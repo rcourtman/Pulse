@@ -106,6 +106,167 @@ func TestHandleLookupNotFound(t *testing.T) {
 	}
 }
 
+func TestHandleLookupByHostname(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		hosts          []models.Host
+		queryHostname  string
+		expectedHostID string
+		expectedStatus int
+	}{
+		{
+			name: "exact hostname match",
+			hosts: []models.Host{
+				{ID: "host-1", Hostname: "server.example.com", DisplayName: "Server One"},
+			},
+			queryHostname:  "server.example.com",
+			expectedHostID: "host-1",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "exact hostname case-insensitive",
+			hosts: []models.Host{
+				{ID: "host-1", Hostname: "server.example.com", DisplayName: "Server One"},
+			},
+			queryHostname:  "SERVER.EXAMPLE.COM",
+			expectedHostID: "host-1",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "display name match",
+			hosts: []models.Host{
+				{ID: "host-1", Hostname: "srv1", DisplayName: "ProductionServer"},
+			},
+			queryHostname:  "ProductionServer",
+			expectedHostID: "host-1",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "display name case-insensitive",
+			hosts: []models.Host{
+				{ID: "host-1", Hostname: "srv1", DisplayName: "ProductionServer"},
+			},
+			queryHostname:  "productionserver",
+			expectedHostID: "host-1",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "short hostname match",
+			hosts: []models.Host{
+				{ID: "host-1", Hostname: "webserver.corp.example.com", DisplayName: "Web Server"},
+			},
+			queryHostname:  "webserver",
+			expectedHostID: "host-1",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "short hostname case-insensitive",
+			hosts: []models.Host{
+				{ID: "host-1", Hostname: "webserver.corp.example.com", DisplayName: "Web Server"},
+			},
+			queryHostname:  "WEBSERVER",
+			expectedHostID: "host-1",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "exact match preferred over short match",
+			hosts: []models.Host{
+				{ID: "host-1", Hostname: "web.example.com", DisplayName: "Web 1"},
+				{ID: "host-2", Hostname: "web", DisplayName: "Web 2"},
+			},
+			queryHostname:  "web",
+			expectedHostID: "host-2",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "first match wins in sorted order",
+			hosts: []models.Host{
+				// After sorting by Hostname: "aaa" < "zzz", so host-2 is checked first
+				{ID: "host-1", Hostname: "zzz", DisplayName: "target"},
+				{ID: "host-2", Hostname: "aaa", DisplayName: "target"},
+			},
+			queryHostname:  "target",
+			expectedHostID: "host-2",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "display name matched before hostname of later host",
+			hosts: []models.Host{
+				{ID: "host-1", Hostname: "other", DisplayName: "target"},
+				{ID: "host-2", Hostname: "target", DisplayName: "Other"},
+			},
+			queryHostname:  "target",
+			expectedHostID: "host-1",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "short hostname with FQDN query",
+			hosts: []models.Host{
+				{ID: "host-1", Hostname: "db.prod.example.com", DisplayName: "Database"},
+			},
+			queryHostname:  "db.staging.example.com",
+			expectedHostID: "host-1",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "no match returns not found",
+			hosts: []models.Host{
+				{ID: "host-1", Hostname: "server.example.com", DisplayName: "Server"},
+			},
+			queryHostname:  "unknown",
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name: "hostname without dots matches exactly",
+			hosts: []models.Host{
+				{ID: "host-1", Hostname: "localhost", DisplayName: "Local"},
+			},
+			queryHostname:  "localhost",
+			expectedHostID: "host-1",
+			expectedStatus: http.StatusOK,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler := newHostAgentHandlerForTests(t, tc.hosts...)
+			req := httptest.NewRequest(http.MethodGet, "/api/agents/host/lookup?hostname="+tc.queryHostname, nil)
+			rec := httptest.NewRecorder()
+
+			handler.HandleLookup(rec, req)
+
+			if rec.Code != tc.expectedStatus {
+				t.Fatalf("expected status %d, got %d: %s", tc.expectedStatus, rec.Code, rec.Body.String())
+			}
+
+			if tc.expectedStatus != http.StatusOK {
+				return
+			}
+
+			var resp struct {
+				Success bool `json:"success"`
+				Host    struct {
+					ID string `json:"id"`
+				} `json:"host"`
+			}
+			if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+				t.Fatalf("failed to decode response: %v", err)
+			}
+
+			if !resp.Success {
+				t.Fatalf("expected success=true")
+			}
+			if resp.Host.ID != tc.expectedHostID {
+				t.Fatalf("expected host id %q, got %q", tc.expectedHostID, resp.Host.ID)
+			}
+		})
+	}
+}
+
 func newHostAgentHandlerForTests(t *testing.T, hosts ...models.Host) *HostAgentHandlers {
 	t.Helper()
 
