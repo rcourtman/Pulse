@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -23,6 +24,30 @@ type dockerCommandAckRequest struct {
 	HostID  string `json:"hostId"`
 	Status  string `json:"status"`
 	Message string `json:"message,omitempty"`
+}
+
+// errInvalidCommandStatus is returned when an unrecognized command status is provided.
+var errInvalidCommandStatus = errors.New("invalid command status")
+
+// normalizeCommandStatus converts a client-provided status string into a canonical
+// internal status constant. It accepts multiple aliases for each status:
+//   - acknowledged: "", "ack", "acknowledged"
+//   - completed: "success", "completed", "complete"
+//   - failed: "fail", "failed", "error"
+//
+// Returns errInvalidCommandStatus for unrecognized values.
+func normalizeCommandStatus(status string) (string, error) {
+	status = strings.ToLower(strings.TrimSpace(status))
+	switch status {
+	case "", "ack", "acknowledged":
+		return monitoring.DockerCommandStatusAcknowledged, nil
+	case "success", "completed", "complete":
+		return monitoring.DockerCommandStatusCompleted, nil
+	case "fail", "failed", "error":
+		return monitoring.DockerCommandStatusFailed, nil
+	default:
+		return "", errInvalidCommandStatus
+	}
 }
 
 // NewDockerAgentHandlers constructs a new Docker agent handler group.
@@ -154,15 +179,8 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	status := strings.ToLower(strings.TrimSpace(req.Status))
-	switch status {
-	case "", "ack", "acknowledged":
-		status = monitoring.DockerCommandStatusAcknowledged
-	case "success", "completed", "complete":
-		status = monitoring.DockerCommandStatusCompleted
-	case "fail", "failed", "error":
-		status = monitoring.DockerCommandStatusFailed
-	default:
+	status, err := normalizeCommandStatus(req.Status)
+	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_status", "Invalid command status", nil)
 		return
 	}
