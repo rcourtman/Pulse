@@ -11,27 +11,16 @@ import { HostsFilter } from './HostsFilter';
 import { useWebSocket } from '@/App';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getHostStatusIndicator } from '@/utils/status';
-import { MetricText, useGridTemplate } from '@/components/shared/responsive';
+import { MetricText } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
-import type { ColumnConfig } from '@/types/responsive';
-import { STANDARD_COLUMNS } from '@/types/responsive';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 // Global drawer state to persist across re-renders
 const drawerState = new Map<string, boolean>();
 
-type SortKey = 'name' | 'platform' | 'cpu' | 'memory' | 'uptime';
-
-const HOST_COLUMNS: ColumnConfig[] = [
-  { ...STANDARD_COLUMNS.name, label: 'Host', minWidth: '200px', sortKey: 'name' },
-  { id: 'platform', label: 'Platform', priority: 'primary', minWidth: '120px', flex: 1, sortable: true, sortKey: 'platform' },
-  { ...STANDARD_COLUMNS.cpu, maxWidth: '156px', sortKey: 'cpu' },
-  { ...STANDARD_COLUMNS.memory, maxWidth: '156px', sortKey: 'memory' },
-  { id: 'temperature', label: 'Temp', priority: 'secondary', minWidth: '80px', maxWidth: '100px' },
-  { id: 'disk', label: 'Disk', minWidth: '140px', maxWidth: '156px', priority: 'secondary' },
-  { ...STANDARD_COLUMNS.uptime, maxWidth: '100px', align: 'right', sortKey: 'uptime' },
-];
+type SortKey = 'name' | 'platform' | 'cpu' | 'memory' | 'disk' | 'uptime';
 
 interface HostsOverviewProps {
   hosts: Host[];
@@ -45,18 +34,21 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
   const [statusFilter, setStatusFilter] = createSignal<'all' | 'online' | 'degraded' | 'offline'>('all');
   const [sortKey, setSortKey] = createSignal<SortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
+  const { isMobile } = useBreakpoint();
 
-  const handleSort = (key: string) => {
+  const handleSort = (key: SortKey) => {
     if (sortKey() === key) {
       setSortDirection(sortDirection() === 'asc' ? 'desc' : 'asc');
     } else {
-      setSortKey(key as SortKey);
+      setSortKey(key);
       setSortDirection('asc');
     }
   };
 
-  // Use responsive grid template
-  const { gridTemplate, visibleColumns, isMobile } = useGridTemplate({ columns: HOST_COLUMNS });
+  const renderSortIndicator = (key: SortKey) => {
+    if (sortKey() !== key) return null;
+    return sortDirection() === 'asc' ? '▲' : '▼';
+  };
 
   // Keyboard listener to auto-focus search
   let searchInputRef: HTMLInputElement | undefined;
@@ -116,6 +108,12 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
         case 'memory':
           comparison = (a.memory?.usage ?? 0) - (b.memory?.usage ?? 0);
           break;
+        case 'disk': {
+          const aDisk = a.disks?.reduce((sum, d) => sum + (d.usage ?? 0), 0) ?? 0;
+          const bDisk = b.disks?.reduce((sum, d) => sum + (d.usage ?? 0), 0) ?? 0;
+          comparison = aDisk - bDisk;
+          break;
+        }
         case 'uptime':
           comparison = (a.uptimeSeconds ?? 0) - (b.uptimeSeconds ?? 0);
           break;
@@ -154,176 +152,45 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
     return sortedHosts().filter((host) => matchesSearch(host) && matchesStatus(host));
   });
 
-  const renderCell = (column: ColumnConfig, host: Host) => {
-    const cpuPercent = () => host.cpuUsage ?? 0;
-    const memPercent = () => host.memory?.usage ?? 0;
+  const getTemperatureValue = (host: Host) => {
+    if (!host.sensors?.temperatureCelsius) return null;
+    const temps = host.sensors.temperatureCelsius;
 
-    const hostStatus = createMemo(() => getHostStatusIndicator(host));
+    // Try to find a "package" or "composite" temperature first
+    const packageKey = Object.keys(temps).find(k =>
+      k.toLowerCase().includes('package') ||
+      k.toLowerCase().includes('composite') ||
+      k.toLowerCase().includes('tctl')
+    );
 
-    switch (column.id) {
-      case 'name':
-        return (
-          <div class="pl-4 pr-2 py-1 overflow-hidden">
-            <div class="flex items-center gap-2 min-w-0">
-              <StatusDot
-                variant={hostStatus().variant}
-                title={hostStatus().label}
-                ariaLabel={hostStatus().label}
-                size="xs"
-              />
-              <div class="min-w-0 flex-1">
-                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-                  {host.displayName || host.hostname || host.id}
-                </p>
-                <Show when={host.displayName && host.displayName !== host.hostname}>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-                    {host.hostname}
-                  </p>
-                </Show>
-                <Show when={host.lastSeen}>
-                  <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-                    Updated {formatRelativeTime(host.lastSeen!)}
-                  </p>
-                </Show>
-              </div>
-            </div>
-          </div>
-        );
-      case 'platform':
-        return (
-          <div class="px-2 py-1 overflow-hidden">
-            <div class="text-xs text-gray-700 dark:text-gray-300">
-              <p class="font-medium capitalize">{host.platform || '—'}</p>
-              <Show when={host.osName}>
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
-                  {host.osName} {host.osVersion}
-                </p>
-              </Show>
-            </div>
-          </div>
-        );
-      case 'cpu':
-        return (
-          <div class="px-2 py-1 overflow-hidden">
-            <Show when={isMobile()}>
-              <div class="md:hidden">
-                <MetricText value={cpuPercent()} type="cpu" />
-              </div>
-            </Show>
-            <div class="hidden md:block w-full">
-              <EnhancedCPUBar
-                usage={cpuPercent()}
-                loadAverage={host.loadAverage?.[0]}
-                cores={host.cpuCount}
-              />
-            </div>
-          </div>
-        );
-      case 'memory':
-        return (
-          <div class="px-2 py-1 overflow-hidden">
-            <Show when={isMobile()}>
-              <div class="md:hidden">
-                <MetricText value={memPercent()} type="memory" />
-              </div>
-            </Show>
-            <div class="hidden md:block w-full">
-              <StackedMemoryBar
-                used={host.memory?.used || 0}
-                total={host.memory?.total || 0}
-                balloon={host.memory?.balloon || 0}
-                swapUsed={host.memory?.swapUsed || 0}
-                swapTotal={host.memory?.swapTotal || 0}
-              />
-            </div>
-          </div>
-        );
-      case 'temperature':
-        const tempValue = (() => {
-          if (!host.sensors?.temperatureCelsius) return null;
-          const temps = host.sensors.temperatureCelsius;
+    if (packageKey) return temps[packageKey];
 
-          // Try to find a "package" or "composite" temperature first
-          const packageKey = Object.keys(temps).find(k =>
-            k.toLowerCase().includes('package') ||
-            k.toLowerCase().includes('composite') ||
-            k.toLowerCase().includes('tctl')
-          );
-
-          if (packageKey) return temps[packageKey];
-
-          // Fallback: average of all core temps
-          const coreKeys = Object.keys(temps).filter(k => k.toLowerCase().includes('core'));
-          if (coreKeys.length > 0) {
-            const sum = coreKeys.reduce((acc, k) => acc + temps[k], 0);
-            return sum / coreKeys.length;
-          }
-
-          // Fallback: just take the first available value if any
-          const values = Object.values(temps);
-          if (values.length > 0) return values[0];
-
-          return null;
-        })();
-
-        return (
-          <div class="px-2 py-1 overflow-hidden">
-            <Show when={tempValue !== null} fallback={<span class="text-xs text-gray-500 dark:text-gray-400">—</span>}>
-              <TemperatureGauge value={tempValue!} />
-            </Show>
-          </div>
-        );
-      case 'disk':
-        const diskStats = (() => {
-          if (!host.disks || host.disks.length === 0) return { percent: 0, used: 0, total: 0 };
-          const totalUsed = host.disks.reduce((sum, d) => sum + (d.used ?? 0), 0);
-          const totalSize = host.disks.reduce((sum, d) => sum + (d.total ?? 0), 0);
-          return {
-            percent: totalSize > 0 ? (totalUsed / totalSize) * 100 : 0,
-            used: totalUsed,
-            total: totalSize
-          };
-        })();
-        const diskPercent = diskStats.percent;
-
-
-        return (
-          <div class="px-2 py-1 overflow-hidden">
-            <Show when={isMobile()}>
-              <div class="md:hidden">
-                <MetricText value={diskPercent} type="disk" />
-              </div>
-            </Show>
-            <div class="hidden md:block w-full">
-              <StackedDiskBar
-                disks={host.disks}
-                aggregateDisk={{
-                  total: diskStats.total,
-                  used: diskStats.used,
-                  free: diskStats.total - diskStats.used,
-                  usage: diskStats.percent / 100
-                }}
-              />
-            </div>
-          </div>
-        );
-      case 'uptime':
-        return (
-          <div class="px-2 py-1 text-right overflow-hidden">
-            <Show
-              when={host.uptimeSeconds}
-              fallback={<span class="text-xs text-gray-500 dark:text-gray-400">—</span>}
-            >
-              <span class="text-xs text-gray-700 dark:text-gray-300">
-                {formatUptime(host.uptimeSeconds!)}
-              </span>
-            </Show>
-          </div>
-        );
-      default:
-        return null;
+    // Fallback: average of all core temps
+    const coreKeys = Object.keys(temps).filter(k => k.toLowerCase().includes('core'));
+    if (coreKeys.length > 0) {
+      const sum = coreKeys.reduce((acc, k) => acc + temps[k], 0);
+      return sum / coreKeys.length;
     }
+
+    // Fallback: just take the first available value if any
+    const values = Object.values(temps);
+    if (values.length > 0) return values[0];
+
+    return null;
   };
+
+  const getDiskStats = (host: Host) => {
+    if (!host.disks || host.disks.length === 0) return { percent: 0, used: 0, total: 0 };
+    const totalUsed = host.disks.reduce((sum, d) => sum + (d.used ?? 0), 0);
+    const totalSize = host.disks.reduce((sum, d) => sum + (d.total ?? 0), 0);
+    return {
+      percent: totalSize > 0 ? (totalUsed / totalSize) * 100 : 0,
+      used: totalUsed,
+      total: totalSize
+    };
+  };
+
+  const thClass = "px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap";
 
   return (
     <div class="space-y-4">
@@ -397,277 +264,403 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
               >
                 <Card padding="none" tone="glass" class="overflow-hidden">
                   <div class="overflow-x-auto">
-                    {/* Header */}
-                    <div
-                      class="grid border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20 min-w-[520px] md:min-w-0"
-                      style={{ 'grid-template-columns': gridTemplate() }}
-                    >
-                      <For each={visibleColumns()}>
-                        {(column) => (
-                          <div
-                            class={`${column.id === 'name' ? 'pl-4 pr-2' : 'px-2'} py-1 flex items-center ${column.align === 'right' ? 'justify-end' : 'justify-start'} ${column.sortable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
-                            onClick={() => column.sortable && column.sortKey && handleSort(column.sortKey)}
+                    <table class="w-full border-collapse whitespace-nowrap">
+                      <thead>
+                        <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+                          <th
+                            class={`${thClass} text-left pl-4`}
+                            onClick={() => handleSort('name')}
                           >
-                            <div class="flex items-center gap-1">
-                              {column.label}
-                              {column.sortKey === sortKey() && (
-                                <span class="text-gray-400">
-                                  {sortDirection() === 'asc' ? '▲' : '▼'}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </For>
-                    </div>
+                            Host {renderSortIndicator('name')}
+                          </th>
+                          <th class={thClass} onClick={() => handleSort('platform')}>
+                            Platform {renderSortIndicator('platform')}
+                          </th>
+                          <th class={thClass} onClick={() => handleSort('cpu')}>
+                            CPU {renderSortIndicator('cpu')}
+                          </th>
+                          <th class={thClass} onClick={() => handleSort('memory')}>
+                            Memory {renderSortIndicator('memory')}
+                          </th>
+                          <th class={thClass}>
+                            Temp
+                          </th>
+                          <th class={thClass} onClick={() => handleSort('disk')}>
+                            Disk {renderSortIndicator('disk')}
+                          </th>
+                          <th class={`${thClass} text-right pr-4`} onClick={() => handleSort('uptime')}>
+                            Uptime {renderSortIndicator('uptime')}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <For each={filteredHosts()}>
+                          {(host) => {
+                            // Drawer state
+                            const [drawerOpen, setDrawerOpen] = createSignal(drawerState.get(host.id) ?? false);
 
-                    {/* Rows */}
-                    <div class="divide-y divide-gray-200 dark:divide-gray-700 min-w-[520px] md:min-w-0">
-                      <For each={filteredHosts()}>
-                        {(host) => {
-                          // Drawer state
-                          const [drawerOpen, setDrawerOpen] = createSignal(drawerState.get(host.id) ?? false);
+                            // Check if we have additional info to show in drawer
+                            const hasDrawerContent = createMemo(() => {
+                              return (
+                                (host.disks && host.disks.length > 0) ||
+                                (host.networkInterfaces && host.networkInterfaces.length > 0) ||
+                                (host.raid && host.raid.length > 0) ||
+                                host.loadAverage ||
+                                host.cpuCount ||
+                                host.kernelVersion ||
+                                host.architecture ||
+                                host.agentVersion ||
+                                (host.sensors?.temperatureCelsius && Object.keys(host.sensors.temperatureCelsius).length > 0)
+                              );
+                            });
 
-                          // Check if we have additional info to show in drawer
-                          const hasDrawerContent = createMemo(() => {
+                            const toggleDrawer = (event: MouseEvent) => {
+                              if (!hasDrawerContent()) return;
+                              const target = event.target as HTMLElement;
+                              if (target.closest('a, button, [data-prevent-toggle]')) {
+                                return;
+                              }
+                              setDrawerOpen((prev) => !prev);
+                            };
+
+                            // Sync drawer state
+                            createEffect(on(() => host.id, (id) => {
+                              const stored = drawerState.get(id);
+                              if (stored !== undefined) {
+                                setDrawerOpen(stored);
+                              } else {
+                                setDrawerOpen(false);
+                              }
+                            }));
+
+                            createEffect(() => {
+                              drawerState.set(host.id, drawerOpen());
+                            });
+
+                            const rowClass = () => {
+                              const base = 'transition-all duration-200';
+                              const hover = 'hover:bg-gray-50 dark:hover:bg-gray-800/50';
+                              const clickable = hasDrawerContent() ? 'cursor-pointer' : '';
+                              const expanded = drawerOpen() ? 'bg-gray-50 dark:bg-gray-800/40' : '';
+                              return `${base} ${hover} ${clickable} ${expanded}`;
+                            };
+
+                            const hostStatus = createMemo(() => getHostStatusIndicator(host));
+                            const cpuPercent = host.cpuUsage ?? 0;
+                            const memPercent = host.memory?.usage ?? 0;
+                            const tempValue = getTemperatureValue(host);
+                            const diskStats = getDiskStats(host);
+
                             return (
-                              (host.disks && host.disks.length > 0) ||
-                              (host.networkInterfaces && host.networkInterfaces.length > 0) ||
-                              (host.raid && host.raid.length > 0) ||
-                              host.loadAverage ||
-                              host.cpuCount ||
-                              host.kernelVersion ||
-                              host.architecture ||
-                              host.agentVersion ||
-                              (host.sensors?.temperatureCelsius && Object.keys(host.sensors.temperatureCelsius).length > 0)
-                            );
-                          });
-
-                          const toggleDrawer = (event: MouseEvent) => {
-                            if (!hasDrawerContent()) return;
-                            const target = event.target as HTMLElement;
-                            if (target.closest('a, button, [data-prevent-toggle]')) {
-                              return;
-                            }
-                            setDrawerOpen((prev) => !prev);
-                          };
-
-                          // Sync drawer state
-                          createEffect(on(() => host.id, (id) => {
-                            const stored = drawerState.get(id);
-                            if (stored !== undefined) {
-                              setDrawerOpen(stored);
-                            } else {
-                              setDrawerOpen(false);
-                            }
-                          }));
-
-                          createEffect(() => {
-                            drawerState.set(host.id, drawerOpen());
-                          });
-
-                          const rowClass = () => {
-                            const base = 'grid items-center transition-all duration-200';
-                            const hover = 'hover:bg-gray-50 dark:hover:bg-gray-800/50';
-                            const clickable = hasDrawerContent() ? 'cursor-pointer' : '';
-                            const expanded = drawerOpen() ? 'bg-gray-50 dark:bg-gray-800/40' : '';
-                            return `${base} ${hover} ${clickable} ${expanded}`;
-                          };
-
-                          return (
-                            <>
-                              <div
-                                class={rowClass()}
-                                style={{ 'grid-template-columns': gridTemplate() }}
-                                onClick={toggleDrawer}
-                                aria-expanded={drawerOpen()}
-                              >
-                                <For each={visibleColumns()}>
-                                  {(column) => renderCell(column, host)}
-                                </For>
-                              </div>
-
-                              {/* Drawer - Additional Info */}
-                              <Show when={drawerOpen() && hasDrawerContent()}>
-                                <div class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 border-t border-gray-100 dark:border-gray-800/50">
-                                  <div class="flex flex-wrap justify-start gap-3">
-                                    {/* System Info */}
-                                    <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                      <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">System</div>
-                                      <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                                        <Show when={host.cpuCount}>
-                                          <div class="flex items-center justify-between gap-2">
-                                            <span class="font-medium text-gray-700 dark:text-gray-200">CPUs</span>
-                                            <span class="text-right text-gray-600 dark:text-gray-300">{host.cpuCount}</span>
-                                          </div>
+                              <>
+                                <tr
+                                  class={rowClass()}
+                                  onClick={toggleDrawer}
+                                  aria-expanded={drawerOpen()}
+                                >
+                                  {/* Host Name */}
+                                  <td class="pl-4 pr-2 py-1 align-middle">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                      <StatusDot
+                                        variant={hostStatus().variant}
+                                        title={hostStatus().label}
+                                        ariaLabel={hostStatus().label}
+                                        size="xs"
+                                      />
+                                      <div class="min-w-0">
+                                        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                                          {host.displayName || host.hostname || host.id}
+                                        </p>
+                                        <Show when={host.displayName && host.displayName !== host.hostname}>
+                                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
+                                            {host.hostname}
+                                          </p>
                                         </Show>
-                                        <Show when={host.loadAverage && host.loadAverage.length > 0}>
-                                          <div class="flex items-center justify-between gap-2">
-                                            <span class="font-medium text-gray-700 dark:text-gray-200">Load Avg</span>
-                                            <span class="text-right text-gray-600 dark:text-gray-300">{host.loadAverage!.map(l => l.toFixed(2)).join(', ')}</span>
-                                          </div>
-                                        </Show>
-                                        <Show when={host.architecture}>
-                                          <div class="flex items-center justify-between gap-2">
-                                            <span class="font-medium text-gray-700 dark:text-gray-200">Arch</span>
-                                            <span class="text-right text-gray-600 dark:text-gray-300">{host.architecture}</span>
-                                          </div>
-                                        </Show>
-                                        <Show when={host.kernelVersion}>
-                                          <div class="flex items-center justify-between gap-2">
-                                            <span class="font-medium text-gray-700 dark:text-gray-200">Kernel</span>
-                                            <span class="text-right text-gray-600 dark:text-gray-300 truncate">{host.kernelVersion}</span>
-                                          </div>
-                                        </Show>
-                                        <Show when={host.agentVersion}>
-                                          <div class="flex items-center justify-between gap-2">
-                                            <span class="font-medium text-gray-700 dark:text-gray-200">Agent</span>
-                                            <span class="text-right text-gray-600 dark:text-gray-300">{host.agentVersion}</span>
-                                          </div>
+                                        <Show when={host.lastSeen}>
+                                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
+                                            Updated {formatRelativeTime(host.lastSeen!)}
+                                          </p>
                                         </Show>
                                       </div>
                                     </div>
+                                  </td>
 
-                                    {/* Network Interfaces */}
-                                    <Show when={host.networkInterfaces && host.networkInterfaces.length > 0}>
-                                      <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                        <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Network</div>
-                                        <div class="mt-2 space-y-2 text-[11px]">
-                                          <For each={host.networkInterfaces?.slice(0, 4)}>
-                                            {(iface) => (
-                                              <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700/70">
-                                                <div class="font-medium text-gray-700 dark:text-gray-200">{iface.name}</div>
-                                                <Show when={iface.addresses && iface.addresses.length > 0}>
-                                                  <div class="flex flex-wrap gap-1 mt-1 text-[10px]">
-                                                    <For each={iface.addresses}>
-                                                      {(addr) => (
-                                                        <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                                                          {addr}
-                                                        </span>
-                                                      )}
-                                                    </For>
-                                                  </div>
-                                                </Show>
-                                              </div>
-                                            )}
-                                          </For>
-                                        </div>
+                                  {/* Platform */}
+                                  <td class="px-2 py-1 align-middle">
+                                    <div class="text-xs text-gray-700 dark:text-gray-300">
+                                      <p class="font-medium capitalize whitespace-nowrap">{host.platform || '—'}</p>
+                                      <Show when={host.osName}>
+                                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
+                                          {host.osName} {host.osVersion}
+                                        </p>
+                                      </Show>
+                                    </div>
+                                  </td>
+
+                                  {/* CPU */}
+                                  <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+                                    <Show when={isMobile()}>
+                                      <div class="md:hidden flex justify-center">
+                                        <MetricText value={cpuPercent} type="cpu" />
                                       </div>
                                     </Show>
+                                    <div class="hidden md:block">
+                                      <EnhancedCPUBar
+                                        usage={cpuPercent}
+                                        loadAverage={host.loadAverage?.[0]}
+                                        cores={host.cpuCount}
+                                      />
+                                    </div>
+                                  </td>
 
-                                    {/* Disk Info */}
-                                    <Show when={host.disks && host.disks.length > 0}>
-                                      <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                        <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Disks</div>
-                                        <div class="mt-2 space-y-2 text-[11px]">
-                                          <For each={host.disks?.slice(0, 3)}>
-                                            {(disk) => {
-                                              const diskPercent = () => disk.usage ?? 0;
-                                              return (
-                                                <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700/70">
-                                                  <div class="flex items-center justify-between">
-                                                    <span class="font-medium text-gray-700 dark:text-gray-200 truncate">{disk.mountpoint || disk.device}</span>
-                                                    <span class="text-[10px] text-gray-500 dark:text-gray-400">
-                                                      {formatBytes(disk.used ?? 0, 0)} / {formatBytes(disk.total ?? 0, 0)}
-                                                    </span>
-                                                  </div>
-                                                  <Show when={diskPercent() > 0}>
-                                                    <div class="mt-1">
-                                                      <MetricBar
-                                                        value={diskPercent()}
-                                                        label={formatPercent(diskPercent())}
-                                                        type="disk"
-                                                        class="max-w-none"
-                                                      />
-                                                    </div>
-                                                  </Show>
+                                  {/* Memory */}
+                                  <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+                                    <Show when={isMobile()}>
+                                      <div class="md:hidden flex justify-center">
+                                        <MetricText value={memPercent} type="memory" />
+                                      </div>
+                                    </Show>
+                                    <div class="hidden md:block">
+                                      <StackedMemoryBar
+                                        used={host.memory?.used || 0}
+                                        total={host.memory?.total || 0}
+                                        balloon={host.memory?.balloon || 0}
+                                        swapUsed={host.memory?.swapUsed || 0}
+                                        swapTotal={host.memory?.swapTotal || 0}
+                                      />
+                                    </div>
+                                  </td>
+
+                                  {/* Temperature */}
+                                  <td class="px-2 py-1 align-middle">
+                                    <div class="flex justify-center">
+                                      <Show when={tempValue !== null} fallback={<span class="text-xs text-gray-400">—</span>}>
+                                        <TemperatureGauge value={tempValue!} />
+                                      </Show>
+                                    </div>
+                                  </td>
+
+                                  {/* Disk */}
+                                  <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+                                    <Show when={isMobile()}>
+                                      <div class="md:hidden flex justify-center">
+                                        <MetricText value={diskStats.percent} type="disk" />
+                                      </div>
+                                    </Show>
+                                    <div class="hidden md:block">
+                                      <StackedDiskBar
+                                        disks={host.disks}
+                                        aggregateDisk={{
+                                          total: diskStats.total,
+                                          used: diskStats.used,
+                                          free: diskStats.total - diskStats.used,
+                                          usage: diskStats.percent / 100
+                                        }}
+                                      />
+                                    </div>
+                                  </td>
+
+                                  {/* Uptime */}
+                                  <td class="px-2 py-1 pr-4 align-middle">
+                                    <div class="flex justify-end">
+                                      <Show
+                                        when={host.uptimeSeconds}
+                                        fallback={<span class="text-xs text-gray-400">—</span>}
+                                      >
+                                        <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                                          {formatUptime(host.uptimeSeconds!)}
+                                        </span>
+                                      </Show>
+                                    </div>
+                                  </td>
+                                </tr>
+
+                                {/* Drawer - Additional Info */}
+                                <Show when={drawerOpen() && hasDrawerContent()}>
+                                  <tr>
+                                    <td colspan={7} class="p-0">
+                                      <div class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 border-t border-gray-100 dark:border-gray-800/50">
+                                        <div class="flex flex-wrap justify-start gap-3">
+                                          {/* System Info */}
+                                          <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                            <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">System</div>
+                                            <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                                              <Show when={host.cpuCount}>
+                                                <div class="flex items-center justify-between gap-2">
+                                                  <span class="font-medium text-gray-700 dark:text-gray-200">CPUs</span>
+                                                  <span class="text-right text-gray-600 dark:text-gray-300">{host.cpuCount}</span>
                                                 </div>
-                                              );
-                                            }}
-                                          </For>
-                                        </div>
-                                      </div>
-                                    </Show>
+                                              </Show>
+                                              <Show when={host.loadAverage && host.loadAverage.length > 0}>
+                                                <div class="flex items-center justify-between gap-2">
+                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Load Avg</span>
+                                                  <span class="text-right text-gray-600 dark:text-gray-300">{host.loadAverage!.map(l => l.toFixed(2)).join(', ')}</span>
+                                                </div>
+                                              </Show>
+                                              <Show when={host.architecture}>
+                                                <div class="flex items-center justify-between gap-2">
+                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Arch</span>
+                                                  <span class="text-right text-gray-600 dark:text-gray-300">{host.architecture}</span>
+                                                </div>
+                                              </Show>
+                                              <Show when={host.kernelVersion}>
+                                                <div class="flex items-center justify-between gap-2">
+                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Kernel</span>
+                                                  <span class="text-right text-gray-600 dark:text-gray-300 truncate">{host.kernelVersion}</span>
+                                                </div>
+                                              </Show>
+                                              <Show when={host.agentVersion}>
+                                                <div class="flex items-center justify-between gap-2">
+                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Agent</span>
+                                                  <span class="text-right text-gray-600 dark:text-gray-300">{host.agentVersion}</span>
+                                                </div>
+                                              </Show>
+                                            </div>
+                                          </div>
 
-                                    {/* Temperature Sensors */}
-                                    <Show when={host.sensors?.temperatureCelsius && Object.keys(host.sensors.temperatureCelsius).length > 0}>
-                                      <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                        <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Temperatures</div>
-                                        <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                                          <For each={Object.entries(host.sensors!.temperatureCelsius!).slice(0, 5)}>
-                                            {([name, temp]) => (
-                                              <div class="flex items-center justify-between gap-2">
-                                                <span class="font-medium text-gray-700 dark:text-gray-200 truncate">{name}</span>
-                                                <span class={`text-right ${temp > 80 ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-600 dark:text-gray-300'}`}>
-                                                  {temp.toFixed(1)}°C
-                                                </span>
-                                              </div>
-                                            )}
-                                          </For>
-                                        </div>
-                                      </div>
-                                    </Show>
-
-                                    {/* RAID Arrays */}
-                                    <Show when={host.raid && host.raid.length > 0}>
-                                      <For each={host.raid!}>
-                                        {(array) => {
-                                          const isDegraded = () => array.state.toLowerCase().includes('degraded') || array.failedDevices > 0;
-                                          const isRebuilding = () => array.state.toLowerCase().includes('recover') || array.state.toLowerCase().includes('resync') || array.rebuildPercent > 0;
-                                          const isHealthy = () => !isDegraded() && !isRebuilding() && array.state.toLowerCase().includes('clean');
-
-                                          const stateColor = () => {
-                                            if (isDegraded()) return 'text-red-600 dark:text-red-400 font-semibold';
-                                            if (isRebuilding()) return 'text-amber-600 dark:text-amber-400 font-semibold';
-                                            if (isHealthy()) return 'text-green-600 dark:text-green-400';
-                                            return 'text-gray-600 dark:text-gray-300';
-                                          };
-
-                                          return (
+                                          {/* Network Interfaces */}
+                                          <Show when={host.networkInterfaces && host.networkInterfaces.length > 0}>
                                             <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                                                RAID {array.level.replace('raid', '')} - {array.device}
-                                              </div>
-                                              <div class="mt-2 space-y-1 text-[11px]">
-                                                <div class="flex items-center justify-between gap-2">
-                                                  <span class="font-medium text-gray-700 dark:text-gray-200">State</span>
-                                                  <span class={stateColor()}>{array.state}</span>
-                                                </div>
-                                                <div class="flex items-center justify-between gap-2">
-                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Devices</span>
-                                                  <span class="text-gray-600 dark:text-gray-300">
-                                                    {array.activeDevices}/{array.totalDevices}
-                                                    {array.failedDevices > 0 && <span class="text-red-600 dark:text-red-400"> ({array.failedDevices} failed)</span>}
-                                                  </span>
-                                                </div>
-                                                <Show when={isRebuilding() && array.rebuildPercent > 0}>
-                                                  <div class="flex items-center justify-between gap-2">
-                                                    <span class="font-medium text-gray-700 dark:text-gray-200">Rebuild</span>
-                                                    <span class="text-amber-600 dark:text-amber-400 font-medium">
-                                                      {array.rebuildPercent.toFixed(1)}%
-                                                    </span>
-                                                  </div>
-                                                  <Show when={array.rebuildSpeed}>
-                                                    <div class="flex items-center justify-between gap-2">
-                                                      <span class="font-medium text-gray-700 dark:text-gray-200">Speed</span>
-                                                      <span class="text-gray-600 dark:text-gray-300">{array.rebuildSpeed}</span>
+                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Network</div>
+                                              <div class="mt-2 space-y-2 text-[11px]">
+                                                <For each={host.networkInterfaces?.slice(0, 4)}>
+                                                  {(iface) => (
+                                                    <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700/70">
+                                                      <div class="font-medium text-gray-700 dark:text-gray-200">{iface.name}</div>
+                                                      <Show when={iface.addresses && iface.addresses.length > 0}>
+                                                        <div class="flex flex-wrap gap-1 mt-1 text-[10px]">
+                                                          <For each={iface.addresses}>
+                                                            {(addr) => (
+                                                              <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                                                {addr}
+                                                              </span>
+                                                            )}
+                                                          </For>
+                                                        </div>
+                                                      </Show>
                                                     </div>
-                                                  </Show>
-                                                </Show>
+                                                  )}
+                                                </For>
                                               </div>
                                             </div>
-                                          );
-                                        }}
-                                      </For>
-                                    </Show>
-                                  </div>
-                                </div>
-                              </Show>
-                            </>
-                          );
-                        }}
-                      </For>
-                    </div>
+                                          </Show>
+
+                                          {/* Disk Info */}
+                                          <Show when={host.disks && host.disks.length > 0}>
+                                            <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Disks</div>
+                                              <div class="mt-2 space-y-2 text-[11px]">
+                                                <For each={host.disks?.slice(0, 3)}>
+                                                  {(disk) => {
+                                                    const diskPercent = () => disk.usage ?? 0;
+                                                    return (
+                                                      <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700/70">
+                                                        <div class="flex items-center justify-between">
+                                                          <span class="font-medium text-gray-700 dark:text-gray-200 truncate">{disk.mountpoint || disk.device}</span>
+                                                          <span class="text-[10px] text-gray-500 dark:text-gray-400">
+                                                            {formatBytes(disk.used ?? 0, 0)} / {formatBytes(disk.total ?? 0, 0)}
+                                                          </span>
+                                                        </div>
+                                                        <Show when={diskPercent() > 0}>
+                                                          <div class="mt-1">
+                                                            <MetricBar
+                                                              value={diskPercent()}
+                                                              label={formatPercent(diskPercent())}
+                                                              type="disk"
+                                                              class="max-w-none"
+                                                            />
+                                                          </div>
+                                                        </Show>
+                                                      </div>
+                                                    );
+                                                  }}
+                                                </For>
+                                              </div>
+                                            </div>
+                                          </Show>
+
+                                          {/* Temperature Sensors */}
+                                          <Show when={host.sensors?.temperatureCelsius && Object.keys(host.sensors.temperatureCelsius).length > 0}>
+                                            <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Temperatures</div>
+                                              <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                                                <For each={Object.entries(host.sensors!.temperatureCelsius!).slice(0, 5)}>
+                                                  {([name, temp]) => (
+                                                    <div class="flex items-center justify-between gap-2">
+                                                      <span class="font-medium text-gray-700 dark:text-gray-200 truncate">{name}</span>
+                                                      <span class={`text-right ${temp > 80 ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-600 dark:text-gray-300'}`}>
+                                                        {temp.toFixed(1)}°C
+                                                      </span>
+                                                    </div>
+                                                  )}
+                                                </For>
+                                              </div>
+                                            </div>
+                                          </Show>
+
+                                          {/* RAID Arrays */}
+                                          <Show when={host.raid && host.raid.length > 0}>
+                                            <For each={host.raid!}>
+                                              {(array) => {
+                                                const isDegraded = () => array.state.toLowerCase().includes('degraded') || array.failedDevices > 0;
+                                                const isRebuilding = () => array.state.toLowerCase().includes('recover') || array.state.toLowerCase().includes('resync') || array.rebuildPercent > 0;
+                                                const isHealthy = () => !isDegraded() && !isRebuilding() && array.state.toLowerCase().includes('clean');
+
+                                                const stateColor = () => {
+                                                  if (isDegraded()) return 'text-red-600 dark:text-red-400 font-semibold';
+                                                  if (isRebuilding()) return 'text-amber-600 dark:text-amber-400 font-semibold';
+                                                  if (isHealthy()) return 'text-green-600 dark:text-green-400';
+                                                  return 'text-gray-600 dark:text-gray-300';
+                                                };
+
+                                                return (
+                                                  <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                                    <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                                                      RAID {array.level.replace('raid', '')} - {array.device}
+                                                    </div>
+                                                    <div class="mt-2 space-y-1 text-[11px]">
+                                                      <div class="flex items-center justify-between gap-2">
+                                                        <span class="font-medium text-gray-700 dark:text-gray-200">State</span>
+                                                        <span class={stateColor()}>{array.state}</span>
+                                                      </div>
+                                                      <div class="flex items-center justify-between gap-2">
+                                                        <span class="font-medium text-gray-700 dark:text-gray-200">Devices</span>
+                                                        <span class="text-gray-600 dark:text-gray-300">
+                                                          {array.activeDevices}/{array.totalDevices}
+                                                          {array.failedDevices > 0 && <span class="text-red-600 dark:text-red-400"> ({array.failedDevices} failed)</span>}
+                                                        </span>
+                                                      </div>
+                                                      <Show when={isRebuilding() && array.rebuildPercent > 0}>
+                                                        <div class="flex items-center justify-between gap-2">
+                                                          <span class="font-medium text-gray-700 dark:text-gray-200">Rebuild</span>
+                                                          <span class="text-amber-600 dark:text-amber-400 font-medium">
+                                                            {array.rebuildPercent.toFixed(1)}%
+                                                          </span>
+                                                        </div>
+                                                        <Show when={array.rebuildSpeed}>
+                                                          <div class="flex items-center justify-between gap-2">
+                                                            <span class="font-medium text-gray-700 dark:text-gray-200">Speed</span>
+                                                            <span class="text-gray-600 dark:text-gray-300">{array.rebuildSpeed}</span>
+                                                          </div>
+                                                        </Show>
+                                                      </Show>
+                                                    </div>
+                                                  </div>
+                                                );
+                                              }}
+                                            </For>
+                                          </Show>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                </Show>
+                              </>
+                            );
+                          }}
+                        </For>
+                      </tbody>
+                    </table>
                   </div>
                 </Card>
               </Show>
