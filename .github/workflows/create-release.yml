@@ -445,15 +445,15 @@ jobs:
           echo "✓ Release published as latest: ${TAG}"
 
       - name: Trigger demo server update
-        continue-on-error: true  # GITHUB_TOKEN can't dispatch workflows; non-fatal
+        continue-on-error: true  # Non-fatal if PAT not configured
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT || github.token }}
         run: |
           TAG="${{ needs.extract_version.outputs.tag }}"
           echo "Triggering demo server update for ${TAG}..."
 
           # Publishing via API doesn't fire the release webhook, so we dispatch manually
-          # This may fail due to GITHUB_TOKEN limitations - demo update is non-critical
+          # Requires WORKFLOW_PAT secret with 'repo' and 'workflow' scopes
           gh workflow run update-demo-server.yml -f tag="${TAG}"
 
           echo "✓ Demo server update workflow dispatched"
