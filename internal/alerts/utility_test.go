@@ -1063,3 +1063,433 @@ func TestHostDiskResourceID(t *testing.T) {
 		})
 	}
 }
+
+// TestIsMonitorOnlyAlert tests the isMonitorOnlyAlert function
+func TestIsMonitorOnlyAlert(t *testing.T) {
+	tests := []struct {
+		name  string
+		alert *Alert
+		want  bool
+	}{
+		{
+			name:  "nil alert returns false",
+			alert: nil,
+			want:  false,
+		},
+		{
+			name: "nil metadata returns false",
+			alert: &Alert{
+				ID:       "test-1",
+				Metadata: nil,
+			},
+			want: false,
+		},
+		{
+			name: "empty metadata returns false",
+			alert: &Alert{
+				ID:       "test-1",
+				Metadata: map[string]interface{}{},
+			},
+			want: false,
+		},
+		{
+			name: "no monitorOnly key returns false",
+			alert: &Alert{
+				ID:       "test-1",
+				Metadata: map[string]interface{}{"other": "value"},
+			},
+			want: false,
+		},
+		{
+			name: "monitorOnly bool true returns true",
+			alert: &Alert{
+				ID:       "test-1",
+				Metadata: map[string]interface{}{"monitorOnly": true},
+			},
+			want: true,
+		},
+		{
+			name: "monitorOnly bool false returns false",
+			alert: &Alert{
+				ID:       "test-1",
+				Metadata: map[string]interface{}{"monitorOnly": false},
+			},
+			want: false,
+		},
+		{
+			name: "monitorOnly string 'true' returns true",
+			alert: &Alert{
+				ID:       "test-1",
+				Metadata: map[string]interface{}{"monitorOnly": "true"},
+			},
+			want: true,
+		},
+		{
+			name: "monitorOnly string 'TRUE' returns true (case insensitive)",
+			alert: &Alert{
+				ID:       "test-1",
+				Metadata: map[string]interface{}{"monitorOnly": "TRUE"},
+			},
+			want: true,
+		},
+		{
+			name: "monitorOnly string 'True' returns true (case insensitive)",
+			alert: &Alert{
+				ID:       "test-1",
+				Metadata: map[string]interface{}{"monitorOnly": "True"},
+			},
+			want: true,
+		},
+		{
+			name: "monitorOnly string 'false' returns false",
+			alert: &Alert{
+				ID:       "test-1",
+				Metadata: map[string]interface{}{"monitorOnly": "false"},
+			},
+			want: false,
+		},
+		{
+			name: "monitorOnly string 'yes' returns false (not 'true')",
+			alert: &Alert{
+				ID:       "test-1",
+				Metadata: map[string]interface{}{"monitorOnly": "yes"},
+			},
+			want: false,
+		},
+		{
+			name: "monitorOnly int value returns false (not bool or string)",
+			alert: &Alert{
+				ID:       "test-1",
+				Metadata: map[string]interface{}{"monitorOnly": 1},
+			},
+			want: false,
+		},
+		{
+			name: "monitorOnly nil value returns false",
+			alert: &Alert{
+				ID:       "test-1",
+				Metadata: map[string]interface{}{"monitorOnly": nil},
+			},
+			want: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := isMonitorOnlyAlert(tc.alert)
+			if got != tc.want {
+				t.Errorf("isMonitorOnlyAlert() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestQuietHoursCategoryForAlert tests the quietHoursCategoryForAlert function
+func TestQuietHoursCategoryForAlert(t *testing.T) {
+	tests := []struct {
+		name  string
+		alert *Alert
+		want  string
+	}{
+		// Nil alert
+		{
+			name:  "nil alert returns empty",
+			alert: nil,
+			want:  "",
+		},
+
+		// Performance metrics
+		{
+			name:  "cpu type returns performance",
+			alert: &Alert{Type: "cpu"},
+			want:  "performance",
+		},
+		{
+			name:  "memory type returns performance",
+			alert: &Alert{Type: "memory"},
+			want:  "performance",
+		},
+		{
+			name:  "disk type returns performance",
+			alert: &Alert{Type: "disk"},
+			want:  "performance",
+		},
+		{
+			name:  "diskRead type returns performance",
+			alert: &Alert{Type: "diskRead"},
+			want:  "performance",
+		},
+		{
+			name:  "diskWrite type returns performance",
+			alert: &Alert{Type: "diskWrite"},
+			want:  "performance",
+		},
+		{
+			name:  "networkIn type returns performance",
+			alert: &Alert{Type: "networkIn"},
+			want:  "performance",
+		},
+		{
+			name:  "networkOut type returns performance",
+			alert: &Alert{Type: "networkOut"},
+			want:  "performance",
+		},
+		{
+			name:  "temperature type returns performance",
+			alert: &Alert{Type: "temperature"},
+			want:  "performance",
+		},
+		{
+			name:  "queue-depth returns performance",
+			alert: &Alert{Type: "queue-depth"},
+			want:  "performance",
+		},
+		{
+			name:  "queue-deferred returns performance",
+			alert: &Alert{Type: "queue-deferred"},
+			want:  "performance",
+		},
+		{
+			name:  "queue-hold returns performance",
+			alert: &Alert{Type: "queue-hold"},
+			want:  "performance",
+		},
+		{
+			name:  "message-age returns performance",
+			alert: &Alert{Type: "message-age"},
+			want:  "performance",
+		},
+		{
+			name:  "docker-container-health returns performance",
+			alert: &Alert{Type: "docker-container-health"},
+			want:  "performance",
+		},
+		{
+			name:  "docker-container-restart-loop returns performance",
+			alert: &Alert{Type: "docker-container-restart-loop"},
+			want:  "performance",
+		},
+		{
+			name:  "docker-container-oom-kill returns performance",
+			alert: &Alert{Type: "docker-container-oom-kill"},
+			want:  "performance",
+		},
+		{
+			name:  "docker-container-memory-limit returns performance",
+			alert: &Alert{Type: "docker-container-memory-limit"},
+			want:  "performance",
+		},
+
+		// Storage metrics
+		{
+			name:  "usage type returns storage",
+			alert: &Alert{Type: "usage"},
+			want:  "storage",
+		},
+		{
+			name:  "disk-health returns storage",
+			alert: &Alert{Type: "disk-health"},
+			want:  "storage",
+		},
+		{
+			name:  "disk-wearout returns storage",
+			alert: &Alert{Type: "disk-wearout"},
+			want:  "storage",
+		},
+		{
+			name:  "zfs-pool-state returns storage",
+			alert: &Alert{Type: "zfs-pool-state"},
+			want:  "storage",
+		},
+		{
+			name:  "zfs-pool-errors returns storage",
+			alert: &Alert{Type: "zfs-pool-errors"},
+			want:  "storage",
+		},
+		{
+			name:  "zfs-device returns storage",
+			alert: &Alert{Type: "zfs-device"},
+			want:  "storage",
+		},
+
+		// Offline metrics
+		{
+			name:  "connectivity type returns offline",
+			alert: &Alert{Type: "connectivity"},
+			want:  "offline",
+		},
+		{
+			name:  "offline type returns offline",
+			alert: &Alert{Type: "offline"},
+			want:  "offline",
+		},
+		{
+			name:  "powered-off type returns offline",
+			alert: &Alert{Type: "powered-off"},
+			want:  "offline",
+		},
+		{
+			name:  "docker-host-offline returns offline",
+			alert: &Alert{Type: "docker-host-offline"},
+			want:  "offline",
+		},
+
+		// Docker container prefix handling
+		{
+			name:  "docker-container-state returns offline",
+			alert: &Alert{Type: "docker-container-state"},
+			want:  "offline",
+		},
+		{
+			name:  "docker-container-cpu returns performance (prefix match)",
+			alert: &Alert{Type: "docker-container-cpu"},
+			want:  "performance",
+		},
+		{
+			name:  "docker-container-disk returns performance (prefix match)",
+			alert: &Alert{Type: "docker-container-disk"},
+			want:  "performance",
+		},
+
+		// Unknown types
+		{
+			name:  "unknown type returns empty",
+			alert: &Alert{Type: "unknown-type"},
+			want:  "",
+		},
+		{
+			name:  "empty type returns empty",
+			alert: &Alert{Type: ""},
+			want:  "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := quietHoursCategoryForAlert(tc.alert)
+			if got != tc.want {
+				t.Errorf("quietHoursCategoryForAlert(%v) = %q, want %q", tc.alert, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestEnsureValidHysteresis tests the ensureValidHysteresis function
+func TestEnsureValidHysteresis(t *testing.T) {
+	tests := []struct {
+		name         string
+		threshold    *HysteresisThreshold
+		metricName   string
+		wantTrigger  float64
+		wantClear    float64
+		expectChange bool
+	}{
+		{
+			name:         "nil threshold does nothing",
+			threshold:    nil,
+			metricName:   "cpu",
+			expectChange: false,
+		},
+		{
+			name:         "valid threshold unchanged",
+			threshold:    &HysteresisThreshold{Trigger: 90, Clear: 85},
+			metricName:   "cpu",
+			wantTrigger:  90,
+			wantClear:    85,
+			expectChange: false,
+		},
+		{
+			name:         "clear < trigger is valid",
+			threshold:    &HysteresisThreshold{Trigger: 80, Clear: 70},
+			metricName:   "memory",
+			wantTrigger:  80,
+			wantClear:    70,
+			expectChange: false,
+		},
+		{
+			name:         "clear == trigger is auto-fixed",
+			threshold:    &HysteresisThreshold{Trigger: 90, Clear: 90},
+			metricName:   "disk",
+			wantTrigger:  90,
+			wantClear:    85, // 90 - 5 = 85
+			expectChange: true,
+		},
+		{
+			name:         "clear > trigger is auto-fixed",
+			threshold:    &HysteresisThreshold{Trigger: 80, Clear: 90},
+			metricName:   "network",
+			wantTrigger:  80,
+			wantClear:    75, // 80 - 5 = 75
+			expectChange: true,
+		},
+		{
+			name:         "auto-fix clamps clear to 0 for low trigger",
+			threshold:    &HysteresisThreshold{Trigger: 3, Clear: 5},
+			metricName:   "low",
+			wantTrigger:  3,
+			wantClear:    0, // 3 - 5 = -2, clamped to 0
+			expectChange: true,
+		},
+		{
+			name:         "trigger at 5 with invalid clear",
+			threshold:    &HysteresisThreshold{Trigger: 5, Clear: 10},
+			metricName:   "edge",
+			wantTrigger:  5,
+			wantClear:    0, // 5 - 5 = 0
+			expectChange: true,
+		},
+		{
+			name:         "zero trigger with positive clear is fixed",
+			threshold:    &HysteresisThreshold{Trigger: 0, Clear: 5},
+			metricName:   "zero",
+			wantTrigger:  0,
+			wantClear:    0, // 0 - 5 = -5, clamped to 0
+			expectChange: true,
+		},
+		{
+			name:         "both zero triggers auto-fix (clear >= trigger)",
+			threshold:    &HysteresisThreshold{Trigger: 0, Clear: 0},
+			metricName:   "disabled",
+			wantTrigger:  0,
+			wantClear:    0, // 0 - 5 = -5, clamped to 0 (same value, but fix attempted)
+			expectChange: false, // Result same as input, even though fix was attempted
+		},
+		{
+			name:         "large trigger with equal clear",
+			threshold:    &HysteresisThreshold{Trigger: 100, Clear: 100},
+			metricName:   "max",
+			wantTrigger:  100,
+			wantClear:    95, // 100 - 5 = 95
+			expectChange: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.threshold == nil {
+				// Just ensure it doesn't panic
+				ensureValidHysteresis(nil, tc.metricName)
+				return
+			}
+
+			// Make a copy to check if it changed
+			originalTrigger := tc.threshold.Trigger
+			originalClear := tc.threshold.Clear
+
+			ensureValidHysteresis(tc.threshold, tc.metricName)
+
+			if tc.threshold.Trigger != tc.wantTrigger {
+				t.Errorf("Trigger = %v, want %v", tc.threshold.Trigger, tc.wantTrigger)
+			}
+			if tc.threshold.Clear != tc.wantClear {
+				t.Errorf("Clear = %v, want %v", tc.threshold.Clear, tc.wantClear)
+			}
+
+			// Verify expectChange matches reality
+			changed := tc.threshold.Trigger != originalTrigger || tc.threshold.Clear != originalClear
+			if changed != tc.expectChange {
+				t.Errorf("expectChange = %v, but changed = %v", tc.expectChange, changed)
+			}
+		})
+	}
+}
