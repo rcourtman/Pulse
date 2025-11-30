@@ -815,3 +815,544 @@ func TestVMToFrontend_TagsJoinedCorrectly(t *testing.T) {
 		t.Errorf("Tags = %q, want 'tag1,tag2,tag3'", frontend.Tags)
 	}
 }
+
+func TestDockerHostToFrontend(t *testing.T) {
+	now := time.Now()
+	tokenLastUsed := now.Add(-1 * time.Hour)
+
+	host := DockerHost{
+		ID:                "dh-123",
+		AgentID:           "agent-456",
+		Hostname:          "docker-server",
+		DisplayName:       "Docker Server",
+		CustomDisplayName: "My Docker Server",
+		MachineID:         "machine-789",
+		OS:                "linux",
+		KernelVersion:     "5.15.0",
+		Architecture:      "amd64",
+		Runtime:           "docker",
+		RuntimeVersion:    "24.0.0",
+		DockerVersion:     "24.0.0",
+		CPUs:              8,
+		TotalMemoryBytes:  16000000000,
+		UptimeSeconds:     86400,
+		CPUUsage:          25.5,
+		Status:            "online",
+		LastSeen:          now,
+		IntervalSeconds:   30,
+		AgentVersion:      "1.0.0",
+		TokenID:           "token-123",
+		TokenName:         "my-token",
+		TokenHint:         "abc***xyz",
+		TokenLastUsedAt:   &tokenLastUsed,
+		LoadAverage:       []float64{1.0, 0.8, 0.5},
+		Memory:            Memory{Total: 16000000000, Used: 8000000000},
+		Disks:             []Disk{{Total: 500000000000, Used: 250000000000}},
+		NetworkInterfaces: []HostNetworkInterface{{Name: "eth0", Addresses: []string{"192.168.1.100"}}},
+		Containers: []DockerContainer{
+			{ID: "ct-1", Name: "nginx", State: "running"},
+		},
+	}
+
+	frontend := host.ToFrontend()
+
+	if frontend.ID != host.ID {
+		t.Errorf("ID = %q, want %q", frontend.ID, host.ID)
+	}
+	if frontend.AgentID != host.AgentID {
+		t.Errorf("AgentID = %q, want %q", frontend.AgentID, host.AgentID)
+	}
+	if frontend.Hostname != host.Hostname {
+		t.Errorf("Hostname = %q, want %q", frontend.Hostname, host.Hostname)
+	}
+	if frontend.DisplayName != host.DisplayName {
+		t.Errorf("DisplayName = %q, want %q", frontend.DisplayName, host.DisplayName)
+	}
+	if frontend.CPUUsagePercent != host.CPUUsage {
+		t.Errorf("CPUUsagePercent = %f, want %f", frontend.CPUUsagePercent, host.CPUUsage)
+	}
+	if frontend.LastSeen != now.Unix()*1000 {
+		t.Errorf("LastSeen = %d, want %d", frontend.LastSeen, now.Unix()*1000)
+	}
+	if frontend.TokenID != host.TokenID {
+		t.Errorf("TokenID = %q, want %q", frontend.TokenID, host.TokenID)
+	}
+	if frontend.TokenLastUsedAt == nil || *frontend.TokenLastUsedAt != tokenLastUsed.Unix()*1000 {
+		t.Errorf("TokenLastUsedAt = %v, want %d", frontend.TokenLastUsedAt, tokenLastUsed.Unix()*1000)
+	}
+	if len(frontend.LoadAverage) != 3 {
+		t.Errorf("LoadAverage length = %d, want 3", len(frontend.LoadAverage))
+	}
+	if frontend.Memory == nil {
+		t.Error("Memory should not be nil")
+	}
+	if len(frontend.Disks) != 1 {
+		t.Errorf("Disks length = %d, want 1", len(frontend.Disks))
+	}
+	if len(frontend.NetworkInterfaces) != 1 {
+		t.Errorf("NetworkInterfaces length = %d, want 1", len(frontend.NetworkInterfaces))
+	}
+	if len(frontend.Containers) != 1 {
+		t.Errorf("Containers length = %d, want 1", len(frontend.Containers))
+	}
+}
+
+func TestDockerHostToFrontend_EmptyDisplayName(t *testing.T) {
+	host := DockerHost{
+		Hostname:    "docker-host",
+		DisplayName: "",
+		LastSeen:    time.Now(),
+	}
+
+	frontend := host.ToFrontend()
+
+	// Should fall back to Hostname
+	if frontend.DisplayName != host.Hostname {
+		t.Errorf("DisplayName = %q, want %q (should fallback to Hostname)", frontend.DisplayName, host.Hostname)
+	}
+}
+
+func TestDockerHostToFrontend_WithSwarm(t *testing.T) {
+	host := DockerHost{
+		LastSeen: time.Now(),
+		Swarm: &DockerSwarmInfo{
+			NodeID:   "node-123",
+			NodeRole: "manager",
+		},
+	}
+
+	frontend := host.ToFrontend()
+
+	if frontend.Swarm == nil {
+		t.Error("Swarm should not be nil")
+	}
+	if frontend.Swarm.NodeID != "node-123" {
+		t.Errorf("Swarm.NodeID = %q, want %q", frontend.Swarm.NodeID, "node-123")
+	}
+}
+
+func TestDockerHostToFrontend_WithServices(t *testing.T) {
+	host := DockerHost{
+		LastSeen: time.Now(),
+		Services: []DockerService{
+			{ID: "svc-1", Name: "web"},
+			{ID: "svc-2", Name: "api"},
+		},
+	}
+
+	frontend := host.ToFrontend()
+
+	if len(frontend.Services) != 2 {
+		t.Errorf("Services length = %d, want 2", len(frontend.Services))
+	}
+}
+
+func TestDockerHostToFrontend_WithTasks(t *testing.T) {
+	host := DockerHost{
+		LastSeen: time.Now(),
+		Tasks: []DockerTask{
+			{ID: "task-1", ServiceName: "web"},
+		},
+	}
+
+	frontend := host.ToFrontend()
+
+	if len(frontend.Tasks) != 1 {
+		t.Errorf("Tasks length = %d, want 1", len(frontend.Tasks))
+	}
+}
+
+func TestDockerHostToFrontend_WithCommand(t *testing.T) {
+	now := time.Now()
+	host := DockerHost{
+		LastSeen: now,
+		Command: &DockerHostCommandStatus{
+			ID:        "cmd-123",
+			Type:      "update",
+			Status:    "pending",
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}
+
+	frontend := host.ToFrontend()
+
+	if frontend.Command == nil {
+		t.Error("Command should not be nil")
+	}
+	if frontend.Command.ID != "cmd-123" {
+		t.Errorf("Command.ID = %q, want %q", frontend.Command.ID, "cmd-123")
+	}
+}
+
+func TestHostToFrontend(t *testing.T) {
+	now := time.Now()
+	tokenLastUsed := now.Add(-2 * time.Hour)
+
+	host := Host{
+		ID:              "host-123",
+		Hostname:        "server1",
+		DisplayName:     "Server 1",
+		Platform:        "linux",
+		OSName:          "Ubuntu",
+		OSVersion:       "22.04",
+		KernelVersion:   "5.15.0-generic",
+		Architecture:    "amd64",
+		CPUCount:        16,
+		CPUUsage:        35.0,
+		Status:          "online",
+		UptimeSeconds:   172800,
+		IntervalSeconds: 60,
+		AgentVersion:    "1.2.0",
+		TokenID:         "tok-456",
+		TokenName:       "host-token",
+		TokenHint:       "xyz***",
+		TokenLastUsedAt: &tokenLastUsed,
+		Tags:            []string{"production", "web"},
+		LastSeen:        now,
+		LoadAverage:     []float64{2.0, 1.5, 1.0},
+		Memory:          Memory{Total: 32000000000, Used: 16000000000},
+		Disks:           []Disk{{Total: 1000000000000, Used: 500000000000}},
+		NetworkInterfaces: []HostNetworkInterface{
+			{Name: "eth0", Addresses: []string{"10.0.0.50"}},
+		},
+		Sensors: HostSensorSummary{
+			TemperatureCelsius: map[string]float64{"cpu": 55.0},
+		},
+	}
+
+	frontend := host.ToFrontend()
+
+	if frontend.ID != host.ID {
+		t.Errorf("ID = %q, want %q", frontend.ID, host.ID)
+	}
+	if frontend.Hostname != host.Hostname {
+		t.Errorf("Hostname = %q, want %q", frontend.Hostname, host.Hostname)
+	}
+	if frontend.DisplayName != host.DisplayName {
+		t.Errorf("DisplayName = %q, want %q", frontend.DisplayName, host.DisplayName)
+	}
+	if frontend.Platform != host.Platform {
+		t.Errorf("Platform = %q, want %q", frontend.Platform, host.Platform)
+	}
+	if frontend.CPUCount != host.CPUCount {
+		t.Errorf("CPUCount = %d, want %d", frontend.CPUCount, host.CPUCount)
+	}
+	if frontend.CPUUsage != host.CPUUsage {
+		t.Errorf("CPUUsage = %f, want %f", frontend.CPUUsage, host.CPUUsage)
+	}
+	if frontend.LastSeen != now.Unix()*1000 {
+		t.Errorf("LastSeen = %d, want %d", frontend.LastSeen, now.Unix()*1000)
+	}
+	if len(frontend.Tags) != 2 {
+		t.Errorf("Tags length = %d, want 2", len(frontend.Tags))
+	}
+	if len(frontend.LoadAverage) != 3 {
+		t.Errorf("LoadAverage length = %d, want 3", len(frontend.LoadAverage))
+	}
+	if frontend.Memory == nil {
+		t.Error("Memory should not be nil")
+	}
+	if len(frontend.Disks) != 1 {
+		t.Errorf("Disks length = %d, want 1", len(frontend.Disks))
+	}
+	if len(frontend.NetworkInterfaces) != 1 {
+		t.Errorf("NetworkInterfaces length = %d, want 1", len(frontend.NetworkInterfaces))
+	}
+	if frontend.Sensors == nil {
+		t.Error("Sensors should not be nil")
+	}
+	if frontend.TokenLastUsedAt == nil || *frontend.TokenLastUsedAt != tokenLastUsed.Unix()*1000 {
+		t.Errorf("TokenLastUsedAt = %v, want %d", frontend.TokenLastUsedAt, tokenLastUsed.Unix()*1000)
+	}
+}
+
+func TestHostToFrontend_DisplayNameFallback(t *testing.T) {
+	tests := []struct {
+		name        string
+		displayName string
+		hostname    string
+		expected    string
+	}{
+		{
+			name:        "both empty",
+			displayName: "",
+			hostname:    "",
+			expected:    "",
+		},
+		{
+			name:        "displayName set",
+			displayName: "My Server",
+			hostname:    "server1",
+			expected:    "My Server",
+		},
+		{
+			name:        "only hostname",
+			displayName: "",
+			hostname:    "server1",
+			expected:    "server1",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			host := Host{
+				DisplayName: tc.displayName,
+				Hostname:    tc.hostname,
+				LastSeen:    time.Now(),
+			}
+
+			frontend := host.ToFrontend()
+
+			if frontend.DisplayName != tc.expected {
+				t.Errorf("DisplayName = %q, want %q", frontend.DisplayName, tc.expected)
+			}
+		})
+	}
+}
+
+func TestCephClusterToFrontend(t *testing.T) {
+	now := time.Now()
+
+	cluster := CephCluster{
+		ID:             "ceph-123",
+		Instance:       "default",
+		Name:           "ceph-cluster",
+		FSID:           "abc-def-123",
+		Health:         "HEALTH_OK",
+		HealthMessage:  "Cluster is healthy",
+		TotalBytes:     10000000000000,
+		UsedBytes:      5000000000000,
+		AvailableBytes: 5000000000000,
+		UsagePercent:   50.0,
+		NumMons:        3,
+		NumMgrs:        2,
+		NumOSDs:        12,
+		NumOSDsUp:      12,
+		NumOSDsIn:      12,
+		NumPGs:         256,
+		LastUpdated:    now,
+		Pools: []CephPool{
+			{Name: "rbd", StoredBytes: 500000000000, AvailableBytes: 500000000000},
+		},
+		Services: []CephServiceStatus{
+			{Type: "mon", Running: 3, Total: 3},
+		},
+	}
+
+	frontend := cluster.ToFrontend()
+
+	if frontend.ID != cluster.ID {
+		t.Errorf("ID = %q, want %q", frontend.ID, cluster.ID)
+	}
+	if frontend.Name != cluster.Name {
+		t.Errorf("Name = %q, want %q", frontend.Name, cluster.Name)
+	}
+	if frontend.FSID != cluster.FSID {
+		t.Errorf("FSID = %q, want %q", frontend.FSID, cluster.FSID)
+	}
+	if frontend.Health != cluster.Health {
+		t.Errorf("Health = %q, want %q", frontend.Health, cluster.Health)
+	}
+	if frontend.TotalBytes != cluster.TotalBytes {
+		t.Errorf("TotalBytes = %d, want %d", frontend.TotalBytes, cluster.TotalBytes)
+	}
+	if frontend.UsagePercent != cluster.UsagePercent {
+		t.Errorf("UsagePercent = %f, want %f", frontend.UsagePercent, cluster.UsagePercent)
+	}
+	if frontend.NumOSDs != cluster.NumOSDs {
+		t.Errorf("NumOSDs = %d, want %d", frontend.NumOSDs, cluster.NumOSDs)
+	}
+	if frontend.LastUpdated != now.Unix()*1000 {
+		t.Errorf("LastUpdated = %d, want %d", frontend.LastUpdated, now.Unix()*1000)
+	}
+	if len(frontend.Pools) != 1 {
+		t.Errorf("Pools length = %d, want 1", len(frontend.Pools))
+	}
+	if len(frontend.Services) != 1 {
+		t.Errorf("Services length = %d, want 1", len(frontend.Services))
+	}
+}
+
+func TestCephClusterToFrontend_EmptyPoolsAndServices(t *testing.T) {
+	cluster := CephCluster{
+		ID:          "ceph-empty",
+		LastUpdated: time.Now(),
+	}
+
+	frontend := cluster.ToFrontend()
+
+	if frontend.Pools != nil {
+		t.Errorf("Pools = %v, want nil for empty pools", frontend.Pools)
+	}
+	if frontend.Services != nil {
+		t.Errorf("Services = %v, want nil for empty services", frontend.Services)
+	}
+}
+
+func TestReplicationJobToFrontend(t *testing.T) {
+	now := time.Now()
+	lastSync := now.Add(-1 * time.Hour)
+	nextSync := now.Add(1 * time.Hour)
+
+	job := ReplicationJob{
+		ID:                      "rep-123",
+		Instance:                "default",
+		JobID:                   "job-456",
+		JobNumber:               1,
+		Guest:                   "vm/100",
+		GuestID:                 100,
+		GuestName:               "test-vm",
+		GuestType:               "qemu",
+		GuestNode:               "pve1",
+		SourceNode:              "pve1",
+		SourceStorage:           "local-lvm",
+		TargetNode:              "pve2",
+		TargetStorage:           "local-lvm",
+		Schedule:                "*/15 * * * *",
+		Type:                    "local",
+		Enabled:                 true,
+		State:                   "active",
+		Status:                  "OK",
+		LastSyncStatus:          "success",
+		LastSyncUnix:            lastSync.Unix(),
+		LastSyncDurationSeconds: 120,
+		LastSyncDurationHuman:   "2m",
+		NextSyncUnix:            nextSync.Unix(),
+		DurationSeconds:         120,
+		DurationHuman:           "2m",
+		FailCount:               0,
+		Comment:                 "Daily replication",
+		LastSyncTime:            &lastSync,
+		NextSyncTime:            &nextSync,
+		LastPolled:              now,
+	}
+
+	frontend := job.ToFrontend()
+
+	if frontend.ID != job.ID {
+		t.Errorf("ID = %q, want %q", frontend.ID, job.ID)
+	}
+	if frontend.JobID != job.JobID {
+		t.Errorf("JobID = %q, want %q", frontend.JobID, job.JobID)
+	}
+	if frontend.GuestID != job.GuestID {
+		t.Errorf("GuestID = %d, want %d", frontend.GuestID, job.GuestID)
+	}
+	if frontend.GuestName != job.GuestName {
+		t.Errorf("GuestName = %q, want %q", frontend.GuestName, job.GuestName)
+	}
+	if frontend.SourceNode != job.SourceNode {
+		t.Errorf("SourceNode = %q, want %q", frontend.SourceNode, job.SourceNode)
+	}
+	if frontend.TargetNode != job.TargetNode {
+		t.Errorf("TargetNode = %q, want %q", frontend.TargetNode, job.TargetNode)
+	}
+	if frontend.Enabled != job.Enabled {
+		t.Errorf("Enabled = %v, want %v", frontend.Enabled, job.Enabled)
+	}
+	if frontend.LastSyncStatus != job.LastSyncStatus {
+		t.Errorf("LastSyncStatus = %q, want %q", frontend.LastSyncStatus, job.LastSyncStatus)
+	}
+	if frontend.LastSyncTime != lastSync.UnixMilli() {
+		t.Errorf("LastSyncTime = %d, want %d", frontend.LastSyncTime, lastSync.UnixMilli())
+	}
+	if frontend.NextSyncTime != nextSync.UnixMilli() {
+		t.Errorf("NextSyncTime = %d, want %d", frontend.NextSyncTime, nextSync.UnixMilli())
+	}
+	if frontend.PolledAt != now.UnixMilli() {
+		t.Errorf("PolledAt = %d, want %d", frontend.PolledAt, now.UnixMilli())
+	}
+}
+
+func TestReplicationJobToFrontend_NilTimes(t *testing.T) {
+	job := ReplicationJob{
+		ID:           "rep-nil",
+		LastSyncTime: nil,
+		NextSyncTime: nil,
+		LastPolled:   time.Time{}, // zero value
+	}
+
+	frontend := job.ToFrontend()
+
+	if frontend.LastSyncTime != 0 {
+		t.Errorf("LastSyncTime = %d, want 0 for nil", frontend.LastSyncTime)
+	}
+	if frontend.NextSyncTime != 0 {
+		t.Errorf("NextSyncTime = %d, want 0 for nil", frontend.NextSyncTime)
+	}
+	// PolledAt defaults to now if LastPolled is zero
+	if frontend.PolledAt == 0 {
+		t.Error("PolledAt should not be 0 (defaults to now)")
+	}
+}
+
+func TestDockerServiceUpdateToFrontend(t *testing.T) {
+	completedAt := time.Now().Add(-5 * time.Minute)
+
+	update := DockerServiceUpdate{
+		State:       "completed",
+		Message:     "Update completed successfully",
+		CompletedAt: &completedAt,
+	}
+
+	frontend := update.ToFrontend()
+
+	if frontend.State != update.State {
+		t.Errorf("State = %q, want %q", frontend.State, update.State)
+	}
+	if frontend.Message != update.Message {
+		t.Errorf("Message = %q, want %q", frontend.Message, update.Message)
+	}
+	if frontend.CompletedAt == nil || *frontend.CompletedAt != completedAt.Unix()*1000 {
+		t.Errorf("CompletedAt = %v, want %d", frontend.CompletedAt, completedAt.Unix()*1000)
+	}
+}
+
+func TestDockerServiceUpdateToFrontend_NilCompletedAt(t *testing.T) {
+	update := DockerServiceUpdate{
+		State:       "updating",
+		CompletedAt: nil,
+	}
+
+	frontend := update.ToFrontend()
+
+	if frontend.CompletedAt != nil {
+		t.Errorf("CompletedAt = %v, want nil", frontend.CompletedAt)
+	}
+}
+
+func TestDockerContainerToFrontend_PodmanInfo(t *testing.T) {
+	container := DockerContainer{
+		ID:        "podman-ct",
+		Name:      "nginx",
+		CreatedAt: time.Now(),
+		Podman: &DockerPodmanContainer{
+			PodName:           "web-pod",
+			PodID:             "pod-123",
+			Infra:             false,
+			ComposeProject:    "myapp",
+			ComposeService:    "web",
+			ComposeWorkdir:    "/home/user/myapp",
+			ComposeConfigHash: "abc123",
+			AutoUpdatePolicy:  "registry",
+			AutoUpdateRestart: "always",
+			UserNamespace:     "keep-id:uid=1000,gid=1000",
+		},
+	}
+
+	frontend := container.ToFrontend()
+
+	if frontend.Podman == nil {
+		t.Fatal("Podman should not be nil")
+	}
+	if frontend.Podman.PodName != "web-pod" {
+		t.Errorf("Podman.PodName = %q, want %q", frontend.Podman.PodName, "web-pod")
+	}
+	if frontend.Podman.ComposeProject != "myapp" {
+		t.Errorf("Podman.ComposeProject = %q, want %q", frontend.Podman.ComposeProject, "myapp")
+	}
+	if frontend.Podman.AutoUpdatePolicy != "registry" {
+		t.Errorf("Podman.AutoUpdatePolicy = %q, want %q", frontend.Podman.AutoUpdatePolicy, "registry")
+	}
+}
