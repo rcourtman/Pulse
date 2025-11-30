@@ -1,7 +1,10 @@
 package alerts
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 // TestSanitizeAlertKey tests the sanitizeAlertKey function
@@ -585,5 +588,478 @@ func TestCalculateMedianInt_DoesNotModifyInput(t *testing.T) {
 			t.Errorf("calculateMedianInt modified input: got %v, original was %v", input, original)
 			return
 		}
+	}
+}
+
+// TestHostResourceID tests the hostResourceID function
+func TestHostResourceID(t *testing.T) {
+	tests := []struct {
+		name   string
+		hostID string
+		want   string
+	}{
+		{
+			name:   "normal host ID",
+			hostID: "host-123",
+			want:   "host:host-123",
+		},
+		{
+			name:   "empty string returns unknown",
+			hostID: "",
+			want:   "host:unknown",
+		},
+		{
+			name:   "whitespace only returns unknown",
+			hostID: "   ",
+			want:   "host:unknown",
+		},
+		{
+			name:   "whitespace is trimmed",
+			hostID: "  host-456  ",
+			want:   "host:host-456",
+		},
+		{
+			name:   "UUID format",
+			hostID: "550e8400-e29b-41d4-a716-446655440000",
+			want:   "host:550e8400-e29b-41d4-a716-446655440000",
+		},
+		{
+			name:   "simple hostname",
+			hostID: "server1",
+			want:   "host:server1",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := hostResourceID(tc.hostID)
+			if got != tc.want {
+				t.Errorf("hostResourceID(%q) = %q, want %q", tc.hostID, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestHostDisplayName tests the hostDisplayName function
+func TestHostDisplayName(t *testing.T) {
+	tests := []struct {
+		name string
+		host models.Host
+		want string
+	}{
+		{
+			name: "display name preferred",
+			host: models.Host{
+				ID:          "id-123",
+				DisplayName: "My Server",
+				Hostname:    "server.local",
+			},
+			want: "My Server",
+		},
+		{
+			name: "hostname when no display name",
+			host: models.Host{
+				ID:          "id-123",
+				DisplayName: "",
+				Hostname:    "server.local",
+			},
+			want: "server.local",
+		},
+		{
+			name: "ID when no display name or hostname",
+			host: models.Host{
+				ID:          "id-123",
+				DisplayName: "",
+				Hostname:    "",
+			},
+			want: "id-123",
+		},
+		{
+			name: "fallback to Host literal",
+			host: models.Host{
+				ID:          "",
+				DisplayName: "",
+				Hostname:    "",
+			},
+			want: "Host",
+		},
+		{
+			name: "whitespace display name ignored",
+			host: models.Host{
+				ID:          "id-123",
+				DisplayName: "   ",
+				Hostname:    "server.local",
+			},
+			want: "server.local",
+		},
+		{
+			name: "whitespace hostname ignored",
+			host: models.Host{
+				ID:          "id-123",
+				DisplayName: "",
+				Hostname:    "   ",
+			},
+			want: "id-123",
+		},
+		{
+			name: "display name with whitespace trimmed",
+			host: models.Host{
+				ID:          "id-123",
+				DisplayName: "  Server Name  ",
+				Hostname:    "server.local",
+			},
+			want: "Server Name",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := hostDisplayName(tc.host)
+			if got != tc.want {
+				t.Errorf("hostDisplayName() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestHostInstanceName tests the hostInstanceName function
+func TestHostInstanceName(t *testing.T) {
+	tests := []struct {
+		name string
+		host models.Host
+		want string
+	}{
+		{
+			name: "platform preferred",
+			host: models.Host{
+				Platform: "linux",
+				OSName:   "Ubuntu 22.04",
+			},
+			want: "linux",
+		},
+		{
+			name: "os name when no platform",
+			host: models.Host{
+				Platform: "",
+				OSName:   "Ubuntu 22.04",
+			},
+			want: "Ubuntu 22.04",
+		},
+		{
+			name: "fallback to Host Agent",
+			host: models.Host{
+				Platform: "",
+				OSName:   "",
+			},
+			want: "Host Agent",
+		},
+		{
+			name: "whitespace platform ignored",
+			host: models.Host{
+				Platform: "   ",
+				OSName:   "Windows Server",
+			},
+			want: "Windows Server",
+		},
+		{
+			name: "whitespace os name ignored",
+			host: models.Host{
+				Platform: "",
+				OSName:   "   ",
+			},
+			want: "Host Agent",
+		},
+		{
+			name: "platform with whitespace trimmed",
+			host: models.Host{
+				Platform: "  darwin  ",
+				OSName:   "macOS",
+			},
+			want: "darwin",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := hostInstanceName(tc.host)
+			if got != tc.want {
+				t.Errorf("hostInstanceName() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestSanitizeHostComponent tests the sanitizeHostComponent function
+func TestSanitizeHostComponent(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		// Empty/whitespace
+		{
+			name:  "empty returns unknown",
+			input: "",
+			want:  "unknown",
+		},
+		{
+			name:  "whitespace only returns unknown",
+			input: "   ",
+			want:  "unknown",
+		},
+
+		// Basic strings
+		{
+			name:  "lowercase passes through",
+			input: "myhost",
+			want:  "myhost",
+		},
+		{
+			name:  "uppercase converted to lowercase",
+			input: "MYHOST",
+			want:  "myhost",
+		},
+		{
+			name:  "mixed case normalized",
+			input: "MyHost",
+			want:  "myhost",
+		},
+		{
+			name:  "numbers preserved",
+			input: "host123",
+			want:  "host123",
+		},
+
+		// Special characters become hyphens
+		{
+			name:  "spaces become hyphen",
+			input: "my host",
+			want:  "my-host",
+		},
+		{
+			name:  "multiple spaces become single hyphen",
+			input: "my   host",
+			want:  "my-host",
+		},
+		{
+			name:  "underscores become hyphen",
+			input: "my_host",
+			want:  "my-host",
+		},
+		{
+			name:  "slashes become hyphen",
+			input: "mnt/data",
+			want:  "mnt-data",
+		},
+		{
+			name:  "dots become hyphen",
+			input: "host.local",
+			want:  "host-local",
+		},
+		{
+			name:  "mixed special chars",
+			input: "host.local/data_01",
+			want:  "host-local-data-01",
+		},
+
+		// Trimming leading/trailing hyphens
+		{
+			name:  "leading special chars trimmed",
+			input: "--host",
+			want:  "host",
+		},
+		{
+			name:  "trailing special chars trimmed",
+			input: "host--",
+			want:  "host",
+		},
+		{
+			name:  "both ends trimmed",
+			input: "/host/",
+			want:  "host",
+		},
+
+		// Only special chars
+		{
+			name:  "only special chars returns unknown",
+			input: "@#$%",
+			want:  "unknown",
+		},
+		{
+			name:  "only hyphens returns unknown",
+			input: "---",
+			want:  "unknown",
+		},
+
+		// Real-world examples
+		{
+			name:  "linux mount path",
+			input: "/mnt/storage",
+			want:  "mnt-storage",
+		},
+		{
+			name:  "device path",
+			input: "/dev/sda1",
+			want:  "dev-sda1",
+		},
+		{
+			name:  "nvme device",
+			input: "nvme0n1p1",
+			want:  "nvme0n1p1",
+		},
+		{
+			name:  "IP address",
+			input: "192.168.1.1",
+			want:  "192-168-1-1",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sanitizeHostComponent(tc.input)
+			if got != tc.want {
+				t.Errorf("sanitizeHostComponent(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestSanitizeRAIDDevice tests the sanitizeRAIDDevice function
+func TestSanitizeRAIDDevice(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "with dev prefix",
+			input: "/dev/md0",
+			want:  "md0",
+		},
+		{
+			name:  "without dev prefix",
+			input: "md0",
+			want:  "md0",
+		},
+		{
+			name:  "nvme device",
+			input: "/dev/nvme0n1",
+			want:  "nvme0n1",
+		},
+		{
+			name:  "sda device",
+			input: "/dev/sda",
+			want:  "sda",
+		},
+		{
+			name:  "empty returns unknown",
+			input: "",
+			want:  "unknown",
+		},
+		{
+			name:  "only dev prefix",
+			input: "/dev/",
+			want:  "unknown",
+		},
+		{
+			name:  "md device with partition",
+			input: "/dev/md127p1",
+			want:  "md127p1",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sanitizeRAIDDevice(tc.input)
+			if got != tc.want {
+				t.Errorf("sanitizeRAIDDevice(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestHostDiskResourceID tests the hostDiskResourceID function
+func TestHostDiskResourceID(t *testing.T) {
+	tests := []struct {
+		name         string
+		host         models.Host
+		disk         models.Disk
+		wantID       string
+		wantNamePart string // Part of the name to check
+	}{
+		{
+			name: "mountpoint preferred",
+			host: models.Host{ID: "host-123"},
+			disk: models.Disk{
+				Mountpoint: "/mnt/data",
+				Device:     "/dev/sda1",
+			},
+			wantID:       "host:host-123/disk:mnt-data",
+			wantNamePart: "/mnt/data",
+		},
+		{
+			name: "device when no mountpoint",
+			host: models.Host{ID: "host-123"},
+			disk: models.Disk{
+				Mountpoint: "",
+				Device:     "/dev/sda1",
+			},
+			wantID:       "host:host-123/disk:dev-sda1",
+			wantNamePart: "/dev/sda1",
+		},
+		{
+			name: "fallback to disk literal",
+			host: models.Host{ID: "host-123"},
+			disk: models.Disk{
+				Mountpoint: "",
+				Device:     "",
+			},
+			wantID:       "host:host-123/disk:disk",
+			wantNamePart: "disk",
+		},
+		{
+			name: "root mount sanitizes to unknown",
+			host: models.Host{ID: "host-123"},
+			disk: models.Disk{
+				Mountpoint: "/",
+				Device:     "/dev/sda1",
+			},
+			wantID:       "host:host-123/disk:unknown",
+			wantNamePart: "/",
+		},
+		{
+			name: "whitespace mountpoint uses device",
+			host: models.Host{ID: "host-123"},
+			disk: models.Disk{
+				Mountpoint: "   ",
+				Device:     "/dev/sda1",
+			},
+			wantID:       "host:host-123/disk:dev-sda1",
+			wantNamePart: "/dev/sda1",
+		},
+		{
+			name: "includes host display name",
+			host: models.Host{
+				ID:          "host-123",
+				DisplayName: "My Server",
+			},
+			disk: models.Disk{
+				Mountpoint: "/data",
+			},
+			wantID:       "host:host-123/disk:data",
+			wantNamePart: "My Server",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotID, gotName := hostDiskResourceID(tc.host, tc.disk)
+			if gotID != tc.wantID {
+				t.Errorf("hostDiskResourceID() ID = %q, want %q", gotID, tc.wantID)
+			}
+			if !strings.Contains(gotName, tc.wantNamePart) {
+				t.Errorf("hostDiskResourceID() Name = %q, want to contain %q", gotName, tc.wantNamePart)
+			}
+		})
 	}
 }
