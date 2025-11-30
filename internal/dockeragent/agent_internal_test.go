@@ -7,6 +7,7 @@ import (
 	"time"
 
 	containertypes "github.com/docker/docker/api/types/container"
+	systemtypes "github.com/docker/docker/api/types/system"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
@@ -750,6 +751,285 @@ func TestExtractPodmanMetadata(t *testing.T) {
 			tt.want(t, got)
 		})
 	}
+}
+
+func TestDetectRuntime(t *testing.T) {
+	tests := []struct {
+		name       string
+		info       systemtypes.Info
+		endpoint   string
+		preference RuntimeKind
+		want       RuntimeKind
+	}{
+		{
+			name:       "preference podman returns podman",
+			info:       systemtypes.Info{},
+			endpoint:   "unix:///var/run/docker.sock",
+			preference: RuntimePodman,
+			want:       RuntimePodman,
+		},
+		{
+			name:       "podman in endpoint lowercase",
+			info:       systemtypes.Info{},
+			endpoint:   "unix:///run/podman/podman.sock",
+			preference: RuntimeAuto,
+			want:       RuntimePodman,
+		},
+		{
+			name:       "libpod in endpoint",
+			info:       systemtypes.Info{},
+			endpoint:   "unix:///run/user/1000/libpod/libpod.sock",
+			preference: RuntimeAuto,
+			want:       RuntimePodman,
+		},
+		{
+			name:       "podman in endpoint uppercase",
+			info:       systemtypes.Info{},
+			endpoint:   "unix:///run/PODMAN/podman.sock",
+			preference: RuntimeAuto,
+			want:       RuntimePodman,
+		},
+		{
+			name: "podman in InitBinary",
+			info: systemtypes.Info{
+				InitBinary: "/usr/bin/podman",
+			},
+			endpoint:   "unix:///var/run/docker.sock",
+			preference: RuntimeAuto,
+			want:       RuntimePodman,
+		},
+		{
+			name: "podman in ServerVersion",
+			info: systemtypes.Info{
+				ServerVersion: "4.5.0-podman",
+			},
+			endpoint:   "unix:///var/run/docker.sock",
+			preference: RuntimeAuto,
+			want:       RuntimePodman,
+		},
+		{
+			name: "podman in DriverStatus",
+			info: systemtypes.Info{
+				DriverStatus: [][2]string{
+					{"Driver", "overlay"},
+					{"Backing Filesystem", "extfs"},
+					{"Supports d_type", "true"},
+					{"Using metacopy", "podman-default"},
+				},
+			},
+			endpoint:   "unix:///var/run/docker.sock",
+			preference: RuntimeAuto,
+			want:       RuntimePodman,
+		},
+		{
+			name: "podman in SecurityOptions",
+			info: systemtypes.Info{
+				SecurityOptions: []string{
+					"name=seccomp,profile=default",
+					"name=rootless,podman",
+				},
+			},
+			endpoint:   "unix:///var/run/docker.sock",
+			preference: RuntimeAuto,
+			want:       RuntimePodman,
+		},
+		{
+			name:       "preference docker returns docker",
+			info:       systemtypes.Info{},
+			endpoint:   "unix:///var/run/docker.sock",
+			preference: RuntimeDocker,
+			want:       RuntimeDocker,
+		},
+		{
+			name:       "auto with docker socket returns docker",
+			info:       systemtypes.Info{},
+			endpoint:   "unix:///var/run/docker.sock",
+			preference: RuntimeAuto,
+			want:       RuntimeDocker,
+		},
+		{
+			name: "docker info with no podman indicators returns docker",
+			info: systemtypes.Info{
+				InitBinary:      "docker-init",
+				ServerVersion:   "24.0.5",
+				DriverStatus:    [][2]string{{"Driver", "overlay2"}},
+				SecurityOptions: []string{"name=seccomp,profile=default"},
+			},
+			endpoint:   "unix:///var/run/docker.sock",
+			preference: RuntimeAuto,
+			want:       RuntimeDocker,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := detectRuntime(tt.info, tt.endpoint, tt.preference)
+			if got != tt.want {
+				t.Errorf("detectRuntime() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildRuntimeCandidates(t *testing.T) {
+	tests := []struct {
+		name       string
+		preference RuntimeKind
+		wantMin    int // minimum expected candidates
+	}{
+		{
+			name:       "auto includes both podman and docker sockets",
+			preference: RuntimeAuto,
+			wantMin:    3, // at least env defaults + podman rootless + docker default
+		},
+		{
+			name:       "docker preference includes docker socket",
+			preference: RuntimeDocker,
+			wantMin:    2, // at least env defaults + docker default
+		},
+		{
+			name:       "podman preference includes podman sockets",
+			preference: RuntimePodman,
+			wantMin:    3, // at least env defaults + podman rootless + podman system
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			candidates := buildRuntimeCandidates(tt.preference)
+			if len(candidates) < tt.wantMin {
+				t.Errorf("buildRuntimeCandidates(%v) returned %d candidates, want at least %d", tt.preference, len(candidates), tt.wantMin)
+			}
+
+			// Verify first candidate is always "environment defaults"
+			if len(candidates) > 0 && candidates[0].label != "environment defaults" {
+				t.Errorf("first candidate should be 'environment defaults', got %q", candidates[0].label)
+			}
+
+			// Verify no duplicates
+			seen := make(map[string]bool)
+			for _, c := range candidates {
+				key := c.host
+				if key == "" {
+					key = "__default__"
+				}
+				if seen[key] {
+					t.Errorf("duplicate candidate with host %q", c.host)
+				}
+				seen[key] = true
+			}
+		})
+	}
+}
+
+func TestBuildRuntimeCandidatesContent(t *testing.T) {
+	// Test that docker preference doesn't include podman sockets
+	t.Run("docker excludes podman sockets", func(t *testing.T) {
+		candidates := buildRuntimeCandidates(RuntimeDocker)
+		for _, c := range candidates {
+			if c.label == "podman rootless socket" || c.label == "podman system socket" {
+				t.Errorf("docker preference should not include %q", c.label)
+			}
+		}
+	})
+
+	// Test that podman preference doesn't include default docker socket
+	t.Run("podman excludes default docker socket", func(t *testing.T) {
+		candidates := buildRuntimeCandidates(RuntimePodman)
+		for _, c := range candidates {
+			if c.label == "default docker socket" {
+				t.Errorf("podman preference should not include %q", c.label)
+			}
+		}
+	})
+
+	// Test that auto includes both
+	t.Run("auto includes both docker and podman", func(t *testing.T) {
+		candidates := buildRuntimeCandidates(RuntimeAuto)
+		hasDocker := false
+		hasPodman := false
+		for _, c := range candidates {
+			if c.label == "default docker socket" {
+				hasDocker = true
+			}
+			if c.label == "podman rootless socket" || c.label == "podman system socket" {
+				hasPodman = true
+			}
+		}
+		if !hasDocker {
+			t.Error("auto preference should include docker socket")
+		}
+		if !hasPodman {
+			t.Error("auto preference should include podman sockets")
+		}
+	})
+}
+
+func TestRandomDuration(t *testing.T) {
+	tests := []struct {
+		name string
+		max  time.Duration
+	}{
+		{"zero max returns zero", 0},
+		{"negative max returns zero", -time.Second},
+		{"positive max returns value in range", 5 * time.Second},
+		{"large max works", time.Hour},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.max <= 0 {
+				got := randomDuration(tt.max)
+				if got != 0 {
+					t.Errorf("randomDuration(%v) = %v, want 0", tt.max, got)
+				}
+				return
+			}
+
+			// For positive max, verify the result is in range
+			// Run multiple times to check randomness
+			for i := 0; i < 10; i++ {
+				got := randomDuration(tt.max)
+				if got < 0 || got >= tt.max {
+					t.Errorf("randomDuration(%v) = %v, want [0, %v)", tt.max, got, tt.max)
+				}
+			}
+		})
+	}
+
+	// Test that results are actually random (not all the same)
+	t.Run("results vary", func(t *testing.T) {
+		max := 10 * time.Second
+		results := make(map[time.Duration]bool)
+		for i := 0; i < 100; i++ {
+			results[randomDuration(max)] = true
+		}
+		// With 100 iterations, we should get more than 1 unique result
+		if len(results) < 2 {
+			t.Error("randomDuration appears to not be random")
+		}
+	})
+}
+
+func TestDetermineSelfUpdateArch(t *testing.T) {
+	// This test validates the function returns a valid result
+	// The actual result depends on the runtime environment
+	got := determineSelfUpdateArch()
+
+	// Should be one of the known values or empty (if architecture unknown)
+	validArches := map[string]bool{
+		"":             true,
+		"linux-amd64":  true,
+		"linux-arm64":  true,
+		"linux-armv7":  true,
+	}
+
+	if !validArches[got] {
+		t.Errorf("determineSelfUpdateArch() = %q, want one of %v", got, validArches)
+	}
+
+	// On most test environments, we should get a non-empty result
+	// But we can't assert this as it depends on the machine
 }
 
 func TestDetectHostRemovedError(t *testing.T) {
