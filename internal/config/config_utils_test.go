@@ -166,6 +166,456 @@ func TestSplitAndTrim(t *testing.T) {
 	}
 }
 
+func TestCloneDiscoveryConfig(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  DiscoveryConfig
+	}{
+		{
+			name: "empty config",
+			cfg:  DiscoveryConfig{},
+		},
+		{
+			name: "full config with all fields",
+			cfg: DiscoveryConfig{
+				EnvironmentOverride: "docker_host",
+				SubnetAllowlist:     []string{"10.0.0.0/8", "192.168.0.0/16"},
+				SubnetBlocklist:     []string{"172.16.0.0/12"},
+				MaxHostsPerScan:     512,
+				MaxConcurrent:       25,
+				EnableReverseDNS:    true,
+				ScanGateways:        false,
+				DialTimeout:         2000,
+				HTTPTimeout:         3000,
+			},
+		},
+		{
+			name: "nil slices",
+			cfg: DiscoveryConfig{
+				EnvironmentOverride: "native",
+				SubnetAllowlist:     nil,
+				SubnetBlocklist:     nil,
+				MaxHostsPerScan:     100,
+			},
+		},
+		{
+			name: "empty slices",
+			cfg: DiscoveryConfig{
+				SubnetAllowlist: []string{},
+				SubnetBlocklist: []string{},
+			},
+		},
+		{
+			name: "single element slices",
+			cfg: DiscoveryConfig{
+				SubnetAllowlist: []string{"10.0.0.0/8"},
+				SubnetBlocklist: []string{"169.254.0.0/16"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clone := CloneDiscoveryConfig(tt.cfg)
+
+			// Verify all scalar fields match
+			if clone.EnvironmentOverride != tt.cfg.EnvironmentOverride {
+				t.Errorf("EnvironmentOverride: got %q, want %q", clone.EnvironmentOverride, tt.cfg.EnvironmentOverride)
+			}
+			if clone.MaxHostsPerScan != tt.cfg.MaxHostsPerScan {
+				t.Errorf("MaxHostsPerScan: got %d, want %d", clone.MaxHostsPerScan, tt.cfg.MaxHostsPerScan)
+			}
+			if clone.MaxConcurrent != tt.cfg.MaxConcurrent {
+				t.Errorf("MaxConcurrent: got %d, want %d", clone.MaxConcurrent, tt.cfg.MaxConcurrent)
+			}
+			if clone.EnableReverseDNS != tt.cfg.EnableReverseDNS {
+				t.Errorf("EnableReverseDNS: got %v, want %v", clone.EnableReverseDNS, tt.cfg.EnableReverseDNS)
+			}
+			if clone.ScanGateways != tt.cfg.ScanGateways {
+				t.Errorf("ScanGateways: got %v, want %v", clone.ScanGateways, tt.cfg.ScanGateways)
+			}
+			if clone.DialTimeout != tt.cfg.DialTimeout {
+				t.Errorf("DialTimeout: got %d, want %d", clone.DialTimeout, tt.cfg.DialTimeout)
+			}
+			if clone.HTTPTimeout != tt.cfg.HTTPTimeout {
+				t.Errorf("HTTPTimeout: got %d, want %d", clone.HTTPTimeout, tt.cfg.HTTPTimeout)
+			}
+
+			// Verify slice contents match
+			if len(clone.SubnetAllowlist) != len(tt.cfg.SubnetAllowlist) {
+				t.Errorf("SubnetAllowlist length: got %d, want %d", len(clone.SubnetAllowlist), len(tt.cfg.SubnetAllowlist))
+			} else {
+				for i, v := range clone.SubnetAllowlist {
+					if v != tt.cfg.SubnetAllowlist[i] {
+						t.Errorf("SubnetAllowlist[%d]: got %q, want %q", i, v, tt.cfg.SubnetAllowlist[i])
+					}
+				}
+			}
+
+			if len(clone.SubnetBlocklist) != len(tt.cfg.SubnetBlocklist) {
+				t.Errorf("SubnetBlocklist length: got %d, want %d", len(clone.SubnetBlocklist), len(tt.cfg.SubnetBlocklist))
+			} else {
+				for i, v := range clone.SubnetBlocklist {
+					if v != tt.cfg.SubnetBlocklist[i] {
+						t.Errorf("SubnetBlocklist[%d]: got %q, want %q", i, v, tt.cfg.SubnetBlocklist[i])
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestCloneDiscoveryConfig_SliceIndependence verifies that modifying the clone
+// does not affect the original (deep copy verification).
+func TestCloneDiscoveryConfig_SliceIndependence(t *testing.T) {
+	original := DiscoveryConfig{
+		SubnetAllowlist: []string{"10.0.0.0/8", "192.168.0.0/16"},
+		SubnetBlocklist: []string{"172.16.0.0/12", "169.254.0.0/16"},
+	}
+
+	clone := CloneDiscoveryConfig(original)
+
+	// Modify the clone's slices
+	clone.SubnetAllowlist[0] = "modified"
+	clone.SubnetBlocklist[0] = "modified"
+
+	// Original should be unchanged
+	if original.SubnetAllowlist[0] != "10.0.0.0/8" {
+		t.Errorf("Original SubnetAllowlist was modified: got %q", original.SubnetAllowlist[0])
+	}
+	if original.SubnetBlocklist[0] != "172.16.0.0/12" {
+		t.Errorf("Original SubnetBlocklist was modified: got %q", original.SubnetBlocklist[0])
+	}
+
+	// Append to clone slices
+	clone.SubnetAllowlist = append(clone.SubnetAllowlist, "new")
+
+	// Original length should be unchanged
+	if len(original.SubnetAllowlist) != 2 {
+		t.Errorf("Original SubnetAllowlist length changed: got %d", len(original.SubnetAllowlist))
+	}
+}
+
+// TestCloneDiscoveryConfig_NilSliceIndependence verifies nil slices remain nil in clone.
+func TestCloneDiscoveryConfig_NilSliceIndependence(t *testing.T) {
+	original := DiscoveryConfig{
+		SubnetAllowlist: nil,
+		SubnetBlocklist: nil,
+	}
+
+	clone := CloneDiscoveryConfig(original)
+
+	if clone.SubnetAllowlist != nil {
+		t.Errorf("Expected nil SubnetAllowlist, got %v", clone.SubnetAllowlist)
+	}
+	if clone.SubnetBlocklist != nil {
+		t.Errorf("Expected nil SubnetBlocklist, got %v", clone.SubnetBlocklist)
+	}
+}
+
+func TestNormalizeDiscoveryConfig(t *testing.T) {
+	defaults := DefaultDiscoveryConfig()
+
+	tests := []struct {
+		name     string
+		cfg      DiscoveryConfig
+		expected DiscoveryConfig
+	}{
+		{
+			name: "empty config gets defaults",
+			cfg:  DiscoveryConfig{},
+			expected: DiscoveryConfig{
+				EnvironmentOverride: defaults.EnvironmentOverride,
+				SubnetAllowlist:     []string{},
+				SubnetBlocklist:     defaults.SubnetBlocklist,
+				MaxHostsPerScan:     defaults.MaxHostsPerScan,
+				MaxConcurrent:       defaults.MaxConcurrent,
+				DialTimeout:         defaults.DialTimeout,
+				HTTPTimeout:         defaults.HTTPTimeout,
+			},
+		},
+		{
+			name: "valid environment preserved",
+			cfg: DiscoveryConfig{
+				EnvironmentOverride: "docker_host",
+			},
+			expected: DiscoveryConfig{
+				EnvironmentOverride: "docker_host",
+				SubnetAllowlist:     []string{},
+				SubnetBlocklist:     defaults.SubnetBlocklist,
+				MaxHostsPerScan:     defaults.MaxHostsPerScan,
+				MaxConcurrent:       defaults.MaxConcurrent,
+				DialTimeout:         defaults.DialTimeout,
+				HTTPTimeout:         defaults.HTTPTimeout,
+			},
+		},
+		{
+			name: "invalid environment falls back to auto",
+			cfg: DiscoveryConfig{
+				EnvironmentOverride: "invalid_env",
+			},
+			expected: DiscoveryConfig{
+				EnvironmentOverride: "auto",
+				SubnetAllowlist:     []string{},
+				SubnetBlocklist:     defaults.SubnetBlocklist,
+				MaxHostsPerScan:     defaults.MaxHostsPerScan,
+				MaxConcurrent:       defaults.MaxConcurrent,
+				DialTimeout:         defaults.DialTimeout,
+				HTTPTimeout:         defaults.HTTPTimeout,
+			},
+		},
+		{
+			name: "environment with whitespace trimmed",
+			cfg: DiscoveryConfig{
+				EnvironmentOverride: "  native  ",
+			},
+			expected: DiscoveryConfig{
+				EnvironmentOverride: "native",
+				SubnetAllowlist:     []string{},
+				SubnetBlocklist:     defaults.SubnetBlocklist,
+				MaxHostsPerScan:     defaults.MaxHostsPerScan,
+				MaxConcurrent:       defaults.MaxConcurrent,
+				DialTimeout:         defaults.DialTimeout,
+				HTTPTimeout:         defaults.HTTPTimeout,
+			},
+		},
+		{
+			name: "positive values preserved",
+			cfg: DiscoveryConfig{
+				MaxHostsPerScan: 100,
+				MaxConcurrent:   10,
+				DialTimeout:     500,
+				HTTPTimeout:     1000,
+			},
+			expected: DiscoveryConfig{
+				EnvironmentOverride: defaults.EnvironmentOverride,
+				SubnetAllowlist:     []string{},
+				SubnetBlocklist:     defaults.SubnetBlocklist,
+				MaxHostsPerScan:     100,
+				MaxConcurrent:       10,
+				DialTimeout:         500,
+				HTTPTimeout:         1000,
+			},
+		},
+		{
+			name: "zero values get defaults",
+			cfg: DiscoveryConfig{
+				MaxHostsPerScan: 0,
+				MaxConcurrent:   0,
+				DialTimeout:     0,
+				HTTPTimeout:     0,
+			},
+			expected: DiscoveryConfig{
+				EnvironmentOverride: defaults.EnvironmentOverride,
+				SubnetAllowlist:     []string{},
+				SubnetBlocklist:     defaults.SubnetBlocklist,
+				MaxHostsPerScan:     defaults.MaxHostsPerScan,
+				MaxConcurrent:       defaults.MaxConcurrent,
+				DialTimeout:         defaults.DialTimeout,
+				HTTPTimeout:         defaults.HTTPTimeout,
+			},
+		},
+		{
+			name: "negative values get defaults",
+			cfg: DiscoveryConfig{
+				MaxHostsPerScan: -1,
+				MaxConcurrent:   -10,
+				DialTimeout:     -100,
+				HTTPTimeout:     -1000,
+			},
+			expected: DiscoveryConfig{
+				EnvironmentOverride: defaults.EnvironmentOverride,
+				SubnetAllowlist:     []string{},
+				SubnetBlocklist:     defaults.SubnetBlocklist,
+				MaxHostsPerScan:     defaults.MaxHostsPerScan,
+				MaxConcurrent:       defaults.MaxConcurrent,
+				DialTimeout:         defaults.DialTimeout,
+				HTTPTimeout:         defaults.HTTPTimeout,
+			},
+		},
+		{
+			name: "subnet allowlist sanitized",
+			cfg: DiscoveryConfig{
+				SubnetAllowlist: []string{" 10.0.0.0/8 ", "10.0.0.0/8", "", "192.168.0.0/16"},
+			},
+			expected: DiscoveryConfig{
+				EnvironmentOverride: defaults.EnvironmentOverride,
+				SubnetAllowlist:     []string{"10.0.0.0/8", "192.168.0.0/16"},
+				SubnetBlocklist:     defaults.SubnetBlocklist,
+				MaxHostsPerScan:     defaults.MaxHostsPerScan,
+				MaxConcurrent:       defaults.MaxConcurrent,
+				DialTimeout:         defaults.DialTimeout,
+				HTTPTimeout:         defaults.HTTPTimeout,
+			},
+		},
+		{
+			name: "subnet blocklist sanitized",
+			cfg: DiscoveryConfig{
+				SubnetBlocklist: []string{" 172.16.0.0/12 ", "", "172.16.0.0/12"},
+			},
+			expected: DiscoveryConfig{
+				EnvironmentOverride: defaults.EnvironmentOverride,
+				SubnetAllowlist:     []string{},
+				SubnetBlocklist:     []string{"172.16.0.0/12"},
+				MaxHostsPerScan:     defaults.MaxHostsPerScan,
+				MaxConcurrent:       defaults.MaxConcurrent,
+				DialTimeout:         defaults.DialTimeout,
+				HTTPTimeout:         defaults.HTTPTimeout,
+			},
+		},
+		{
+			name: "nil blocklist gets defaults",
+			cfg: DiscoveryConfig{
+				SubnetBlocklist: nil,
+			},
+			expected: DiscoveryConfig{
+				EnvironmentOverride: defaults.EnvironmentOverride,
+				SubnetAllowlist:     []string{},
+				SubnetBlocklist:     defaults.SubnetBlocklist,
+				MaxHostsPerScan:     defaults.MaxHostsPerScan,
+				MaxConcurrent:       defaults.MaxConcurrent,
+				DialTimeout:         defaults.DialTimeout,
+				HTTPTimeout:         defaults.HTTPTimeout,
+			},
+		},
+		{
+			name: "empty blocklist after sanitization stays empty",
+			cfg: DiscoveryConfig{
+				SubnetBlocklist: []string{"", "  ", ""},
+			},
+			expected: DiscoveryConfig{
+				EnvironmentOverride: defaults.EnvironmentOverride,
+				SubnetAllowlist:     []string{},
+				SubnetBlocklist:     []string{}, // sanitizeCIDRList returns []string{} not nil
+				MaxHostsPerScan:     defaults.MaxHostsPerScan,
+				MaxConcurrent:       defaults.MaxConcurrent,
+				DialTimeout:         defaults.DialTimeout,
+				HTTPTimeout:         defaults.HTTPTimeout,
+			},
+		},
+		{
+			name: "boolean fields preserved",
+			cfg: DiscoveryConfig{
+				EnableReverseDNS: false,
+				ScanGateways:     true,
+			},
+			expected: DiscoveryConfig{
+				EnvironmentOverride: defaults.EnvironmentOverride,
+				SubnetAllowlist:     []string{},
+				SubnetBlocklist:     defaults.SubnetBlocklist,
+				MaxHostsPerScan:     defaults.MaxHostsPerScan,
+				MaxConcurrent:       defaults.MaxConcurrent,
+				EnableReverseDNS:    false,
+				ScanGateways:        true,
+				DialTimeout:         defaults.DialTimeout,
+				HTTPTimeout:         defaults.HTTPTimeout,
+			},
+		},
+		{
+			name: "all valid environments",
+			cfg: DiscoveryConfig{
+				EnvironmentOverride: "lxc_privileged",
+			},
+			expected: DiscoveryConfig{
+				EnvironmentOverride: "lxc_privileged",
+				SubnetAllowlist:     []string{},
+				SubnetBlocklist:     defaults.SubnetBlocklist,
+				MaxHostsPerScan:     defaults.MaxHostsPerScan,
+				MaxConcurrent:       defaults.MaxConcurrent,
+				DialTimeout:         defaults.DialTimeout,
+				HTTPTimeout:         defaults.HTTPTimeout,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := NormalizeDiscoveryConfig(tt.cfg)
+
+			if result.EnvironmentOverride != tt.expected.EnvironmentOverride {
+				t.Errorf("EnvironmentOverride: got %q, want %q", result.EnvironmentOverride, tt.expected.EnvironmentOverride)
+			}
+			if result.MaxHostsPerScan != tt.expected.MaxHostsPerScan {
+				t.Errorf("MaxHostsPerScan: got %d, want %d", result.MaxHostsPerScan, tt.expected.MaxHostsPerScan)
+			}
+			if result.MaxConcurrent != tt.expected.MaxConcurrent {
+				t.Errorf("MaxConcurrent: got %d, want %d", result.MaxConcurrent, tt.expected.MaxConcurrent)
+			}
+			if result.EnableReverseDNS != tt.expected.EnableReverseDNS {
+				t.Errorf("EnableReverseDNS: got %v, want %v", result.EnableReverseDNS, tt.expected.EnableReverseDNS)
+			}
+			if result.ScanGateways != tt.expected.ScanGateways {
+				t.Errorf("ScanGateways: got %v, want %v", result.ScanGateways, tt.expected.ScanGateways)
+			}
+			if result.DialTimeout != tt.expected.DialTimeout {
+				t.Errorf("DialTimeout: got %d, want %d", result.DialTimeout, tt.expected.DialTimeout)
+			}
+			if result.HTTPTimeout != tt.expected.HTTPTimeout {
+				t.Errorf("HTTPTimeout: got %d, want %d", result.HTTPTimeout, tt.expected.HTTPTimeout)
+			}
+
+			// Check slice equality
+			if len(result.SubnetAllowlist) != len(tt.expected.SubnetAllowlist) {
+				t.Errorf("SubnetAllowlist length: got %d, want %d", len(result.SubnetAllowlist), len(tt.expected.SubnetAllowlist))
+			} else {
+				for i, v := range result.SubnetAllowlist {
+					if v != tt.expected.SubnetAllowlist[i] {
+						t.Errorf("SubnetAllowlist[%d]: got %q, want %q", i, v, tt.expected.SubnetAllowlist[i])
+					}
+				}
+			}
+
+			if len(result.SubnetBlocklist) != len(tt.expected.SubnetBlocklist) {
+				t.Errorf("SubnetBlocklist length: got %d, want %d", len(result.SubnetBlocklist), len(tt.expected.SubnetBlocklist))
+			} else {
+				for i, v := range result.SubnetBlocklist {
+					if v != tt.expected.SubnetBlocklist[i] {
+						t.Errorf("SubnetBlocklist[%d]: got %q, want %q", i, v, tt.expected.SubnetBlocklist[i])
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestNormalizeDiscoveryConfig_DoesNotModifyInput verifies the original config is not mutated.
+func TestNormalizeDiscoveryConfig_DoesNotModifyInput(t *testing.T) {
+	original := DiscoveryConfig{
+		EnvironmentOverride: "  docker_host  ",
+		SubnetAllowlist:     []string{" 10.0.0.0/8 ", "192.168.0.0/16"},
+		SubnetBlocklist:     []string{" 172.16.0.0/12 "},
+		MaxHostsPerScan:     -1,
+	}
+
+	// Store original values
+	origEnv := original.EnvironmentOverride
+	origAllowlist := make([]string, len(original.SubnetAllowlist))
+	copy(origAllowlist, original.SubnetAllowlist)
+	origBlocklist := make([]string, len(original.SubnetBlocklist))
+	copy(origBlocklist, original.SubnetBlocklist)
+	origMaxHosts := original.MaxHostsPerScan
+
+	_ = NormalizeDiscoveryConfig(original)
+
+	// Verify original is unchanged
+	if original.EnvironmentOverride != origEnv {
+		t.Errorf("Original EnvironmentOverride modified: got %q, want %q", original.EnvironmentOverride, origEnv)
+	}
+	if original.MaxHostsPerScan != origMaxHosts {
+		t.Errorf("Original MaxHostsPerScan modified: got %d, want %d", original.MaxHostsPerScan, origMaxHosts)
+	}
+	for i, v := range original.SubnetAllowlist {
+		if v != origAllowlist[i] {
+			t.Errorf("Original SubnetAllowlist[%d] modified: got %q, want %q", i, v, origAllowlist[i])
+		}
+	}
+	for i, v := range original.SubnetBlocklist {
+		if v != origBlocklist[i] {
+			t.Errorf("Original SubnetBlocklist[%d] modified: got %q, want %q", i, v, origBlocklist[i])
+		}
+	}
+}
+
 func TestSanitizeCIDRList(t *testing.T) {
 	tests := []struct {
 		name     string
