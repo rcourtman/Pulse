@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -405,6 +406,105 @@ func TestFormatTimeMaybe(t *testing.T) {
 			result := formatTimeMaybe(tt.input)
 			if result != tt.expected {
 				t.Errorf("formatTimeMaybe() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestHasLegacyThresholds(t *testing.T) {
+	ptrFloat := func(v float64) *float64 { return &v }
+
+	tests := []struct {
+		name     string
+		config   alerts.ThresholdConfig
+		expected bool
+	}{
+		{
+			name:     "empty config",
+			config:   alerts.ThresholdConfig{},
+			expected: false,
+		},
+		{
+			name: "modern thresholds only",
+			config: alerts.ThresholdConfig{
+				CPU:    &alerts.HysteresisThreshold{Trigger: 80, Clear: 70},
+				Memory: &alerts.HysteresisThreshold{Trigger: 85, Clear: 75},
+			},
+			expected: false,
+		},
+		{
+			name: "CPU legacy set",
+			config: alerts.ThresholdConfig{
+				CPULegacy: ptrFloat(80.0),
+			},
+			expected: true,
+		},
+		{
+			name: "Memory legacy set",
+			config: alerts.ThresholdConfig{
+				MemoryLegacy: ptrFloat(85.0),
+			},
+			expected: true,
+		},
+		{
+			name: "Disk legacy set",
+			config: alerts.ThresholdConfig{
+				DiskLegacy: ptrFloat(90.0),
+			},
+			expected: true,
+		},
+		{
+			name: "DiskRead legacy set",
+			config: alerts.ThresholdConfig{
+				DiskReadLegacy: ptrFloat(50.0),
+			},
+			expected: true,
+		},
+		{
+			name: "DiskWrite legacy set",
+			config: alerts.ThresholdConfig{
+				DiskWriteLegacy: ptrFloat(60.0),
+			},
+			expected: true,
+		},
+		{
+			name: "NetworkIn legacy set",
+			config: alerts.ThresholdConfig{
+				NetworkInLegacy: ptrFloat(70.0),
+			},
+			expected: true,
+		},
+		{
+			name: "NetworkOut legacy set",
+			config: alerts.ThresholdConfig{
+				NetworkOutLegacy: ptrFloat(75.0),
+			},
+			expected: true,
+		},
+		{
+			name: "multiple legacy fields set",
+			config: alerts.ThresholdConfig{
+				CPULegacy:    ptrFloat(80.0),
+				MemoryLegacy: ptrFloat(85.0),
+				DiskLegacy:   ptrFloat(90.0),
+			},
+			expected: true,
+		},
+		{
+			name: "mixed modern and legacy",
+			config: alerts.ThresholdConfig{
+				CPU:          &alerts.HysteresisThreshold{Trigger: 80, Clear: 70},
+				MemoryLegacy: ptrFloat(85.0),
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := hasLegacyThresholds(tt.config)
+			if result != tt.expected {
+				t.Errorf("hasLegacyThresholds() = %v, want %v", result, tt.expected)
 			}
 		})
 	}
