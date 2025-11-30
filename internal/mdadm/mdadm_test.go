@@ -160,6 +160,320 @@ Consistency Policy : resync
 				},
 			},
 		},
+		{
+			name:   "RAID1 with spare devices",
+			device: "/dev/md3",
+			output: `/dev/md3:
+           Version : 1.2
+        Raid Level : raid1
+      Raid Devices : 2
+     Total Devices : 3
+
+             State : clean
+    Active Devices : 2
+   Working Devices : 3
+    Failed Devices : 0
+     Spare Devices : 1
+
+              Name : server:3
+              UUID : 11223344:55667788:99aabbcc:ddeeff00
+
+    Number   Major   Minor   RaidDevice State
+       0       8        1        0      active sync   /dev/sda1
+       1       8       17        1      active sync   /dev/sdb1
+
+       2       8       33        -      spare   /dev/sdc1`,
+			want: host.RAIDArray{
+				Device:         "/dev/md3",
+				Name:           "server:3",
+				Level:          "raid1",
+				State:          "clean",
+				TotalDevices:   3,
+				ActiveDevices:  2,
+				WorkingDevices: 3,
+				FailedDevices:  0,
+				SpareDevices:   1,
+				UUID:           "11223344:55667788:99aabbcc:ddeeff00",
+				Devices: []host.RAIDDevice{
+					{Device: "/dev/sda1", State: "active sync", Slot: 0},
+					{Device: "/dev/sdb1", State: "active sync", Slot: 1},
+					{Device: "/dev/sdc1", State: "spare", Slot: -1},
+				},
+			},
+		},
+		{
+			name:   "RAID10 array",
+			device: "/dev/md4",
+			output: `/dev/md4:
+           Version : 1.2
+        Raid Level : raid10
+        Array Size : 209715200 (200.00 GiB 214.75 GB)
+      Raid Devices : 4
+     Total Devices : 4
+
+             State : clean
+    Active Devices : 4
+   Working Devices : 4
+    Failed Devices : 0
+     Spare Devices : 0
+
+              Layout : near=2
+          Chunk Size : 512K
+
+              Name : server:4
+              UUID : aabbccdd:eeff0011:22334455:66778899
+
+    Number   Major   Minor   RaidDevice State
+       0       8        1        0      active sync set-A   /dev/sda1
+       1       8       17        1      active sync set-B   /dev/sdb1
+       2       8       33        2      active sync set-A   /dev/sdc1
+       3       8       49        3      active sync set-B   /dev/sdd1`,
+			want: host.RAIDArray{
+				Device:         "/dev/md4",
+				Name:           "server:4",
+				Level:          "raid10",
+				State:          "clean",
+				TotalDevices:   4,
+				ActiveDevices:  4,
+				WorkingDevices: 4,
+				FailedDevices:  0,
+				SpareDevices:   0,
+				UUID:           "aabbccdd:eeff0011:22334455:66778899",
+				Devices: []host.RAIDDevice{
+					{Device: "/dev/sda1", State: "active sync set-A", Slot: 0},
+					{Device: "/dev/sdb1", State: "active sync set-B", Slot: 1},
+					{Device: "/dev/sdc1", State: "active sync set-A", Slot: 2},
+					{Device: "/dev/sdd1", State: "active sync set-B", Slot: 3},
+				},
+			},
+		},
+		{
+			name:   "RAID0 array (striped)",
+			device: "/dev/md5",
+			output: `/dev/md5:
+           Version : 1.2
+        Raid Level : raid0
+        Array Size : 209715200 (200.00 GiB 214.75 GB)
+      Raid Devices : 2
+     Total Devices : 2
+
+             State : clean
+    Active Devices : 2
+   Working Devices : 2
+    Failed Devices : 0
+     Spare Devices : 0
+
+          Chunk Size : 512K
+
+              Name : server:5
+              UUID : 12ab34cd:56ef78gh:90ij12kl:34mn56op
+
+    Number   Major   Minor   RaidDevice State
+       0       8        1        0      active sync   /dev/sda1
+       1       8       17        1      active sync   /dev/sdb1`,
+			want: host.RAIDArray{
+				Device:         "/dev/md5",
+				Name:           "server:5",
+				Level:          "raid0",
+				State:          "clean",
+				TotalDevices:   2,
+				ActiveDevices:  2,
+				WorkingDevices: 2,
+				FailedDevices:  0,
+				SpareDevices:   0,
+				UUID:           "12ab34cd:56ef78gh:90ij12kl:34mn56op",
+				Devices: []host.RAIDDevice{
+					{Device: "/dev/sda1", State: "active sync", Slot: 0},
+					{Device: "/dev/sdb1", State: "active sync", Slot: 1},
+				},
+			},
+		},
+		{
+			name:   "reshaping array",
+			device: "/dev/md6",
+			output: `/dev/md6:
+           Version : 1.2
+        Raid Level : raid5
+      Raid Devices : 4
+     Total Devices : 4
+
+             State : active, reshaping
+    Active Devices : 4
+   Working Devices : 4
+    Failed Devices : 0
+     Spare Devices : 0
+
+    Reshape Status : 23.5% complete
+
+              UUID : 99887766:55443322:11009988:77665544
+
+    Number   Major   Minor   RaidDevice State
+       0       8        1        0      active sync   /dev/sda1
+       1       8       17        1      active sync   /dev/sdb1
+       2       8       33        2      active sync   /dev/sdc1
+       3       8       49        3      active sync   /dev/sdd1`,
+			want: host.RAIDArray{
+				Device:         "/dev/md6",
+				Level:          "raid5",
+				State:          "active, reshaping",
+				TotalDevices:   4,
+				ActiveDevices:  4,
+				WorkingDevices: 4,
+				FailedDevices:  0,
+				SpareDevices:   0,
+				UUID:           "99887766:55443322:11009988:77665544",
+				RebuildPercent: 23.5,
+				Devices: []host.RAIDDevice{
+					{Device: "/dev/sda1", State: "active sync", Slot: 0},
+					{Device: "/dev/sdb1", State: "active sync", Slot: 1},
+					{Device: "/dev/sdc1", State: "active sync", Slot: 2},
+					{Device: "/dev/sdd1", State: "active sync", Slot: 3},
+				},
+			},
+		},
+		{
+			name:   "array with multiple faulty and spare devices",
+			device: "/dev/md7",
+			output: `/dev/md7:
+           Version : 1.2
+        Raid Level : raid5
+      Raid Devices : 3
+     Total Devices : 5
+
+             State : clean, degraded
+    Active Devices : 2
+   Working Devices : 3
+    Failed Devices : 2
+     Spare Devices : 1
+
+              UUID : ffeeddcc:bbaa9988:77665544:33221100
+
+    Number   Major   Minor   RaidDevice State
+       0       8        1        0      active sync   /dev/sda1
+       -       0        0        1      removed
+       2       8       33        2      active sync   /dev/sdc1
+
+       3       8       49        -      spare   /dev/sdd1
+       1       8       17        -      faulty   /dev/sdb1
+       4       8       65        -      faulty   /dev/sde1`,
+			want: host.RAIDArray{
+				Device:         "/dev/md7",
+				Level:          "raid5",
+				State:          "clean, degraded",
+				TotalDevices:   5,
+				ActiveDevices:  2,
+				WorkingDevices: 3,
+				FailedDevices:  2,
+				SpareDevices:   1,
+				UUID:           "ffeeddcc:bbaa9988:77665544:33221100",
+				Devices: []host.RAIDDevice{
+					{Device: "/dev/sda1", State: "active sync", Slot: 0},
+					{Device: "/dev/sdc1", State: "active sync", Slot: 2},
+					{Device: "/dev/sdd1", State: "spare", Slot: -1},
+					{Device: "/dev/sdb1", State: "faulty", Slot: -1},
+					{Device: "/dev/sde1", State: "faulty", Slot: -1},
+				},
+			},
+		},
+		{
+			name:   "empty output",
+			device: "/dev/md99",
+			output: "",
+			want: host.RAIDArray{
+				Device:  "/dev/md99",
+				Devices: []host.RAIDDevice{},
+			},
+		},
+		{
+			name:   "minimal output with only version",
+			device: "/dev/md10",
+			output: `/dev/md10:
+           Version : 1.2`,
+			want: host.RAIDArray{
+				Device:  "/dev/md10",
+				Devices: []host.RAIDDevice{},
+			},
+		},
+		{
+			name:   "output with extra whitespace",
+			device: "/dev/md11",
+			output: `
+
+/dev/md11:
+           Version : 1.2
+        Raid Level : raid1
+
+
+             State : clean
+
+    Active Devices : 2
+   Working Devices : 2
+    Failed Devices : 0
+     Spare Devices : 0
+
+              UUID : 12341234:56785678:90ab90ab:cdefcdef
+
+
+    Number   Major   Minor   RaidDevice State
+       0       8        1        0      active sync   /dev/sda1
+
+       1       8       17        1      active sync   /dev/sdb1
+
+`,
+			want: host.RAIDArray{
+				Device:         "/dev/md11",
+				Level:          "raid1",
+				State:          "clean",
+				ActiveDevices:  2,
+				WorkingDevices: 2,
+				FailedDevices:  0,
+				SpareDevices:   0,
+				UUID:           "12341234:56785678:90ab90ab:cdefcdef",
+				Devices: []host.RAIDDevice{
+					{Device: "/dev/sda1", State: "active sync", Slot: 0},
+					{Device: "/dev/sdb1", State: "active sync", Slot: 1},
+				},
+			},
+		},
+		{
+			name:   "rebuild with decimal percentage",
+			device: "/dev/md12",
+			output: `/dev/md12:
+           Version : 1.2
+        Raid Level : raid1
+      Raid Devices : 2
+     Total Devices : 2
+
+             State : active, degraded, recovering
+    Active Devices : 1
+   Working Devices : 2
+    Failed Devices : 0
+     Spare Devices : 1
+
+    Rebuild Status : 67.8% complete
+
+              UUID : abcdef12:34567890:abcdef12:34567890
+
+    Number   Major   Minor   RaidDevice State
+       0       8        1        0      active sync   /dev/sda1
+       1       8       17        1      spare rebuilding   /dev/sdb1`,
+			want: host.RAIDArray{
+				Device:         "/dev/md12",
+				Level:          "raid1",
+				State:          "active, degraded, recovering",
+				TotalDevices:   2,
+				ActiveDevices:  1,
+				WorkingDevices: 2,
+				FailedDevices:  0,
+				SpareDevices:   1,
+				UUID:           "abcdef12:34567890:abcdef12:34567890",
+				RebuildPercent: 67.8,
+				Devices: []host.RAIDDevice{
+					{Device: "/dev/sda1", State: "active sync", Slot: 0},
+					{Device: "/dev/sdb1", State: "spare rebuilding", Slot: 1},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
