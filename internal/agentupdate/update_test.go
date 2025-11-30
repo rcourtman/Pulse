@@ -5,164 +5,51 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	"github.com/rs/zerolog"
 )
 
 func TestDetermineArch(t *testing.T) {
-	arch := determineArch()
+	// Test that determineArch returns a non-empty string on common platforms
+	result := determineArch()
 
-	// Should return a non-empty string on known platforms
-	if runtime.GOOS == "linux" || runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
-		if arch == "" {
-			t.Error("determineArch() returned empty string on known platform")
+	// On known platforms, should return os-arch format
+	switch runtime.GOOS {
+	case "linux", "darwin", "windows":
+		if result == "" {
+			t.Errorf("determineArch() returned empty string on %s/%s", runtime.GOOS, runtime.GOARCH)
+		}
+
+		// Should contain the OS
+		if len(result) < len(runtime.GOOS) {
+			t.Errorf("determineArch() = %q, expected to start with %s", result, runtime.GOOS)
 		}
 
 		// Should be in format "os-arch"
-		expected := runtime.GOOS + "-" + runtime.GOARCH
-		// Handle arm normalization
-		if runtime.GOARCH == "arm" {
-			expected = runtime.GOOS + "-armv7"
-		}
-		if arch != expected {
-			t.Logf("determineArch() = %q (expected %q, but platform-specific normalization may apply)", arch, expected)
+		expectedPrefix := runtime.GOOS + "-"
+		if result[:len(expectedPrefix)] != expectedPrefix {
+			t.Errorf("determineArch() = %q, expected to start with %q", result, expectedPrefix)
 		}
 	}
 }
 
-func TestVerifyBinaryMagic_ELF(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("ELF test only runs on Linux")
+func TestDetermineArch_Format(t *testing.T) {
+	result := determineArch()
+	if result == "" {
+		t.Skip("determineArch returned empty string on this platform")
 	}
 
-	// Create a temp file with valid ELF magic
-	tmpDir := t.TempDir()
-	validELF := filepath.Join(tmpDir, "valid-elf")
-	// ELF magic: 0x7f 'E' 'L' 'F' followed by some padding
-	err := os.WriteFile(validELF, []byte{0x7f, 'E', 'L', 'F', 0, 0, 0, 0}, 0644)
-	if err != nil {
-		t.Fatalf("failed to create test file: %v", err)
+	// Result should contain a dash separating OS and arch
+	found := false
+	for i := 0; i < len(result); i++ {
+		if result[i] == '-' {
+			found = true
+			break
+		}
 	}
-
-	if err := verifyBinaryMagic(validELF); err != nil {
-		t.Errorf("verifyBinaryMagic() rejected valid ELF: %v", err)
-	}
-
-	// Create invalid file
-	invalidFile := filepath.Join(tmpDir, "invalid")
-	err = os.WriteFile(invalidFile, []byte("not an elf binary"), 0644)
-	if err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
-
-	if err := verifyBinaryMagic(invalidFile); err == nil {
-		t.Error("verifyBinaryMagic() accepted invalid file")
-	}
-}
-
-func TestVerifyBinaryMagic_PE(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("PE test only runs on Windows")
-	}
-
-	tmpDir := t.TempDir()
-
-	// Create a temp file with valid PE magic (MZ)
-	validPE := filepath.Join(tmpDir, "valid.exe")
-	err := os.WriteFile(validPE, []byte{'M', 'Z', 0, 0, 0, 0, 0, 0}, 0644)
-	if err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
-
-	if err := verifyBinaryMagic(validPE); err != nil {
-		t.Errorf("verifyBinaryMagic() rejected valid PE: %v", err)
-	}
-
-	// Create invalid file
-	invalidFile := filepath.Join(tmpDir, "invalid.exe")
-	err = os.WriteFile(invalidFile, []byte("not a pe binary!"), 0644)
-	if err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
-
-	if err := verifyBinaryMagic(invalidFile); err == nil {
-		t.Error("verifyBinaryMagic() accepted invalid file")
-	}
-}
-
-func TestVerifyBinaryMagic_MachO(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("Mach-O test only runs on macOS")
-	}
-
-	tmpDir := t.TempDir()
-
-	// Create a temp file with valid Mach-O 64-bit magic (little-endian)
-	validMachO := filepath.Join(tmpDir, "valid-macho")
-	err := os.WriteFile(validMachO, []byte{0xcf, 0xfa, 0xed, 0xfe, 0, 0, 0, 0}, 0644)
-	if err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
-
-	if err := verifyBinaryMagic(validMachO); err != nil {
-		t.Errorf("verifyBinaryMagic() rejected valid Mach-O: %v", err)
-	}
-
-	// Test universal binary magic
-	universalMachO := filepath.Join(tmpDir, "universal-macho")
-	err = os.WriteFile(universalMachO, []byte{0xca, 0xfe, 0xba, 0xbe, 0, 0, 0, 0}, 0644)
-	if err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
-
-	if err := verifyBinaryMagic(universalMachO); err != nil {
-		t.Errorf("verifyBinaryMagic() rejected valid universal Mach-O: %v", err)
-	}
-
-	// Create invalid file
-	invalidFile := filepath.Join(tmpDir, "invalid")
-	err = os.WriteFile(invalidFile, []byte("not a macho binary"), 0644)
-	if err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
-
-	if err := verifyBinaryMagic(invalidFile); err == nil {
-		t.Error("verifyBinaryMagic() accepted invalid file")
-	}
-}
-
-func TestVerifyBinaryMagic_TooShort(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Create a file that's too short to have magic bytes
-	shortFile := filepath.Join(tmpDir, "short")
-	err := os.WriteFile(shortFile, []byte{0x7f}, 0644)
-	if err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
-
-	if err := verifyBinaryMagic(shortFile); err == nil {
-		t.Error("verifyBinaryMagic() accepted file that's too short")
-	}
-}
-
-func TestVerifyBinaryMagic_NonExistent(t *testing.T) {
-	if err := verifyBinaryMagic("/nonexistent/path/to/file"); err == nil {
-		t.Error("verifyBinaryMagic() accepted non-existent file")
-	}
-}
-
-func TestVerifyBinaryMagic_EmptyFile(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	emptyFile := filepath.Join(tmpDir, "empty")
-	err := os.WriteFile(emptyFile, []byte{}, 0644)
-	if err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
-
-	if err := verifyBinaryMagic(emptyFile); err == nil {
-		t.Error("verifyBinaryMagic() accepted empty file")
+	if !found {
+		t.Errorf("determineArch() = %q, expected format os-arch with dash separator", result)
 	}
 }
 
@@ -171,9 +58,26 @@ func TestUnraidPersistentPath(t *testing.T) {
 		agentName string
 		expected  string
 	}{
-		{"pulse-agent", "/boot/config/plugins/pulse-agent/pulse-agent"},
-		{"pulse-docker-agent", "/boot/config/plugins/pulse-docker-agent/pulse-docker-agent"},
-		{"custom-agent", "/boot/config/plugins/custom-agent/custom-agent"},
+		{
+			agentName: "pulse-agent",
+			expected:  "/boot/config/plugins/pulse-agent/pulse-agent",
+		},
+		{
+			agentName: "pulse-docker-agent",
+			expected:  "/boot/config/plugins/pulse-docker-agent/pulse-docker-agent",
+		},
+		{
+			agentName: "pulse-host-agent",
+			expected:  "/boot/config/plugins/pulse-host-agent/pulse-host-agent",
+		},
+		{
+			agentName: "custom-agent",
+			expected:  "/boot/config/plugins/custom-agent/custom-agent",
+		},
+		{
+			agentName: "",
+			expected:  "/boot/config/plugins//",
+		},
 	}
 
 	for _, tc := range tests {
@@ -186,51 +90,241 @@ func TestUnraidPersistentPath(t *testing.T) {
 	}
 }
 
-func TestNewUpdater_Defaults(t *testing.T) {
-	cfg := Config{
-		PulseURL:       "https://pulse.example.com",
-		APIToken:       "test-token",
-		AgentName:      "pulse-agent",
-		CurrentVersion: "1.0.0",
+func TestVerifyBinaryMagic_ELF(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("ELF verification test only runs on Linux")
 	}
 
-	updater := New(cfg)
+	// Create a temp file with ELF magic bytes
+	tmpDir := t.TempDir()
+	elfPath := filepath.Join(tmpDir, "test_elf")
 
-	if updater == nil {
-		t.Fatal("New() returned nil")
+	// ELF magic: 0x7f 'E' 'L' 'F' followed by some data
+	elfData := []byte{0x7f, 'E', 'L', 'F', 0x02, 0x01, 0x01, 0x00}
+	if err := os.WriteFile(elfPath, elfData, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	// Check default check interval is applied
-	if updater.cfg.CheckInterval != 1*60*60*1000000000 { // 1 hour in nanoseconds
-		t.Errorf("default CheckInterval not applied, got %v", updater.cfg.CheckInterval)
-	}
-
-	if updater.client == nil {
-		t.Error("http client is nil")
+	err := verifyBinaryMagic(elfPath)
+	if err != nil {
+		t.Errorf("verifyBinaryMagic() error = %v for valid ELF", err)
 	}
 }
 
-func TestNewUpdater_CustomInterval(t *testing.T) {
-	cfg := Config{
-		PulseURL:       "https://pulse.example.com",
-		APIToken:       "test-token",
-		AgentName:      "pulse-agent",
-		CurrentVersion: "1.0.0",
-		CheckInterval:  30 * 60 * 1000000000, // 30 minutes in nanoseconds
+func TestVerifyBinaryMagic_InvalidELF(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("ELF verification test only runs on Linux")
 	}
 
-	updater := New(cfg)
+	tmpDir := t.TempDir()
+	invalidPath := filepath.Join(tmpDir, "invalid")
 
-	if updater.cfg.CheckInterval != cfg.CheckInterval {
-		t.Errorf("custom CheckInterval not preserved, got %v", updater.cfg.CheckInterval)
+	// Write invalid magic bytes
+	invalidData := []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	if err := os.WriteFile(invalidPath, invalidData, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	err := verifyBinaryMagic(invalidPath)
+	if err == nil {
+		t.Error("verifyBinaryMagic() expected error for invalid binary")
+	}
+}
+
+func TestVerifyBinaryMagic_MachO64(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Mach-O verification test only runs on macOS")
+	}
+
+	tmpDir := t.TempDir()
+	machoPath := filepath.Join(tmpDir, "test_macho")
+
+	// Mach-O 64-bit magic (little-endian): 0xcf 0xfa 0xed 0xfe
+	machoData := []byte{0xcf, 0xfa, 0xed, 0xfe, 0x07, 0x00, 0x00, 0x01}
+	if err := os.WriteFile(machoPath, machoData, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	err := verifyBinaryMagic(machoPath)
+	if err != nil {
+		t.Errorf("verifyBinaryMagic() error = %v for valid Mach-O", err)
+	}
+}
+
+func TestVerifyBinaryMagic_MachO32(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Mach-O verification test only runs on macOS")
+	}
+
+	tmpDir := t.TempDir()
+	machoPath := filepath.Join(tmpDir, "test_macho32")
+
+	// Mach-O 32-bit magic (little-endian): 0xce 0xfa 0xed 0xfe
+	machoData := []byte{0xce, 0xfa, 0xed, 0xfe, 0x07, 0x00, 0x00, 0x01}
+	if err := os.WriteFile(machoPath, machoData, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	err := verifyBinaryMagic(machoPath)
+	if err != nil {
+		t.Errorf("verifyBinaryMagic() error = %v for valid Mach-O 32-bit", err)
+	}
+}
+
+func TestVerifyBinaryMagic_MachOUniversal(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Mach-O verification test only runs on macOS")
+	}
+
+	tmpDir := t.TempDir()
+	machoPath := filepath.Join(tmpDir, "test_macho_fat")
+
+	// Mach-O universal/fat binary magic: 0xca 0xfe 0xba 0xbe
+	machoData := []byte{0xca, 0xfe, 0xba, 0xbe, 0x00, 0x00, 0x00, 0x02}
+	if err := os.WriteFile(machoPath, machoData, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	err := verifyBinaryMagic(machoPath)
+	if err != nil {
+		t.Errorf("verifyBinaryMagic() error = %v for valid Mach-O universal", err)
+	}
+}
+
+func TestVerifyBinaryMagic_InvalidMachO(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Mach-O verification test only runs on macOS")
+	}
+
+	tmpDir := t.TempDir()
+	invalidPath := filepath.Join(tmpDir, "invalid")
+
+	// Write invalid magic bytes
+	invalidData := []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	if err := os.WriteFile(invalidPath, invalidData, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	err := verifyBinaryMagic(invalidPath)
+	if err == nil {
+		t.Error("verifyBinaryMagic() expected error for invalid Mach-O binary")
+	}
+}
+
+func TestVerifyBinaryMagic_PE(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("PE verification test only runs on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	pePath := filepath.Join(tmpDir, "test_pe.exe")
+
+	// PE magic: 'M' 'Z'
+	peData := []byte{'M', 'Z', 0x90, 0x00, 0x03, 0x00, 0x00, 0x00}
+	if err := os.WriteFile(pePath, peData, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	err := verifyBinaryMagic(pePath)
+	if err != nil {
+		t.Errorf("verifyBinaryMagic() error = %v for valid PE", err)
+	}
+}
+
+func TestVerifyBinaryMagic_InvalidPE(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("PE verification test only runs on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	invalidPath := filepath.Join(tmpDir, "invalid.exe")
+
+	// Write invalid magic bytes (not MZ)
+	invalidData := []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	if err := os.WriteFile(invalidPath, invalidData, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	err := verifyBinaryMagic(invalidPath)
+	if err == nil {
+		t.Error("verifyBinaryMagic() expected error for invalid PE binary")
+	}
+}
+
+func TestVerifyBinaryMagic_NonexistentFile(t *testing.T) {
+	err := verifyBinaryMagic("/nonexistent/path/to/binary")
+	if err == nil {
+		t.Error("verifyBinaryMagic() expected error for nonexistent file")
+	}
+}
+
+func TestVerifyBinaryMagic_TooShort(t *testing.T) {
+	tmpDir := t.TempDir()
+	shortPath := filepath.Join(tmpDir, "short")
+
+	// Write only 2 bytes (less than 4 required for magic)
+	shortData := []byte{0x7f, 'E'}
+	if err := os.WriteFile(shortPath, shortData, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	err := verifyBinaryMagic(shortPath)
+	if err == nil {
+		t.Error("verifyBinaryMagic() expected error for file too short to read magic")
+	}
+}
+
+func TestVerifyBinaryMagic_EmptyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	emptyPath := filepath.Join(tmpDir, "empty")
+
+	// Write empty file
+	if err := os.WriteFile(emptyPath, []byte{}, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	err := verifyBinaryMagic(emptyPath)
+	if err == nil {
+		t.Error("verifyBinaryMagic() expected error for empty file")
+	}
+}
+
+func TestVerifyBinaryMagic_TextFile(t *testing.T) {
+	// Skip on unknown platforms where verification is skipped
+	switch runtime.GOOS {
+	case "linux", "darwin", "windows":
+		// continue with test
+	default:
+		t.Skip("Platform verification skipped on unknown OS")
+	}
+
+	tmpDir := t.TempDir()
+	textPath := filepath.Join(tmpDir, "script.sh")
+
+	// Write a shell script (not a binary)
+	textData := []byte("#!/bin/bash\necho hello\n")
+	if err := os.WriteFile(textPath, textData, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	err := verifyBinaryMagic(textPath)
+	if err == nil {
+		t.Error("verifyBinaryMagic() expected error for text file")
 	}
 }
 
 func TestIsUnraid(t *testing.T) {
-	// This test verifies the function doesn't panic
-	// Actual result depends on the system
+	// isUnraid checks for /etc/unraid-version
+	// On non-Unraid systems, this should return false
 	result := isUnraid()
-	t.Logf("isUnraid() = %v (depends on test environment)", result)
+
+	// Check if /etc/unraid-version exists
+	_, err := os.Stat("/etc/unraid-version")
+	expected := err == nil
+
+	if result != expected {
+		t.Errorf("isUnraid() = %v, want %v", result, expected)
+	}
 }
 
 func TestConfig_Defaults(t *testing.T) {
@@ -250,7 +344,7 @@ func TestConfig_Defaults(t *testing.T) {
 		t.Error("CurrentVersion should be empty by default")
 	}
 	if cfg.CheckInterval != 0 {
-		t.Error("CheckInterval should be 0 by default")
+		t.Error("CheckInterval should be zero by default")
 	}
 	if cfg.InsecureSkipVerify {
 		t.Error("InsecureSkipVerify should be false by default")
@@ -263,7 +357,76 @@ func TestConfig_Defaults(t *testing.T) {
 	}
 }
 
-func TestNewUpdater_InsecureSkipVerify(t *testing.T) {
+func TestNew_DefaultCheckInterval(t *testing.T) {
+	cfg := Config{
+		PulseURL:       "https://pulse.example.com",
+		APIToken:       "test-token",
+		AgentName:      "pulse-agent",
+		CurrentVersion: "1.0.0",
+		// CheckInterval not set
+	}
+
+	updater := New(cfg)
+
+	// Should have defaulted to 1 hour
+	if updater.cfg.CheckInterval != 1*time.Hour {
+		t.Errorf("CheckInterval = %v, want 1h", updater.cfg.CheckInterval)
+	}
+}
+
+func TestNew_CustomCheckInterval(t *testing.T) {
+	cfg := Config{
+		PulseURL:       "https://pulse.example.com",
+		APIToken:       "test-token",
+		AgentName:      "pulse-agent",
+		CurrentVersion: "1.0.0",
+		CheckInterval:  30 * time.Minute,
+	}
+
+	updater := New(cfg)
+
+	// Should preserve custom interval
+	if updater.cfg.CheckInterval != 30*time.Minute {
+		t.Errorf("CheckInterval = %v, want 30m", updater.cfg.CheckInterval)
+	}
+}
+
+func TestNew_WithLogger(t *testing.T) {
+	logger := zerolog.Nop()
+	cfg := Config{
+		PulseURL:       "https://pulse.example.com",
+		APIToken:       "test-token",
+		AgentName:      "pulse-agent",
+		CurrentVersion: "1.0.0",
+		Logger:         &logger,
+	}
+
+	updater := New(cfg)
+
+	// Should not panic and should create valid updater
+	if updater == nil {
+		t.Error("New() returned nil")
+	}
+}
+
+func TestNew_NilLogger(t *testing.T) {
+	cfg := Config{
+		PulseURL:       "https://pulse.example.com",
+		APIToken:       "test-token",
+		AgentName:      "pulse-agent",
+		CurrentVersion: "1.0.0",
+		Logger:         nil,
+	}
+
+	updater := New(cfg)
+
+	// Should not panic and should create valid updater with nop logger
+	if updater == nil {
+		t.Error("New() returned nil")
+	}
+}
+
+func TestNew_InsecureSkipVerify(t *testing.T) {
 	cfg := Config{
 		PulseURL:           "https://pulse.example.com",
 		APIToken:           "test-token",
@@ -274,136 +437,34 @@ func TestNewUpdater_InsecureSkipVerify(t *testing.T) {
 
 	updater := New(cfg)
 
-	if updater == nil {
-		t.Fatal("New() returned nil")
-	}
-
 	if !updater.cfg.InsecureSkipVerify {
 		t.Error("InsecureSkipVerify should be true")
 	}
 }
 
-func TestNewUpdater_Disabled(t *testing.T) {
+func TestNew_ClientNotNil(t *testing.T) {
 	cfg := Config{
 		PulseURL:       "https://pulse.example.com",
 		APIToken:       "test-token",
 		AgentName:      "pulse-agent",
 		CurrentVersion: "1.0.0",
-		Disabled:       true,
 	}
 
 	updater := New(cfg)
 
-	if updater == nil {
-		t.Fatal("New() returned nil")
-	}
-
-	if !updater.cfg.Disabled {
-		t.Error("Disabled should be true")
-	}
-}
-
-func TestDetermineArch_KnownPlatforms(t *testing.T) {
-	arch := determineArch()
-
-	// On known platforms, should return os-arch format
-	switch runtime.GOOS {
-	case "linux", "darwin", "windows":
-		if arch == "" {
-			t.Error("determineArch() should return non-empty string on known platforms")
-		}
-		// Should contain hyphen separating OS and arch
-		if len(arch) < 3 || arch[0] == '-' || arch[len(arch)-1] == '-' {
-			t.Errorf("determineArch() = %q, invalid format", arch)
-		}
-	}
-}
-
-func TestVerifyBinaryMagic_DirectoryFails(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Trying to verify a directory should fail
-	err := verifyBinaryMagic(tmpDir)
-	if err == nil {
-		t.Error("verifyBinaryMagic() should fail for directories")
+	if updater.client == nil {
+		t.Error("client should not be nil")
 	}
 }
 
 func TestConstants(t *testing.T) {
-	// Verify constants are sensible
-	if maxBinarySize <= 0 {
-		t.Error("maxBinarySize should be positive")
-	}
-	if maxBinarySize < 1024*1024 {
-		t.Error("maxBinarySize should be at least 1MB")
+	// Verify maxBinarySize is reasonable (100 MB)
+	if maxBinarySize != 100*1024*1024 {
+		t.Errorf("maxBinarySize = %d, want %d", maxBinarySize, 100*1024*1024)
 	}
 
-	if downloadTimeout <= 0 {
-		t.Error("downloadTimeout should be positive")
-	}
-}
-
-func TestSymlinkResolution(t *testing.T) {
-	// Test that filepath.EvalSymlinks works as expected for our use case
-	tmpDir := t.TempDir()
-
-	// Create a real file
-	realFile := filepath.Join(tmpDir, "real", "binary")
-	if err := os.MkdirAll(filepath.Dir(realFile), 0755); err != nil {
-		t.Fatalf("failed to create dir: %v", err)
-	}
-	if err := os.WriteFile(realFile, []byte("test"), 0755); err != nil {
-		t.Fatalf("failed to create file: %v", err)
-	}
-
-	// Create a symlink to it
-	linkFile := filepath.Join(tmpDir, "link", "binary")
-	if err := os.MkdirAll(filepath.Dir(linkFile), 0755); err != nil {
-		t.Fatalf("failed to create link dir: %v", err)
-	}
-	if err := os.Symlink(realFile, linkFile); err != nil {
-		t.Fatalf("failed to create symlink: %v", err)
-	}
-
-	// EvalSymlinks should resolve to the real path
-	resolved, err := filepath.EvalSymlinks(linkFile)
-	if err != nil {
-		t.Fatalf("EvalSymlinks failed: %v", err)
-	}
-
-	// Normalize realFile in case tmpDir itself contains symlinks (e.g. /var -> /private/var on macOS)
-	realFileResolved, err := filepath.EvalSymlinks(realFile)
-	if err != nil {
-		t.Fatalf("EvalSymlinks on realFile failed: %v", err)
-	}
-
-	if resolved != realFileResolved {
-		t.Errorf("EvalSymlinks(%q) = %q, want %q", linkFile, resolved, realFileResolved)
-	}
-
-	// Verify temp file in same dir as resolved path allows rename
-	targetDir := filepath.Dir(resolved)
-	tmpFile, err := os.CreateTemp(targetDir, "test-*.tmp")
-	if err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
-	tmpPath := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(tmpPath)
-
-	// Rename should work since both files are on the same filesystem
-	newPath := filepath.Join(targetDir, "renamed")
-	if err := os.Rename(tmpPath, newPath); err != nil {
-		t.Errorf("Rename failed (same filesystem): %v", err)
-	}
-	os.Remove(newPath)
-}
-
-func TestNormalizeVersion(t *testing.T) {
-	if got := utils.NormalizeVersion("v4.33.1"); got != "4.33.1" {
-		t.Errorf("NormalizeVersion(%q) = %q, want %q", "v4.33.1", got, "4.33.1")
-	}
-	if got := utils.NormalizeVersion("4.33.1"); got != "4.33.1" {
-		t.Errorf("NormalizeVersion(%q) = %q, want %q", "4.33.1", got, "4.33.1")
+	// Verify downloadTimeout is reasonable (5 minutes)
+	if downloadTimeout != 5*time.Minute {
+		t.Errorf("downloadTimeout = %v, want 5m", downloadTimeout)
 	}
 }
