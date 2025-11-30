@@ -244,30 +244,28 @@ END {
 configure_local_authorized_key() {
     local auth_line=$1
     local auth_keys_file="/root/.ssh/authorized_keys"
-    local tmp_auth
 
-    tmp_auth=$(mktemp)
     mkdir -p /root/.ssh
-    touch "$tmp_auth"
+    touch "$auth_keys_file"
+    chmod 600 "$auth_keys_file"
 
-    if [[ -f "$auth_keys_file" ]]; then
-        grep -vF '# pulse-managed-key' "$auth_keys_file" >"$tmp_auth" 2>/dev/null || true
-        chmod --reference="$auth_keys_file" "$tmp_auth" 2>/dev/null || chmod 600 "$tmp_auth"
-        chown --reference="$auth_keys_file" "$tmp_auth" 2>/dev/null || true
-    else
-        chmod 600 "$tmp_auth"
+    # Extract just the key portion (without forced command prefix) for matching
+    # Format: command="...",options KEY_TYPE KEY_DATA COMMENT
+    local key_data
+    key_data=$(echo "$auth_line" | grep -oE 'ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+')
+
+    # Check if this exact key already exists (regardless of forced command)
+    if grep -qF "$key_data" "$auth_keys_file" 2>/dev/null; then
+        if [ "$QUIET" != true ]; then
+            print_success "SSH key already configured on localhost"
+        fi
+        return 0
     fi
 
-    echo "${auth_line}" >>"$tmp_auth"
-    if mv "$tmp_auth" "$auth_keys_file"; then
-        if [ "$QUIET" != true ]; then
-            print_success "SSH key configured on localhost"
-        fi
-    else
-        rm -f "$tmp_auth"
-        print_warn "Failed to configure SSH key on localhost"
-        print_info "Add this line manually to /root/.ssh/authorized_keys:"
-        print_info "  ${auth_line}"
+    # Key not present, add it
+    echo "${auth_line}" >>"$auth_keys_file"
+    if [ "$QUIET" != true ]; then
+        print_success "SSH key configured on localhost"
     fi
 }
 
@@ -3076,10 +3074,6 @@ if [[ -n "$CLUSTER_NODES" ]]; then
             continue
         fi
 
-        # Remove any existing proxy keys first
-        ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
-            "sed -i '/# pulse-managed-key\$/d' /root/.ssh/authorized_keys" 2>/dev/null || true
-
         # Ensure wrapper compatibility on remote node (supports old installations)
         # Create symlink if old wrapper exists but new path doesn't
         ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
@@ -3088,19 +3082,31 @@ if [[ -n "$CLUSTER_NODES" ]]; then
                 ln -sf /usr/local/bin/pulse-sensor-wrapper.sh /opt/pulse/sensor-proxy/bin/pulse-sensor-wrapper.sh; \
             fi" 2>/dev/null || true
 
-        # Add new key with forced command
-        SSH_ERROR=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
-            "echo '${AUTH_LINE}' >> /root/.ssh/authorized_keys" 2>&1)
-        if [[ $? -eq 0 ]]; then
-            print_success "SSH key configured on $node_ip"
+        # Extract just the key portion for matching (ssh-TYPE KEY_DATA)
+        KEY_DATA=$(echo "$AUTH_LINE" | grep -oE 'ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+')
+
+        # Check if key already exists on remote node
+        KEY_EXISTS=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
+            "grep -qF '$KEY_DATA' /root/.ssh/authorized_keys 2>/dev/null && echo 'yes' || echo 'no'" 2>/dev/null)
+
+        if [[ "$KEY_EXISTS" == "yes" ]]; then
+            print_success "SSH key already configured on $node_ip"
             ((SSH_SUCCESS_COUNT+=1))
         else
-            print_warn "Failed to configure SSH key on $node_ip"
-            ((SSH_FAILURE_COUNT+=1))
-            SSH_FAILED_NODES+=("$node_ip")
-            # Log detailed error for debugging
-            if [[ -n "$SSH_ERROR" ]]; then
-                print_info "  Error details: $(echo "$SSH_ERROR" | head -1)"
+            # Add new key with forced command (appends, does not remove existing keys)
+            SSH_ERROR=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
+                "echo '${AUTH_LINE}' >> /root/.ssh/authorized_keys" 2>&1)
+            if [[ $? -eq 0 ]]; then
+                print_success "SSH key configured on $node_ip"
+                ((SSH_SUCCESS_COUNT+=1))
+            else
+                print_warn "Failed to configure SSH key on $node_ip"
+                ((SSH_FAILURE_COUNT+=1))
+                SSH_FAILED_NODES+=("$node_ip")
+                # Log detailed error for debugging
+                if [[ -n "$SSH_ERROR" ]]; then
+                    print_info "  Error details: $(echo "$SSH_ERROR" | head -1)"
+                fi
             fi
         fi
     done
