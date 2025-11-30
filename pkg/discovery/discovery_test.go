@@ -465,3 +465,371 @@ func TestPBSDiscoveryWithUnauthorizedVersion(t *testing.T) {
 		t.Errorf("Expected product %q, got %q", ProductPBS, probe.PrimaryProduct)
 	}
 }
+
+func TestFriendlyPhaseName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		phase    string
+		expected string
+	}{
+		{"lxc container network", "lxc_container_network", "Container network"},
+		{"docker bridge network", "docker_bridge_network", "Docker bridge network"},
+		{"docker container network", "docker_container_network", "Docker container network"},
+		{"host local network", "host_local_network", "Local network"},
+		{"inferred gateway network", "inferred_gateway_network", "Gateway network"},
+		{"extra targets", "extra_targets", "Additional targets"},
+		{"proxmox cluster network", "proxmox_cluster_network", "Proxmox cluster network"},
+		{"unknown phase returns as-is", "some_unknown_phase", "some_unknown_phase"},
+		{"empty string returns empty", "", ""},
+		{"manual subnet passthrough", "manual_subnet", "manual_subnet"},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			result := friendlyPhaseName(tc.phase)
+			if result != tc.expected {
+				t.Errorf("friendlyPhaseName(%q) = %q, want %q", tc.phase, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestDefaultProductsForPort(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		port     int
+		expected []string
+	}{
+		{"port 8006 returns PVE and PMG", 8006, []string{productPVE, productPMG}},
+		{"port 8007 returns PBS", 8007, []string{productPBS}},
+		{"port 443 returns nil", 443, nil},
+		{"port 80 returns nil", 80, nil},
+		{"port 0 returns nil", 0, nil},
+		{"random port returns nil", 12345, nil},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			result := defaultProductsForPort(tc.port)
+			if tc.expected == nil {
+				if result != nil {
+					t.Errorf("defaultProductsForPort(%d) = %v, want nil", tc.port, result)
+				}
+				return
+			}
+			if len(result) != len(tc.expected) {
+				t.Errorf("defaultProductsForPort(%d) = %v, want %v", tc.port, result, tc.expected)
+				return
+			}
+			for i, v := range tc.expected {
+				if result[i] != v {
+					t.Errorf("defaultProductsForPort(%d)[%d] = %q, want %q", tc.port, i, result[i], v)
+				}
+			}
+		})
+	}
+}
+
+func TestCloneHeader(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil input returns nil", func(t *testing.T) {
+		result := cloneHeader(nil)
+		if result != nil {
+			t.Errorf("cloneHeader(nil) = %v, want nil", result)
+		}
+	})
+
+	t.Run("empty header returns empty header", func(t *testing.T) {
+		input := http.Header{}
+		result := cloneHeader(input)
+		if result == nil {
+			t.Fatal("cloneHeader(empty) returned nil")
+		}
+		if len(result) != 0 {
+			t.Errorf("cloneHeader(empty) has length %d, want 0", len(result))
+		}
+	})
+
+	t.Run("clones single-value headers", func(t *testing.T) {
+		input := http.Header{
+			"Content-Type":  []string{"application/json"},
+			"Authorization": []string{"Bearer token123"},
+		}
+		result := cloneHeader(input)
+
+		if result.Get("Content-Type") != "application/json" {
+			t.Errorf("Content-Type = %q, want %q", result.Get("Content-Type"), "application/json")
+		}
+		if result.Get("Authorization") != "Bearer token123" {
+			t.Errorf("Authorization = %q, want %q", result.Get("Authorization"), "Bearer token123")
+		}
+	})
+
+	t.Run("clones multi-value headers", func(t *testing.T) {
+		input := http.Header{
+			"Set-Cookie": []string{"cookie1=val1", "cookie2=val2", "cookie3=val3"},
+		}
+		result := cloneHeader(input)
+
+		cookies := result.Values("Set-Cookie")
+		if len(cookies) != 3 {
+			t.Fatalf("Set-Cookie count = %d, want 3", len(cookies))
+		}
+		if cookies[0] != "cookie1=val1" || cookies[1] != "cookie2=val2" || cookies[2] != "cookie3=val3" {
+			t.Errorf("Set-Cookie values = %v, want [cookie1=val1 cookie2=val2 cookie3=val3]", cookies)
+		}
+	})
+
+	t.Run("clone is independent of original", func(t *testing.T) {
+		input := http.Header{
+			"X-Custom": []string{"original"},
+		}
+		result := cloneHeader(input)
+
+		// Modify original
+		input.Set("X-Custom", "modified")
+
+		// Clone should be unaffected
+		if result.Get("X-Custom") != "original" {
+			t.Errorf("clone was affected by original modification: got %q, want %q", result.Get("X-Custom"), "original")
+		}
+	})
+
+	t.Run("original is independent of clone", func(t *testing.T) {
+		input := http.Header{
+			"X-Custom": []string{"original"},
+		}
+		result := cloneHeader(input)
+
+		// Modify clone
+		result.Set("X-Custom", "modified")
+
+		// Original should be unaffected
+		if input.Get("X-Custom") != "original" {
+			t.Errorf("original was affected by clone modification: got %q, want %q", input.Get("X-Custom"), "original")
+		}
+	})
+}
+
+func TestCopyMetadata(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil input returns empty map", func(t *testing.T) {
+		result := copyMetadata(nil)
+		if result == nil {
+			t.Fatal("copyMetadata(nil) returned nil, want empty map")
+		}
+		if len(result) != 0 {
+			t.Errorf("copyMetadata(nil) has length %d, want 0", len(result))
+		}
+	})
+
+	t.Run("empty map returns empty map", func(t *testing.T) {
+		input := map[string]string{}
+		result := copyMetadata(input)
+		if result == nil {
+			t.Fatal("copyMetadata(empty) returned nil")
+		}
+		if len(result) != 0 {
+			t.Errorf("copyMetadata(empty) has length %d, want 0", len(result))
+		}
+	})
+
+	t.Run("copies all entries", func(t *testing.T) {
+		input := map[string]string{
+			"key1":        "value1",
+			"key2":        "value2",
+			"environment": "docker_bridge",
+		}
+		result := copyMetadata(input)
+
+		if len(result) != 3 {
+			t.Fatalf("copyMetadata returned %d entries, want 3", len(result))
+		}
+		if result["key1"] != "value1" {
+			t.Errorf("key1 = %q, want %q", result["key1"], "value1")
+		}
+		if result["key2"] != "value2" {
+			t.Errorf("key2 = %q, want %q", result["key2"], "value2")
+		}
+		if result["environment"] != "docker_bridge" {
+			t.Errorf("environment = %q, want %q", result["environment"], "docker_bridge")
+		}
+	})
+
+	t.Run("clone is independent of original", func(t *testing.T) {
+		input := map[string]string{"key": "original"}
+		result := copyMetadata(input)
+
+		// Modify original
+		input["key"] = "modified"
+
+		// Clone should be unaffected
+		if result["key"] != "original" {
+			t.Errorf("clone was affected by original modification: got %q, want %q", result["key"], "original")
+		}
+	})
+
+	t.Run("original is independent of clone", func(t *testing.T) {
+		input := map[string]string{"key": "original"}
+		result := copyMetadata(input)
+
+		// Modify clone
+		result["key"] = "modified"
+
+		// Original should be unaffected
+		if input["key"] != "original" {
+			t.Errorf("original was affected by clone modification: got %q, want %q", input["key"], "original")
+		}
+	})
+}
+
+func TestEnsurePolicyDefaults(t *testing.T) {
+	t.Parallel()
+
+	defaults := envdetect.DefaultScanPolicy()
+
+	t.Run("zero policy gets defaults for zero/negative fields", func(t *testing.T) {
+		input := envdetect.ScanPolicy{}
+		result := ensurePolicyDefaults(input)
+
+		if result.MaxConcurrent != defaults.MaxConcurrent {
+			t.Errorf("MaxConcurrent = %d, want %d", result.MaxConcurrent, defaults.MaxConcurrent)
+		}
+		if result.DialTimeout != defaults.DialTimeout {
+			t.Errorf("DialTimeout = %v, want %v", result.DialTimeout, defaults.DialTimeout)
+		}
+		if result.HTTPTimeout != defaults.HTTPTimeout {
+			t.Errorf("HTTPTimeout = %v, want %v", result.HTTPTimeout, defaults.HTTPTimeout)
+		}
+		// MaxHostsPerScan = 0 is preserved (means unlimited), only < 0 gets default
+		if result.MaxHostsPerScan != 0 {
+			t.Errorf("MaxHostsPerScan = %d, want 0 (zero is preserved as unlimited)", result.MaxHostsPerScan)
+		}
+	})
+
+	t.Run("negative MaxConcurrent gets default", func(t *testing.T) {
+		input := envdetect.ScanPolicy{MaxConcurrent: -1}
+		result := ensurePolicyDefaults(input)
+		if result.MaxConcurrent != defaults.MaxConcurrent {
+			t.Errorf("MaxConcurrent = %d, want %d", result.MaxConcurrent, defaults.MaxConcurrent)
+		}
+	})
+
+	t.Run("positive MaxConcurrent preserved", func(t *testing.T) {
+		input := envdetect.ScanPolicy{MaxConcurrent: 100}
+		result := ensurePolicyDefaults(input)
+		if result.MaxConcurrent != 100 {
+			t.Errorf("MaxConcurrent = %d, want 100", result.MaxConcurrent)
+		}
+	})
+
+	t.Run("negative DialTimeout gets default", func(t *testing.T) {
+		input := envdetect.ScanPolicy{DialTimeout: -time.Second}
+		result := ensurePolicyDefaults(input)
+		if result.DialTimeout != defaults.DialTimeout {
+			t.Errorf("DialTimeout = %v, want %v", result.DialTimeout, defaults.DialTimeout)
+		}
+	})
+
+	t.Run("positive DialTimeout preserved", func(t *testing.T) {
+		input := envdetect.ScanPolicy{DialTimeout: 5 * time.Second}
+		result := ensurePolicyDefaults(input)
+		if result.DialTimeout != 5*time.Second {
+			t.Errorf("DialTimeout = %v, want 5s", result.DialTimeout)
+		}
+	})
+
+	t.Run("negative HTTPTimeout gets default", func(t *testing.T) {
+		input := envdetect.ScanPolicy{HTTPTimeout: -time.Second}
+		result := ensurePolicyDefaults(input)
+		if result.HTTPTimeout != defaults.HTTPTimeout {
+			t.Errorf("HTTPTimeout = %v, want %v", result.HTTPTimeout, defaults.HTTPTimeout)
+		}
+	})
+
+	t.Run("positive HTTPTimeout preserved", func(t *testing.T) {
+		input := envdetect.ScanPolicy{HTTPTimeout: 10 * time.Second}
+		result := ensurePolicyDefaults(input)
+		if result.HTTPTimeout != 10*time.Second {
+			t.Errorf("HTTPTimeout = %v, want 10s", result.HTTPTimeout)
+		}
+	})
+
+	t.Run("zero MaxHostsPerScan preserved (unlimited)", func(t *testing.T) {
+		input := envdetect.ScanPolicy{MaxHostsPerScan: 0}
+		result := ensurePolicyDefaults(input)
+		// MaxHostsPerScan = 0 means unlimited, should be preserved (not replaced with default)
+		if result.MaxHostsPerScan != 0 {
+			t.Errorf("MaxHostsPerScan = %d, want 0 (zero should be preserved as unlimited)", result.MaxHostsPerScan)
+		}
+	})
+
+	t.Run("negative MaxHostsPerScan gets default", func(t *testing.T) {
+		input := envdetect.ScanPolicy{MaxHostsPerScan: -1}
+		result := ensurePolicyDefaults(input)
+		if result.MaxHostsPerScan != defaults.MaxHostsPerScan {
+			t.Errorf("MaxHostsPerScan = %d, want %d", result.MaxHostsPerScan, defaults.MaxHostsPerScan)
+		}
+	})
+
+	t.Run("positive MaxHostsPerScan preserved", func(t *testing.T) {
+		input := envdetect.ScanPolicy{MaxHostsPerScan: 500}
+		result := ensurePolicyDefaults(input)
+		if result.MaxHostsPerScan != 500 {
+			t.Errorf("MaxHostsPerScan = %d, want 500", result.MaxHostsPerScan)
+		}
+	})
+
+	t.Run("boolean fields preserved", func(t *testing.T) {
+		input := envdetect.ScanPolicy{
+			EnableReverseDNS: true,
+			ScanGateways:     false,
+		}
+		result := ensurePolicyDefaults(input)
+		if result.EnableReverseDNS != true {
+			t.Errorf("EnableReverseDNS = %v, want true", result.EnableReverseDNS)
+		}
+		if result.ScanGateways != false {
+			t.Errorf("ScanGateways = %v, want false", result.ScanGateways)
+		}
+	})
+
+	t.Run("all custom values preserved", func(t *testing.T) {
+		input := envdetect.ScanPolicy{
+			MaxConcurrent:    25,
+			DialTimeout:      3 * time.Second,
+			HTTPTimeout:      5 * time.Second,
+			MaxHostsPerScan:  256,
+			EnableReverseDNS: false,
+			ScanGateways:     true,
+		}
+		result := ensurePolicyDefaults(input)
+
+		if result.MaxConcurrent != 25 {
+			t.Errorf("MaxConcurrent = %d, want 25", result.MaxConcurrent)
+		}
+		if result.DialTimeout != 3*time.Second {
+			t.Errorf("DialTimeout = %v, want 3s", result.DialTimeout)
+		}
+		if result.HTTPTimeout != 5*time.Second {
+			t.Errorf("HTTPTimeout = %v, want 5s", result.HTTPTimeout)
+		}
+		if result.MaxHostsPerScan != 256 {
+			t.Errorf("MaxHostsPerScan = %d, want 256", result.MaxHostsPerScan)
+		}
+		if result.EnableReverseDNS != false {
+			t.Errorf("EnableReverseDNS = %v, want false", result.EnableReverseDNS)
+		}
+		if result.ScanGateways != true {
+			t.Errorf("ScanGateways = %v, want true", result.ScanGateways)
+		}
+	})
+}
