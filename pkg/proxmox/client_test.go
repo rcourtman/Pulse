@@ -3,6 +3,7 @@ package proxmox
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"testing"
 )
 
@@ -241,6 +242,326 @@ func TestMemoryStatusUnmarshalFlexibleValues(t *testing.T) {
 			}
 			if status.Shared != tc.want.Shared {
 				t.Fatalf("shared: got %d, want %d", status.Shared, tc.want.Shared)
+			}
+		})
+	}
+}
+
+func TestFlexIntUnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    FlexInt
+		wantErr bool
+	}{
+		{
+			name:  "integer",
+			input: "42",
+			want:  FlexInt(42),
+		},
+		{
+			name:  "zero",
+			input: "0",
+			want:  FlexInt(0),
+		},
+		{
+			name:  "negative integer",
+			input: "-10",
+			want:  FlexInt(-10),
+		},
+		{
+			name:  "float truncates",
+			input: "1.5",
+			want:  FlexInt(1),
+		},
+		{
+			name:  "float 2.9 truncates",
+			input: "2.9",
+			want:  FlexInt(2),
+		},
+		{
+			name:  "string integer",
+			input: `"123"`,
+			want:  FlexInt(123),
+		},
+		{
+			name:  "string float",
+			input: `"1.5"`,
+			want:  FlexInt(1),
+		},
+		{
+			name:  "string float 3.7",
+			input: `"3.7"`,
+			want:  FlexInt(3),
+		},
+		{
+			name:  "large integer",
+			input: "1000000",
+			want:  FlexInt(1000000),
+		},
+		{
+			name:    "invalid string",
+			input:   `"not a number"`,
+			wantErr: true,
+		},
+		{
+			name:    "empty string",
+			input:   `""`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid json",
+			input:   `{invalid}`,
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var f FlexInt
+			err := f.UnmarshalJSON([]byte(tc.input))
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if f != tc.want {
+				t.Fatalf("got %d, want %d", f, tc.want)
+			}
+		})
+	}
+}
+
+func TestCoerceUint64(t *testing.T) {
+	tests := []struct {
+		name    string
+		field   string
+		value   interface{}
+		want    uint64
+		wantErr bool
+	}{
+		// nil handling
+		{
+			name:  "nil returns zero",
+			field: "test",
+			value: nil,
+			want:  0,
+		},
+		// float64 handling
+		{
+			name:  "float64 positive",
+			field: "test",
+			value: float64(100.0),
+			want:  100,
+		},
+		{
+			name:  "float64 rounds",
+			field: "test",
+			value: float64(100.6),
+			want:  101,
+		},
+		{
+			name:  "float64 negative returns zero",
+			field: "test",
+			value: float64(-10),
+			want:  0,
+		},
+		{
+			name:  "float64 zero",
+			field: "test",
+			value: float64(0),
+			want:  0,
+		},
+		{
+			name:    "float64 NaN returns error",
+			field:   "test",
+			value:   math.NaN(),
+			wantErr: true,
+		},
+		{
+			name:    "float64 positive infinity returns error",
+			field:   "test",
+			value:   math.Inf(1),
+			wantErr: true,
+		},
+		// int handling
+		{
+			name:  "int positive",
+			field: "test",
+			value: int(42),
+			want:  42,
+		},
+		{
+			name:  "int negative returns zero",
+			field: "test",
+			value: int(-5),
+			want:  0,
+		},
+		{
+			name:  "int zero",
+			field: "test",
+			value: int(0),
+			want:  0,
+		},
+		// int64 handling
+		{
+			name:  "int64 positive",
+			field: "test",
+			value: int64(1000000000000),
+			want:  1000000000000,
+		},
+		{
+			name:  "int64 negative returns zero",
+			field: "test",
+			value: int64(-100),
+			want:  0,
+		},
+		// int32 handling
+		{
+			name:  "int32 positive",
+			field: "test",
+			value: int32(12345),
+			want:  12345,
+		},
+		{
+			name:  "int32 negative returns zero",
+			field: "test",
+			value: int32(-1),
+			want:  0,
+		},
+		// uint32 handling
+		{
+			name:  "uint32",
+			field: "test",
+			value: uint32(4294967295),
+			want:  4294967295,
+		},
+		// uint64 handling
+		{
+			name:  "uint64",
+			field: "test",
+			value: uint64(18446744073709551615),
+			want:  18446744073709551615,
+		},
+		// json.Number handling
+		{
+			name:  "json.Number integer",
+			field: "test",
+			value: json.Number("12345"),
+			want:  12345,
+		},
+		{
+			name:  "json.Number float",
+			field: "test",
+			value: json.Number("123.45"),
+			want:  123,
+		},
+		// string handling
+		{
+			name:  "string integer",
+			field: "test",
+			value: "12345",
+			want:  12345,
+		},
+		{
+			name:  "string with whitespace",
+			field: "test",
+			value: "  12345  ",
+			want:  12345,
+		},
+		{
+			name:  "string empty",
+			field: "test",
+			value: "",
+			want:  0,
+		},
+		{
+			name:  "string null",
+			field: "test",
+			value: "null",
+			want:  0,
+		},
+		{
+			name:  "string NULL uppercase",
+			field: "test",
+			value: "NULL",
+			want:  0,
+		},
+		{
+			name:  "string with quotes",
+			field: "test",
+			value: `"12345"`,
+			want:  12345,
+		},
+		{
+			name:  "string with single quotes",
+			field: "test",
+			value: `'12345'`,
+			want:  12345,
+		},
+		{
+			name:  "string with commas",
+			field: "test",
+			value: "1,000,000",
+			want:  1000000,
+		},
+		{
+			name:  "string float notation",
+			field: "test",
+			value: "123.45",
+			want:  123,
+		},
+		{
+			name:  "string scientific notation",
+			field: "test",
+			value: "1e6",
+			want:  1000000,
+		},
+		{
+			name:  "string scientific notation uppercase",
+			field: "test",
+			value: "1E6",
+			want:  1000000,
+		},
+		{
+			name:    "string invalid",
+			field:   "test",
+			value:   "not a number",
+			wantErr: true,
+		},
+		// unsupported type
+		{
+			name:    "unsupported type bool",
+			field:   "test",
+			value:   true,
+			wantErr: true,
+		},
+		{
+			name:    "unsupported type slice",
+			field:   "test",
+			value:   []int{1, 2, 3},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := coerceUint64(tc.field, tc.value)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("got %d, want %d", got, tc.want)
 			}
 		})
 	}
