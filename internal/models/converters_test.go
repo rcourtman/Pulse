@@ -563,6 +563,143 @@ func TestRemovedDockerHostToFrontend(t *testing.T) {
 	}
 }
 
+func TestToDockerHostCommandFrontend(t *testing.T) {
+	now := time.Now()
+	dispatched := now.Add(-time.Minute)
+	acknowledged := now.Add(-30 * time.Second)
+	completed := now.Add(-10 * time.Second)
+	expires := now.Add(time.Hour)
+
+	t.Run("basic fields", func(t *testing.T) {
+		cmd := DockerHostCommandStatus{
+			ID:        "cmd-123",
+			Type:      "update",
+			Status:    "pending",
+			Message:   "Update requested",
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		result := toDockerHostCommandFrontend(cmd)
+
+		if result.ID != "cmd-123" {
+			t.Errorf("ID = %q, want %q", result.ID, "cmd-123")
+		}
+		if result.Type != "update" {
+			t.Errorf("Type = %q, want %q", result.Type, "update")
+		}
+		if result.Status != "pending" {
+			t.Errorf("Status = %q, want %q", result.Status, "pending")
+		}
+		if result.Message != "Update requested" {
+			t.Errorf("Message = %q, want %q", result.Message, "Update requested")
+		}
+		if result.CreatedAt != now.Unix()*1000 {
+			t.Errorf("CreatedAt = %d, want %d", result.CreatedAt, now.Unix()*1000)
+		}
+		if result.UpdatedAt != now.Unix()*1000 {
+			t.Errorf("UpdatedAt = %d, want %d", result.UpdatedAt, now.Unix()*1000)
+		}
+	})
+
+	t.Run("optional timestamps nil", func(t *testing.T) {
+		cmd := DockerHostCommandStatus{
+			ID:        "cmd-456",
+			Type:      "restart",
+			Status:    "pending",
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		result := toDockerHostCommandFrontend(cmd)
+
+		if result.DispatchedAt != nil {
+			t.Errorf("DispatchedAt = %v, want nil", result.DispatchedAt)
+		}
+		if result.AcknowledgedAt != nil {
+			t.Errorf("AcknowledgedAt = %v, want nil", result.AcknowledgedAt)
+		}
+		if result.CompletedAt != nil {
+			t.Errorf("CompletedAt = %v, want nil", result.CompletedAt)
+		}
+		if result.FailedAt != nil {
+			t.Errorf("FailedAt = %v, want nil", result.FailedAt)
+		}
+		if result.ExpiresAt != nil {
+			t.Errorf("ExpiresAt = %v, want nil", result.ExpiresAt)
+		}
+	})
+
+	t.Run("all optional timestamps set", func(t *testing.T) {
+		failed := now.Add(-5 * time.Second)
+
+		cmd := DockerHostCommandStatus{
+			ID:             "cmd-789",
+			Type:           "update",
+			Status:         "completed",
+			CreatedAt:      now,
+			UpdatedAt:      now,
+			DispatchedAt:   &dispatched,
+			AcknowledgedAt: &acknowledged,
+			CompletedAt:    &completed,
+			FailedAt:       &failed,
+			ExpiresAt:      &expires,
+		}
+
+		result := toDockerHostCommandFrontend(cmd)
+
+		if result.DispatchedAt == nil || *result.DispatchedAt != dispatched.Unix()*1000 {
+			t.Errorf("DispatchedAt = %v, want %d", result.DispatchedAt, dispatched.Unix()*1000)
+		}
+		if result.AcknowledgedAt == nil || *result.AcknowledgedAt != acknowledged.Unix()*1000 {
+			t.Errorf("AcknowledgedAt = %v, want %d", result.AcknowledgedAt, acknowledged.Unix()*1000)
+		}
+		if result.CompletedAt == nil || *result.CompletedAt != completed.Unix()*1000 {
+			t.Errorf("CompletedAt = %v, want %d", result.CompletedAt, completed.Unix()*1000)
+		}
+		if result.FailedAt == nil || *result.FailedAt != failed.Unix()*1000 {
+			t.Errorf("FailedAt = %v, want %d", result.FailedAt, failed.Unix()*1000)
+		}
+		if result.ExpiresAt == nil || *result.ExpiresAt != expires.Unix()*1000 {
+			t.Errorf("ExpiresAt = %v, want %d", result.ExpiresAt, expires.Unix()*1000)
+		}
+	})
+
+	t.Run("failure reason set", func(t *testing.T) {
+		cmd := DockerHostCommandStatus{
+			ID:            "cmd-fail",
+			Type:          "update",
+			Status:        "failed",
+			FailureReason: "Connection timeout",
+			CreatedAt:     now,
+			UpdatedAt:     now,
+		}
+
+		result := toDockerHostCommandFrontend(cmd)
+
+		if result.FailureReason != "Connection timeout" {
+			t.Errorf("FailureReason = %q, want %q", result.FailureReason, "Connection timeout")
+		}
+	})
+
+	t.Run("empty failure reason", func(t *testing.T) {
+		cmd := DockerHostCommandStatus{
+			ID:            "cmd-ok",
+			Type:          "update",
+			Status:        "completed",
+			FailureReason: "",
+			CreatedAt:     now,
+			UpdatedAt:     now,
+		}
+
+		result := toDockerHostCommandFrontend(cmd)
+
+		if result.FailureReason != "" {
+			t.Errorf("FailureReason = %q, want empty", result.FailureReason)
+		}
+	})
+}
+
 func TestVMToFrontend_EmptyTags(t *testing.T) {
 	vm := VM{
 		Tags:     []string{},
