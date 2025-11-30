@@ -56,6 +56,10 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
+      - name: Install frontend dependencies
+        working-directory: frontend-modern
+        run: npm ci
+
       - name: Build Pulse for testing
         run: |
           make build || go build -o pulse ./cmd/pulse
