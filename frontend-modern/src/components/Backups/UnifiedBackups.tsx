@@ -94,6 +94,10 @@ const UnifiedBackups: Component = () => {
   } | null>(null);
   const [chartTimeRange, setChartTimeRange] = createSignal(30);
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
+
+  // Pagination state - limit rows to prevent UI lockup with large backup counts
+  const ITEMS_PER_PAGE = 100;
+  const [currentPage, setCurrentPage] = createSignal(1);
   const availableBackupsTooltipText =
     'Daily counts of backups still available for restore across snapshots, PVE storage, and PBS.';
 
@@ -654,15 +658,21 @@ const UnifiedBackups: Component = () => {
       'December',
     ];
 
+    const currentYear = now.getFullYear();
+
     data.forEach((item) => {
       const date = new Date(item.backupTime * 1000);
       const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const backupYear = date.getFullYear();
 
       let label: string;
       const month = months[date.getMonth()];
       const day = date.getDate();
       const suffix = getDaySuffix(day);
-      const absoluteDate = `${month} ${day}${suffix}`;
+      // Show year for non-current year backups
+      const absoluteDate = backupYear === currentYear
+        ? `${month} ${day}${suffix}`
+        : `${month} ${day}${suffix}, ${backupYear}`;
 
       if (dateOnly.getTime() === today.getTime()) {
         label = `Today (${absoluteDate})`;
@@ -716,6 +726,67 @@ const UnifiedBackups: Component = () => {
     // The items come pre-sorted from filteredData(), so we don't need to re-sort them
 
     return groups;
+  });
+
+  // Total item count across all groups (for pagination)
+  const totalItems = createMemo(() => {
+    return groupedData().reduce((sum, group) => sum + group.items.length, 0);
+  });
+
+  // Total pages
+  const totalPages = createMemo(() => {
+    return Math.max(1, Math.ceil(totalItems() / ITEMS_PER_PAGE));
+  });
+
+  // Reset to page 1 when filters change
+  createEffect(() => {
+    // Track filter dependencies
+    searchTerm();
+    selectedNode();
+    typeFilter();
+    backupTypeFilter();
+    statusFilter();
+    selectedDateRange();
+    // Reset page
+    setCurrentPage(1);
+  });
+
+  // Paginated data - slice across groups to get ITEMS_PER_PAGE items
+  const paginatedData = createMemo(() => {
+    const groups = groupedData();
+    const start = (currentPage() - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+
+    // Flatten all items with their group info, slice, then regroup
+    const allItems: { group: DateGroup; item: UnifiedBackup }[] = [];
+    for (const group of groups) {
+      for (const item of group.items) {
+        allItems.push({ group, item });
+      }
+    }
+
+    const sliced = allItems.slice(start, end);
+
+    // Regroup the sliced items
+    const resultGroups: DateGroup[] = [];
+    const groupMap = new Map<string, UnifiedBackup[]>();
+
+    for (const { group, item } of sliced) {
+      if (!groupMap.has(group.label)) {
+        groupMap.set(group.label, []);
+      }
+      groupMap.get(group.label)!.push(item);
+    }
+
+    // Preserve original group order
+    for (const group of groups) {
+      const items = groupMap.get(group.label);
+      if (items && items.length > 0) {
+        resultGroups.push({ label: group.label, items });
+      }
+    }
+
+    return resultGroups;
   });
 
   // Sort handler
@@ -1938,7 +2009,7 @@ const UnifiedBackups: Component = () => {
               >
                 {/* Mobile Card View - Compact */}
                 <div class="block lg:hidden space-y-3">
-                  <For each={groupedData()}>
+                  <For each={paginatedData()}>
                     {(group) => (
                       <div class="space-y-1">
                         <div class="text-xs font-medium text-gray-600 dark:text-gray-400 px-2 py-1 sticky top-0 bg-gray-50 dark:bg-gray-900 z-10">
@@ -2117,7 +2188,7 @@ const UnifiedBackups: Component = () => {
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                    <For each={groupedData()}>
+                    <For each={paginatedData()}>
                       {(group) => (
                         <>
                           <tr class="bg-gray-50 dark:bg-gray-900/40">
@@ -2367,6 +2438,48 @@ const UnifiedBackups: Component = () => {
                     </For>
                   </tbody>
                 </table>
+
+                {/* Pagination Controls */}
+                <Show when={totalPages() > 1}>
+                  <div class="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                      Showing {((currentPage() - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage() * ITEMS_PER_PAGE, totalItems())} of {totalItems()} backups
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <button
+                        onClick={() => setCurrentPage(1)}
+                        disabled={currentPage() === 1}
+                        class="px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        First
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage() === 1}
+                        class="px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        Previous
+                      </button>
+                      <span class="text-sm text-gray-600 dark:text-gray-400 px-2">
+                        Page {currentPage()} of {totalPages()}
+                      </span>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(totalPages(), p + 1))}
+                        disabled={currentPage() === totalPages()}
+                        class="px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        Next
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(totalPages())}
+                        disabled={currentPage() === totalPages()}
+                        class="px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        Last
+                      </button>
+                    </div>
+                  </div>
+                </Show>
               </Show>
             </Show>
           </div>
