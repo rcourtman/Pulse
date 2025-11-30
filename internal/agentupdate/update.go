@@ -18,7 +18,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -430,15 +429,8 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 		}
 	}
 
-	// Restart with same arguments
-	args := os.Args
-	env := os.Environ()
-
-	if err := syscall.Exec(execPath, args, env); err != nil {
-		return fmt.Errorf("failed to restart: %w", err)
-	}
-
-	return nil
+	// Restart the process using platform-specific implementation
+	return restartProcess(execPath)
 }
 
 // determineArch returns the architecture string for download URLs (e.g., "linux-amd64", "darwin-arm64").
