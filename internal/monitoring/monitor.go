@@ -8363,6 +8363,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// Update state with storage backups for this instance
 	m.state.UpdateStorageBackupsForInstance(instanceName, allBackups)
 
+	// Sync backup times to VMs/Containers for backup status indicators
+	m.state.SyncGuestBackupTimes()
+
 	if m.alertManager != nil {
 		snapshot := m.state.GetSnapshot()
 		guestsByKey, guestsByVMID := buildGuestLookups(snapshot, m.guestMetadataStore)
@@ -9288,6 +9291,9 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 	// Update state
 	m.state.UpdatePBSBackups(instanceName, allBackups)
+
+	// Sync backup times to VMs/Containers for backup status indicators
+	m.state.SyncGuestBackupTimes()
 
 	if m.alertManager != nil {
 		snapshot := m.state.GetSnapshot()

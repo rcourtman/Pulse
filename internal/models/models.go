@@ -2,6 +2,7 @@ package models
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1116,6 +1117,51 @@ func (s *State) UpdateContainers(containers []Container) {
 	defer s.mu.Unlock()
 	s.Containers = containers
 	s.LastUpdate = time.Now()
+}
+
+// SyncGuestBackupTimes updates LastBackup on VMs and Containers from storage backups and PBS backups.
+// Call this after updating storage backups or PBS backups to ensure guest backup indicators are accurate.
+func (s *State) SyncGuestBackupTimes() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Build a map of VMID -> latest backup time from all backup sources
+	latestBackup := make(map[int]time.Time)
+
+	// Process PVE storage backups
+	for _, backup := range s.PVEBackups.StorageBackups {
+		if backup.VMID <= 0 {
+			continue
+		}
+		if existing, ok := latestBackup[backup.VMID]; !ok || backup.Time.After(existing) {
+			latestBackup[backup.VMID] = backup.Time
+		}
+	}
+
+	// Process PBS backups (VMID is string, BackupTime is the timestamp)
+	for _, backup := range s.PBSBackups {
+		vmid, err := strconv.Atoi(backup.VMID)
+		if err != nil || vmid <= 0 {
+			continue
+		}
+		if existing, ok := latestBackup[vmid]; !ok || backup.BackupTime.After(existing) {
+			latestBackup[vmid] = backup.BackupTime
+		}
+	}
+
+	// Update VMs
+	for i := range s.VMs {
+		if backupTime, ok := latestBackup[s.VMs[i].VMID]; ok {
+			s.VMs[i].LastBackup = backupTime
+		}
+	}
+
+	// Update Containers
+	for i := range s.Containers {
+		if backupTime, ok := latestBackup[s.Containers[i].VMID]; ok {
+			s.Containers[i].LastBackup = backupTime
+		}
+	}
 }
 
 // UpdateContainersForInstance updates containers for a specific instance, merging with existing containers
