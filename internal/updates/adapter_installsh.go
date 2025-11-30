@@ -617,6 +617,10 @@ func (a *InstallShAdapter) parseProgress(line string) UpdateProgress {
 
 // readLastLines reads the last N lines from a file
 func (a *InstallShAdapter) readLastLines(filepath string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+
 	file, err := os.Open(filepath)
 	if err != nil {
 		return ""
