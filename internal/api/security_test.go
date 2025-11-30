@@ -4,7 +4,13 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 )
+
+// fixedTimeForTest returns a fixed time for deterministic testing
+func fixedTimeForTest() time.Time {
+	return time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
+}
 
 func resetTrustedProxyConfig() {
 	trustedProxyCIDRs = nil
@@ -241,5 +247,454 @@ func TestIsPrivateIPExtended(t *testing.T) {
 				t.Errorf("isPrivateIP(%q) = %v, want %v", tc.ip, got, tc.want)
 			}
 		})
+	}
+}
+
+// resetFailedLogins clears the failed login state for testing
+func resetFailedLogins() {
+	failedMu.Lock()
+	defer failedMu.Unlock()
+	failedLogins = make(map[string]*FailedLogin)
+}
+
+// resetSessionTracking clears session tracking state for testing
+func resetSessionTracking() {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+	allSessions = make(map[string][]string)
+}
+
+func TestRecordFailedLogin(t *testing.T) {
+	resetFailedLogins()
+
+	t.Run("increments count on each failure", func(t *testing.T) {
+		resetFailedLogins()
+		identifier := "test-user-1"
+
+		RecordFailedLogin(identifier)
+		attempts, _, _ := GetLockoutInfo(identifier)
+		if attempts != 1 {
+			t.Errorf("attempts = %d, want 1", attempts)
+		}
+
+		RecordFailedLogin(identifier)
+		attempts, _, _ = GetLockoutInfo(identifier)
+		if attempts != 2 {
+			t.Errorf("attempts = %d, want 2", attempts)
+		}
+
+		RecordFailedLogin(identifier)
+		attempts, _, _ = GetLockoutInfo(identifier)
+		if attempts != 3 {
+			t.Errorf("attempts = %d, want 3", attempts)
+		}
+	})
+
+	t.Run("triggers lockout at max attempts", func(t *testing.T) {
+		resetFailedLogins()
+		identifier := "test-user-2"
+
+		// Record up to max failed attempts
+		for i := 0; i < maxFailedAttempts; i++ {
+			RecordFailedLogin(identifier)
+		}
+
+		attempts, lockedUntil, isLocked := GetLockoutInfo(identifier)
+		if attempts != maxFailedAttempts {
+			t.Errorf("attempts = %d, want %d", attempts, maxFailedAttempts)
+		}
+		if !isLocked {
+			t.Error("expected isLocked = true")
+		}
+		if lockedUntil.IsZero() {
+			t.Error("expected lockedUntil to be set")
+		}
+	})
+
+	t.Run("independent identifiers", func(t *testing.T) {
+		resetFailedLogins()
+		identifier1 := "user-a"
+		identifier2 := "user-b"
+
+		RecordFailedLogin(identifier1)
+		RecordFailedLogin(identifier1)
+		RecordFailedLogin(identifier2)
+
+		attempts1, _, _ := GetLockoutInfo(identifier1)
+		attempts2, _, _ := GetLockoutInfo(identifier2)
+
+		if attempts1 != 2 {
+			t.Errorf("identifier1 attempts = %d, want 2", attempts1)
+		}
+		if attempts2 != 1 {
+			t.Errorf("identifier2 attempts = %d, want 1", attempts2)
+		}
+	})
+}
+
+func TestClearFailedLogins(t *testing.T) {
+	resetFailedLogins()
+
+	t.Run("clears failed login count", func(t *testing.T) {
+		resetFailedLogins()
+		identifier := "test-user-clear"
+
+		RecordFailedLogin(identifier)
+		RecordFailedLogin(identifier)
+
+		attempts, _, _ := GetLockoutInfo(identifier)
+		if attempts != 2 {
+			t.Errorf("attempts before clear = %d, want 2", attempts)
+		}
+
+		ClearFailedLogins(identifier)
+
+		attempts, _, _ = GetLockoutInfo(identifier)
+		if attempts != 0 {
+			t.Errorf("attempts after clear = %d, want 0", attempts)
+		}
+	})
+
+	t.Run("clearing nonexistent identifier does not panic", func(t *testing.T) {
+		resetFailedLogins()
+		ClearFailedLogins("nonexistent-user")
+		// Should not panic
+	})
+
+	t.Run("clears lockout state", func(t *testing.T) {
+		resetFailedLogins()
+		identifier := "locked-user"
+
+		// Lock the account
+		for i := 0; i < maxFailedAttempts; i++ {
+			RecordFailedLogin(identifier)
+		}
+
+		_, _, isLocked := GetLockoutInfo(identifier)
+		if !isLocked {
+			t.Error("expected account to be locked before clear")
+		}
+
+		ClearFailedLogins(identifier)
+
+		_, _, isLocked = GetLockoutInfo(identifier)
+		if isLocked {
+			t.Error("expected account to not be locked after clear")
+		}
+	})
+}
+
+func TestGetLockoutInfo(t *testing.T) {
+	resetFailedLogins()
+
+	t.Run("nonexistent identifier returns zeros", func(t *testing.T) {
+		resetFailedLogins()
+		attempts, lockedUntil, isLocked := GetLockoutInfo("unknown-user")
+		if attempts != 0 {
+			t.Errorf("attempts = %d, want 0", attempts)
+		}
+		if !lockedUntil.IsZero() {
+			t.Errorf("lockedUntil = %v, want zero time", lockedUntil)
+		}
+		if isLocked {
+			t.Error("expected isLocked = false")
+		}
+	})
+
+	t.Run("returns correct attempts below lockout", func(t *testing.T) {
+		resetFailedLogins()
+		identifier := "partial-user"
+
+		RecordFailedLogin(identifier)
+		RecordFailedLogin(identifier)
+
+		attempts, _, isLocked := GetLockoutInfo(identifier)
+		if attempts != 2 {
+			t.Errorf("attempts = %d, want 2", attempts)
+		}
+		if isLocked {
+			t.Error("expected isLocked = false for attempts below max")
+		}
+	})
+
+	t.Run("isLocked true only when attempts >= max and within lockout period", func(t *testing.T) {
+		resetFailedLogins()
+		identifier := "locked-user-test"
+
+		// Record max attempts to trigger lockout
+		for i := 0; i < maxFailedAttempts; i++ {
+			RecordFailedLogin(identifier)
+		}
+
+		attempts, lockedUntil, isLocked := GetLockoutInfo(identifier)
+		if attempts != maxFailedAttempts {
+			t.Errorf("attempts = %d, want %d", attempts, maxFailedAttempts)
+		}
+		if !isLocked {
+			t.Error("expected isLocked = true")
+		}
+		if lockedUntil.IsZero() {
+			t.Error("expected lockedUntil to be set")
+		}
+	})
+}
+
+func TestResetLockout(t *testing.T) {
+	resetFailedLogins()
+
+	t.Run("resets lockout state", func(t *testing.T) {
+		resetFailedLogins()
+		identifier := "admin-reset-test"
+
+		// Lock the account
+		for i := 0; i < maxFailedAttempts; i++ {
+			RecordFailedLogin(identifier)
+		}
+
+		_, _, isLocked := GetLockoutInfo(identifier)
+		if !isLocked {
+			t.Error("expected account to be locked before reset")
+		}
+
+		ResetLockout(identifier)
+
+		attempts, _, isLocked := GetLockoutInfo(identifier)
+		if isLocked {
+			t.Error("expected account to not be locked after reset")
+		}
+		if attempts != 0 {
+			t.Errorf("attempts = %d, want 0 after reset", attempts)
+		}
+	})
+
+	t.Run("resetting nonexistent identifier does not panic", func(t *testing.T) {
+		resetFailedLogins()
+		ResetLockout("nonexistent-admin-user")
+		// Should not panic
+	})
+}
+
+func TestTrackUserSession(t *testing.T) {
+	resetSessionTracking()
+
+	t.Run("tracks new user session", func(t *testing.T) {
+		resetSessionTracking()
+		TrackUserSession("alice", "session-1")
+
+		username := GetSessionUsername("session-1")
+		if username != "alice" {
+			t.Errorf("username = %q, want alice", username)
+		}
+	})
+
+	t.Run("tracks multiple sessions for same user", func(t *testing.T) {
+		resetSessionTracking()
+		TrackUserSession("bob", "session-a")
+		TrackUserSession("bob", "session-b")
+		TrackUserSession("bob", "session-c")
+
+		if GetSessionUsername("session-a") != "bob" {
+			t.Error("session-a should belong to bob")
+		}
+		if GetSessionUsername("session-b") != "bob" {
+			t.Error("session-b should belong to bob")
+		}
+		if GetSessionUsername("session-c") != "bob" {
+			t.Error("session-c should belong to bob")
+		}
+	})
+
+	t.Run("tracks sessions for multiple users", func(t *testing.T) {
+		resetSessionTracking()
+		TrackUserSession("user1", "sess-1")
+		TrackUserSession("user2", "sess-2")
+		TrackUserSession("user3", "sess-3")
+
+		if GetSessionUsername("sess-1") != "user1" {
+			t.Error("sess-1 should belong to user1")
+		}
+		if GetSessionUsername("sess-2") != "user2" {
+			t.Error("sess-2 should belong to user2")
+		}
+		if GetSessionUsername("sess-3") != "user3" {
+			t.Error("sess-3 should belong to user3")
+		}
+	})
+}
+
+func TestGetSessionUsername(t *testing.T) {
+	resetSessionTracking()
+
+	t.Run("returns empty for unknown session", func(t *testing.T) {
+		resetSessionTracking()
+		username := GetSessionUsername("unknown-session")
+		if username != "" {
+			t.Errorf("username = %q, want empty string", username)
+		}
+	})
+
+	t.Run("returns correct username for tracked session", func(t *testing.T) {
+		resetSessionTracking()
+		TrackUserSession("testuser", "test-session-id")
+
+		username := GetSessionUsername("test-session-id")
+		if username != "testuser" {
+			t.Errorf("username = %q, want testuser", username)
+		}
+	})
+
+	t.Run("handles multiple users and sessions", func(t *testing.T) {
+		resetSessionTracking()
+		TrackUserSession("alice", "alice-session-1")
+		TrackUserSession("alice", "alice-session-2")
+		TrackUserSession("bob", "bob-session-1")
+
+		if GetSessionUsername("alice-session-1") != "alice" {
+			t.Error("alice-session-1 should belong to alice")
+		}
+		if GetSessionUsername("alice-session-2") != "alice" {
+			t.Error("alice-session-2 should belong to alice")
+		}
+		if GetSessionUsername("bob-session-1") != "bob" {
+			t.Error("bob-session-1 should belong to bob")
+		}
+		if GetSessionUsername("unknown") != "" {
+			t.Error("unknown session should return empty string")
+		}
+	})
+}
+
+func TestClearCSRFCookie(t *testing.T) {
+	t.Run("nil writer does not panic", func(t *testing.T) {
+		clearCSRFCookie(nil)
+		// Should not panic
+	})
+
+	t.Run("sets cookie with maxage -1", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		clearCSRFCookie(w)
+
+		cookies := w.Result().Cookies()
+		if len(cookies) != 1 {
+			t.Fatalf("expected 1 cookie, got %d", len(cookies))
+		}
+
+		cookie := cookies[0]
+		if cookie.Name != "pulse_csrf" {
+			t.Errorf("cookie name = %q, want pulse_csrf", cookie.Name)
+		}
+		if cookie.Value != "" {
+			t.Errorf("cookie value = %q, want empty string", cookie.Value)
+		}
+		if cookie.MaxAge != -1 {
+			t.Errorf("cookie MaxAge = %d, want -1", cookie.MaxAge)
+		}
+	})
+}
+
+func TestIssueNewCSRFCookie(t *testing.T) {
+	t.Run("nil writer returns empty string", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/api/test", nil)
+		token := issueNewCSRFCookie(nil, req, "session-id")
+		if token != "" {
+			t.Errorf("token = %q, want empty string", token)
+		}
+	})
+
+	t.Run("nil request returns empty string", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		token := issueNewCSRFCookie(w, nil, "session-id")
+		if token != "" {
+			t.Errorf("token = %q, want empty string", token)
+		}
+	})
+
+	t.Run("empty session ID returns empty string", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/test", nil)
+		token := issueNewCSRFCookie(w, req, "")
+		if token != "" {
+			t.Errorf("token = %q, want empty string for empty session", token)
+		}
+	})
+
+	t.Run("whitespace only session ID returns empty string", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/test", nil)
+		token := issueNewCSRFCookie(w, req, "   ")
+		if token != "" {
+			t.Errorf("token = %q, want empty string for whitespace session", token)
+		}
+	})
+
+	t.Run("valid session returns non-empty token", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/test", nil)
+		token := issueNewCSRFCookie(w, req, "valid-session-id")
+		if token == "" {
+			t.Error("expected non-empty token for valid session")
+		}
+
+		// Check that a cookie was set
+		cookies := w.Result().Cookies()
+		found := false
+		for _, c := range cookies {
+			if c.Name == "pulse_csrf" && c.Value == token {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected pulse_csrf cookie to be set with the token value")
+		}
+	})
+}
+
+func TestFailedLogin_Fields(t *testing.T) {
+	fl := FailedLogin{
+		Count:       3,
+		LastAttempt: fixedTimeForTest(),
+		LockedUntil: fixedTimeForTest().Add(15 * 60 * 1000000000),
+	}
+
+	if fl.Count != 3 {
+		t.Errorf("Count = %d, want 3", fl.Count)
+	}
+	if fl.LastAttempt.IsZero() {
+		t.Error("LastAttempt should not be zero")
+	}
+	if fl.LockedUntil.IsZero() {
+		t.Error("LockedUntil should not be zero")
+	}
+}
+
+func TestAuditEvent_Fields(t *testing.T) {
+	ae := AuditEvent{
+		Timestamp: fixedTimeForTest(),
+		Event:     "login_attempt",
+		User:      "admin",
+		IP:        "192.168.1.100",
+		Path:      "/api/auth/login",
+		Success:   true,
+		Details:   "successful login",
+	}
+
+	if ae.Event != "login_attempt" {
+		t.Errorf("Event = %q, want login_attempt", ae.Event)
+	}
+	if ae.User != "admin" {
+		t.Errorf("User = %q, want admin", ae.User)
+	}
+	if ae.IP != "192.168.1.100" {
+		t.Errorf("IP = %q, want 192.168.1.100", ae.IP)
+	}
+	if ae.Path != "/api/auth/login" {
+		t.Errorf("Path = %q, want /api/auth/login", ae.Path)
+	}
+	if !ae.Success {
+		t.Error("Success should be true")
+	}
+	if ae.Details != "successful login" {
+		t.Errorf("Details = %q, want 'successful login'", ae.Details)
 	}
 }
