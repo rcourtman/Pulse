@@ -119,21 +119,31 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
             >
-                {/* Stacked segments */}
-                <div class="absolute top-0 left-0 h-full w-full flex">
-                    <For each={segments()}>
-                        {(segment, idx) => (
+                {/* Stacked segments - use absolute positioning like MetricBar for correct width scaling */}
+                <For each={segments()}>
+                    {(segment, idx) => {
+                        // Calculate left offset as sum of previous segments
+                        const leftOffset = () => {
+                            let offset = 0;
+                            const segs = segments();
+                            for (let i = 0; i < idx(); i++) {
+                                offset += segs[i].percent;
+                            }
+                            return offset;
+                        };
+                        return (
                             <div
-                                class="h-full transition-all duration-300"
+                                class="absolute top-0 h-full transition-all duration-300"
                                 style={{
+                                    left: `${leftOffset()}%`,
                                     width: `${segment.percent}%`,
                                     'background-color': segment.color,
                                     'border-right': idx() < segments().length - 1 ? '1px solid rgba(255,255,255,0.3)' : 'none',
                                 }}
                             />
-                        )}
-                    </For>
-                </div>
+                        );
+                    }}
+                </For>
 
                 {/* Swap Indicator (Thin line at bottom if swap is used) */}
                 {/* Swap Indicator (Thin line at bottom if swap is used) */}
