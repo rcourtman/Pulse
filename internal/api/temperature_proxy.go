@@ -230,6 +230,7 @@ func (h *TemperatureProxyHandlers) HandleRegister(w http.ResponseWriter, r *http
 	// Find matching PVE instance by hostname
 	var matchedInstance *config.PVEInstance
 	var matchedIndex int
+	var matchedEndpointIndex = -1 // For cluster nodes, track which endpoint matched
 
 	for i := range nodesConfig.PVEInstances {
 		instance := &nodesConfig.PVEInstances[i]
@@ -250,10 +251,11 @@ func (h *TemperatureProxyHandlers) HandleRegister(w http.ResponseWriter, r *http
 
 		// Check cluster endpoints
 		if instance.IsCluster {
-			for _, ep := range instance.ClusterEndpoints {
+			for j, ep := range instance.ClusterEndpoints {
 				if strings.EqualFold(ep.NodeName, hostname) || strings.Contains(strings.ToLower(ep.Host), strings.ToLower(hostname)) {
 					matchedInstance = instance
 					matchedIndex = i
+					matchedEndpointIndex = j
 					break
 				}
 			}
@@ -282,15 +284,28 @@ func (h *TemperatureProxyHandlers) HandleRegister(w http.ResponseWriter, r *http
 	}
 
 	// Update the instance with proxy configuration
+	// For clusters, store per-node tokens on the ClusterEndpoint; instance-level token is for non-cluster or fallback
 	nodesConfig.PVEInstances[matchedIndex].TemperatureProxyURL = proxyURL
 	if isHTTPMode {
 		nodesConfig.PVEInstances[matchedIndex].TemperatureProxyToken = authToken
 	}
-	nodesConfig.PVEInstances[matchedIndex].TemperatureProxyControlToken = ctrlToken
+
+	// For cluster nodes, store token on the specific endpoint so each node has its own token
+	if matchedEndpointIndex >= 0 && matchedInstance.IsCluster {
+		nodesConfig.PVEInstances[matchedIndex].ClusterEndpoints[matchedEndpointIndex].TemperatureProxyControlToken = ctrlToken
+		log.Debug().
+			Str("hostname", hostname).
+			Int("endpoint_index", matchedEndpointIndex).
+			Msg("Storing control token on cluster endpoint")
+	} else {
+		// Non-cluster instance or matched by instance name directly
+		nodesConfig.PVEInstances[matchedIndex].TemperatureProxyControlToken = ctrlToken
+	}
 
 	// Save updated configuration
 	log.Debug().
 		Int("matchedIndex", matchedIndex).
+		Int("matchedEndpointIndex", matchedEndpointIndex).
 		Str("saving_url", nodesConfig.PVEInstances[matchedIndex].TemperatureProxyURL).
 		Bool("saving_has_token", nodesConfig.PVEInstances[matchedIndex].TemperatureProxyToken != "").
 		Str("instance_name", nodesConfig.PVEInstances[matchedIndex].Name).
@@ -368,6 +383,8 @@ func (h *TemperatureProxyHandlers) HandleAuthorizedNodes(w http.ResponseWriter, 
 	var matched *config.PVEInstance
 	for i := range nodesConfig.PVEInstances {
 		inst := &nodesConfig.PVEInstances[i]
+
+		// Check instance-level token first
 		switch {
 		case strings.TrimSpace(inst.TemperatureProxyControlToken) == token:
 			matched = inst
@@ -377,6 +394,20 @@ func (h *TemperatureProxyHandlers) HandleAuthorizedNodes(w http.ResponseWriter, 
 		}
 		if matched != nil {
 			break
+		}
+
+		// For clusters, also check per-node tokens on ClusterEndpoints
+		if inst.IsCluster {
+			for j := range inst.ClusterEndpoints {
+				ep := &inst.ClusterEndpoints[j]
+				if strings.TrimSpace(ep.TemperatureProxyControlToken) == token {
+					matched = inst
+					break
+				}
+			}
+			if matched != nil {
+				break
+			}
 		}
 	}
 
