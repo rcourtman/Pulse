@@ -445,9 +445,9 @@ jobs:
           echo "✓ Release published as latest: ${TAG}"
 
       - name: Trigger demo server update
-        continue-on-error: true  # Non-fatal if PAT not configured
+        continue-on-error: true  # Non-fatal if dispatch fails
         env:
-          GH_TOKEN: ${{ secrets.WORKFLOW_PAT || github.token }}
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
           TAG="${{ needs.extract_version.outputs.tag }}"
           echo "Triggering demo server update for ${TAG}..."
