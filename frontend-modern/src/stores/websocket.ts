@@ -84,6 +84,12 @@ export function createWebSocketStore(url: string) {
   let consecutiveEmptyDockerUpdates = 0;
   let hasReceivedNonEmptyDockerHosts = false;
 
+  // Track consecutive empty hosts payloads (same protection as dockerHosts)
+  // This prevents "Host" type badge from disappearing when transient empty
+  // hosts arrays are received. See #773.
+  let consecutiveEmptyHostUpdates = 0;
+  let hasReceivedNonEmptyHosts = false;
+
   const mergeDockerHostRevocations = (incomingHosts: DockerHost[]) => {
     if (!Array.isArray(incomingHosts) || incomingHosts.length === 0) {
       return incomingHosts;
@@ -294,6 +300,8 @@ export function createWebSocketStore(url: string) {
       isReconnecting = false;
       consecutiveEmptyDockerUpdates = 0;
       hasReceivedNonEmptyDockerHosts = false;
+      consecutiveEmptyHostUpdates = 0;
+      hasReceivedNonEmptyHosts = false;
 
       // Start heartbeat to keep connection alive
       if (heartbeatInterval) {
@@ -461,16 +469,51 @@ export function createWebSocketStore(url: string) {
               logger.debug('[WebSocket] Received null dockerHosts payload');
             }
 
-            // Prepare hosts data if present
+            // Prepare hosts data if present (with same transient empty protection as dockerHosts)
             let processedHosts: Host[] | null = null;
+            let shouldApplyHosts = false;
+
             if (hasHostsUpdate) {
-              processedHosts = Array.isArray(message.data.hosts)
-                ? mergeHostRevocations(message.data.hosts)
-                : message.data.hosts;
+              if (Array.isArray(message.data.hosts)) {
+                const incomingHosts = message.data.hosts;
+                if (incomingHosts.length === 0) {
+                  consecutiveEmptyHostUpdates += 1;
+
+                  shouldApplyHosts =
+                    !hasReceivedNonEmptyHosts ||
+                    consecutiveEmptyHostUpdates >= 3 ||
+                    message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE;
+
+                  if (shouldApplyHosts) {
+                    logger.debug('[WebSocket] Updating hosts', {
+                      count: incomingHosts.length,
+                    });
+                    processedHosts = mergeHostRevocations(incomingHosts);
+                  } else {
+                    logger.debug('[WebSocket] Skipping transient empty hosts payload', {
+                      streak: consecutiveEmptyHostUpdates,
+                    });
+                  }
+                } else {
+                  consecutiveEmptyHostUpdates = 0;
+                  hasReceivedNonEmptyHosts = true;
+                  shouldApplyHosts = true;
+                  logger.debug('[WebSocket] Updating hosts', {
+                    count: incomingHosts.length,
+                  });
+                  processedHosts = mergeHostRevocations(incomingHosts);
+                }
+              } else {
+                logger.warn('[WebSocket] Received non-array hosts payload', {
+                  type: typeof message.data.hosts,
+                });
+              }
+            } else if (message.data.hosts === null) {
+              logger.debug('[WebSocket] Received null hosts payload');
             }
 
             // Apply updates - batch together if both are present to prevent flapping
-            if (shouldApplyDockerHosts && processedHosts !== null) {
+            if (shouldApplyDockerHosts && shouldApplyHosts) {
               // Both dockerHosts and hosts in this message - batch them atomically
               batch(() => {
                 setState('dockerHosts', reconcile(processedDockerHosts!, { key: 'id' }));
@@ -503,7 +546,7 @@ export function createWebSocketStore(url: string) {
                 pruneMetricsByPrefix(getMetricKeyPrefix('dockerHost'), hostIds);
                 pruneMetricsByPrefix(getMetricKeyPrefix('dockerContainer'), dockerContainerIds);
               }
-              if (processedHosts !== null) {
+              if (shouldApplyHosts && processedHosts !== null) {
                 setState('hosts', reconcile(processedHosts, { key: 'id' }));
               }
             }
