@@ -165,3 +165,95 @@ func TestSplitAndTrim(t *testing.T) {
 		})
 	}
 }
+
+func TestSanitizeCIDRList(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []string
+		expected []string
+	}{
+		// Nil and empty handling
+		{"nil input", nil, nil},
+		{"empty slice", []string{}, nil},
+
+		// Single entry
+		{"single valid entry", []string{"10.0.0.0/8"}, []string{"10.0.0.0/8"}},
+		{"single entry with leading space", []string{" 10.0.0.0/8"}, []string{"10.0.0.0/8"}},
+		{"single entry with trailing space", []string{"10.0.0.0/8 "}, []string{"10.0.0.0/8"}},
+		{"single entry with both spaces", []string{"  10.0.0.0/8  "}, []string{"10.0.0.0/8"}},
+		{"single entry with tabs", []string{"\t10.0.0.0/8\t"}, []string{"10.0.0.0/8"}},
+
+		// Multiple valid entries (no duplicates)
+		{"two valid entries", []string{"10.0.0.0/8", "192.168.0.0/16"}, []string{"10.0.0.0/8", "192.168.0.0/16"}},
+		{"three valid entries", []string{"10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"}, []string{"10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"}},
+
+		// Duplicates at various positions
+		{"duplicate at end", []string{"10.0.0.0/8", "192.168.0.0/16", "10.0.0.0/8"}, []string{"10.0.0.0/8", "192.168.0.0/16"}},
+		{"duplicate at start", []string{"10.0.0.0/8", "10.0.0.0/8", "192.168.0.0/16"}, []string{"10.0.0.0/8", "192.168.0.0/16"}},
+		{"duplicate in middle", []string{"10.0.0.0/8", "192.168.0.0/16", "10.0.0.0/8", "172.16.0.0/12"}, []string{"10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"}},
+		{"all duplicates", []string{"10.0.0.0/8", "10.0.0.0/8", "10.0.0.0/8"}, []string{"10.0.0.0/8"}},
+		{"multiple duplicates", []string{"a", "b", "a", "c", "b", "d", "a"}, []string{"a", "b", "c", "d"}},
+
+		// Whitespace variations
+		{"entry with leading whitespace", []string{"  10.0.0.0/8", "192.168.0.0/16"}, []string{"10.0.0.0/8", "192.168.0.0/16"}},
+		{"entry with trailing whitespace", []string{"10.0.0.0/8  ", "192.168.0.0/16"}, []string{"10.0.0.0/8", "192.168.0.0/16"}},
+		{"mixed whitespace", []string{" 10.0.0.0/8", "192.168.0.0/16 ", "  172.16.0.0/12  "}, []string{"10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"}},
+		{"tabs and spaces mixed", []string{"\t10.0.0.0/8 ", " \t192.168.0.0/16\t ", "  172.16.0.0/12"}, []string{"10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"}},
+
+		// Entries that become duplicates after trimming
+		{"duplicates after trim", []string{" 10.0.0.0/8", "10.0.0.0/8 ", "  10.0.0.0/8  "}, []string{"10.0.0.0/8"}},
+		{"duplicates after trim with others", []string{" 10.0.0.0/8", "192.168.0.0/16", "10.0.0.0/8 "}, []string{"10.0.0.0/8", "192.168.0.0/16"}},
+
+		// All empty/whitespace entries
+		{"single empty string", []string{""}, []string{}},
+		{"multiple empty strings", []string{"", "", ""}, []string{}},
+		{"only whitespace", []string{" ", "  ", "\t", " \t "}, []string{}},
+		{"mixed empty and whitespace", []string{"", " ", "", "\t"}, []string{}},
+
+		// Mixed valid and empty entries
+		{"valid with empty at start", []string{"", "10.0.0.0/8", "192.168.0.0/16"}, []string{"10.0.0.0/8", "192.168.0.0/16"}},
+		{"valid with empty in middle", []string{"10.0.0.0/8", "", "192.168.0.0/16"}, []string{"10.0.0.0/8", "192.168.0.0/16"}},
+		{"valid with empty at end", []string{"10.0.0.0/8", "192.168.0.0/16", ""}, []string{"10.0.0.0/8", "192.168.0.0/16"}},
+		{"valid with multiple empty", []string{"", "10.0.0.0/8", "", "192.168.0.0/16", "", ""}, []string{"10.0.0.0/8", "192.168.0.0/16"}},
+		{"valid with whitespace entries", []string{" ", "10.0.0.0/8", "  ", "192.168.0.0/16", "\t"}, []string{"10.0.0.0/8", "192.168.0.0/16"}},
+
+		// Order preservation
+		{"order preserved basic", []string{"z", "a", "m"}, []string{"z", "a", "m"}},
+		{"order preserved with duplicates", []string{"z", "a", "m", "z", "a"}, []string{"z", "a", "m"}},
+		{"order preserved complex", []string{"third", "first", "second", "third", "first"}, []string{"third", "first", "second"}},
+		{"order preserved after trim", []string{" c ", "a", " b ", "c", " a "}, []string{"c", "a", "b"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := sanitizeCIDRList(tt.input)
+
+			// Check nil vs empty slice distinction
+			if tt.expected == nil {
+				if result != nil {
+					t.Errorf("sanitizeCIDRList(%v) = %v, want nil", tt.input, result)
+				}
+				return
+			}
+
+			if result == nil {
+				t.Errorf("sanitizeCIDRList(%v) = nil, want %v", tt.input, tt.expected)
+				return
+			}
+
+			// Check length
+			if len(result) != len(tt.expected) {
+				t.Errorf("sanitizeCIDRList(%v) returned %d items, want %d", tt.input, len(result), len(tt.expected))
+				t.Errorf("got: %v, want: %v", result, tt.expected)
+				return
+			}
+
+			// Check each element
+			for i, v := range result {
+				if v != tt.expected[i] {
+					t.Errorf("sanitizeCIDRList(%v)[%d] = %q, want %q", tt.input, i, v, tt.expected[i])
+				}
+			}
+		})
+	}
+}
