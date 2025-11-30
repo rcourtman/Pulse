@@ -179,3 +179,560 @@ func TestIsDirectLoopbackRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestFirstForwardedValue(t *testing.T) {
+	tests := []struct {
+		name   string
+		header string
+		want   string
+	}{
+		// Empty/nil cases
+		{
+			name:   "empty string",
+			header: "",
+			want:   "",
+		},
+
+		// Single value
+		{
+			name:   "single IP",
+			header: "192.168.1.1",
+			want:   "192.168.1.1",
+		},
+		{
+			name:   "single IP with whitespace",
+			header: "  192.168.1.1  ",
+			want:   "192.168.1.1",
+		},
+		{
+			name:   "single IPv6",
+			header: "2001:db8::1",
+			want:   "2001:db8::1",
+		},
+
+		// Multiple values (comma-separated)
+		{
+			name:   "multiple IPs returns first",
+			header: "192.168.1.1, 10.0.0.1, 172.16.0.1",
+			want:   "192.168.1.1",
+		},
+		{
+			name:   "multiple IPs with extra whitespace",
+			header: "  203.0.113.42  ,  192.168.1.1  ",
+			want:   "203.0.113.42",
+		},
+		{
+			name:   "first value empty after split",
+			header: ", 192.168.1.1",
+			want:   "",
+		},
+		{
+			name:   "only commas",
+			header: ",,,",
+			want:   "",
+		},
+
+		// Realistic proxy chain scenarios
+		{
+			name:   "proxy chain client first",
+			header: "client.example.com, proxy1.example.com, proxy2.example.com",
+			want:   "client.example.com",
+		},
+		{
+			name:   "mixed IPv4 and IPv6 chain",
+			header: "2001:db8::1, 192.168.1.1, 10.0.0.1",
+			want:   "2001:db8::1",
+		},
+
+		// Edge cases
+		{
+			name:   "value with port (non-standard but seen in wild)",
+			header: "192.168.1.1:8080, 10.0.0.1",
+			want:   "192.168.1.1:8080",
+		},
+		{
+			name:   "hostname instead of IP",
+			header: "client.example.com",
+			want:   "client.example.com",
+		},
+		{
+			name:   "tabs and newlines stripped",
+			header: "\t192.168.1.1\n",
+			want:   "192.168.1.1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := firstForwardedValue(tt.header)
+			if got != tt.want {
+				t.Errorf("firstForwardedValue(%q) = %q, want %q", tt.header, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSanitizeForwardedHost(t *testing.T) {
+	tests := []struct {
+		name         string
+		raw          string
+		wantFull     string // host with port preserved
+		wantHostOnly string // host without port, brackets stripped
+	}{
+		// Empty cases
+		{
+			name:         "empty string",
+			raw:          "",
+			wantFull:     "",
+			wantHostOnly: "",
+		},
+		{
+			name:         "only whitespace",
+			raw:          "   ",
+			wantFull:     "",
+			wantHostOnly: "",
+		},
+		{
+			name:         "only scheme http",
+			raw:          "http://",
+			wantFull:     "",
+			wantHostOnly: "",
+		},
+		{
+			name:         "only scheme https",
+			raw:          "https://",
+			wantFull:     "",
+			wantHostOnly: "",
+		},
+
+		// Simple hostnames
+		{
+			name:         "simple hostname",
+			raw:          "example.com",
+			wantFull:     "example.com",
+			wantHostOnly: "example.com",
+		},
+		{
+			name:         "hostname with whitespace",
+			raw:          "  example.com  ",
+			wantFull:     "example.com",
+			wantHostOnly: "example.com",
+		},
+		{
+			name:         "fqdn",
+			raw:          "api.example.com",
+			wantFull:     "api.example.com",
+			wantHostOnly: "api.example.com",
+		},
+
+		// Hostnames with ports
+		{
+			name:         "hostname with port",
+			raw:          "example.com:8080",
+			wantFull:     "example.com:8080",
+			wantHostOnly: "example.com",
+		},
+		{
+			name:         "hostname with standard https port",
+			raw:          "example.com:443",
+			wantFull:     "example.com:443",
+			wantHostOnly: "example.com",
+		},
+		{
+			name:         "hostname with standard http port",
+			raw:          "example.com:80",
+			wantFull:     "example.com:80",
+			wantHostOnly: "example.com",
+		},
+
+		// With scheme prefixes
+		{
+			name:         "http scheme stripped",
+			raw:          "http://example.com",
+			wantFull:     "example.com",
+			wantHostOnly: "example.com",
+		},
+		{
+			name:         "https scheme stripped",
+			raw:          "https://example.com",
+			wantFull:     "example.com",
+			wantHostOnly: "example.com",
+		},
+		{
+			name:         "http scheme with port",
+			raw:          "http://example.com:8080",
+			wantFull:     "example.com:8080",
+			wantHostOnly: "example.com",
+		},
+		{
+			name:         "https scheme with port",
+			raw:          "https://example.com:9443",
+			wantFull:     "example.com:9443",
+			wantHostOnly: "example.com",
+		},
+
+		// Trailing slashes/paths
+		{
+			name:         "trailing slash stripped",
+			raw:          "example.com/",
+			wantFull:     "example.com",
+			wantHostOnly: "example.com",
+		},
+		{
+			name:         "scheme and trailing slash",
+			raw:          "https://example.com/",
+			wantFull:     "example.com",
+			wantHostOnly: "example.com",
+		},
+
+		// IPv4 addresses
+		{
+			name:         "IPv4 address",
+			raw:          "192.168.1.1",
+			wantFull:     "192.168.1.1",
+			wantHostOnly: "192.168.1.1",
+		},
+		{
+			name:         "IPv4 with port",
+			raw:          "192.168.1.1:8080",
+			wantFull:     "192.168.1.1:8080",
+			wantHostOnly: "192.168.1.1",
+		},
+		{
+			name:         "IPv4 with scheme",
+			raw:          "http://10.0.0.1",
+			wantFull:     "10.0.0.1",
+			wantHostOnly: "10.0.0.1",
+		},
+
+		// IPv6 addresses (key edge case - bracket handling)
+		{
+			name:         "IPv6 with brackets",
+			raw:          "[::1]",
+			wantFull:     "[::1]",
+			wantHostOnly: "::1",
+		},
+		{
+			name:         "IPv6 with brackets and port",
+			raw:          "[::1]:8080",
+			wantFull:     "[::1]:8080",
+			wantHostOnly: "::1",
+		},
+		{
+			name:         "IPv6 full address with brackets",
+			raw:          "[2001:db8::1]",
+			wantFull:     "[2001:db8::1]",
+			wantHostOnly: "2001:db8::1",
+		},
+		{
+			name:         "IPv6 full address with brackets and port",
+			raw:          "[2001:db8::1]:443",
+			wantFull:     "[2001:db8::1]:443",
+			wantHostOnly: "2001:db8::1",
+		},
+		{
+			name:         "IPv6 with scheme",
+			raw:          "https://[::1]:9443",
+			wantFull:     "[::1]:9443",
+			wantHostOnly: "::1",
+		},
+		{
+			name:         "IPv6 without brackets (raw - no port possible)",
+			raw:          "::1",
+			wantFull:     "::1",
+			wantHostOnly: "::1",
+		},
+
+		// Realistic forwarded host headers
+		{
+			name:         "X-Forwarded-Host typical",
+			raw:          "api.myservice.com",
+			wantFull:     "api.myservice.com",
+			wantHostOnly: "api.myservice.com",
+		},
+		{
+			name:         "reverse proxy with non-standard port",
+			raw:          "internal.corp.local:7655",
+			wantFull:     "internal.corp.local:7655",
+			wantHostOnly: "internal.corp.local",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotFull, gotHostOnly := sanitizeForwardedHost(tt.raw)
+			if gotFull != tt.wantFull {
+				t.Errorf("sanitizeForwardedHost(%q) full = %q, want %q", tt.raw, gotFull, tt.wantFull)
+			}
+			if gotHostOnly != tt.wantHostOnly {
+				t.Errorf("sanitizeForwardedHost(%q) hostOnly = %q, want %q", tt.raw, gotHostOnly, tt.wantHostOnly)
+			}
+		})
+	}
+}
+
+func TestIsLoopbackHost(t *testing.T) {
+	tests := []struct {
+		name string
+		host string
+		want bool
+	}{
+		// Empty/special cases (treated as loopback for safety)
+		{
+			name: "empty string",
+			host: "",
+			want: true,
+		},
+
+		// Localhost keyword
+		{
+			name: "localhost lowercase",
+			host: "localhost",
+			want: true,
+		},
+		{
+			name: "localhost uppercase",
+			host: "LOCALHOST",
+			want: true,
+		},
+		{
+			name: "localhost mixed case",
+			host: "LocalHost",
+			want: true,
+		},
+
+		// IPv4 loopback range
+		{
+			name: "127.0.0.1",
+			host: "127.0.0.1",
+			want: true,
+		},
+		{
+			name: "127.0.0.2 (full loopback range)",
+			host: "127.0.0.2",
+			want: true,
+		},
+		{
+			name: "127.255.255.255 (end of loopback range)",
+			host: "127.255.255.255",
+			want: true,
+		},
+
+		// IPv6 loopback
+		{
+			name: "::1",
+			host: "::1",
+			want: true,
+		},
+
+		// Unspecified addresses (treated as loopback)
+		{
+			name: "0.0.0.0 unspecified IPv4",
+			host: "0.0.0.0",
+			want: true,
+		},
+		{
+			name: ":: unspecified IPv6",
+			host: "::",
+			want: true,
+		},
+
+		// Non-loopback private addresses
+		{
+			name: "private 192.168.x",
+			host: "192.168.1.1",
+			want: false,
+		},
+		{
+			name: "private 10.x",
+			host: "10.0.0.1",
+			want: false,
+		},
+		{
+			name: "private 172.16.x",
+			host: "172.16.0.1",
+			want: false,
+		},
+
+		// Non-loopback public addresses
+		{
+			name: "public IPv4",
+			host: "203.0.113.42",
+			want: false,
+		},
+		{
+			name: "public IPv6",
+			host: "2001:db8::1",
+			want: false,
+		},
+
+		// Hostnames (not IPs)
+		{
+			name: "regular hostname",
+			host: "example.com",
+			want: false,
+		},
+		{
+			name: "fqdn",
+			host: "api.example.com",
+			want: false,
+		},
+		{
+			name: "localhost-like but not localhost",
+			host: "localhost.example.com",
+			want: false,
+		},
+		{
+			name: "hostname starting with local",
+			host: "local.example.com",
+			want: false,
+		},
+
+		// Edge cases
+		{
+			name: "link-local IPv6",
+			host: "fe80::1",
+			want: false,
+		},
+		{
+			name: "multicast",
+			host: "224.0.0.1",
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isLoopbackHost(tt.host)
+			if got != tt.want {
+				t.Errorf("isLoopbackHost(%q) = %v, want %v", tt.host, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestShouldAppendForwardedPort(t *testing.T) {
+	tests := []struct {
+		name   string
+		port   string
+		scheme string
+		want   bool
+	}{
+		// Empty port
+		{
+			name:   "empty port",
+			port:   "",
+			scheme: "https",
+			want:   false,
+		},
+
+		// Invalid port (non-numeric)
+		{
+			name:   "non-numeric port",
+			port:   "abc",
+			scheme: "https",
+			want:   false,
+		},
+		{
+			name:   "port with letters",
+			port:   "80a",
+			scheme: "http",
+			want:   false,
+		},
+		{
+			name:   "negative port string (Atoi accepts it)",
+			port:   "-80",
+			scheme: "http",
+			want:   true, // strconv.Atoi parses "-80" as -80 (valid int)
+		},
+
+		// Default ports that should NOT be appended
+		{
+			name:   "https with 443",
+			port:   "443",
+			scheme: "https",
+			want:   false,
+		},
+		{
+			name:   "http with 80",
+			port:   "80",
+			scheme: "http",
+			want:   false,
+		},
+
+		// Default ports for wrong scheme SHOULD be appended
+		{
+			name:   "http with 443 (unusual)",
+			port:   "443",
+			scheme: "http",
+			want:   true,
+		},
+		{
+			name:   "https with 80 (unusual)",
+			port:   "80",
+			scheme: "https",
+			want:   true,
+		},
+
+		// Non-default ports should be appended
+		{
+			name:   "https with 8443",
+			port:   "8443",
+			scheme: "https",
+			want:   true,
+		},
+		{
+			name:   "http with 8080",
+			port:   "8080",
+			scheme: "http",
+			want:   true,
+		},
+		{
+			name:   "https with custom port",
+			port:   "9443",
+			scheme: "https",
+			want:   true,
+		},
+		{
+			name:   "pulse default port",
+			port:   "7655",
+			scheme: "https",
+			want:   true,
+		},
+
+		// Edge cases
+		{
+			name:   "port 0",
+			port:   "0",
+			scheme: "http",
+			want:   true,
+		},
+		{
+			name:   "high port number",
+			port:   "65535",
+			scheme: "https",
+			want:   true,
+		},
+		{
+			name:   "empty scheme with non-default port",
+			port:   "8080",
+			scheme: "",
+			want:   true,
+		},
+		{
+			name:   "unknown scheme",
+			port:   "443",
+			scheme: "wss",
+			want:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldAppendForwardedPort(tt.port, tt.scheme)
+			if got != tt.want {
+				t.Errorf("shouldAppendForwardedPort(%q, %q) = %v, want %v", tt.port, tt.scheme, got, tt.want)
+			}
+		})
+	}
+}
