@@ -3,11 +3,13 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 )
 
@@ -764,4 +766,567 @@ func TestParseSensorsJSON_MultipleSuperioCPUFields(t *testing.T) {
 	if temp.CPUPackage != 52.0 {
 		t.Fatalf("expected cpu package temperature from 'CPU Temperature' field (52.0), got %.2f", temp.CPUPackage)
 	}
+}
+
+// =============================================================================
+// Unit tests for utility functions
+// =============================================================================
+
+func TestExtractTempInput(t *testing.T) {
+	tests := []struct {
+		name      string
+		sensorMap map[string]interface{}
+		wantTemp  float64
+		wantNaN   bool
+	}{
+		{
+			name: "float64 temp1_input",
+			sensorMap: map[string]interface{}{
+				"temp1_input": 45.5,
+			},
+			wantTemp: 45.5,
+		},
+		{
+			name: "float64 temp2_input",
+			sensorMap: map[string]interface{}{
+				"temp2_input": 72.3,
+			},
+			wantTemp: 72.3,
+		},
+		{
+			name: "int value converted to float64",
+			sensorMap: map[string]interface{}{
+				"temp1_input": 55,
+			},
+			wantTemp: 55.0,
+		},
+		{
+			name: "string value parseable",
+			sensorMap: map[string]interface{}{
+				"temp1_input": "62.5",
+			},
+			wantTemp: 62.5,
+		},
+		{
+			name: "string value non-numeric",
+			sensorMap: map[string]interface{}{
+				"temp1_input": "N/A",
+			},
+			wantNaN: true,
+		},
+		{
+			name: "no _input suffix",
+			sensorMap: map[string]interface{}{
+				"temp1":     45.5,
+				"temp1_max": 100.0,
+			},
+			wantNaN: true,
+		},
+		{
+			name:      "empty map",
+			sensorMap: map[string]interface{}{},
+			wantNaN:   true,
+		},
+		{
+			name:      "nil map",
+			sensorMap: nil,
+			wantNaN:   true,
+		},
+		{
+			name: "zero temperature",
+			sensorMap: map[string]interface{}{
+				"temp1_input": 0.0,
+			},
+			wantTemp: 0.0,
+		},
+		{
+			name: "negative temperature",
+			sensorMap: map[string]interface{}{
+				"temp1_input": -10.5,
+			},
+			wantTemp: -10.5,
+		},
+		{
+			name: "mixed valid and invalid fields",
+			sensorMap: map[string]interface{}{
+				"temp1":       45.0,
+				"temp1_input": 50.0,
+				"temp1_max":   100.0,
+			},
+			wantTemp: 50.0,
+		},
+		{
+			name: "boolean value (invalid type)",
+			sensorMap: map[string]interface{}{
+				"temp1_input": true,
+			},
+			wantNaN: true,
+		},
+		{
+			name: "nil value",
+			sensorMap: map[string]interface{}{
+				"temp1_input": nil,
+			},
+			wantNaN: true,
+		},
+		{
+			name: "very high temperature",
+			sensorMap: map[string]interface{}{
+				"temp1_input": 125.5,
+			},
+			wantTemp: 125.5,
+		},
+		{
+			name: "fractional precision",
+			sensorMap: map[string]interface{}{
+				"temp1_input": 45.123456789,
+			},
+			wantTemp: 45.123456789,
+		},
+		{
+			name: "temp_crit_input also matches",
+			sensorMap: map[string]interface{}{
+				"temp1_crit_input": 95.0,
+			},
+			wantTemp: 95.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractTempInput(tt.sensorMap)
+
+			if tt.wantNaN {
+				if !math.IsNaN(got) {
+					t.Errorf("extractTempInput() = %v, want NaN", got)
+				}
+				return
+			}
+
+			if got != tt.wantTemp {
+				t.Errorf("extractTempInput() = %v, want %v", got, tt.wantTemp)
+			}
+		})
+	}
+}
+
+func TestExtractCoreNumber(t *testing.T) {
+	tests := []struct {
+		name string
+		want int
+	}{
+		{"Core 0", 0},
+		{"Core 1", 1},
+		{"Core 10", 10},
+		{"Core 99", 99},
+		{"Core 127", 127},
+		{"Core", 0},           // missing number
+		{"Core ", 0},          // trailing space, no number
+		{"core 5", 5},         // lowercase
+		{"CORE 7", 7},         // uppercase
+		{"Core  12", 12},      // extra space (Fields handles this)
+		{"", 0},               // empty string
+		{"   ", 0},            // whitespace only
+		{"Core abc", 0},       // non-numeric
+		{"Package id 0", 0},   // last part is "0"
+		{"temp1", 0},          // no spaces
+		{"Core 1000", 1000},   // large core number
+		{"Prefix Core 5", 5},  // core not at start
+		{"Core 0 extra", 0},   // text after number - "extra" is last field
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractCoreNumber(tt.name)
+			if got != tt.want {
+				t.Errorf("extractCoreNumber(%q) = %v, want %v", tt.name, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExtractHostname(t *testing.T) {
+	tests := []struct {
+		name    string
+		hostURL string
+		want    string
+	}{
+		{
+			name:    "https with port",
+			hostURL: "https://192.168.1.100:8006",
+			want:    "192.168.1.100",
+		},
+		{
+			name:    "https without port",
+			hostURL: "https://192.168.1.100",
+			want:    "192.168.1.100",
+		},
+		{
+			name:    "http with port",
+			hostURL: "http://192.168.1.100:8006",
+			want:    "192.168.1.100",
+		},
+		{
+			name:    "http without port",
+			hostURL: "http://192.168.1.100",
+			want:    "192.168.1.100",
+		},
+		{
+			name:    "hostname with port",
+			hostURL: "https://proxmox.local:8006",
+			want:    "proxmox.local",
+		},
+		{
+			name:    "hostname without port",
+			hostURL: "https://proxmox.local",
+			want:    "proxmox.local",
+		},
+		{
+			name:    "bare IP",
+			hostURL: "192.168.1.100",
+			want:    "192.168.1.100",
+		},
+		{
+			name:    "bare IP with port",
+			hostURL: "192.168.1.100:8006",
+			want:    "192.168.1.100",
+		},
+		{
+			name:    "bare hostname",
+			hostURL: "proxmox.local",
+			want:    "proxmox.local",
+		},
+		{
+			name:    "bare hostname with port",
+			hostURL: "proxmox.local:8006",
+			want:    "proxmox.local",
+		},
+		{
+			name:    "with path",
+			hostURL: "https://192.168.1.100:8006/api2/json",
+			want:    "192.168.1.100",
+		},
+		{
+			name:    "empty string",
+			hostURL: "",
+			want:    "",
+		},
+		{
+			name:    "protocol only",
+			hostURL: "https://",
+			want:    "",
+		},
+		{
+			name:    "FQDN",
+			hostURL: "https://pve1.example.com:8006",
+			want:    "pve1.example.com",
+		},
+		{
+			name:    "localhost",
+			hostURL: "http://localhost:8006",
+			want:    "localhost",
+		},
+		{
+			name:    "127.0.0.1",
+			hostURL: "https://127.0.0.1:8006",
+			want:    "127.0.0.1",
+		},
+		{
+			name:    "uppercase protocol not stripped",
+			hostURL: "HTTPS://192.168.1.100:8006",
+			want:    "HTTPS", // TrimPrefix is case-sensitive, so "HTTPS:" becomes hostname part
+		},
+		{
+			name:    "trailing slash",
+			hostURL: "https://192.168.1.100/",
+			want:    "192.168.1.100",
+		},
+		{
+			name:    "query string",
+			hostURL: "https://192.168.1.100:8006/api?key=value",
+			want:    "192.168.1.100",
+		},
+		{
+			name:    "double protocol",
+			hostURL: "https://https://192.168.1.100",
+			want:    "https",
+		},
+		{
+			name:    "port only",
+			hostURL: ":8006",
+			want:    "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractHostname(tt.hostURL)
+			if got != tt.want {
+				t.Errorf("extractHostname(%q) = %q, want %q", tt.hostURL, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeSMARTEntries(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  []smartEntryRaw
+		want []models.DiskTemp
+	}{
+		{
+			name: "nil input",
+			raw:  nil,
+			want: nil,
+		},
+		{
+			name: "empty slice",
+			raw:  []smartEntryRaw{},
+			want: nil,
+		},
+		{
+			name: "single entry with all fields",
+			raw: []smartEntryRaw{
+				{
+					Device:         "/dev/sda",
+					Serial:         "WD-WMC1T0123456",
+					WWN:            "5 0014ee 2b1234567",
+					Model:          "WDC WD40EFRX-68N32N0",
+					Type:           "sata",
+					Temperature:    intPtr(38),
+					LastUpdated:    "2024-01-15T10:30:00Z",
+					StandbySkipped: false,
+				},
+			},
+			want: []models.DiskTemp{
+				{
+					Device:         "/dev/sda",
+					Serial:         "WD-WMC1T0123456",
+					WWN:            "5 0014ee 2b1234567",
+					Model:          "WDC WD40EFRX-68N32N0",
+					Type:           "sata",
+					Temperature:    38,
+					LastUpdated:    mustParseTime("2024-01-15T10:30:00Z"),
+					StandbySkipped: false,
+				},
+			},
+		},
+		{
+			name: "entry with nil temperature",
+			raw: []smartEntryRaw{
+				{
+					Device:      "/dev/sdb",
+					Temperature: nil,
+				},
+			},
+			want: []models.DiskTemp{
+				{
+					Device:      "/dev/sdb",
+					Temperature: 0, // nil becomes 0
+				},
+			},
+		},
+		{
+			name: "entry with standby skipped",
+			raw: []smartEntryRaw{
+				{
+					Device:         "/dev/sdc",
+					StandbySkipped: true,
+					Temperature:    nil,
+				},
+			},
+			want: []models.DiskTemp{
+				{
+					Device:         "/dev/sdc",
+					StandbySkipped: true,
+					Temperature:    0,
+				},
+			},
+		},
+		{
+			name: "empty device skipped",
+			raw: []smartEntryRaw{
+				{
+					Device:      "",
+					Temperature: intPtr(40),
+				},
+			},
+			want: []models.DiskTemp{},
+		},
+		{
+			name: "whitespace-only device skipped",
+			raw: []smartEntryRaw{
+				{
+					Device:      "   ",
+					Temperature: intPtr(40),
+				},
+			},
+			want: []models.DiskTemp{},
+		},
+		{
+			name: "invalid timestamp ignored",
+			raw: []smartEntryRaw{
+				{
+					Device:      "/dev/sda",
+					LastUpdated: "not-a-timestamp",
+					Temperature: intPtr(42),
+				},
+			},
+			want: []models.DiskTemp{
+				{
+					Device:      "/dev/sda",
+					Temperature: 42,
+					LastUpdated: time.Time{}, // zero time
+				},
+			},
+		},
+		{
+			name: "empty timestamp",
+			raw: []smartEntryRaw{
+				{
+					Device:      "/dev/sda",
+					LastUpdated: "",
+					Temperature: intPtr(42),
+				},
+			},
+			want: []models.DiskTemp{
+				{
+					Device:      "/dev/sda",
+					Temperature: 42,
+					LastUpdated: time.Time{},
+				},
+			},
+		},
+		{
+			name: "multiple entries",
+			raw: []smartEntryRaw{
+				{Device: "/dev/sda", Temperature: intPtr(38), Type: "sata"},
+				{Device: "/dev/sdb", Temperature: intPtr(40), Type: "sata"},
+				{Device: "/dev/nvme0n1", Temperature: intPtr(45), Type: "nvme"},
+			},
+			want: []models.DiskTemp{
+				{Device: "/dev/sda", Temperature: 38, Type: "sata"},
+				{Device: "/dev/sdb", Temperature: 40, Type: "sata"},
+				{Device: "/dev/nvme0n1", Temperature: 45, Type: "nvme"},
+			},
+		},
+		{
+			name: "whitespace trimmed from fields",
+			raw: []smartEntryRaw{
+				{
+					Device: "  /dev/sda  ",
+					Serial: "  ABC123  ",
+					WWN:    "  1234  ",
+					Model:  "  Model X  ",
+					Type:   "  sata  ",
+				},
+			},
+			want: []models.DiskTemp{
+				{
+					Device: "/dev/sda",
+					Serial: "ABC123",
+					WWN:    "1234",
+					Model:  "Model X",
+					Type:   "sata",
+				},
+			},
+		},
+		{
+			name: "mixed valid and empty devices",
+			raw: []smartEntryRaw{
+				{Device: "/dev/sda", Temperature: intPtr(38)},
+				{Device: "", Temperature: intPtr(40)},
+				{Device: "/dev/sdc", Temperature: intPtr(42)},
+			},
+			want: []models.DiskTemp{
+				{Device: "/dev/sda", Temperature: 38},
+				{Device: "/dev/sdc", Temperature: 42},
+			},
+		},
+		{
+			name: "zero temperature",
+			raw: []smartEntryRaw{
+				{Device: "/dev/sda", Temperature: intPtr(0)},
+			},
+			want: []models.DiskTemp{
+				{Device: "/dev/sda", Temperature: 0},
+			},
+		},
+		{
+			name: "negative temperature",
+			raw: []smartEntryRaw{
+				{Device: "/dev/sda", Temperature: intPtr(-10)},
+			},
+			want: []models.DiskTemp{
+				{Device: "/dev/sda", Temperature: -10},
+			},
+		},
+		{
+			name: "high temperature",
+			raw: []smartEntryRaw{
+				{Device: "/dev/sda", Temperature: intPtr(85)},
+			},
+			want: []models.DiskTemp{
+				{Device: "/dev/sda", Temperature: 85},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeSMARTEntries(tt.raw)
+
+			if tt.want == nil {
+				if got != nil {
+					t.Errorf("normalizeSMARTEntries() = %v, want nil", got)
+				}
+				return
+			}
+
+			if len(got) != len(tt.want) {
+				t.Fatalf("normalizeSMARTEntries() returned %d entries, want %d", len(got), len(tt.want))
+			}
+
+			for i := range got {
+				if got[i].Device != tt.want[i].Device {
+					t.Errorf("entry[%d].Device = %q, want %q", i, got[i].Device, tt.want[i].Device)
+				}
+				if got[i].Serial != tt.want[i].Serial {
+					t.Errorf("entry[%d].Serial = %q, want %q", i, got[i].Serial, tt.want[i].Serial)
+				}
+				if got[i].WWN != tt.want[i].WWN {
+					t.Errorf("entry[%d].WWN = %q, want %q", i, got[i].WWN, tt.want[i].WWN)
+				}
+				if got[i].Model != tt.want[i].Model {
+					t.Errorf("entry[%d].Model = %q, want %q", i, got[i].Model, tt.want[i].Model)
+				}
+				if got[i].Type != tt.want[i].Type {
+					t.Errorf("entry[%d].Type = %q, want %q", i, got[i].Type, tt.want[i].Type)
+				}
+				if got[i].Temperature != tt.want[i].Temperature {
+					t.Errorf("entry[%d].Temperature = %d, want %d", i, got[i].Temperature, tt.want[i].Temperature)
+				}
+				if !got[i].LastUpdated.Equal(tt.want[i].LastUpdated) {
+					t.Errorf("entry[%d].LastUpdated = %v, want %v", i, got[i].LastUpdated, tt.want[i].LastUpdated)
+				}
+				if got[i].StandbySkipped != tt.want[i].StandbySkipped {
+					t.Errorf("entry[%d].StandbySkipped = %v, want %v", i, got[i].StandbySkipped, tt.want[i].StandbySkipped)
+				}
+			}
+		})
+	}
+}
+
+// Helper functions for test setup
+
+func intPtr(i int) *int {
+	return &i
+}
+
+func mustParseTime(s string) time.Time {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		panic(err)
+	}
+	return t
 }
