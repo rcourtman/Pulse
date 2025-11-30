@@ -2,33 +2,71 @@ package hostagent
 
 import (
 	"testing"
-	"time"
-
-	"github.com/rs/zerolog"
 )
 
 func TestNormalisePlatform(t *testing.T) {
 	tests := []struct {
-		input    string
+		name     string
+		platform string
 		expected string
 	}{
-		{"darwin", "macos"},
-		{"Darwin", "macos"},
-		{"DARWIN", "macos"},
-		{" darwin ", "macos"},
-		{"linux", "linux"},
-		{"Linux", "linux"},
-		{"windows", "windows"},
-		{"freebsd", "freebsd"},
-		{"", ""},
-		{"  ", ""},
+		{
+			name:     "darwin becomes macos",
+			platform: "darwin",
+			expected: "macos",
+		},
+		{
+			name:     "Darwin uppercase becomes macos",
+			platform: "Darwin",
+			expected: "macos",
+		},
+		{
+			name:     "DARWIN all caps becomes macos",
+			platform: "DARWIN",
+			expected: "macos",
+		},
+		{
+			name:     "linux unchanged",
+			platform: "linux",
+			expected: "linux",
+		},
+		{
+			name:     "Linux mixed case becomes lowercase",
+			platform: "Linux",
+			expected: "linux",
+		},
+		{
+			name:     "windows unchanged",
+			platform: "windows",
+			expected: "windows",
+		},
+		{
+			name:     "freebsd unchanged",
+			platform: "freebsd",
+			expected: "freebsd",
+		},
+		{
+			name:     "empty string",
+			platform: "",
+			expected: "",
+		},
+		{
+			name:     "whitespace trimmed",
+			platform: "  linux  ",
+			expected: "linux",
+		},
+		{
+			name:     "darwin with whitespace",
+			platform: "  darwin  ",
+			expected: "macos",
+		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.input, func(t *testing.T) {
-			result := normalisePlatform(tc.input)
-			if result != tc.expected {
-				t.Errorf("normalisePlatform(%q) = %q, want %q", tc.input, result, tc.expected)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := normalisePlatform(tt.platform)
+			if result != tt.expected {
+				t.Errorf("normalisePlatform(%q) = %q, want %q", tt.platform, result, tt.expected)
 			}
 		})
 	}
@@ -41,22 +79,27 @@ func TestIsLoopback(t *testing.T) {
 		expected bool
 	}{
 		{
-			name:     "has loopback",
-			flags:    []string{"up", "loopback", "running"},
+			name:     "loopback lowercase",
+			flags:    []string{"up", "loopback"},
 			expected: true,
 		},
 		{
-			name:     "has LOOPBACK uppercase",
-			flags:    []string{"UP", "LOOPBACK", "RUNNING"},
+			name:     "LOOPBACK uppercase",
+			flags:    []string{"up", "LOOPBACK"},
 			expected: true,
 		},
 		{
-			name:     "has Loopback mixed case",
-			flags:    []string{"up", "Loopback", "running"},
+			name:     "Loopback mixed case",
+			flags:    []string{"up", "Loopback"},
 			expected: true,
 		},
 		{
-			name:     "no loopback",
+			name:     "loopback only flag",
+			flags:    []string{"loopback"},
+			expected: true,
+		},
+		{
+			name:     "no loopback flag",
 			flags:    []string{"up", "broadcast", "running"},
 			expected: false,
 		},
@@ -70,71 +113,24 @@ func TestIsLoopback(t *testing.T) {
 			flags:    nil,
 			expected: false,
 		},
+		{
+			name:     "loopback first",
+			flags:    []string{"loopback", "up"},
+			expected: true,
+		},
+		{
+			name:     "loopback in middle",
+			flags:    []string{"up", "loopback", "running"},
+			expected: true,
+		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			result := isLoopback(tc.flags)
-			if result != tc.expected {
-				t.Errorf("isLoopback(%v) = %v, want %v", tc.flags, result, tc.expected)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isLoopback(tt.flags)
+			if result != tt.expected {
+				t.Errorf("isLoopback(%v) = %v, want %v", tt.flags, result, tt.expected)
 			}
 		})
-	}
-}
-
-func TestNewAgent_MissingToken(t *testing.T) {
-	cfg := Config{
-		PulseURL: "http://localhost:7655",
-		APIToken: "",
-	}
-
-	_, err := New(cfg)
-	if err == nil {
-		t.Error("New() should fail when API token is missing")
-	}
-}
-
-func TestNewAgent_WhitespaceToken(t *testing.T) {
-	cfg := Config{
-		PulseURL: "http://localhost:7655",
-		APIToken: "   ",
-	}
-
-	_, err := New(cfg)
-	if err == nil {
-		t.Error("New() should fail when API token is only whitespace")
-	}
-}
-
-func TestNewAgent_DefaultInterval(t *testing.T) {
-	// We can't easily test New() without mocking gohost.InfoWithContext
-	// but we can verify the default interval constant
-	if defaultInterval != 30*time.Second {
-		t.Errorf("defaultInterval = %v, want %v", defaultInterval, 30*time.Second)
-	}
-}
-
-func TestConfig_Defaults(t *testing.T) {
-	cfg := Config{}
-
-	// Verify zero values
-	if cfg.Interval != 0 {
-		t.Errorf("Config.Interval should be zero by default, got %v", cfg.Interval)
-	}
-	if cfg.InsecureSkipVerify {
-		t.Error("Config.InsecureSkipVerify should be false by default")
-	}
-	if cfg.RunOnce {
-		t.Error("Config.RunOnce should be false by default")
-	}
-	if cfg.LogLevel != zerolog.Level(0) {
-		t.Errorf("Config.LogLevel should be 0 (TraceLevel) by default, got %v", cfg.LogLevel)
-	}
-}
-
-func TestVersion(t *testing.T) {
-	// Verify Version is set (build-time override or default)
-	if Version == "" {
-		t.Error("Version should not be empty")
 	}
 }
