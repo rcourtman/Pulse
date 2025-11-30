@@ -7,6 +7,7 @@ import (
 	"time"
 
 	containertypes "github.com/docker/docker/api/types/container"
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
 func TestNormalizeTargets(t *testing.T) {
@@ -496,4 +497,330 @@ func TestSummarizeBlockIO(t *testing.T) {
 			t.Errorf("WriteBytes = %d, want 2000", got.WriteBytes)
 		}
 	})
+}
+
+func TestExtractPodmanMetadata(t *testing.T) {
+	tests := []struct {
+		name   string
+		labels map[string]string
+		want   func(*testing.T, *agentsdocker.PodmanContainer)
+	}{
+		{
+			name:   "nil labels returns nil",
+			labels: nil,
+			want: func(t *testing.T, got *agentsdocker.PodmanContainer) {
+				if got != nil {
+					t.Errorf("expected nil, got %+v", got)
+				}
+			},
+		},
+		{
+			name:   "empty labels returns nil",
+			labels: map[string]string{},
+			want: func(t *testing.T, got *agentsdocker.PodmanContainer) {
+				if got != nil {
+					t.Errorf("expected nil, got %+v", got)
+				}
+			},
+		},
+		{
+			name: "unrelated labels returns nil",
+			labels: map[string]string{
+				"com.docker.compose.project": "myproject",
+				"maintainer":                 "test@example.com",
+			},
+			want: func(t *testing.T, got *agentsdocker.PodmanContainer) {
+				if got != nil {
+					t.Errorf("expected nil, got %+v", got)
+				}
+			},
+		},
+		{
+			name: "pod metadata",
+			labels: map[string]string{
+				"io.podman.annotations.pod.name": "mypod",
+				"io.podman.annotations.pod.id":   "abc123",
+			},
+			want: func(t *testing.T, got *agentsdocker.PodmanContainer) {
+				if got == nil {
+					t.Fatal("expected non-nil")
+				}
+				if got.PodName != "mypod" {
+					t.Errorf("PodName = %q, want %q", got.PodName, "mypod")
+				}
+				if got.PodID != "abc123" {
+					t.Errorf("PodID = %q, want %q", got.PodID, "abc123")
+				}
+			},
+		},
+		{
+			name: "infra container true",
+			labels: map[string]string{
+				"io.podman.annotations.pod.infra": "true",
+			},
+			want: func(t *testing.T, got *agentsdocker.PodmanContainer) {
+				if got == nil {
+					t.Fatal("expected non-nil")
+				}
+				if !got.Infra {
+					t.Error("Infra should be true")
+				}
+			},
+		},
+		{
+			name: "infra container yes",
+			labels: map[string]string{
+				"io.podman.annotations.pod.infra": "yes",
+			},
+			want: func(t *testing.T, got *agentsdocker.PodmanContainer) {
+				if got == nil {
+					t.Fatal("expected non-nil")
+				}
+				if !got.Infra {
+					t.Error("Infra should be true for 'yes' value")
+				}
+			},
+		},
+		{
+			name: "infra container false",
+			labels: map[string]string{
+				"io.podman.annotations.pod.name":  "mypod",
+				"io.podman.annotations.pod.infra": "false",
+			},
+			want: func(t *testing.T, got *agentsdocker.PodmanContainer) {
+				if got == nil {
+					t.Fatal("expected non-nil")
+				}
+				if got.Infra {
+					t.Error("Infra should be false")
+				}
+			},
+		},
+		{
+			name: "compose metadata",
+			labels: map[string]string{
+				"io.podman.compose.project":     "myproject",
+				"io.podman.compose.service":     "web",
+				"io.podman.compose.working_dir": "/app",
+				"io.podman.compose.config-hash": "sha256:abc123",
+			},
+			want: func(t *testing.T, got *agentsdocker.PodmanContainer) {
+				if got == nil {
+					t.Fatal("expected non-nil")
+				}
+				if got.ComposeProject != "myproject" {
+					t.Errorf("ComposeProject = %q, want %q", got.ComposeProject, "myproject")
+				}
+				if got.ComposeService != "web" {
+					t.Errorf("ComposeService = %q, want %q", got.ComposeService, "web")
+				}
+				if got.ComposeWorkdir != "/app" {
+					t.Errorf("ComposeWorkdir = %q, want %q", got.ComposeWorkdir, "/app")
+				}
+				if got.ComposeConfig != "sha256:abc123" {
+					t.Errorf("ComposeConfig = %q, want %q", got.ComposeConfig, "sha256:abc123")
+				}
+			},
+		},
+		{
+			name: "auto-update metadata",
+			labels: map[string]string{
+				"io.containers.autoupdate":         "registry",
+				"io.containers.autoupdate.restart": "true",
+			},
+			want: func(t *testing.T, got *agentsdocker.PodmanContainer) {
+				if got == nil {
+					t.Fatal("expected non-nil")
+				}
+				if got.AutoUpdatePolicy != "registry" {
+					t.Errorf("AutoUpdatePolicy = %q, want %q", got.AutoUpdatePolicy, "registry")
+				}
+				if got.AutoUpdateRestart != "true" {
+					t.Errorf("AutoUpdateRestart = %q, want %q", got.AutoUpdateRestart, "true")
+				}
+			},
+		},
+		{
+			name: "user namespace from podman annotations",
+			labels: map[string]string{
+				"io.podman.annotations.userns": "keep-id",
+			},
+			want: func(t *testing.T, got *agentsdocker.PodmanContainer) {
+				if got == nil {
+					t.Fatal("expected non-nil")
+				}
+				if got.UserNS != "keep-id" {
+					t.Errorf("UserNS = %q, want %q", got.UserNS, "keep-id")
+				}
+			},
+		},
+		{
+			name: "user namespace from io.containers",
+			labels: map[string]string{
+				"io.containers.userns": "auto",
+			},
+			want: func(t *testing.T, got *agentsdocker.PodmanContainer) {
+				if got == nil {
+					t.Fatal("expected non-nil")
+				}
+				if got.UserNS != "auto" {
+					t.Errorf("UserNS = %q, want %q", got.UserNS, "auto")
+				}
+			},
+		},
+		{
+			name: "podman annotation takes precedence over io.containers for userns",
+			labels: map[string]string{
+				"io.podman.annotations.userns": "keep-id",
+				"io.containers.userns":         "auto",
+			},
+			want: func(t *testing.T, got *agentsdocker.PodmanContainer) {
+				if got == nil {
+					t.Fatal("expected non-nil")
+				}
+				if got.UserNS != "keep-id" {
+					t.Errorf("UserNS = %q, want %q (podman annotation should take precedence)", got.UserNS, "keep-id")
+				}
+			},
+		},
+		{
+			name: "whitespace is trimmed",
+			labels: map[string]string{
+				"io.podman.annotations.pod.name": "  mypod  ",
+				"io.podman.compose.project":      "\tproject\t",
+			},
+			want: func(t *testing.T, got *agentsdocker.PodmanContainer) {
+				if got == nil {
+					t.Fatal("expected non-nil")
+				}
+				if got.PodName != "mypod" {
+					t.Errorf("PodName = %q, want %q", got.PodName, "mypod")
+				}
+				if got.ComposeProject != "project" {
+					t.Errorf("ComposeProject = %q, want %q", got.ComposeProject, "project")
+				}
+			},
+		},
+		{
+			name: "full realistic example",
+			labels: map[string]string{
+				"io.podman.annotations.pod.name":   "webapp-pod",
+				"io.podman.annotations.pod.id":     "deadbeef1234",
+				"io.podman.annotations.pod.infra":  "false",
+				"io.podman.compose.project":        "myapp",
+				"io.podman.compose.service":        "api",
+				"io.podman.compose.working_dir":    "/home/user/myapp",
+				"io.podman.compose.config-hash":    "sha256:abc",
+				"io.containers.autoupdate":         "local",
+				"io.containers.autoupdate.restart": "always",
+				"io.podman.annotations.userns":     "keep-id:uid=1000,gid=1000",
+			},
+			want: func(t *testing.T, got *agentsdocker.PodmanContainer) {
+				if got == nil {
+					t.Fatal("expected non-nil")
+				}
+				if got.PodName != "webapp-pod" {
+					t.Errorf("PodName = %q, want %q", got.PodName, "webapp-pod")
+				}
+				if got.PodID != "deadbeef1234" {
+					t.Errorf("PodID = %q, want %q", got.PodID, "deadbeef1234")
+				}
+				if got.Infra {
+					t.Error("Infra should be false")
+				}
+				if got.ComposeProject != "myapp" {
+					t.Errorf("ComposeProject = %q, want %q", got.ComposeProject, "myapp")
+				}
+				if got.ComposeService != "api" {
+					t.Errorf("ComposeService = %q, want %q", got.ComposeService, "api")
+				}
+				if got.AutoUpdatePolicy != "local" {
+					t.Errorf("AutoUpdatePolicy = %q, want %q", got.AutoUpdatePolicy, "local")
+				}
+				if got.UserNS != "keep-id:uid=1000,gid=1000" {
+					t.Errorf("UserNS = %q, want %q", got.UserNS, "keep-id:uid=1000,gid=1000")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractPodmanMetadata(tt.labels)
+			tt.want(t, got)
+		})
+	}
+}
+
+func TestDetectHostRemovedError(t *testing.T) {
+	tests := []struct {
+		name string
+		body []byte
+		want string
+	}{
+		{
+			name: "empty body returns empty",
+			body: []byte{},
+			want: "",
+		},
+		{
+			name: "nil body returns empty",
+			body: nil,
+			want: "",
+		},
+		{
+			name: "invalid JSON returns empty",
+			body: []byte("not json"),
+			want: "",
+		},
+		{
+			name: "wrong error code returns empty",
+			body: []byte(`{"error": "host was removed", "code": "invalid_token"}`),
+			want: "",
+		},
+		{
+			name: "correct code but wrong error message returns empty",
+			body: []byte(`{"error": "invalid request", "code": "invalid_report"}`),
+			want: "",
+		},
+		{
+			name: "host removed error returns message",
+			body: []byte(`{"error": "Docker host xyz was removed from this Pulse instance", "code": "invalid_report"}`),
+			want: "Docker host xyz was removed from this Pulse instance",
+		},
+		{
+			name: "case insensitive code matching",
+			body: []byte(`{"error": "host was removed", "code": "INVALID_REPORT"}`),
+			want: "host was removed",
+		},
+		{
+			name: "case insensitive error matching",
+			body: []byte(`{"error": "Host WAS REMOVED from server", "code": "invalid_report"}`),
+			want: "Host WAS REMOVED from server",
+		},
+		{
+			name: "extra fields in JSON are ignored",
+			body: []byte(`{"error": "host was removed", "code": "invalid_report", "timestamp": "2024-01-01T00:00:00Z"}`),
+			want: "host was removed",
+		},
+		{
+			name: "missing error field returns empty",
+			body: []byte(`{"code": "invalid_report"}`),
+			want: "",
+		},
+		{
+			name: "missing code field returns empty",
+			body: []byte(`{"error": "host was removed"}`),
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := detectHostRemovedError(tt.body)
+			if got != tt.want {
+				t.Errorf("detectHostRemovedError() = %q, want %q", got, tt.want)
+			}
+		})
+	}
 }
