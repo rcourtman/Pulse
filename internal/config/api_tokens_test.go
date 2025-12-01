@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 )
 
 func TestAPITokenRecordHasScope(t *testing.T) {
@@ -262,6 +265,765 @@ func TestLoadAPITokens_ErrorPaths(t *testing.T) {
 		_, err := persistence.LoadAPITokens()
 		if err == nil {
 			t.Fatal("expected error for invalid JSON, got nil")
+		}
+	})
+}
+
+func TestClone(t *testing.T) {
+	t.Run("clones all fields", func(t *testing.T) {
+		now := time.Now().UTC()
+		original := APITokenRecord{
+			ID:         "test-id",
+			Name:       "test-name",
+			Hash:       "test-hash",
+			Prefix:     "prefix",
+			Suffix:     "suffix",
+			CreatedAt:  now,
+			LastUsedAt: &now,
+			Scopes:     []string{ScopeMonitoringRead, ScopeSettingsWrite},
+		}
+
+		clone := original.Clone()
+
+		if clone.ID != original.ID {
+			t.Errorf("ID: got %q, want %q", clone.ID, original.ID)
+		}
+		if clone.Name != original.Name {
+			t.Errorf("Name: got %q, want %q", clone.Name, original.Name)
+		}
+		if clone.Hash != original.Hash {
+			t.Errorf("Hash: got %q, want %q", clone.Hash, original.Hash)
+		}
+		if clone.Prefix != original.Prefix {
+			t.Errorf("Prefix: got %q, want %q", clone.Prefix, original.Prefix)
+		}
+		if clone.Suffix != original.Suffix {
+			t.Errorf("Suffix: got %q, want %q", clone.Suffix, original.Suffix)
+		}
+		if !clone.CreatedAt.Equal(original.CreatedAt) {
+			t.Errorf("CreatedAt: got %v, want %v", clone.CreatedAt, original.CreatedAt)
+		}
+		if clone.LastUsedAt == nil {
+			t.Fatal("LastUsedAt should not be nil")
+		}
+		if !clone.LastUsedAt.Equal(*original.LastUsedAt) {
+			t.Errorf("LastUsedAt: got %v, want %v", *clone.LastUsedAt, *original.LastUsedAt)
+		}
+	})
+
+	t.Run("LastUsedAt is deep copied", func(t *testing.T) {
+		now := time.Now().UTC()
+		original := APITokenRecord{
+			ID:         "test-id",
+			LastUsedAt: &now,
+			Scopes:     []string{ScopeMonitoringRead},
+		}
+
+		clone := original.Clone()
+
+		// Modify the clone's LastUsedAt
+		newTime := now.Add(time.Hour)
+		*clone.LastUsedAt = newTime
+
+		// Original should be unchanged
+		if !original.LastUsedAt.Equal(now) {
+			t.Errorf("modifying clone affected original: got %v, want %v", *original.LastUsedAt, now)
+		}
+	})
+
+	t.Run("Scopes slice is deep copied", func(t *testing.T) {
+		original := APITokenRecord{
+			ID:     "test-id",
+			Scopes: []string{ScopeMonitoringRead, ScopeSettingsWrite},
+		}
+
+		clone := original.Clone()
+
+		// Modify the clone's Scopes
+		clone.Scopes[0] = "modified"
+
+		// Original should be unchanged
+		if original.Scopes[0] != ScopeMonitoringRead {
+			t.Errorf("modifying clone scopes affected original: got %q, want %q", original.Scopes[0], ScopeMonitoringRead)
+		}
+	})
+
+	t.Run("nil LastUsedAt stays nil", func(t *testing.T) {
+		original := APITokenRecord{
+			ID:         "test-id",
+			LastUsedAt: nil,
+			Scopes:     []string{ScopeMonitoringRead},
+		}
+
+		clone := original.Clone()
+
+		if clone.LastUsedAt != nil {
+			t.Errorf("LastUsedAt should be nil, got %v", clone.LastUsedAt)
+		}
+	})
+
+	t.Run("empty scopes normalized to wildcard", func(t *testing.T) {
+		original := APITokenRecord{
+			ID:     "test-id",
+			Scopes: nil,
+		}
+
+		clone := original.Clone()
+
+		if len(clone.Scopes) != 1 || clone.Scopes[0] != ScopeWildcard {
+			t.Errorf("empty scopes should normalize to wildcard, got %v", clone.Scopes)
+		}
+	})
+}
+
+func TestNewAPITokenRecord(t *testing.T) {
+	t.Run("valid token and name", func(t *testing.T) {
+		token := "my-secret-token-12345"
+		name := "Test Token"
+		scopes := []string{ScopeMonitoringRead}
+
+		record, err := NewAPITokenRecord(token, name, scopes)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if record.ID == "" {
+			t.Error("ID should be set")
+		}
+		if record.Name != name {
+			t.Errorf("Name: got %q, want %q", record.Name, name)
+		}
+		if record.Hash == "" {
+			t.Error("Hash should be set")
+		}
+		if record.Hash == token {
+			t.Error("Hash should not equal raw token")
+		}
+		if record.Prefix != "my-sec" {
+			t.Errorf("Prefix: got %q, want %q", record.Prefix, "my-sec")
+		}
+		if record.Suffix != "2345" {
+			t.Errorf("Suffix: got %q, want %q", record.Suffix, "2345")
+		}
+		if record.CreatedAt.IsZero() {
+			t.Error("CreatedAt should be set")
+		}
+		if len(record.Scopes) != 1 || record.Scopes[0] != ScopeMonitoringRead {
+			t.Errorf("Scopes: got %v, want [%s]", record.Scopes, ScopeMonitoringRead)
+		}
+	})
+
+	t.Run("empty token returns ErrInvalidToken", func(t *testing.T) {
+		_, err := NewAPITokenRecord("", "Test", nil)
+		if err != ErrInvalidToken {
+			t.Errorf("expected ErrInvalidToken, got %v", err)
+		}
+	})
+
+	t.Run("empty scopes normalized to wildcard", func(t *testing.T) {
+		record, err := NewAPITokenRecord("some-token", "Test", nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(record.Scopes) != 1 || record.Scopes[0] != ScopeWildcard {
+			t.Errorf("expected wildcard scope, got %v", record.Scopes)
+		}
+	})
+
+	t.Run("empty slice scopes normalized to wildcard", func(t *testing.T) {
+		record, err := NewAPITokenRecord("some-token", "Test", []string{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(record.Scopes) != 1 || record.Scopes[0] != ScopeWildcard {
+			t.Errorf("expected wildcard scope, got %v", record.Scopes)
+		}
+	})
+
+	t.Run("prefix and suffix set from token", func(t *testing.T) {
+		record, err := NewAPITokenRecord("abcdefghijklmnop", "Test", nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if record.Prefix != "abcdef" {
+			t.Errorf("Prefix: got %q, want %q", record.Prefix, "abcdef")
+		}
+		if record.Suffix != "mnop" {
+			t.Errorf("Suffix: got %q, want %q", record.Suffix, "mnop")
+		}
+	})
+
+	t.Run("short token handles prefix/suffix", func(t *testing.T) {
+		record, err := NewAPITokenRecord("abc", "Test", nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if record.Prefix != "abc" {
+			t.Errorf("Prefix: got %q, want %q", record.Prefix, "abc")
+		}
+		if record.Suffix != "abc" {
+			t.Errorf("Suffix: got %q, want %q", record.Suffix, "abc")
+		}
+	})
+}
+
+func TestNewHashedAPITokenRecord(t *testing.T) {
+	t.Run("valid hash", func(t *testing.T) {
+		hash := "abcdef1234567890"
+		name := "Test Token"
+		created := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		scopes := []string{ScopeMonitoringRead}
+
+		record, err := NewHashedAPITokenRecord(hash, name, created, scopes)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if record.ID == "" {
+			t.Error("ID should be set")
+		}
+		if record.Name != name {
+			t.Errorf("Name: got %q, want %q", record.Name, name)
+		}
+		if record.Hash != hash {
+			t.Errorf("Hash: got %q, want %q", record.Hash, hash)
+		}
+		if !record.CreatedAt.Equal(created) {
+			t.Errorf("CreatedAt: got %v, want %v", record.CreatedAt, created)
+		}
+	})
+
+	t.Run("empty hash returns ErrInvalidToken", func(t *testing.T) {
+		_, err := NewHashedAPITokenRecord("", "Test", time.Now(), nil)
+		if err != ErrInvalidToken {
+			t.Errorf("expected ErrInvalidToken, got %v", err)
+		}
+	})
+
+	t.Run("zero time gets set to now", func(t *testing.T) {
+		before := time.Now().UTC()
+		record, err := NewHashedAPITokenRecord("somehash", "Test", time.Time{}, nil)
+		after := time.Now().UTC()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if record.CreatedAt.Before(before) || record.CreatedAt.After(after) {
+			t.Errorf("CreatedAt should be between %v and %v, got %v", before, after, record.CreatedAt)
+		}
+	})
+
+	t.Run("scopes normalized", func(t *testing.T) {
+		record, err := NewHashedAPITokenRecord("somehash", "Test", time.Now(), nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(record.Scopes) != 1 || record.Scopes[0] != ScopeWildcard {
+			t.Errorf("expected wildcard scope, got %v", record.Scopes)
+		}
+	})
+
+	t.Run("prefix and suffix set from hash", func(t *testing.T) {
+		record, err := NewHashedAPITokenRecord("abcdefghijklmnop", "Test", time.Now(), nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if record.Prefix != "abcdef" {
+			t.Errorf("Prefix: got %q, want %q", record.Prefix, "abcdef")
+		}
+		if record.Suffix != "mnop" {
+			t.Errorf("Suffix: got %q, want %q", record.Suffix, "mnop")
+		}
+	})
+}
+
+func TestHasAPITokens(t *testing.T) {
+	t.Run("empty slice returns false", func(t *testing.T) {
+		cfg := &Config{APITokens: nil}
+		if cfg.HasAPITokens() {
+			t.Error("expected false for nil tokens")
+		}
+
+		cfg.APITokens = []APITokenRecord{}
+		if cfg.HasAPITokens() {
+			t.Error("expected false for empty tokens")
+		}
+	})
+
+	t.Run("non-empty slice returns true", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "test", Hash: "hash"},
+			},
+		}
+		if !cfg.HasAPITokens() {
+			t.Error("expected true for non-empty tokens")
+		}
+	})
+}
+
+func TestAPITokenCount(t *testing.T) {
+	t.Run("empty returns 0", func(t *testing.T) {
+		cfg := &Config{APITokens: nil}
+		if cfg.APITokenCount() != 0 {
+			t.Errorf("expected 0, got %d", cfg.APITokenCount())
+		}
+	})
+
+	t.Run("returns correct count", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "1", Hash: "hash1"},
+				{ID: "2", Hash: "hash2"},
+				{ID: "3", Hash: "hash3"},
+			},
+		}
+		if cfg.APITokenCount() != 3 {
+			t.Errorf("expected 3, got %d", cfg.APITokenCount())
+		}
+	})
+}
+
+func TestActiveAPITokenHashes(t *testing.T) {
+	t.Run("empty tokens returns empty slice", func(t *testing.T) {
+		cfg := &Config{APITokens: nil}
+		hashes := cfg.ActiveAPITokenHashes()
+		if len(hashes) != 0 {
+			t.Errorf("expected empty slice, got %v", hashes)
+		}
+	})
+
+	t.Run("skips records with empty hash", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "1", Hash: "hash1"},
+				{ID: "2", Hash: ""},
+				{ID: "3", Hash: "hash3"},
+			},
+		}
+		hashes := cfg.ActiveAPITokenHashes()
+		if len(hashes) != 2 {
+			t.Fatalf("expected 2 hashes, got %d", len(hashes))
+		}
+		if hashes[0] != "hash1" || hashes[1] != "hash3" {
+			t.Errorf("expected [hash1, hash3], got %v", hashes)
+		}
+	})
+
+	t.Run("returns all valid hashes", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "1", Hash: "hash1"},
+				{ID: "2", Hash: "hash2"},
+			},
+		}
+		hashes := cfg.ActiveAPITokenHashes()
+		if len(hashes) != 2 {
+			t.Fatalf("expected 2 hashes, got %d", len(hashes))
+		}
+	})
+}
+
+func TestHasAPITokenHash(t *testing.T) {
+	cfg := &Config{
+		APITokens: []APITokenRecord{
+			{ID: "1", Hash: "existing-hash"},
+			{ID: "2", Hash: "another-hash"},
+		},
+	}
+
+	t.Run("returns true when hash exists", func(t *testing.T) {
+		if !cfg.HasAPITokenHash("existing-hash") {
+			t.Error("expected true for existing hash")
+		}
+		if !cfg.HasAPITokenHash("another-hash") {
+			t.Error("expected true for another existing hash")
+		}
+	})
+
+	t.Run("returns false when hash doesn't exist", func(t *testing.T) {
+		if cfg.HasAPITokenHash("nonexistent") {
+			t.Error("expected false for nonexistent hash")
+		}
+	})
+
+	t.Run("returns false for empty config", func(t *testing.T) {
+		emptyCfg := &Config{}
+		if emptyCfg.HasAPITokenHash("any-hash") {
+			t.Error("expected false for empty config")
+		}
+	})
+}
+
+func TestPrimaryAPITokenHash(t *testing.T) {
+	t.Run("empty tokens returns empty string", func(t *testing.T) {
+		cfg := &Config{APITokens: nil}
+		if cfg.PrimaryAPITokenHash() != "" {
+			t.Errorf("expected empty string, got %q", cfg.PrimaryAPITokenHash())
+		}
+	})
+
+	t.Run("returns first token's hash", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "1", Hash: "first-hash"},
+				{ID: "2", Hash: "second-hash"},
+			},
+		}
+		if cfg.PrimaryAPITokenHash() != "first-hash" {
+			t.Errorf("expected first-hash, got %q", cfg.PrimaryAPITokenHash())
+		}
+	})
+}
+
+func TestPrimaryAPITokenHint(t *testing.T) {
+	t.Run("empty tokens returns empty string", func(t *testing.T) {
+		cfg := &Config{APITokens: nil}
+		if cfg.PrimaryAPITokenHint() != "" {
+			t.Errorf("expected empty string, got %q", cfg.PrimaryAPITokenHint())
+		}
+	})
+
+	t.Run("returns prefix...suffix format when both exist", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "1", Prefix: "abcdef", Suffix: "wxyz"},
+			},
+		}
+		expected := "abcdef...wxyz"
+		if cfg.PrimaryAPITokenHint() != expected {
+			t.Errorf("expected %q, got %q", expected, cfg.PrimaryAPITokenHint())
+		}
+	})
+
+	t.Run("falls back to hash truncation when no prefix", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "1", Hash: "12345678abcdefgh", Prefix: "", Suffix: "wxyz"},
+			},
+		}
+		expected := "1234...efgh"
+		if cfg.PrimaryAPITokenHint() != expected {
+			t.Errorf("expected %q, got %q", expected, cfg.PrimaryAPITokenHint())
+		}
+	})
+
+	t.Run("falls back to hash truncation when no suffix", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "1", Hash: "12345678abcdefgh", Prefix: "abcdef", Suffix: ""},
+			},
+		}
+		expected := "1234...efgh"
+		if cfg.PrimaryAPITokenHint() != expected {
+			t.Errorf("expected %q, got %q", expected, cfg.PrimaryAPITokenHint())
+		}
+	})
+
+	t.Run("returns empty for short hash without prefix/suffix", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "1", Hash: "short", Prefix: "", Suffix: ""},
+			},
+		}
+		if cfg.PrimaryAPITokenHint() != "" {
+			t.Errorf("expected empty string for short hash, got %q", cfg.PrimaryAPITokenHint())
+		}
+	})
+}
+
+func TestValidateAPIToken(t *testing.T) {
+	rawToken := "my-secret-api-token-123"
+	hashedToken := auth.HashAPIToken(rawToken)
+
+	t.Run("empty token returns nil, false", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "1", Hash: hashedToken, Scopes: []string{ScopeWildcard}},
+			},
+		}
+		record, valid := cfg.ValidateAPIToken("")
+		if record != nil || valid {
+			t.Error("expected nil, false for empty token")
+		}
+	})
+
+	t.Run("invalid token returns nil, false", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "1", Hash: hashedToken, Scopes: []string{ScopeWildcard}},
+			},
+		}
+		record, valid := cfg.ValidateAPIToken("wrong-token")
+		if record != nil || valid {
+			t.Error("expected nil, false for invalid token")
+		}
+	})
+
+	t.Run("valid token returns record, true and updates LastUsedAt", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "1", Hash: hashedToken, Scopes: []string{ScopeMonitoringRead}},
+			},
+		}
+
+		before := time.Now().UTC()
+		record, valid := cfg.ValidateAPIToken(rawToken)
+		after := time.Now().UTC()
+
+		if !valid {
+			t.Fatal("expected valid=true")
+		}
+		if record == nil {
+			t.Fatal("expected non-nil record")
+		}
+		if record.ID != "1" {
+			t.Errorf("expected ID=1, got %q", record.ID)
+		}
+		if record.LastUsedAt == nil {
+			t.Fatal("LastUsedAt should be set")
+		}
+		if record.LastUsedAt.Before(before) || record.LastUsedAt.After(after) {
+			t.Errorf("LastUsedAt should be between %v and %v, got %v", before, after, *record.LastUsedAt)
+		}
+
+		// Verify the config's record was also updated
+		if cfg.APITokens[0].LastUsedAt == nil {
+			t.Error("config's record LastUsedAt should be updated")
+		}
+	})
+
+	t.Run("validates against multiple tokens", func(t *testing.T) {
+		token2 := "another-token-456"
+		hash2 := auth.HashAPIToken(token2)
+
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "1", Hash: hashedToken, Scopes: []string{ScopeWildcard}},
+				{ID: "2", Hash: hash2, Scopes: []string{ScopeMonitoringRead}},
+			},
+		}
+
+		record, valid := cfg.ValidateAPIToken(token2)
+		if !valid {
+			t.Fatal("expected valid=true for second token")
+		}
+		if record.ID != "2" {
+			t.Errorf("expected ID=2, got %q", record.ID)
+		}
+	})
+
+	t.Run("empty config returns nil, false", func(t *testing.T) {
+		cfg := &Config{}
+		record, valid := cfg.ValidateAPIToken(rawToken)
+		if record != nil || valid {
+			t.Error("expected nil, false for empty config")
+		}
+	})
+}
+
+func TestUpsertAPIToken(t *testing.T) {
+	t.Run("insert new token", func(t *testing.T) {
+		cfg := &Config{}
+		record := APITokenRecord{
+			ID:        "new-id",
+			Name:      "New Token",
+			Hash:      "new-hash",
+			CreatedAt: time.Now().UTC(),
+		}
+
+		cfg.UpsertAPIToken(record)
+
+		if len(cfg.APITokens) != 1 {
+			t.Fatalf("expected 1 token, got %d", len(cfg.APITokens))
+		}
+		if cfg.APITokens[0].ID != "new-id" {
+			t.Errorf("expected ID=new-id, got %q", cfg.APITokens[0].ID)
+		}
+		// Should have normalized scopes
+		if len(cfg.APITokens[0].Scopes) != 1 || cfg.APITokens[0].Scopes[0] != ScopeWildcard {
+			t.Errorf("expected wildcard scope, got %v", cfg.APITokens[0].Scopes)
+		}
+	})
+
+	t.Run("update existing token by ID", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "existing", Name: "Old Name", Hash: "old-hash", CreatedAt: time.Now().UTC()},
+			},
+		}
+
+		updated := APITokenRecord{
+			ID:        "existing",
+			Name:      "Updated Name",
+			Hash:      "updated-hash",
+			CreatedAt: time.Now().UTC(),
+			Scopes:    []string{ScopeMonitoringRead},
+		}
+		cfg.UpsertAPIToken(updated)
+
+		if len(cfg.APITokens) != 1 {
+			t.Fatalf("expected 1 token after update, got %d", len(cfg.APITokens))
+		}
+		if cfg.APITokens[0].Name != "Updated Name" {
+			t.Errorf("expected name to be updated, got %q", cfg.APITokens[0].Name)
+		}
+		if cfg.APITokens[0].Hash != "updated-hash" {
+			t.Errorf("expected hash to be updated, got %q", cfg.APITokens[0].Hash)
+		}
+	})
+
+	t.Run("sorting happens after upsert", func(t *testing.T) {
+		older := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		newer := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "older", Name: "Older", Hash: "hash1", CreatedAt: older},
+			},
+		}
+
+		cfg.UpsertAPIToken(APITokenRecord{
+			ID:        "newer",
+			Name:      "Newer",
+			Hash:      "hash2",
+			CreatedAt: newer,
+		})
+
+		if len(cfg.APITokens) != 2 {
+			t.Fatalf("expected 2 tokens, got %d", len(cfg.APITokens))
+		}
+		// Newest should be first
+		if cfg.APITokens[0].ID != "newer" {
+			t.Errorf("expected newest token first, got %q", cfg.APITokens[0].ID)
+		}
+		if cfg.APITokens[1].ID != "older" {
+			t.Errorf("expected older token second, got %q", cfg.APITokens[1].ID)
+		}
+	})
+}
+
+func TestRemoveAPIToken(t *testing.T) {
+	t.Run("remove existing returns true", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "keep", Hash: "hash1"},
+				{ID: "remove", Hash: "hash2"},
+				{ID: "also-keep", Hash: "hash3"},
+			},
+		}
+
+		removed := cfg.RemoveAPIToken("remove")
+		if !removed {
+			t.Error("expected true when removing existing token")
+		}
+		if len(cfg.APITokens) != 2 {
+			t.Fatalf("expected 2 tokens remaining, got %d", len(cfg.APITokens))
+		}
+		// Verify the correct token was removed
+		for _, token := range cfg.APITokens {
+			if token.ID == "remove" {
+				t.Error("removed token should not be in list")
+			}
+		}
+	})
+
+	t.Run("remove non-existing returns false", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "existing", Hash: "hash1"},
+			},
+		}
+
+		removed := cfg.RemoveAPIToken("nonexistent")
+		if removed {
+			t.Error("expected false when removing nonexistent token")
+		}
+		if len(cfg.APITokens) != 1 {
+			t.Errorf("token count should be unchanged, got %d", len(cfg.APITokens))
+		}
+	})
+
+	t.Run("remove from empty returns false", func(t *testing.T) {
+		cfg := &Config{}
+		removed := cfg.RemoveAPIToken("any")
+		if removed {
+			t.Error("expected false when removing from empty config")
+		}
+	})
+}
+
+func TestSortAPITokens(t *testing.T) {
+	t.Run("sorts newest first", func(t *testing.T) {
+		oldest := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		middle := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+		newest := time.Date(2024, 12, 1, 0, 0, 0, 0, time.UTC)
+
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "middle", Hash: "hash2", CreatedAt: middle},
+				{ID: "oldest", Hash: "hash1", CreatedAt: oldest},
+				{ID: "newest", Hash: "hash3", CreatedAt: newest},
+			},
+		}
+
+		cfg.SortAPITokens()
+
+		if cfg.APITokens[0].ID != "newest" {
+			t.Errorf("expected newest first, got %q", cfg.APITokens[0].ID)
+		}
+		if cfg.APITokens[1].ID != "middle" {
+			t.Errorf("expected middle second, got %q", cfg.APITokens[1].ID)
+		}
+		if cfg.APITokens[2].ID != "oldest" {
+			t.Errorf("expected oldest last, got %q", cfg.APITokens[2].ID)
+		}
+	})
+
+	t.Run("updates legacy APIToken field", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "1", Hash: "primary-hash", CreatedAt: time.Now().UTC()},
+			},
+		}
+
+		cfg.SortAPITokens()
+
+		if cfg.APIToken != "primary-hash" {
+			t.Errorf("expected APIToken to be set to primary hash, got %q", cfg.APIToken)
+		}
+		if !cfg.APITokenEnabled {
+			t.Error("expected APITokenEnabled to be true")
+		}
+	})
+
+	t.Run("empty tokens clears APIToken", func(t *testing.T) {
+		cfg := &Config{
+			APIToken:        "old-value",
+			APITokenEnabled: true,
+			APITokens:       []APITokenRecord{},
+		}
+
+		cfg.SortAPITokens()
+
+		if cfg.APIToken != "" {
+			t.Errorf("expected APIToken to be cleared, got %q", cfg.APIToken)
+		}
+	})
+
+	t.Run("normalizes scopes for all tokens", func(t *testing.T) {
+		cfg := &Config{
+			APITokens: []APITokenRecord{
+				{ID: "1", Hash: "hash1", CreatedAt: time.Now().UTC(), Scopes: nil},
+				{ID: "2", Hash: "hash2", CreatedAt: time.Now().UTC(), Scopes: []string{}},
+			},
+		}
+
+		cfg.SortAPITokens()
+
+		for i, token := range cfg.APITokens {
+			if len(token.Scopes) != 1 || token.Scopes[0] != ScopeWildcard {
+				t.Errorf("token %d: expected wildcard scope, got %v", i, token.Scopes)
+			}
 		}
 	})
 }
