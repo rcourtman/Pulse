@@ -719,6 +719,311 @@ func TestQueueDockerStopCommand(t *testing.T) {
 	})
 }
 
+func TestGetDockerCommandPayload(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty hostID returns nil", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+
+		payload, status := monitor.getDockerCommandPayload("")
+		if payload != nil {
+			t.Fatalf("expected nil payload for empty hostID, got %v", payload)
+		}
+		if status != nil {
+			t.Fatalf("expected nil status for empty hostID, got %v", status)
+		}
+	})
+
+	t.Run("whitespace-only hostID returns nil", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+
+		payload, status := monitor.getDockerCommandPayload("   ")
+		if payload != nil {
+			t.Fatalf("expected nil payload for whitespace hostID, got %v", payload)
+		}
+		if status != nil {
+			t.Fatalf("expected nil status for whitespace hostID, got %v", status)
+		}
+	})
+
+	t.Run("host not found in dockerCommands returns nil", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+
+		payload, status := monitor.getDockerCommandPayload("nonexistent-host")
+		if payload != nil {
+			t.Fatalf("expected nil payload for nonexistent host, got %v", payload)
+		}
+		if status != nil {
+			t.Fatalf("expected nil status for nonexistent host, got %v", status)
+		}
+	})
+
+	t.Run("expired command is cleaned up and returns nil", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+
+		host := models.DockerHost{
+			ID:          "host-expired",
+			Hostname:    "node-expired",
+			DisplayName: "node-expired",
+			Status:      "online",
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		// Queue a command
+		cmdStatus, err := monitor.queueDockerStopCommand(host.ID)
+		if err != nil {
+			t.Fatalf("queue stop command: %v", err)
+		}
+
+		// Manually expire the command
+		monitor.mu.Lock()
+		cmd := monitor.dockerCommands[host.ID]
+		past := time.Now().Add(-2 * dockerCommandDefaultTTL)
+		cmd.status.ExpiresAt = &past
+		monitor.mu.Unlock()
+
+		// Fetch should return nil and clean up
+		payload, status := monitor.getDockerCommandPayload(host.ID)
+		if payload != nil {
+			t.Fatalf("expected nil payload for expired command, got %v", payload)
+		}
+		if status != nil {
+			t.Fatalf("expected nil status for expired command, got %v", status)
+		}
+
+		// Verify cleanup
+		monitor.mu.Lock()
+		_, commandExists := monitor.dockerCommands[host.ID]
+		_, indexExists := monitor.dockerCommandIndex[cmdStatus.ID]
+		monitor.mu.Unlock()
+
+		if commandExists {
+			t.Fatal("expected expired command to be removed from dockerCommands")
+		}
+		if indexExists {
+			t.Fatal("expected expired command to be removed from dockerCommandIndex")
+		}
+
+		// Verify state was updated with expired status
+		hostState := findDockerHost(t, monitor, host.ID)
+		if hostState.Command == nil {
+			t.Fatal("expected host command to be set in state")
+		}
+		if hostState.Command.Status != DockerCommandStatusExpired {
+			t.Fatalf("expected expired status in state, got %q", hostState.Command.Status)
+		}
+		if hostState.Command.FailureReason == "" {
+			t.Fatal("expected failure reason to be set on expired command")
+		}
+	})
+
+	t.Run("queued command is marked as dispatched", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+
+		host := models.DockerHost{
+			ID:          "host-queued",
+			Hostname:    "node-queued",
+			DisplayName: "node-queued",
+			Status:      "online",
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		// Queue a command
+		_, err := monitor.queueDockerStopCommand(host.ID)
+		if err != nil {
+			t.Fatalf("queue stop command: %v", err)
+		}
+
+		// Verify command is queued
+		monitor.mu.Lock()
+		cmd := monitor.dockerCommands[host.ID]
+		if cmd.status.Status != DockerCommandStatusQueued {
+			t.Fatalf("expected queued status before fetch, got %q", cmd.status.Status)
+		}
+		monitor.mu.Unlock()
+
+		// Fetch payload - should mark as dispatched
+		payload, status := monitor.getDockerCommandPayload(host.ID)
+
+		// For stop command, payload is nil but status should be returned
+		if status == nil {
+			t.Fatal("expected status to be returned")
+		}
+		if status.Status != DockerCommandStatusDispatched {
+			t.Fatalf("expected dispatched status, got %q", status.Status)
+		}
+		if status.DispatchedAt == nil {
+			t.Fatal("expected DispatchedAt to be set")
+		}
+
+		// Verify state was updated
+		hostState := findDockerHost(t, monitor, host.ID)
+		if hostState.Command == nil {
+			t.Fatal("expected host command to be set in state")
+		}
+		if hostState.Command.Status != DockerCommandStatusDispatched {
+			t.Fatalf("expected dispatched status in state, got %q", hostState.Command.Status)
+		}
+
+		// payload is nil for stop commands (no additional data needed)
+		if payload != nil {
+			t.Fatalf("expected nil payload for stop command, got %v", payload)
+		}
+	})
+
+	t.Run("already dispatched command is not re-marked", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+
+		host := models.DockerHost{
+			ID:          "host-dispatched",
+			Hostname:    "node-dispatched",
+			DisplayName: "node-dispatched",
+			Status:      "online",
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		// Queue a command
+		_, err := monitor.queueDockerStopCommand(host.ID)
+		if err != nil {
+			t.Fatalf("queue stop command: %v", err)
+		}
+
+		// First fetch - marks as dispatched
+		_, status1 := monitor.getDockerCommandPayload(host.ID)
+		if status1 == nil {
+			t.Fatal("expected status from first fetch")
+		}
+		firstDispatchedAt := status1.DispatchedAt
+		firstUpdatedAt := status1.UpdatedAt
+
+		// Small delay to ensure time would change if re-marked
+		time.Sleep(time.Millisecond)
+
+		// Second fetch - should NOT re-mark
+		_, status2 := monitor.getDockerCommandPayload(host.ID)
+		if status2 == nil {
+			t.Fatal("expected status from second fetch")
+		}
+
+		// DispatchedAt should be the same
+		if status2.DispatchedAt == nil {
+			t.Fatal("expected DispatchedAt to still be set")
+		}
+		if !status2.DispatchedAt.Equal(*firstDispatchedAt) {
+			t.Fatalf("DispatchedAt changed: first=%v, second=%v", *firstDispatchedAt, *status2.DispatchedAt)
+		}
+
+		// UpdatedAt should be the same (not re-updated)
+		if !status2.UpdatedAt.Equal(firstUpdatedAt) {
+			t.Fatalf("UpdatedAt changed: first=%v, second=%v", firstUpdatedAt, status2.UpdatedAt)
+		}
+
+		// Status should still be dispatched
+		if status2.Status != DockerCommandStatusDispatched {
+			t.Fatalf("expected dispatched status, got %q", status2.Status)
+		}
+	})
+
+	t.Run("returns payload and status copy", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+
+		host := models.DockerHost{
+			ID:          "host-payload",
+			Hostname:    "node-payload",
+			DisplayName: "node-payload",
+			Status:      "online",
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		// Manually create a command with a payload
+		testPayload := map[string]any{
+			"action": "test",
+			"count":  42,
+		}
+		cmd := newDockerHostCommand("test-type", "test message", dockerCommandDefaultTTL, testPayload)
+
+		monitor.mu.Lock()
+		monitor.dockerCommands[host.ID] = &cmd
+		monitor.dockerCommandIndex[cmd.status.ID] = host.ID
+		monitor.mu.Unlock()
+
+		// Fetch payload
+		payload, status := monitor.getDockerCommandPayload(host.ID)
+
+		if payload == nil {
+			t.Fatal("expected payload to be returned")
+		}
+		if payload["action"] != "test" {
+			t.Fatalf("expected action 'test', got %v", payload["action"])
+		}
+		if payload["count"] != 42 {
+			t.Fatalf("expected count 42, got %v", payload["count"])
+		}
+
+		if status == nil {
+			t.Fatal("expected status to be returned")
+		}
+		if status.Type != "test-type" {
+			t.Fatalf("expected type 'test-type', got %q", status.Type)
+		}
+		if status.Message != "test message" {
+			t.Fatalf("expected message 'test message', got %q", status.Message)
+		}
+
+		// Verify it's a copy by modifying the returned status
+		status.Message = "modified"
+		monitor.mu.Lock()
+		originalCmd := monitor.dockerCommands[host.ID]
+		if originalCmd.status.Message == "modified" {
+			t.Fatal("modifying returned status should not affect original")
+		}
+		monitor.mu.Unlock()
+	})
+
+	t.Run("hostID with whitespace is normalized", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+
+		host := models.DockerHost{
+			ID:          "host-whitespace",
+			Hostname:    "node-whitespace",
+			DisplayName: "node-whitespace",
+			Status:      "online",
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		// Queue a command
+		_, err := monitor.queueDockerStopCommand(host.ID)
+		if err != nil {
+			t.Fatalf("queue stop command: %v", err)
+		}
+
+		// Fetch with whitespace-padded ID
+		_, status := monitor.getDockerCommandPayload("  host-whitespace  ")
+		if status == nil {
+			t.Fatal("expected status to be returned for whitespace-padded hostID")
+		}
+		if status.Status != DockerCommandStatusDispatched {
+			t.Fatalf("expected dispatched status, got %q", status.Status)
+		}
+	})
+}
+
 func TestAcknowledgeDockerCommandErrorPaths(t *testing.T) {
 	t.Parallel()
 
