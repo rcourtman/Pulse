@@ -5952,3 +5952,246 @@ func TestClearAlertHistory(t *testing.T) {
 		}
 	})
 }
+
+func TestClearNodeOfflineAlert(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no alert and no count is no-op", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		node := models.Node{ID: "node1", Name: "Node 1"}
+		m.clearNodeOfflineAlert(node)
+
+		m.mu.RLock()
+		alertCount := len(m.activeAlerts)
+		m.mu.RUnlock()
+		if alertCount != 0 {
+			t.Errorf("expected 0 alerts, got %d", alertCount)
+		}
+	})
+
+	t.Run("resets offline count when node comes online", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.nodeOfflineCount["node1"] = 5
+		m.mu.Unlock()
+
+		node := models.Node{ID: "node1", Name: "Node 1"}
+		m.clearNodeOfflineAlert(node)
+
+		m.mu.RLock()
+		_, exists := m.nodeOfflineCount["node1"]
+		m.mu.RUnlock()
+		if exists {
+			t.Error("expected offline count to be cleared")
+		}
+	})
+
+	t.Run("clears existing alert and adds to resolved", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		var resolvedCalled bool
+		m.SetResolvedCallback(func(alertID string) {
+			resolvedCalled = true
+		})
+
+		m.mu.Lock()
+		m.nodeOfflineCount["node1"] = 3
+		m.activeAlerts["node-offline-node1"] = &Alert{
+			ID:        "node-offline-node1",
+			Type:      "offline",
+			StartTime: time.Now().Add(-10 * time.Minute),
+		}
+		m.mu.Unlock()
+
+		node := models.Node{ID: "node1", Name: "Node 1", Instance: "pve1"}
+		m.clearNodeOfflineAlert(node)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["node-offline-node1"]
+		_, countExists := m.nodeOfflineCount["node1"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected alert to be cleared")
+		}
+		if countExists {
+			t.Error("expected offline count to be cleared")
+		}
+
+		// Check resolved
+		m.resolvedMutex.RLock()
+		resolved := m.recentlyResolved["node-offline-node1"]
+		m.resolvedMutex.RUnlock()
+		if resolved == nil {
+			t.Error("expected alert to be added to recently resolved")
+		}
+		if !resolvedCalled {
+			t.Error("expected resolved callback to be called")
+		}
+	})
+}
+
+func TestClearPBSOfflineAlert(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no alert and no count is no-op", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pbs := models.PBSInstance{ID: "pbs1", Name: "PBS 1"}
+		m.clearPBSOfflineAlert(pbs)
+
+		m.mu.RLock()
+		alertCount := len(m.activeAlerts)
+		m.mu.RUnlock()
+		if alertCount != 0 {
+			t.Errorf("expected 0 alerts, got %d", alertCount)
+		}
+	})
+
+	t.Run("resets offline confirmation count", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.offlineConfirmations["pbs1"] = 5
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{ID: "pbs1", Name: "PBS 1"}
+		m.clearPBSOfflineAlert(pbs)
+
+		m.mu.RLock()
+		_, exists := m.offlineConfirmations["pbs1"]
+		m.mu.RUnlock()
+		if exists {
+			t.Error("expected offline confirmation count to be cleared")
+		}
+	})
+
+	t.Run("clears existing alert and adds to resolved", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		var resolvedCalled bool
+		m.SetResolvedCallback(func(alertID string) {
+			resolvedCalled = true
+		})
+
+		m.mu.Lock()
+		m.offlineConfirmations["pbs1"] = 3
+		m.activeAlerts["pbs-offline-pbs1"] = &Alert{
+			ID:        "pbs-offline-pbs1",
+			Type:      "offline",
+			StartTime: time.Now().Add(-5 * time.Minute),
+		}
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{ID: "pbs1", Name: "PBS 1", Host: "pbs.local"}
+		m.clearPBSOfflineAlert(pbs)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["pbs-offline-pbs1"]
+		_, countExists := m.offlineConfirmations["pbs1"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected alert to be cleared")
+		}
+		if countExists {
+			t.Error("expected offline confirmation count to be cleared")
+		}
+
+		// Check resolved
+		m.resolvedMutex.RLock()
+		resolved := m.recentlyResolved["pbs-offline-pbs1"]
+		m.resolvedMutex.RUnlock()
+		if resolved == nil {
+			t.Error("expected alert to be added to recently resolved")
+		}
+		if !resolvedCalled {
+			t.Error("expected resolved callback to be called")
+		}
+	})
+}
+
+func TestClearPMGOfflineAlert(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no alert and no count is no-op", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1"}
+		m.clearPMGOfflineAlert(pmg)
+
+		m.mu.RLock()
+		alertCount := len(m.activeAlerts)
+		m.mu.RUnlock()
+		if alertCount != 0 {
+			t.Errorf("expected 0 alerts, got %d", alertCount)
+		}
+	})
+
+	t.Run("resets offline confirmation count", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.offlineConfirmations["pmg1"] = 5
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1"}
+		m.clearPMGOfflineAlert(pmg)
+
+		m.mu.RLock()
+		_, exists := m.offlineConfirmations["pmg1"]
+		m.mu.RUnlock()
+		if exists {
+			t.Error("expected offline confirmation count to be cleared")
+		}
+	})
+
+	t.Run("clears existing alert and adds to resolved", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		var resolvedCalled bool
+		m.SetResolvedCallback(func(alertID string) {
+			resolvedCalled = true
+		})
+
+		m.mu.Lock()
+		m.offlineConfirmations["pmg1"] = 3
+		m.activeAlerts["pmg-offline-pmg1"] = &Alert{
+			ID:        "pmg-offline-pmg1",
+			Type:      "offline",
+			StartTime: time.Now().Add(-5 * time.Minute),
+		}
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1", Host: "pmg.local"}
+		m.clearPMGOfflineAlert(pmg)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["pmg-offline-pmg1"]
+		_, countExists := m.offlineConfirmations["pmg1"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected alert to be cleared")
+		}
+		if countExists {
+			t.Error("expected offline confirmation count to be cleared")
+		}
+
+		// Check resolved
+		m.resolvedMutex.RLock()
+		resolved := m.recentlyResolved["pmg-offline-pmg1"]
+		m.resolvedMutex.RUnlock()
+		if resolved == nil {
+			t.Error("expected alert to be added to recently resolved")
+		}
+		if !resolvedCalled {
+			t.Error("expected resolved callback to be called")
+		}
+	})
+}
