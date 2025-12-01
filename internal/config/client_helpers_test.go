@@ -78,6 +78,106 @@ func TestCreateConfigHelpersNormalizeHosts(t *testing.T) {
 	}
 }
 
+func TestCreateProxmoxConfigFromFields(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		host           string
+		user           string
+		password       string
+		tokenName      string
+		tokenValue     string
+		fingerprint    string
+		verifySSL      bool
+		expectedUser   string
+		expectedHost   string
+	}{
+		{
+			name:         "user without realm gets @pam appended (password auth)",
+			host:         "https://pve.local",
+			user:         "root",
+			password:     "secret",
+			tokenName:    "",
+			tokenValue:   "",
+			expectedUser: "root@pam",
+			expectedHost: "https://pve.local:8006",
+		},
+		{
+			name:         "user with realm unchanged",
+			host:         "https://pve.local",
+			user:         "admin@pve",
+			password:     "secret",
+			tokenName:    "",
+			tokenValue:   "",
+			expectedUser: "admin@pve",
+			expectedHost: "https://pve.local:8006",
+		},
+		{
+			name:         "token auth does not modify user",
+			host:         "https://pve.local",
+			user:         "root",
+			password:     "",
+			tokenName:    "mytoken",
+			tokenValue:   "token-value",
+			expectedUser: "root",
+			expectedHost: "https://pve.local:8006",
+		},
+		{
+			name:         "empty user unchanged",
+			host:         "https://pve.local",
+			user:         "",
+			password:     "secret",
+			tokenName:    "",
+			tokenValue:   "",
+			expectedUser: "",
+			expectedHost: "https://pve.local:8006",
+		},
+		{
+			name:         "fingerprint and verifySSL preserved",
+			host:         "pve.local",
+			user:         "root",
+			password:     "secret",
+			tokenName:    "",
+			tokenValue:   "",
+			fingerprint:  "AA:BB:CC",
+			verifySSL:    false,
+			expectedUser: "root@pam",
+			expectedHost: "https://pve.local:8006",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := CreateProxmoxConfigFromFields(tt.host, tt.user, tt.password, tt.tokenName, tt.tokenValue, tt.fingerprint, tt.verifySSL)
+
+			if cfg.User != tt.expectedUser {
+				t.Errorf("User = %q, want %q", cfg.User, tt.expectedUser)
+			}
+			if cfg.Host != tt.expectedHost {
+				t.Errorf("Host = %q, want %q", cfg.Host, tt.expectedHost)
+			}
+			if cfg.Password != tt.password {
+				t.Errorf("Password = %q, want %q", cfg.Password, tt.password)
+			}
+			if cfg.TokenName != tt.tokenName {
+				t.Errorf("TokenName = %q, want %q", cfg.TokenName, tt.tokenName)
+			}
+			if cfg.TokenValue != tt.tokenValue {
+				t.Errorf("TokenValue = %q, want %q", cfg.TokenValue, tt.tokenValue)
+			}
+			if cfg.Fingerprint != tt.fingerprint {
+				t.Errorf("Fingerprint = %q, want %q", cfg.Fingerprint, tt.fingerprint)
+			}
+			if cfg.VerifySSL != tt.verifySSL {
+				t.Errorf("VerifySSL = %v, want %v", cfg.VerifySSL, tt.verifySSL)
+			}
+		})
+	}
+}
+
 func TestStripDefaultPort(t *testing.T) {
 	tests := []struct {
 		name        string
