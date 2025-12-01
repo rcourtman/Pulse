@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -479,6 +480,94 @@ func TestInferVersionFromDownloadURL(t *testing.T) {
 		t.Run(tt.url, func(t *testing.T) {
 			if got := inferVersionFromDownloadURL(tt.url); got != tt.expected {
 				t.Fatalf("expected %s, got %s", tt.expected, got)
+			}
+		})
+	}
+}
+
+func TestSanitizeError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		err      error
+		expected string
+	}{
+		{
+			name:     "nil error",
+			err:      nil,
+			expected: "",
+		},
+		{
+			name:     "simple error",
+			err:      errors.New("connection refused"),
+			expected: "connection refused",
+		},
+		{
+			name:     "error with newlines preserved",
+			err:      errors.New("line1\nline2"),
+			expected: "line1\nline2",
+		},
+		{
+			name:     "error at max length",
+			err:      errors.New(strings.Repeat("a", 500)),
+			expected: strings.Repeat("a", 500),
+		},
+		{
+			name:     "error over max length truncated",
+			err:      errors.New(strings.Repeat("a", 501)),
+			expected: strings.Repeat("a", 500) + "...",
+		},
+		{
+			name:     "error way over max length",
+			err:      errors.New(strings.Repeat("a", 1000)),
+			expected: strings.Repeat("a", 500) + "...",
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := sanitizeError(tc.err); got != tc.expected {
+				t.Fatalf("sanitizeError() = %q (len %d), expected %q (len %d)",
+					got, len(got), tc.expected, len(tc.expected))
+			}
+		})
+	}
+}
+
+func TestStatusDelayForStage(t *testing.T) {
+	// This test verifies the stage delay logic without actually configuring a delay
+	// since configuredStageDelay uses sync.Once and reads from environment
+
+	tests := []struct {
+		name   string
+		status string
+	}{
+		// Stages that should return configured delay (if any)
+		{name: "downloading", status: "downloading"},
+		{name: "verifying", status: "verifying"},
+		{name: "extracting", status: "extracting"},
+		{name: "backing-up", status: "backing-up"},
+		{name: "applying", status: "applying"},
+
+		// Stages that should always return 0
+		{name: "idle", status: "idle"},
+		{name: "completed", status: "completed"},
+		{name: "failed", status: "failed"},
+		{name: "unknown", status: "unknown"},
+		{name: "empty", status: ""},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			// Without PULSE_UPDATE_STAGE_DELAY_MS set, all should return 0
+			got := statusDelayForStage(tc.status)
+			if got != 0 {
+				t.Fatalf("statusDelayForStage(%q) = %v, expected 0 (no delay configured)",
+					tc.status, got)
 			}
 		})
 	}
