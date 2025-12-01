@@ -3771,3 +3771,112 @@ func TestCleanupDockerContainerAlerts(t *testing.T) {
 		}
 	})
 }
+
+func TestSafeCallEscalateCallback(t *testing.T) {
+	t.Parallel()
+
+	t.Run("calls callback with alert and level", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		var receivedAlert *Alert
+		var receivedLevel int
+		done := make(chan struct{})
+
+		m.SetEscalateCallback(func(alert *Alert, level int) {
+			receivedAlert = alert
+			receivedLevel = level
+			close(done)
+		})
+
+		alert := &Alert{
+			ID:           "test-alert",
+			Type:         "test",
+			ResourceName: "resource-1",
+		}
+
+		m.safeCallEscalateCallback(alert, 2)
+
+		select {
+		case <-done:
+			if receivedAlert == nil {
+				t.Fatal("expected alert to be received")
+			}
+			if receivedAlert.ID != "test-alert" {
+				t.Errorf("expected alert ID 'test-alert', got %q", receivedAlert.ID)
+			}
+			if receivedLevel != 2 {
+				t.Errorf("expected level 2, got %d", receivedLevel)
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatal("callback not called within timeout")
+		}
+	})
+
+	t.Run("noop when callback is nil", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		// No callback set
+
+		alert := &Alert{ID: "test-alert"}
+
+		// Should not panic
+		m.safeCallEscalateCallback(alert, 1)
+	})
+
+	t.Run("recovers from panic in callback", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		done := make(chan struct{})
+		m.SetEscalateCallback(func(alert *Alert, level int) {
+			defer close(done)
+			panic("test panic")
+		})
+
+		alert := &Alert{ID: "panic-test"}
+
+		// Should not panic the caller
+		m.safeCallEscalateCallback(alert, 1)
+
+		select {
+		case <-done:
+			// Callback ran (and panicked, but recovered)
+		case <-time.After(1 * time.Second):
+			t.Fatal("callback not called within timeout")
+		}
+	})
+
+	t.Run("clones alert to prevent modification", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		var receivedAlert *Alert
+		done := make(chan struct{})
+
+		m.SetEscalateCallback(func(alert *Alert, level int) {
+			receivedAlert = alert
+			close(done)
+		})
+
+		original := &Alert{
+			ID:           "original-alert",
+			ResourceName: "original-resource",
+		}
+
+		m.safeCallEscalateCallback(original, 1)
+
+		select {
+		case <-done:
+			// Modify original after callback started
+			original.ResourceName = "modified"
+
+			// Received alert should be a clone, not affected by modification
+			if receivedAlert.ID != "original-alert" {
+				t.Errorf("expected cloned alert ID")
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatal("callback not called within timeout")
+		}
+	})
+}
