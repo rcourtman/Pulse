@@ -3567,3 +3567,83 @@ func TestHandleDockerHostRemovedEmptyID(t *testing.T) {
 		t.Error("expected offline count to remain when host ID is empty")
 	}
 }
+
+func TestHandleDockerHostOnline(t *testing.T) {
+	t.Parallel()
+
+	t.Run("clears offline alert and tracking", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		host := models.DockerHost{ID: "docker-host-1", DisplayName: "My Host"}
+		alertID := fmt.Sprintf("docker-host-offline-%s", host.ID)
+
+		// Set up offline alert and tracking
+		m.mu.Lock()
+		m.activeAlerts[alertID] = &Alert{ID: alertID, ResourceID: fmt.Sprintf("docker:%s", host.ID)}
+		m.dockerOfflineCount[host.ID] = 5
+		m.mu.Unlock()
+
+		m.HandleDockerHostOnline(host)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts[alertID]
+		_, countExists := m.dockerOfflineCount[host.ID]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected offline alert to be cleared")
+		}
+		if countExists {
+			t.Error("expected offline count to be cleared")
+		}
+	})
+
+	t.Run("noop when no offline alert exists", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		host := models.DockerHost{ID: "docker-host-2"}
+
+		// Set up only tracking, no alert
+		m.mu.Lock()
+		m.dockerOfflineCount[host.ID] = 2
+		m.mu.Unlock()
+
+		m.HandleDockerHostOnline(host)
+
+		m.mu.RLock()
+		_, countExists := m.dockerOfflineCount[host.ID]
+		m.mu.RUnlock()
+
+		if countExists {
+			t.Error("expected offline count to be cleared even without alert")
+		}
+	})
+
+	t.Run("empty host ID is noop", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Create some data that should not be touched
+		m.mu.Lock()
+		m.activeAlerts["docker-host-offline-other"] = &Alert{ID: "docker-host-offline-other"}
+		m.dockerOfflineCount["other"] = 3
+		m.mu.Unlock()
+
+		host := models.DockerHost{ID: ""}
+		m.HandleDockerHostOnline(host)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["docker-host-offline-other"]
+		_, countExists := m.dockerOfflineCount["other"]
+		m.mu.RUnlock()
+
+		if !alertExists {
+			t.Error("expected other alert to remain when host ID is empty")
+		}
+		if !countExists {
+			t.Error("expected other count to remain when host ID is empty")
+		}
+	})
+}
