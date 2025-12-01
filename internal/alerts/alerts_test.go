@@ -6195,3 +6195,156 @@ func TestClearPMGOfflineAlert(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckNodeOffline(t *testing.T) {
+	t.Parallel()
+
+	t.Run("override DisableConnectivity clears alert and returns", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Overrides = map[string]ThresholdConfig{
+			"node1": {DisableConnectivity: true},
+		}
+		m.activeAlerts["node-offline-node1"] = &Alert{ID: "node-offline-node1"}
+		m.nodeOfflineCount["node1"] = 5
+		m.mu.Unlock()
+
+		node := models.Node{ID: "node1", Name: "Node 1"}
+		m.checkNodeOffline(node)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["node-offline-node1"]
+		_, countExists := m.nodeOfflineCount["node1"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected alert to be cleared when connectivity disabled")
+		}
+		if countExists {
+			t.Error("expected offline count to be cleared")
+		}
+	})
+
+	t.Run("existing alert updates StartTime", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		oldTime := time.Now().Add(-1 * time.Hour)
+		m.mu.Lock()
+		m.activeAlerts["node-offline-node1"] = &Alert{
+			ID:        "node-offline-node1",
+			StartTime: oldTime,
+		}
+		m.mu.Unlock()
+
+		node := models.Node{ID: "node1", Name: "Node 1"}
+		m.checkNodeOffline(node)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["node-offline-node1"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to exist")
+		}
+		if !alert.StartTime.After(oldTime) {
+			t.Error("expected StartTime to be updated")
+		}
+	})
+
+	t.Run("insufficient confirmations waits", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		node := models.Node{ID: "node1", Name: "Node 1", Instance: "pve1"}
+
+		// First call - count 1
+		m.checkNodeOffline(node)
+		m.mu.RLock()
+		count1 := m.nodeOfflineCount["node1"]
+		alert1 := m.activeAlerts["node-offline-node1"]
+		m.mu.RUnlock()
+		if count1 != 1 {
+			t.Errorf("expected count 1, got %d", count1)
+		}
+		if alert1 != nil {
+			t.Error("expected no alert after 1 confirmation")
+		}
+
+		// Second call - count 2
+		m.checkNodeOffline(node)
+		m.mu.RLock()
+		count2 := m.nodeOfflineCount["node1"]
+		alert2 := m.activeAlerts["node-offline-node1"]
+		m.mu.RUnlock()
+		if count2 != 2 {
+			t.Errorf("expected count 2, got %d", count2)
+		}
+		if alert2 != nil {
+			t.Error("expected no alert after 2 confirmations")
+		}
+	})
+
+	t.Run("creates alert after 3 confirmations", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.nodeOfflineCount["node1"] = 2 // Pre-set to trigger on next call
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:               "node1",
+			Name:             "Node 1",
+			Instance:         "pve1",
+			Status:           "offline",
+			ConnectionHealth: "disconnected",
+		}
+
+		m.checkNodeOffline(node)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["node-offline-node1"]
+		count := m.nodeOfflineCount["node1"]
+		m.mu.RUnlock()
+
+		if count != 3 {
+			t.Errorf("expected count 3, got %d", count)
+		}
+		if alert == nil {
+			t.Fatal("expected alert after 3 confirmations")
+		}
+		if alert.Type != "connectivity" {
+			t.Errorf("expected type connectivity, got %s", alert.Type)
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level, got %s", alert.Level)
+		}
+		if alert.ResourceID != "node1" {
+			t.Errorf("expected resourceID node1, got %s", alert.ResourceID)
+		}
+	})
+
+	t.Run("alert added to history", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.nodeOfflineCount["node1"] = 2
+		m.mu.Unlock()
+
+		node := models.Node{ID: "node1", Name: "Node 1", Instance: "pve1"}
+		m.checkNodeOffline(node)
+
+		// Check history
+		history := m.GetAlertHistory(10)
+		found := false
+		for _, h := range history {
+			if h.ID == "node-offline-node1" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected alert to be added to history")
+		}
+	})
+}
