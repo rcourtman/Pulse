@@ -231,6 +231,59 @@ func TestMergeNVMeTempsIntoDisks(t *testing.T) {
 				{Node: "node1", DevPath: "/dev/nvme0n1", Type: "nvme", Temperature: 0},
 			},
 		},
+		{
+			name: "NVMe disk with no legacy temps for node (continue branch)",
+			disks: []models.PhysicalDisk{
+				{Node: "node1", DevPath: "/dev/nvme0n1", Type: "nvme", Temperature: 0},
+				{Node: "node2", DevPath: "/dev/nvme0n1", Type: "nvme", Temperature: 0},
+			},
+			nodes: []models.Node{
+				{
+					Name: "node1",
+					Temperature: &models.Temperature{
+						Available: true,
+						NVMe: []models.NVMeTemp{
+							{Device: "nvme0", Temp: 45.0},
+						},
+					},
+				},
+				{
+					Name: "node2",
+					Temperature: &models.Temperature{
+						Available: true,
+						// No NVMe temps for node2, but SMART is empty too
+					},
+				},
+			},
+			expected: []models.PhysicalDisk{
+				{Node: "node1", DevPath: "/dev/nvme0n1", Type: "nvme", Temperature: 45},
+				{Node: "node2", DevPath: "/dev/nvme0n1", Type: "nvme", Temperature: 0},
+			},
+		},
+		{
+			name: "more NVMe disks than temps (break branch)",
+			disks: []models.PhysicalDisk{
+				{Node: "node1", DevPath: "/dev/nvme0n1", Type: "nvme", Temperature: 0},
+				{Node: "node1", DevPath: "/dev/nvme1n1", Type: "nvme", Temperature: 0},
+				{Node: "node1", DevPath: "/dev/nvme2n1", Type: "nvme", Temperature: 0},
+			},
+			nodes: []models.Node{
+				{
+					Name: "node1",
+					Temperature: &models.Temperature{
+						Available: true,
+						NVMe: []models.NVMeTemp{
+							{Device: "nvme0", Temp: 40.0},
+						},
+					},
+				},
+			},
+			expected: []models.PhysicalDisk{
+				{Node: "node1", DevPath: "/dev/nvme0n1", Type: "nvme", Temperature: 40},
+				{Node: "node1", DevPath: "/dev/nvme1n1", Type: "nvme", Temperature: 0},
+				{Node: "node1", DevPath: "/dev/nvme2n1", Type: "nvme", Temperature: 0},
+			},
+		},
 	}
 
 	for _, tt := range tests {
