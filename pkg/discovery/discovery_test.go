@@ -833,3 +833,263 @@ func TestEnsurePolicyDefaults(t *testing.T) {
 		}
 	})
 }
+
+func TestClonePhase(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil subnets returns empty subnets", func(t *testing.T) {
+		input := envdetect.SubnetPhase{
+			Name:       "test_phase",
+			Subnets:    nil,
+			Confidence: 0.8,
+			Priority:   1,
+		}
+		result := clonePhase(input)
+
+		if result.Name != "test_phase" {
+			t.Errorf("Name = %q, want %q", result.Name, "test_phase")
+		}
+		if result.Confidence != 0.8 {
+			t.Errorf("Confidence = %v, want 0.8", result.Confidence)
+		}
+		if result.Priority != 1 {
+			t.Errorf("Priority = %d, want 1", result.Priority)
+		}
+		if result.Subnets != nil {
+			t.Errorf("Subnets = %v, want nil", result.Subnets)
+		}
+	})
+
+	t.Run("empty subnets cloned correctly", func(t *testing.T) {
+		input := envdetect.SubnetPhase{
+			Name:    "empty_phase",
+			Subnets: []net.IPNet{},
+		}
+		result := clonePhase(input)
+
+		if result.Subnets == nil {
+			t.Error("Subnets should not be nil for empty input slice")
+		}
+		if len(result.Subnets) != 0 {
+			t.Errorf("Subnets length = %d, want 0", len(result.Subnets))
+		}
+	})
+
+	t.Run("subnets are deep copied", func(t *testing.T) {
+		_, subnet1, _ := net.ParseCIDR("192.168.1.0/24")
+		_, subnet2, _ := net.ParseCIDR("10.0.0.0/8")
+		input := envdetect.SubnetPhase{
+			Name:       "multi_subnet",
+			Subnets:    []net.IPNet{*subnet1, *subnet2},
+			Confidence: 0.9,
+			Priority:   2,
+		}
+		result := clonePhase(input)
+
+		if len(result.Subnets) != 2 {
+			t.Fatalf("Subnets length = %d, want 2", len(result.Subnets))
+		}
+		if result.Subnets[0].String() != "192.168.1.0/24" {
+			t.Errorf("Subnets[0] = %v, want 192.168.1.0/24", result.Subnets[0].String())
+		}
+		if result.Subnets[1].String() != "10.0.0.0/8" {
+			t.Errorf("Subnets[1] = %v, want 10.0.0.0/8", result.Subnets[1].String())
+		}
+	})
+
+	t.Run("modifications to clone do not affect original", func(t *testing.T) {
+		_, subnet1, _ := net.ParseCIDR("172.16.0.0/16")
+		input := envdetect.SubnetPhase{
+			Name:       "original",
+			Subnets:    []net.IPNet{*subnet1},
+			Confidence: 0.7,
+		}
+		result := clonePhase(input)
+
+		// Modify clone
+		result.Name = "modified"
+		result.Confidence = 0.1
+		_, newSubnet, _ := net.ParseCIDR("192.168.0.0/16")
+		result.Subnets[0] = *newSubnet
+
+		// Original should be unchanged
+		if input.Name != "original" {
+			t.Errorf("original Name was modified: got %q", input.Name)
+		}
+		if input.Confidence != 0.7 {
+			t.Errorf("original Confidence was modified: got %v", input.Confidence)
+		}
+		if input.Subnets[0].String() != "172.16.0.0/16" {
+			t.Errorf("original Subnets[0] was modified: got %v", input.Subnets[0].String())
+		}
+	})
+}
+
+func TestCloneProfile(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil profile returns default profile", func(t *testing.T) {
+		result := cloneProfile(nil)
+
+		if result == nil {
+			t.Fatal("cloneProfile(nil) returned nil")
+		}
+		if result.Type != envdetect.Unknown {
+			t.Errorf("Type = %v, want Unknown", result.Type)
+		}
+		if result.Confidence != 0.3 {
+			t.Errorf("Confidence = %v, want 0.3", result.Confidence)
+		}
+		if len(result.Warnings) != 1 || result.Warnings[0] != "Environment profile unavailable; using defaults" {
+			t.Errorf("Warnings = %v, want single default warning", result.Warnings)
+		}
+		if result.Metadata == nil {
+			t.Error("Metadata should not be nil")
+		}
+	})
+
+	t.Run("basic fields are copied", func(t *testing.T) {
+		input := &envdetect.EnvironmentProfile{
+			Type:       envdetect.LXCPrivileged,
+			Confidence: 0.95,
+		}
+		result := cloneProfile(input)
+
+		if result.Type != envdetect.LXCPrivileged {
+			t.Errorf("Type = %v, want LXCPrivileged", result.Type)
+		}
+		if result.Confidence != 0.95 {
+			t.Errorf("Confidence = %v, want 0.95", result.Confidence)
+		}
+	})
+
+	t.Run("metadata is deep copied", func(t *testing.T) {
+		input := &envdetect.EnvironmentProfile{
+			Type: envdetect.DockerBridge,
+			Metadata: map[string]string{
+				"gateway": "192.168.1.1",
+				"network": "bridge",
+			},
+		}
+		result := cloneProfile(input)
+
+		if result.Metadata["gateway"] != "192.168.1.1" {
+			t.Errorf("Metadata[gateway] = %q, want 192.168.1.1", result.Metadata["gateway"])
+		}
+
+		// Modify clone
+		result.Metadata["gateway"] = "10.0.0.1"
+		result.Metadata["new_key"] = "new_value"
+
+		// Original should be unchanged
+		if input.Metadata["gateway"] != "192.168.1.1" {
+			t.Errorf("original Metadata[gateway] was modified: got %q", input.Metadata["gateway"])
+		}
+		if _, exists := input.Metadata["new_key"]; exists {
+			t.Error("original Metadata has new_key which should not exist")
+		}
+	})
+
+	t.Run("warnings are deep copied", func(t *testing.T) {
+		input := &envdetect.EnvironmentProfile{
+			Type:     envdetect.Unknown,
+			Warnings: []string{"warning1", "warning2"},
+		}
+		result := cloneProfile(input)
+
+		if len(result.Warnings) != 2 {
+			t.Fatalf("Warnings length = %d, want 2", len(result.Warnings))
+		}
+
+		// Modify clone
+		result.Warnings[0] = "modified"
+		result.Warnings = append(result.Warnings, "warning3")
+
+		// Original should be unchanged
+		if input.Warnings[0] != "warning1" {
+			t.Errorf("original Warnings[0] was modified: got %q", input.Warnings[0])
+		}
+		if len(input.Warnings) != 2 {
+			t.Errorf("original Warnings length changed: got %d", len(input.Warnings))
+		}
+	})
+
+	t.Run("extra targets are deep copied", func(t *testing.T) {
+		input := &envdetect.EnvironmentProfile{
+			Type:         envdetect.Native,
+			ExtraTargets: []net.IP{net.ParseIP("192.168.1.100"), net.ParseIP("10.0.0.50")},
+		}
+		result := cloneProfile(input)
+
+		if len(result.ExtraTargets) != 2 {
+			t.Fatalf("ExtraTargets length = %d, want 2", len(result.ExtraTargets))
+		}
+		if result.ExtraTargets[0].String() != "192.168.1.100" {
+			t.Errorf("ExtraTargets[0] = %v, want 192.168.1.100", result.ExtraTargets[0])
+		}
+
+		// Modify clone
+		result.ExtraTargets[0] = net.ParseIP("1.2.3.4")
+
+		// Original should be unchanged
+		if input.ExtraTargets[0].String() != "192.168.1.100" {
+			t.Errorf("original ExtraTargets[0] was modified: got %v", input.ExtraTargets[0])
+		}
+	})
+
+	t.Run("phases are deep copied", func(t *testing.T) {
+		_, subnet, _ := net.ParseCIDR("172.17.0.0/16")
+		input := &envdetect.EnvironmentProfile{
+			Type: envdetect.DockerBridge,
+			Phases: []envdetect.SubnetPhase{
+				{
+					Name:       "docker_bridge",
+					Subnets:    []net.IPNet{*subnet},
+					Confidence: 0.85,
+					Priority:   1,
+				},
+			},
+		}
+		result := cloneProfile(input)
+
+		if len(result.Phases) != 1 {
+			t.Fatalf("Phases length = %d, want 1", len(result.Phases))
+		}
+		if result.Phases[0].Name != "docker_bridge" {
+			t.Errorf("Phases[0].Name = %q, want docker_bridge", result.Phases[0].Name)
+		}
+
+		// Modify clone
+		result.Phases[0].Name = "modified_phase"
+		_, newSubnet, _ := net.ParseCIDR("10.0.0.0/8")
+		result.Phases[0].Subnets[0] = *newSubnet
+
+		// Original should be unchanged
+		if input.Phases[0].Name != "docker_bridge" {
+			t.Errorf("original Phases[0].Name was modified: got %q", input.Phases[0].Name)
+		}
+		if input.Phases[0].Subnets[0].String() != "172.17.0.0/16" {
+			t.Errorf("original Phases[0].Subnets[0] was modified: got %v", input.Phases[0].Subnets[0].String())
+		}
+	})
+
+	t.Run("result is independent pointer", func(t *testing.T) {
+		input := &envdetect.EnvironmentProfile{
+			Type:       envdetect.Native,
+			Confidence: 0.9,
+		}
+		result := cloneProfile(input)
+
+		if result == input {
+			t.Error("cloneProfile should return a new pointer, not the same one")
+		}
+
+		// Modify clone's scalar field
+		result.Confidence = 0.1
+
+		// Original should be unchanged
+		if input.Confidence != 0.9 {
+			t.Errorf("original Confidence was modified: got %v", input.Confidence)
+		}
+	})
+}
