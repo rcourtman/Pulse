@@ -344,6 +344,7 @@ func TestIsCPUChip(t *testing.T) {
 		{"nct6775-isa-0290", true},
 		{"cpu_thermal-virtual-0", true},
 		{"acpitz-acpi-0", true},
+		{"rp1_adc-isa-0000", true}, // Raspberry Pi RP1 ADC
 		{"nvme-pci-0100", false},
 		{"amdgpu-pci-0300", false},
 		{"unknown-chip", false},
