@@ -234,6 +234,59 @@ func TestAllowDockerHostReenrollNoopWhenHostNotBlocked(t *testing.T) {
 	}
 }
 
+func TestDockerCommandHasExpired(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		expiresAt *time.Time
+		checkTime time.Time
+		want      bool
+	}{
+		{
+			name:      "nil ExpiresAt returns false",
+			expiresAt: nil,
+			checkTime: time.Now(),
+			want:      false,
+		},
+		{
+			name:      "future expiry returns false",
+			expiresAt: func() *time.Time { t := time.Now().Add(time.Hour); return &t }(),
+			checkTime: time.Now(),
+			want:      false,
+		},
+		{
+			name:      "past expiry returns true",
+			expiresAt: func() *time.Time { t := time.Now().Add(-time.Hour); return &t }(),
+			checkTime: time.Now(),
+			want:      true,
+		},
+		{
+			name:      "exact expiry time returns false",
+			expiresAt: func() *time.Time { t := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC); return &t }(),
+			checkTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
+			want:      false, // checkTime.After(expiresAt) is false when equal
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cmd := &dockerHostCommand{
+				status: models.DockerHostCommandStatus{
+					ExpiresAt: tt.expiresAt,
+				},
+			}
+
+			got := cmd.hasExpired(tt.checkTime)
+			if got != tt.want {
+				t.Errorf("hasExpired() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAcknowledgeDockerCommandErrorPaths(t *testing.T) {
 	t.Parallel()
 
