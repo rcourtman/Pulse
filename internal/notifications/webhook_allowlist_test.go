@@ -2,64 +2,182 @@ package notifications
 
 import (
 	"net"
+	"strings"
 	"testing"
 )
 
 func TestUpdateAllowedPrivateCIDRs(t *testing.T) {
-	nm := NewNotificationManager("")
-
 	tests := []struct {
 		name    string
 		cidrs   string
-		wantErr bool
+		wantErr string // empty string means no error expected
 	}{
+		// Success cases
 		{
 			name:    "empty string clears allowlist",
 			cidrs:   "",
-			wantErr: false,
+			wantErr: "",
 		},
 		{
 			name:    "single valid CIDR",
 			cidrs:   "192.168.1.0/24",
-			wantErr: false,
+			wantErr: "",
 		},
 		{
 			name:    "multiple valid CIDRs",
 			cidrs:   "192.168.1.0/24,10.0.0.0/8",
-			wantErr: false,
+			wantErr: "",
 		},
 		{
 			name:    "CIDR with spaces",
 			cidrs:   "192.168.1.0/24, 10.0.0.0/8",
-			wantErr: false,
+			wantErr: "",
 		},
 		{
 			name:    "bare IPv4 address",
 			cidrs:   "192.168.1.1",
-			wantErr: false,
+			wantErr: "",
 		},
 		{
 			name:    "bare IPv6 address",
 			cidrs:   "fe80::1",
-			wantErr: false,
+			wantErr: "",
 		},
 		{
-			name:    "invalid CIDR",
+			name:    "valid IPv6 CIDR",
+			cidrs:   "fe80::/10",
+			wantErr: "",
+		},
+		{
+			name:    "loopback IPv6",
+			cidrs:   "::1",
+			wantErr: "",
+		},
+		{
+			name:    "multiple valid CIDRs with mixed IP versions",
+			cidrs:   "192.168.1.0/24, 10.0.0.0/8, fe80::/10",
+			wantErr: "",
+		},
+		{
+			name:    "mixed bare IPs and CIDRs",
+			cidrs:   "192.168.1.1, 10.0.0.0/8",
+			wantErr: "",
+		},
+		{
+			name:    "whitespace handling",
+			cidrs:   "  192.168.1.0/24  ,  10.0.0.1  ",
+			wantErr: "",
+		},
+		{
+			name:    "empty entries skipped",
+			cidrs:   "192.168.1.0/24,,10.0.0.1",
+			wantErr: "",
+		},
+
+		// Error cases - invalid IP addresses (bare IPs without CIDR notation)
+		{
+			name:    "invalid IP address - garbage text",
 			cidrs:   "not-a-cidr",
-			wantErr: true,
+			wantErr: "invalid IP address: not-a-cidr",
 		},
 		{
-			name:    "invalid IP address",
+			name:    "invalid IP address - out of range octets",
 			cidrs:   "999.999.999.999",
-			wantErr: true,
+			wantErr: "invalid IP address: 999.999.999.999",
+		},
+		{
+			name:    "invalid IP address in list",
+			cidrs:   "192.168.1.0/24, invalid, 10.0.0.1",
+			wantErr: "invalid IP address: invalid",
+		},
+		{
+			name:    "IP with too many octets",
+			cidrs:   "192.168.1.1.1",
+			wantErr: "invalid IP address: 192.168.1.1.1",
+		},
+		{
+			name:    "IP with negative octet",
+			cidrs:   "192.168.-1.0",
+			wantErr: "invalid IP address: 192.168.-1.0",
+		},
+		{
+			name:    "IP with octet out of range",
+			cidrs:   "192.168.256.0",
+			wantErr: "invalid IP address: 192.168.256.0",
+		},
+
+		// Error cases - invalid CIDR notation
+		{
+			name:    "CIDR prefix too large for IPv4",
+			cidrs:   "192.168.1.0/33",
+			wantErr: "invalid CIDR range 192.168.1.0/33",
+		},
+		{
+			name:    "CIDR prefix too large for IPv6",
+			cidrs:   "fe80::/129",
+			wantErr: "invalid CIDR range fe80::/129",
+		},
+		{
+			name:    "CIDR prefix way too large",
+			cidrs:   "192.168.1.0/999",
+			wantErr: "invalid CIDR range 192.168.1.0/999",
+		},
+		{
+			name:    "CIDR with negative prefix",
+			cidrs:   "192.168.1.0/-1",
+			wantErr: "invalid CIDR range 192.168.1.0/-1",
+		},
+		{
+			name:    "CIDR with non-numeric prefix",
+			cidrs:   "192.168.1.0/abc",
+			wantErr: "invalid CIDR range 192.168.1.0/abc",
+		},
+		{
+			name:    "CIDR with empty prefix",
+			cidrs:   "192.168.1.0/",
+			wantErr: "invalid CIDR range 192.168.1.0/",
+		},
+		{
+			name:    "CIDR with floating point prefix",
+			cidrs:   "192.168.1.0/24.5",
+			wantErr: "invalid CIDR range 192.168.1.0/24.5",
+		},
+
+		// Error cases - malformed strings
+		{
+			name:    "double slash in CIDR",
+			cidrs:   "192.168.1.0//24",
+			wantErr: "invalid CIDR range 192.168.1.0//24",
+		},
+		{
+			name:    "CIDR with invalid IP part",
+			cidrs:   "999.999.999.999/24",
+			wantErr: "invalid CIDR range 999.999.999.999/24",
+		},
+		{
+			name:    "valid CIDR followed by invalid CIDR",
+			cidrs:   "192.168.1.0/24, bad/cidr",
+			wantErr: "invalid CIDR range bad/cidr",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			nm := NewNotificationManager("")
+			defer nm.Stop()
+
 			err := nm.UpdateAllowedPrivateCIDRs(tt.cidrs)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("UpdateAllowedPrivateCIDRs() error = %v, wantErr %v", err, tt.wantErr)
+
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("UpdateAllowedPrivateCIDRs() unexpected error = %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Errorf("UpdateAllowedPrivateCIDRs() expected error containing %q, got nil", tt.wantErr)
+				} else if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Errorf("UpdateAllowedPrivateCIDRs() error = %v, want error containing %q", err, tt.wantErr)
+				}
 			}
 		})
 	}

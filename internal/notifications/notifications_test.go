@@ -507,6 +507,122 @@ func TestRenderWebhookURL_InvalidTemplate(t *testing.T) {
 	}
 }
 
+func TestRenderWebhookURL_ErrorPaths(t *testing.T) {
+	tests := []struct {
+		name        string
+		urlTemplate string
+		data        WebhookPayloadData
+		wantErr     string
+	}{
+		{
+			name:        "empty URL template",
+			urlTemplate: "",
+			data:        WebhookPayloadData{},
+			wantErr:     "webhook URL cannot be empty",
+		},
+		{
+			name:        "whitespace-only URL template",
+			urlTemplate: "   \t\n  ",
+			data:        WebhookPayloadData{},
+			wantErr:     "webhook URL cannot be empty",
+		},
+		{
+			name:        "invalid template syntax",
+			urlTemplate: "https://example.com/{{.Unclosed",
+			data:        WebhookPayloadData{},
+			wantErr:     "invalid webhook URL template",
+		},
+		{
+			name:        "template execution error - undefined function",
+			urlTemplate: "https://example.com/{{undefined_func .Message}}",
+			data:        WebhookPayloadData{Message: "test"},
+			wantErr:     "invalid webhook URL template",
+		},
+		{
+			name:        "template produces empty URL",
+			urlTemplate: "{{if false}}https://example.com{{end}}",
+			data:        WebhookPayloadData{},
+			wantErr:     "webhook URL template produced empty URL",
+		},
+		{
+			name:        "template renders to missing scheme",
+			urlTemplate: "{{.Message}}/path",
+			data:        WebhookPayloadData{Message: "example.com"},
+			wantErr:     "missing scheme or host",
+		},
+		{
+			name:        "template renders to missing host",
+			urlTemplate: "{{.Message}}://",
+			data:        WebhookPayloadData{Message: "https"},
+			wantErr:     "missing scheme or host",
+		},
+		{
+			name:        "template renders to relative path",
+			urlTemplate: "/{{.Message}}/webhook",
+			data:        WebhookPayloadData{Message: "api"},
+			wantErr:     "missing scheme or host",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := renderWebhookURL(tt.urlTemplate, tt.data)
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil (result: %q)", tt.wantErr, result)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("expected error containing %q, got: %v", tt.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestRenderWebhookURL_SuccessCases(t *testing.T) {
+	tests := []struct {
+		name        string
+		urlTemplate string
+		data        WebhookPayloadData
+		want        string
+	}{
+		{
+			name:        "static URL - no template",
+			urlTemplate: "https://example.com/webhook",
+			data:        WebhookPayloadData{},
+			want:        "https://example.com/webhook",
+		},
+		{
+			name:        "URL with whitespace trimmed",
+			urlTemplate: "  https://example.com/webhook  ",
+			data:        WebhookPayloadData{},
+			want:        "https://example.com/webhook",
+		},
+		{
+			name:        "URL with template variable in path",
+			urlTemplate: "https://example.com/{{.ResourceType}}/alert",
+			data:        WebhookPayloadData{ResourceType: "vm"},
+			want:        "https://example.com/vm/alert",
+		},
+		{
+			name:        "URL with urlquery encoding",
+			urlTemplate: "https://example.com?msg={{urlquery .Message}}",
+			data:        WebhookPayloadData{Message: "hello world"},
+			want:        "https://example.com?msg=hello+world",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := renderWebhookURL(tt.urlTemplate, tt.data)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if result != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, result)
+			}
+		})
+	}
+}
+
 func TestSendTestNotificationApprise(t *testing.T) {
 	nm := NewNotificationManager("")
 	nm.SetEmailConfig(EmailConfig{Enabled: false})
