@@ -17,20 +17,49 @@ func TestNormalizeEndpointHost(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
+		name  string
 		input string
 		want  string
 	}{
-		{"", ""},
-		{"  node.local  ", "node.local"},
-		{"https://node.local:8006/", "node.local"},
-		{"node.local:8006", "node.local"},
-		{"node.local/path", "node.local"},
-		{"https://[2001:db8::1]:8006", "2001:db8::1"},
+		// Empty and whitespace
+		{"empty string", "", ""},
+		{"whitespace only", "   ", ""},
+		{"whitespace with tabs", " \t ", ""},
+
+		// Full URLs with scheme
+		{"https URL with port and path", "https://example.com:8006/api", "example.com"},
+		{"http URL with path", "http://host/path", "host"},
+		{"https URL with trailing slash", "https://node.local:8006/", "node.local"},
+
+		// URLs without scheme
+		{"host with port", "example.com:8006", "example.com"},
+		{"host with port no scheme", "node.local:8006", "node.local"},
+
+		// Hostname only
+		{"hostname only", "example.com", "example.com"},
+		{"simple hostname", "node.local", "node.local"},
+
+		// IP addresses
+		{"IPv4 with port", "192.168.1.1:8006", "192.168.1.1"},
+		{"IPv4 only", "192.168.1.100", "192.168.1.100"},
+		{"IPv6 bracketed with port", "https://[2001:db8::1]:8006", "2001:db8::1"},
+
+		// Host with path (no scheme)
+		{"host with path no scheme", "node.local/path", "node.local"},
+		{"host with deep path", "server.example.com/api/v1/resource", "server.example.com"},
+
+		// Edge cases with just scheme prefix
+		{"just https prefix", "https://", ""},
+		{"just http prefix", "http://", ""},
+
+		// Whitespace trimming
+		{"whitespace around hostname", "  node.local  ", "node.local"},
+		{"whitespace around URL", "  https://example.com:8006  ", "example.com"},
 	}
 
 	for _, tc := range cases {
 		tc := tc
-		t.Run(tc.input, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			if got := normalizeEndpointHost(tc.input); got != tc.want {
 				t.Fatalf("normalizeEndpointHost(%q) = %q, want %q", tc.input, got, tc.want)

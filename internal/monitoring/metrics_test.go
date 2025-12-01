@@ -1094,3 +1094,104 @@ func TestDecInFlight_DecrementsGauge(t *testing.T) {
 		t.Errorf("inflight{pve} = %v, want 0 after full decrement", got)
 	}
 }
+
+func TestDecrementPending_NilPollMetrics(t *testing.T) {
+	t.Parallel()
+
+	var pm *PollMetrics
+	// Should not panic
+	pm.decrementPending()
+}
+
+func TestDecrementPending_DecrementsWhenPositive(t *testing.T) {
+	t.Parallel()
+
+	pm := newFullTestPollMetrics(t)
+
+	// Set initial pending count
+	pm.ResetQueueDepth(5)
+
+	pm.decrementPending()
+
+	pm.mu.RLock()
+	gotPending := pm.pending
+	pm.mu.RUnlock()
+
+	if gotPending != 4 {
+		t.Errorf("pending = %v, want 4 after decrement from 5", gotPending)
+	}
+}
+
+func TestDecrementPending_DoesNotGoBelowZero(t *testing.T) {
+	t.Parallel()
+
+	pm := newFullTestPollMetrics(t)
+
+	// Start at 0 (default)
+	pm.decrementPending()
+
+	pm.mu.RLock()
+	gotPending := pm.pending
+	pm.mu.RUnlock()
+
+	if gotPending != 0 {
+		t.Errorf("pending = %v, want 0 (should not go negative)", gotPending)
+	}
+
+	// Also verify the gauge is 0
+	gotQueueDepth := getGaugeValue(pm.queueDepth)
+	if gotQueueDepth != 0 {
+		t.Errorf("queueDepth gauge = %v, want 0", gotQueueDepth)
+	}
+}
+
+func TestDecrementPending_UpdatesQueueDepthGauge(t *testing.T) {
+	t.Parallel()
+
+	pm := newFullTestPollMetrics(t)
+
+	pm.ResetQueueDepth(10)
+	pm.decrementPending()
+
+	gotQueueDepth := getGaugeValue(pm.queueDepth)
+	if gotQueueDepth != 9 {
+		t.Errorf("queueDepth gauge = %v, want 9", gotQueueDepth)
+	}
+}
+
+func TestDecrementPending_MultipleDecrements(t *testing.T) {
+	t.Parallel()
+
+	pm := newFullTestPollMetrics(t)
+
+	pm.ResetQueueDepth(5)
+
+	// Decrement 5 times
+	for i := 0; i < 5; i++ {
+		pm.decrementPending()
+	}
+
+	pm.mu.RLock()
+	gotPending := pm.pending
+	pm.mu.RUnlock()
+
+	if gotPending != 0 {
+		t.Errorf("pending = %v, want 0 after 5 decrements from 5", gotPending)
+	}
+
+	gotQueueDepth := getGaugeValue(pm.queueDepth)
+	if gotQueueDepth != 0 {
+		t.Errorf("queueDepth gauge = %v, want 0", gotQueueDepth)
+	}
+
+	// Decrement one more time - should stay at 0
+	pm.decrementPending()
+
+	pm.mu.RLock()
+	gotPending = pm.pending
+	pm.mu.RUnlock()
+
+	if gotPending != 0 {
+		t.Errorf("pending = %v, want 0 after extra decrement", gotPending)
+	}
+}

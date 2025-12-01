@@ -65,4 +65,51 @@ func TestTaskExecutionTimeout(t *testing.T) {
 			t.Fatalf("taskExecutionTimeout() = %v, want %v", got, defaultTaskTimeout)
 		}
 	})
+
+	t.Run("nil Monitor returns defaultTaskTimeout", func(t *testing.T) {
+		var m *Monitor
+		got := m.taskExecutionTimeout(InstanceTypePVE)
+		if got != defaultTaskTimeout {
+			t.Fatalf("taskExecutionTimeout() = %v, want %v", got, defaultTaskTimeout)
+		}
+	})
+
+	t.Run("zero pollTimeout returns defaultTaskTimeout", func(t *testing.T) {
+		m := &Monitor{pollTimeout: 0}
+		got := m.taskExecutionTimeout(InstanceTypePVE)
+		if got != defaultTaskTimeout {
+			t.Fatalf("taskExecutionTimeout() = %v, want %v", got, defaultTaskTimeout)
+		}
+	})
+
+	t.Run("negative pollTimeout returns defaultTaskTimeout", func(t *testing.T) {
+		m := &Monitor{pollTimeout: -5 * time.Second}
+		got := m.taskExecutionTimeout(InstanceTypePVE)
+		if got != defaultTaskTimeout {
+			t.Fatalf("taskExecutionTimeout() = %v, want %v", got, defaultTaskTimeout)
+		}
+	})
+
+	t.Run("InstanceType parameter is ignored", func(t *testing.T) {
+		m := &Monitor{pollTimeout: 60 * time.Second}
+		// All instance types should return the same value
+		gotPVE := m.taskExecutionTimeout(InstanceTypePVE)
+		gotPBS := m.taskExecutionTimeout(InstanceTypePBS)
+		gotPMG := m.taskExecutionTimeout(InstanceTypePMG)
+		gotUnknown := m.taskExecutionTimeout(InstanceType("unknown"))
+
+		expected := 60 * time.Second
+		if gotPVE != expected {
+			t.Errorf("taskExecutionTimeout(PVE) = %v, want %v", gotPVE, expected)
+		}
+		if gotPBS != expected {
+			t.Errorf("taskExecutionTimeout(PBS) = %v, want %v", gotPBS, expected)
+		}
+		if gotPMG != expected {
+			t.Errorf("taskExecutionTimeout(PMG) = %v, want %v", gotPMG, expected)
+		}
+		if gotUnknown != expected {
+			t.Errorf("taskExecutionTimeout(unknown) = %v, want %v", gotUnknown, expected)
+		}
+	})
 }
