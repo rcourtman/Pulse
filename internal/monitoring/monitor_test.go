@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -703,4 +704,144 @@ type testError struct {
 
 func (e *testError) Error() string {
 	return e.msg
+}
+
+func TestResetAuthFailures(t *testing.T) {
+	t.Run("empty nodeType uses instanceName as nodeID", func(t *testing.T) {
+		m := &Monitor{
+			authFailures:    map[string]int{"myinstance": 3},
+			lastAuthAttempt: map[string]time.Time{"myinstance": time.Now()},
+		}
+
+		m.resetAuthFailures("myinstance", "")
+
+		if _, exists := m.authFailures["myinstance"]; exists {
+			t.Error("expected authFailures['myinstance'] to be deleted")
+		}
+		if _, exists := m.lastAuthAttempt["myinstance"]; exists {
+			t.Error("expected lastAuthAttempt['myinstance'] to be deleted")
+		}
+	})
+
+	t.Run("non-empty nodeType creates type-instance nodeID", func(t *testing.T) {
+		m := &Monitor{
+			authFailures:    map[string]int{"pve-myinstance": 2},
+			lastAuthAttempt: map[string]time.Time{"pve-myinstance": time.Now()},
+		}
+
+		m.resetAuthFailures("myinstance", "pve")
+
+		if _, exists := m.authFailures["pve-myinstance"]; exists {
+			t.Error("expected authFailures['pve-myinstance'] to be deleted")
+		}
+		if _, exists := m.lastAuthAttempt["pve-myinstance"]; exists {
+			t.Error("expected lastAuthAttempt['pve-myinstance'] to be deleted")
+		}
+	})
+
+	t.Run("deletes entry from authFailures when count > 0", func(t *testing.T) {
+		m := &Monitor{
+			authFailures:    map[string]int{"pbs-node1": 5, "pve-node2": 2},
+			lastAuthAttempt: map[string]time.Time{"pbs-node1": time.Now(), "pve-node2": time.Now()},
+		}
+
+		m.resetAuthFailures("node1", "pbs")
+
+		if _, exists := m.authFailures["pbs-node1"]; exists {
+			t.Error("expected authFailures['pbs-node1'] to be deleted")
+		}
+		// Other entries should remain
+		if _, exists := m.authFailures["pve-node2"]; !exists {
+			t.Error("expected authFailures['pve-node2'] to remain")
+		}
+	})
+
+	t.Run("deletes entry from lastAuthAttempt when count > 0", func(t *testing.T) {
+		m := &Monitor{
+			authFailures:    map[string]int{"pmg-server": 1},
+			lastAuthAttempt: map[string]time.Time{"pmg-server": time.Now(), "other-node": time.Now()},
+		}
+
+		m.resetAuthFailures("server", "pmg")
+
+		if _, exists := m.lastAuthAttempt["pmg-server"]; exists {
+			t.Error("expected lastAuthAttempt['pmg-server'] to be deleted")
+		}
+		// Other entries should remain
+		if _, exists := m.lastAuthAttempt["other-node"]; !exists {
+			t.Error("expected lastAuthAttempt['other-node'] to remain")
+		}
+	})
+
+	t.Run("does nothing when nodeID not in map", func(t *testing.T) {
+		m := &Monitor{
+			authFailures:    map[string]int{"pve-other": 3},
+			lastAuthAttempt: map[string]time.Time{"pve-other": time.Now()},
+		}
+
+		m.resetAuthFailures("nonexistent", "pve")
+
+		// Original entries should remain unchanged
+		if count := m.authFailures["pve-other"]; count != 3 {
+			t.Errorf("expected authFailures['pve-other'] = 3, got %d", count)
+		}
+		if _, exists := m.lastAuthAttempt["pve-other"]; !exists {
+			t.Error("expected lastAuthAttempt['pve-other'] to remain")
+		}
+	})
+
+	t.Run("does nothing when count is 0", func(t *testing.T) {
+		timestamp := time.Now()
+		m := &Monitor{
+			authFailures:    map[string]int{"pve-zerocount": 0},
+			lastAuthAttempt: map[string]time.Time{"pve-zerocount": timestamp},
+		}
+
+		m.resetAuthFailures("zerocount", "pve")
+
+		// Entry should remain since count is 0
+		if _, exists := m.authFailures["pve-zerocount"]; !exists {
+			t.Error("expected authFailures['pve-zerocount'] to remain when count is 0")
+		}
+		if _, exists := m.lastAuthAttempt["pve-zerocount"]; !exists {
+			t.Error("expected lastAuthAttempt['pve-zerocount'] to remain when count is 0")
+		}
+	})
+}
+
+func TestClampUint64ToInt64(t *testing.T) {
+	t.Run("zero value returns 0", func(t *testing.T) {
+		result := clampUint64ToInt64(0)
+		if result != 0 {
+			t.Errorf("expected 0, got %d", result)
+		}
+	})
+
+	t.Run("small positive value returns same value", func(t *testing.T) {
+		result := clampUint64ToInt64(12345)
+		if result != 12345 {
+			t.Errorf("expected 12345, got %d", result)
+		}
+	})
+
+	t.Run("value at math.MaxInt64 returns math.MaxInt64", func(t *testing.T) {
+		result := clampUint64ToInt64(uint64(math.MaxInt64))
+		if result != math.MaxInt64 {
+			t.Errorf("expected %d, got %d", int64(math.MaxInt64), result)
+		}
+	})
+
+	t.Run("value at math.MaxInt64 + 1 clamps to math.MaxInt64", func(t *testing.T) {
+		result := clampUint64ToInt64(uint64(math.MaxInt64) + 1)
+		if result != math.MaxInt64 {
+			t.Errorf("expected %d, got %d", int64(math.MaxInt64), result)
+		}
+	})
+
+	t.Run("value at math.MaxUint64 clamps to math.MaxInt64", func(t *testing.T) {
+		result := clampUint64ToInt64(math.MaxUint64)
+		if result != math.MaxInt64 {
+			t.Errorf("expected %d, got %d", int64(math.MaxInt64), result)
+		}
+	})
 }
