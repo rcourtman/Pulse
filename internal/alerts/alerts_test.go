@@ -4142,3 +4142,235 @@ func TestClearActiveAlertsEmptyMaps(t *testing.T) {
 		t.Errorf("expected activeAlerts to remain empty, got %d", len(m.activeAlerts))
 	}
 }
+
+func TestClearBackupAlertsLocked(t *testing.T) {
+	t.Parallel()
+
+	t.Run("clears backup-age alerts only", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add a backup-age alert
+		m.activeAlerts["backup-alert-1"] = &Alert{
+			ID:   "backup-alert-1",
+			Type: "backup-age",
+		}
+		// Add a non-backup alert
+		m.activeAlerts["cpu-alert-1"] = &Alert{
+			ID:   "cpu-alert-1",
+			Type: "cpu",
+		}
+		// Add another backup-age alert
+		m.activeAlerts["backup-alert-2"] = &Alert{
+			ID:   "backup-alert-2",
+			Type: "backup-age",
+		}
+
+		if len(m.activeAlerts) != 3 {
+			t.Fatalf("expected 3 alerts, got %d", len(m.activeAlerts))
+		}
+
+		m.mu.Lock()
+		m.clearBackupAlertsLocked()
+		m.mu.Unlock()
+
+		// Should have removed backup-age alerts, keeping cpu alert
+		if len(m.activeAlerts) != 1 {
+			t.Errorf("expected 1 alert remaining, got %d", len(m.activeAlerts))
+		}
+		if _, exists := m.activeAlerts["cpu-alert-1"]; !exists {
+			t.Error("expected cpu-alert-1 to remain")
+		}
+		if _, exists := m.activeAlerts["backup-alert-1"]; exists {
+			t.Error("expected backup-alert-1 to be cleared")
+		}
+		if _, exists := m.activeAlerts["backup-alert-2"]; exists {
+			t.Error("expected backup-alert-2 to be cleared")
+		}
+	})
+
+	t.Run("handles nil alert in map", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add a nil alert entry
+		m.activeAlerts["nil-alert"] = nil
+		// Add a valid backup-age alert
+		m.activeAlerts["backup-alert"] = &Alert{
+			ID:   "backup-alert",
+			Type: "backup-age",
+		}
+
+		m.mu.Lock()
+		m.clearBackupAlertsLocked()
+		m.mu.Unlock()
+
+		// Should have skipped nil and removed backup-age
+		if len(m.activeAlerts) != 1 {
+			t.Errorf("expected 1 alert remaining, got %d", len(m.activeAlerts))
+		}
+		// Nil entry should remain
+		if _, exists := m.activeAlerts["nil-alert"]; !exists {
+			t.Error("expected nil-alert entry to remain (nil check should skip it)")
+		}
+	})
+
+	t.Run("empty alerts map is no-op", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.clearBackupAlertsLocked()
+		m.mu.Unlock()
+
+		if len(m.activeAlerts) != 0 {
+			t.Errorf("expected 0 alerts, got %d", len(m.activeAlerts))
+		}
+	})
+}
+
+func TestClearBackupAlerts(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+
+	// Add a backup-age alert
+	m.activeAlerts["backup-alert"] = &Alert{
+		ID:   "backup-alert",
+		Type: "backup-age",
+	}
+	// Add a non-backup alert
+	m.activeAlerts["cpu-alert"] = &Alert{
+		ID:   "cpu-alert",
+		Type: "cpu",
+	}
+
+	// Call the public method (handles locking internally)
+	m.clearBackupAlerts()
+
+	// Only cpu alert should remain
+	if len(m.activeAlerts) != 1 {
+		t.Errorf("expected 1 alert remaining, got %d", len(m.activeAlerts))
+	}
+	if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+		t.Error("expected cpu-alert to remain")
+	}
+}
+
+func TestClearSnapshotAlertsForInstanceLocked(t *testing.T) {
+	t.Parallel()
+
+	t.Run("clears snapshot alerts for specific instance", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add snapshot alerts for different instances
+		m.activeAlerts["snap-inst1"] = &Alert{
+			ID:       "snap-inst1",
+			Type:     "snapshot-age",
+			Instance: "instance1",
+		}
+		m.activeAlerts["snap-inst2"] = &Alert{
+			ID:       "snap-inst2",
+			Type:     "snapshot-age",
+			Instance: "instance2",
+		}
+		// Add a non-snapshot alert
+		m.activeAlerts["cpu-alert"] = &Alert{
+			ID:   "cpu-alert",
+			Type: "cpu",
+		}
+
+		m.mu.Lock()
+		m.clearSnapshotAlertsForInstanceLocked("instance1")
+		m.mu.Unlock()
+
+		// Should keep instance2 snapshot and cpu alert
+		if len(m.activeAlerts) != 2 {
+			t.Errorf("expected 2 alerts remaining, got %d", len(m.activeAlerts))
+		}
+		if _, exists := m.activeAlerts["snap-inst1"]; exists {
+			t.Error("expected snap-inst1 to be cleared")
+		}
+		if _, exists := m.activeAlerts["snap-inst2"]; !exists {
+			t.Error("expected snap-inst2 to remain")
+		}
+	})
+
+	t.Run("clears all snapshot alerts when instance is empty", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add snapshot alerts for different instances
+		m.activeAlerts["snap-inst1"] = &Alert{
+			ID:       "snap-inst1",
+			Type:     "snapshot-age",
+			Instance: "instance1",
+		}
+		m.activeAlerts["snap-inst2"] = &Alert{
+			ID:       "snap-inst2",
+			Type:     "snapshot-age",
+			Instance: "instance2",
+		}
+		// Add a non-snapshot alert
+		m.activeAlerts["cpu-alert"] = &Alert{
+			ID:   "cpu-alert",
+			Type: "cpu",
+		}
+
+		m.mu.Lock()
+		m.clearSnapshotAlertsForInstanceLocked("")
+		m.mu.Unlock()
+
+		// Should keep only cpu alert
+		if len(m.activeAlerts) != 1 {
+			t.Errorf("expected 1 alert remaining, got %d", len(m.activeAlerts))
+		}
+		if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+			t.Error("expected cpu-alert to remain")
+		}
+	})
+
+	t.Run("handles nil alert in map", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add nil entry and valid snapshot alert
+		m.activeAlerts["nil-alert"] = nil
+		m.activeAlerts["snap-alert"] = &Alert{
+			ID:       "snap-alert",
+			Type:     "snapshot-age",
+			Instance: "inst1",
+		}
+
+		m.mu.Lock()
+		m.clearSnapshotAlertsForInstanceLocked("inst1")
+		m.mu.Unlock()
+
+		// Nil entry should remain, snapshot should be cleared
+		if len(m.activeAlerts) != 1 {
+			t.Errorf("expected 1 alert remaining, got %d", len(m.activeAlerts))
+		}
+		if _, exists := m.activeAlerts["nil-alert"]; !exists {
+			t.Error("expected nil-alert entry to remain")
+		}
+	})
+}
+
+func TestClearSnapshotAlertsForInstance(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+
+	// Add a snapshot alert
+	m.activeAlerts["snap-alert"] = &Alert{
+		ID:       "snap-alert",
+		Type:     "snapshot-age",
+		Instance: "instance1",
+	}
+
+	// Call the public method (handles locking internally)
+	m.clearSnapshotAlertsForInstance("instance1")
+
+	if len(m.activeAlerts) != 0 {
+		t.Errorf("expected 0 alerts remaining, got %d", len(m.activeAlerts))
+	}
+}
