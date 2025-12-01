@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func TestParseDurationEnv(t *testing.T) {
@@ -388,4 +389,318 @@ func TestBaseIntervalForInstanceType(t *testing.T) {
 			t.Errorf("expected %v, got %v", defaultInterval, result)
 		}
 	})
+}
+
+func TestRecordAuthFailure(t *testing.T) {
+	t.Run("empty nodeType uses instanceName as nodeID", func(t *testing.T) {
+		m := &Monitor{
+			authFailures:    make(map[string]int),
+			lastAuthAttempt: make(map[string]time.Time),
+		}
+
+		m.recordAuthFailure("myinstance", "")
+
+		if _, exists := m.authFailures["myinstance"]; !exists {
+			t.Error("expected authFailures['myinstance'] to exist")
+		}
+		if m.authFailures["myinstance"] != 1 {
+			t.Errorf("expected authFailures['myinstance'] = 1, got %d", m.authFailures["myinstance"])
+		}
+	})
+
+	t.Run("non-empty nodeType creates type-instance nodeID", func(t *testing.T) {
+		m := &Monitor{
+			authFailures:    make(map[string]int),
+			lastAuthAttempt: make(map[string]time.Time),
+		}
+
+		m.recordAuthFailure("myinstance", "pve")
+
+		expectedID := "pve-myinstance"
+		if _, exists := m.authFailures[expectedID]; !exists {
+			t.Errorf("expected authFailures['%s'] to exist", expectedID)
+		}
+		if m.authFailures[expectedID] != 1 {
+			t.Errorf("expected authFailures['%s'] = 1, got %d", expectedID, m.authFailures[expectedID])
+		}
+	})
+
+	t.Run("increments authFailures counter", func(t *testing.T) {
+		m := &Monitor{
+			authFailures:    make(map[string]int),
+			lastAuthAttempt: make(map[string]time.Time),
+		}
+
+		m.recordAuthFailure("node1", "pve")
+		m.recordAuthFailure("node1", "pve")
+		m.recordAuthFailure("node1", "pve")
+
+		if m.authFailures["pve-node1"] != 3 {
+			t.Errorf("expected 3 failures, got %d", m.authFailures["pve-node1"])
+		}
+	})
+
+	t.Run("records lastAuthAttempt timestamp", func(t *testing.T) {
+		m := &Monitor{
+			authFailures:    make(map[string]int),
+			lastAuthAttempt: make(map[string]time.Time),
+		}
+
+		before := time.Now()
+		m.recordAuthFailure("node1", "pbs")
+		after := time.Now()
+
+		timestamp, exists := m.lastAuthAttempt["pbs-node1"]
+		if !exists {
+			t.Fatal("expected lastAuthAttempt['pbs-node1'] to exist")
+		}
+		if timestamp.Before(before) || timestamp.After(after) {
+			t.Errorf("timestamp %v not between %v and %v", timestamp, before, after)
+		}
+	})
+
+	t.Run("triggers removal at 5 failures for nodeType pve", func(t *testing.T) {
+		m := &Monitor{
+			authFailures:    make(map[string]int),
+			lastAuthAttempt: make(map[string]time.Time),
+			config: &config.Config{
+				PVEInstances: []config.PVEInstance{
+					{Name: "pve1", Host: "192.168.1.1"},
+				},
+			},
+			state: newMinimalState(),
+		}
+
+		// Record 4 failures - should not trigger removal
+		for i := 0; i < 4; i++ {
+			m.recordAuthFailure("pve1", "pve")
+		}
+		if m.authFailures["pve-pve1"] != 4 {
+			t.Errorf("expected 4 failures, got %d", m.authFailures["pve-pve1"])
+		}
+
+		// 5th failure should trigger removal and reset counters
+		m.recordAuthFailure("pve1", "pve")
+
+		if _, exists := m.authFailures["pve-pve1"]; exists {
+			t.Error("expected authFailures['pve-pve1'] to be deleted after 5 failures")
+		}
+		if _, exists := m.lastAuthAttempt["pve-pve1"]; exists {
+			t.Error("expected lastAuthAttempt['pve-pve1'] to be deleted after 5 failures")
+		}
+	})
+
+	t.Run("triggers removal at 5 failures for nodeType pbs", func(t *testing.T) {
+		m := &Monitor{
+			authFailures:    make(map[string]int),
+			lastAuthAttempt: make(map[string]time.Time),
+			config:          &config.Config{},
+			state:           newMinimalState(),
+		}
+
+		// Record 5 failures
+		for i := 0; i < 5; i++ {
+			m.recordAuthFailure("pbs1", "pbs")
+		}
+
+		// Counters should be reset after removal
+		if _, exists := m.authFailures["pbs-pbs1"]; exists {
+			t.Error("expected authFailures['pbs-pbs1'] to be deleted after 5 failures")
+		}
+		if _, exists := m.lastAuthAttempt["pbs-pbs1"]; exists {
+			t.Error("expected lastAuthAttempt['pbs-pbs1'] to be deleted after 5 failures")
+		}
+	})
+
+	t.Run("triggers removal at 5 failures for nodeType pmg", func(t *testing.T) {
+		m := &Monitor{
+			authFailures:    make(map[string]int),
+			lastAuthAttempt: make(map[string]time.Time),
+			config:          &config.Config{},
+			state:           newMinimalState(),
+		}
+
+		// Record 5 failures
+		for i := 0; i < 5; i++ {
+			m.recordAuthFailure("pmg1", "pmg")
+		}
+
+		// Counters should be reset after removal
+		if _, exists := m.authFailures["pmg-pmg1"]; exists {
+			t.Error("expected authFailures['pmg-pmg1'] to be deleted after 5 failures")
+		}
+		if _, exists := m.lastAuthAttempt["pmg-pmg1"]; exists {
+			t.Error("expected lastAuthAttempt['pmg-pmg1'] to be deleted after 5 failures")
+		}
+	})
+
+	t.Run("resets counters after removal", func(t *testing.T) {
+		m := &Monitor{
+			authFailures:    make(map[string]int),
+			lastAuthAttempt: make(map[string]time.Time),
+			config:          &config.Config{},
+			state:           newMinimalState(),
+		}
+
+		// Trigger removal with 5 failures
+		for i := 0; i < 5; i++ {
+			m.recordAuthFailure("testnode", "pve")
+		}
+
+		// Verify counters are reset
+		if len(m.authFailures) != 0 {
+			t.Errorf("expected authFailures to be empty, got %v", m.authFailures)
+		}
+		if len(m.lastAuthAttempt) != 0 {
+			t.Errorf("expected lastAuthAttempt to be empty, got %v", m.lastAuthAttempt)
+		}
+
+		// New failures should start from 1 again
+		m.recordAuthFailure("testnode", "pve")
+		if m.authFailures["pve-testnode"] != 1 {
+			t.Errorf("expected counter to restart at 1, got %d", m.authFailures["pve-testnode"])
+		}
+	})
+}
+
+// newMinimalState creates a minimal State for testing
+func newMinimalState() *models.State {
+	return models.NewState()
+}
+
+func TestRecoverFromPanic(t *testing.T) {
+	t.Run("no panic does nothing", func(t *testing.T) {
+		// When no panic occurs, recoverFromPanic should do nothing
+		// and the function should complete normally
+		completed := false
+		func() {
+			defer recoverFromPanic("test-goroutine")
+			completed = true
+		}()
+		if !completed {
+			t.Error("expected function to complete normally without panic")
+		}
+	})
+
+	t.Run("recovers from string panic", func(t *testing.T) {
+		didPanic := false
+		recovered := false
+		func() {
+			defer func() {
+				// This runs after recoverFromPanic
+				recovered = true
+			}()
+			defer recoverFromPanic("test-goroutine")
+			didPanic = true
+			panic("test panic message")
+		}()
+		if !didPanic {
+			t.Error("expected panic to occur")
+		}
+		if !recovered {
+			t.Error("expected to recover from panic")
+		}
+	})
+
+	t.Run("recovers from error panic", func(t *testing.T) {
+		didPanic := false
+		recovered := false
+		testErr := &testError{msg: "test error"}
+		func() {
+			defer func() {
+				recovered = true
+			}()
+			defer recoverFromPanic("error-goroutine")
+			didPanic = true
+			panic(testErr)
+		}()
+		if !didPanic {
+			t.Error("expected panic to occur")
+		}
+		if !recovered {
+			t.Error("expected to recover from error panic")
+		}
+	})
+
+	t.Run("recovers from int panic", func(t *testing.T) {
+		didPanic := false
+		recovered := false
+		func() {
+			defer func() {
+				recovered = true
+			}()
+			defer recoverFromPanic("int-goroutine")
+			didPanic = true
+			panic(42)
+		}()
+		if !didPanic {
+			t.Error("expected panic to occur")
+		}
+		if !recovered {
+			t.Error("expected to recover from int panic")
+		}
+	})
+
+	t.Run("recovers from struct panic", func(t *testing.T) {
+		type panicData struct {
+			code    int
+			message string
+		}
+		didPanic := false
+		recovered := false
+		func() {
+			defer func() {
+				recovered = true
+			}()
+			defer recoverFromPanic("struct-goroutine")
+			didPanic = true
+			panic(panicData{code: 500, message: "internal error"})
+		}()
+		if !didPanic {
+			t.Error("expected panic to occur")
+		}
+		if !recovered {
+			t.Error("expected to recover from struct panic")
+		}
+	})
+
+	t.Run("recovers from nil panic", func(t *testing.T) {
+		didPanic := false
+		recovered := false
+		func() {
+			defer func() {
+				recovered = true
+			}()
+			defer recoverFromPanic("nil-goroutine")
+			didPanic = true
+			panic(nil)
+		}()
+		if !didPanic {
+			t.Error("expected panic to occur")
+		}
+		if !recovered {
+			t.Error("expected to recover from nil panic")
+		}
+	})
+
+	t.Run("code after panic is not executed", func(t *testing.T) {
+		afterPanicExecuted := false
+		func() {
+			defer recoverFromPanic("test-goroutine")
+			panic("stop here")
+			afterPanicExecuted = true //nolint:govet // unreachable code is intentional for test
+		}()
+		if afterPanicExecuted {
+			t.Error("expected code after panic to not execute")
+		}
+	})
+}
+
+// testError implements error interface for panic testing
+type testError struct {
+	msg string
+}
+
+func (e *testError) Error() string {
+	return e.msg
 }
