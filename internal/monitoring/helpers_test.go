@@ -82,12 +82,41 @@ func TestGetNodeDisplayName(t *testing.T) {
 		node     string
 		want     string
 	}{
+		// nil instance returns trimmed nodeName
 		{"nil instance trims", nil, "  nodeX  ", "nodeX"},
+
+		// empty nodeName returns "unknown-node"
+		{"empty nodeName", nil, "", "unknown-node"},
+
+		// whitespace-only nodeName returns "unknown-node"
+		{"whitespace nodeName", nil, "   ", "unknown-node"},
+
+		// non-cluster: instance.Name takes priority
 		{"friendly standalone", &config.PVEInstance{Name: "Friendly"}, "nodeA", "Friendly"},
+
+		// non-cluster: falls back to nodeName when Name empty
+		{"non-cluster nodeName fallback", &config.PVEInstance{Name: "", Host: "pve.example.com"}, "node1", "node1"},
+
+		// non-cluster: falls back to host label when nodeName is "unknown-node"
 		{"host fallback", &config.PVEInstance{Host: "https://host.local:8006"}, "unknown-node", "host.local"},
+
+		// non-cluster: returns unknown-node when host is IP address
+		{"host IP fallback to unknown-node", &config.PVEInstance{Name: "", Host: "https://192.168.1.100:8006"}, "", "unknown-node"},
+
+		// cluster: lookupClusterEndpointLabel result takes priority
 		{"cluster host label", clusterInstance, "node1", "node1.local"},
-		{"cluster ip fallback", clusterInstance, "node2", "node2"},
+
+		// cluster: falls back to baseName when no endpoint label
 		{"cluster base fallback", clusterInstance, "node3", "node3"},
+
+		// cluster: falls back to nodeName (IP fallback via endpoint)
+		{"cluster ip fallback", clusterInstance, "node2", "node2"},
+
+		// cluster: falls back to friendly name when baseName is "unknown-node"
+		{"cluster friendly fallback", &config.PVEInstance{IsCluster: true, Name: "Cluster Name", ClusterEndpoints: []config.ClusterEndpoint{}}, "", "Cluster Name"},
+
+		// cluster: returns unknown-node when no fallbacks available
+		{"cluster no fallbacks", &config.PVEInstance{IsCluster: true, Name: "", Host: "pve.example.com", ClusterEndpoints: []config.ClusterEndpoint{}}, "", "unknown-node"},
 	}
 
 	for _, tc := range cases {
