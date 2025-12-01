@@ -4053,3 +4053,71 @@ func TestHandleHostOnline(t *testing.T) {
 		}
 	})
 }
+
+func TestAcknowledgeAlertNotFound(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+
+	err := m.AcknowledgeAlert("nonexistent-alert", "user1")
+
+	if err == nil {
+		t.Fatal("expected error when acknowledging nonexistent alert")
+	}
+	if !strings.Contains(err.Error(), "alert not found") {
+		t.Errorf("expected 'alert not found' error, got: %v", err)
+	}
+}
+
+func TestUnacknowledgeAlertNotFound(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+
+	err := m.UnacknowledgeAlert("nonexistent-alert")
+
+	if err == nil {
+		t.Fatal("expected error when unacknowledging nonexistent alert")
+	}
+	if !strings.Contains(err.Error(), "alert not found") {
+		t.Errorf("expected 'alert not found' error, got: %v", err)
+	}
+}
+
+func TestUnacknowledgeAlertSuccess(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+
+	// Create and acknowledge an alert first
+	alertID := "test-alert-123"
+	now := time.Now()
+	m.activeAlerts[alertID] = &Alert{
+		ID:           alertID,
+		Acknowledged: true,
+		AckTime:      &now,
+		AckUser:      "user1",
+	}
+	m.ackState[alertID] = ackRecord{acknowledged: true, user: "user1", time: now}
+
+	// Unacknowledge the alert
+	err := m.UnacknowledgeAlert(alertID)
+
+	if err != nil {
+		t.Fatalf("unexpected error unacknowledging alert: %v", err)
+	}
+
+	// Verify alert state was updated
+	alert := m.activeAlerts[alertID]
+	if alert.Acknowledged {
+		t.Error("expected Acknowledged to be false")
+	}
+	if alert.AckTime != nil {
+		t.Error("expected AckTime to be nil")
+	}
+	if alert.AckUser != "" {
+		t.Errorf("expected AckUser to be empty, got: %s", alert.AckUser)
+	}
+
+	// Verify ackState was removed
+	if _, exists := m.ackState[alertID]; exists {
+		t.Error("expected ackState entry to be deleted")
+	}
+}
