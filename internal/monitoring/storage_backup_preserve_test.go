@@ -92,6 +92,152 @@ func TestPreserveFailedStorageBackupsSkipsDuplicates(t *testing.T) {
 	}
 }
 
+func TestPreserveFailedStorageBackupsEmptyPreserveMap(t *testing.T) {
+	instance := "pve01"
+	current := []models.StorageBackup{
+		{ID: "backup1", Instance: instance, Storage: "local"},
+	}
+	snapshot := models.StateSnapshot{
+		PVEBackups: models.PVEBackups{
+			StorageBackups: []models.StorageBackup{
+				{ID: "backup2", Instance: instance, Storage: "nas-share"},
+			},
+		},
+	}
+
+	merged, storages := preserveFailedStorageBackups(instance, snapshot, nil, current)
+
+	if len(merged) != 1 {
+		t.Fatalf("expected current unchanged with 1 backup, got %d", len(merged))
+	}
+	if storages != nil {
+		t.Fatalf("expected nil storages list, got %v", storages)
+	}
+
+	// Also test empty map (not nil)
+	merged2, storages2 := preserveFailedStorageBackups(instance, snapshot, map[string]struct{}{}, current)
+	if len(merged2) != 1 {
+		t.Fatalf("expected current unchanged with 1 backup, got %d", len(merged2))
+	}
+	if storages2 != nil {
+		t.Fatalf("expected nil storages list for empty map, got %v", storages2)
+	}
+}
+
+func TestPreserveFailedStorageBackupsNoMatchingBackups(t *testing.T) {
+	instance := "pve01"
+	current := []models.StorageBackup{
+		{ID: "backup1", Instance: instance, Storage: "local"},
+	}
+	snapshot := models.StateSnapshot{
+		PVEBackups: models.PVEBackups{
+			StorageBackups: []models.StorageBackup{
+				{ID: "backup2", Instance: instance, Storage: "other-storage"},
+			},
+		},
+	}
+	toPreserve := map[string]struct{}{
+		"nas-share": {}, // Storage not in snapshot
+	}
+
+	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)
+
+	if len(merged) != 1 {
+		t.Fatalf("expected current unchanged with 1 backup, got %d", len(merged))
+	}
+	if storages != nil {
+		t.Fatalf("expected nil storages list when no matches, got %v", storages)
+	}
+}
+
+func TestPreserveFailedStorageBackupsWrongInstance(t *testing.T) {
+	instance := "pve01"
+	current := []models.StorageBackup{
+		{ID: "backup1", Instance: instance, Storage: "local"},
+	}
+	snapshot := models.StateSnapshot{
+		PVEBackups: models.PVEBackups{
+			StorageBackups: []models.StorageBackup{
+				{ID: "backup2", Instance: "pve02", Storage: "nas-share"}, // Wrong instance
+			},
+		},
+	}
+	toPreserve := map[string]struct{}{
+		"nas-share": {},
+	}
+
+	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)
+
+	if len(merged) != 1 {
+		t.Fatalf("expected current unchanged (wrong instance skipped), got %d backups", len(merged))
+	}
+	if storages != nil {
+		t.Fatalf("expected nil storages list, got %v", storages)
+	}
+}
+
+func TestPreserveFailedStorageBackupsStorageNotInPreserveMap(t *testing.T) {
+	instance := "pve01"
+	current := []models.StorageBackup{
+		{ID: "backup1", Instance: instance, Storage: "local"},
+	}
+	snapshot := models.StateSnapshot{
+		PVEBackups: models.PVEBackups{
+			StorageBackups: []models.StorageBackup{
+				{ID: "backup2", Instance: instance, Storage: "nas-share"},
+				{ID: "backup3", Instance: instance, Storage: "other-storage"},
+			},
+		},
+	}
+	toPreserve := map[string]struct{}{
+		"nas-share": {}, // Only nas-share should be preserved
+	}
+
+	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)
+
+	if len(merged) != 2 {
+		t.Fatalf("expected 2 backups (original + nas-share), got %d", len(merged))
+	}
+	if len(storages) != 1 || storages[0] != "nas-share" {
+		t.Fatalf("expected [nas-share], got %v", storages)
+	}
+	// Verify other-storage was not added
+	for _, b := range merged {
+		if b.Storage == "other-storage" {
+			t.Fatal("other-storage should not have been preserved")
+		}
+	}
+}
+
+func TestPreserveFailedStorageBackupsSortedStorageNames(t *testing.T) {
+	instance := "pve01"
+	current := []models.StorageBackup{}
+	snapshot := models.StateSnapshot{
+		PVEBackups: models.PVEBackups{
+			StorageBackups: []models.StorageBackup{
+				{ID: "backup1", Instance: instance, Storage: "zebra-storage"},
+				{ID: "backup2", Instance: instance, Storage: "alpha-storage"},
+				{ID: "backup3", Instance: instance, Storage: "middle-storage"},
+			},
+		},
+	}
+	toPreserve := map[string]struct{}{
+		"zebra-storage":  {},
+		"alpha-storage":  {},
+		"middle-storage": {},
+	}
+
+	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)
+
+	if len(merged) != 3 {
+		t.Fatalf("expected 3 backups, got %d", len(merged))
+	}
+	expected := []string{"alpha-storage", "middle-storage", "zebra-storage"}
+	if !slices.Equal(storages, expected) {
+		t.Fatalf("expected sorted storages %v, got %v", expected, storages)
+	}
+}
+
 func TestStorageNamesForNode(t *testing.T) {
 	tests := []struct {
 		name         string
