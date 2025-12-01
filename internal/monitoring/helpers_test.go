@@ -893,3 +893,303 @@ func TestExtractGuestOSInfo(t *testing.T) {
 		})
 	}
 }
+
+func TestCloneStringFloatMap(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		input map[string]float64
+		want  map[string]float64
+	}{
+		{name: "nil input", input: nil, want: nil},
+		{name: "empty map", input: map[string]float64{}, want: nil},
+		{name: "single entry", input: map[string]float64{"cpu": 42.5}, want: map[string]float64{"cpu": 42.5}},
+		{name: "multiple entries", input: map[string]float64{"temp1": 45.0, "temp2": 50.0}, want: map[string]float64{"temp1": 45.0, "temp2": 50.0}},
+		{name: "zero value", input: map[string]float64{"zero": 0.0}, want: map[string]float64{"zero": 0.0}},
+		{name: "negative value", input: map[string]float64{"neg": -10.5}, want: map[string]float64{"neg": -10.5}},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := cloneStringFloatMap(tc.input)
+			if tc.want == nil {
+				if got != nil {
+					t.Fatalf("cloneStringFloatMap(%v) = %v, want nil", tc.input, got)
+				}
+				return
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("cloneStringFloatMap(%v) length = %d, want %d", tc.input, len(got), len(tc.want))
+			}
+			for k, v := range tc.want {
+				if got[k] != v {
+					t.Fatalf("cloneStringFloatMap(%v)[%q] = %v, want %v", tc.input, k, got[k], v)
+				}
+			}
+			// Verify it's a deep copy
+			if tc.input != nil && len(tc.input) > 0 {
+				for k := range tc.input {
+					tc.input[k] = 999.0
+					if got[k] == 999.0 {
+						t.Fatalf("cloneStringFloatMap() returned reference, not a copy")
+					}
+					break
+				}
+			}
+		})
+	}
+}
+
+func TestCloneStringMap(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		input map[string]string
+		want  map[string]string
+	}{
+		{name: "nil input", input: nil, want: nil},
+		{name: "empty map", input: map[string]string{}, want: nil},
+		{name: "single entry", input: map[string]string{"key": "value"}, want: map[string]string{"key": "value"}},
+		{name: "multiple entries", input: map[string]string{"a": "1", "b": "2"}, want: map[string]string{"a": "1", "b": "2"}},
+		{name: "empty string value", input: map[string]string{"empty": ""}, want: map[string]string{"empty": ""}},
+		{name: "empty string key", input: map[string]string{"": "value"}, want: map[string]string{"": "value"}},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := cloneStringMap(tc.input)
+			if tc.want == nil {
+				if got != nil {
+					t.Fatalf("cloneStringMap(%v) = %v, want nil", tc.input, got)
+				}
+				return
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("cloneStringMap(%v) length = %d, want %d", tc.input, len(got), len(tc.want))
+			}
+			for k, v := range tc.want {
+				if got[k] != v {
+					t.Fatalf("cloneStringMap(%v)[%q] = %q, want %q", tc.input, k, got[k], v)
+				}
+			}
+			// Verify it's a deep copy
+			if tc.input != nil && len(tc.input) > 0 {
+				for k := range tc.input {
+					tc.input[k] = "modified"
+					if got[k] == "modified" {
+						t.Fatalf("cloneStringMap() returned reference, not a copy")
+					}
+					break
+				}
+			}
+		})
+	}
+}
+
+func TestNormalizeAgentVersion(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		input string
+		want  string
+	}{
+		// Empty/whitespace
+		{"", ""},
+		{"  ", ""},
+		{"   \t  ", ""},
+
+		// Already has v prefix
+		{"v1.0.0", "v1.0.0"},
+		{"V1.0.0", "v1.0.0"},
+
+		// Needs v prefix
+		{"1.0.0", "v1.0.0"},
+		{"4.35.0", "v4.35.0"},
+
+		// Multiple v prefixes trimmed
+		{"vv1.0.0", "v1.0.0"},
+		{"VVV1.0.0", "v1.0.0"},
+		{"vVv1.0.0", "v1.0.0"},
+
+		// Only v/V (edge case)
+		{"v", ""},
+		{"V", ""},
+		{"vV", ""},
+
+		// With whitespace
+		{"  v1.0.0  ", "v1.0.0"},
+		{"  1.0.0  ", "v1.0.0"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.input, func(t *testing.T) {
+			t.Parallel()
+			if got := normalizeAgentVersion(tc.input); got != tc.want {
+				t.Fatalf("normalizeAgentVersion(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNormalizePBSNamespacePath(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		input string
+		want  string
+	}{
+		// Root path normalizes to empty
+		{"/", ""},
+
+		// Other paths preserved
+		{"", ""},
+		{"backup", "backup"},
+		{"/backup", "/backup"},
+		{"backup/subdir", "backup/subdir"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.input, func(t *testing.T) {
+			t.Parallel()
+			if got := normalizePBSNamespacePath(tc.input); got != tc.want {
+				t.Fatalf("normalizePBSNamespacePath(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNamespacePathsForDatastore(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		ds   models.PBSDatastore
+		want []string
+	}{
+		{
+			name: "no namespaces returns empty string",
+			ds:   models.PBSDatastore{Name: "ds1", Namespaces: nil},
+			want: []string{""},
+		},
+		{
+			name: "empty namespaces returns empty string",
+			ds:   models.PBSDatastore{Name: "ds1", Namespaces: []models.PBSNamespace{}},
+			want: []string{""},
+		},
+		{
+			name: "single namespace",
+			ds: models.PBSDatastore{
+				Name: "ds1",
+				Namespaces: []models.PBSNamespace{
+					{Path: "backup"},
+				},
+			},
+			want: []string{"backup"},
+		},
+		{
+			name: "multiple namespaces",
+			ds: models.PBSDatastore{
+				Name: "ds1",
+				Namespaces: []models.PBSNamespace{
+					{Path: "backup"},
+					{Path: "archive"},
+				},
+			},
+			want: []string{"backup", "archive"},
+		},
+		{
+			name: "root namespace normalized",
+			ds: models.PBSDatastore{
+				Name: "ds1",
+				Namespaces: []models.PBSNamespace{
+					{Path: "/"},
+				},
+			},
+			want: []string{""},
+		},
+		{
+			name: "duplicate paths deduplicated",
+			ds: models.PBSDatastore{
+				Name: "ds1",
+				Namespaces: []models.PBSNamespace{
+					{Path: "backup"},
+					{Path: "backup"},
+					{Path: "archive"},
+				},
+			},
+			want: []string{"backup", "archive"},
+		},
+		{
+			name: "duplicate root paths deduplicated",
+			ds: models.PBSDatastore{
+				Name: "ds1",
+				Namespaces: []models.PBSNamespace{
+					{Path: "/"},
+					{Path: "/"},
+				},
+			},
+			want: []string{""},
+		},
+		{
+			name: "all empty paths result in single empty",
+			ds: models.PBSDatastore{
+				Name: "ds1",
+				Namespaces: []models.PBSNamespace{
+					{Path: ""},
+					{Path: ""},
+				},
+			},
+			want: []string{""},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := namespacePathsForDatastore(tc.ds)
+			if len(got) != len(tc.want) {
+				t.Fatalf("namespacePathsForDatastore() = %v, want %v", got, tc.want)
+			}
+			for i, v := range tc.want {
+				if got[i] != v {
+					t.Fatalf("namespacePathsForDatastore()[%d] = %q, want %q", i, got[i], v)
+				}
+			}
+		})
+	}
+}
+
+func TestNormalizeDockerHostID(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"", ""},
+		{"host1", "host1"},
+		{"  host1  ", "host1"},
+		{"  ", ""},
+		{"\t\n", ""},
+		{"docker-host-123", "docker-host-123"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.input, func(t *testing.T) {
+			t.Parallel()
+			if got := normalizeDockerHostID(tc.input); got != tc.want {
+				t.Fatalf("normalizeDockerHostID(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
