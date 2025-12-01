@@ -1896,3 +1896,61 @@ func TestReevaluateClearsDockerContainerAlertWhenIgnoredPrefixAdded(t *testing.T
 		t.Fatalf("expected docker container alert to be cleared when ignored prefix is configured")
 	}
 }
+
+func TestBuildGuestKey(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		instance string
+		node     string
+		vmid     int
+		want     string
+	}{
+		{
+			name:     "different instance and node",
+			instance: "cluster-1",
+			node:     "pve-node",
+			vmid:     100,
+			want:     "cluster-1-pve-node-100",
+		},
+		{
+			name:     "same instance and node",
+			instance: "pve-node",
+			node:     "pve-node",
+			vmid:     200,
+			want:     "pve-node-200",
+		},
+		{
+			name:     "empty instance uses node",
+			instance: "",
+			node:     "pve-node",
+			vmid:     300,
+			want:     "pve-node-300",
+		},
+		{
+			name:     "whitespace instance uses node",
+			instance: "   ",
+			node:     "pve-node",
+			vmid:     400,
+			want:     "pve-node-400",
+		},
+		{
+			name:     "instance with whitespace trimmed",
+			instance: "  cluster-1  ",
+			node:     "pve-node",
+			vmid:     500,
+			want:     "cluster-1-pve-node-500",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := BuildGuestKey(tt.instance, tt.node, tt.vmid)
+			if got != tt.want {
+				t.Errorf("BuildGuestKey(%q, %q, %d) = %q, want %q", tt.instance, tt.node, tt.vmid, got, tt.want)
+			}
+		})
+	}
+}
