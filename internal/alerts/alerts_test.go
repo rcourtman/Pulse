@@ -1454,6 +1454,11 @@ func TestMatchesDockerIgnoredPrefix(t *testing.T) {
 		{name: "trimmed comparison", containerName: "runner-job", containerID: "abc", prefixes: []string{"  runner- "}, want: true},
 		{name: "case insensitive", containerName: "Runner-Job", containerID: "abc", prefixes: []string{"runner-"}, want: true},
 		{name: "no match", containerName: "service", containerID: "xyz", prefixes: []string{"runner-"}, want: false},
+		{name: "skips empty prefix in list", containerName: "runner-job", containerID: "abc", prefixes: []string{"", "runner-"}, want: true},
+		{name: "all empty prefixes returns false", containerName: "runner-job", containerID: "abc", prefixes: []string{"", "  ", ""}, want: false},
+		{name: "empty name matches id", containerName: "", containerID: "runner-123", prefixes: []string{"runner-"}, want: true},
+		{name: "empty id matches name", containerName: "runner-job", containerID: "", prefixes: []string{"runner-"}, want: true},
+		{name: "both empty no match", containerName: "", containerID: "", prefixes: []string{"runner-"}, want: false},
 	}
 
 	for _, tc := range tests {
