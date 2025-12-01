@@ -7828,3 +7828,427 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 		}
 	})
 }
+
+func TestCleanup(t *testing.T) {
+	t.Parallel()
+
+	t.Run("auto-acknowledges old alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		oldTime := time.Now().Add(-3 * time.Hour)
+		m.mu.Lock()
+		m.config.AutoAcknowledgeAfterHours = 2
+		m.activeAlerts["old-alert"] = &Alert{
+			ID:           "old-alert",
+			StartTime:    oldTime,
+			Acknowledged: false,
+		}
+		m.mu.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["old-alert"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to exist")
+		}
+		if !alert.Acknowledged {
+			t.Error("expected alert to be auto-acknowledged")
+		}
+		if alert.AckUser != "system-auto" {
+			t.Errorf("expected AckUser 'system-auto', got %s", alert.AckUser)
+		}
+	})
+
+	t.Run("removes old acknowledged alerts by TTL", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		oldAckTime := time.Now().Add(-10 * 24 * time.Hour) // 10 days ago
+		m.mu.Lock()
+		m.config.MaxAcknowledgedAgeDays = 7
+		m.activeAlerts["ack-alert"] = &Alert{
+			ID:           "ack-alert",
+			Acknowledged: true,
+			AckTime:      &oldAckTime,
+		}
+		m.mu.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["ack-alert"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected acknowledged alert to be removed by TTL")
+		}
+	})
+
+	t.Run("removes old unacknowledged alerts by TTL", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		oldTime := time.Now().Add(-40 * 24 * time.Hour) // 40 days ago
+		m.mu.Lock()
+		m.config.MaxAlertAgeDays = 30
+		m.config.AutoAcknowledgeAfterHours = 0 // Disable auto-acknowledge to test TTL
+		m.activeAlerts["old-unack-alert"] = &Alert{
+			ID:           "old-unack-alert",
+			StartTime:    oldTime,
+			Acknowledged: false,
+		}
+		m.mu.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["old-unack-alert"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected old unacknowledged alert to be removed by TTL")
+		}
+	})
+
+	t.Run("removes acknowledged alerts by maxAge fallback", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		oldAckTime := time.Now().Add(-2 * time.Hour)
+		m.mu.Lock()
+		m.activeAlerts["ack-fallback"] = &Alert{
+			ID:           "ack-fallback",
+			Acknowledged: true,
+			AckTime:      &oldAckTime,
+		}
+		m.mu.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["ack-fallback"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected acknowledged alert to be removed by maxAge fallback")
+		}
+	})
+
+	t.Run("cleans up old recent alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		oldTime := time.Now().Add(-10 * time.Minute)
+		m.mu.Lock()
+		m.recentAlerts["recent-old"] = &Alert{
+			ID:        "recent-old",
+			StartTime: oldTime,
+		}
+		m.mu.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.mu.RLock()
+		_, exists := m.recentAlerts["recent-old"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected old recent alert to be cleaned up")
+		}
+	})
+
+	t.Run("cleans up expired suppressions", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.suppressedUntil["suppressed-alert"] = time.Now().Add(-1 * time.Hour)
+		m.mu.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.mu.RLock()
+		_, exists := m.suppressedUntil["suppressed-alert"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected expired suppression to be cleaned up")
+		}
+	})
+
+	t.Run("cleans up old rate limit entries", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.alertRateLimit["rate-limited"] = []time.Time{
+			time.Now().Add(-2 * time.Hour), // Old, should be removed
+			time.Now().Add(-30 * time.Minute), // Recent, should remain
+		}
+		m.mu.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.mu.RLock()
+		times := m.alertRateLimit["rate-limited"]
+		m.mu.RUnlock()
+
+		if len(times) != 1 {
+			t.Errorf("expected 1 recent time, got %d", len(times))
+		}
+	})
+
+	t.Run("removes empty rate limit entries", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.alertRateLimit["all-old"] = []time.Time{
+			time.Now().Add(-2 * time.Hour),
+		}
+		m.mu.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.mu.RLock()
+		_, exists := m.alertRateLimit["all-old"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected empty rate limit entry to be removed")
+		}
+	})
+
+	t.Run("cleans up old recently resolved alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.resolvedMutex.Lock()
+		m.recentlyResolved["old-resolved"] = &ResolvedAlert{
+			Alert:        &Alert{ID: "old-resolved"},
+			ResolvedTime: time.Now().Add(-10 * time.Minute),
+		}
+		m.resolvedMutex.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.resolvedMutex.Lock()
+		_, exists := m.recentlyResolved["old-resolved"]
+		m.resolvedMutex.Unlock()
+
+		if exists {
+			t.Error("expected old recently resolved alert to be cleaned up")
+		}
+	})
+
+	t.Run("cleans up stale pending alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.pendingAlerts["stale-pending"] = time.Now().Add(-15 * time.Minute)
+		m.mu.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.mu.RLock()
+		_, exists := m.pendingAlerts["stale-pending"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected stale pending alert to be cleaned up")
+		}
+	})
+
+	t.Run("cleans up flapping history for inactive alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.flappingHistory["inactive-alert"] = []time.Time{
+			time.Now().Add(-30 * time.Minute),
+		}
+		m.flappingActive["inactive-alert"] = true
+		// No active alert, no suppression
+		m.mu.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.mu.RLock()
+		_, historyExists := m.flappingHistory["inactive-alert"]
+		_, activeExists := m.flappingActive["inactive-alert"]
+		m.mu.RUnlock()
+
+		if historyExists {
+			t.Error("expected flapping history to be cleaned up")
+		}
+		if activeExists {
+			t.Error("expected flapping active flag to be cleaned up")
+		}
+	})
+
+	t.Run("cleans up stale Docker restart tracking", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.dockerRestartTracking["stale-container"] = &dockerRestartRecord{
+			lastChecked: time.Now().Add(-25 * time.Hour),
+		}
+		m.mu.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.mu.RLock()
+		_, exists := m.dockerRestartTracking["stale-container"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected stale Docker restart tracking to be cleaned up")
+		}
+	})
+
+	t.Run("cleans up stale PMG anomaly trackers", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.pmgAnomalyTrackers["stale-pmg"] = &pmgAnomalyTracker{
+			LastSampleTime: time.Now().Add(-25 * time.Hour),
+		}
+		m.mu.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.mu.RLock()
+		_, exists := m.pmgAnomalyTrackers["stale-pmg"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected stale PMG anomaly tracker to be cleaned up")
+		}
+	})
+
+	t.Run("cleans up empty PMG quarantine history", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.pmgQuarantineHistory["empty-pmg"] = []pmgQuarantineSnapshot{}
+		m.mu.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.mu.RLock()
+		_, exists := m.pmgQuarantineHistory["empty-pmg"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected empty PMG quarantine history to be cleaned up")
+		}
+	})
+
+	t.Run("cleans up stale PMG quarantine history", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.pmgQuarantineHistory["stale-pmg"] = []pmgQuarantineSnapshot{
+			{Timestamp: time.Now().Add(-8 * 24 * time.Hour)},
+		}
+		m.mu.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.mu.RLock()
+		_, exists := m.pmgQuarantineHistory["stale-pmg"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected stale PMG quarantine history to be cleaned up")
+		}
+	})
+}
+
+func TestConvertLegacyThreshold(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil input returns nil", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		result := m.convertLegacyThreshold(nil)
+
+		if result != nil {
+			t.Error("expected nil result for nil input")
+		}
+	})
+
+	t.Run("zero value returns nil", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		zero := 0.0
+		result := m.convertLegacyThreshold(&zero)
+
+		if result != nil {
+			t.Error("expected nil result for zero value")
+		}
+	})
+
+	t.Run("negative value returns nil", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		neg := -5.0
+		result := m.convertLegacyThreshold(&neg)
+
+		if result != nil {
+			t.Error("expected nil result for negative value")
+		}
+	})
+
+	t.Run("positive value with default margin", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		threshold := 80.0
+		result := m.convertLegacyThreshold(&threshold)
+
+		if result == nil {
+			t.Fatal("expected non-nil result")
+		}
+		if result.Trigger != 80.0 {
+			t.Errorf("expected trigger 80.0, got %f", result.Trigger)
+		}
+		if result.Clear != 75.0 { // 80 - 5 (default margin)
+			t.Errorf("expected clear 75.0, got %f", result.Clear)
+		}
+	})
+
+	t.Run("positive value with custom margin", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.config.HysteresisMargin = 10.0
+		m.mu.Unlock()
+
+		threshold := 80.0
+		result := m.convertLegacyThreshold(&threshold)
+
+		if result == nil {
+			t.Fatal("expected non-nil result")
+		}
+		if result.Trigger != 80.0 {
+			t.Errorf("expected trigger 80.0, got %f", result.Trigger)
+		}
+		if result.Clear != 70.0 { // 80 - 10 (custom margin)
+			t.Errorf("expected clear 70.0, got %f", result.Clear)
+		}
+	})
+}
