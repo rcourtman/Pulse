@@ -1009,3 +1009,124 @@ func findSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+func TestVMAgentFieldUnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  int
+	}{
+		{
+			name:  "integer format enabled",
+			input: `1`,
+			want:  1,
+		},
+		{
+			name:  "integer format zero",
+			input: `0`,
+			want:  0,
+		},
+		{
+			name:  "object format with available > 0",
+			input: `{"enabled":1,"available":1}`,
+			want:  1,
+		},
+		{
+			name:  "object format with enabled > 0 but available=0",
+			input: `{"enabled":1,"available":0}`,
+			want:  1,
+		},
+		{
+			name:  "object format with both 0",
+			input: `{"enabled":0,"available":0}`,
+			want:  0,
+		},
+		{
+			name:  "object format available takes priority",
+			input: `{"enabled":0,"available":1}`,
+			want:  1,
+		},
+		{
+			name:  "invalid JSON defaults to 0",
+			input: `{invalid}`,
+			want:  0,
+		},
+		{
+			name:  "empty string defaults to 0",
+			input: ``,
+			want:  0,
+		},
+		{
+			name:  "null value defaults to 0",
+			input: `null`,
+			want:  0,
+		},
+		{
+			name:  "string value defaults to 0",
+			input: `"enabled"`,
+			want:  0,
+		},
+		{
+			name:  "array value defaults to 0",
+			input: `[1,2,3]`,
+			want:  0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var agent VMAgentField
+			// UnmarshalJSON always returns nil, so we just check the value
+			_ = agent.UnmarshalJSON([]byte(tc.input))
+			if agent.Value != tc.want {
+				t.Errorf("VMAgentField.UnmarshalJSON(%q) = %d, want %d", tc.input, agent.Value, tc.want)
+			}
+		})
+	}
+}
+
+func TestVMAgentFieldUnmarshalJSON_InVMStatus(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		want    int
+	}{
+		{
+			name:    "VMStatus with integer agent field",
+			payload: `{"status":"running","cpu":0.5,"cpus":4,"mem":1073741824,"maxmem":4294967296,"agent":1}`,
+			want:    1,
+		},
+		{
+			name:    "VMStatus with object agent field",
+			payload: `{"status":"running","cpu":0.1,"cpus":2,"mem":536870912,"maxmem":2147483648,"agent":{"enabled":1,"available":1}}`,
+			want:    1,
+		},
+		{
+			name:    "VMStatus with object agent enabled but not available",
+			payload: `{"status":"stopped","cpu":0,"cpus":1,"mem":0,"maxmem":1073741824,"agent":{"enabled":1,"available":0}}`,
+			want:    1,
+		},
+		{
+			name:    "VMStatus with object agent both zero",
+			payload: `{"status":"stopped","cpu":0,"cpus":1,"mem":0,"maxmem":1073741824,"agent":{"enabled":0,"available":0}}`,
+			want:    0,
+		},
+		{
+			name:    "VMStatus without agent field",
+			payload: `{"status":"running","cpu":0.2,"cpus":2,"mem":268435456,"maxmem":1073741824}`,
+			want:    0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var status VMStatus
+			if err := json.Unmarshal([]byte(tc.payload), &status); err != nil {
+				t.Fatalf("unexpected error unmarshalling VMStatus: %v", err)
+			}
+			if status.Agent.Value != tc.want {
+				t.Errorf("VMStatus.Agent.Value = %d, want %d", status.Agent.Value, tc.want)
+			}
+		})
+	}
+}
