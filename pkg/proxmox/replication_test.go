@@ -95,6 +95,9 @@ func TestIntFromAny(t *testing.T) {
 		{"float32 integer", float32(42.0), 42, true},
 		{"float32 round down", float32(42.4), 42, true},
 		{"float32 round up", float32(42.6), 43, true},
+		{"float32 NaN", float32(math.NaN()), 0, false},
+		{"float32 +Inf", float32(math.Inf(1)), 0, false},
+		{"float32 -Inf", float32(math.Inf(-1)), 0, false},
 		{"float64 integer", float64(42.0), 42, true},
 		{"float64 round half", float64(42.5), 43, true},
 		{"float64 NaN", math.NaN(), 0, false},
@@ -219,6 +222,9 @@ func TestFloatFromAny(t *testing.T) {
 		{"float64 +Inf", math.Inf(1), 0, false},
 		{"float64 -Inf", math.Inf(-1), 0, false},
 		{"float32", float32(3.14), float64(float32(3.14)), true},
+		{"float32 NaN", float32(math.NaN()), 0, false},
+		{"float32 +Inf", float32(math.Inf(1)), 0, false},
+		{"float32 -Inf", float32(math.Inf(-1)), 0, false},
 
 		// int types
 		{"int", int(42), 42, true},
