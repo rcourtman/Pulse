@@ -1840,6 +1840,307 @@ func TestConvertDockerSwarmInfo(t *testing.T) {
 	}
 }
 
+func TestConvertDockerTasks(t *testing.T) {
+	now := time.Now()
+	past := now.Add(-1 * time.Hour)
+	future := now.Add(1 * time.Hour)
+
+	tests := []struct {
+		name     string
+		input    []agentsdocker.Task
+		expected []models.DockerTask
+	}{
+		{
+			name:     "nil input returns nil",
+			input:    nil,
+			expected: nil,
+		},
+		{
+			name:     "empty slice returns nil",
+			input:    []agentsdocker.Task{},
+			expected: nil,
+		},
+		{
+			name: "single task with all fields",
+			input: []agentsdocker.Task{
+				{
+					ID:            "task-123",
+					ServiceID:     "service-abc",
+					ServiceName:   "my-service",
+					Slot:          1,
+					NodeID:        "node-xyz",
+					NodeName:      "worker-1",
+					DesiredState:  "running",
+					CurrentState:  "running",
+					Error:         "",
+					Message:       "Started container",
+					ContainerID:   "container-456",
+					ContainerName: "my-service.1.task-123",
+					CreatedAt:     past,
+					UpdatedAt:     &now,
+					StartedAt:     &past,
+					CompletedAt:   nil,
+				},
+			},
+			expected: []models.DockerTask{
+				{
+					ID:            "task-123",
+					ServiceID:     "service-abc",
+					ServiceName:   "my-service",
+					Slot:          1,
+					NodeID:        "node-xyz",
+					NodeName:      "worker-1",
+					DesiredState:  "running",
+					CurrentState:  "running",
+					Error:         "",
+					Message:       "Started container",
+					ContainerID:   "container-456",
+					ContainerName: "my-service.1.task-123",
+					CreatedAt:     past,
+					UpdatedAt:     &now,
+					StartedAt:     &past,
+					CompletedAt:   nil,
+				},
+			},
+		},
+		{
+			name: "task with error state",
+			input: []agentsdocker.Task{
+				{
+					ID:           "task-failed",
+					ServiceID:    "service-abc",
+					ServiceName:  "failing-service",
+					Slot:         1,
+					DesiredState: "running",
+					CurrentState: "failed",
+					Error:        "exit code 1",
+					Message:      "Container exited with error",
+					CreatedAt:    past,
+					CompletedAt:  &now,
+				},
+			},
+			expected: []models.DockerTask{
+				{
+					ID:           "task-failed",
+					ServiceID:    "service-abc",
+					ServiceName:  "failing-service",
+					Slot:         1,
+					DesiredState: "running",
+					CurrentState: "failed",
+					Error:        "exit code 1",
+					Message:      "Container exited with error",
+					CreatedAt:    past,
+					CompletedAt:  &now,
+				},
+			},
+		},
+		{
+			name: "multiple tasks",
+			input: []agentsdocker.Task{
+				{
+					ID:           "task-1",
+					ServiceName:  "service-a",
+					Slot:         1,
+					CurrentState: "running",
+					CreatedAt:    past,
+				},
+				{
+					ID:           "task-2",
+					ServiceName:  "service-a",
+					Slot:         2,
+					CurrentState: "running",
+					CreatedAt:    past,
+				},
+				{
+					ID:           "task-3",
+					ServiceName:  "service-b",
+					Slot:         1,
+					CurrentState: "pending",
+					CreatedAt:    now,
+				},
+			},
+			expected: []models.DockerTask{
+				{
+					ID:           "task-1",
+					ServiceName:  "service-a",
+					Slot:         1,
+					CurrentState: "running",
+					CreatedAt:    past,
+				},
+				{
+					ID:           "task-2",
+					ServiceName:  "service-a",
+					Slot:         2,
+					CurrentState: "running",
+					CreatedAt:    past,
+				},
+				{
+					ID:           "task-3",
+					ServiceName:  "service-b",
+					Slot:         1,
+					CurrentState: "pending",
+					CreatedAt:    now,
+				},
+			},
+		},
+		{
+			name: "task with nil time pointers",
+			input: []agentsdocker.Task{
+				{
+					ID:          "task-nil-times",
+					ServiceName: "test-service",
+					CreatedAt:   now,
+					UpdatedAt:   nil,
+					StartedAt:   nil,
+					CompletedAt: nil,
+				},
+			},
+			expected: []models.DockerTask{
+				{
+					ID:          "task-nil-times",
+					ServiceName: "test-service",
+					CreatedAt:   now,
+					UpdatedAt:   nil,
+					StartedAt:   nil,
+					CompletedAt: nil,
+				},
+			},
+		},
+		{
+			name: "task with zero time values",
+			input: []agentsdocker.Task{
+				{
+					ID:          "task-zero-times",
+					ServiceName: "test-service",
+					CreatedAt:   now,
+					UpdatedAt:   ptrTime(time.Time{}),
+					StartedAt:   ptrTime(time.Time{}),
+					CompletedAt: ptrTime(time.Time{}),
+				},
+			},
+			expected: []models.DockerTask{
+				{
+					ID:          "task-zero-times",
+					ServiceName: "test-service",
+					CreatedAt:   now,
+					UpdatedAt:   nil,
+					StartedAt:   nil,
+					CompletedAt: nil,
+				},
+			},
+		},
+		{
+			name: "task with all time fields set",
+			input: []agentsdocker.Task{
+				{
+					ID:          "task-all-times",
+					ServiceName: "test-service",
+					CreatedAt:   past,
+					UpdatedAt:   &now,
+					StartedAt:   &past,
+					CompletedAt: &future,
+				},
+			},
+			expected: []models.DockerTask{
+				{
+					ID:          "task-all-times",
+					ServiceName: "test-service",
+					CreatedAt:   past,
+					UpdatedAt:   &now,
+					StartedAt:   &past,
+					CompletedAt: &future,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := convertDockerTasks(tt.input)
+
+			if tt.expected == nil {
+				if result != nil {
+					t.Errorf("expected nil, got %+v", result)
+				}
+				return
+			}
+
+			if len(result) != len(tt.expected) {
+				t.Fatalf("expected %d tasks, got %d", len(tt.expected), len(result))
+			}
+
+			for i := range tt.expected {
+				exp := tt.expected[i]
+				got := result[i]
+
+				if got.ID != exp.ID {
+					t.Errorf("task[%d].ID: expected %q, got %q", i, exp.ID, got.ID)
+				}
+				if got.ServiceID != exp.ServiceID {
+					t.Errorf("task[%d].ServiceID: expected %q, got %q", i, exp.ServiceID, got.ServiceID)
+				}
+				if got.ServiceName != exp.ServiceName {
+					t.Errorf("task[%d].ServiceName: expected %q, got %q", i, exp.ServiceName, got.ServiceName)
+				}
+				if got.Slot != exp.Slot {
+					t.Errorf("task[%d].Slot: expected %d, got %d", i, exp.Slot, got.Slot)
+				}
+				if got.NodeID != exp.NodeID {
+					t.Errorf("task[%d].NodeID: expected %q, got %q", i, exp.NodeID, got.NodeID)
+				}
+				if got.NodeName != exp.NodeName {
+					t.Errorf("task[%d].NodeName: expected %q, got %q", i, exp.NodeName, got.NodeName)
+				}
+				if got.DesiredState != exp.DesiredState {
+					t.Errorf("task[%d].DesiredState: expected %q, got %q", i, exp.DesiredState, got.DesiredState)
+				}
+				if got.CurrentState != exp.CurrentState {
+					t.Errorf("task[%d].CurrentState: expected %q, got %q", i, exp.CurrentState, got.CurrentState)
+				}
+				if got.Error != exp.Error {
+					t.Errorf("task[%d].Error: expected %q, got %q", i, exp.Error, got.Error)
+				}
+				if got.Message != exp.Message {
+					t.Errorf("task[%d].Message: expected %q, got %q", i, exp.Message, got.Message)
+				}
+				if got.ContainerID != exp.ContainerID {
+					t.Errorf("task[%d].ContainerID: expected %q, got %q", i, exp.ContainerID, got.ContainerID)
+				}
+				if got.ContainerName != exp.ContainerName {
+					t.Errorf("task[%d].ContainerName: expected %q, got %q", i, exp.ContainerName, got.ContainerName)
+				}
+				if !got.CreatedAt.Equal(exp.CreatedAt) {
+					t.Errorf("task[%d].CreatedAt: expected %v, got %v", i, exp.CreatedAt, got.CreatedAt)
+				}
+
+				// Check optional time fields
+				if (exp.UpdatedAt == nil) != (got.UpdatedAt == nil) {
+					t.Errorf("task[%d].UpdatedAt nil mismatch: expected nil=%v, got nil=%v", i, exp.UpdatedAt == nil, got.UpdatedAt == nil)
+				} else if exp.UpdatedAt != nil && !got.UpdatedAt.Equal(*exp.UpdatedAt) {
+					t.Errorf("task[%d].UpdatedAt: expected %v, got %v", i, *exp.UpdatedAt, *got.UpdatedAt)
+				}
+
+				if (exp.StartedAt == nil) != (got.StartedAt == nil) {
+					t.Errorf("task[%d].StartedAt nil mismatch: expected nil=%v, got nil=%v", i, exp.StartedAt == nil, got.StartedAt == nil)
+				} else if exp.StartedAt != nil && !got.StartedAt.Equal(*exp.StartedAt) {
+					t.Errorf("task[%d].StartedAt: expected %v, got %v", i, *exp.StartedAt, *got.StartedAt)
+				}
+
+				if (exp.CompletedAt == nil) != (got.CompletedAt == nil) {
+					t.Errorf("task[%d].CompletedAt nil mismatch: expected nil=%v, got nil=%v", i, exp.CompletedAt == nil, got.CompletedAt == nil)
+				} else if exp.CompletedAt != nil && !got.CompletedAt.Equal(*exp.CompletedAt) {
+					t.Errorf("task[%d].CompletedAt: expected %v, got %v", i, *exp.CompletedAt, *got.CompletedAt)
+				}
+			}
+		})
+	}
+}
+
+// ptrTime is a helper to create a pointer to a time.Time value
+func ptrTime(t time.Time) *time.Time {
+	return &t
+}
+
 func TestAllowDockerHostReenroll(t *testing.T) {
 	t.Run("empty hostID returns error", func(t *testing.T) {
 		m := &Monitor{
