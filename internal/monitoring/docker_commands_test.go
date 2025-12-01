@@ -287,6 +287,84 @@ func TestDockerCommandHasExpired(t *testing.T) {
 	}
 }
 
+func TestMarkFailed(t *testing.T) {
+	t.Parallel()
+
+	t.Run("sets status to failed", func(t *testing.T) {
+		t.Parallel()
+
+		cmd := newDockerHostCommand(DockerCommandTypeStop, "test", dockerCommandDefaultTTL, nil)
+		cmd.markFailed("connection lost")
+
+		if cmd.status.Status != DockerCommandStatusFailed {
+			t.Errorf("expected status %q, got %q", DockerCommandStatusFailed, cmd.status.Status)
+		}
+	})
+
+	t.Run("sets FailedAt to current time", func(t *testing.T) {
+		t.Parallel()
+
+		cmd := newDockerHostCommand(DockerCommandTypeStop, "test", dockerCommandDefaultTTL, nil)
+		before := time.Now().UTC()
+		cmd.markFailed("timeout")
+		after := time.Now().UTC()
+
+		if cmd.status.FailedAt == nil {
+			t.Fatal("expected FailedAt to be set")
+		}
+		if cmd.status.FailedAt.Before(before) || cmd.status.FailedAt.After(after) {
+			t.Errorf("FailedAt %v not in expected range [%v, %v]", *cmd.status.FailedAt, before, after)
+		}
+	})
+
+	t.Run("sets UpdatedAt to current time", func(t *testing.T) {
+		t.Parallel()
+
+		cmd := newDockerHostCommand(DockerCommandTypeStop, "test", dockerCommandDefaultTTL, nil)
+		originalUpdatedAt := cmd.status.UpdatedAt
+		time.Sleep(time.Millisecond) // Ensure time advances
+		before := time.Now().UTC()
+		cmd.markFailed("error")
+		after := time.Now().UTC()
+
+		if !cmd.status.UpdatedAt.After(originalUpdatedAt) {
+			t.Errorf("UpdatedAt should be updated; original=%v, new=%v", originalUpdatedAt, cmd.status.UpdatedAt)
+		}
+		if cmd.status.UpdatedAt.Before(before) || cmd.status.UpdatedAt.After(after) {
+			t.Errorf("UpdatedAt %v not in expected range [%v, %v]", cmd.status.UpdatedAt, before, after)
+		}
+	})
+
+	t.Run("sets FailureReason to provided reason", func(t *testing.T) {
+		t.Parallel()
+
+		cmd := newDockerHostCommand(DockerCommandTypeStop, "test", dockerCommandDefaultTTL, nil)
+		reason := "agent unreachable: connection refused"
+		cmd.markFailed(reason)
+
+		if cmd.status.FailureReason != reason {
+			t.Errorf("expected FailureReason %q, got %q", reason, cmd.status.FailureReason)
+		}
+	})
+
+	t.Run("accepts empty reason string", func(t *testing.T) {
+		t.Parallel()
+
+		cmd := newDockerHostCommand(DockerCommandTypeStop, "test", dockerCommandDefaultTTL, nil)
+		cmd.markFailed("")
+
+		if cmd.status.Status != DockerCommandStatusFailed {
+			t.Errorf("expected status %q, got %q", DockerCommandStatusFailed, cmd.status.Status)
+		}
+		if cmd.status.FailureReason != "" {
+			t.Errorf("expected empty FailureReason, got %q", cmd.status.FailureReason)
+		}
+		if cmd.status.FailedAt == nil {
+			t.Error("expected FailedAt to be set even with empty reason")
+		}
+	})
+}
+
 func TestAcknowledgeDockerCommandErrorPaths(t *testing.T) {
 	t.Parallel()
 
