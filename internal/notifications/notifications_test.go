@@ -562,6 +562,12 @@ func TestRenderWebhookURL_ErrorPaths(t *testing.T) {
 			data:        WebhookPayloadData{Message: "api"},
 			wantErr:     "missing scheme or host",
 		},
+		{
+			name:        "template renders to unparseable URL - malformed IPv6",
+			urlTemplate: "http://[{{.Message}}",
+			data:        WebhookPayloadData{Message: "::1"},
+			wantErr:     "invalid URL",
+		},
 	}
 
 	for _, tt := range tests {
