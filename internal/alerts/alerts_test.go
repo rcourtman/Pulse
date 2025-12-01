@@ -2513,3 +2513,158 @@ func TestGetMetricTimeThreshold(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckRateLimit(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no rate limit when MaxAlertsHour is zero", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Schedule.MaxAlertsHour = 0
+		m.mu.Unlock()
+
+		m.mu.Lock()
+		result := m.checkRateLimit("test-alert")
+		m.mu.Unlock()
+
+		if !result {
+			t.Errorf("checkRateLimit() = false, want true when MaxAlertsHour is 0")
+		}
+	})
+
+	t.Run("no rate limit when MaxAlertsHour is negative", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Schedule.MaxAlertsHour = -1
+		m.mu.Unlock()
+
+		m.mu.Lock()
+		result := m.checkRateLimit("test-alert")
+		m.mu.Unlock()
+
+		if !result {
+			t.Errorf("checkRateLimit() = false, want true when MaxAlertsHour is negative")
+		}
+	})
+
+	t.Run("allows alerts under rate limit", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Schedule.MaxAlertsHour = 5
+		m.mu.Unlock()
+
+		// First 5 alerts should be allowed
+		for i := 0; i < 5; i++ {
+			m.mu.Lock()
+			result := m.checkRateLimit("test-alert")
+			m.mu.Unlock()
+
+			if !result {
+				t.Errorf("checkRateLimit() call %d = false, want true (under limit)", i+1)
+			}
+		}
+	})
+
+	t.Run("blocks alerts at rate limit", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Schedule.MaxAlertsHour = 3
+		m.mu.Unlock()
+
+		// Use up the rate limit
+		for i := 0; i < 3; i++ {
+			m.mu.Lock()
+			_ = m.checkRateLimit("test-alert")
+			m.mu.Unlock()
+		}
+
+		// Fourth alert should be blocked
+		m.mu.Lock()
+		result := m.checkRateLimit("test-alert")
+		m.mu.Unlock()
+
+		if result {
+			t.Errorf("checkRateLimit() = true, want false (at rate limit)")
+		}
+	})
+
+	t.Run("different alert IDs have separate limits", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Schedule.MaxAlertsHour = 2
+		m.mu.Unlock()
+
+		// Use up limit for alert-1
+		for i := 0; i < 2; i++ {
+			m.mu.Lock()
+			_ = m.checkRateLimit("alert-1")
+			m.mu.Unlock()
+		}
+
+		// alert-2 should still be allowed
+		m.mu.Lock()
+		result := m.checkRateLimit("alert-2")
+		m.mu.Unlock()
+
+		if !result {
+			t.Errorf("checkRateLimit(alert-2) = false, want true (separate limit)")
+		}
+	})
+
+	t.Run("old entries are cleaned up", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Schedule.MaxAlertsHour = 2
+
+		// Pre-populate with old entries (more than 1 hour ago)
+		oldTime := time.Now().Add(-2 * time.Hour)
+		m.alertRateLimit["test-alert"] = []time.Time{oldTime, oldTime}
+		m.mu.Unlock()
+
+		// Should be allowed because old entries are cleaned up
+		m.mu.Lock()
+		result := m.checkRateLimit("test-alert")
+		m.mu.Unlock()
+
+		if !result {
+			t.Errorf("checkRateLimit() = false, want true (old entries should be cleaned)")
+		}
+	})
+
+	t.Run("mixed old and recent entries", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Schedule.MaxAlertsHour = 2
+
+		// Pre-populate with 1 old and 1 recent entry
+		oldTime := time.Now().Add(-2 * time.Hour)
+		recentTime := time.Now().Add(-30 * time.Minute)
+		m.alertRateLimit["test-alert"] = []time.Time{oldTime, recentTime}
+		m.mu.Unlock()
+
+		// First call should be allowed (1 recent + 1 new = 2)
+		m.mu.Lock()
+		result1 := m.checkRateLimit("test-alert")
+		m.mu.Unlock()
+
+		if !result1 {
+			t.Errorf("checkRateLimit() call 1 = false, want true")
+		}
+
+		// Second call should be blocked (2 recent + 1 new would exceed 2)
+		m.mu.Lock()
+		result2 := m.checkRateLimit("test-alert")
+		m.mu.Unlock()
+
+		if result2 {
+			t.Errorf("checkRateLimit() call 2 = true, want false (at limit)")
+		}
+	})
+}
