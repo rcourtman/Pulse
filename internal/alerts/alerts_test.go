@@ -3283,3 +3283,121 @@ func TestClearHostMetricAlerts(t *testing.T) {
 		}
 	})
 }
+
+func TestClearHostDiskAlerts(t *testing.T) {
+	t.Parallel()
+
+	t.Run("clears all disk alerts for host", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		hostID := "disk-host"
+		resourceID := fmt.Sprintf("host:%s", hostID)
+
+		// Create disk alerts with the expected ResourceID format
+		m.mu.Lock()
+		m.activeAlerts["disk1-alert"] = &Alert{
+			ID:         "disk1-alert",
+			ResourceID: fmt.Sprintf("%s/disk:sda", resourceID),
+		}
+		m.activeAlerts["disk2-alert"] = &Alert{
+			ID:         "disk2-alert",
+			ResourceID: fmt.Sprintf("%s/disk:sdb", resourceID),
+		}
+		m.activeAlerts["cpu-alert"] = &Alert{
+			ID:         "cpu-alert",
+			ResourceID: fmt.Sprintf("%s-cpu", resourceID),
+		}
+		m.mu.Unlock()
+
+		m.clearHostDiskAlerts(hostID)
+
+		m.mu.RLock()
+		_, disk1Exists := m.activeAlerts["disk1-alert"]
+		_, disk2Exists := m.activeAlerts["disk2-alert"]
+		_, cpuExists := m.activeAlerts["cpu-alert"]
+		m.mu.RUnlock()
+
+		if disk1Exists {
+			t.Error("expected disk1 alert to be cleared")
+		}
+		if disk2Exists {
+			t.Error("expected disk2 alert to be cleared")
+		}
+		if !cpuExists {
+			t.Error("expected cpu alert to remain (not a disk alert)")
+		}
+	})
+
+	t.Run("empty hostID is noop", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Create an alert
+		m.mu.Lock()
+		m.activeAlerts["disk-alert"] = &Alert{
+			ID:         "disk-alert",
+			ResourceID: "host:unknown/disk:sda",
+		}
+		m.mu.Unlock()
+
+		m.clearHostDiskAlerts("")
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["disk-alert"]
+		m.mu.RUnlock()
+
+		if !exists {
+			t.Error("expected alert to remain when hostID is empty")
+		}
+	})
+
+	t.Run("skips nil alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		hostID := "nil-test"
+		resourceID := fmt.Sprintf("host:%s", hostID)
+
+		m.mu.Lock()
+		m.activeAlerts["nil-alert"] = nil
+		m.activeAlerts["real-alert"] = &Alert{
+			ID:         "real-alert",
+			ResourceID: fmt.Sprintf("%s/disk:sda", resourceID),
+		}
+		m.mu.Unlock()
+
+		// Should not panic
+		m.clearHostDiskAlerts(hostID)
+
+		m.mu.RLock()
+		_, realExists := m.activeAlerts["real-alert"]
+		m.mu.RUnlock()
+
+		if realExists {
+			t.Error("expected real alert to be cleared")
+		}
+	})
+
+	t.Run("noop when no matching alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.activeAlerts["other-alert"] = &Alert{
+			ID:         "other-alert",
+			ResourceID: "host:other-host/disk:sda",
+		}
+		m.mu.Unlock()
+
+		m.clearHostDiskAlerts("my-host")
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["other-alert"]
+		m.mu.RUnlock()
+
+		if !exists {
+			t.Error("expected other host's alert to remain")
+		}
+	})
+}
