@@ -206,6 +206,8 @@ func TestIsNotImplementedError(t *testing.T) {
 		{"not implemented but 500", "not implemented status 500", false},
 		{"not implemented but 404", "not implemented error 404", false},
 		{"space before 501 with not implemented", " 501 not implemented", true},
+		// Tab character triggers extractStatusCode fallback (regex \s+ matches tab but " 501" check doesn't)
+		{"tab before 501 with not implemented", "not implemented api error\t501", true},
 	}
 
 	for _, tt := range tests {
