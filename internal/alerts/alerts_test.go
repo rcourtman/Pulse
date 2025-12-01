@@ -2272,3 +2272,104 @@ func TestGetGlobalMetricTimeThreshold(t *testing.T) {
 		})
 	}
 }
+
+func TestGetBaseTimeThreshold(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		timeThresholds map[string]int
+		timeThreshold  int // global fallback
+		resourceType   string
+		wantDelay      int
+		wantFound      bool
+	}{
+		{
+			name:           "nil TimeThresholds returns global TimeThreshold",
+			timeThresholds: nil,
+			timeThreshold:  60,
+			resourceType:   "guest",
+			wantDelay:      60,
+			wantFound:      false,
+		},
+		{
+			name:           "direct resource type match",
+			timeThresholds: map[string]int{"guest": 120, "node": 90},
+			timeThreshold:  60,
+			resourceType:   "guest",
+			wantDelay:      120,
+			wantFound:      true,
+		},
+		{
+			name:           "canonical key match for vm",
+			timeThresholds: map[string]int{"guest": 120},
+			timeThreshold:  60,
+			resourceType:   "vm",
+			wantDelay:      120,
+			wantFound:      true,
+		},
+		{
+			name:           "canonical key match for container",
+			timeThresholds: map[string]int{"guest": 120},
+			timeThreshold:  60,
+			resourceType:   "container",
+			wantDelay:      120,
+			wantFound:      true,
+		},
+		{
+			name:           "all fallback when no specific match",
+			timeThresholds: map[string]int{"all": 45},
+			timeThreshold:  60,
+			resourceType:   "storage",
+			wantDelay:      45,
+			wantFound:      false, // "all" returns found=false
+		},
+		{
+			name:           "specific match takes precedence over all",
+			timeThresholds: map[string]int{"storage": 30, "all": 45},
+			timeThreshold:  60,
+			resourceType:   "storage",
+			wantDelay:      30,
+			wantFound:      true,
+		},
+		{
+			name:           "no match and no all returns global threshold",
+			timeThresholds: map[string]int{"guest": 120},
+			timeThreshold:  60,
+			resourceType:   "storage",
+			wantDelay:      60,
+			wantFound:      false,
+		},
+		{
+			name:           "empty TimeThresholds returns global threshold",
+			timeThresholds: map[string]int{},
+			timeThreshold:  60,
+			resourceType:   "guest",
+			wantDelay:      60,
+			wantFound:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			m := NewManager()
+			m.mu.Lock()
+			m.config.TimeThresholds = tt.timeThresholds
+			m.config.TimeThreshold = tt.timeThreshold
+			m.mu.Unlock()
+
+			m.mu.RLock()
+			gotDelay, gotFound := m.getBaseTimeThreshold(tt.resourceType)
+			m.mu.RUnlock()
+
+			if gotDelay != tt.wantDelay {
+				t.Errorf("getBaseTimeThreshold() delay = %d, want %d", gotDelay, tt.wantDelay)
+			}
+			if gotFound != tt.wantFound {
+				t.Errorf("getBaseTimeThreshold() found = %v, want %v", gotFound, tt.wantFound)
+			}
+		})
+	}
+}
