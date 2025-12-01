@@ -385,3 +385,39 @@ func TestNormalizeNodeHost(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateNodeID(t *testing.T) {
+	tests := []struct {
+		name     string
+		nodeType string
+		index    int
+		want     string
+	}{
+		// Standard node types
+		{"pve node index 0", "pve", 0, "pve-0"},
+		{"pve node index 1", "pve", 1, "pve-1"},
+		{"pbs node index 0", "pbs", 0, "pbs-0"},
+		{"pmg node index 5", "pmg", 5, "pmg-5"},
+		{"docker node index 2", "docker", 2, "docker-2"},
+
+		// Edge cases
+		{"empty node type", "", 0, "-0"},
+		{"negative index", "pve", -1, "pve--1"},
+		{"large index", "pve", 999, "pve-999"},
+		{"very large index", "pve", 2147483647, "pve-2147483647"},
+
+		// Custom/unknown node types
+		{"custom type", "custom-type", 3, "custom-type-3"},
+		{"type with spaces", "my node", 1, "my node-1"},
+		{"type with special chars", "node_v2", 0, "node_v2-0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := generateNodeID(tt.nodeType, tt.index)
+			if got != tt.want {
+				t.Errorf("generateNodeID(%q, %d) = %q, want %q", tt.nodeType, tt.index, got, tt.want)
+			}
+		})
+	}
+}
