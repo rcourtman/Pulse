@@ -3647,3 +3647,127 @@ func TestHandleDockerHostOnline(t *testing.T) {
 		}
 	})
 }
+
+func TestCleanupDockerContainerAlerts(t *testing.T) {
+	t.Parallel()
+
+	t.Run("clears alerts not in seen set", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		host := models.DockerHost{ID: "docker-host-1"}
+		prefix := fmt.Sprintf("docker:%s/", host.ID)
+
+		// Create container alerts
+		m.mu.Lock()
+		m.activeAlerts["container1-alert"] = &Alert{
+			ID:         "container1-alert",
+			ResourceID: prefix + "container1",
+		}
+		m.activeAlerts["container2-alert"] = &Alert{
+			ID:         "container2-alert",
+			ResourceID: prefix + "container2",
+		}
+		m.activeAlerts["container3-alert"] = &Alert{
+			ID:         "container3-alert",
+			ResourceID: prefix + "container3",
+		}
+		m.dockerStateConfirm[prefix+"container1"] = 2
+		m.dockerStateConfirm[prefix+"container2"] = 1
+		m.dockerStateConfirm[prefix+"container3"] = 3
+		m.mu.Unlock()
+
+		// Only container1 and container2 are in seen set
+		seen := map[string]struct{}{
+			prefix + "container1": {},
+			prefix + "container2": {},
+		}
+
+		m.cleanupDockerContainerAlerts(host, seen)
+
+		m.mu.RLock()
+		_, c1Exists := m.activeAlerts["container1-alert"]
+		_, c2Exists := m.activeAlerts["container2-alert"]
+		_, c3Exists := m.activeAlerts["container3-alert"]
+		_, s1Exists := m.dockerStateConfirm[prefix+"container1"]
+		_, s2Exists := m.dockerStateConfirm[prefix+"container2"]
+		_, s3Exists := m.dockerStateConfirm[prefix+"container3"]
+		m.mu.RUnlock()
+
+		if !c1Exists {
+			t.Error("expected container1 alert to remain (in seen set)")
+		}
+		if !c2Exists {
+			t.Error("expected container2 alert to remain (in seen set)")
+		}
+		if c3Exists {
+			t.Error("expected container3 alert to be cleared (not in seen set)")
+		}
+		if !s1Exists {
+			t.Error("expected container1 state confirm to remain (in seen set)")
+		}
+		if !s2Exists {
+			t.Error("expected container2 state confirm to remain (in seen set)")
+		}
+		if s3Exists {
+			t.Error("expected container3 state confirm to be cleared (not in seen set)")
+		}
+	})
+
+	t.Run("skips alerts from other hosts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		host := models.DockerHost{ID: "host-a"}
+
+		// Create alert for a different host
+		m.mu.Lock()
+		m.activeAlerts["other-host-alert"] = &Alert{
+			ID:         "other-host-alert",
+			ResourceID: "docker:host-b/container1",
+		}
+		m.mu.Unlock()
+
+		seen := map[string]struct{}{} // Empty seen set
+
+		m.cleanupDockerContainerAlerts(host, seen)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["other-host-alert"]
+		m.mu.RUnlock()
+
+		if !exists {
+			t.Error("expected other host's alert to remain")
+		}
+	})
+
+	t.Run("handles empty seen set", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		host := models.DockerHost{ID: "host-c"}
+		prefix := fmt.Sprintf("docker:%s/", host.ID)
+
+		m.mu.Lock()
+		m.activeAlerts["to-clear"] = &Alert{
+			ID:         "to-clear",
+			ResourceID: prefix + "container1",
+		}
+		m.dockerStateConfirm[prefix+"container1"] = 1
+		m.mu.Unlock()
+
+		m.cleanupDockerContainerAlerts(host, map[string]struct{}{})
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["to-clear"]
+		_, stateExists := m.dockerStateConfirm[prefix+"container1"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected alert to be cleared with empty seen set")
+		}
+		if stateExists {
+			t.Error("expected state confirm to be cleared with empty seen set")
+		}
+	})
+}
