@@ -472,6 +472,141 @@ func TestStalenessTracker_StalenessScore_MetricsNotUsedWhenLastSuccessZero(t *te
 	}
 }
 
+func TestStalenessTracker_StalenessScore_NegativeMaxStaleUsesDefault(t *testing.T) {
+	// Create tracker and directly set maxStale to negative to test the defensive fallback
+	tracker := &StalenessTracker{
+		entries:  make(map[string]FreshnessSnapshot),
+		maxStale: -5 * time.Minute, // Force negative to test default fallback
+	}
+
+	// Set a 2.5 minute old success
+	oldTime := time.Now().Add(-150 * time.Second)
+	tracker.setSnapshot(FreshnessSnapshot{
+		InstanceType: InstanceTypePVE,
+		Instance:     "neg-max-test",
+		LastSuccess:  oldTime,
+	})
+
+	score, ok := tracker.StalenessScore(InstanceTypePVE, "neg-max-test")
+	if !ok {
+		t.Fatal("staleness score should be available")
+	}
+
+	// With default 5 minute maxStale, 2.5 minutes should give ~0.5 score
+	expected := 150.0 / 300.0 // 150s / 300s (5 min)
+	tolerance := 0.05
+	if score < expected-tolerance || score > expected+tolerance {
+		t.Errorf("staleness score = %f, want ~%f (using default 5 min maxStale)", score, expected)
+	}
+}
+
+func TestStalenessTracker_StalenessScore_MetricsLookupFails(t *testing.T) {
+	// Create a minimal PollMetrics with lastSuccessByKey support
+	pm := &PollMetrics{
+		lastSuccessByKey: make(map[metricKey]time.Time),
+	}
+
+	tracker := NewStalenessTracker(pm)
+	tracker.SetBounds(10*time.Second, 60*time.Second)
+
+	// Set snapshot with non-zero LastSuccess
+	oldTime := time.Now().Add(-30 * time.Second)
+	tracker.setSnapshot(FreshnessSnapshot{
+		InstanceType: InstanceTypePVE,
+		Instance:     "lookup-fail-test",
+		LastSuccess:  oldTime,
+	})
+
+	// Don't store anything in metrics - the lookup will fail
+
+	score, ok := tracker.StalenessScore(InstanceTypePVE, "lookup-fail-test")
+	if !ok {
+		t.Fatal("staleness score should be available")
+	}
+
+	// Should use the tracker's LastSuccess since metrics lookup failed: 30s / 60s = 0.5
+	expected := 30.0 / 60.0
+	tolerance := 0.05
+	if score < expected-tolerance || score > expected+tolerance {
+		t.Errorf("staleness score = %f, want ~%f (using tracker time, metrics lookup failed)", score, expected)
+	}
+}
+
+func TestStalenessTracker_StalenessScore_ScoreClampedBetweenZeroAndOne(t *testing.T) {
+	// Test that score is always in [0, 1] range
+	tests := []struct {
+		name       string
+		age        time.Duration
+		maxStale   time.Duration
+		wantScore  float64
+		wantCapped bool
+	}{
+		{
+			name:       "age much older than maxStale is capped at 1",
+			age:        10 * time.Minute,
+			maxStale:   1 * time.Minute,
+			wantScore:  1.0,
+			wantCapped: true,
+		},
+		{
+			name:       "age at exactly maxStale gives 1",
+			age:        5 * time.Minute,
+			maxStale:   5 * time.Minute,
+			wantScore:  1.0,
+			wantCapped: false,
+		},
+		{
+			name:       "age at half maxStale gives 0.5",
+			age:        2*time.Minute + 30*time.Second,
+			maxStale:   5 * time.Minute,
+			wantScore:  0.5,
+			wantCapped: false,
+		},
+		{
+			name:       "very small age gives near-zero score",
+			age:        1 * time.Millisecond,
+			maxStale:   5 * time.Minute,
+			wantScore:  0.0,
+			wantCapped: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tracker := NewStalenessTracker(nil)
+			tracker.SetBounds(10*time.Second, tt.maxStale)
+
+			tracker.setSnapshot(FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "clamp-test",
+				LastSuccess:  time.Now().Add(-tt.age),
+			})
+
+			score, ok := tracker.StalenessScore(InstanceTypePVE, "clamp-test")
+			if !ok {
+				t.Fatal("staleness score should be available")
+			}
+
+			// Check score is in [0, 1] range
+			if score < 0 || score > 1 {
+				t.Errorf("score = %f, want score in [0, 1] range", score)
+			}
+
+			tolerance := 0.05
+			if score < tt.wantScore-tolerance || score > tt.wantScore+tolerance {
+				t.Errorf("score = %f, want ~%f", score, tt.wantScore)
+			}
+		})
+	}
+}
+
+// Note on coverage: The `if score < 0 { score = 0 }` branch (line 145) is mathematically
+// unreachable because:
+// 1. If age <= 0, we return early with score=0 (line 133-135)
+// 2. If max <= 0, we default to 5 minutes making max positive (line 138-140)
+// 3. Therefore score = age.Seconds() / max.Seconds() is always non-negative
+// This is defensive code that guards against future refactoring mistakes.
+
 func TestTrackerKey(t *testing.T) {
 	tests := []struct {
 		instanceType InstanceType
