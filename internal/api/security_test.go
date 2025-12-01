@@ -44,17 +44,51 @@ func TestGetClientIPUsesForwardedForTrustedProxy(t *testing.T) {
 }
 
 func TestIsPrivateIP(t *testing.T) {
-	t.Helper()
 	cases := []struct {
 		name string
 		ip   string
 		want bool
 	}{
+		// Public IPs
 		{"public IPv4", "198.51.100.42", false},
-		{"private IPv4", "10.1.2.3", true},
+		{"public IPv4 Google DNS", "8.8.8.8", false},
+		{"public IPv6", "2001:4860:4860::8888", false},
+
+		// Private IPv4 ranges (RFC1918)
+		{"private IPv4 10.x.x.x", "10.1.2.3", true},
+		{"private IPv4 10.0.0.0", "10.0.0.0", true},
+		{"private IPv4 10.255.255.255", "10.255.255.255", true},
+		{"private IPv4 172.16.x.x", "172.16.0.1", true},
+		{"private IPv4 172.31.x.x", "172.31.255.255", true},
+		{"private IPv4 192.168.x.x", "192.168.1.100", true},
+
+		// Loopback
 		{"loopback IPv4", "127.0.0.1", true},
-		{"link-local IPv6", "fe80::1", true},
+		{"loopback IPv4 127.0.0.0", "127.0.0.0", true},
+		{"loopback IPv4 127.255.255.255", "127.255.255.255", true},
+		{"loopback IPv6", "::1", true},
 		{"loopback IPv6 with port", "[::1]:8443", true},
+
+		// Link-local
+		{"link-local IPv4", "169.254.1.1", true},
+		{"link-local IPv6", "fe80::1", true},
+
+		// Link-local multicast
+		{"link-local multicast IPv4", "224.0.0.1", true},
+		{"link-local multicast IPv6", "ff02::1", true},
+
+		// Unique local IPv6 (fc00::/7)
+		{"unique local IPv6 fc00", "fc00::1", true},
+		{"unique local IPv6 fd00", "fd00::1", true},
+
+		// Edge cases - empty/invalid
+		{"empty string", "", false},
+		{"invalid IP", "not-an-ip", false},
+		{"invalid format", "999.999.999.999", false},
+
+		// With port numbers
+		{"private IPv4 with port", "192.168.1.1:8080", true},
+		{"public IPv4 with port", "8.8.8.8:53", false},
 	}
 
 	for _, tc := range cases {
