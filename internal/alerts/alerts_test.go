@@ -3966,3 +3966,85 @@ func TestSafeCallResolvedCallback(t *testing.T) {
 		}
 	})
 }
+
+func TestHandleHostOnline(t *testing.T) {
+	t.Parallel()
+
+	t.Run("clears offline alert and confirmation tracking", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		host := models.Host{ID: "host-1", Hostname: "my-host"}
+		alertID := fmt.Sprintf("host-offline-%s", host.ID)
+		resourceKey := fmt.Sprintf("host:%s", host.ID)
+
+		// Set up offline alert and tracking
+		m.mu.Lock()
+		m.activeAlerts[alertID] = &Alert{ID: alertID, ResourceID: resourceKey}
+		m.offlineConfirmations[resourceKey] = 5
+		m.mu.Unlock()
+
+		m.HandleHostOnline(host)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts[alertID]
+		_, confirmExists := m.offlineConfirmations[resourceKey]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected offline alert to be cleared")
+		}
+		if confirmExists {
+			t.Error("expected offline confirmation to be cleared")
+		}
+	})
+
+	t.Run("clears confirmation even without alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		host := models.Host{ID: "host-2"}
+		resourceKey := fmt.Sprintf("host:%s", host.ID)
+
+		// Only tracking, no alert
+		m.mu.Lock()
+		m.offlineConfirmations[resourceKey] = 2
+		m.mu.Unlock()
+
+		m.HandleHostOnline(host)
+
+		m.mu.RLock()
+		_, exists := m.offlineConfirmations[resourceKey]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected offline confirmation to be cleared")
+		}
+	})
+
+	t.Run("empty host ID is noop", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Create data that should not be touched
+		m.mu.Lock()
+		m.activeAlerts["host-offline-other"] = &Alert{ID: "host-offline-other"}
+		m.offlineConfirmations["host:other"] = 3
+		m.mu.Unlock()
+
+		host := models.Host{ID: ""}
+		m.HandleHostOnline(host)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["host-offline-other"]
+		_, confirmExists := m.offlineConfirmations["host:other"]
+		m.mu.RUnlock()
+
+		if !alertExists {
+			t.Error("expected other alert to remain when host ID is empty")
+		}
+		if !confirmExists {
+			t.Error("expected other confirmation to remain when host ID is empty")
+		}
+	})
+}
