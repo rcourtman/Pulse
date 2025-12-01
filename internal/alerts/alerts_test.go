@@ -7448,3 +7448,383 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckStorageOffline(t *testing.T) {
+	t.Parallel()
+
+	t.Run("first poll increments confirmation but does not create alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		storage := models.Storage{
+			ID:   "local-lvm",
+			Name: "Local LVM",
+			Node: "pve-node1",
+		}
+
+		m.checkStorageOffline(storage)
+
+		m.mu.RLock()
+		confirmCount := m.offlineConfirmations["local-lvm"]
+		_, alertExists := m.activeAlerts["storage-offline-local-lvm"]
+		m.mu.RUnlock()
+
+		if confirmCount != 1 {
+			t.Errorf("expected confirmation count 1, got %d", confirmCount)
+		}
+		if alertExists {
+			t.Error("expected no alert on first poll")
+		}
+	})
+
+	t.Run("second poll creates alert after confirmation", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		storage := models.Storage{
+			ID:       "local-lvm",
+			Name:     "Local LVM",
+			Node:     "pve-node1",
+			Instance: "pve-instance",
+		}
+
+		// First poll - confirmation
+		m.checkStorageOffline(storage)
+		// Second poll - should create alert
+		m.checkStorageOffline(storage)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["storage-offline-local-lvm"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to be created after second poll")
+		}
+		if alert.Type != "offline" {
+			t.Errorf("expected type 'offline', got %s", alert.Type)
+		}
+		if alert.Level != AlertLevelWarning {
+			t.Errorf("expected warning level, got %s", alert.Level)
+		}
+		if alert.ResourceID != "local-lvm" {
+			t.Errorf("expected resource ID 'local-lvm', got %s", alert.ResourceID)
+		}
+		if alert.Node != "pve-node1" {
+			t.Errorf("expected node 'pve-node1', got %s", alert.Node)
+		}
+	})
+
+	t.Run("existing alert updates LastSeen", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		oldTime := time.Now().Add(-1 * time.Hour)
+		m.mu.Lock()
+		m.offlineConfirmations["local-lvm"] = 5 // Already confirmed
+		m.activeAlerts["storage-offline-local-lvm"] = &Alert{
+			ID:       "storage-offline-local-lvm",
+			LastSeen: oldTime,
+		}
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:   "local-lvm",
+			Name: "Local LVM",
+			Node: "pve-node1",
+		}
+
+		m.checkStorageOffline(storage)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["storage-offline-local-lvm"]
+		m.mu.RUnlock()
+
+		if !alert.LastSeen.After(oldTime) {
+			t.Error("expected LastSeen to be updated")
+		}
+	})
+
+	t.Run("disabled storage clears existing alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Pre-create an alert
+		m.mu.Lock()
+		m.activeAlerts["storage-offline-local-lvm"] = &Alert{ID: "storage-offline-local-lvm"}
+		m.config.Overrides = map[string]ThresholdConfig{
+			"local-lvm": {Disabled: true},
+		}
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:   "local-lvm",
+			Name: "Local LVM",
+			Node: "pve-node1",
+		}
+
+		m.checkStorageOffline(storage)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["storage-offline-local-lvm"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected alert to be cleared when storage is disabled")
+		}
+	})
+
+	t.Run("disabled storage does not create alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.config.Overrides = map[string]ThresholdConfig{
+			"local-lvm": {Disabled: true},
+		}
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:   "local-lvm",
+			Name: "Local LVM",
+			Node: "pve-node1",
+		}
+
+		// Multiple polls should not create alert
+		m.checkStorageOffline(storage)
+		m.checkStorageOffline(storage)
+		m.checkStorageOffline(storage)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["storage-offline-local-lvm"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected no alert when storage is disabled")
+		}
+	})
+}
+
+func TestCheckGuestPoweredOff(t *testing.T) {
+	t.Parallel()
+
+	t.Run("first poll increments confirmation but does not create alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
+
+		m.mu.RLock()
+		confirmCount := m.offlineConfirmations["vm100"]
+		_, alertExists := m.activeAlerts["guest-powered-off-vm100"]
+		m.mu.RUnlock()
+
+		if confirmCount != 1 {
+			t.Errorf("expected confirmation count 1, got %d", confirmCount)
+		}
+		if alertExists {
+			t.Error("expected no alert on first poll")
+		}
+	})
+
+	t.Run("second poll creates alert after confirmation", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// First poll - confirmation
+		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
+		// Second poll - should create alert
+		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["guest-powered-off-vm100"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to be created after second poll")
+		}
+		if alert.Type != "powered-off" {
+			t.Errorf("expected type 'powered-off', got %s", alert.Type)
+		}
+		if alert.Level != AlertLevelWarning {
+			t.Errorf("expected warning level (default severity), got %s", alert.Level)
+		}
+		if alert.ResourceID != "vm100" {
+			t.Errorf("expected resource ID 'vm100', got %s", alert.ResourceID)
+		}
+	})
+
+	t.Run("existing alert updates LastSeen and level", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		oldTime := time.Now().Add(-1 * time.Hour)
+		m.mu.Lock()
+		m.activeAlerts["guest-powered-off-vm100"] = &Alert{
+			ID:       "guest-powered-off-vm100",
+			LastSeen: oldTime,
+			Level:    AlertLevelWarning,
+		}
+		m.mu.Unlock()
+
+		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["guest-powered-off-vm100"]
+		m.mu.RUnlock()
+
+		if !alert.LastSeen.After(oldTime) {
+			t.Error("expected LastSeen to be updated")
+		}
+	})
+
+	t.Run("monitorOnly flag is set in metadata", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// First poll
+		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", true)
+		// Second poll - creates alert
+		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", true)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["guest-powered-off-vm100"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to be created")
+		}
+		if alert.Metadata == nil {
+			t.Fatal("expected metadata to be set")
+		}
+		if monitorOnly, ok := alert.Metadata["monitorOnly"].(bool); !ok || !monitorOnly {
+			t.Error("expected monitorOnly to be true")
+		}
+	})
+
+	t.Run("disabled guest clears existing alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Pre-create an alert and confirmation count
+		m.mu.Lock()
+		m.activeAlerts["guest-powered-off-vm100"] = &Alert{ID: "guest-powered-off-vm100"}
+		m.offlineConfirmations["vm100"] = 5
+		m.config.Overrides = map[string]ThresholdConfig{
+			"vm100": {Disabled: true},
+		}
+		m.mu.Unlock()
+
+		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["guest-powered-off-vm100"]
+		_, confirmExists := m.offlineConfirmations["vm100"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected alert to be cleared when guest is disabled")
+		}
+		if confirmExists {
+			t.Error("expected confirmation count to be cleared")
+		}
+	})
+
+	t.Run("disableConnectivity clears existing alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Pre-create an alert
+		m.mu.Lock()
+		m.activeAlerts["guest-powered-off-vm100"] = &Alert{ID: "guest-powered-off-vm100"}
+		m.config.Overrides = map[string]ThresholdConfig{
+			"vm100": {DisableConnectivity: true},
+		}
+		m.mu.Unlock()
+
+		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["guest-powered-off-vm100"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected alert to be cleared when connectivity is disabled")
+		}
+	})
+
+	t.Run("uses override severity when configured", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.config.Overrides = map[string]ThresholdConfig{
+			"vm100": {PoweredOffSeverity: AlertLevelCritical},
+		}
+		m.mu.Unlock()
+
+		// First poll
+		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
+		// Second poll
+		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["guest-powered-off-vm100"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to be created")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level from override, got %s", alert.Level)
+		}
+	})
+
+	t.Run("uses default severity when no override", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.config.GuestDefaults.PoweredOffSeverity = AlertLevelCritical
+		m.mu.Unlock()
+
+		// First poll
+		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
+		// Second poll
+		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["guest-powered-off-vm100"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to be created")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level from defaults, got %s", alert.Level)
+		}
+	})
+
+	t.Run("container type in message", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// First poll
+		m.checkGuestPoweredOff("ct200", "TestContainer", "pve-node1", "pve-instance", "Container", false)
+		// Second poll
+		m.checkGuestPoweredOff("ct200", "TestContainer", "pve-node1", "pve-instance", "Container", false)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["guest-powered-off-ct200"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to be created")
+		}
+		if !strings.Contains(alert.Message, "Container") {
+			t.Errorf("expected message to contain 'Container', got %s", alert.Message)
+		}
+		if !strings.Contains(alert.Message, "TestContainer") {
+			t.Errorf("expected message to contain 'TestContainer', got %s", alert.Message)
+		}
+	})
+}
