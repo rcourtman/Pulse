@@ -1375,3 +1375,445 @@ func TestGetEmailConfig(t *testing.T) {
 		t.Fatalf("expected startTLS to be true")
 	}
 }
+
+func TestBuildResolvedNotificationContent(t *testing.T) {
+	t.Run("nil alert list returns empty strings", func(t *testing.T) {
+		title, htmlBody, textBody := buildResolvedNotificationContent(nil, time.Now(), "")
+		if title != "" || htmlBody != "" || textBody != "" {
+			t.Fatalf("expected empty strings for nil list, got title=%q, htmlBody=%q, textBody=%q", title, htmlBody, textBody)
+		}
+	})
+
+	t.Run("empty alert list returns empty strings", func(t *testing.T) {
+		title, htmlBody, textBody := buildResolvedNotificationContent([]*alerts.Alert{}, time.Now(), "")
+		if title != "" || htmlBody != "" || textBody != "" {
+			t.Fatalf("expected empty strings for empty list, got title=%q, htmlBody=%q, textBody=%q", title, htmlBody, textBody)
+		}
+	})
+
+	t.Run("list with only nil alerts returns empty strings", func(t *testing.T) {
+		title, htmlBody, textBody := buildResolvedNotificationContent([]*alerts.Alert{nil, nil, nil}, time.Now(), "")
+		if title != "" || htmlBody != "" || textBody != "" {
+			t.Fatalf("expected empty strings for nil-only list, got title=%q, htmlBody=%q, textBody=%q", title, htmlBody, textBody)
+		}
+	})
+
+	t.Run("single alert generates correct title and body", func(t *testing.T) {
+		startTime := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
+		resolvedAt := time.Date(2024, 1, 15, 11, 0, 0, 0, time.UTC)
+
+		alert := &alerts.Alert{
+			ID:           "test-alert-1",
+			Type:         "cpu",
+			Level:        alerts.AlertLevelWarning,
+			ResourceName: "vm-100",
+			Message:      "CPU usage exceeded threshold",
+			StartTime:    startTime,
+			Node:         "pve1",
+			Instance:     "vm-100",
+			Threshold:    80,
+			Value:        95.5,
+		}
+
+		title, htmlBody, textBody := buildResolvedNotificationContent([]*alerts.Alert{alert}, resolvedAt, "")
+
+		expectedTitle := "Pulse alert resolved: vm-100"
+		if title != expectedTitle {
+			t.Fatalf("expected title %q, got %q", expectedTitle, title)
+		}
+
+		// Check text body contains expected elements
+		if !strings.Contains(textBody, "Resolved at 2024-01-15T11:00:00Z") {
+			t.Fatalf("expected resolved timestamp in body, got: %s", textBody)
+		}
+		if !strings.Contains(textBody, "[WARNING] vm-100") {
+			t.Fatalf("expected alert level and resource name in body, got: %s", textBody)
+		}
+		if !strings.Contains(textBody, "CPU usage exceeded threshold") {
+			t.Fatalf("expected message in body, got: %s", textBody)
+		}
+		if !strings.Contains(textBody, "Started: 2024-01-15T10:30:00Z") {
+			t.Fatalf("expected start time in body, got: %s", textBody)
+		}
+		if !strings.Contains(textBody, "Cleared: 2024-01-15T11:00:00Z") {
+			t.Fatalf("expected cleared time in body, got: %s", textBody)
+		}
+		if !strings.Contains(textBody, "Node: pve1") {
+			t.Fatalf("expected node in body, got: %s", textBody)
+		}
+		if !strings.Contains(textBody, "Last value 95.50 (threshold 80.00)") {
+			t.Fatalf("expected threshold/value in body, got: %s", textBody)
+		}
+
+		// Check HTML body wraps in pre tag
+		if !strings.Contains(htmlBody, "<pre style=") {
+			t.Fatalf("expected HTML body to start with <pre> tag, got: %s", htmlBody)
+		}
+		if !strings.Contains(htmlBody, "</pre>") {
+			t.Fatalf("expected HTML body to end with </pre> tag, got: %s", htmlBody)
+		}
+	})
+
+	t.Run("multiple alerts generate plural title", func(t *testing.T) {
+		alert1 := &alerts.Alert{
+			ID:           "alert-1",
+			Level:        alerts.AlertLevelWarning,
+			ResourceName: "vm-100",
+		}
+		alert2 := &alerts.Alert{
+			ID:           "alert-2",
+			Level:        alerts.AlertLevelCritical,
+			ResourceName: "vm-101",
+		}
+		alert3 := &alerts.Alert{
+			ID:           "alert-3",
+			Level:        alerts.AlertLevelWarning,
+			ResourceName: "vm-102",
+		}
+
+		title, _, textBody := buildResolvedNotificationContent([]*alerts.Alert{alert1, alert2, alert3}, time.Now(), "")
+
+		expectedTitle := "Pulse alerts resolved (3)"
+		if title != expectedTitle {
+			t.Fatalf("expected title %q, got %q", expectedTitle, title)
+		}
+
+		// Verify all alerts are in the body
+		if !strings.Contains(textBody, "[WARNING] vm-100") {
+			t.Fatalf("expected alert1 in body, got: %s", textBody)
+		}
+		if !strings.Contains(textBody, "[CRITICAL] vm-101") {
+			t.Fatalf("expected alert2 in body, got: %s", textBody)
+		}
+		if !strings.Contains(textBody, "[WARNING] vm-102") {
+			t.Fatalf("expected alert3 in body, got: %s", textBody)
+		}
+	})
+
+	t.Run("zero resolvedAt uses current time", func(t *testing.T) {
+		alert := &alerts.Alert{
+			ID:           "test-alert",
+			Level:        alerts.AlertLevelWarning,
+			ResourceName: "vm-100",
+		}
+
+		beforeCall := time.Now()
+		_, _, textBody := buildResolvedNotificationContent([]*alerts.Alert{alert}, time.Time{}, "")
+		afterCall := time.Now()
+
+		// The resolved timestamp should be between beforeCall and afterCall
+		if !strings.Contains(textBody, "Resolved at") {
+			t.Fatalf("expected 'Resolved at' in body, got: %s", textBody)
+		}
+
+		// Extract the timestamp from the body and verify it's reasonable
+		// The format is "Resolved at 2024-01-15T11:00:00Z" or similar
+		lines := strings.Split(textBody, "\n")
+		if len(lines) == 0 {
+			t.Fatalf("expected at least one line in body")
+		}
+		firstLine := lines[0]
+		if !strings.HasPrefix(firstLine, "Resolved at ") {
+			t.Fatalf("expected first line to start with 'Resolved at ', got: %s", firstLine)
+		}
+		timestampStr := strings.TrimPrefix(firstLine, "Resolved at ")
+		parsedTime, err := time.Parse(time.RFC3339, timestampStr)
+		if err != nil {
+			t.Fatalf("failed to parse timestamp %q: %v", timestampStr, err)
+		}
+		if parsedTime.Before(beforeCall.Add(-time.Second)) || parsedTime.After(afterCall.Add(time.Second)) {
+			t.Fatalf("expected timestamp between %v and %v, got %v", beforeCall, afterCall, parsedTime)
+		}
+	})
+
+	t.Run("public URL is appended when provided", func(t *testing.T) {
+		alert := &alerts.Alert{
+			ID:           "test-alert",
+			Level:        alerts.AlertLevelWarning,
+			ResourceName: "vm-100",
+		}
+
+		_, _, textBody := buildResolvedNotificationContent([]*alerts.Alert{alert}, time.Now(), "https://pulse.example.com")
+
+		if !strings.Contains(textBody, "Dashboard: https://pulse.example.com") {
+			t.Fatalf("expected dashboard URL in body, got: %s", textBody)
+		}
+	})
+
+	t.Run("public URL is not appended when empty", func(t *testing.T) {
+		alert := &alerts.Alert{
+			ID:           "test-alert",
+			Level:        alerts.AlertLevelWarning,
+			ResourceName: "vm-100",
+		}
+
+		_, _, textBody := buildResolvedNotificationContent([]*alerts.Alert{alert}, time.Now(), "")
+
+		if strings.Contains(textBody, "Dashboard:") {
+			t.Fatalf("expected no dashboard URL in body, got: %s", textBody)
+		}
+	})
+
+	t.Run("HTML body properly escapes content", func(t *testing.T) {
+		alert := &alerts.Alert{
+			ID:           "test-alert",
+			Level:        alerts.AlertLevelWarning,
+			ResourceName: "<script>alert('xss')</script>",
+			Message:      "Value > threshold & alert triggered",
+		}
+
+		_, htmlBody, _ := buildResolvedNotificationContent([]*alerts.Alert{alert}, time.Now(), "")
+
+		// Check that HTML special characters are escaped
+		if strings.Contains(htmlBody, "<script>") {
+			t.Fatalf("expected <script> to be escaped in HTML body, got: %s", htmlBody)
+		}
+		if !strings.Contains(htmlBody, "&lt;script&gt;") {
+			t.Fatalf("expected &lt;script&gt; in HTML body, got: %s", htmlBody)
+		}
+		if strings.Contains(htmlBody, "& alert") {
+			t.Fatalf("expected & to be escaped in HTML body, got: %s", htmlBody)
+		}
+		if !strings.Contains(htmlBody, "&amp; alert") {
+			t.Fatalf("expected &amp; in HTML body, got: %s", htmlBody)
+		}
+		if strings.Contains(htmlBody, "> threshold") {
+			t.Fatalf("expected > to be escaped in HTML body, got: %s", htmlBody)
+		}
+		if !strings.Contains(htmlBody, "&gt; threshold") {
+			t.Fatalf("expected &gt; in HTML body, got: %s", htmlBody)
+		}
+	})
+
+	t.Run("mixed nil and valid alerts filters correctly", func(t *testing.T) {
+		alert1 := &alerts.Alert{
+			ID:           "alert-1",
+			Level:        alerts.AlertLevelWarning,
+			ResourceName: "vm-100",
+		}
+		alert2 := &alerts.Alert{
+			ID:           "alert-2",
+			Level:        alerts.AlertLevelCritical,
+			ResourceName: "vm-101",
+		}
+
+		title, _, textBody := buildResolvedNotificationContent([]*alerts.Alert{nil, alert1, nil, alert2, nil}, time.Now(), "")
+
+		expectedTitle := "Pulse alerts resolved (2)"
+		if title != expectedTitle {
+			t.Fatalf("expected title %q, got %q", expectedTitle, title)
+		}
+
+		if !strings.Contains(textBody, "[WARNING] vm-100") {
+			t.Fatalf("expected alert1 in body, got: %s", textBody)
+		}
+		if !strings.Contains(textBody, "[CRITICAL] vm-101") {
+			t.Fatalf("expected alert2 in body, got: %s", textBody)
+		}
+	})
+
+	t.Run("instance not shown when same as node", func(t *testing.T) {
+		alert := &alerts.Alert{
+			ID:           "test-alert",
+			Level:        alerts.AlertLevelWarning,
+			ResourceName: "pve1",
+			Node:         "pve1",
+			Instance:     "pve1", // Same as node
+		}
+
+		_, _, textBody := buildResolvedNotificationContent([]*alerts.Alert{alert}, time.Now(), "")
+
+		if !strings.Contains(textBody, "Node: pve1") {
+			t.Fatalf("expected node in body, got: %s", textBody)
+		}
+		// Instance line should not appear when same as node
+		if strings.Contains(textBody, "Instance: pve1") {
+			t.Fatalf("expected instance to be omitted when same as node, got: %s", textBody)
+		}
+	})
+
+	t.Run("instance shown when different from node", func(t *testing.T) {
+		alert := &alerts.Alert{
+			ID:           "test-alert",
+			Level:        alerts.AlertLevelWarning,
+			ResourceName: "vm-100",
+			Node:         "pve1",
+			Instance:     "vm-100", // Different from node
+		}
+
+		_, _, textBody := buildResolvedNotificationContent([]*alerts.Alert{alert}, time.Now(), "")
+
+		if !strings.Contains(textBody, "Node: pve1") {
+			t.Fatalf("expected node in body, got: %s", textBody)
+		}
+		if !strings.Contains(textBody, "Instance: vm-100") {
+			t.Fatalf("expected instance in body when different from node, got: %s", textBody)
+		}
+	})
+
+	t.Run("threshold and value only shown when non-zero", func(t *testing.T) {
+		alertWithValues := &alerts.Alert{
+			ID:           "test-alert-1",
+			Level:        alerts.AlertLevelWarning,
+			ResourceName: "vm-100",
+			Threshold:    80,
+			Value:        95,
+		}
+		alertWithoutValues := &alerts.Alert{
+			ID:           "test-alert-2",
+			Level:        alerts.AlertLevelWarning,
+			ResourceName: "vm-101",
+			Threshold:    0,
+			Value:        0,
+		}
+
+		_, _, textBodyWith := buildResolvedNotificationContent([]*alerts.Alert{alertWithValues}, time.Now(), "")
+		_, _, textBodyWithout := buildResolvedNotificationContent([]*alerts.Alert{alertWithoutValues}, time.Now(), "")
+
+		if !strings.Contains(textBodyWith, "Last value 95.00 (threshold 80.00)") {
+			t.Fatalf("expected threshold/value in body with values, got: %s", textBodyWith)
+		}
+		if strings.Contains(textBodyWithout, "Last value") {
+			t.Fatalf("expected no threshold/value in body without values, got: %s", textBodyWithout)
+		}
+	})
+}
+
+func TestCheckWebhookRateLimit(t *testing.T) {
+	t.Run("first request to new URL returns true and creates entry", func(t *testing.T) {
+		nm := NewNotificationManager("")
+
+		result := nm.checkWebhookRateLimit("https://example.com/webhook1")
+		if !result {
+			t.Fatalf("expected first request to return true")
+		}
+
+		nm.webhookRateMu.Lock()
+		entry, exists := nm.webhookRateLimits["https://example.com/webhook1"]
+		nm.webhookRateMu.Unlock()
+
+		if !exists {
+			t.Fatalf("expected entry to be created for webhook URL")
+		}
+		if entry.sentCount != 1 {
+			t.Fatalf("expected sentCount to be 1, got %d", entry.sentCount)
+		}
+	})
+
+	t.Run("multiple requests within window and under limit return true", func(t *testing.T) {
+		nm := NewNotificationManager("")
+
+		url := "https://example.com/webhook2"
+
+		// Make multiple requests, all under the limit
+		for i := 1; i <= WebhookRateLimitMax-1; i++ {
+			result := nm.checkWebhookRateLimit(url)
+			if !result {
+				t.Fatalf("request %d should return true (under limit)", i)
+			}
+		}
+
+		nm.webhookRateMu.Lock()
+		entry := nm.webhookRateLimits[url]
+		count := entry.sentCount
+		nm.webhookRateMu.Unlock()
+
+		if count != WebhookRateLimitMax-1 {
+			t.Fatalf("expected sentCount to be %d, got %d", WebhookRateLimitMax-1, count)
+		}
+	})
+
+	t.Run("requests at limit return false", func(t *testing.T) {
+		nm := NewNotificationManager("")
+
+		url := "https://example.com/webhook3"
+
+		// Use up all allowed requests
+		for i := 1; i <= WebhookRateLimitMax; i++ {
+			result := nm.checkWebhookRateLimit(url)
+			if !result {
+				t.Fatalf("request %d should return true (at or under limit)", i)
+			}
+		}
+
+		// Next request should be rate limited
+		result := nm.checkWebhookRateLimit(url)
+		if result {
+			t.Fatalf("expected request beyond limit to return false")
+		}
+
+		nm.webhookRateMu.Lock()
+		entry := nm.webhookRateLimits[url]
+		count := entry.sentCount
+		nm.webhookRateMu.Unlock()
+
+		// Count should remain at max since rate-limited requests don't increment
+		if count != WebhookRateLimitMax {
+			t.Fatalf("expected sentCount to remain at %d, got %d", WebhookRateLimitMax, count)
+		}
+	})
+
+	t.Run("requests after window expiry reset counter and return true", func(t *testing.T) {
+		nm := NewNotificationManager("")
+
+		url := "https://example.com/webhook4"
+
+		// Make first request to create entry
+		nm.checkWebhookRateLimit(url)
+
+		// Manually set lastSent to a time beyond the window
+		nm.webhookRateMu.Lock()
+		entry := nm.webhookRateLimits[url]
+		entry.lastSent = time.Now().Add(-WebhookRateLimitWindow - time.Second)
+		entry.sentCount = WebhookRateLimitMax // Simulate being at the limit
+		nm.webhookRateMu.Unlock()
+
+		// Request after window expiry should succeed and reset counter
+		result := nm.checkWebhookRateLimit(url)
+		if !result {
+			t.Fatalf("expected request after window expiry to return true")
+		}
+
+		nm.webhookRateMu.Lock()
+		count := nm.webhookRateLimits[url].sentCount
+		nm.webhookRateMu.Unlock()
+
+		if count != 1 {
+			t.Fatalf("expected sentCount to reset to 1, got %d", count)
+		}
+	})
+
+	t.Run("different URLs have independent rate limits", func(t *testing.T) {
+		nm := NewNotificationManager("")
+
+		url1 := "https://example.com/webhook-a"
+		url2 := "https://example.com/webhook-b"
+
+		// Exhaust rate limit for url1
+		for i := 1; i <= WebhookRateLimitMax; i++ {
+			nm.checkWebhookRateLimit(url1)
+		}
+
+		// url1 should be rate limited
+		if nm.checkWebhookRateLimit(url1) {
+			t.Fatalf("expected url1 to be rate limited")
+		}
+
+		// url2 should still work (independent limit)
+		if !nm.checkWebhookRateLimit(url2) {
+			t.Fatalf("expected url2 to not be rate limited")
+		}
+
+		nm.webhookRateMu.Lock()
+		count1 := nm.webhookRateLimits[url1].sentCount
+		count2 := nm.webhookRateLimits[url2].sentCount
+		nm.webhookRateMu.Unlock()
+
+		if count1 != WebhookRateLimitMax {
+			t.Fatalf("expected url1 sentCount to be %d, got %d", WebhookRateLimitMax, count1)
+		}
+		if count2 != 1 {
+			t.Fatalf("expected url2 sentCount to be 1, got %d", count2)
+		}
+	})
+}
