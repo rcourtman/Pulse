@@ -1942,6 +1942,167 @@ func TestParseNVMeTemps_AppendsToExisting(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// Tests for isProxyEnabled
+// =============================================================================
+
+func TestIsProxyEnabled_NilProxyClient(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyClient: nil,
+		useProxy:    true, // even if this is true, nil client should return false
+	}
+
+	if tc.isProxyEnabled() {
+		t.Error("expected isProxyEnabled() to return false when proxyClient is nil")
+	}
+}
+
+func TestIsProxyEnabled_UseProxyAlreadyTrue(t *testing.T) {
+	stub := &stubTemperatureProxy{}
+	stub.setAvailable(false) // shouldn't matter since useProxy is already true
+
+	tc := &TemperatureCollector{
+		proxyClient: stub,
+		useProxy:    true,
+	}
+
+	if !tc.isProxyEnabled() {
+		t.Error("expected isProxyEnabled() to return true when useProxy is already true")
+	}
+
+	// Verify useProxy remains true (unchanged)
+	if !tc.useProxy {
+		t.Error("expected useProxy to remain true")
+	}
+}
+
+func TestIsProxyEnabled_UseProxyFalseStillInCooldown(t *testing.T) {
+	stub := &stubTemperatureProxy{}
+	stub.setAvailable(true) // shouldn't be checked since still in cooldown
+
+	cooldownTime := time.Now().Add(5 * time.Minute)
+	tc := &TemperatureCollector{
+		proxyClient:        stub,
+		useProxy:           false,
+		proxyCooldownUntil: cooldownTime,
+		proxyFailures:      2,
+	}
+
+	if tc.isProxyEnabled() {
+		t.Error("expected isProxyEnabled() to return false while in cooldown")
+	}
+
+	// Verify state is unchanged
+	if tc.useProxy {
+		t.Error("expected useProxy to remain false during cooldown")
+	}
+	if tc.proxyFailures != 2 {
+		t.Errorf("expected proxyFailures to remain 2, got %d", tc.proxyFailures)
+	}
+	if !tc.proxyCooldownUntil.Equal(cooldownTime) {
+		t.Errorf("expected proxyCooldownUntil to remain unchanged")
+	}
+}
+
+func TestIsProxyEnabled_CooldownExpiredProxyAvailable(t *testing.T) {
+	stub := &stubTemperatureProxy{}
+	stub.setAvailable(true)
+
+	tc := &TemperatureCollector{
+		proxyClient:        stub,
+		useProxy:           false,
+		proxyCooldownUntil: time.Now().Add(-time.Minute), // expired
+		proxyFailures:      2,
+	}
+
+	if !tc.isProxyEnabled() {
+		t.Error("expected isProxyEnabled() to return true when cooldown expired and proxy available")
+	}
+
+	// Verify state was restored
+	if !tc.useProxy {
+		t.Error("expected useProxy to be set to true after restoration")
+	}
+	if tc.proxyFailures != 0 {
+		t.Errorf("expected proxyFailures to be reset to 0, got %d", tc.proxyFailures)
+	}
+	if !tc.proxyCooldownUntil.IsZero() {
+		t.Errorf("expected proxyCooldownUntil to be zero after restoration, got %s", tc.proxyCooldownUntil)
+	}
+}
+
+func TestIsProxyEnabled_CooldownExpiredProxyUnavailable(t *testing.T) {
+	stub := &stubTemperatureProxy{}
+	stub.setAvailable(false)
+
+	expiredCooldown := time.Now().Add(-time.Minute)
+	tc := &TemperatureCollector{
+		proxyClient:        stub,
+		useProxy:           false,
+		proxyCooldownUntil: expiredCooldown,
+		proxyFailures:      2,
+	}
+
+	before := time.Now()
+	if tc.isProxyEnabled() {
+		t.Error("expected isProxyEnabled() to return false when proxy unavailable")
+	}
+
+	// Verify state
+	if tc.useProxy {
+		t.Error("expected useProxy to remain false when proxy unavailable")
+	}
+	// Cooldown should be extended by proxyRetryInterval (5 minutes)
+	if !tc.proxyCooldownUntil.After(before) {
+		t.Errorf("expected proxyCooldownUntil to be extended into the future, got %s", tc.proxyCooldownUntil)
+	}
+	expectedMinCooldown := before.Add(proxyRetryInterval - time.Second)
+	if tc.proxyCooldownUntil.Before(expectedMinCooldown) {
+		t.Errorf("expected proxyCooldownUntil to be at least %s, got %s", expectedMinCooldown, tc.proxyCooldownUntil)
+	}
+}
+
+func TestIsProxyEnabled_ZeroCooldownProxyAvailable(t *testing.T) {
+	stub := &stubTemperatureProxy{}
+	stub.setAvailable(true)
+
+	tc := &TemperatureCollector{
+		proxyClient:        stub,
+		useProxy:           false,
+		proxyCooldownUntil: time.Time{}, // zero value - time.Now().After(zero) is true
+		proxyFailures:      0,
+	}
+
+	if !tc.isProxyEnabled() {
+		t.Error("expected isProxyEnabled() to return true with zero cooldown and available proxy")
+	}
+
+	if !tc.useProxy {
+		t.Error("expected useProxy to be set to true")
+	}
+}
+
+func TestIsProxyEnabled_ZeroCooldownProxyUnavailable(t *testing.T) {
+	stub := &stubTemperatureProxy{}
+	stub.setAvailable(false)
+
+	tc := &TemperatureCollector{
+		proxyClient:        stub,
+		useProxy:           false,
+		proxyCooldownUntil: time.Time{}, // zero value
+	}
+
+	before := time.Now()
+	if tc.isProxyEnabled() {
+		t.Error("expected isProxyEnabled() to return false when proxy unavailable")
+	}
+
+	// Should set a new cooldown since proxy is unavailable
+	if !tc.proxyCooldownUntil.After(before) {
+		t.Errorf("expected proxyCooldownUntil to be set in the future, got %s", tc.proxyCooldownUntil)
+	}
+}
+
 // Helper functions for test setup
 
 func intPtr(i int) *int {
