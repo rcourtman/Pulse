@@ -2054,3 +2054,151 @@ func TestEnsureBreaker(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateDeadLetterMetrics_NilPollMetrics(t *testing.T) {
+	t.Parallel()
+
+	m := &Monitor{
+		pollMetrics:     nil,
+		deadLetterQueue: NewTaskQueue(),
+	}
+
+	// Should not panic
+	m.updateDeadLetterMetrics()
+}
+
+func TestUpdateDeadLetterMetrics_NilDeadLetterQueue(t *testing.T) {
+	t.Parallel()
+
+	m := &Monitor{
+		pollMetrics:     newTestPollMetrics(t),
+		deadLetterQueue: nil,
+	}
+
+	// Should not panic
+	m.updateDeadLetterMetrics()
+}
+
+func TestUpdateDeadLetterMetrics_BothNil(t *testing.T) {
+	t.Parallel()
+
+	m := &Monitor{
+		pollMetrics:     nil,
+		deadLetterQueue: nil,
+	}
+
+	// Should not panic
+	m.updateDeadLetterMetrics()
+}
+
+func TestUpdateDeadLetterMetrics_EmptyQueue(t *testing.T) {
+	t.Parallel()
+
+	pm := newTestPollMetrics(t)
+	dlq := NewTaskQueue()
+
+	// Pre-populate with some dead letter data to verify it gets cleared
+	pm.UpdateDeadLetterCounts([]DeadLetterTask{
+		{Type: "pve", Instance: "pve1"},
+	})
+	if got := getGaugeVecValue(pm.schedulerDeadLetterDepth, "pve", "pve1"); got != 1 {
+		t.Fatalf("pre-check: dead_letter_depth{pve,pve1} = %v, want 1", got)
+	}
+
+	m := &Monitor{
+		pollMetrics:     pm,
+		deadLetterQueue: dlq,
+	}
+
+	// Empty queue should call UpdateDeadLetterCounts(nil) which clears previous entries
+	m.updateDeadLetterMetrics()
+
+	got := getGaugeVecValue(pm.schedulerDeadLetterDepth, "pve", "pve1")
+	if got != 0 {
+		t.Errorf("dead_letter_depth{pve,pve1} = %v, want 0 after empty queue update", got)
+	}
+}
+
+func TestUpdateDeadLetterMetrics_NonEmptyQueue(t *testing.T) {
+	t.Parallel()
+
+	pm := newTestPollMetrics(t)
+	dlq := NewTaskQueue()
+
+	// Add tasks to the dead letter queue
+	dlq.Upsert(ScheduledTask{
+		InstanceType: InstanceTypePVE,
+		InstanceName: "pve-instance-1",
+		NextRun:      time.Now().Add(time.Hour),
+	})
+	dlq.Upsert(ScheduledTask{
+		InstanceType: InstanceTypePBS,
+		InstanceName: "pbs-instance-1",
+		NextRun:      time.Now().Add(time.Hour),
+	})
+
+	m := &Monitor{
+		pollMetrics:     pm,
+		deadLetterQueue: dlq,
+	}
+
+	m.updateDeadLetterMetrics()
+
+	// Verify metrics were updated with the tasks from the queue
+	gotPve := getGaugeVecValue(pm.schedulerDeadLetterDepth, "pve", "pve-instance-1")
+	if gotPve != 1 {
+		t.Errorf("dead_letter_depth{pve,pve-instance-1} = %v, want 1", gotPve)
+	}
+
+	gotPbs := getGaugeVecValue(pm.schedulerDeadLetterDepth, "pbs", "pbs-instance-1")
+	if gotPbs != 1 {
+		t.Errorf("dead_letter_depth{pbs,pbs-instance-1} = %v, want 1", gotPbs)
+	}
+}
+
+func TestUpdateDeadLetterMetrics_QueueChanges(t *testing.T) {
+	t.Parallel()
+
+	pm := newTestPollMetrics(t)
+	dlq := NewTaskQueue()
+
+	m := &Monitor{
+		pollMetrics:     pm,
+		deadLetterQueue: dlq,
+	}
+
+	// First, add some tasks
+	dlq.Upsert(ScheduledTask{
+		InstanceType: InstanceTypePVE,
+		InstanceName: "pve1",
+		NextRun:      time.Now().Add(time.Hour),
+	})
+	dlq.Upsert(ScheduledTask{
+		InstanceType: InstanceTypePBS,
+		InstanceName: "pbs1",
+		NextRun:      time.Now().Add(time.Hour),
+	})
+
+	m.updateDeadLetterMetrics()
+
+	// Verify initial state
+	if got := getGaugeVecValue(pm.schedulerDeadLetterDepth, "pve", "pve1"); got != 1 {
+		t.Fatalf("initial pve/pve1 = %v, want 1", got)
+	}
+	if got := getGaugeVecValue(pm.schedulerDeadLetterDepth, "pbs", "pbs1"); got != 1 {
+		t.Fatalf("initial pbs/pbs1 = %v, want 1", got)
+	}
+
+	// Remove pbs1 from queue
+	dlq.Remove(InstanceTypePBS, "pbs1")
+
+	m.updateDeadLetterMetrics()
+
+	// pve1 should still be 1, pbs1 should be cleared to 0
+	if got := getGaugeVecValue(pm.schedulerDeadLetterDepth, "pve", "pve1"); got != 1 {
+		t.Errorf("after removal pve/pve1 = %v, want 1", got)
+	}
+	if got := getGaugeVecValue(pm.schedulerDeadLetterDepth, "pbs", "pbs1"); got != 0 {
+		t.Errorf("after removal pbs/pbs1 = %v, want 0", got)
+	}
+}
