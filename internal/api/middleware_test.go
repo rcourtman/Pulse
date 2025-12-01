@@ -441,3 +441,22 @@ func TestResponseWriter_EdgeCases(t *testing.T) {
 		}
 	})
 }
+
+func TestErrorHandler_EmptyPath(t *testing.T) {
+	// Test that empty path is normalized to "/" (fix for issue #334)
+	var capturedPath string
+	handler := ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req.URL.Path = "" // explicitly set empty path
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if capturedPath != "/" {
+		t.Errorf("expected empty path to be normalized to '/', got %q", capturedPath)
+	}
+}
