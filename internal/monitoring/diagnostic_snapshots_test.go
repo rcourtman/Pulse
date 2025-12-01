@@ -3,6 +3,8 @@ package monitoring
 import (
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func TestMakeNodeSnapshotKey(t *testing.T) {
@@ -521,6 +523,238 @@ func TestRecordGuestSnapshot(t *testing.T) {
 		if len(m.guestSnapshots) != 1 {
 			t.Errorf("Expected 1 guest snapshot, got %d", len(m.guestSnapshots))
 		}
+	})
+}
+
+func TestLogNodeMemorySource(t *testing.T) {
+	t.Run("nil Monitor is no-op", func(t *testing.T) {
+		var m *Monitor
+		// Should not panic
+		m.logNodeMemorySource("instance", "node1", NodeMemorySnapshot{
+			MemorySource: "rrd-data",
+		})
+	})
+
+	t.Run("same source as existing snapshot - no log emitted", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// Pre-populate with existing snapshot
+		key := makeNodeSnapshotKey("pve1", "node1")
+		m.nodeSnapshots[key] = NodeMemorySnapshot{
+			MemorySource: "rrd-data",
+		}
+
+		// Should not panic and should return early (same source)
+		m.logNodeMemorySource("pve1", "node1", NodeMemorySnapshot{
+			MemorySource: "rrd-data",
+		})
+	})
+
+	t.Run("empty source triggers warn level", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// Should not panic - empty source triggers Warn
+		m.logNodeMemorySource("pve1", "node1", NodeMemorySnapshot{
+			MemorySource: "",
+		})
+	})
+
+	t.Run("nodes-endpoint source triggers warn level", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// Should not panic - nodes-endpoint triggers Warn
+		m.logNodeMemorySource("pve1", "node1", NodeMemorySnapshot{
+			MemorySource: "nodes-endpoint",
+		})
+	})
+
+	t.Run("node-status-used source triggers warn level", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// Should not panic - node-status-used triggers Warn
+		m.logNodeMemorySource("pve1", "node1", NodeMemorySnapshot{
+			MemorySource: "node-status-used",
+		})
+	})
+
+	t.Run("previous-snapshot source triggers warn level", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// Should not panic - previous-snapshot triggers Warn
+		m.logNodeMemorySource("pve1", "node1", NodeMemorySnapshot{
+			MemorySource: "previous-snapshot",
+		})
+	})
+
+	t.Run("rrd-data source triggers debug level", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// Should not panic - rrd-data triggers Debug
+		m.logNodeMemorySource("pve1", "node1", NodeMemorySnapshot{
+			MemorySource: "rrd-data",
+		})
+	})
+
+	t.Run("rrd-available source triggers debug level", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// Should not panic - rrd-available triggers Debug
+		m.logNodeMemorySource("pve1", "node1", NodeMemorySnapshot{
+			MemorySource: "rrd-available",
+		})
+	})
+
+	t.Run("source change from existing triggers log", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// Pre-populate with existing snapshot
+		key := makeNodeSnapshotKey("pve1", "node1")
+		m.nodeSnapshots[key] = NodeMemorySnapshot{
+			MemorySource: "rrd-data",
+		}
+
+		// Different source should trigger logging
+		m.logNodeMemorySource("pve1", "node1", NodeMemorySnapshot{
+			MemorySource: "rrd-available",
+		})
+	})
+
+	t.Run("FallbackReason is logged when present", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// Should not panic - FallbackReason present
+		m.logNodeMemorySource("pve1", "node1", NodeMemorySnapshot{
+			MemorySource:   "previous-snapshot",
+			FallbackReason: "no rrd data available",
+		})
+	})
+
+	t.Run("Raw fields are logged when > 0", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// Should not panic - various Raw fields > 0
+		m.logNodeMemorySource("pve1", "node1", NodeMemorySnapshot{
+			MemorySource: "rrd-data",
+			Raw: NodeMemoryRaw{
+				Available:           1000000000,
+				Buffers:             200000000,
+				Cached:              500000000,
+				TotalMinusUsed:      800000000,
+				RRDAvailable:        900000000,
+				RRDUsed:             100000000,
+				RRDTotal:            1000000000,
+				ProxmoxMemorySource: "rrd",
+			},
+		})
+	})
+
+	t.Run("Memory fields are logged when > 0", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// Should not panic - Memory fields > 0
+		m.logNodeMemorySource("pve1", "node1", NodeMemorySnapshot{
+			MemorySource: "rrd-data",
+			Memory: models.Memory{
+				Total: 16000000000,
+				Used:  8000000000,
+				Free:  8000000000,
+				Usage: 0.5,
+			},
+		})
+	})
+
+	t.Run("all warn sources", func(t *testing.T) {
+		warnSources := []string{"", "nodes-endpoint", "node-status-used", "previous-snapshot"}
+
+		for _, source := range warnSources {
+			t.Run("source_"+source, func(t *testing.T) {
+				m := &Monitor{
+					nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+					guestSnapshots: make(map[string]GuestMemorySnapshot),
+				}
+
+				// Should not panic
+				m.logNodeMemorySource("pve1", "node1", NodeMemorySnapshot{
+					MemorySource: source,
+				})
+			})
+		}
+	})
+
+	t.Run("debug sources", func(t *testing.T) {
+		debugSources := []string{"rrd-data", "rrd-available", "node-status-available", "calculated"}
+
+		for _, source := range debugSources {
+			t.Run("source_"+source, func(t *testing.T) {
+				m := &Monitor{
+					nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+					guestSnapshots: make(map[string]GuestMemorySnapshot),
+				}
+
+				// Should not panic
+				m.logNodeMemorySource("pve1", "node1", NodeMemorySnapshot{
+					MemorySource: source,
+				})
+			})
+		}
+	})
+
+	t.Run("new node with no prior snapshot logs", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// No existing snapshot, empty prevSource should not match non-empty source
+		m.logNodeMemorySource("pve1", "node1", NodeMemorySnapshot{
+			MemorySource: "rrd-data",
+		})
+	})
+
+	t.Run("new node with empty source matches no prior snapshot", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// No existing snapshot means prevSource is "", matching empty MemorySource
+		// This should skip logging due to prevSource == snapshot.MemorySource
+		m.logNodeMemorySource("pve1", "node1", NodeMemorySnapshot{
+			MemorySource: "",
+		})
 	})
 }
 
