@@ -640,8 +640,8 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 			strings.Contains(errStr, "json: cannot unmarshal") ||
 			(strings.Contains(errStr, "storage '") && strings.Contains(errStr, "is not available on node")) ||
 			strings.Contains(errStr, "unexpected response format") ||
-			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/storage/")) ||
-			(strings.Contains(errStr, "Client.Timeout exceeded") && strings.Contains(errStr, "/storage/")) {
+			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/storage")) ||
+			(strings.Contains(errStr, "Client.Timeout exceeded") && strings.Contains(errStr, "/storage")) {
 			// This is likely a node-specific failure, not an endpoint failure
 			// Return the error but don't mark the endpoint as unhealthy
 			log.Debug().
