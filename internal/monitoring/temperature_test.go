@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -351,31 +352,106 @@ func TestParseSensorsJSON_ZeroTemperature(t *testing.T) {
 }
 
 func TestParseRPiTemperature(t *testing.T) {
-	collector := &TemperatureCollector{}
-	temp, err := collector.parseRPiTemperature("48720\n")
-	if err != nil {
-		t.Fatalf("unexpected error parsing RPi thermal zone output: %v", err)
+	tests := []struct {
+		name        string
+		output      string
+		wantErr     bool
+		errContains string
+		wantTempC   float64
+	}{
+		{
+			name:        "empty output returns error",
+			output:      "",
+			wantErr:     true,
+			errContains: "empty RPi temperature output",
+		},
+		{
+			name:        "whitespace-only output returns error",
+			output:      "   \t\n  ",
+			wantErr:     true,
+			errContains: "empty RPi temperature output",
+		},
+		{
+			name:        "invalid non-numeric output returns error",
+			output:      "not-a-number",
+			wantErr:     true,
+			errContains: "failed to parse RPi temperature",
+		},
+		{
+			name:      "valid millidegrees 45678 returns 45.678°C",
+			output:    "45678",
+			wantErr:   false,
+			wantTempC: 45.678,
+		},
+		{
+			name:      "valid millidegrees with whitespace returns correct temp",
+			output:    "  45678\n",
+			wantErr:   false,
+			wantTempC: 45.678,
+		},
+		{
+			name:      "zero value returns 0°C",
+			output:    "0",
+			wantErr:   false,
+			wantTempC: 0.0,
+		},
+		{
+			name:      "negative value returns negative temp",
+			output:    "-5000",
+			wantErr:   false,
+			wantTempC: -5.0,
+		},
 	}
-	if !temp.Available {
-		t.Fatalf("expected temperature to be marked available")
-	}
-	if !temp.HasCPU {
-		t.Fatalf("expected HasCPU to be true for RPi thermal zone output")
-	}
-	expected := 48.72
-	if diff := temp.CPUPackage - expected; diff > 1e-6 || diff < -1e-6 {
-		t.Fatalf("expected cpu package temperature %.2f, got %.2f", expected, temp.CPUPackage)
-	}
-	if temp.CPUMax != temp.CPUPackage {
-		t.Fatalf("expected cpu max to match package temperature %.2f, got %.2f", temp.CPUPackage, temp.CPUMax)
-	}
-	if temp.LastUpdate.IsZero() {
-		t.Fatalf("expected LastUpdate to be set")
-	}
-	if elapsed := time.Since(temp.LastUpdate); elapsed > 2*time.Second {
-		t.Fatalf("expected LastUpdate to be recent, got %s", elapsed)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			collector := &TemperatureCollector{}
+			temp, err := collector.parseRPiTemperature(tt.output)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.errContains)
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Fatalf("expected error containing %q, got %q", tt.errContains, err.Error())
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if temp == nil {
+				t.Fatalf("expected temperature struct, got nil")
+			}
+			if !temp.Available {
+				t.Errorf("expected temperature to be marked available")
+			}
+			if !temp.HasCPU {
+				t.Errorf("expected HasCPU to be true")
+			}
+			if diff := temp.CPUPackage - tt.wantTempC; diff > 1e-9 || diff < -1e-9 {
+				t.Errorf("expected CPUPackage %.3f, got %.3f", tt.wantTempC, temp.CPUPackage)
+			}
+			if temp.CPUMax != temp.CPUPackage {
+				t.Errorf("expected CPUMax to equal CPUPackage (%.3f), got %.3f", temp.CPUPackage, temp.CPUMax)
+			}
+			if len(temp.Cores) != 0 {
+				t.Errorf("expected empty Cores slice, got %d entries", len(temp.Cores))
+			}
+			if len(temp.NVMe) != 0 {
+				t.Errorf("expected empty NVMe slice, got %d entries", len(temp.NVMe))
+			}
+			if temp.LastUpdate.IsZero() {
+				t.Errorf("expected LastUpdate to be set")
+			}
+			if elapsed := time.Since(temp.LastUpdate); elapsed > 2*time.Second {
+				t.Errorf("expected LastUpdate to be recent, got %s", elapsed)
+			}
+		})
 	}
 }
+
 
 func TestParseSensorsJSON_PiPartialSensors(t *testing.T) {
 	collector := &TemperatureCollector{}
@@ -2100,6 +2176,186 @@ func TestIsProxyEnabled_ZeroCooldownProxyUnavailable(t *testing.T) {
 	// Should set a new cooldown since proxy is unavailable
 	if !tc.proxyCooldownUntil.After(before) {
 		t.Errorf("expected proxyCooldownUntil to be set in the future, got %s", tc.proxyCooldownUntil)
+	}
+}
+
+// =============================================================================
+// Tests for handleProxyFailure
+// =============================================================================
+
+func TestHandleProxyFailure_NilProxyClient(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyClient:     nil,
+		proxyFailures:   2,
+		proxyHostStates: make(map[string]*proxyHostState),
+	}
+
+	// Should return early without panic
+	tc.handleProxyFailure("192.168.1.100", fmt.Errorf("some error"))
+
+	// State should remain unchanged
+	if tc.proxyFailures != 2 {
+		t.Errorf("expected proxyFailures to remain 2, got %d", tc.proxyFailures)
+	}
+	if len(tc.proxyHostStates) != 0 {
+		t.Errorf("expected proxyHostStates to remain empty, got %d entries", len(tc.proxyHostStates))
+	}
+}
+
+func TestHandleProxyFailure_ShouldDisableProxyFalse_CallsHandleProxyHostFailure(t *testing.T) {
+	stub := &stubTemperatureProxy{}
+
+	tc := &TemperatureCollector{
+		proxyClient:     stub,
+		proxyFailures:   0,
+		useProxy:        true,
+		proxyHostStates: make(map[string]*proxyHostState),
+	}
+
+	// ErrorTypeSensor does NOT trigger shouldDisableProxy (returns false)
+	sensorErr := &tempproxy.ProxyError{Type: tempproxy.ErrorTypeSensor, Message: "sensor not found"}
+	tc.handleProxyFailure("192.168.1.100", sensorErr)
+
+	// proxyFailures should NOT be incremented (that's for global disable path)
+	if tc.proxyFailures != 0 {
+		t.Errorf("expected proxyFailures to remain 0, got %d", tc.proxyFailures)
+	}
+
+	// handleProxyHostFailure should have been called - check host state
+	tc.proxyMu.Lock()
+	state, exists := tc.proxyHostStates["192.168.1.100"]
+	tc.proxyMu.Unlock()
+
+	if !exists {
+		t.Fatal("expected host to be added to proxyHostStates")
+	}
+	if state.failures != 1 {
+		t.Errorf("expected host failures to be 1, got %d", state.failures)
+	}
+	if state.lastError != "sensor not found" {
+		t.Errorf("expected lastError to be 'sensor not found', got %q", state.lastError)
+	}
+}
+
+func TestHandleProxyFailure_ShouldDisableProxyTrue_IncrementsFailures(t *testing.T) {
+	stub := &stubTemperatureProxy{}
+
+	tc := &TemperatureCollector{
+		proxyClient:     stub,
+		proxyFailures:   0,
+		useProxy:        true,
+		proxyHostStates: make(map[string]*proxyHostState),
+	}
+
+	// ErrorTypeTransport triggers shouldDisableProxy (returns true)
+	transportErr := &tempproxy.ProxyError{Type: tempproxy.ErrorTypeTransport, Message: "connection refused"}
+	tc.handleProxyFailure("192.168.1.100", transportErr)
+
+	if tc.proxyFailures != 1 {
+		t.Errorf("expected proxyFailures to be 1, got %d", tc.proxyFailures)
+	}
+
+	// Proxy should still be enabled (threshold not reached)
+	if !tc.useProxy {
+		t.Error("expected useProxy to remain true (threshold not reached)")
+	}
+
+	// handleProxyHostFailure should NOT have been called
+	tc.proxyMu.Lock()
+	hostStateCount := len(tc.proxyHostStates)
+	tc.proxyMu.Unlock()
+
+	if hostStateCount != 0 {
+		t.Errorf("expected proxyHostStates to remain empty, got %d entries", hostStateCount)
+	}
+}
+
+func TestHandleProxyFailure_ReachesThreshold_DisablesProxy(t *testing.T) {
+	stub := &stubTemperatureProxy{}
+
+	tc := &TemperatureCollector{
+		proxyClient:     stub,
+		proxyFailures:   proxyFailureThreshold - 1, // one failure away from threshold
+		useProxy:        true,
+		proxyHostStates: make(map[string]*proxyHostState),
+	}
+
+	transportErr := &tempproxy.ProxyError{Type: tempproxy.ErrorTypeTransport, Message: "connection refused"}
+	before := time.Now()
+	tc.handleProxyFailure("192.168.1.100", transportErr)
+
+	// Proxy should now be disabled
+	if tc.useProxy {
+		t.Error("expected useProxy to be false after reaching threshold")
+	}
+
+	// proxyFailures should be reset to 0
+	if tc.proxyFailures != 0 {
+		t.Errorf("expected proxyFailures to be reset to 0, got %d", tc.proxyFailures)
+	}
+
+	// proxyCooldownUntil should be set in the future
+	if !tc.proxyCooldownUntil.After(before) {
+		t.Errorf("expected proxyCooldownUntil to be in the future, got %s", tc.proxyCooldownUntil)
+	}
+}
+
+func TestHandleProxyFailure_ReachesThreshold_UseProxyFalse_NoDoubleDisable(t *testing.T) {
+	stub := &stubTemperatureProxy{}
+
+	originalCooldown := time.Now().Add(10 * time.Minute)
+	tc := &TemperatureCollector{
+		proxyClient:        stub,
+		proxyFailures:      proxyFailureThreshold - 1, // one failure away from threshold
+		useProxy:           false,                     // already disabled
+		proxyCooldownUntil: originalCooldown,
+		proxyHostStates:    make(map[string]*proxyHostState),
+	}
+
+	transportErr := &tempproxy.ProxyError{Type: tempproxy.ErrorTypeTransport, Message: "connection refused"}
+	tc.handleProxyFailure("192.168.1.100", transportErr)
+
+	// proxyFailures should increment (we still track failures)
+	if tc.proxyFailures != proxyFailureThreshold {
+		t.Errorf("expected proxyFailures to be %d, got %d", proxyFailureThreshold, tc.proxyFailures)
+	}
+
+	// useProxy should remain false
+	if tc.useProxy {
+		t.Error("expected useProxy to remain false")
+	}
+
+	// proxyCooldownUntil should NOT be changed (no double-disable)
+	if !tc.proxyCooldownUntil.Equal(originalCooldown) {
+		t.Errorf("expected proxyCooldownUntil to remain %s, got %s", originalCooldown, tc.proxyCooldownUntil)
+	}
+}
+
+func TestHandleProxyFailure_PlainError_TriggersDisablePath(t *testing.T) {
+	stub := &stubTemperatureProxy{}
+
+	tc := &TemperatureCollector{
+		proxyClient:     stub,
+		proxyFailures:   0,
+		useProxy:        true,
+		proxyHostStates: make(map[string]*proxyHostState),
+	}
+
+	// Plain errors (not ProxyError) should trigger shouldDisableProxy (returns true)
+	plainErr := fmt.Errorf("connection refused")
+	tc.handleProxyFailure("192.168.1.100", plainErr)
+
+	if tc.proxyFailures != 1 {
+		t.Errorf("expected proxyFailures to be 1, got %d", tc.proxyFailures)
+	}
+
+	// handleProxyHostFailure should NOT be called
+	tc.proxyMu.Lock()
+	hostStateCount := len(tc.proxyHostStates)
+	tc.proxyMu.Unlock()
+
+	if hostStateCount != 0 {
+		t.Errorf("expected proxyHostStates to remain empty, got %d entries", hostStateCount)
 	}
 }
 
