@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"math"
+	"net/http"
 	"testing"
 	"time"
 
@@ -671,5 +672,197 @@ func TestMessage_Fields(t *testing.T) {
 	}
 	if msg.Timestamp != "2024-01-01T00:00:00Z" {
 		t.Errorf("Timestamp = %v, want 2024-01-01T00:00:00Z", msg.Timestamp)
+	}
+}
+
+func TestHub_CheckOrigin(t *testing.T) {
+	tests := []struct {
+		name           string
+		origin         string
+		host           string
+		allowedOrigins []string
+		forwardedProto string
+		forwardedHost  string
+		expected       bool
+	}{
+		// No origin header - always allowed for non-browser clients
+		{
+			name:     "no origin header",
+			origin:   "",
+			host:     "localhost:8080",
+			expected: true,
+		},
+
+		// Same-origin requests
+		{
+			name:     "same origin http",
+			origin:   "http://localhost:8080",
+			host:     "localhost:8080",
+			expected: true,
+		},
+		{
+			name:           "same origin with forwarded proto https",
+			origin:         "https://example.com",
+			host:           "example.com",
+			forwardedProto: "https",
+			expected:       true,
+		},
+		{
+			name:          "same origin with forwarded host",
+			origin:        "http://proxy.example.com",
+			host:          "backend:8080",
+			forwardedHost: "proxy.example.com",
+			expected:      true,
+		},
+
+		// Wildcard allowed origins
+		{
+			name:           "wildcard allows any origin",
+			origin:         "https://evil.com",
+			host:           "localhost:8080",
+			allowedOrigins: []string{"*"},
+			expected:       true,
+		},
+
+		// Explicit allowed origins
+		{
+			name:           "explicit allowed origin matches",
+			origin:         "https://app.example.com",
+			host:           "localhost:8080",
+			allowedOrigins: []string{"https://app.example.com"},
+			expected:       true,
+		},
+		{
+			name:           "explicit allowed origin no match",
+			origin:         "https://other.example.com",
+			host:           "localhost:8080",
+			allowedOrigins: []string{"https://app.example.com"},
+			expected:       false,
+		},
+		{
+			name:           "multiple allowed origins - match second",
+			origin:         "https://second.example.com",
+			host:           "localhost:8080",
+			allowedOrigins: []string{"https://first.example.com", "https://second.example.com"},
+			expected:       true,
+		},
+
+		// Private network fallback (no allowed origins configured)
+		{
+			name:     "private IP 192.168.x.x allowed when no origins configured",
+			origin:   "http://192.168.1.100:3000",
+			host:     "localhost:8080",
+			expected: true,
+		},
+		{
+			name:     "private IP 10.x.x.x allowed when no origins configured",
+			origin:   "http://10.0.0.50:3000",
+			host:     "localhost:8080",
+			expected: true,
+		},
+		{
+			name:     "localhost allowed when no origins configured",
+			origin:   "http://localhost:3000",
+			host:     "localhost:8080",
+			expected: true,
+		},
+		{
+			name:     "127.0.0.1 allowed when no origins configured",
+			origin:   "http://127.0.0.1:3000",
+			host:     "localhost:8080",
+			expected: true,
+		},
+		{
+			name:     ".local domain allowed when no origins configured",
+			origin:   "http://myserver.local:3000",
+			host:     "localhost:8080",
+			expected: true,
+		},
+		{
+			name:     ".lan domain allowed when no origins configured",
+			origin:   "http://myserver.lan:3000",
+			host:     "localhost:8080",
+			expected: true,
+		},
+		{
+			name:     "public IP rejected when no origins configured",
+			origin:   "http://8.8.8.8:3000",
+			host:     "localhost:8080",
+			expected: false,
+		},
+		{
+			name:     "public domain rejected when no origins configured",
+			origin:   "https://evil.example.com",
+			host:     "localhost:8080",
+			expected: false,
+		},
+
+		// HTTPS origin stripping
+		{
+			name:     "https origin with private IP",
+			origin:   "https://192.168.1.50:443",
+			host:     "localhost:8080",
+			expected: true,
+		},
+
+		// Forwarded proto normalization
+		{
+			name:           "wss forwarded proto normalized to https",
+			origin:         "https://example.com",
+			host:           "example.com",
+			forwardedProto: "wss",
+			expected:       true,
+		},
+		{
+			name:           "ws forwarded proto normalized to http",
+			origin:         "http://example.com",
+			host:           "example.com",
+			forwardedProto: "ws",
+			expected:       true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hub := NewHub(nil)
+			if len(tc.allowedOrigins) > 0 {
+				hub.SetAllowedOrigins(tc.allowedOrigins)
+			}
+
+			req := &http.Request{
+				Host:   tc.host,
+				Header: make(http.Header),
+			}
+			if tc.origin != "" {
+				req.Header.Set("Origin", tc.origin)
+			}
+			if tc.forwardedProto != "" {
+				req.Header.Set("X-Forwarded-Proto", tc.forwardedProto)
+			}
+			if tc.forwardedHost != "" {
+				req.Header.Set("X-Forwarded-Host", tc.forwardedHost)
+			}
+
+			result := hub.checkOrigin(req)
+			if result != tc.expected {
+				t.Errorf("checkOrigin() = %v, want %v", result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestHub_CheckOrigin_XForwardedScheme(t *testing.T) {
+	hub := NewHub(nil)
+
+	req := &http.Request{
+		Host:   "example.com",
+		Header: make(http.Header),
+	}
+	req.Header.Set("Origin", "https://example.com")
+	req.Header.Set("X-Forwarded-Scheme", "https")
+
+	result := hub.checkOrigin(req)
+	if !result {
+		t.Error("checkOrigin should allow same-origin with X-Forwarded-Scheme")
 	}
 }
