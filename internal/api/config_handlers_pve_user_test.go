@@ -1,6 +1,12 @@
 package api
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+)
 
 func TestNormalizePVEUser(t *testing.T) {
 	tests := []struct {
@@ -445,4 +451,301 @@ func TestShouldSkipClusterAutoDetection(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFindInstanceNameByHost(t *testing.T) {
+	t.Run("pve instances", func(t *testing.T) {
+		cfg := &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{Name: "pve-node1", Host: "https://192.168.1.10:8006"},
+				{Name: "pve-node2", Host: "https://192.168.1.11:8006"},
+				{Name: "pve-node3", Host: "https://pve3.example.com:8006"},
+			},
+		}
+		h := &ConfigHandlers{config: cfg}
+
+		tests := []struct {
+			name     string
+			nodeType string
+			host     string
+			want     string
+		}{
+			{
+				name:     "finds first PVE node",
+				nodeType: "pve",
+				host:     "https://192.168.1.10:8006",
+				want:     "pve-node1",
+			},
+			{
+				name:     "finds second PVE node",
+				nodeType: "pve",
+				host:     "https://192.168.1.11:8006",
+				want:     "pve-node2",
+			},
+			{
+				name:     "finds PVE node by hostname",
+				nodeType: "pve",
+				host:     "https://pve3.example.com:8006",
+				want:     "pve-node3",
+			},
+			{
+				name:     "returns empty for non-existent PVE host",
+				nodeType: "pve",
+				host:     "https://192.168.1.99:8006",
+				want:     "",
+			},
+			{
+				name:     "returns empty for empty host",
+				nodeType: "pve",
+				host:     "",
+				want:     "",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				got := h.findInstanceNameByHost(tt.nodeType, tt.host)
+				if got != tt.want {
+					t.Errorf("findInstanceNameByHost(%q, %q) = %q, want %q", tt.nodeType, tt.host, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("pbs instances", func(t *testing.T) {
+		cfg := &config.Config{
+			PBSInstances: []config.PBSInstance{
+				{Name: "pbs-backup1", Host: "https://192.168.1.20:8007"},
+				{Name: "pbs-backup2", Host: "https://backup.example.com:8007"},
+			},
+		}
+		h := &ConfigHandlers{config: cfg}
+
+		tests := []struct {
+			name     string
+			nodeType string
+			host     string
+			want     string
+		}{
+			{
+				name:     "finds PBS node by IP",
+				nodeType: "pbs",
+				host:     "https://192.168.1.20:8007",
+				want:     "pbs-backup1",
+			},
+			{
+				name:     "finds PBS node by hostname",
+				nodeType: "pbs",
+				host:     "https://backup.example.com:8007",
+				want:     "pbs-backup2",
+			},
+			{
+				name:     "returns empty for non-existent PBS host",
+				nodeType: "pbs",
+				host:     "https://192.168.1.99:8007",
+				want:     "",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				got := h.findInstanceNameByHost(tt.nodeType, tt.host)
+				if got != tt.want {
+					t.Errorf("findInstanceNameByHost(%q, %q) = %q, want %q", tt.nodeType, tt.host, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("unknown node type", func(t *testing.T) {
+		cfg := &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{Name: "pve-node1", Host: "https://192.168.1.10:8006"},
+			},
+			PBSInstances: []config.PBSInstance{
+				{Name: "pbs-backup1", Host: "https://192.168.1.20:8007"},
+			},
+		}
+		h := &ConfigHandlers{config: cfg}
+
+		tests := []struct {
+			name     string
+			nodeType string
+			host     string
+			want     string
+		}{
+			{
+				name:     "returns empty for unknown type",
+				nodeType: "unknown",
+				host:     "https://192.168.1.10:8006",
+				want:     "",
+			},
+			{
+				name:     "returns empty for pmg type (not implemented)",
+				nodeType: "pmg",
+				host:     "https://192.168.1.30:8006",
+				want:     "",
+			},
+			{
+				name:     "returns empty for empty type",
+				nodeType: "",
+				host:     "https://192.168.1.10:8006",
+				want:     "",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				got := h.findInstanceNameByHost(tt.nodeType, tt.host)
+				if got != tt.want {
+					t.Errorf("findInstanceNameByHost(%q, %q) = %q, want %q", tt.nodeType, tt.host, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("empty config", func(t *testing.T) {
+		cfg := &config.Config{}
+		h := &ConfigHandlers{config: cfg}
+
+		got := h.findInstanceNameByHost("pve", "https://192.168.1.10:8006")
+		if got != "" {
+			t.Errorf("expected empty string for empty config, got %q", got)
+		}
+	})
+}
+
+func TestValidateSetupToken(t *testing.T) {
+	t.Run("empty token returns false", func(t *testing.T) {
+		h := &ConfigHandlers{
+			setupCodes:        make(map[string]*SetupCode),
+			recentSetupTokens: make(map[string]time.Time),
+		}
+
+		if h.ValidateSetupToken("") {
+			t.Error("expected false for empty token")
+		}
+	})
+
+	t.Run("valid setup code token", func(t *testing.T) {
+		token := "test-setup-token-12345"
+		tokenHash := auth.HashAPIToken(token)
+
+		h := &ConfigHandlers{
+			setupCodes: map[string]*SetupCode{
+				tokenHash: {
+					ExpiresAt: time.Now().Add(1 * time.Hour),
+					Used:      false,
+				},
+			},
+			recentSetupTokens: make(map[string]time.Time),
+		}
+
+		if !h.ValidateSetupToken(token) {
+			t.Error("expected true for valid setup code token")
+		}
+	})
+
+	t.Run("expired setup code returns false", func(t *testing.T) {
+		token := "expired-token-12345"
+		tokenHash := auth.HashAPIToken(token)
+
+		h := &ConfigHandlers{
+			setupCodes: map[string]*SetupCode{
+				tokenHash: {
+					ExpiresAt: time.Now().Add(-1 * time.Hour), // Expired
+					Used:      false,
+				},
+			},
+			recentSetupTokens: make(map[string]time.Time),
+		}
+
+		if h.ValidateSetupToken(token) {
+			t.Error("expected false for expired setup code")
+		}
+	})
+
+	t.Run("used setup code returns false", func(t *testing.T) {
+		token := "used-token-12345"
+		tokenHash := auth.HashAPIToken(token)
+
+		h := &ConfigHandlers{
+			setupCodes: map[string]*SetupCode{
+				tokenHash: {
+					ExpiresAt: time.Now().Add(1 * time.Hour),
+					Used:      true, // Already used
+				},
+			},
+			recentSetupTokens: make(map[string]time.Time),
+		}
+
+		if h.ValidateSetupToken(token) {
+			t.Error("expected false for used setup code")
+		}
+	})
+
+	t.Run("valid recent setup token", func(t *testing.T) {
+		token := "recent-setup-token-12345"
+		tokenHash := auth.HashAPIToken(token)
+
+		h := &ConfigHandlers{
+			setupCodes: make(map[string]*SetupCode),
+			recentSetupTokens: map[string]time.Time{
+				tokenHash: time.Now().Add(1 * time.Hour), // Valid for another hour
+			},
+		}
+
+		if !h.ValidateSetupToken(token) {
+			t.Error("expected true for valid recent setup token")
+		}
+	})
+
+	t.Run("expired recent setup token returns false", func(t *testing.T) {
+		token := "expired-recent-token-12345"
+		tokenHash := auth.HashAPIToken(token)
+
+		h := &ConfigHandlers{
+			setupCodes: make(map[string]*SetupCode),
+			recentSetupTokens: map[string]time.Time{
+				tokenHash: time.Now().Add(-1 * time.Hour), // Expired
+			},
+		}
+
+		if h.ValidateSetupToken(token) {
+			t.Error("expected false for expired recent setup token")
+		}
+	})
+
+	t.Run("non-existent token returns false", func(t *testing.T) {
+		h := &ConfigHandlers{
+			setupCodes:        make(map[string]*SetupCode),
+			recentSetupTokens: make(map[string]time.Time),
+		}
+
+		if h.ValidateSetupToken("non-existent-token") {
+			t.Error("expected false for non-existent token")
+		}
+	})
+
+	t.Run("setup code takes precedence over recent token", func(t *testing.T) {
+		token := "dual-token-12345"
+		tokenHash := auth.HashAPIToken(token)
+
+		h := &ConfigHandlers{
+			setupCodes: map[string]*SetupCode{
+				tokenHash: {
+					ExpiresAt: time.Now().Add(1 * time.Hour),
+					Used:      false,
+				},
+			},
+			recentSetupTokens: map[string]time.Time{
+				tokenHash: time.Now().Add(1 * time.Hour),
+			},
+		}
+
+		// Should return true (setup code is valid)
+		if !h.ValidateSetupToken(token) {
+			t.Error("expected true when both setup code and recent token exist")
+		}
+	})
 }
