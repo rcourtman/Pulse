@@ -603,6 +603,42 @@ func TestCoerceUint64(t *testing.T) {
 			value:   "not a number",
 			wantErr: true,
 		},
+		{
+			name:    "string invalid float in scientific notation",
+			field:   "test",
+			value:   "1.2.3e4",
+			wantErr: true,
+		},
+		{
+			name:  "string quoted null",
+			field: "test",
+			value: `"null"`,
+			want:  0,
+		},
+		{
+			name:  "string quoted empty",
+			field: "test",
+			value: `""`,
+			want:  0,
+		},
+		{
+			name:  "string single quoted empty",
+			field: "test",
+			value: `''`,
+			want:  0,
+		},
+		{
+			name:  "float64 at MaxUint64 boundary",
+			field: "test",
+			value: float64(math.MaxUint64),
+			want:  math.MaxUint64,
+		},
+		{
+			name:  "float64 exceeding MaxUint64",
+			field: "test",
+			value: float64(math.MaxUint64) * 2,
+			want:  math.MaxUint64,
+		},
 		// unsupported type
 		{
 			name:    "unsupported type bool",
