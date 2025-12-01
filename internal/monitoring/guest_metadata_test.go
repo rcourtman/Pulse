@@ -1215,6 +1215,114 @@ func newDeterministicRng(seed int64) *rand.Rand {
 	return rand.New(rand.NewSource(seed))
 }
 
+func TestClearGuestMetadataCache(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil monitor is safe", func(t *testing.T) {
+		t.Parallel()
+
+		var m *Monitor
+		// Should not panic
+		m.clearGuestMetadataCache("instance", "node", 100)
+	})
+
+	t.Run("nil cache map is safe", func(t *testing.T) {
+		t.Parallel()
+
+		m := &Monitor{guestMetadataCache: nil}
+		// Should not panic
+		m.clearGuestMetadataCache("instance", "node", 100)
+	})
+
+	t.Run("successfully clears existing entry", func(t *testing.T) {
+		t.Parallel()
+
+		key := guestMetadataCacheKey("instance", "node", 100)
+		m := &Monitor{
+			guestMetadataCache: map[string]guestMetadataCacheEntry{
+				key: {
+					ipAddresses:  []string{"192.168.1.10"},
+					osName:       "Linux",
+					osVersion:    "5.15",
+					agentVersion: "1.0",
+					fetchedAt:    time.Now(),
+				},
+			},
+		}
+
+		// Verify entry exists before clearing
+		if _, ok := m.guestMetadataCache[key]; !ok {
+			t.Fatal("entry should exist before clearing")
+		}
+
+		m.clearGuestMetadataCache("instance", "node", 100)
+
+		// Verify entry was removed
+		if _, ok := m.guestMetadataCache[key]; ok {
+			t.Fatal("entry should not exist after clearing")
+		}
+	})
+
+	t.Run("non-existent key does not cause error", func(t *testing.T) {
+		t.Parallel()
+
+		existingKey := guestMetadataCacheKey("other-instance", "other-node", 200)
+		m := &Monitor{
+			guestMetadataCache: map[string]guestMetadataCacheEntry{
+				existingKey: {
+					ipAddresses: []string{"10.0.0.5"},
+					fetchedAt:   time.Now(),
+				},
+			},
+		}
+
+		// Clear a key that doesn't exist - should not panic or error
+		m.clearGuestMetadataCache("instance", "node", 100)
+
+		// Verify existing entry is still there
+		if _, ok := m.guestMetadataCache[existingKey]; !ok {
+			t.Fatal("existing entry should not be affected")
+		}
+	})
+
+	t.Run("only clears specified key, other entries remain", func(t *testing.T) {
+		t.Parallel()
+
+		key1 := guestMetadataCacheKey("instance1", "node1", 100)
+		key2 := guestMetadataCacheKey("instance2", "node2", 200)
+		key3 := guestMetadataCacheKey("instance1", "node1", 300)
+
+		m := &Monitor{
+			guestMetadataCache: map[string]guestMetadataCacheEntry{
+				key1: {ipAddresses: []string{"192.168.1.10"}, fetchedAt: time.Now()},
+				key2: {ipAddresses: []string{"192.168.1.20"}, fetchedAt: time.Now()},
+				key3: {ipAddresses: []string{"192.168.1.30"}, fetchedAt: time.Now()},
+			},
+		}
+
+		// Clear only key2
+		m.clearGuestMetadataCache("instance2", "node2", 200)
+
+		// Verify key2 was removed
+		if _, ok := m.guestMetadataCache[key2]; ok {
+			t.Fatal("key2 should be removed")
+		}
+
+		// Verify key1 and key3 still exist
+		if _, ok := m.guestMetadataCache[key1]; !ok {
+			t.Fatal("key1 should still exist")
+		}
+		if _, ok := m.guestMetadataCache[key3]; !ok {
+			t.Fatal("key3 should still exist")
+		}
+
+		// Verify map size
+		if len(m.guestMetadataCache) != 2 {
+			t.Fatalf("expected 2 entries remaining, got %d", len(m.guestMetadataCache))
+		}
+	})
+}
+
 func TestReleaseGuestMetadataSlot(t *testing.T) {
 	t.Parallel()
 

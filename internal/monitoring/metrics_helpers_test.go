@@ -1,6 +1,9 @@
 package monitoring
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestNormalizeLabel(t *testing.T) {
 	tests := []struct {
@@ -368,4 +371,118 @@ func TestMakeNodeMetricKey(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStoreNodeLastSuccess(t *testing.T) {
+	t.Run("stores timestamp correctly", func(t *testing.T) {
+		pm := &PollMetrics{
+			nodeLastSuccessByKey: make(map[nodeMetricKey]time.Time),
+		}
+		ts := time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC)
+
+		pm.storeNodeLastSuccess("proxmox", "server1", "node1", ts)
+
+		key := makeNodeMetricKey("proxmox", "server1", "node1")
+		got, ok := pm.nodeLastSuccessByKey[key]
+		if !ok {
+			t.Fatal("expected key to exist in map")
+		}
+		if !got.Equal(ts) {
+			t.Errorf("stored timestamp = %v, want %v", got, ts)
+		}
+	})
+
+	t.Run("overwrites existing value", func(t *testing.T) {
+		pm := &PollMetrics{
+			nodeLastSuccessByKey: make(map[nodeMetricKey]time.Time),
+		}
+		ts1 := time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC)
+		ts2 := time.Date(2025, 1, 15, 11, 45, 0, 0, time.UTC)
+
+		pm.storeNodeLastSuccess("proxmox", "server1", "node1", ts1)
+		pm.storeNodeLastSuccess("proxmox", "server1", "node1", ts2)
+
+		key := makeNodeMetricKey("proxmox", "server1", "node1")
+		got := pm.nodeLastSuccessByKey[key]
+		if !got.Equal(ts2) {
+			t.Errorf("stored timestamp = %v, want %v", got, ts2)
+		}
+	})
+
+	t.Run("multiple distinct keys stored independently", func(t *testing.T) {
+		pm := &PollMetrics{
+			nodeLastSuccessByKey: make(map[nodeMetricKey]time.Time),
+		}
+		ts1 := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
+		ts2 := time.Date(2025, 1, 15, 11, 0, 0, 0, time.UTC)
+		ts3 := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
+
+		pm.storeNodeLastSuccess("proxmox", "server1", "node1", ts1)
+		pm.storeNodeLastSuccess("proxmox", "server1", "node2", ts2)
+		pm.storeNodeLastSuccess("docker", "prod", "host1", ts3)
+
+		key1 := makeNodeMetricKey("proxmox", "server1", "node1")
+		key2 := makeNodeMetricKey("proxmox", "server1", "node2")
+		key3 := makeNodeMetricKey("docker", "prod", "host1")
+
+		if got := pm.nodeLastSuccessByKey[key1]; !got.Equal(ts1) {
+			t.Errorf("key1 timestamp = %v, want %v", got, ts1)
+		}
+		if got := pm.nodeLastSuccessByKey[key2]; !got.Equal(ts2) {
+			t.Errorf("key2 timestamp = %v, want %v", got, ts2)
+		}
+		if got := pm.nodeLastSuccessByKey[key3]; !got.Equal(ts3) {
+			t.Errorf("key3 timestamp = %v, want %v", got, ts3)
+		}
+	})
+}
+
+func TestLastNodeSuccessFor(t *testing.T) {
+	t.Run("returns time and true for existing key", func(t *testing.T) {
+		pm := &PollMetrics{
+			nodeLastSuccessByKey: make(map[nodeMetricKey]time.Time),
+		}
+		ts := time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC)
+		key := makeNodeMetricKey("proxmox", "server1", "node1")
+		pm.nodeLastSuccessByKey[key] = ts
+
+		got, ok := pm.lastNodeSuccessFor("proxmox", "server1", "node1")
+		if !ok {
+			t.Error("expected ok to be true")
+		}
+		if !got.Equal(ts) {
+			t.Errorf("returned timestamp = %v, want %v", got, ts)
+		}
+	})
+
+	t.Run("returns zero time and false for non-existent key", func(t *testing.T) {
+		pm := &PollMetrics{
+			nodeLastSuccessByKey: make(map[nodeMetricKey]time.Time),
+		}
+
+		got, ok := pm.lastNodeSuccessFor("proxmox", "server1", "nonexistent")
+		if ok {
+			t.Error("expected ok to be false")
+		}
+		if !got.IsZero() {
+			t.Errorf("expected zero time, got %v", got)
+		}
+	})
+
+	t.Run("retrieves correct value after store", func(t *testing.T) {
+		pm := &PollMetrics{
+			nodeLastSuccessByKey: make(map[nodeMetricKey]time.Time),
+		}
+		ts := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+
+		pm.storeNodeLastSuccess("docker", "prod", "worker1", ts)
+
+		got, ok := pm.lastNodeSuccessFor("docker", "prod", "worker1")
+		if !ok {
+			t.Error("expected ok to be true")
+		}
+		if !got.Equal(ts) {
+			t.Errorf("returned timestamp = %v, want %v", got, ts)
+		}
+	})
 }
