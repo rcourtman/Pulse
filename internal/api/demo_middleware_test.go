@@ -44,6 +44,8 @@ func TestDemoModeMiddleware(t *testing.T) {
 		{"demo on websocket GET", true, http.MethodGet, "/api/ws", "websocket", true, http.StatusOK, true},
 		{"demo on websocket case insensitive", true, http.MethodGet, "/api/ws", "WebSocket", true, http.StatusOK, true},
 		{"demo on websocket uppercase", true, http.MethodGet, "/api/ws", "WEBSOCKET", true, http.StatusOK, true},
+		// WebSocket upgrade with POST method (tests websocket branch after GET/HEAD/OPTIONS check)
+		{"demo on websocket POST", true, http.MethodPost, "/api/ws", "websocket", true, http.StatusOK, true},
 
 		// Demo mode enabled - auth endpoints allowed (POST)
 		{"demo on login", true, http.MethodPost, "/api/login", "", true, http.StatusOK, true},
