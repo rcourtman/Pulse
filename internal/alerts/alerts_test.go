@@ -4374,3 +4374,225 @@ func TestClearSnapshotAlertsForInstance(t *testing.T) {
 		t.Errorf("expected 0 alerts remaining, got %d", len(m.activeAlerts))
 	}
 }
+
+func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
+	t.Parallel()
+
+	t.Run("DisableAllNodesOffline clears node offline alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add node offline alerts
+		m.activeAlerts["node-offline-node1"] = &Alert{ID: "node-offline-node1", Type: "offline"}
+		m.activeAlerts["node-offline-node2"] = &Alert{ID: "node-offline-node2", Type: "offline"}
+		// Add non-node alert
+		m.activeAlerts["cpu-alert"] = &Alert{ID: "cpu-alert", Type: "cpu"}
+		// Add to nodeOfflineCount
+		m.nodeOfflineCount["node1"] = 3
+		m.nodeOfflineCount["node2"] = 2
+
+		m.config.DisableAllNodesOffline = true
+
+		m.mu.Lock()
+		m.applyGlobalOfflineSettingsLocked()
+		m.mu.Unlock()
+
+		// Node alerts should be cleared
+		if _, exists := m.activeAlerts["node-offline-node1"]; exists {
+			t.Error("expected node-offline-node1 to be cleared")
+		}
+		if _, exists := m.activeAlerts["node-offline-node2"]; exists {
+			t.Error("expected node-offline-node2 to be cleared")
+		}
+		// Non-node alert should remain
+		if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+			t.Error("expected cpu-alert to remain")
+		}
+		// nodeOfflineCount should be reset
+		if len(m.nodeOfflineCount) != 0 {
+			t.Errorf("expected nodeOfflineCount to be empty, got %d entries", len(m.nodeOfflineCount))
+		}
+	})
+
+	t.Run("DisableAllPBSOffline clears PBS offline alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add PBS offline alerts
+		m.activeAlerts["pbs-offline-pbs1"] = &Alert{ID: "pbs-offline-pbs1", ResourceID: "pbs1", Type: "offline"}
+		// Add non-PBS alert
+		m.activeAlerts["cpu-alert"] = &Alert{ID: "cpu-alert", Type: "cpu"}
+		// Add to offlineConfirmations
+		m.offlineConfirmations["pbs1"] = 3
+
+		m.config.DisableAllPBSOffline = true
+
+		m.mu.Lock()
+		m.applyGlobalOfflineSettingsLocked()
+		m.mu.Unlock()
+
+		// PBS alert should be cleared
+		if _, exists := m.activeAlerts["pbs-offline-pbs1"]; exists {
+			t.Error("expected pbs-offline-pbs1 to be cleared")
+		}
+		// Non-PBS alert should remain
+		if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+			t.Error("expected cpu-alert to remain")
+		}
+		// offlineConfirmations for PBS should be removed
+		if _, exists := m.offlineConfirmations["pbs1"]; exists {
+			t.Error("expected offlineConfirmations for pbs1 to be removed")
+		}
+	})
+
+	t.Run("DisableAllGuestsOffline clears guest powered off alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add guest powered off alerts
+		m.activeAlerts["guest-powered-off-vm1"] = &Alert{ID: "guest-powered-off-vm1", ResourceID: "vm1", Type: "powered-off"}
+		// Add non-guest alert
+		m.activeAlerts["cpu-alert"] = &Alert{ID: "cpu-alert", Type: "cpu"}
+		// Add to offlineConfirmations
+		m.offlineConfirmations["vm1"] = 2
+
+		m.config.DisableAllGuestsOffline = true
+
+		m.mu.Lock()
+		m.applyGlobalOfflineSettingsLocked()
+		m.mu.Unlock()
+
+		// Guest alert should be cleared
+		if _, exists := m.activeAlerts["guest-powered-off-vm1"]; exists {
+			t.Error("expected guest-powered-off-vm1 to be cleared")
+		}
+		// Non-guest alert should remain
+		if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+			t.Error("expected cpu-alert to remain")
+		}
+		// offlineConfirmations for guest should be removed
+		if _, exists := m.offlineConfirmations["vm1"]; exists {
+			t.Error("expected offlineConfirmations for vm1 to be removed")
+		}
+	})
+
+	t.Run("DisableAllDockerHostsOffline clears docker host alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add docker host offline alerts
+		m.activeAlerts["docker-host-offline-host1"] = &Alert{ID: "docker-host-offline-host1", Type: "offline"}
+		// Add non-docker host alert
+		m.activeAlerts["cpu-alert"] = &Alert{ID: "cpu-alert", Type: "cpu"}
+		// Add to dockerOfflineCount
+		m.dockerOfflineCount["host1"] = 3
+
+		m.config.DisableAllDockerHostsOffline = true
+
+		m.mu.Lock()
+		m.applyGlobalOfflineSettingsLocked()
+		m.mu.Unlock()
+
+		// Docker host alert should be cleared
+		if _, exists := m.activeAlerts["docker-host-offline-host1"]; exists {
+			t.Error("expected docker-host-offline-host1 to be cleared")
+		}
+		// Non-docker host alert should remain
+		if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+			t.Error("expected cpu-alert to remain")
+		}
+		// dockerOfflineCount should be reset
+		if len(m.dockerOfflineCount) != 0 {
+			t.Errorf("expected dockerOfflineCount to be empty, got %d entries", len(m.dockerOfflineCount))
+		}
+	})
+
+	t.Run("DisableAllDockerContainers clears docker container alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add docker container alerts
+		m.activeAlerts["docker-container-unhealthy-c1"] = &Alert{ID: "docker-container-unhealthy-c1", Type: "unhealthy"}
+		m.activeAlerts["docker-container-exited-c2"] = &Alert{ID: "docker-container-exited-c2", Type: "exited"}
+		// Add non-container alert
+		m.activeAlerts["cpu-alert"] = &Alert{ID: "cpu-alert", Type: "cpu"}
+		// Add tracking state
+		m.dockerStateConfirm["c1"] = 2
+		m.dockerRestartTracking["c1"] = &dockerRestartRecord{count: 5}
+		m.dockerLastExitCode["c1"] = 137
+
+		m.config.DisableAllDockerContainers = true
+
+		m.mu.Lock()
+		m.applyGlobalOfflineSettingsLocked()
+		m.mu.Unlock()
+
+		// Docker container alerts should be cleared
+		if _, exists := m.activeAlerts["docker-container-unhealthy-c1"]; exists {
+			t.Error("expected docker-container-unhealthy-c1 to be cleared")
+		}
+		if _, exists := m.activeAlerts["docker-container-exited-c2"]; exists {
+			t.Error("expected docker-container-exited-c2 to be cleared")
+		}
+		// Non-container alert should remain
+		if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+			t.Error("expected cpu-alert to remain")
+		}
+		// Tracking state should be reset
+		if len(m.dockerStateConfirm) != 0 {
+			t.Errorf("expected dockerStateConfirm to be empty, got %d entries", len(m.dockerStateConfirm))
+		}
+		if len(m.dockerRestartTracking) != 0 {
+			t.Errorf("expected dockerRestartTracking to be empty, got %d entries", len(m.dockerRestartTracking))
+		}
+		if len(m.dockerLastExitCode) != 0 {
+			t.Errorf("expected dockerLastExitCode to be empty, got %d entries", len(m.dockerLastExitCode))
+		}
+	})
+
+	t.Run("DisableAllDockerServices clears docker service alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add docker service alerts
+		m.activeAlerts["docker-service-unhealthy-svc1"] = &Alert{ID: "docker-service-unhealthy-svc1", Type: "unhealthy"}
+		// Add non-service alert
+		m.activeAlerts["cpu-alert"] = &Alert{ID: "cpu-alert", Type: "cpu"}
+
+		m.config.DisableAllDockerServices = true
+
+		m.mu.Lock()
+		m.applyGlobalOfflineSettingsLocked()
+		m.mu.Unlock()
+
+		// Docker service alert should be cleared
+		if _, exists := m.activeAlerts["docker-service-unhealthy-svc1"]; exists {
+			t.Error("expected docker-service-unhealthy-svc1 to be cleared")
+		}
+		// Non-service alert should remain
+		if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+			t.Error("expected cpu-alert to remain")
+		}
+	})
+
+	t.Run("no settings enabled does nothing", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add various alerts
+		m.activeAlerts["node-offline-node1"] = &Alert{ID: "node-offline-node1", Type: "offline"}
+		m.activeAlerts["pbs-offline-pbs1"] = &Alert{ID: "pbs-offline-pbs1", Type: "offline"}
+		m.activeAlerts["docker-container-unhealthy-c1"] = &Alert{ID: "docker-container-unhealthy-c1", Type: "unhealthy"}
+
+		// All disable settings are false by default
+
+		m.mu.Lock()
+		m.applyGlobalOfflineSettingsLocked()
+		m.mu.Unlock()
+
+		// All alerts should remain
+		if len(m.activeAlerts) != 3 {
+			t.Errorf("expected 3 alerts to remain, got %d", len(m.activeAlerts))
+		}
+	})
+}
