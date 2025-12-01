@@ -807,3 +807,422 @@ func TestSendTestNotificationAppriseHTTP(t *testing.T) {
 		t.Fatalf("timeout waiting for Apprise HTTP request")
 	}
 }
+
+func TestPublicURL(t *testing.T) {
+	t.Run("set and get URL", func(t *testing.T) {
+		nm := NewNotificationManager("")
+		nm.SetPublicURL("https://pulse.example.com")
+
+		got := nm.GetPublicURL()
+		if got != "https://pulse.example.com" {
+			t.Fatalf("expected https://pulse.example.com, got %q", got)
+		}
+	})
+
+	t.Run("empty string is no-op", func(t *testing.T) {
+		nm := NewNotificationManager("")
+		nm.SetPublicURL("https://pulse.example.com")
+		nm.SetPublicURL("")
+
+		got := nm.GetPublicURL()
+		if got != "https://pulse.example.com" {
+			t.Fatalf("expected URL to remain unchanged, got %q", got)
+		}
+	})
+
+	t.Run("trailing slash is trimmed", func(t *testing.T) {
+		nm := NewNotificationManager("")
+		nm.SetPublicURL("https://pulse.example.com/")
+
+		got := nm.GetPublicURL()
+		if got != "https://pulse.example.com" {
+			t.Fatalf("expected trailing slash to be trimmed, got %q", got)
+		}
+	})
+
+	t.Run("whitespace is trimmed", func(t *testing.T) {
+		nm := NewNotificationManager("")
+		nm.SetPublicURL("  https://pulse.example.com  ")
+
+		got := nm.GetPublicURL()
+		if got != "https://pulse.example.com" {
+			t.Fatalf("expected whitespace to be trimmed, got %q", got)
+		}
+	})
+
+	t.Run("same URL twice is no-op", func(t *testing.T) {
+		nm := NewNotificationManager("")
+		nm.SetPublicURL("https://pulse.example.com")
+
+		nm.mu.RLock()
+		urlBefore := nm.publicURL
+		nm.mu.RUnlock()
+
+		nm.SetPublicURL("https://pulse.example.com")
+
+		nm.mu.RLock()
+		urlAfter := nm.publicURL
+		nm.mu.RUnlock()
+
+		if urlBefore != urlAfter {
+			t.Fatalf("expected URL to remain unchanged")
+		}
+	})
+
+	t.Run("whitespace-only is no-op", func(t *testing.T) {
+		nm := NewNotificationManager("")
+		nm.SetPublicURL("https://pulse.example.com")
+		nm.SetPublicURL("   ")
+
+		got := nm.GetPublicURL()
+		if got != "https://pulse.example.com" {
+			t.Fatalf("expected URL to remain unchanged after whitespace-only set, got %q", got)
+		}
+	})
+}
+
+func TestGetAppriseConfigReturnsCopy(t *testing.T) {
+	nm := NewNotificationManager("")
+	nm.SetAppriseConfig(AppriseConfig{
+		Enabled:        true,
+		Targets:        []string{"discord://token1", "slack://token2"},
+		TimeoutSeconds: 30,
+	})
+
+	// Get a copy of the config
+	configCopy := nm.GetAppriseConfig()
+
+	// Modify the returned copy
+	configCopy.Targets = append(configCopy.Targets, "telegram://token3")
+	configCopy.Enabled = false
+	configCopy.TimeoutSeconds = 60
+
+	// Get another copy and verify the internal state wasn't affected
+	configAfter := nm.GetAppriseConfig()
+
+	if !configAfter.Enabled {
+		t.Fatalf("modifying returned copy should not affect internal enabled state")
+	}
+	if configAfter.TimeoutSeconds != 30 {
+		t.Fatalf("expected timeout 30, got %d", configAfter.TimeoutSeconds)
+	}
+	if len(configAfter.Targets) != 2 {
+		t.Fatalf("expected 2 targets, got %d", len(configAfter.Targets))
+	}
+	if configAfter.Targets[0] != "discord://token1" || configAfter.Targets[1] != "slack://token2" {
+		t.Fatalf("internal targets were modified: %v", configAfter.Targets)
+	}
+}
+
+func TestNotifyOnResolve(t *testing.T) {
+	t.Run("default value is true", func(t *testing.T) {
+		nm := NewNotificationManager("")
+
+		if !nm.GetNotifyOnResolve() {
+			t.Fatalf("expected default notifyOnResolve to be true")
+		}
+	})
+
+	t.Run("set true and get", func(t *testing.T) {
+		nm := NewNotificationManager("")
+		nm.SetNotifyOnResolve(true)
+
+		if !nm.GetNotifyOnResolve() {
+			t.Fatalf("expected notifyOnResolve to be true after setting")
+		}
+	})
+
+	t.Run("set false and get", func(t *testing.T) {
+		nm := NewNotificationManager("")
+		nm.SetNotifyOnResolve(false)
+
+		if nm.GetNotifyOnResolve() {
+			t.Fatalf("expected notifyOnResolve to be false after setting")
+		}
+	})
+}
+
+func TestGroupingOptions(t *testing.T) {
+	t.Run("byNode=true, byGuest=false", func(t *testing.T) {
+		nm := NewNotificationManager("")
+		nm.SetGroupingOptions(true, false)
+
+		nm.mu.RLock()
+		byNode := nm.groupByNode
+		byGuest := nm.groupByGuest
+		nm.mu.RUnlock()
+
+		if !byNode {
+			t.Fatalf("expected groupByNode to be true")
+		}
+		if byGuest {
+			t.Fatalf("expected groupByGuest to be false")
+		}
+	})
+
+	t.Run("byNode=false, byGuest=true", func(t *testing.T) {
+		nm := NewNotificationManager("")
+		nm.SetGroupingOptions(false, true)
+
+		nm.mu.RLock()
+		byNode := nm.groupByNode
+		byGuest := nm.groupByGuest
+		nm.mu.RUnlock()
+
+		if byNode {
+			t.Fatalf("expected groupByNode to be false")
+		}
+		if !byGuest {
+			t.Fatalf("expected groupByGuest to be true")
+		}
+	})
+
+	t.Run("both true", func(t *testing.T) {
+		nm := NewNotificationManager("")
+		nm.SetGroupingOptions(true, true)
+
+		nm.mu.RLock()
+		byNode := nm.groupByNode
+		byGuest := nm.groupByGuest
+		nm.mu.RUnlock()
+
+		if !byNode {
+			t.Fatalf("expected groupByNode to be true")
+		}
+		if !byGuest {
+			t.Fatalf("expected groupByGuest to be true")
+		}
+	})
+
+	t.Run("both false", func(t *testing.T) {
+		nm := NewNotificationManager("")
+		nm.SetGroupingOptions(false, false)
+
+		nm.mu.RLock()
+		byNode := nm.groupByNode
+		byGuest := nm.groupByGuest
+		nm.mu.RUnlock()
+
+		if byNode {
+			t.Fatalf("expected groupByNode to be false")
+		}
+		if byGuest {
+			t.Fatalf("expected groupByGuest to be false")
+		}
+	})
+}
+
+func TestWebhookAddAndGet(t *testing.T) {
+	t.Run("add webhook and retrieve", func(t *testing.T) {
+		nm := NewNotificationManager("")
+
+		webhook := WebhookConfig{
+			ID:      "webhook-1",
+			Name:    "Test Webhook",
+			URL:     "https://example.com/hook",
+			Method:  "POST",
+			Enabled: true,
+			Service: "generic",
+		}
+		nm.AddWebhook(webhook)
+
+		webhooks := nm.GetWebhooks()
+		if len(webhooks) != 1 {
+			t.Fatalf("expected 1 webhook, got %d", len(webhooks))
+		}
+		if webhooks[0].ID != "webhook-1" {
+			t.Fatalf("expected webhook ID 'webhook-1', got %q", webhooks[0].ID)
+		}
+		if webhooks[0].Name != "Test Webhook" {
+			t.Fatalf("expected webhook name 'Test Webhook', got %q", webhooks[0].Name)
+		}
+	})
+
+	t.Run("add multiple webhooks", func(t *testing.T) {
+		nm := NewNotificationManager("")
+
+		nm.AddWebhook(WebhookConfig{ID: "webhook-1", Name: "First", URL: "https://example.com/1"})
+		nm.AddWebhook(WebhookConfig{ID: "webhook-2", Name: "Second", URL: "https://example.com/2"})
+		nm.AddWebhook(WebhookConfig{ID: "webhook-3", Name: "Third", URL: "https://example.com/3"})
+
+		webhooks := nm.GetWebhooks()
+		if len(webhooks) != 3 {
+			t.Fatalf("expected 3 webhooks, got %d", len(webhooks))
+		}
+
+		ids := make(map[string]bool)
+		for _, wh := range webhooks {
+			ids[wh.ID] = true
+		}
+		if !ids["webhook-1"] || !ids["webhook-2"] || !ids["webhook-3"] {
+			t.Fatalf("missing expected webhook IDs: %v", ids)
+		}
+	})
+
+	t.Run("get webhooks returns empty slice when none", func(t *testing.T) {
+		nm := NewNotificationManager("")
+
+		webhooks := nm.GetWebhooks()
+		if webhooks == nil {
+			t.Fatalf("expected empty slice, got nil")
+		}
+		if len(webhooks) != 0 {
+			t.Fatalf("expected 0 webhooks, got %d", len(webhooks))
+		}
+	})
+}
+
+func TestWebhookUpdate(t *testing.T) {
+	t.Run("update existing webhook", func(t *testing.T) {
+		nm := NewNotificationManager("")
+
+		nm.AddWebhook(WebhookConfig{
+			ID:      "webhook-1",
+			Name:    "Original Name",
+			URL:     "https://example.com/original",
+			Enabled: true,
+		})
+
+		err := nm.UpdateWebhook("webhook-1", WebhookConfig{
+			ID:      "webhook-1",
+			Name:    "Updated Name",
+			URL:     "https://example.com/updated",
+			Enabled: false,
+		})
+		if err != nil {
+			t.Fatalf("expected no error updating webhook, got %v", err)
+		}
+
+		webhooks := nm.GetWebhooks()
+		if len(webhooks) != 1 {
+			t.Fatalf("expected 1 webhook, got %d", len(webhooks))
+		}
+		if webhooks[0].Name != "Updated Name" {
+			t.Fatalf("expected name 'Updated Name', got %q", webhooks[0].Name)
+		}
+		if webhooks[0].URL != "https://example.com/updated" {
+			t.Fatalf("expected URL 'https://example.com/updated', got %q", webhooks[0].URL)
+		}
+		if webhooks[0].Enabled {
+			t.Fatalf("expected enabled to be false")
+		}
+	})
+
+	t.Run("update non-existent webhook returns error", func(t *testing.T) {
+		nm := NewNotificationManager("")
+
+		err := nm.UpdateWebhook("non-existent", WebhookConfig{
+			ID:   "non-existent",
+			Name: "Test",
+		})
+		if err == nil {
+			t.Fatalf("expected error updating non-existent webhook, got nil")
+		}
+		if !strings.Contains(err.Error(), "webhook not found") {
+			t.Fatalf("expected 'webhook not found' error, got: %v", err)
+		}
+	})
+}
+
+func TestWebhookDelete(t *testing.T) {
+	t.Run("delete existing webhook", func(t *testing.T) {
+		nm := NewNotificationManager("")
+
+		nm.AddWebhook(WebhookConfig{ID: "webhook-1", Name: "First"})
+		nm.AddWebhook(WebhookConfig{ID: "webhook-2", Name: "Second"})
+
+		err := nm.DeleteWebhook("webhook-1")
+		if err != nil {
+			t.Fatalf("expected no error deleting webhook, got %v", err)
+		}
+
+		webhooks := nm.GetWebhooks()
+		if len(webhooks) != 1 {
+			t.Fatalf("expected 1 webhook after delete, got %d", len(webhooks))
+		}
+		if webhooks[0].ID != "webhook-2" {
+			t.Fatalf("expected remaining webhook ID 'webhook-2', got %q", webhooks[0].ID)
+		}
+	})
+
+	t.Run("delete non-existent webhook returns error", func(t *testing.T) {
+		nm := NewNotificationManager("")
+
+		err := nm.DeleteWebhook("non-existent")
+		if err == nil {
+			t.Fatalf("expected error deleting non-existent webhook, got nil")
+		}
+		if !strings.Contains(err.Error(), "webhook not found") {
+			t.Fatalf("expected 'webhook not found' error, got: %v", err)
+		}
+	})
+
+	t.Run("delete from middle of list", func(t *testing.T) {
+		nm := NewNotificationManager("")
+
+		nm.AddWebhook(WebhookConfig{ID: "webhook-1", Name: "First"})
+		nm.AddWebhook(WebhookConfig{ID: "webhook-2", Name: "Second"})
+		nm.AddWebhook(WebhookConfig{ID: "webhook-3", Name: "Third"})
+
+		err := nm.DeleteWebhook("webhook-2")
+		if err != nil {
+			t.Fatalf("expected no error deleting middle webhook, got %v", err)
+		}
+
+		webhooks := nm.GetWebhooks()
+		if len(webhooks) != 2 {
+			t.Fatalf("expected 2 webhooks after delete, got %d", len(webhooks))
+		}
+
+		ids := make(map[string]bool)
+		for _, wh := range webhooks {
+			ids[wh.ID] = true
+		}
+		if !ids["webhook-1"] || !ids["webhook-3"] {
+			t.Fatalf("expected webhook-1 and webhook-3 to remain, got: %v", ids)
+		}
+		if ids["webhook-2"] {
+			t.Fatalf("webhook-2 should have been deleted")
+		}
+	})
+}
+
+func TestGetEmailConfig(t *testing.T) {
+	nm := NewNotificationManager("")
+
+	config := EmailConfig{
+		Enabled:  true,
+		SMTPHost: "smtp.example.com",
+		SMTPPort: 587,
+		Username: "user@example.com",
+		Password: "secret",
+		From:     "alerts@example.com",
+		To:       []string{"admin@example.com", "ops@example.com"},
+		StartTLS: true,
+	}
+	nm.SetEmailConfig(config)
+
+	got := nm.GetEmailConfig()
+
+	if !got.Enabled {
+		t.Fatalf("expected enabled to be true")
+	}
+	if got.SMTPHost != "smtp.example.com" {
+		t.Fatalf("expected host 'smtp.example.com', got %q", got.SMTPHost)
+	}
+	if got.SMTPPort != 587 {
+		t.Fatalf("expected port 587, got %d", got.SMTPPort)
+	}
+	if got.Username != "user@example.com" {
+		t.Fatalf("expected username 'user@example.com', got %q", got.Username)
+	}
+	if got.From != "alerts@example.com" {
+		t.Fatalf("expected from 'alerts@example.com', got %q", got.From)
+	}
+	if len(got.To) != 2 {
+		t.Fatalf("expected 2 recipients, got %d", len(got.To))
+	}
+	if !got.StartTLS {
+		t.Fatalf("expected startTLS to be true")
+	}
+}
