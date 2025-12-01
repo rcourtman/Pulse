@@ -2359,6 +2359,246 @@ func TestHandleProxyFailure_PlainError_TriggersDisablePath(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// Tests for handleProxyHostFailure
+// =============================================================================
+
+func TestHandleProxyHostFailure_EmptyHost(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: make(map[string]*proxyHostState),
+	}
+
+	tc.handleProxyHostFailure("", fmt.Errorf("some error"))
+
+	tc.proxyMu.Lock()
+	defer tc.proxyMu.Unlock()
+
+	if len(tc.proxyHostStates) != 0 {
+		t.Errorf("expected no state change for empty host, got %d entries", len(tc.proxyHostStates))
+	}
+}
+
+func TestHandleProxyHostFailure_WhitespaceOnlyHost(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: make(map[string]*proxyHostState),
+	}
+
+	tc.handleProxyHostFailure("   ", fmt.Errorf("some error"))
+
+	tc.proxyMu.Lock()
+	defer tc.proxyMu.Unlock()
+
+	if len(tc.proxyHostStates) != 0 {
+		t.Errorf("expected no state change for whitespace-only host, got %d entries", len(tc.proxyHostStates))
+	}
+}
+
+func TestHandleProxyHostFailure_FirstFailureCreatesState(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: make(map[string]*proxyHostState),
+	}
+
+	tc.handleProxyHostFailure("192.168.1.100", fmt.Errorf("connection refused"))
+
+	tc.proxyMu.Lock()
+	defer tc.proxyMu.Unlock()
+
+	state, exists := tc.proxyHostStates["192.168.1.100"]
+	if !exists {
+		t.Fatal("expected host state to be created")
+	}
+	if state.failures != 1 {
+		t.Errorf("expected failures to be 1, got %d", state.failures)
+	}
+	if state.lastError != "connection refused" {
+		t.Errorf("expected lastError to be 'connection refused', got %q", state.lastError)
+	}
+	if !state.cooldownUntil.IsZero() {
+		t.Errorf("expected cooldownUntil to be zero (threshold not reached), got %s", state.cooldownUntil)
+	}
+}
+
+func TestHandleProxyHostFailure_SubsequentFailuresIncrement(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: map[string]*proxyHostState{
+			"192.168.1.100": {
+				failures:  1,
+				lastError: "first error",
+			},
+		},
+	}
+
+	tc.handleProxyHostFailure("192.168.1.100", fmt.Errorf("second error"))
+
+	tc.proxyMu.Lock()
+	defer tc.proxyMu.Unlock()
+
+	state := tc.proxyHostStates["192.168.1.100"]
+	if state.failures != 2 {
+		t.Errorf("expected failures to be 2, got %d", state.failures)
+	}
+	if state.lastError != "second error" {
+		t.Errorf("expected lastError to be 'second error', got %q", state.lastError)
+	}
+	if !state.cooldownUntil.IsZero() {
+		t.Errorf("expected cooldownUntil to remain zero (threshold not reached), got %s", state.cooldownUntil)
+	}
+}
+
+func TestHandleProxyHostFailure_ReachesThresholdSetsCooldown(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: map[string]*proxyHostState{
+			"192.168.1.100": {
+				failures:  proxyFailureThreshold - 1, // one failure away
+				lastError: "previous error",
+			},
+		},
+	}
+
+	before := time.Now()
+	tc.handleProxyHostFailure("192.168.1.100", fmt.Errorf("final error"))
+
+	tc.proxyMu.Lock()
+	defer tc.proxyMu.Unlock()
+
+	state := tc.proxyHostStates["192.168.1.100"]
+	// failures should be reset to 0 after reaching threshold
+	if state.failures != 0 {
+		t.Errorf("expected failures to be reset to 0 after reaching threshold, got %d", state.failures)
+	}
+	if state.lastError != "final error" {
+		t.Errorf("expected lastError to be 'final error', got %q", state.lastError)
+	}
+	// cooldownUntil should be set in the future
+	if !state.cooldownUntil.After(before) {
+		t.Errorf("expected cooldownUntil to be set in the future, got %s", state.cooldownUntil)
+	}
+	// cooldownUntil should be approximately proxyRetryInterval from now
+	expectedMin := before.Add(proxyRetryInterval - time.Second)
+	if state.cooldownUntil.Before(expectedMin) {
+		t.Errorf("expected cooldownUntil to be at least %s, got %s", expectedMin, state.cooldownUntil)
+	}
+}
+
+func TestHandleProxyHostFailure_LastErrorStored(t *testing.T) {
+	tests := []struct {
+		name        string
+		err         error
+		wantLastErr string
+	}{
+		{
+			name:        "simple error message",
+			err:         fmt.Errorf("connection refused"),
+			wantLastErr: "connection refused",
+		},
+		{
+			name:        "error with whitespace is trimmed",
+			err:         fmt.Errorf("  timeout waiting for response  "),
+			wantLastErr: "timeout waiting for response",
+		},
+		{
+			name:        "empty error message",
+			err:         fmt.Errorf(""),
+			wantLastErr: "",
+		},
+		{
+			name:        "multiline error gets first part after trim",
+			err:         fmt.Errorf("network error\ndetails here"),
+			wantLastErr: "network error\ndetails here",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tc := &TemperatureCollector{
+				proxyHostStates: make(map[string]*proxyHostState),
+			}
+
+			tc.handleProxyHostFailure("192.168.1.100", tt.err)
+
+			tc.proxyMu.Lock()
+			state := tc.proxyHostStates["192.168.1.100"]
+			tc.proxyMu.Unlock()
+
+			if state.lastError != tt.wantLastErr {
+				t.Errorf("expected lastError to be %q, got %q", tt.wantLastErr, state.lastError)
+			}
+		})
+	}
+}
+
+func TestHandleProxyHostFailure_NilStateInMap(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: map[string]*proxyHostState{
+			"192.168.1.100": nil, // nil state in map
+		},
+	}
+
+	tc.handleProxyHostFailure("192.168.1.100", fmt.Errorf("some error"))
+
+	tc.proxyMu.Lock()
+	defer tc.proxyMu.Unlock()
+
+	state := tc.proxyHostStates["192.168.1.100"]
+	if state == nil {
+		t.Fatal("expected new state to be created for nil entry")
+	}
+	if state.failures != 1 {
+		t.Errorf("expected failures to be 1, got %d", state.failures)
+	}
+}
+
+func TestHandleProxyHostFailure_TrimsHostWhitespace(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: make(map[string]*proxyHostState),
+	}
+
+	tc.handleProxyHostFailure("  192.168.1.100  ", fmt.Errorf("some error"))
+
+	tc.proxyMu.Lock()
+	defer tc.proxyMu.Unlock()
+
+	// State should be stored under trimmed key
+	if _, exists := tc.proxyHostStates["192.168.1.100"]; !exists {
+		t.Error("expected state to be stored under trimmed host key")
+	}
+	if _, exists := tc.proxyHostStates["  192.168.1.100  "]; exists {
+		t.Error("state should not be stored under untrimmed host key")
+	}
+}
+
+func TestHandleProxyHostFailure_MultipleHostsIndependent(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: make(map[string]*proxyHostState),
+	}
+
+	// First host gets multiple failures
+	tc.handleProxyHostFailure("192.168.1.100", fmt.Errorf("error 1"))
+	tc.handleProxyHostFailure("192.168.1.100", fmt.Errorf("error 2"))
+
+	// Second host gets one failure
+	tc.handleProxyHostFailure("192.168.1.101", fmt.Errorf("different error"))
+
+	tc.proxyMu.Lock()
+	defer tc.proxyMu.Unlock()
+
+	state1 := tc.proxyHostStates["192.168.1.100"]
+	state2 := tc.proxyHostStates["192.168.1.101"]
+
+	if state1.failures != 2 {
+		t.Errorf("expected host 1 failures to be 2, got %d", state1.failures)
+	}
+	if state2.failures != 1 {
+		t.Errorf("expected host 2 failures to be 1, got %d", state2.failures)
+	}
+	if state1.lastError != "error 2" {
+		t.Errorf("expected host 1 lastError to be 'error 2', got %q", state1.lastError)
+	}
+	if state2.lastError != "different error" {
+		t.Errorf("expected host 2 lastError to be 'different error', got %q", state2.lastError)
+	}
+}
+
 // Helper functions for test setup
 
 func intPtr(i int) *int {

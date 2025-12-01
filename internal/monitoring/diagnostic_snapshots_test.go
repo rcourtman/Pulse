@@ -758,6 +758,213 @@ func TestLogNodeMemorySource(t *testing.T) {
 	})
 }
 
+func TestRecordNodeSnapshot(t *testing.T) {
+	tests := []struct {
+		name             string
+		monitor          *Monitor
+		instance         string
+		node             string
+		snapshot         NodeMemorySnapshot
+		wantPanic        bool
+		wantMapLen       int
+		wantInstance     string
+		wantNode         string
+		checkRetrievedAt string // "set" (auto-set), "preserved" (kept from input), "skip" (don't check)
+		inputRetrievedAt time.Time
+	}{
+		{
+			name:             "nil Monitor returns early without panic",
+			monitor:          nil,
+			instance:         "pve1",
+			node:             "node1",
+			snapshot:         NodeMemorySnapshot{},
+			wantPanic:        false,
+			checkRetrievedAt: "skip",
+		},
+		{
+			name: "nil nodeSnapshots map gets initialized",
+			monitor: &Monitor{
+				nodeSnapshots:  nil,
+				guestSnapshots: make(map[string]GuestMemorySnapshot),
+			},
+			instance:         "pve1",
+			node:             "node1",
+			snapshot:         NodeMemorySnapshot{MemorySource: "test"},
+			wantMapLen:       1,
+			wantInstance:     "pve1",
+			wantNode:         "node1",
+			checkRetrievedAt: "set",
+		},
+		{
+			name: "Instance and Node are set from parameters",
+			monitor: &Monitor{
+				nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+				guestSnapshots: make(map[string]GuestMemorySnapshot),
+			},
+			instance: "my-instance",
+			node:     "my-node",
+			snapshot: NodeMemorySnapshot{
+				Instance: "wrong-instance",
+				Node:     "wrong-node",
+			},
+			wantMapLen:       1,
+			wantInstance:     "my-instance",
+			wantNode:         "my-node",
+			checkRetrievedAt: "set",
+		},
+		{
+			name: "zero RetrievedAt gets set to current time",
+			monitor: &Monitor{
+				nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+				guestSnapshots: make(map[string]GuestMemorySnapshot),
+			},
+			instance:         "pve1",
+			node:             "node1",
+			snapshot:         NodeMemorySnapshot{},
+			wantMapLen:       1,
+			wantInstance:     "pve1",
+			wantNode:         "node1",
+			checkRetrievedAt: "set",
+		},
+		{
+			name: "non-zero RetrievedAt is preserved",
+			monitor: &Monitor{
+				nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+				guestSnapshots: make(map[string]GuestMemorySnapshot),
+			},
+			instance:         "pve1",
+			node:             "node1",
+			snapshot:         NodeMemorySnapshot{RetrievedAt: time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)},
+			wantMapLen:       1,
+			wantInstance:     "pve1",
+			wantNode:         "node1",
+			checkRetrievedAt: "preserved",
+			inputRetrievedAt: time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "snapshot is stored with correct key",
+			monitor: &Monitor{
+				nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+				guestSnapshots: make(map[string]GuestMemorySnapshot),
+			},
+			instance:         "pve1",
+			node:             "node1",
+			snapshot:         NodeMemorySnapshot{MemorySource: "rrd-available"},
+			wantMapLen:       1,
+			wantInstance:     "pve1",
+			wantNode:         "node1",
+			checkRetrievedAt: "set",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			beforeRecord := time.Now()
+
+			// Call recordNodeSnapshot - should not panic
+			tc.monitor.recordNodeSnapshot(tc.instance, tc.node, tc.snapshot)
+
+			afterRecord := time.Now()
+
+			// For nil monitor, we just verify no panic occurred
+			if tc.monitor == nil {
+				return
+			}
+
+			// Verify map was initialized and has expected length
+			if tc.monitor.nodeSnapshots == nil {
+				t.Fatal("nodeSnapshots should have been initialized")
+			}
+			if len(tc.monitor.nodeSnapshots) != tc.wantMapLen {
+				t.Errorf("nodeSnapshots length = %d, want %d", len(tc.monitor.nodeSnapshots), tc.wantMapLen)
+			}
+
+			// Verify snapshot was stored with correct key
+			key := makeNodeSnapshotKey(tc.instance, tc.node)
+			stored, ok := tc.monitor.nodeSnapshots[key]
+			if !ok {
+				t.Fatalf("snapshot not found with key %q", key)
+			}
+
+			// Verify Instance and Node were set from parameters
+			if stored.Instance != tc.wantInstance {
+				t.Errorf("Instance = %q, want %q", stored.Instance, tc.wantInstance)
+			}
+			if stored.Node != tc.wantNode {
+				t.Errorf("Node = %q, want %q", stored.Node, tc.wantNode)
+			}
+
+			// Verify RetrievedAt handling
+			switch tc.checkRetrievedAt {
+			case "set":
+				if stored.RetrievedAt.Before(beforeRecord) || stored.RetrievedAt.After(afterRecord) {
+					t.Errorf("RetrievedAt = %v, want between %v and %v", stored.RetrievedAt, beforeRecord, afterRecord)
+				}
+			case "preserved":
+				if !stored.RetrievedAt.Equal(tc.inputRetrievedAt) {
+					t.Errorf("RetrievedAt = %v, want %v", stored.RetrievedAt, tc.inputRetrievedAt)
+				}
+			}
+		})
+	}
+}
+
+func TestRecordNodeSnapshot_MultipleSnapshots(t *testing.T) {
+	t.Run("records multiple nodes with different keys", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		m.recordNodeSnapshot("pve1", "node1", NodeMemorySnapshot{MemorySource: "src1"})
+		m.recordNodeSnapshot("pve1", "node2", NodeMemorySnapshot{MemorySource: "src2"})
+		m.recordNodeSnapshot("pve2", "node1", NodeMemorySnapshot{MemorySource: "src3"})
+
+		if len(m.nodeSnapshots) != 3 {
+			t.Fatalf("Expected 3 node snapshots, got %d", len(m.nodeSnapshots))
+		}
+
+		// Verify each one exists with correct data
+		key1 := makeNodeSnapshotKey("pve1", "node1")
+		key2 := makeNodeSnapshotKey("pve1", "node2")
+		key3 := makeNodeSnapshotKey("pve2", "node1")
+
+		if m.nodeSnapshots[key1].MemorySource != "src1" {
+			t.Errorf("Snapshot 1 MemorySource = %q, want %q", m.nodeSnapshots[key1].MemorySource, "src1")
+		}
+		if m.nodeSnapshots[key2].MemorySource != "src2" {
+			t.Errorf("Snapshot 2 MemorySource = %q, want %q", m.nodeSnapshots[key2].MemorySource, "src2")
+		}
+		if m.nodeSnapshots[key3].MemorySource != "src3" {
+			t.Errorf("Snapshot 3 MemorySource = %q, want %q", m.nodeSnapshots[key3].MemorySource, "src3")
+		}
+	})
+
+	t.Run("overwrites existing snapshot with same key", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		m.recordNodeSnapshot("pve1", "node1", NodeMemorySnapshot{
+			MemorySource: "old-source",
+		})
+
+		m.recordNodeSnapshot("pve1", "node1", NodeMemorySnapshot{
+			MemorySource: "new-source",
+		})
+
+		if len(m.nodeSnapshots) != 1 {
+			t.Fatalf("Expected 1 node snapshot after overwrite, got %d", len(m.nodeSnapshots))
+		}
+
+		key := makeNodeSnapshotKey("pve1", "node1")
+		if m.nodeSnapshots[key].MemorySource != "new-source" {
+			t.Errorf("MemorySource = %q, want %q", m.nodeSnapshots[key].MemorySource, "new-source")
+		}
+	})
+}
+
 func TestGetDiagnosticSnapshots(t *testing.T) {
 	t.Run("nil Monitor returns empty set with non-nil slices", func(t *testing.T) {
 		var m *Monitor
