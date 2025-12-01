@@ -1374,6 +1374,186 @@ func TestQuietHoursCategoryForAlert(t *testing.T) {
 	}
 }
 
+// TestCanonicalResourceTypeKeys tests the canonicalResourceTypeKeys function
+func TestCanonicalResourceTypeKeys(t *testing.T) {
+	tests := []struct {
+		name         string
+		resourceType string
+		want         []string
+	}{
+		// Guest types
+		{
+			name:         "guest returns guest",
+			resourceType: "guest",
+			want:         []string{"guest"},
+		},
+		{
+			name:         "qemu returns guest",
+			resourceType: "qemu",
+			want:         []string{"guest"},
+		},
+		{
+			name:         "vm returns guest",
+			resourceType: "vm",
+			want:         []string{"guest"},
+		},
+		{
+			name:         "ct returns guest",
+			resourceType: "ct",
+			want:         []string{"guest"},
+		},
+		{
+			name:         "container returns guest",
+			resourceType: "container",
+			want:         []string{"guest"},
+		},
+		{
+			name:         "lxc returns guest",
+			resourceType: "lxc",
+			want:         []string{"guest"},
+		},
+
+		// Docker container types
+		{
+			name:         "docker returns docker and guest",
+			resourceType: "docker",
+			want:         []string{"docker", "guest"},
+		},
+		{
+			name:         "docker container with space returns docker and guest",
+			resourceType: "docker container",
+			want:         []string{"docker", "guest"},
+		},
+		{
+			name:         "dockercontainer returns docker and guest",
+			resourceType: "dockercontainer",
+			want:         []string{"docker", "guest"},
+		},
+
+		// Docker host types
+		{
+			name:         "docker host with space returns dockerhost, docker, node",
+			resourceType: "docker host",
+			want:         []string{"dockerhost", "docker", "node"},
+		},
+		{
+			name:         "dockerhost returns dockerhost, docker, node",
+			resourceType: "dockerhost",
+			want:         []string{"dockerhost", "docker", "node"},
+		},
+
+		// Node type
+		{
+			name:         "node returns node",
+			resourceType: "node",
+			want:         []string{"node"},
+		},
+
+		// PBS types
+		{
+			name:         "pbs returns pbs and node",
+			resourceType: "pbs",
+			want:         []string{"pbs", "node"},
+		},
+		{
+			name:         "pbs server with space returns pbs and node",
+			resourceType: "pbs server",
+			want:         []string{"pbs", "node"},
+		},
+		{
+			name:         "pbsserver returns pbs and node",
+			resourceType: "pbsserver",
+			want:         []string{"pbs", "node"},
+		},
+
+		// Storage type
+		{
+			name:         "storage returns storage",
+			resourceType: "storage",
+			want:         []string{"storage"},
+		},
+
+		// Case insensitivity
+		{
+			name:         "GUEST uppercase returns guest",
+			resourceType: "GUEST",
+			want:         []string{"guest"},
+		},
+		{
+			name:         "Docker mixed case returns docker and guest",
+			resourceType: "Docker",
+			want:         []string{"docker", "guest"},
+		},
+		{
+			name:         "NODE uppercase returns node",
+			resourceType: "NODE",
+			want:         []string{"node"},
+		},
+
+		// Whitespace handling
+		{
+			name:         "guest with leading whitespace",
+			resourceType: "  guest",
+			want:         []string{"guest"},
+		},
+		{
+			name:         "guest with trailing whitespace",
+			resourceType: "guest  ",
+			want:         []string{"guest"},
+		},
+		{
+			name:         "guest with surrounding whitespace",
+			resourceType: "  guest  ",
+			want:         []string{"guest"},
+		},
+
+		// Unknown types return self
+		{
+			name:         "unknown type returns itself",
+			resourceType: "custom",
+			want:         []string{"custom"},
+		},
+		{
+			name:         "pmg returns itself as unknown",
+			resourceType: "pmg",
+			want:         []string{"pmg"},
+		},
+
+		// Empty and whitespace-only
+		{
+			name:         "empty string returns empty slice",
+			resourceType: "",
+			want:         []string{},
+		},
+		{
+			name:         "whitespace only returns empty slice",
+			resourceType: "   ",
+			want:         []string{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := canonicalResourceTypeKeys(tc.resourceType)
+
+			// Check length
+			if len(got) != len(tc.want) {
+				t.Errorf("canonicalResourceTypeKeys(%q) = %v (len %d), want %v (len %d)",
+					tc.resourceType, got, len(got), tc.want, len(tc.want))
+				return
+			}
+
+			// Check each element
+			for i, v := range got {
+				if v != tc.want[i] {
+					t.Errorf("canonicalResourceTypeKeys(%q)[%d] = %q, want %q",
+						tc.resourceType, i, v, tc.want[i])
+				}
+			}
+		})
+	}
+}
+
 // TestEnsureValidHysteresis tests the ensureValidHysteresis function
 func TestEnsureValidHysteresis(t *testing.T) {
 	tests := []struct {
