@@ -460,3 +460,20 @@ func TestErrorHandler_EmptyPath(t *testing.T) {
 		t.Errorf("expected empty path to be normalized to '/', got %q", capturedPath)
 	}
 }
+
+func TestErrorHandler_PanicRecovery(t *testing.T) {
+	// Test that panics are recovered and return 500
+	handler := ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("test panic")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+
+	// Should not panic - ErrorHandler recovers it
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 after panic recovery, got %d", rec.Code)
+	}
+}
