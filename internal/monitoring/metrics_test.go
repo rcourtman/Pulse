@@ -1195,3 +1195,37 @@ func TestDecrementPending_MultipleDecrements(t *testing.T) {
 		t.Errorf("pending = %v, want 0 after extra decrement", gotPending)
 	}
 }
+
+func TestRecordResult_FailureNegativeStalenessClampedToZero(t *testing.T) {
+	t.Parallel()
+
+	pm := newFullTestPollMetrics(t)
+
+	// Record a success with a future timestamp
+	futureTime := time.Now().Add(10 * time.Second)
+	pm.RecordResult(PollResult{
+		InstanceType: "pve",
+		InstanceName: "negative-staleness",
+		StartTime:    futureTime.Add(-time.Second),
+		EndTime:      futureTime,
+		Success:      true,
+	})
+
+	// Now record a failure with an EndTime BEFORE the last success
+	// This creates a negative staleness calculation (EndTime - lastSuccess < 0)
+	pastTime := futureTime.Add(-5 * time.Second)
+	pm.RecordResult(PollResult{
+		InstanceType: "pve",
+		InstanceName: "negative-staleness",
+		StartTime:    pastTime.Add(-time.Second),
+		EndTime:      pastTime,
+		Success:      false,
+		Error:        errors.New("failed"),
+	})
+
+	// Staleness should be clamped to 0, not negative
+	gotStaleness := getGaugeVecValue(pm.staleness, "pve", "negative-staleness")
+	if gotStaleness != 0 {
+		t.Errorf("staleness = %v, want 0 for negative staleness calculation", gotStaleness)
+	}
+}
