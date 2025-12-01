@@ -499,6 +499,190 @@ func TestGetGuestMetrics(t *testing.T) {
 	}
 }
 
+func TestGetGuestMetrics_AllMetricTypes(t *testing.T) {
+	now := time.Now()
+
+	tests := []struct {
+		name       string
+		metricType string
+		value      float64
+	}{
+		{name: "cpu metric", metricType: "cpu", value: 50.5},
+		{name: "memory metric", metricType: "memory", value: 70.0},
+		{name: "disk metric", metricType: "disk", value: 45.0},
+		{name: "diskread metric", metricType: "diskread", value: 1024.0},
+		{name: "diskwrite metric", metricType: "diskwrite", value: 512.0},
+		{name: "netin metric", metricType: "netin", value: 2048.0},
+		{name: "netout metric", metricType: "netout", value: 1536.0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mh := NewMetricsHistory(100, time.Hour)
+			mh.AddGuestMetric("vm-test", tt.metricType, tt.value, now.Add(-5*time.Minute))
+
+			result := mh.GetGuestMetrics("vm-test", tt.metricType, time.Hour)
+
+			if len(result) != 1 {
+				t.Fatalf("len(result) = %d, want 1", len(result))
+			}
+			if result[0].Value != tt.value {
+				t.Errorf("value = %v, want %v", result[0].Value, tt.value)
+			}
+		})
+	}
+}
+
+func TestGetGuestMetrics_GuestNotFound(t *testing.T) {
+	mh := NewMetricsHistory(100, time.Hour)
+
+	// Add data for one guest
+	mh.AddGuestMetric("vm-100", "cpu", 50.0, time.Now())
+
+	// Query non-existent guest
+	result := mh.GetGuestMetrics("vm-nonexistent", "cpu", time.Hour)
+
+	if len(result) != 0 {
+		t.Errorf("expected empty slice for non-existent guest, got %d elements", len(result))
+	}
+	if result == nil {
+		t.Error("expected empty slice, got nil")
+	}
+}
+
+func TestGetGuestMetrics_UnknownMetricType(t *testing.T) {
+	now := time.Now()
+	mh := NewMetricsHistory(100, time.Hour)
+
+	// Add data for the guest
+	mh.AddGuestMetric("vm-100", "cpu", 50.0, now.Add(-5*time.Minute))
+	mh.AddGuestMetric("vm-100", "memory", 70.0, now.Add(-5*time.Minute))
+
+	unknownTypes := []string{"invalid", "unknown", "foo", "bar", "CPU", "Memory", ""}
+
+	for _, metricType := range unknownTypes {
+		t.Run("type_"+metricType, func(t *testing.T) {
+			result := mh.GetGuestMetrics("vm-100", metricType, time.Hour)
+
+			if len(result) != 0 {
+				t.Errorf("expected empty slice for unknown metric type %q, got %d elements", metricType, len(result))
+			}
+			if result == nil {
+				t.Errorf("expected empty slice for unknown metric type %q, got nil", metricType)
+			}
+		})
+	}
+}
+
+func TestGetGuestMetrics_DurationFiltering(t *testing.T) {
+	now := time.Now()
+	mh := NewMetricsHistory(100, 2*time.Hour)
+
+	// Add points at different times
+	mh.AddGuestMetric("vm-100", "cpu", 10.0, now.Add(-90*time.Minute)) // old
+	mh.AddGuestMetric("vm-100", "cpu", 20.0, now.Add(-60*time.Minute)) // old
+	mh.AddGuestMetric("vm-100", "cpu", 30.0, now.Add(-30*time.Minute)) // recent
+	mh.AddGuestMetric("vm-100", "cpu", 40.0, now.Add(-15*time.Minute)) // recent
+	mh.AddGuestMetric("vm-100", "cpu", 50.0, now.Add(-5*time.Minute))  // recent
+
+	tests := []struct {
+		name      string
+		duration  time.Duration
+		wantLen   int
+		wantFirst float64
+		wantLast  float64
+	}{
+		{
+			name:      "all points within 2 hours",
+			duration:  2 * time.Hour,
+			wantLen:   5,
+			wantFirst: 10.0,
+			wantLast:  50.0,
+		},
+		{
+			name:      "points within 45 minutes",
+			duration:  45 * time.Minute,
+			wantLen:   3,
+			wantFirst: 30.0,
+			wantLast:  50.0,
+		},
+		{
+			name:      "points within 20 minutes",
+			duration:  20 * time.Minute,
+			wantLen:   2,
+			wantFirst: 40.0,
+			wantLast:  50.0,
+		},
+		{
+			name:      "points within 10 minutes",
+			duration:  10 * time.Minute,
+			wantLen:   1,
+			wantFirst: 50.0,
+			wantLast:  50.0,
+		},
+		{
+			name:     "zero duration excludes all",
+			duration: 0,
+			wantLen:  0,
+		},
+		{
+			name:     "very short duration excludes all",
+			duration: 1 * time.Minute,
+			wantLen:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := mh.GetGuestMetrics("vm-100", "cpu", tt.duration)
+
+			if len(result) != tt.wantLen {
+				t.Errorf("len(result) = %d, want %d", len(result), tt.wantLen)
+			}
+			if len(result) > 0 {
+				if result[0].Value != tt.wantFirst {
+					t.Errorf("first value = %v, want %v", result[0].Value, tt.wantFirst)
+				}
+				if result[len(result)-1].Value != tt.wantLast {
+					t.Errorf("last value = %v, want %v", result[len(result)-1].Value, tt.wantLast)
+				}
+			}
+		})
+	}
+}
+
+func TestGetGuestMetrics_EmptyMetricsData(t *testing.T) {
+	mh := NewMetricsHistory(100, time.Hour)
+
+	// Directly populate an empty guest metrics entry
+	mh.mu.Lock()
+	mh.guestMetrics["vm-empty"] = &GuestMetrics{
+		CPU:        []MetricPoint{},
+		Memory:     []MetricPoint{},
+		Disk:       []MetricPoint{},
+		DiskRead:   []MetricPoint{},
+		DiskWrite:  []MetricPoint{},
+		NetworkIn:  []MetricPoint{},
+		NetworkOut: []MetricPoint{},
+	}
+	mh.mu.Unlock()
+
+	metricTypes := []string{"cpu", "memory", "disk", "diskread", "diskwrite", "netin", "netout"}
+
+	for _, metricType := range metricTypes {
+		t.Run(metricType, func(t *testing.T) {
+			result := mh.GetGuestMetrics("vm-empty", metricType, time.Hour)
+
+			if len(result) != 0 {
+				t.Errorf("expected empty slice for empty %s metrics, got %d elements", metricType, len(result))
+			}
+			if result == nil {
+				t.Errorf("expected empty slice for empty %s metrics, got nil", metricType)
+			}
+		})
+	}
+}
+
 func TestGetNodeMetrics(t *testing.T) {
 	now := time.Now()
 	mh := NewMetricsHistory(100, time.Hour)

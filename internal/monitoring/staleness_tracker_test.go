@@ -491,3 +491,190 @@ func TestTrackerKey(t *testing.T) {
 		}
 	}
 }
+
+func TestStalenessTracker_MergeSnapshot_TableDriven(t *testing.T) {
+	baseTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	olderTime := baseTime.Add(-10 * time.Second)
+	newerTime := baseTime.Add(10 * time.Second)
+
+	tests := []struct {
+		name            string
+		existing        *FreshnessSnapshot // nil means no existing entry
+		merge           FreshnessSnapshot
+		wantLastSuccess time.Time
+		wantLastError   time.Time
+		wantLastMutated time.Time
+		wantChangeHash  string
+	}{
+		{
+			name:     "merge into non-existent entry creates new entry",
+			existing: nil,
+			merge: FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "new-instance",
+				LastSuccess:  baseTime,
+				LastError:    baseTime,
+				LastMutated:  baseTime,
+				ChangeHash:   "abc123",
+			},
+			wantLastSuccess: baseTime,
+			wantLastError:   baseTime,
+			wantLastMutated: baseTime,
+			wantChangeHash:  "abc123",
+		},
+		{
+			name: "newer LastSuccess updates existing",
+			existing: &FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				LastSuccess:  baseTime,
+			},
+			merge: FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				LastSuccess:  newerTime,
+			},
+			wantLastSuccess: newerTime,
+		},
+		{
+			name: "older LastSuccess does not update existing",
+			existing: &FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				LastSuccess:  baseTime,
+			},
+			merge: FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				LastSuccess:  olderTime,
+			},
+			wantLastSuccess: baseTime,
+		},
+		{
+			name: "newer LastError updates existing",
+			existing: &FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				LastError:    baseTime,
+			},
+			merge: FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				LastError:    newerTime,
+			},
+			wantLastError: newerTime,
+		},
+		{
+			name: "older LastError does not update existing",
+			existing: &FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				LastError:    baseTime,
+			},
+			merge: FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				LastError:    olderTime,
+			},
+			wantLastError: baseTime,
+		},
+		{
+			name: "newer LastMutated updates existing",
+			existing: &FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				LastMutated:  baseTime,
+			},
+			merge: FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				LastMutated:  newerTime,
+			},
+			wantLastMutated: newerTime,
+		},
+		{
+			name: "older LastMutated does not update existing",
+			existing: &FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				LastMutated:  baseTime,
+			},
+			merge: FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				LastMutated:  olderTime,
+			},
+			wantLastMutated: baseTime,
+		},
+		{
+			name: "non-empty ChangeHash updates existing",
+			existing: &FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				ChangeHash:   "old-hash",
+			},
+			merge: FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				ChangeHash:   "new-hash",
+			},
+			wantChangeHash: "new-hash",
+		},
+		{
+			name: "empty ChangeHash does not overwrite existing",
+			existing: &FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				ChangeHash:   "existing-hash",
+			},
+			merge: FreshnessSnapshot{
+				InstanceType: InstanceTypePVE,
+				Instance:     "test",
+				ChangeHash:   "",
+			},
+			wantChangeHash: "existing-hash",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tracker := NewStalenessTracker(nil)
+
+			// Set up existing entry if specified
+			if tt.existing != nil {
+				tracker.setSnapshot(*tt.existing)
+			}
+
+			// Perform merge
+			tracker.mergeSnapshot(tt.merge)
+
+			// Get result
+			snap, ok := tracker.snapshot(tt.merge.InstanceType, tt.merge.Instance)
+			if !ok {
+				t.Fatal("snapshot not found after merge")
+			}
+
+			// Verify instance metadata is always set
+			if snap.InstanceType != tt.merge.InstanceType {
+				t.Errorf("InstanceType = %v, want %v", snap.InstanceType, tt.merge.InstanceType)
+			}
+			if snap.Instance != tt.merge.Instance {
+				t.Errorf("Instance = %q, want %q", snap.Instance, tt.merge.Instance)
+			}
+
+			// Verify timestamps
+			if !tt.wantLastSuccess.IsZero() && !snap.LastSuccess.Equal(tt.wantLastSuccess) {
+				t.Errorf("LastSuccess = %v, want %v", snap.LastSuccess, tt.wantLastSuccess)
+			}
+			if !tt.wantLastError.IsZero() && !snap.LastError.Equal(tt.wantLastError) {
+				t.Errorf("LastError = %v, want %v", snap.LastError, tt.wantLastError)
+			}
+			if !tt.wantLastMutated.IsZero() && !snap.LastMutated.Equal(tt.wantLastMutated) {
+				t.Errorf("LastMutated = %v, want %v", snap.LastMutated, tt.wantLastMutated)
+			}
+			if tt.wantChangeHash != "" && snap.ChangeHash != tt.wantChangeHash {
+				t.Errorf("ChangeHash = %q, want %q", snap.ChangeHash, tt.wantChangeHash)
+			}
+		})
+	}
+}
