@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -305,4 +306,232 @@ func TestIsGuestAgentOSInfoUnsupportedError(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSortContent(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "empty string", input: "", want: ""},
+		{name: "single value", input: "images", want: "images"},
+		{name: "already sorted", input: "backup,images,rootdir", want: "backup,images,rootdir"},
+		{name: "unsorted values", input: "rootdir,images,backup", want: "backup,images,rootdir"},
+		{name: "reverse sorted", input: "vztmpl,rootdir,images,backup", want: "backup,images,rootdir,vztmpl"},
+		{name: "duplicates preserved", input: "images,backup,images", want: "backup,images,images"},
+		{name: "single character values", input: "c,a,b", want: "a,b,c"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := sortContent(tc.input); got != tc.want {
+				t.Fatalf("sortContent(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFormatSeconds(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		total int
+		want  string
+	}{
+		{name: "zero", total: 0, want: ""},
+		{name: "negative", total: -1, want: ""},
+		{name: "one second", total: 1, want: "00:00:01"},
+		{name: "one minute", total: 60, want: "00:01:00"},
+		{name: "one hour", total: 3600, want: "01:00:00"},
+		{name: "mixed time", total: 3661, want: "01:01:01"},
+		{name: "59 seconds", total: 59, want: "00:00:59"},
+		{name: "59 minutes 59 seconds", total: 3599, want: "00:59:59"},
+		{name: "many hours", total: 36000, want: "10:00:00"},
+		{name: "over 24 hours", total: 90061, want: "25:01:01"},
+		{name: "complex time", total: 7384, want: "02:03:04"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := formatSeconds(tc.total); got != tc.want {
+				t.Fatalf("formatSeconds(%d) = %q, want %q", tc.total, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDedupeStringsPreserveOrder(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		input []string
+		want  []string
+	}{
+		{name: "nil input", input: nil, want: nil},
+		{name: "empty slice", input: []string{}, want: nil},
+		{name: "single value", input: []string{"a"}, want: []string{"a"}},
+		{name: "no duplicates", input: []string{"a", "b", "c"}, want: []string{"a", "b", "c"}},
+		{name: "with duplicates", input: []string{"a", "b", "a", "c", "b"}, want: []string{"a", "b", "c"}},
+		{name: "all duplicates", input: []string{"x", "x", "x"}, want: []string{"x"}},
+		{name: "preserves order", input: []string{"c", "a", "b", "a"}, want: []string{"c", "a", "b"}},
+		{name: "empty strings filtered", input: []string{"a", "", "b", "  ", "c"}, want: []string{"a", "b", "c"}},
+		{name: "whitespace trimmed", input: []string{"  a  ", "a", " b "}, want: []string{"a", "b"}},
+		{name: "only empty strings", input: []string{"", "  ", "   "}, want: nil},
+		{name: "mixed empty and values", input: []string{"", "a", "", "a", ""}, want: []string{"a"}},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := dedupeStringsPreserveOrder(tc.input)
+			if !stringSlicesEqual(got, tc.want) {
+				t.Fatalf("dedupeStringsPreserveOrder(%v) = %v, want %v", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSanitizeGuestAddressStrings(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		input string
+		want  []string
+	}{
+		{name: "empty string", input: "", want: nil},
+		{name: "whitespace only", input: "   ", want: nil},
+		{name: "valid ipv4", input: "192.168.1.100", want: []string{"192.168.1.100"}},
+		{name: "valid ipv6", input: "2001:db8::1", want: []string{"2001:db8::1"}},
+		{name: "dhcp placeholder", input: "dhcp", want: nil},
+		{name: "DHCP uppercase", input: "DHCP", want: nil},
+		{name: "manual placeholder", input: "manual", want: nil},
+		{name: "static placeholder", input: "static", want: nil},
+		{name: "auto placeholder", input: "auto", want: nil},
+		{name: "none placeholder", input: "none", want: nil},
+		{name: "n/a placeholder", input: "n/a", want: nil},
+		{name: "unknown placeholder", input: "unknown", want: nil},
+		{name: "zero ipv4", input: "0.0.0.0", want: nil},
+		{name: "zero ipv6", input: "::", want: nil},
+		{name: "loopback ipv6", input: "::1", want: nil},
+		{name: "loopback ipv4", input: "127.0.0.1", want: nil},
+		{name: "loopback subnet", input: "127.0.0.2", want: nil},
+		{name: "link local ipv6", input: "fe80::1", want: nil},
+		{name: "link local with zone", input: "fe80::1%eth0", want: nil},
+		{name: "ip with cidr", input: "192.168.1.100/24", want: []string{"192.168.1.100"}},
+		{name: "ipv6 with cidr", input: "2001:db8::1/64", want: []string{"2001:db8::1"}},
+		{name: "comma separated", input: "192.168.1.1,192.168.1.2", want: []string{"192.168.1.1", "192.168.1.2"}},
+		{name: "semicolon separated", input: "192.168.1.1;192.168.1.2", want: []string{"192.168.1.1", "192.168.1.2"}},
+		{name: "space separated", input: "192.168.1.1 192.168.1.2", want: []string{"192.168.1.1", "192.168.1.2"}},
+		{name: "mixed valid and invalid", input: "192.168.1.1,dhcp,10.0.0.1", want: []string{"192.168.1.1", "10.0.0.1"}},
+		{name: "filters loopback from list", input: "192.168.1.1,127.0.0.1,10.0.0.1", want: []string{"192.168.1.1", "10.0.0.1"}},
+		{name: "ipv6 zone identifier stripped", input: "2001:db8::1%eth0", want: []string{"2001:db8::1"}},
+		{name: "whitespace trimmed", input: "  192.168.1.100  ", want: []string{"192.168.1.100"}},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := sanitizeGuestAddressStrings(tc.input)
+			if !stringSlicesEqual(got, tc.want) {
+				t.Fatalf("sanitizeGuestAddressStrings(%q) = %v, want %v", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCopyFloatPointer(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil input", func(t *testing.T) {
+		t.Parallel()
+		if got := copyFloatPointer(nil); got != nil {
+			t.Fatalf("copyFloatPointer(nil) = %v, want nil", got)
+		}
+	})
+
+	t.Run("copies value", func(t *testing.T) {
+		t.Parallel()
+		original := 42.5
+		copy := copyFloatPointer(&original)
+		if copy == nil {
+			t.Fatal("copyFloatPointer returned nil for non-nil input")
+		}
+		if *copy != original {
+			t.Fatalf("copyFloatPointer value = %v, want %v", *copy, original)
+		}
+	})
+
+	t.Run("independent copy", func(t *testing.T) {
+		t.Parallel()
+		original := 100.0
+		copy := copyFloatPointer(&original)
+		original = 200.0
+		if *copy != 100.0 {
+			t.Fatalf("copy was modified when original changed: got %v, want 100.0", *copy)
+		}
+	})
+
+	t.Run("different pointer", func(t *testing.T) {
+		t.Parallel()
+		original := 50.0
+		copy := copyFloatPointer(&original)
+		if copy == &original {
+			t.Fatal("copyFloatPointer returned same pointer as input")
+		}
+	})
+}
+
+func TestClampInterval(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		value time.Duration
+		min   time.Duration
+		max   time.Duration
+		want  time.Duration
+	}{
+		{name: "within range", value: 30 * time.Second, min: 10 * time.Second, max: 60 * time.Second, want: 30 * time.Second},
+		{name: "below min", value: 5 * time.Second, min: 10 * time.Second, max: 60 * time.Second, want: 10 * time.Second},
+		{name: "above max", value: 120 * time.Second, min: 10 * time.Second, max: 60 * time.Second, want: 60 * time.Second},
+		{name: "at min boundary", value: 10 * time.Second, min: 10 * time.Second, max: 60 * time.Second, want: 10 * time.Second},
+		{name: "at max boundary", value: 60 * time.Second, min: 10 * time.Second, max: 60 * time.Second, want: 60 * time.Second},
+		{name: "zero value below min", value: 0, min: 10 * time.Second, max: 60 * time.Second, want: 10 * time.Second},
+		{name: "negative below min", value: -5 * time.Second, min: 10 * time.Second, max: 60 * time.Second, want: 10 * time.Second},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := clampInterval(tc.value, tc.min, tc.max); got != tc.want {
+				t.Fatalf("clampInterval(%v, %v, %v) = %v, want %v", tc.value, tc.min, tc.max, got, tc.want)
+			}
+		})
+	}
+}
+
+// stringSlicesEqual compares two string slices for equality
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if v != b[i] {
+			return false
+		}
+	}
+	return true
 }
