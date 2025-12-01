@@ -385,6 +385,12 @@ func TestNormalizeNodeHost(t *testing.T) {
 			nodeType: "pve",
 			wantErr:  true,
 		},
+		{
+			name:     "control character in host returns error",
+			rawHost:  "\x00invalid",
+			nodeType: "pve",
+			wantErr:  true,
+		},
 		// Unknown node type (no default port added)
 		{
 			name:     "unknown node type keeps host without port",
