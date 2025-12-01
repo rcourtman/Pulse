@@ -2973,3 +2973,125 @@ func TestDockerServiceDisplayName(t *testing.T) {
 		})
 	}
 }
+
+func TestDockerServiceResourceID(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		hostID      string
+		serviceID   string
+		serviceName string
+		expected    string
+	}{
+		{
+			name:        "with host and service ID",
+			hostID:      "host-1",
+			serviceID:   "svc-123",
+			serviceName: "my-service",
+			expected:    "docker:host-1/service/svc-123",
+		},
+		{
+			name:        "without host ID uses service prefix only",
+			hostID:      "",
+			serviceID:   "svc-123",
+			serviceName: "my-service",
+			expected:    "docker-service:svc-123",
+		},
+		{
+			name:        "whitespace host ID treated as empty",
+			hostID:      "   ",
+			serviceID:   "svc-123",
+			serviceName: "my-service",
+			expected:    "docker-service:svc-123",
+		},
+		{
+			name:        "derives ID from service name when ID empty",
+			hostID:      "host-1",
+			serviceID:   "",
+			serviceName: "My Service",
+			expected:    "docker:host-1/service/my-service",
+		},
+		{
+			name:        "special chars in name replaced with dash",
+			hostID:      "host-1",
+			serviceID:   "",
+			serviceName: "my/service:v1.0",
+			expected:    "docker:host-1/service/my-service-v1-0",
+		},
+		{
+			name:        "backslash and colon replaced",
+			hostID:      "host-1",
+			serviceID:   "",
+			serviceName: "path\\to:service",
+			expected:    "docker:host-1/service/path-to-service",
+		},
+		{
+			name:        "preserves alphanumeric and underscore",
+			hostID:      "host-1",
+			serviceID:   "",
+			serviceName: "my_service_123",
+			expected:    "docker:host-1/service/my_service_123",
+		},
+		{
+			name:        "preserves hyphens",
+			hostID:      "host-1",
+			serviceID:   "",
+			serviceName: "my-service-name",
+			expected:    "docker:host-1/service/my-service-name",
+		},
+		{
+			name:        "trims leading/trailing dashes and underscores",
+			hostID:      "host-1",
+			serviceID:   "",
+			serviceName: "---my-service___",
+			expected:    "docker:host-1/service/my-service",
+		},
+		{
+			name:        "truncates long derived ID to 32 chars",
+			hostID:      "host-1",
+			serviceID:   "",
+			serviceName: "this-is-a-very-long-service-name-that-exceeds-the-limit",
+			expected:    "docker:host-1/service/this-is-a-very-long-service-name",
+		},
+		{
+			name:        "uses 'service' when name is all special chars",
+			hostID:      "host-1",
+			serviceID:   "",
+			serviceName: "!!!@@@###",
+			expected:    "docker:host-1/service/service",
+		},
+		{
+			name:        "uses 'service' when both ID and name empty",
+			hostID:      "host-1",
+			serviceID:   "",
+			serviceName: "",
+			expected:    "docker:host-1/service/service",
+		},
+		{
+			name:        "uses 'service' when both ID and name whitespace",
+			hostID:      "host-1",
+			serviceID:   "   ",
+			serviceName: "   ",
+			expected:    "docker:host-1/service/service",
+		},
+		{
+			name:        "no host and derived name",
+			hostID:      "",
+			serviceID:   "",
+			serviceName: "webserver",
+			expected:    "docker-service:webserver",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := dockerServiceResourceID(tt.hostID, tt.serviceID, tt.serviceName)
+			if result != tt.expected {
+				t.Errorf("dockerServiceResourceID(%q, %q, %q) = %q, want %q",
+					tt.hostID, tt.serviceID, tt.serviceName, result, tt.expected)
+			}
+		})
+	}
+}
