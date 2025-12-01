@@ -420,3 +420,47 @@ func TestUniversalRateLimitMiddleware_HeaderFormat(t *testing.T) {
 		t.Fatalf("header %q should parse as decimal: %v", limitHeader, err)
 	}
 }
+
+func TestResetRateLimitForIP(t *testing.T) {
+	t.Run("nil globalRateLimitConfig does not panic", func(t *testing.T) {
+		// Save current config and restore after test
+		savedConfig := globalRateLimitConfig
+		globalRateLimitConfig = nil
+		defer func() {
+			globalRateLimitConfig = savedConfig
+		}()
+
+		// This should not panic
+		ResetRateLimitForIP("192.168.1.1")
+	})
+
+	t.Run("resets rate limit for specific IP", func(t *testing.T) {
+		InitializeRateLimiters()
+		testIP := "10.0.0.50"
+		limiter := globalRateLimitConfig.AuthEndpoints
+
+		// Make some requests to add this IP to the limiter
+		for i := 0; i < 3; i++ {
+			limiter.Allow(testIP)
+		}
+
+		// Verify IP has attempts recorded
+		limiter.mu.Lock()
+		if _, exists := limiter.attempts[testIP]; !exists {
+			limiter.mu.Unlock()
+			t.Fatal("expected IP to have attempts recorded before reset")
+		}
+		limiter.mu.Unlock()
+
+		// Reset this specific IP
+		ResetRateLimitForIP(testIP)
+
+		// Verify IP is removed from all limiters
+		limiter.mu.Lock()
+		if _, exists := limiter.attempts[testIP]; exists {
+			limiter.mu.Unlock()
+			t.Fatal("expected IP to be cleared after reset")
+		}
+		limiter.mu.Unlock()
+	})
+}
