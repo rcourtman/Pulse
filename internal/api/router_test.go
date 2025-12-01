@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 func TestIsDirectLoopbackRequest(t *testing.T) {
@@ -732,6 +734,48 @@ func TestShouldAppendForwardedPort(t *testing.T) {
 			got := shouldAppendForwardedPort(tt.port, tt.scheme)
 			if got != tt.want {
 				t.Errorf("shouldAppendForwardedPort(%q, %q) = %v, want %v", tt.port, tt.scheme, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCanCapturePublicURL_NilInputs(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	cfg := &config.Config{}
+
+	tests := []struct {
+		name string
+		cfg  *config.Config
+		req  *http.Request
+		want bool
+	}{
+		{
+			name: "nil config",
+			cfg:  nil,
+			req:  req,
+			want: false,
+		},
+		{
+			name: "nil request",
+			cfg:  cfg,
+			req:  nil,
+			want: false,
+		},
+		{
+			name: "both nil",
+			cfg:  nil,
+			req:  nil,
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := canCapturePublicURL(tt.cfg, tt.req)
+			if got != tt.want {
+				t.Errorf("canCapturePublicURL() = %v, want %v", got, tt.want)
 			}
 		})
 	}
