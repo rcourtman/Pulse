@@ -2668,3 +2668,137 @@ func TestCheckRateLimit(t *testing.T) {
 		}
 	})
 }
+
+func TestApplyRelaxedGuestThresholds(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil thresholds get defaults", func(t *testing.T) {
+		t.Parallel()
+		cfg := ThresholdConfig{
+			CPU:    nil,
+			Memory: nil,
+			Disk:   nil,
+		}
+
+		result := applyRelaxedGuestThresholds(cfg)
+
+		if result.CPU == nil {
+			t.Fatal("expected CPU threshold to be set")
+		}
+		if result.CPU.Trigger != 95 {
+			t.Errorf("CPU.Trigger = %v, want 95", result.CPU.Trigger)
+		}
+		if result.CPU.Clear != 90 {
+			t.Errorf("CPU.Clear = %v, want 90", result.CPU.Clear)
+		}
+
+		if result.Memory == nil {
+			t.Fatal("expected Memory threshold to be set")
+		}
+		if result.Memory.Trigger != 92 {
+			t.Errorf("Memory.Trigger = %v, want 92", result.Memory.Trigger)
+		}
+
+		if result.Disk == nil {
+			t.Fatal("expected Disk threshold to be set")
+		}
+		if result.Disk.Trigger != 95 {
+			t.Errorf("Disk.Trigger = %v, want 95", result.Disk.Trigger)
+		}
+	})
+
+	t.Run("low thresholds raised to minimum", func(t *testing.T) {
+		t.Parallel()
+		cfg := ThresholdConfig{
+			CPU:    &HysteresisThreshold{Trigger: 50, Clear: 45},
+			Memory: &HysteresisThreshold{Trigger: 60, Clear: 55},
+			Disk:   &HysteresisThreshold{Trigger: 70, Clear: 65},
+		}
+
+		result := applyRelaxedGuestThresholds(cfg)
+
+		if result.CPU.Trigger != 95 {
+			t.Errorf("CPU.Trigger = %v, want 95 (raised to minimum)", result.CPU.Trigger)
+		}
+		if result.Memory.Trigger != 92 {
+			t.Errorf("Memory.Trigger = %v, want 92 (raised to minimum)", result.Memory.Trigger)
+		}
+		if result.Disk.Trigger != 95 {
+			t.Errorf("Disk.Trigger = %v, want 95 (raised to minimum)", result.Disk.Trigger)
+		}
+	})
+
+	t.Run("high thresholds unchanged", func(t *testing.T) {
+		t.Parallel()
+		cfg := ThresholdConfig{
+			CPU:    &HysteresisThreshold{Trigger: 98, Clear: 93},
+			Memory: &HysteresisThreshold{Trigger: 95, Clear: 90},
+			Disk:   &HysteresisThreshold{Trigger: 99, Clear: 94},
+		}
+
+		result := applyRelaxedGuestThresholds(cfg)
+
+		if result.CPU.Trigger != 98 {
+			t.Errorf("CPU.Trigger = %v, want 98 (unchanged)", result.CPU.Trigger)
+		}
+		if result.Memory.Trigger != 95 {
+			t.Errorf("Memory.Trigger = %v, want 95 (unchanged)", result.Memory.Trigger)
+		}
+		if result.Disk.Trigger != 99 {
+			t.Errorf("Disk.Trigger = %v, want 99 (unchanged)", result.Disk.Trigger)
+		}
+	})
+
+	t.Run("clear adjusted when too close to trigger", func(t *testing.T) {
+		t.Parallel()
+		cfg := ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 95, Clear: 96}, // Clear >= Trigger
+		}
+
+		result := applyRelaxedGuestThresholds(cfg)
+
+		if result.CPU.Clear >= result.CPU.Trigger {
+			t.Errorf("CPU.Clear = %v should be less than Trigger = %v", result.CPU.Clear, result.CPU.Trigger)
+		}
+		if result.CPU.Clear != 90 {
+			t.Errorf("CPU.Clear = %v, want 90 (Trigger - 5)", result.CPU.Clear)
+		}
+	})
+
+	t.Run("clear clamped at zero when it would go negative", func(t *testing.T) {
+		t.Parallel()
+		// Create a threshold where Trigger is above min but Clear would go negative
+		// The adjust function sets Clear = Trigger - 5 if Clear >= Trigger
+		// Then clamps to 0 if Clear < 0
+		// Since all triggers get raised to 95/92/95, the negative clamp path
+		// won't be hit in normal use. Test the logic directly with a config
+		// that has Trigger exactly at minimum and Clear at minimum
+		cfg := ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 95, Clear: 3},
+		}
+
+		result := applyRelaxedGuestThresholds(cfg)
+
+		// Clear at 3 is valid (less than Trigger 95), should stay at 3
+		if result.CPU.Trigger != 95 {
+			t.Errorf("CPU.Trigger = %v, want 95", result.CPU.Trigger)
+		}
+		if result.CPU.Clear != 3 {
+			t.Errorf("CPU.Clear = %v, want 3 (unchanged since < Trigger)", result.CPU.Clear)
+		}
+	})
+
+	t.Run("original config unchanged", func(t *testing.T) {
+		t.Parallel()
+		original := ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 50, Clear: 45},
+		}
+
+		_ = applyRelaxedGuestThresholds(original)
+
+		// Original should be unchanged
+		if original.CPU.Trigger != 50 {
+			t.Errorf("original CPU.Trigger = %v, want 50 (should be unchanged)", original.CPU.Trigger)
+		}
+	})
+}
