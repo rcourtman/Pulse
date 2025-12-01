@@ -328,6 +328,7 @@ func TestNormalizeNodeHost(t *testing.T) {
 		rawHost  string
 		nodeType string
 		want     string
+		wantErr  bool
 	}{
 		{
 			name:     "adds default port to explicit https without port",
@@ -371,13 +372,58 @@ func TestNormalizeNodeHost(t *testing.T) {
 			nodeType: "pve",
 			want:     "http://example.com:8006",
 		},
+		// Error cases
+		{
+			name:     "empty host returns error",
+			rawHost:  "",
+			nodeType: "pve",
+			wantErr:  true,
+		},
+		{
+			name:     "whitespace-only host returns error",
+			rawHost:  "   ",
+			nodeType: "pve",
+			wantErr:  true,
+		},
+		// Unknown node type (no default port added)
+		{
+			name:     "unknown node type keeps host without port",
+			rawHost:  "https://example.com",
+			nodeType: "unknown",
+			want:     "https://example.com",
+		},
+		{
+			name:     "docker node type keeps host without port",
+			rawHost:  "https://docker.lan",
+			nodeType: "docker",
+			want:     "https://docker.lan",
+		},
+		// IPv4 addresses
+		{
+			name:     "IPv4 address gets default port",
+			rawHost:  "192.168.1.100",
+			nodeType: "pve",
+			want:     "https://192.168.1.100:8006",
+		},
+		{
+			name:     "IPv4 with custom port preserved",
+			rawHost:  "192.168.1.100:9000",
+			nodeType: "pve",
+			want:     "https://192.168.1.100:9000",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := normalizeNodeHost(tt.rawHost, tt.nodeType)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("normalizeNodeHost(%q, %q) expected error, got %q", tt.rawHost, tt.nodeType, got)
+				}
+				return
+			}
 			if err != nil {
-				t.Fatalf("normalizeNodeHost returned error: %v", err)
+				t.Fatalf("normalizeNodeHost(%q, %q) returned error: %v", tt.rawHost, tt.nodeType, err)
 			}
 			if got != tt.want {
 				t.Fatalf("normalizeNodeHost(%q, %q) = %q, want %q", tt.rawHost, tt.nodeType, got, tt.want)
