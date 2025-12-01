@@ -35,6 +35,31 @@ func TestDeriveSchemeAndPort(t *testing.T) {
 			wantScheme: "https",
 			wantPort:   "9000",
 		},
+		// Edge cases for full coverage
+		{
+			name:       "empty string returns defaults",
+			host:       "",
+			wantScheme: "https",
+			wantPort:   "8006",
+		},
+		{
+			name:       "whitespace only returns defaults",
+			host:       "   ",
+			wantScheme: "https",
+			wantPort:   "8006",
+		},
+		{
+			name:       "invalid URL returns defaults",
+			host:       "://invalid",
+			wantScheme: "https",
+			wantPort:   "8006",
+		},
+		{
+			name:       "host only without port",
+			host:       "pve1.local",
+			wantScheme: "https",
+			wantPort:   "8006",
+		},
 	}
 
 	for _, tt := range tests {
@@ -93,6 +118,30 @@ func TestEnsureHostHasPort(t *testing.T) {
 			host:     "",
 			port:     "8006",
 			expected: "",
+		},
+		{
+			name:     "empty port returns host unchanged",
+			host:     "pve1.local",
+			port:     "",
+			expected: "pve1.local",
+		},
+		{
+			name:     "both empty returns empty",
+			host:     "",
+			port:     "",
+			expected: "",
+		},
+		{
+			name:     "host with scheme but no port strips scheme and adds port",
+			host:     "https://pve1.local",
+			port:     "8006",
+			expected: "https://pve1.local",
+		},
+		{
+			name:     "protocol-relative URL extracts host and adds port",
+			host:     "//pve1.local",
+			port:     "8006",
+			expected: "pve1.local:8006",
 		},
 	}
 
