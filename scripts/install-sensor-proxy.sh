@@ -3215,7 +3215,14 @@ if [[ "$STANDALONE" == false && "$CONTAINER_ON_THIS_NODE" == true ]]; then
     # Must use temp file and copy back to trigger cluster sync
     # Also, config file contains snapshots sections - only modify main section (before first [)
     TEMP_CONFIG=$(mktemp)
-    cp "$LXC_CONFIG" "$TEMP_CONFIG"
+    print_info "Reading container config from $LXC_CONFIG..."
+    if ! timeout 10 cp "$LXC_CONFIG" "$TEMP_CONFIG" 2>/dev/null; then
+        print_error "Timed out or failed reading container config from $LXC_CONFIG"
+        print_error "The Proxmox cluster filesystem (pmxcfs) may be slow or unresponsive."
+        print_error "Try: pvecm status  # to check cluster health"
+        rm -f "$TEMP_CONFIG"
+        exit 1
+    fi
 
     # Extract line number where snapshots start (first line starting with [)
     SNAPSHOT_START=$(grep -n '^\[' "$TEMP_CONFIG" | head -1 | cut -d: -f1)
@@ -3256,7 +3263,13 @@ if [[ "$STANDALONE" == false && "$CONTAINER_ON_THIS_NODE" == true ]]; then
 
     # Copy back to trigger pmxcfs sync
     if [[ "$MOUNT_UPDATED" = true ]]; then
-        cp "$TEMP_CONFIG" "$LXC_CONFIG"
+        print_info "Writing updated config to $LXC_CONFIG..."
+        if ! timeout 10 cp "$TEMP_CONFIG" "$LXC_CONFIG" 2>/dev/null; then
+            print_error "Timed out or failed writing container config to $LXC_CONFIG"
+            print_error "The Proxmox cluster filesystem (pmxcfs) may be slow or unresponsive."
+            rm -f "$TEMP_CONFIG"
+            exit 1
+        fi
     fi
     rm -f "$TEMP_CONFIG"
 
