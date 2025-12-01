@@ -2282,7 +2282,7 @@ func TestNormalizeMetricTimeThresholds(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := normalizeMetricTimeThresholds(tc.input)
+			result := NormalizeMetricTimeThresholds(tc.input)
 
 			if tc.want == nil {
 				if result != nil {

@@ -5075,3 +5075,406 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		}
 	})
 }
+
+func TestHandleHostRemoved(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty host ID is no-op", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.activeAlerts["host-offline-host1"] = &Alert{ID: "host-offline-host1"}
+		m.mu.Unlock()
+
+		// Empty ID host
+		m.HandleHostRemoved(models.Host{ID: ""})
+
+		// Alert should still exist
+		m.mu.RLock()
+		_, exists := m.activeAlerts["host-offline-host1"]
+		m.mu.RUnlock()
+		if !exists {
+			t.Error("expected alert to remain when empty host ID passed")
+		}
+	})
+
+	t.Run("clears host offline alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.activeAlerts["host-offline-host1"] = &Alert{
+			ID:         "host-offline-host1",
+			ResourceID: "host:host1",
+		}
+		m.offlineConfirmations["host:host1"] = 5
+		m.mu.Unlock()
+
+		m.HandleHostRemoved(models.Host{ID: "host1", Hostname: "testhost"})
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["host-offline-host1"]
+		_, confirmExists := m.offlineConfirmations["host:host1"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected host offline alert to be cleared")
+		}
+		if confirmExists {
+			t.Error("expected offline confirmations to be cleared")
+		}
+	})
+
+	t.Run("clears host metric alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		// Add CPU and memory alerts for host
+		m.activeAlerts["host:host1-cpu"] = &Alert{
+			ID:         "host:host1-cpu",
+			ResourceID: "host:host1",
+		}
+		m.activeAlerts["host:host1-memory"] = &Alert{
+			ID:         "host:host1-memory",
+			ResourceID: "host:host1",
+		}
+		m.mu.Unlock()
+
+		m.HandleHostRemoved(models.Host{ID: "host1", Hostname: "testhost"})
+
+		m.mu.RLock()
+		_, cpuExists := m.activeAlerts["host:host1-cpu"]
+		_, memExists := m.activeAlerts["host:host1-memory"]
+		m.mu.RUnlock()
+
+		if cpuExists {
+			t.Error("expected host CPU alert to be cleared")
+		}
+		if memExists {
+			t.Error("expected host memory alert to be cleared")
+		}
+	})
+
+	t.Run("clears host disk alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		// Add disk alerts for host
+		m.activeAlerts["host:host1/disk:sda-usage"] = &Alert{
+			ID:         "host:host1/disk:sda-usage",
+			ResourceID: "host:host1/disk:sda",
+		}
+		m.activeAlerts["host:host1/disk:sdb-usage"] = &Alert{
+			ID:         "host:host1/disk:sdb-usage",
+			ResourceID: "host:host1/disk:sdb",
+		}
+		m.mu.Unlock()
+
+		m.HandleHostRemoved(models.Host{ID: "host1", Hostname: "testhost"})
+
+		m.mu.RLock()
+		_, sda := m.activeAlerts["host:host1/disk:sda-usage"]
+		_, sdb := m.activeAlerts["host:host1/disk:sdb-usage"]
+		m.mu.RUnlock()
+
+		if sda {
+			t.Error("expected host disk sda alert to be cleared")
+		}
+		if sdb {
+			t.Error("expected host disk sdb alert to be cleared")
+		}
+	})
+
+	t.Run("clears all alert types together", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		// Add multiple alert types
+		m.activeAlerts["host-offline-host1"] = &Alert{ID: "host-offline-host1", ResourceID: "host:host1"}
+		m.activeAlerts["host:host1-cpu"] = &Alert{ID: "host:host1-cpu", ResourceID: "host:host1"}
+		m.activeAlerts["host:host1-memory"] = &Alert{ID: "host:host1-memory", ResourceID: "host:host1"}
+		m.activeAlerts["host:host1/disk:sda-usage"] = &Alert{ID: "host:host1/disk:sda-usage", ResourceID: "host:host1/disk:sda"}
+		m.offlineConfirmations["host:host1"] = 3
+		m.mu.Unlock()
+
+		m.HandleHostRemoved(models.Host{ID: "host1", Hostname: "testhost"})
+
+		m.mu.RLock()
+		alertCount := 0
+		for id := range m.activeAlerts {
+			if strings.Contains(id, "host1") {
+				alertCount++
+			}
+		}
+		_, confirmExists := m.offlineConfirmations["host:host1"]
+		m.mu.RUnlock()
+
+		if alertCount > 0 {
+			t.Errorf("expected all host1 alerts to be cleared, got %d remaining", alertCount)
+		}
+		if confirmExists {
+			t.Error("expected offline confirmations to be cleared")
+		}
+	})
+}
+
+func TestReevaluateGuestAlert(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no active alerts is no-op", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.config.GuestDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 70}
+		m.mu.Unlock()
+
+		// No alerts exist - should not panic
+		m.ReevaluateGuestAlert(nil, "guest1")
+
+		m.mu.RLock()
+		count := len(m.activeAlerts)
+		m.mu.RUnlock()
+		if count != 0 {
+			t.Errorf("expected 0 alerts, got %d", count)
+		}
+	})
+
+	t.Run("clears alert when threshold disabled (nil)", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.activeAlerts["guest1-cpu"] = &Alert{
+			ID:    "guest1-cpu",
+			Type:  "cpu",
+			Value: 90,
+		}
+		m.config.GuestDefaults.CPU = nil // Disabled
+		m.mu.Unlock()
+
+		m.ReevaluateGuestAlert(nil, "guest1")
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["guest1-cpu"]
+		m.mu.RUnlock()
+		if exists {
+			t.Error("expected alert to be cleared when threshold is nil")
+		}
+	})
+
+	t.Run("clears alert when trigger is zero", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.activeAlerts["guest1-memory"] = &Alert{
+			ID:    "guest1-memory",
+			Type:  "memory",
+			Value: 85,
+		}
+		m.config.GuestDefaults.Memory = &HysteresisThreshold{Trigger: 0, Clear: 0}
+		m.mu.Unlock()
+
+		m.ReevaluateGuestAlert(nil, "guest1")
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["guest1-memory"]
+		m.mu.RUnlock()
+		if exists {
+			t.Error("expected alert to be cleared when trigger is 0")
+		}
+	})
+
+	t.Run("clears alert when value below clear threshold", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.activeAlerts["guest1-cpu"] = &Alert{
+			ID:    "guest1-cpu",
+			Type:  "cpu",
+			Value: 65, // Below clear threshold of 70
+		}
+		m.config.GuestDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 70}
+		m.mu.Unlock()
+
+		m.ReevaluateGuestAlert(nil, "guest1")
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["guest1-cpu"]
+		m.mu.RUnlock()
+		if exists {
+			t.Error("expected alert to be cleared when value below clear threshold")
+		}
+	})
+
+	t.Run("clears alert when value below trigger threshold", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.activeAlerts["guest1-disk"] = &Alert{
+			ID:    "guest1-disk",
+			Type:  "disk",
+			Value: 75, // Below trigger of 80
+		}
+		m.config.GuestDefaults.Disk = &HysteresisThreshold{Trigger: 80, Clear: 70}
+		m.mu.Unlock()
+
+		m.ReevaluateGuestAlert(nil, "guest1")
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["guest1-disk"]
+		m.mu.RUnlock()
+		if exists {
+			t.Error("expected alert to be cleared when value below trigger")
+		}
+	})
+
+	t.Run("keeps alert when value above both thresholds", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.activeAlerts["guest1-cpu"] = &Alert{
+			ID:    "guest1-cpu",
+			Type:  "cpu",
+			Value: 90, // Above both trigger (80) and clear (70)
+		}
+		m.config.GuestDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 70}
+		m.mu.Unlock()
+
+		m.ReevaluateGuestAlert(nil, "guest1")
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["guest1-cpu"]
+		m.mu.RUnlock()
+		if !exists {
+			t.Error("expected alert to remain when value above thresholds")
+		}
+	})
+
+	t.Run("processes all metric types", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		// Add alerts for all metric types with values below threshold
+		metrics := []string{"cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut"}
+		for _, metric := range metrics {
+			m.activeAlerts[fmt.Sprintf("guest1-%s", metric)] = &Alert{
+				ID:    fmt.Sprintf("guest1-%s", metric),
+				Type:  metric,
+				Value: 50, // Below threshold
+			}
+		}
+		threshold := &HysteresisThreshold{Trigger: 80, Clear: 70}
+		m.config.GuestDefaults.CPU = threshold
+		m.config.GuestDefaults.Memory = threshold
+		m.config.GuestDefaults.Disk = threshold
+		m.config.GuestDefaults.DiskRead = threshold
+		m.config.GuestDefaults.DiskWrite = threshold
+		m.config.GuestDefaults.NetworkIn = threshold
+		m.config.GuestDefaults.NetworkOut = threshold
+		m.mu.Unlock()
+
+		m.ReevaluateGuestAlert(nil, "guest1")
+
+		m.mu.RLock()
+		remaining := len(m.activeAlerts)
+		m.mu.RUnlock()
+		if remaining != 0 {
+			t.Errorf("expected all alerts to be cleared, got %d remaining", remaining)
+		}
+	})
+
+	t.Run("clears pending alert when threshold disabled", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.activeAlerts["guest1-cpu"] = &Alert{
+			ID:    "guest1-cpu",
+			Type:  "cpu",
+			Value: 90,
+		}
+		m.pendingAlerts["guest1-cpu"] = time.Now() // pendingAlerts is map[string]time.Time
+		m.config.GuestDefaults.CPU = nil           // Disabled
+		m.mu.Unlock()
+
+		m.ReevaluateGuestAlert(nil, "guest1")
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["guest1-cpu"]
+		_, pendingExists := m.pendingAlerts["guest1-cpu"]
+		m.mu.RUnlock()
+		if alertExists {
+			t.Error("expected active alert to be cleared")
+		}
+		if pendingExists {
+			t.Error("expected pending alert to be cleared")
+		}
+	})
+
+	t.Run("uses clear equals trigger when clear is zero", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.activeAlerts["guest1-cpu"] = &Alert{
+			ID:    "guest1-cpu",
+			Type:  "cpu",
+			Value: 75, // Below trigger of 80
+		}
+		// Clear is 0, so it should use trigger (80) as clear threshold
+		m.config.GuestDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 0}
+		m.mu.Unlock()
+
+		m.ReevaluateGuestAlert(nil, "guest1")
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["guest1-cpu"]
+		m.mu.RUnlock()
+		if exists {
+			t.Error("expected alert to be cleared when value below trigger (used as clear)")
+		}
+	})
+
+	t.Run("ignores alerts for different guests", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.activeAlerts["guest1-cpu"] = &Alert{
+			ID:    "guest1-cpu",
+			Type:  "cpu",
+			Value: 50, // Below threshold
+		}
+		m.activeAlerts["guest2-cpu"] = &Alert{
+			ID:    "guest2-cpu",
+			Type:  "cpu",
+			Value: 50, // Below threshold
+		}
+		m.config.GuestDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 70}
+		m.mu.Unlock()
+
+		// Only reevaluate guest1
+		m.ReevaluateGuestAlert(nil, "guest1")
+
+		m.mu.RLock()
+		_, guest1Exists := m.activeAlerts["guest1-cpu"]
+		_, guest2Exists := m.activeAlerts["guest2-cpu"]
+		m.mu.RUnlock()
+
+		if guest1Exists {
+			t.Error("expected guest1 alert to be cleared")
+		}
+		if !guest2Exists {
+			t.Error("expected guest2 alert to remain (not reevaluated)")
+		}
+	})
+}
