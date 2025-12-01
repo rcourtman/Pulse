@@ -2802,3 +2802,113 @@ func TestApplyRelaxedGuestThresholds(t *testing.T) {
 		}
 	})
 }
+
+func TestShouldNotifyAfterCooldown(t *testing.T) {
+	t.Parallel()
+
+	t.Run("cooldown disabled allows notification", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Schedule.Cooldown = 0
+		m.mu.Unlock()
+
+		alert := &Alert{
+			ID:           "test-alert",
+			LastNotified: nil,
+		}
+
+		if !m.shouldNotifyAfterCooldown(alert) {
+			t.Error("expected true when cooldown is 0")
+		}
+	})
+
+	t.Run("negative cooldown allows notification", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Schedule.Cooldown = -5
+		m.mu.Unlock()
+
+		now := time.Now()
+		alert := &Alert{
+			ID:           "test-alert",
+			LastNotified: &now,
+		}
+
+		if !m.shouldNotifyAfterCooldown(alert) {
+			t.Error("expected true when cooldown is negative")
+		}
+	})
+
+	t.Run("first notification allowed when never notified", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Schedule.Cooldown = 30 // 30 minutes
+		m.mu.Unlock()
+
+		alert := &Alert{
+			ID:           "test-alert",
+			LastNotified: nil,
+		}
+
+		if !m.shouldNotifyAfterCooldown(alert) {
+			t.Error("expected true when alert has never been notified")
+		}
+	})
+
+	t.Run("notification blocked during cooldown period", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Schedule.Cooldown = 30 // 30 minutes
+		m.mu.Unlock()
+
+		lastNotified := time.Now().Add(-10 * time.Minute) // Notified 10 minutes ago
+		alert := &Alert{
+			ID:           "test-alert",
+			LastNotified: &lastNotified,
+		}
+
+		if m.shouldNotifyAfterCooldown(alert) {
+			t.Error("expected false when still in cooldown period")
+		}
+	})
+
+	t.Run("notification allowed after cooldown expires", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Schedule.Cooldown = 30 // 30 minutes
+		m.mu.Unlock()
+
+		lastNotified := time.Now().Add(-45 * time.Minute) // Notified 45 minutes ago
+		alert := &Alert{
+			ID:           "test-alert",
+			LastNotified: &lastNotified,
+		}
+
+		if !m.shouldNotifyAfterCooldown(alert) {
+			t.Error("expected true after cooldown period expires")
+		}
+	})
+
+	t.Run("notification allowed at exact cooldown boundary", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Schedule.Cooldown = 30 // 30 minutes
+		m.mu.Unlock()
+
+		lastNotified := time.Now().Add(-30 * time.Minute) // Exactly 30 minutes ago
+		alert := &Alert{
+			ID:           "test-alert",
+			LastNotified: &lastNotified,
+		}
+
+		if !m.shouldNotifyAfterCooldown(alert) {
+			t.Error("expected true at exact cooldown boundary (>=)")
+		}
+	})
+}
