@@ -538,3 +538,333 @@ func TestMetadataKeyConstant(t *testing.T) {
 		t.Errorf("metadataResolvedAt = %q, want %q", metadataResolvedAt, "resolvedAt")
 	}
 }
+
+func TestCopyEmailConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		cfg  EmailConfig
+	}{
+		{
+			name: "empty config",
+			cfg:  EmailConfig{},
+		},
+		{
+			name: "config with empty To slice",
+			cfg: EmailConfig{
+				Enabled:  true,
+				SMTPHost: "smtp.example.com",
+				SMTPPort: 587,
+				From:     "sender@example.com",
+				To:       []string{},
+			},
+		},
+		{
+			name: "config with single recipient",
+			cfg: EmailConfig{
+				Enabled:  true,
+				SMTPHost: "smtp.example.com",
+				SMTPPort: 465,
+				Username: "user",
+				Password: "pass",
+				From:     "sender@example.com",
+				To:       []string{"recipient@example.com"},
+			},
+		},
+		{
+			name: "config with multiple recipients",
+			cfg: EmailConfig{
+				Enabled:  true,
+				SMTPHost: "mail.company.org",
+				SMTPPort: 25,
+				From:     "alerts@company.org",
+				To:       []string{"admin@company.org", "ops@company.org", "devops@company.org"},
+				TLS:      true,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			copied := copyEmailConfig(tc.cfg)
+
+			// Verify fields are equal
+			if copied.Enabled != tc.cfg.Enabled {
+				t.Errorf("Enabled = %v, want %v", copied.Enabled, tc.cfg.Enabled)
+			}
+			if copied.SMTPHost != tc.cfg.SMTPHost {
+				t.Errorf("SMTPHost = %q, want %q", copied.SMTPHost, tc.cfg.SMTPHost)
+			}
+			if copied.SMTPPort != tc.cfg.SMTPPort {
+				t.Errorf("SMTPPort = %d, want %d", copied.SMTPPort, tc.cfg.SMTPPort)
+			}
+			if copied.From != tc.cfg.From {
+				t.Errorf("From = %q, want %q", copied.From, tc.cfg.From)
+			}
+			if len(copied.To) != len(tc.cfg.To) {
+				t.Errorf("To length = %d, want %d", len(copied.To), len(tc.cfg.To))
+			}
+
+			// Verify slice independence (if original has elements)
+			if len(tc.cfg.To) > 0 {
+				originalTo := tc.cfg.To[0]
+				copied.To[0] = "modified@example.com"
+				if tc.cfg.To[0] != originalTo {
+					t.Error("Modifying copied.To should not affect original")
+				}
+			}
+		})
+	}
+}
+
+func TestCopyWebhookConfigs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		webhooks []WebhookConfig
+		wantNil  bool
+	}{
+		{
+			name:     "nil input",
+			webhooks: nil,
+			wantNil:  true,
+		},
+		{
+			name:     "empty slice",
+			webhooks: []WebhookConfig{},
+			wantNil:  true,
+		},
+		{
+			name: "single webhook without maps",
+			webhooks: []WebhookConfig{
+				{
+					Enabled: true,
+					URL:     "https://hooks.example.com/webhook",
+					Method:  "POST",
+				},
+			},
+		},
+		{
+			name: "webhook with headers",
+			webhooks: []WebhookConfig{
+				{
+					Enabled: true,
+					URL:     "https://api.example.com/alerts",
+					Method:  "POST",
+					Headers: map[string]string{
+						"Authorization": "Bearer token123",
+						"Content-Type":  "application/json",
+					},
+				},
+			},
+		},
+		{
+			name: "webhook with custom fields",
+			webhooks: []WebhookConfig{
+				{
+					Enabled: true,
+					URL:     "https://pushover.net/api",
+					CustomFields: map[string]string{
+						"priority": "1",
+						"sound":    "alarm",
+					},
+				},
+			},
+		},
+		{
+			name: "multiple webhooks with all fields",
+			webhooks: []WebhookConfig{
+				{
+					Enabled: true,
+					URL:     "https://discord.com/api/webhooks/123",
+					Headers: map[string]string{"X-Custom": "value"},
+					CustomFields: map[string]string{"key": "val"},
+				},
+				{
+					Enabled: false,
+					URL:     "https://slack.com/api/post",
+					Method:  "POST",
+					Headers: map[string]string{"Authorization": "xoxb-token"},
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			copied := copyWebhookConfigs(tc.webhooks)
+
+			if tc.wantNil {
+				if copied != nil {
+					t.Errorf("Expected nil, got %v", copied)
+				}
+				return
+			}
+
+			if len(copied) != len(tc.webhooks) {
+				t.Errorf("Length = %d, want %d", len(copied), len(tc.webhooks))
+				return
+			}
+
+			// Verify each webhook
+			for i := range tc.webhooks {
+				if copied[i].URL != tc.webhooks[i].URL {
+					t.Errorf("[%d] URL = %q, want %q", i, copied[i].URL, tc.webhooks[i].URL)
+				}
+				if copied[i].Enabled != tc.webhooks[i].Enabled {
+					t.Errorf("[%d] Enabled = %v, want %v", i, copied[i].Enabled, tc.webhooks[i].Enabled)
+				}
+
+				// Verify headers independence
+				if len(tc.webhooks[i].Headers) > 0 {
+					for k := range tc.webhooks[i].Headers {
+						originalVal := tc.webhooks[i].Headers[k]
+						copied[i].Headers[k] = "modified"
+						if tc.webhooks[i].Headers[k] != originalVal {
+							t.Errorf("[%d] Modifying Headers should not affect original", i)
+						}
+						break // Test one key is enough
+					}
+				}
+
+				// Verify custom fields independence
+				if len(tc.webhooks[i].CustomFields) > 0 {
+					for k := range tc.webhooks[i].CustomFields {
+						originalVal := tc.webhooks[i].CustomFields[k]
+						copied[i].CustomFields[k] = "modified"
+						if tc.webhooks[i].CustomFields[k] != originalVal {
+							t.Errorf("[%d] Modifying CustomFields should not affect original", i)
+						}
+						break
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestCopyAppriseConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		cfg  AppriseConfig
+	}{
+		{
+			name: "empty config",
+			cfg:  AppriseConfig{},
+		},
+		{
+			name: "config with empty targets",
+			cfg: AppriseConfig{
+				Enabled: true,
+				Targets: []string{},
+			},
+		},
+		{
+			name: "config with single target",
+			cfg: AppriseConfig{
+				Enabled: true,
+				Targets: []string{"discord://webhook/id/token"},
+			},
+		},
+		{
+			name: "config with multiple targets",
+			cfg: AppriseConfig{
+				Enabled: true,
+				Targets: []string{
+					"slack://token/channel",
+					"telegram://bot_token/chat_id",
+					"email://user:pass@smtp.example.com",
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			copied := copyAppriseConfig(tc.cfg)
+
+			if copied.Enabled != tc.cfg.Enabled {
+				t.Errorf("Enabled = %v, want %v", copied.Enabled, tc.cfg.Enabled)
+			}
+			if len(copied.Targets) != len(tc.cfg.Targets) {
+				t.Errorf("Targets length = %d, want %d", len(copied.Targets), len(tc.cfg.Targets))
+			}
+
+			// Verify slice independence
+			if len(tc.cfg.Targets) > 0 {
+				originalTarget := tc.cfg.Targets[0]
+				copied.Targets[0] = "modified://target"
+				if tc.cfg.Targets[0] != originalTarget {
+					t.Error("Modifying copied.Targets should not affect original")
+				}
+			}
+		})
+	}
+}
+
+func TestBuildNotificationTestAlert(t *testing.T) {
+	t.Parallel()
+
+	alert := buildNotificationTestAlert()
+
+	// Verify required fields are set
+	if alert.ID != "test-alert" {
+		t.Errorf("ID = %q, want %q", alert.ID, "test-alert")
+	}
+	if alert.Type != "cpu" {
+		t.Errorf("Type = %q, want %q", alert.Type, "cpu")
+	}
+	if alert.Level != "warning" {
+		t.Errorf("Level = %q, want %q", alert.Level, "warning")
+	}
+	if alert.ResourceID != "test-resource" {
+		t.Errorf("ResourceID = %q, want %q", alert.ResourceID, "test-resource")
+	}
+	if alert.ResourceName != "Test Resource" {
+		t.Errorf("ResourceName = %q, want %q", alert.ResourceName, "Test Resource")
+	}
+	if alert.Node == "" {
+		t.Error("Node should not be empty")
+	}
+	if alert.Instance == "" {
+		t.Error("Instance should not be empty")
+	}
+	if alert.Message == "" {
+		t.Error("Message should not be empty")
+	}
+	if alert.Value == 0 {
+		t.Error("Value should not be zero")
+	}
+	if alert.Threshold == 0 {
+		t.Error("Threshold should not be zero")
+	}
+	if alert.StartTime.IsZero() {
+		t.Error("StartTime should not be zero")
+	}
+	if alert.LastSeen.IsZero() {
+		t.Error("LastSeen should not be zero")
+	}
+	if alert.Metadata == nil {
+		t.Error("Metadata should not be nil")
+	}
+
+	// Verify StartTime is in the past (shows alert has been active)
+	if !alert.StartTime.Before(time.Now()) {
+		t.Error("StartTime should be in the past")
+	}
+
+	// Verify metadata contains resourceType
+	if rt, ok := alert.Metadata["resourceType"]; !ok || rt != "vm" {
+		t.Errorf("Metadata[resourceType] = %v, want %q", rt, "vm")
+	}
+}
