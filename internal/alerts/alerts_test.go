@@ -3540,3 +3540,30 @@ func TestCleanupHostDiskAlerts(t *testing.T) {
 		}
 	})
 }
+
+func TestHandleDockerHostRemovedEmptyID(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+
+	// Create some alerts that should not be touched
+	m.mu.Lock()
+	m.activeAlerts["docker-host-offline-host1"] = &Alert{ID: "docker-host-offline-host1"}
+	m.dockerOfflineCount["host1"] = 3
+	m.mu.Unlock()
+
+	// Call with empty ID - should be noop
+	host := models.DockerHost{ID: ""}
+	m.HandleDockerHostRemoved(host)
+
+	m.mu.RLock()
+	_, alertExists := m.activeAlerts["docker-host-offline-host1"]
+	_, countExists := m.dockerOfflineCount["host1"]
+	m.mu.RUnlock()
+
+	if !alertExists {
+		t.Error("expected alert to remain when host ID is empty")
+	}
+	if !countExists {
+		t.Error("expected offline count to remain when host ID is empty")
+	}
+}
