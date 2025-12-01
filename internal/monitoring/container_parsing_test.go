@@ -1200,11 +1200,11 @@ func TestEnsureContainerRootDiskEntry(t *testing.T) {
 			},
 		},
 		{
-			name: "negative free clamped to zero",
+			name: "used greater than total gets clamped when total positive",
 			container: &models.Container{
 				Disk: models.Disk{
 					Total: 1000,
-					Used:  1500, // More than total
+					Used:  1500, // More than total, will be clamped to 1000
 				},
 			},
 			want: &models.Container{
@@ -1215,9 +1215,61 @@ func TestEnsureContainerRootDiskEntry(t *testing.T) {
 				Disks: []models.Disk{
 					{
 						Total:      1000,
-						Used:       1000,
+						Used:       1000, // Clamped to total
 						Free:       0,
 						Usage:      100.0,
+						Mountpoint: "/",
+						Type:       "rootfs",
+					},
+				},
+			},
+		},
+		{
+			name: "negative free clamped to zero when total is zero but used is positive",
+			container: &models.Container{
+				Disk: models.Disk{
+					Total: 0,
+					Used:  500, // Used > 0, total = 0, so free = 0 - 500 = -500, clamped to 0
+				},
+			},
+			want: &models.Container{
+				Disk: models.Disk{
+					Total: 0,
+					Used:  500,
+				},
+				Disks: []models.Disk{
+					{
+						Total:      0,
+						Used:       500, // Not clamped because total == 0 (clamping only when total > 0)
+						Free:       0,   // Clamped from -500 to 0
+						Usage:      0,   // No calculation when total == 0
+						Mountpoint: "/",
+						Type:       "rootfs",
+					},
+				},
+			},
+		},
+		{
+			name: "usage already set not recalculated",
+			container: &models.Container{
+				Disk: models.Disk{
+					Total: 1000,
+					Used:  500,
+					Usage: 75.0, // Already set (even if wrong), should not be recalculated
+				},
+			},
+			want: &models.Container{
+				Disk: models.Disk{
+					Total: 1000,
+					Used:  500,
+					Usage: 75.0,
+				},
+				Disks: []models.Disk{
+					{
+						Total:      1000,
+						Used:       500,
+						Free:       500,
+						Usage:      75.0, // Preserved from original
 						Mountpoint: "/",
 						Type:       "rootfs",
 					},
