@@ -434,6 +434,103 @@ func TestParseContainerConfigNetworks(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "parts without equals sign skipped",
+			input: map[string]interface{}{
+				"net0": "name=eth0,invalidpart,hwaddr=AA:BB:CC:DD:EE:FF",
+			},
+			want: []containerNetworkDetails{
+				{
+					Name: "eth0",
+					MAC:  "AA:BB:CC:DD:EE:FF",
+				},
+			},
+		},
+		{
+			name: "mac key variant",
+			input: map[string]interface{}{
+				"net0": "name=eth0,mac=AA:BB:CC:DD:EE:FF",
+			},
+			want: []containerNetworkDetails{
+				{
+					Name: "eth0",
+					MAC:  "AA:BB:CC:DD:EE:FF",
+				},
+			},
+		},
+		{
+			name: "ips key variant",
+			input: map[string]interface{}{
+				"net0": "name=eth0,ips=192.168.1.100",
+			},
+			want: []containerNetworkDetails{
+				{
+					Name:      "eth0",
+					Addresses: []string{"192.168.1.100"},
+				},
+			},
+		},
+		{
+			name: "ip6addr key variant",
+			input: map[string]interface{}{
+				"net0": "name=eth0,ip6addr=2001:db8::1",
+			},
+			want: []containerNetworkDetails{
+				{
+					Name:      "eth0",
+					Addresses: []string{"2001:db8::1"},
+				},
+			},
+		},
+		{
+			name: "ip6prefix key variant",
+			input: map[string]interface{}{
+				"net0": "name=eth0,ip6prefix=2001:db8::",
+			},
+			want: []containerNetworkDetails{
+				{
+					Name:      "eth0",
+					Addresses: []string{"2001:db8::"},
+				},
+			},
+		},
+		{
+			name: "whitespace only interface value",
+			input: map[string]interface{}{
+				"net0": "   ",
+			},
+			want: nil,
+		},
+		{
+			name: "all empty net values returns nil",
+			input: map[string]interface{}{
+				"net0": "",
+				"net1": "   ",
+			},
+			want: nil,
+		},
+		{
+			name: "only unrecognized keys uses key as name",
+			input: map[string]interface{}{
+				"net0": "unknown=value,other=data",
+			},
+			want: []containerNetworkDetails{
+				{
+					Name: "net0",
+				},
+			},
+		},
+		{
+			name: "value parts only without equals",
+			input: map[string]interface{}{
+				"net0": "noequals,alsonoequals",
+			},
+			want: []containerNetworkDetails{
+				{
+					Name: "net0",
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -434,6 +434,8 @@ func TestSanitizeGuestAddressStrings(t *testing.T) {
 		{name: "filters loopback from list", input: "192.168.1.1,127.0.0.1,10.0.0.1", want: []string{"192.168.1.1", "10.0.0.1"}},
 		{name: "ipv6 zone identifier stripped", input: "2001:db8::1%eth0", want: []string{"2001:db8::1"}},
 		{name: "whitespace trimmed", input: "  192.168.1.100  ", want: []string{"192.168.1.100"}},
+		// Edge case: ::1 with CIDR notation to hit the HasPrefix(lower, "::1") check after CIDR stripping
+		{name: "loopback ipv6 with cidr", input: "::1/128", want: nil},
 	}
 
 	for _, tc := range cases {
