@@ -1,10 +1,395 @@
 package monitoring
 
 import (
+	"context"
 	"math/rand"
 	"testing"
 	"time"
 )
+
+// mockStalenessSource is a test implementation of StalenessSource
+type mockStalenessSource struct {
+	scores map[string]float64
+}
+
+func (m mockStalenessSource) StalenessScore(instanceType InstanceType, instanceName string) (float64, bool) {
+	key := string(instanceType) + ":" + instanceName
+	score, ok := m.scores[key]
+	return score, ok
+}
+
+// mockIntervalSelector is a test implementation of IntervalSelector
+type mockIntervalSelector struct {
+	interval time.Duration
+}
+
+func (m mockIntervalSelector) SelectInterval(req IntervalRequest) time.Duration {
+	return m.interval
+}
+
+// mockTaskEnqueuer is a test implementation of TaskEnqueuer
+type mockTaskEnqueuer struct {
+	tasks []ScheduledTask
+}
+
+func (m *mockTaskEnqueuer) Enqueue(ctx context.Context, task ScheduledTask) error {
+	m.tasks = append(m.tasks, task)
+	return nil
+}
+
+// TestNewAdaptiveScheduler tests constructor with various input combinations
+func TestNewAdaptiveScheduler(t *testing.T) {
+	defaultCfg := DefaultSchedulerConfig()
+
+	tests := []struct {
+		name             string
+		cfg              SchedulerConfig
+		staleness        StalenessSource
+		interval         IntervalSelector
+		enqueuer         TaskEnqueuer
+		wantBaseInterval time.Duration
+		wantMinInterval  time.Duration
+		wantMaxInterval  time.Duration
+	}{
+		{
+			name: "all valid parameters preserved",
+			cfg: SchedulerConfig{
+				BaseInterval: 20 * time.Second,
+				MinInterval:  10 * time.Second,
+				MaxInterval:  2 * time.Minute,
+			},
+			staleness:        mockStalenessSource{scores: map[string]float64{"pve:test": 0.5}},
+			interval:         mockIntervalSelector{interval: 15 * time.Second},
+			enqueuer:         &mockTaskEnqueuer{},
+			wantBaseInterval: 20 * time.Second,
+			wantMinInterval:  10 * time.Second,
+			wantMaxInterval:  2 * time.Minute,
+		},
+		{
+			name: "zero BaseInterval gets default",
+			cfg: SchedulerConfig{
+				BaseInterval: 0,
+				MinInterval:  10 * time.Second,
+				MaxInterval:  2 * time.Minute,
+			},
+			staleness:        mockStalenessSource{},
+			interval:         mockIntervalSelector{interval: 15 * time.Second},
+			enqueuer:         &mockTaskEnqueuer{},
+			wantBaseInterval: defaultCfg.BaseInterval,
+			wantMinInterval:  10 * time.Second,
+			wantMaxInterval:  2 * time.Minute,
+		},
+		{
+			name: "negative BaseInterval gets default",
+			cfg: SchedulerConfig{
+				BaseInterval: -5 * time.Second,
+				MinInterval:  10 * time.Second,
+				MaxInterval:  2 * time.Minute,
+			},
+			staleness:        mockStalenessSource{},
+			interval:         mockIntervalSelector{interval: 15 * time.Second},
+			enqueuer:         &mockTaskEnqueuer{},
+			wantBaseInterval: defaultCfg.BaseInterval,
+			wantMinInterval:  10 * time.Second,
+			wantMaxInterval:  2 * time.Minute,
+		},
+		{
+			name: "zero MinInterval gets default",
+			cfg: SchedulerConfig{
+				BaseInterval: 20 * time.Second,
+				MinInterval:  0,
+				MaxInterval:  2 * time.Minute,
+			},
+			staleness:        mockStalenessSource{},
+			interval:         mockIntervalSelector{interval: 15 * time.Second},
+			enqueuer:         &mockTaskEnqueuer{},
+			wantBaseInterval: 20 * time.Second,
+			wantMinInterval:  defaultCfg.MinInterval,
+			wantMaxInterval:  2 * time.Minute,
+		},
+		{
+			name: "negative MinInterval gets default",
+			cfg: SchedulerConfig{
+				BaseInterval: 20 * time.Second,
+				MinInterval:  -5 * time.Second,
+				MaxInterval:  2 * time.Minute,
+			},
+			staleness:        mockStalenessSource{},
+			interval:         mockIntervalSelector{interval: 15 * time.Second},
+			enqueuer:         &mockTaskEnqueuer{},
+			wantBaseInterval: 20 * time.Second,
+			wantMinInterval:  defaultCfg.MinInterval,
+			wantMaxInterval:  2 * time.Minute,
+		},
+		{
+			name: "zero MaxInterval gets default",
+			cfg: SchedulerConfig{
+				BaseInterval: 20 * time.Second,
+				MinInterval:  10 * time.Second,
+				MaxInterval:  0,
+			},
+			staleness:        mockStalenessSource{},
+			interval:         mockIntervalSelector{interval: 15 * time.Second},
+			enqueuer:         &mockTaskEnqueuer{},
+			wantBaseInterval: 20 * time.Second,
+			wantMinInterval:  10 * time.Second,
+			wantMaxInterval:  defaultCfg.MaxInterval,
+		},
+		{
+			name: "negative MaxInterval gets default",
+			cfg: SchedulerConfig{
+				BaseInterval: 20 * time.Second,
+				MinInterval:  10 * time.Second,
+				MaxInterval:  -5 * time.Second,
+			},
+			staleness:        mockStalenessSource{},
+			interval:         mockIntervalSelector{interval: 15 * time.Second},
+			enqueuer:         &mockTaskEnqueuer{},
+			wantBaseInterval: 20 * time.Second,
+			wantMinInterval:  10 * time.Second,
+			wantMaxInterval:  defaultCfg.MaxInterval,
+		},
+		{
+			name: "MaxInterval less than MinInterval gets default",
+			cfg: SchedulerConfig{
+				BaseInterval: 20 * time.Second,
+				MinInterval:  2 * time.Minute,
+				MaxInterval:  30 * time.Second,
+			},
+			staleness:        mockStalenessSource{},
+			interval:         mockIntervalSelector{interval: 15 * time.Second},
+			enqueuer:         &mockTaskEnqueuer{},
+			wantBaseInterval: 20 * time.Second,
+			wantMinInterval:  2 * time.Minute,
+			wantMaxInterval:  defaultCfg.MaxInterval,
+		},
+		{
+			name: "nil staleness gets noopStalenessSource",
+			cfg: SchedulerConfig{
+				BaseInterval: 20 * time.Second,
+				MinInterval:  10 * time.Second,
+				MaxInterval:  2 * time.Minute,
+			},
+			staleness:        nil,
+			interval:         mockIntervalSelector{interval: 15 * time.Second},
+			enqueuer:         &mockTaskEnqueuer{},
+			wantBaseInterval: 20 * time.Second,
+			wantMinInterval:  10 * time.Second,
+			wantMaxInterval:  2 * time.Minute,
+		},
+		{
+			name: "nil interval gets newAdaptiveIntervalSelector",
+			cfg: SchedulerConfig{
+				BaseInterval: 20 * time.Second,
+				MinInterval:  10 * time.Second,
+				MaxInterval:  2 * time.Minute,
+			},
+			staleness:        mockStalenessSource{},
+			interval:         nil,
+			enqueuer:         &mockTaskEnqueuer{},
+			wantBaseInterval: 20 * time.Second,
+			wantMinInterval:  10 * time.Second,
+			wantMaxInterval:  2 * time.Minute,
+		},
+		{
+			name: "nil enqueuer gets noopTaskEnqueuer",
+			cfg: SchedulerConfig{
+				BaseInterval: 20 * time.Second,
+				MinInterval:  10 * time.Second,
+				MaxInterval:  2 * time.Minute,
+			},
+			staleness:        mockStalenessSource{},
+			interval:         mockIntervalSelector{interval: 15 * time.Second},
+			enqueuer:         nil,
+			wantBaseInterval: 20 * time.Second,
+			wantMinInterval:  10 * time.Second,
+			wantMaxInterval:  2 * time.Minute,
+		},
+		{
+			name: "all nil dependencies get defaults",
+			cfg: SchedulerConfig{
+				BaseInterval: 20 * time.Second,
+				MinInterval:  10 * time.Second,
+				MaxInterval:  2 * time.Minute,
+			},
+			staleness:        nil,
+			interval:         nil,
+			enqueuer:         nil,
+			wantBaseInterval: 20 * time.Second,
+			wantMinInterval:  10 * time.Second,
+			wantMaxInterval:  2 * time.Minute,
+		},
+		{
+			name:             "all zero config and nil dependencies get all defaults",
+			cfg:              SchedulerConfig{},
+			staleness:        nil,
+			interval:         nil,
+			enqueuer:         nil,
+			wantBaseInterval: defaultCfg.BaseInterval,
+			wantMinInterval:  defaultCfg.MinInterval,
+			wantMaxInterval:  defaultCfg.MaxInterval,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheduler := NewAdaptiveScheduler(tt.cfg, tt.staleness, tt.interval, tt.enqueuer)
+
+			if scheduler == nil {
+				t.Fatal("NewAdaptiveScheduler returned nil")
+			}
+
+			// Verify config values
+			if scheduler.cfg.BaseInterval != tt.wantBaseInterval {
+				t.Errorf("BaseInterval = %v, want %v", scheduler.cfg.BaseInterval, tt.wantBaseInterval)
+			}
+			if scheduler.cfg.MinInterval != tt.wantMinInterval {
+				t.Errorf("MinInterval = %v, want %v", scheduler.cfg.MinInterval, tt.wantMinInterval)
+			}
+			if scheduler.cfg.MaxInterval != tt.wantMaxInterval {
+				t.Errorf("MaxInterval = %v, want %v", scheduler.cfg.MaxInterval, tt.wantMaxInterval)
+			}
+
+			// Verify staleness is not nil
+			if scheduler.staleness == nil {
+				t.Error("staleness is nil, expected non-nil")
+			}
+
+			// Verify interval is not nil
+			if scheduler.interval == nil {
+				t.Error("interval is nil, expected non-nil")
+			}
+
+			// Verify enqueuer is not nil
+			if scheduler.enqueuer == nil {
+				t.Error("enqueuer is nil, expected non-nil")
+			}
+
+			// Verify lastPlan is initialized
+			if scheduler.lastPlan == nil {
+				t.Error("lastPlan is nil, expected initialized map")
+			}
+		})
+	}
+}
+
+// TestNewAdaptiveScheduler_StalenessType verifies nil staleness becomes noopStalenessSource
+func TestNewAdaptiveScheduler_StalenessType(t *testing.T) {
+	cfg := SchedulerConfig{
+		BaseInterval: 10 * time.Second,
+		MinInterval:  5 * time.Second,
+		MaxInterval:  60 * time.Second,
+	}
+
+	scheduler := NewAdaptiveScheduler(cfg, nil, nil, nil)
+
+	// noopStalenessSource always returns (0, false)
+	score, ok := scheduler.staleness.StalenessScore(InstanceTypePVE, "test")
+	if ok {
+		t.Error("noopStalenessSource should return ok=false")
+	}
+	if score != 0 {
+		t.Errorf("noopStalenessSource should return score=0, got %v", score)
+	}
+}
+
+// TestNewAdaptiveScheduler_IntervalType verifies nil interval becomes adaptiveIntervalSelector
+func TestNewAdaptiveScheduler_IntervalType(t *testing.T) {
+	cfg := SchedulerConfig{
+		BaseInterval: 10 * time.Second,
+		MinInterval:  5 * time.Second,
+		MaxInterval:  60 * time.Second,
+	}
+
+	scheduler := NewAdaptiveScheduler(cfg, nil, nil, nil)
+
+	// adaptiveIntervalSelector should return a duration within bounds
+	req := IntervalRequest{
+		Now:            time.Now(),
+		BaseInterval:   cfg.BaseInterval,
+		MinInterval:    cfg.MinInterval,
+		MaxInterval:    cfg.MaxInterval,
+		StalenessScore: 0.5,
+		InstanceKey:    "test-interval-type",
+	}
+
+	interval := scheduler.interval.SelectInterval(req)
+	if interval < cfg.MinInterval || interval > cfg.MaxInterval {
+		t.Errorf("SelectInterval returned %v, expected between %v and %v",
+			interval, cfg.MinInterval, cfg.MaxInterval)
+	}
+}
+
+// TestNewAdaptiveScheduler_EnqueuerType verifies nil enqueuer becomes noopTaskEnqueuer
+func TestNewAdaptiveScheduler_EnqueuerType(t *testing.T) {
+	cfg := SchedulerConfig{
+		BaseInterval: 10 * time.Second,
+		MinInterval:  5 * time.Second,
+		MaxInterval:  60 * time.Second,
+	}
+
+	scheduler := NewAdaptiveScheduler(cfg, nil, nil, nil)
+
+	// noopTaskEnqueuer.Enqueue should return nil (no error)
+	task := ScheduledTask{
+		InstanceName: "test",
+		InstanceType: InstanceTypePVE,
+		NextRun:      time.Now(),
+		Interval:     10 * time.Second,
+	}
+
+	err := scheduler.enqueuer.Enqueue(context.Background(), task)
+	if err != nil {
+		t.Errorf("noopTaskEnqueuer.Enqueue should return nil, got %v", err)
+	}
+}
+
+// TestNewAdaptiveScheduler_PreservesCustomDependencies verifies custom implementations are preserved
+func TestNewAdaptiveScheduler_PreservesCustomDependencies(t *testing.T) {
+	cfg := SchedulerConfig{
+		BaseInterval: 10 * time.Second,
+		MinInterval:  5 * time.Second,
+		MaxInterval:  60 * time.Second,
+	}
+
+	customStaleness := mockStalenessSource{scores: map[string]float64{"pve:test": 0.75}}
+	customInterval := mockIntervalSelector{interval: 25 * time.Second}
+	customEnqueuer := &mockTaskEnqueuer{}
+
+	scheduler := NewAdaptiveScheduler(cfg, customStaleness, customInterval, customEnqueuer)
+
+	// Verify custom staleness is used
+	score, ok := scheduler.staleness.StalenessScore(InstanceTypePVE, "test")
+	if !ok || score != 0.75 {
+		t.Errorf("expected custom staleness to return (0.75, true), got (%v, %v)", score, ok)
+	}
+
+	// Verify custom interval selector is used
+	req := IntervalRequest{
+		Now:            time.Now(),
+		BaseInterval:   cfg.BaseInterval,
+		MinInterval:    cfg.MinInterval,
+		MaxInterval:    cfg.MaxInterval,
+		StalenessScore: 0.5,
+		InstanceKey:    "test",
+	}
+	interval := scheduler.interval.SelectInterval(req)
+	if interval != 25*time.Second {
+		t.Errorf("expected custom interval selector to return 25s, got %v", interval)
+	}
+
+	// Verify custom enqueuer is used
+	task := ScheduledTask{
+		InstanceName: "test",
+		InstanceType: InstanceTypePVE,
+		NextRun:      time.Now(),
+		Interval:     10 * time.Second,
+	}
+	_ = scheduler.enqueuer.Enqueue(context.Background(), task)
+	if len(customEnqueuer.tasks) != 1 {
+		t.Errorf("expected custom enqueuer to have 1 task, got %d", len(customEnqueuer.tasks))
+	}
+}
 
 // TestClampFloat tests the clampFloat helper function
 func TestClampFloat(t *testing.T) {

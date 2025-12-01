@@ -788,6 +788,91 @@ func TestTaskQueue_Remove(t *testing.T) {
 	})
 }
 
+func TestTaskHeap_Pop(t *testing.T) {
+	t.Run("pop from empty heap returns nil", func(t *testing.T) {
+		h := &taskHeap{}
+
+		result := h.Pop()
+
+		if result != nil {
+			t.Errorf("Pop() = %v, want nil", result)
+		}
+	})
+
+	t.Run("pop from single-element heap returns that element and empties heap", func(t *testing.T) {
+		entry := &scheduledTaskEntry{
+			task: ScheduledTask{
+				InstanceName: "pve-1",
+				InstanceType: InstanceTypePVE,
+				NextRun:      time.Now(),
+				Priority:     1.0,
+			},
+			index: 0,
+		}
+		h := &taskHeap{entry}
+
+		result := h.Pop()
+
+		if result != entry {
+			t.Errorf("Pop() returned wrong entry")
+		}
+		if entry.index != -1 {
+			t.Errorf("entry.index = %d, want -1", entry.index)
+		}
+		if len(*h) != 0 {
+			t.Errorf("heap length = %d, want 0", len(*h))
+		}
+	})
+
+	t.Run("pop from multi-element heap returns last element with index set to -1", func(t *testing.T) {
+		entry1 := &scheduledTaskEntry{
+			task: ScheduledTask{
+				InstanceName: "pve-1",
+				InstanceType: InstanceTypePVE,
+				NextRun:      time.Now(),
+				Priority:     1.0,
+			},
+			index: 0,
+		}
+		entry2 := &scheduledTaskEntry{
+			task: ScheduledTask{
+				InstanceName: "pve-2",
+				InstanceType: InstanceTypePVE,
+				NextRun:      time.Now().Add(10 * time.Second),
+				Priority:     1.0,
+			},
+			index: 1,
+		}
+		entry3 := &scheduledTaskEntry{
+			task: ScheduledTask{
+				InstanceName: "pve-3",
+				InstanceType: InstanceTypePVE,
+				NextRun:      time.Now().Add(20 * time.Second),
+				Priority:     1.0,
+			},
+			index: 2,
+		}
+		h := &taskHeap{entry1, entry2, entry3}
+
+		result := h.Pop()
+
+		// Pop returns the last element in the slice (entry3)
+		if result != entry3 {
+			t.Errorf("Pop() returned wrong entry, got %v want entry3", result)
+		}
+		if entry3.index != -1 {
+			t.Errorf("entry3.index = %d, want -1", entry3.index)
+		}
+		if len(*h) != 2 {
+			t.Errorf("heap length = %d, want 2", len(*h))
+		}
+		// entry1 and entry2 should still be in the heap
+		if (*h)[0] != entry1 || (*h)[1] != entry2 {
+			t.Errorf("remaining heap entries are wrong")
+		}
+	})
+}
+
 // verifyHeapInvariant checks that the heap maintains its invariants:
 // 1. len(entries) matches heap size
 // 2. Each entry's index matches its actual position in heap
