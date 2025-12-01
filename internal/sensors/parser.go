@@ -95,7 +95,7 @@ func isCPUChip(chipLower string) bool {
 		"it87", "nct6687", "nct6775", "nct6776", "nct6779",
 		"nct6791", "nct6792", "nct6793", "nct6795", "nct6796",
 		"nct6797", "nct6798", "w83627", "f71882",
-		"cpu_thermal", "rpitemp",
+		"cpu_thermal", "rp1_adc", "rpitemp",
 	}
 
 	for _, chip := range cpuChips {
