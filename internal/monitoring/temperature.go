@@ -675,21 +675,39 @@ func (tc *TemperatureCollector) parseNVMeTemps(chipName string, chipMap map[stri
 	// Extract device name from chip name (e.g., "nvme-pci-0400" -> "nvme0")
 	device := "nvme" + strings.TrimPrefix(chipName, "nvme-pci-")
 
+	// Try "Composite" first (preferred sensor name for NVMe temps)
 	for sensorName, sensorData := range chipMap {
+		if !strings.Contains(sensorName, "Composite") {
+			continue
+		}
 		sensorMap, ok := sensorData.(map[string]interface{})
 		if !ok {
 			continue
 		}
+		if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) && tempVal > 0 {
+			temp.NVMe = append(temp.NVMe, models.NVMeTemp{
+				Device: device,
+				Temp:   tempVal,
+			})
+			return
+		}
+	}
 
-		// Look for Composite temperature (main NVMe temp)
-		if strings.Contains(sensorName, "Composite") || strings.Contains(sensorName, "Sensor 1") {
-			if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) && tempVal > 0 {
-				temp.NVMe = append(temp.NVMe, models.NVMeTemp{
-					Device: device,
-					Temp:   tempVal,
-				})
-				break // Only one temp per NVMe device
-			}
+	// Fall back to "Sensor 1" if no valid Composite found
+	for sensorName, sensorData := range chipMap {
+		if !strings.Contains(sensorName, "Sensor 1") {
+			continue
+		}
+		sensorMap, ok := sensorData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) && tempVal > 0 {
+			temp.NVMe = append(temp.NVMe, models.NVMeTemp{
+				Device: device,
+				Temp:   tempVal,
+			})
+			return
 		}
 	}
 }
