@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -230,5 +231,173 @@ func TestAllowDockerHostReenrollNoopWhenHostNotBlocked(t *testing.T) {
 	stateHost := findDockerHost(t, monitor, host.ID)
 	if stateHost.ID != host.ID {
 		t.Fatalf("expected host to remain in state; got %+v", stateHost)
+	}
+}
+
+func TestAcknowledgeDockerCommandErrorPaths(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		setup         func(*Monitor) (commandID, hostID, status, message string)
+		expectedError string
+	}{
+		{
+			name: "empty command ID",
+			setup: func(m *Monitor) (string, string, string, string) {
+				return "", "host-1", DockerCommandStatusCompleted, ""
+			},
+			expectedError: "command id is required",
+		},
+		{
+			name: "whitespace-only command ID",
+			setup: func(m *Monitor) (string, string, string, string) {
+				return "   ", "host-1", DockerCommandStatusCompleted, ""
+			},
+			expectedError: "command id is required",
+		},
+		{
+			name: "command not found in index",
+			setup: func(m *Monitor) (string, string, string, string) {
+				return "nonexistent-cmd-id", "host-1", DockerCommandStatusCompleted, ""
+			},
+			expectedError: `docker host command "nonexistent-cmd-id" not found`,
+		},
+		{
+			name: "empty normalized host ID",
+			setup: func(m *Monitor) (string, string, string, string) {
+				host := models.DockerHost{
+					ID:          "host-1",
+					Hostname:    "node-1",
+					DisplayName: "node-1",
+					Status:      "online",
+				}
+				m.state.UpsertDockerHost(host)
+
+				cmdStatus, err := m.QueueDockerHostStop(host.ID)
+				if err != nil {
+					t.Fatalf("queue stop command: %v", err)
+				}
+
+				return cmdStatus.ID, "   ", DockerCommandStatusCompleted, ""
+			},
+			expectedError: "docker host id is required",
+		},
+		{
+			name: "command belongs to wrong host",
+			setup: func(m *Monitor) (string, string, string, string) {
+				host := models.DockerHost{
+					ID:          "host-correct",
+					Hostname:    "node-correct",
+					DisplayName: "node-correct",
+					Status:      "online",
+				}
+				m.state.UpsertDockerHost(host)
+
+				cmdStatus, err := m.QueueDockerHostStop(host.ID)
+				if err != nil {
+					t.Fatalf("queue stop command: %v", err)
+				}
+
+				return cmdStatus.ID, "host-wrong", DockerCommandStatusCompleted, ""
+			},
+			expectedError: "does not belong to host",
+		},
+		{
+			name: "command not in active map",
+			setup: func(m *Monitor) (string, string, string, string) {
+				host := models.DockerHost{
+					ID:          "host-1",
+					Hostname:    "node-1",
+					DisplayName: "node-1",
+					Status:      "online",
+				}
+				m.state.UpsertDockerHost(host)
+
+				cmdStatus, err := m.QueueDockerHostStop(host.ID)
+				if err != nil {
+					t.Fatalf("queue stop command: %v", err)
+				}
+
+				m.mu.Lock()
+				delete(m.dockerCommands, host.ID)
+				m.mu.Unlock()
+
+				return cmdStatus.ID, host.ID, DockerCommandStatusCompleted, ""
+			},
+			expectedError: "not active",
+		},
+		{
+			name: "invalid command status",
+			setup: func(m *Monitor) (string, string, string, string) {
+				host := models.DockerHost{
+					ID:          "host-1",
+					Hostname:    "node-1",
+					DisplayName: "node-1",
+					Status:      "online",
+				}
+				m.state.UpsertDockerHost(host)
+
+				cmdStatus, err := m.QueueDockerHostStop(host.ID)
+				if err != nil {
+					t.Fatalf("queue stop command: %v", err)
+				}
+
+				m.FetchDockerCommandForHost(host.ID)
+
+				return cmdStatus.ID, host.ID, "invalid-status", ""
+			},
+			expectedError: `invalid command status "invalid-status"`,
+		},
+		{
+			name: "empty host ID skips host validation",
+			setup: func(m *Monitor) (string, string, string, string) {
+				host := models.DockerHost{
+					ID:          "host-1",
+					Hostname:    "node-1",
+					DisplayName: "node-1",
+					Status:      "online",
+				}
+				m.state.UpsertDockerHost(host)
+
+				cmdStatus, err := m.QueueDockerHostStop(host.ID)
+				if err != nil {
+					t.Fatalf("queue stop command: %v", err)
+				}
+
+				m.FetchDockerCommandForHost(host.ID)
+
+				// Empty hostID should skip host validation and succeed
+				return cmdStatus.ID, "", DockerCommandStatusCompleted, "done"
+			},
+			expectedError: "", // No error expected - this is a success case
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			monitor := newTestMonitorForCommands(t)
+
+			commandID, hostID, status, message := tt.setup(monitor)
+
+			_, _, _, err := monitor.AcknowledgeDockerHostCommand(commandID, hostID, status, message)
+
+			if tt.expectedError == "" {
+				// Success case
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				return
+			}
+
+			// Error case
+			if err == nil {
+				t.Fatalf("expected error containing %q, got none", tt.expectedError)
+			}
+
+			if !strings.Contains(err.Error(), tt.expectedError) {
+				t.Fatalf("expected error containing %q, got %q", tt.expectedError, err.Error())
+			}
+		})
 	}
 }
