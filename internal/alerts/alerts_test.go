@@ -2912,3 +2912,64 @@ func TestShouldNotifyAfterCooldown(t *testing.T) {
 		}
 	})
 }
+
+func TestDockerServiceDisplayName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		service  models.DockerService
+		expected string
+	}{
+		{
+			name:     "returns name when present",
+			service:  models.DockerService{Name: "my-service", ID: "abc123456789xyz"},
+			expected: "my-service",
+		},
+		{
+			name:     "returns trimmed name",
+			service:  models.DockerService{Name: "  my-service  ", ID: "abc123456789xyz"},
+			expected: "my-service",
+		},
+		{
+			name:     "returns truncated ID when name is empty",
+			service:  models.DockerService{Name: "", ID: "abc123456789xyz"},
+			expected: "abc123456789",
+		},
+		{
+			name:     "returns full short ID when less than 12 chars",
+			service:  models.DockerService{Name: "", ID: "abc123"},
+			expected: "abc123",
+		},
+		{
+			name:     "returns trimmed ID",
+			service:  models.DockerService{Name: "", ID: "  abc123456789xyz  "},
+			expected: "abc123456789",
+		},
+		{
+			name:     "returns 'service' when both name and ID empty",
+			service:  models.DockerService{Name: "", ID: ""},
+			expected: "service",
+		},
+		{
+			name:     "returns 'service' when both whitespace only",
+			service:  models.DockerService{Name: "   ", ID: "   "},
+			expected: "service",
+		},
+		{
+			name:     "prefers name over ID",
+			service:  models.DockerService{Name: "preferred", ID: "not-this-id"},
+			expected: "preferred",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := dockerServiceDisplayName(tt.service)
+			if result != tt.expected {
+				t.Errorf("dockerServiceDisplayName(%+v) = %q, want %q", tt.service, result, tt.expected)
+			}
+		})
+	}
+}
