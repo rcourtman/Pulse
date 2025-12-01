@@ -694,6 +694,22 @@ func TestIsEmptyInterface(t *testing.T) {
 			value:    map[string]string{},
 			expected: false,
 		},
+		// fmt.Stringer types
+		{
+			name:     "stringer with empty string",
+			value:    emptyStringer{},
+			expected: true,
+		},
+		{
+			name:     "stringer with whitespace",
+			value:    whitespaceStringer{},
+			expected: true,
+		},
+		{
+			name:     "stringer with content",
+			value:    contentStringer{},
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -705,6 +721,19 @@ func TestIsEmptyInterface(t *testing.T) {
 		})
 	}
 }
+
+// Test helper types for fmt.Stringer interface
+type emptyStringer struct{}
+
+func (emptyStringer) String() string { return "" }
+
+type whitespaceStringer struct{}
+
+func (whitespaceStringer) String() string { return "   \t  " }
+
+type contentStringer struct{}
+
+func (contentStringer) String() string { return "content" }
 
 func TestEnsurePushoverCustomFieldAliases(t *testing.T) {
 	tests := []struct {

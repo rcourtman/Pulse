@@ -68,23 +68,97 @@ func TestIsPrivateIP(t *testing.T) {
 }
 
 func TestIsTrustedNetwork(t *testing.T) {
-	t.Helper()
+	t.Parallel()
 
-	if !isTrustedNetwork("10.0.0.5", nil) {
-		t.Fatal("expected private IP to be trusted when no networks configured")
+	tests := []struct {
+		name            string
+		ip              string
+		trustedNetworks []string
+		expected        bool
+	}{
+		// Nil trusted networks - falls back to private IP check
+		{
+			name:            "private IP trusted when no networks configured",
+			ip:              "10.0.0.5",
+			trustedNetworks: nil,
+			expected:        true,
+		},
+		{
+			name:            "public IP untrusted when no networks configured",
+			ip:              "198.51.100.42",
+			trustedNetworks: nil,
+			expected:        false,
+		},
+		// Empty trusted networks slice - falls back to private IP check
+		{
+			name:            "private IP trusted with empty networks",
+			ip:              "192.168.1.1",
+			trustedNetworks: []string{},
+			expected:        true,
+		},
+		// Custom CIDR networks
+		{
+			name:            "IP within custom CIDR trusted",
+			ip:              "203.0.113.44:8080",
+			trustedNetworks: []string{"203.0.113.0/24"},
+			expected:        true,
+		},
+		{
+			name:            "IP outside custom CIDR untrusted",
+			ip:              "198.51.100.42",
+			trustedNetworks: []string{"203.0.113.0/24"},
+			expected:        false,
+		},
+		// Edge cases - empty/invalid input
+		{
+			name:            "empty IP string returns false",
+			ip:              "",
+			trustedNetworks: []string{"10.0.0.0/8"},
+			expected:        false,
+		},
+		{
+			name:            "invalid IP returns false",
+			ip:              "not-an-ip",
+			trustedNetworks: []string{"10.0.0.0/8"},
+			expected:        false,
+		},
+		// Invalid CIDR is skipped, not matched
+		{
+			name:            "invalid CIDR in list is skipped",
+			ip:              "10.0.0.5",
+			trustedNetworks: []string{"invalid-cidr", "10.0.0.0/8"},
+			expected:        true,
+		},
+		{
+			name:            "only invalid CIDRs returns false",
+			ip:              "10.0.0.5",
+			trustedNetworks: []string{"invalid-cidr", "also-invalid"},
+			expected:        false,
+		},
+		// Whitespace handling in CIDRs
+		{
+			name:            "CIDR with whitespace is trimmed",
+			ip:              "10.0.0.5",
+			trustedNetworks: []string{"  10.0.0.0/8  "},
+			expected:        true,
+		},
+		// Multiple valid CIDRs
+		{
+			name:            "IP matches second CIDR",
+			ip:              "172.16.5.10",
+			trustedNetworks: []string{"10.0.0.0/8", "172.16.0.0/12"},
+			expected:        true,
+		},
 	}
 
-	if isTrustedNetwork("198.51.100.42", nil) {
-		t.Fatal("expected public IP to be untrusted when no networks configured")
-	}
-
-	custom := []string{"203.0.113.0/24"}
-	if !isTrustedNetwork("203.0.113.44:8080", custom) {
-		t.Fatal("expected IP within custom CIDR to be trusted")
-	}
-
-	if isTrustedNetwork("198.51.100.42", custom) {
-		t.Fatal("expected IP outside custom CIDR to be untrusted")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := isTrustedNetwork(tt.ip, tt.trustedNetworks)
+			if result != tt.expected {
+				t.Errorf("isTrustedNetwork(%q, %v) = %v, want %v", tt.ip, tt.trustedNetworks, result, tt.expected)
+			}
+		})
 	}
 }
 
