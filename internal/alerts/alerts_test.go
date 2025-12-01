@@ -4773,3 +4773,305 @@ func TestHandleHostOffline(t *testing.T) {
 		}
 	})
 }
+
+func TestReevaluateActiveAlertsLocked(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty alerts map is no-op", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.reevaluateActiveAlertsLocked()
+		m.mu.Unlock()
+
+		if len(m.activeAlerts) != 0 {
+			t.Errorf("expected 0 alerts, got %d", len(m.activeAlerts))
+		}
+	})
+
+	t.Run("alert with insufficient ID parts is skipped", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Alert ID without dash separator
+		m.activeAlerts["singlepart"] = &Alert{ID: "singlepart", Type: "cpu", Value: 90}
+
+		m.mu.Lock()
+		m.reevaluateActiveAlertsLocked()
+		m.mu.Unlock()
+
+		// Alert should remain (skipped due to ID format)
+		if _, exists := m.activeAlerts["singlepart"]; !exists {
+			t.Error("expected singlepart alert to remain")
+		}
+	})
+
+	t.Run("DisableAllPMG resolves PMG queue alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add PMG queue alert
+		m.activeAlerts["pmg-queue-cpu"] = &Alert{
+			ID:   "pmg-queue-cpu",
+			Type: "queue-depth",
+		}
+
+		m.config.DisableAllPMG = true
+
+		m.mu.Lock()
+		m.reevaluateActiveAlertsLocked()
+		m.mu.Unlock()
+
+		// PMG alert should be resolved
+		if _, exists := m.activeAlerts["pmg-queue-cpu"]; exists {
+			t.Error("expected PMG alert to be resolved")
+		}
+	})
+
+	t.Run("DisableAllHosts resolves Host alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add host alert with resourceType metadata
+		m.activeAlerts["host-1-cpu"] = &Alert{
+			ID:    "host-1-cpu",
+			Type:  "cpu",
+			Value: 90,
+			Metadata: map[string]interface{}{
+				"resourceType": "Host",
+			},
+		}
+
+		m.config.DisableAllHosts = true
+
+		m.mu.Lock()
+		m.reevaluateActiveAlertsLocked()
+		m.mu.Unlock()
+
+		// Host alert should be resolved
+		if _, exists := m.activeAlerts["host-1-cpu"]; exists {
+			t.Error("expected Host alert to be resolved")
+		}
+	})
+
+	t.Run("Docker host offline alerts are skipped", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add docker host offline alert
+		m.activeAlerts["docker-host-1-offline"] = &Alert{
+			ID:   "docker-host-1-offline",
+			Type: "docker-host-offline",
+		}
+
+		m.mu.Lock()
+		m.reevaluateActiveAlertsLocked()
+		m.mu.Unlock()
+
+		// Docker host offline alert should remain (skipped)
+		if _, exists := m.activeAlerts["docker-host-1-offline"]; !exists {
+			t.Error("expected docker-host-offline alert to remain")
+		}
+	})
+
+	t.Run("DisableAllDockerHosts resolves dockerhost alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add dockerhost metric alert
+		m.activeAlerts["dockerhost-1-cpu"] = &Alert{
+			ID:    "dockerhost-1-cpu",
+			Type:  "cpu",
+			Value: 90,
+			Metadata: map[string]interface{}{
+				"resourceType": "dockerhost",
+			},
+		}
+
+		m.config.DisableAllDockerHosts = true
+
+		m.mu.Lock()
+		m.reevaluateActiveAlertsLocked()
+		m.mu.Unlock()
+
+		// Dockerhost alert should be resolved
+		if _, exists := m.activeAlerts["dockerhost-1-cpu"]; exists {
+			t.Error("expected dockerhost alert to be resolved")
+		}
+	})
+
+	t.Run("DisableAllNodes resolves Node alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add node alert with Instance = "Node"
+		m.activeAlerts["node1-cpu"] = &Alert{
+			ID:       "node1-cpu",
+			Type:     "cpu",
+			Value:    90,
+			Instance: "Node",
+		}
+
+		m.config.DisableAllNodes = true
+
+		m.mu.Lock()
+		m.reevaluateActiveAlertsLocked()
+		m.mu.Unlock()
+
+		// Node alert should be resolved
+		if _, exists := m.activeAlerts["node1-cpu"]; exists {
+			t.Error("expected Node alert to be resolved")
+		}
+	})
+
+	t.Run("DisableAllStorage resolves Storage alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add storage alert with Instance = "Storage"
+		m.activeAlerts["storage1-usage"] = &Alert{
+			ID:       "storage1-usage",
+			Type:     "usage",
+			Value:    90,
+			Instance: "Storage",
+		}
+
+		m.config.DisableAllStorage = true
+
+		m.mu.Lock()
+		m.reevaluateActiveAlertsLocked()
+		m.mu.Unlock()
+
+		// Storage alert should be resolved
+		if _, exists := m.activeAlerts["storage1-usage"]; exists {
+			t.Error("expected Storage alert to be resolved")
+		}
+	})
+
+	t.Run("DisableAllPBS resolves PBS alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add PBS alert with Instance = "PBS"
+		m.activeAlerts["pbs1-cpu"] = &Alert{
+			ID:       "pbs1-cpu",
+			Type:     "cpu",
+			Value:    90,
+			Instance: "PBS",
+		}
+
+		m.config.DisableAllPBS = true
+
+		m.mu.Lock()
+		m.reevaluateActiveAlertsLocked()
+		m.mu.Unlock()
+
+		// PBS alert should be resolved
+		if _, exists := m.activeAlerts["pbs1-cpu"]; exists {
+			t.Error("expected PBS alert to be resolved")
+		}
+	})
+
+	t.Run("DisableAllGuests resolves Guest alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add guest alert with Instance set to something other than "Node"/"Storage"/"PBS"
+		// Note: If both Instance and Node are empty, it matches the node branch
+		m.activeAlerts["guest1-cpu"] = &Alert{
+			ID:       "guest1-cpu",
+			Type:     "cpu",
+			Value:    90,
+			Instance: "qemu/100", // Guest instance
+			Node:     "pve1",     // Different from Instance, so doesn't match node branch
+		}
+
+		m.config.DisableAllGuests = true
+
+		m.mu.Lock()
+		m.reevaluateActiveAlertsLocked()
+		m.mu.Unlock()
+
+		// Guest alert should be resolved
+		if _, exists := m.activeAlerts["guest1-cpu"]; exists {
+			t.Error("expected Guest alert to be resolved")
+		}
+	})
+
+	t.Run("alert with disabled override is resolved", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add guest alert with override
+		m.activeAlerts["guest1-cpu"] = &Alert{
+			ID:       "guest1-cpu",
+			Type:     "cpu",
+			Value:    90,
+			Instance: "qemu/100",
+			Node:     "pve1",
+		}
+		m.config.Overrides = map[string]ThresholdConfig{
+			"guest1": {Disabled: true},
+		}
+
+		m.mu.Lock()
+		m.reevaluateActiveAlertsLocked()
+		m.mu.Unlock()
+
+		// Alert should be resolved due to disabled override
+		if _, exists := m.activeAlerts["guest1-cpu"]; exists {
+			t.Error("expected alert with disabled override to be resolved")
+		}
+	})
+
+	t.Run("alert below clear threshold is resolved", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add guest alert below new clear threshold
+		m.activeAlerts["guest1-cpu"] = &Alert{
+			ID:        "guest1-cpu",
+			Type:      "cpu",
+			Value:     70, // Below clear threshold
+			Threshold: 80,
+			Instance:  "qemu/100",
+			Node:      "pve1",
+		}
+		m.config.GuestDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+
+		m.mu.Lock()
+		m.reevaluateActiveAlertsLocked()
+		m.mu.Unlock()
+
+		// Alert should be resolved (value 70 < clear 75)
+		if _, exists := m.activeAlerts["guest1-cpu"]; exists {
+			t.Error("expected alert below clear threshold to be resolved")
+		}
+	})
+
+	t.Run("alert between clear and trigger is resolved on config change", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add guest alert between clear and new higher trigger
+		m.activeAlerts["guest1-cpu"] = &Alert{
+			ID:        "guest1-cpu",
+			Type:      "cpu",
+			Value:     85, // Between clear (75) and new trigger (90)
+			Threshold: 80,
+			Instance:  "qemu/100",
+			Node:      "pve1",
+		}
+		m.config.GuestDefaults.CPU = &HysteresisThreshold{Trigger: 90, Clear: 75}
+
+		m.mu.Lock()
+		m.reevaluateActiveAlertsLocked()
+		m.mu.Unlock()
+
+		// Alert should be resolved (value 85 < trigger 90)
+		if _, exists := m.activeAlerts["guest1-cpu"]; exists {
+			t.Error("expected alert between thresholds to be resolved")
+		}
+	})
+}
