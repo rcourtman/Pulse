@@ -101,73 +101,7 @@ func TestGetNodeDisplayName(t *testing.T) {
 	}
 }
 
-func TestMergeNVMeTempsIntoDisks(t *testing.T) {
-	t.Parallel()
-
-	original := []models.PhysicalDisk{
-		{Node: "nodeA", Instance: "inst", DevPath: "/dev/nvme1n1", Type: "nvme", Temperature: 0},
-		{Node: "nodeA", Instance: "inst", DevPath: "/dev/nvme0n1", Type: "NVME", Temperature: 0},
-		{Node: "nodeB", Instance: "inst", DevPath: "/dev/sda", Type: "sata", Temperature: 45},
-	}
-
-	nodes := []models.Node{
-		{
-			Name: "nodeA",
-			Temperature: &models.Temperature{
-				Available: true,
-				NVMe: []models.NVMeTemp{
-					{Device: "nvme0n1", Temp: 30.4},
-					{Device: "nvme1n1", Temp: 31.6},
-				},
-			},
-		},
-	}
-
-	merged := mergeNVMeTempsIntoDisks(original, nodes)
-
-	if got, want := merged[0].Temperature, 32; got != want {
-		t.Fatalf("disk 0 temperature = %d, want %d", got, want)
-	}
-	if got, want := merged[1].Temperature, 30; got != want {
-		t.Fatalf("disk 1 temperature = %d, want %d", got, want)
-	}
-	if got, want := merged[2].Temperature, 45; got != want {
-		t.Fatalf("non-nvme disk temperature changed: got %d want %d", got, want)
-	}
-	if got := original[0].Temperature; got != 0 {
-		t.Fatalf("expected original slice unchanged, got %d", got)
-	}
-}
-
-func TestMergeNVMeTempsIntoDisksClearsMissingOrInvalid(t *testing.T) {
-	t.Parallel()
-
-	disks := []models.PhysicalDisk{
-		{Node: "nodeA", Instance: "inst", DevPath: "/dev/nvme0n1", Type: "nvme", Temperature: 0},
-		{Node: "nodeC", Instance: "inst", DevPath: "/dev/nvme1n1", Type: "nvme", Temperature: 0},
-	}
-
-	nodes := []models.Node{
-		{
-			Name: "nodeA",
-			Temperature: &models.Temperature{
-				Available: true,
-				NVMe: []models.NVMeTemp{
-					{Device: "nvme0n1", Temp: math.NaN()},
-				},
-			},
-		},
-	}
-
-	merged := mergeNVMeTempsIntoDisks(disks, nodes)
-
-	if got := merged[0].Temperature; got != 0 {
-		t.Fatalf("expected NaN temp to reset to 0, got %d", got)
-	}
-	if got := merged[1].Temperature; got != 0 {
-		t.Fatalf("expected missing temps to reset to 0, got %d", got)
-	}
-}
+// TestMergeNVMeTempsIntoDisks moved to merge_temps_test.go
 
 func TestSafePercentage(t *testing.T) {
 	t.Parallel()

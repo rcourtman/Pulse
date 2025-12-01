@@ -1187,6 +1187,155 @@ func TestWebhookDelete(t *testing.T) {
 	})
 }
 
+func TestTemplateFuncMap(t *testing.T) {
+	funcs := templateFuncMap()
+
+	t.Run("title function", func(t *testing.T) {
+		titleFn := funcs["title"].(func(string) string)
+
+		// Empty string returns empty
+		if got := titleFn(""); got != "" {
+			t.Fatalf("expected empty string, got %q", got)
+		}
+
+		// Single character uppercased
+		if got := titleFn("a"); got != "A" {
+			t.Fatalf("expected 'A', got %q", got)
+		}
+
+		// Already uppercase single character
+		if got := titleFn("Z"); got != "Z" {
+			t.Fatalf("expected 'Z', got %q", got)
+		}
+
+		// Multi-character: first upper, rest lower
+		if got := titleFn("HELLO"); got != "Hello" {
+			t.Fatalf("expected 'Hello', got %q", got)
+		}
+
+		if got := titleFn("hello"); got != "Hello" {
+			t.Fatalf("expected 'Hello', got %q", got)
+		}
+
+		if got := titleFn("hElLo"); got != "Hello" {
+			t.Fatalf("expected 'Hello', got %q", got)
+		}
+	})
+
+	t.Run("upper function", func(t *testing.T) {
+		upperFn := funcs["upper"].(func(string) string)
+
+		if got := upperFn("hello"); got != "HELLO" {
+			t.Fatalf("expected 'HELLO', got %q", got)
+		}
+
+		if got := upperFn(""); got != "" {
+			t.Fatalf("expected empty string, got %q", got)
+		}
+
+		if got := upperFn("Hello World"); got != "HELLO WORLD" {
+			t.Fatalf("expected 'HELLO WORLD', got %q", got)
+		}
+	})
+
+	t.Run("lower function", func(t *testing.T) {
+		lowerFn := funcs["lower"].(func(string) string)
+
+		if got := lowerFn("HELLO"); got != "hello" {
+			t.Fatalf("expected 'hello', got %q", got)
+		}
+
+		if got := lowerFn(""); got != "" {
+			t.Fatalf("expected empty string, got %q", got)
+		}
+
+		if got := lowerFn("Hello World"); got != "hello world" {
+			t.Fatalf("expected 'hello world', got %q", got)
+		}
+	})
+
+	t.Run("printf function", func(t *testing.T) {
+		printfFn := funcs["printf"].(func(string, ...any) string)
+
+		if got := printfFn("hello %s", "world"); got != "hello world" {
+			t.Fatalf("expected 'hello world', got %q", got)
+		}
+
+		if got := printfFn("value: %d", 42); got != "value: 42" {
+			t.Fatalf("expected 'value: 42', got %q", got)
+		}
+
+		if got := printfFn("%.2f%%", 95.5); got != "95.50%" {
+			t.Fatalf("expected '95.50%%', got %q", got)
+		}
+	})
+
+	t.Run("urlquery function", func(t *testing.T) {
+		urlqueryFn := funcs["urlquery"].(func(...any) string)
+
+		if got := urlqueryFn("hello world"); got != "hello+world" {
+			t.Fatalf("expected 'hello+world', got %q", got)
+		}
+
+		if got := urlqueryFn("a=b&c=d"); got != "a%3Db%26c%3Dd" {
+			t.Fatalf("expected 'a%%3Db%%26c%%3Dd', got %q", got)
+		}
+
+		if got := urlqueryFn("special: +/?#"); got != "special%3A+%2B%2F%3F%23" {
+			t.Fatalf("expected 'special%%3A+%%2B%%2F%%3F%%23', got %q", got)
+		}
+	})
+
+	t.Run("urlencode function (alias)", func(t *testing.T) {
+		urlencodeFn := funcs["urlencode"].(func(...any) string)
+
+		// Should behave identically to urlquery
+		if got := urlencodeFn("hello world"); got != "hello+world" {
+			t.Fatalf("expected 'hello+world', got %q", got)
+		}
+
+		if got := urlencodeFn("test@example.com"); got != "test%40example.com" {
+			t.Fatalf("expected 'test%%40example.com', got %q", got)
+		}
+	})
+
+	t.Run("urlpath function", func(t *testing.T) {
+		urlpathFn := funcs["urlpath"].(func(string) string)
+
+		// Spaces encoded as %20, not +
+		if got := urlpathFn("hello world"); got != "hello%20world" {
+			t.Fatalf("expected 'hello%%20world', got %q", got)
+		}
+
+		// Slashes encoded
+		if got := urlpathFn("path/to/file"); got != "path%2Fto%2Ffile" {
+			t.Fatalf("expected 'path%%2Fto%%2Ffile', got %q", got)
+		}
+
+		if got := urlpathFn(""); got != "" {
+			t.Fatalf("expected empty string, got %q", got)
+		}
+	})
+
+	t.Run("pathescape function", func(t *testing.T) {
+		pathescapeFn := funcs["pathescape"].(func(string) string)
+
+		// Should behave identically to urlpath
+		if got := pathescapeFn("hello world"); got != "hello%20world" {
+			t.Fatalf("expected 'hello%%20world', got %q", got)
+		}
+
+		if got := pathescapeFn("segment/with/slashes"); got != "segment%2Fwith%2Fslashes" {
+			t.Fatalf("expected 'segment%%2Fwith%%2Fslashes', got %q", got)
+		}
+
+		// Special characters
+		if got := pathescapeFn("test?query=1"); got != "test%3Fquery=1" {
+			t.Fatalf("expected 'test%%3Fquery=1', got %q", got)
+		}
+	})
+}
+
 func TestGetEmailConfig(t *testing.T) {
 	nm := NewNotificationManager("")
 
