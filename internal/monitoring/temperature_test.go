@@ -622,21 +622,86 @@ func TestTemperatureCollector_ConcurrentCollectTemperature(t *testing.T) {
 }
 
 func TestDisableLegacySSHOnAuthFailure(t *testing.T) {
-	collector := &TemperatureCollector{}
-
-	if !collector.disableLegacySSHOnAuthFailure(fmt.Errorf("ssh command failed: Permission denied (publickey)."), "node-1", "host-1") {
-		t.Fatalf("expected authentication errors to be detected")
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "nil error returns false",
+			err:      nil,
+			expected: false,
+		},
+		{
+			name:     "non-auth error connection refused returns false",
+			err:      fmt.Errorf("connection refused"),
+			expected: false,
+		},
+		{
+			name:     "non-auth error connection timed out returns false",
+			err:      fmt.Errorf("connection timed out"),
+			expected: false,
+		},
+		{
+			name:     "non-auth error network unreachable returns false",
+			err:      fmt.Errorf("network unreachable"),
+			expected: false,
+		},
+		{
+			name:     "permission denied returns true",
+			err:      fmt.Errorf("permission denied"),
+			expected: true,
+		},
+		{
+			name:     "authentication failed returns true",
+			err:      fmt.Errorf("authentication failed"),
+			expected: true,
+		},
+		{
+			name:     "publickey returns true",
+			err:      fmt.Errorf("publickey"),
+			expected: true,
+		},
+		{
+			name:     "case insensitive PERMISSION DENIED returns true",
+			err:      fmt.Errorf("PERMISSION DENIED"),
+			expected: true,
+		},
+		{
+			name:     "case insensitive Authentication Failed returns true",
+			err:      fmt.Errorf("Authentication Failed"),
+			expected: true,
+		},
+		{
+			name:     "case insensitive PUBLICKEY returns true",
+			err:      fmt.Errorf("PUBLICKEY"),
+			expected: true,
+		},
+		{
+			name:     "mixed case Permission Denied returns true",
+			err:      fmt.Errorf("Permission Denied"),
+			expected: true,
+		},
+		{
+			name:     "embedded permission denied in message returns true",
+			err:      fmt.Errorf("ssh command failed: Permission denied (publickey)."),
+			expected: true,
+		},
+		{
+			name:     "embedded authentication failed in message returns true",
+			err:      fmt.Errorf("ssh: authentication failed: no supported methods remain"),
+			expected: true,
+		},
 	}
-	// legacySSHDisabled check removed as we no longer globally disable SSH
 
-	// Repeated auth errors should still return true
-	if !collector.disableLegacySSHOnAuthFailure(fmt.Errorf("permission denied"), "node-1", "host-1") {
-		t.Fatalf("expected repeated authentication errors to be detected")
-	}
-
-	// Non-authentication errors should not trigger detection
-	if collector.disableLegacySSHOnAuthFailure(fmt.Errorf("connection timed out"), "node-1", "host-1") {
-		t.Fatalf("expected non-authentication errors to be ignored")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			collector := &TemperatureCollector{}
+			result := collector.disableLegacySSHOnAuthFailure(tt.err, "test-node", "test-host")
+			if result != tt.expected {
+				t.Errorf("disableLegacySSHOnAuthFailure() = %v, want %v", result, tt.expected)
+			}
+		})
 	}
 }
 
@@ -1633,6 +1698,248 @@ func TestHandleProxyHostSuccess_NilMap(t *testing.T) {
 
 	// Should not panic with nil map
 	tc.handleProxyHostSuccess("192.168.1.100")
+}
+
+// =============================================================================
+// Tests for parseNVMeTemps
+// =============================================================================
+
+func TestParseNVMeTemps(t *testing.T) {
+	tests := []struct {
+		name       string
+		chipName   string
+		chipMap    map[string]interface{}
+		wantNVMe   []models.NVMeTemp
+		wantDevice string
+	}{
+		{
+			name:     "empty chipMap does nothing",
+			chipName: "nvme-pci-0400",
+			chipMap:  map[string]interface{}{},
+			wantNVMe: nil,
+		},
+		{
+			name:     "sensorData is not a map (skipped)",
+			chipName: "nvme-pci-0400",
+			chipMap: map[string]interface{}{
+				"Composite": "not a map",
+				"Sensor 1":  12345,
+			},
+			wantNVMe: nil,
+		},
+		{
+			name:     "sensor name doesn't contain Composite or Sensor 1 (skipped)",
+			chipName: "nvme-pci-0400",
+			chipMap: map[string]interface{}{
+				"Temperature": map[string]interface{}{
+					"temp1_input": 42.5,
+				},
+				"Sensor 2": map[string]interface{}{
+					"temp1_input": 38.0,
+				},
+			},
+			wantNVMe: nil,
+		},
+		{
+			name:     "Composite with valid temp_input is added",
+			chipName: "nvme-pci-0400",
+			chipMap: map[string]interface{}{
+				"Composite": map[string]interface{}{
+					"temp1_input": 42.5,
+				},
+			},
+			wantNVMe: []models.NVMeTemp{
+				{Device: "nvme0400", Temp: 42.5},
+			},
+		},
+		{
+			name:     "Sensor 1 with valid temp_input is added",
+			chipName: "nvme-pci-0500",
+			chipMap: map[string]interface{}{
+				"Sensor 1": map[string]interface{}{
+					"temp1_input": 38.75,
+				},
+			},
+			wantNVMe: []models.NVMeTemp{
+				{Device: "nvme0500", Temp: 38.75},
+			},
+		},
+		{
+			name:     "invalid/NaN temp value is skipped",
+			chipName: "nvme-pci-0400",
+			chipMap: map[string]interface{}{
+				"Composite": map[string]interface{}{
+					"temp1_input": "not-a-number",
+				},
+			},
+			wantNVMe: nil,
+		},
+		{
+			name:     "zero temp value is skipped",
+			chipName: "nvme-pci-0400",
+			chipMap: map[string]interface{}{
+				"Composite": map[string]interface{}{
+					"temp1_input": 0.0,
+				},
+			},
+			wantNVMe: nil,
+		},
+		{
+			name:     "negative temp value is skipped",
+			chipName: "nvme-pci-0400",
+			chipMap: map[string]interface{}{
+				"Composite": map[string]interface{}{
+					"temp1_input": -5.0,
+				},
+			},
+			wantNVMe: nil,
+		},
+		{
+			name:     "device name extraction from chip name works correctly",
+			chipName: "nvme-pci-0100",
+			chipMap: map[string]interface{}{
+				"Composite": map[string]interface{}{
+					"temp1_input": 35.0,
+				},
+			},
+			wantNVMe: []models.NVMeTemp{
+				{Device: "nvme0100", Temp: 35.0},
+			},
+		},
+		{
+			name:     "only first valid sensor is used (Composite before Sensor 1)",
+			chipName: "nvme-pci-0400",
+			chipMap: map[string]interface{}{
+				"Composite": map[string]interface{}{
+					"temp1_input": 40.0,
+				},
+				"Sensor 1": map[string]interface{}{
+					"temp1_input": 45.0,
+				},
+			},
+			wantNVMe: []models.NVMeTemp{
+				{Device: "nvme0400", Temp: 40.0},
+			},
+		},
+		{
+			name:     "Composite substring match (e.g., 'Composite temp')",
+			chipName: "nvme-pci-0400",
+			chipMap: map[string]interface{}{
+				"Composite temp": map[string]interface{}{
+					"temp1_input": 41.0,
+				},
+			},
+			wantNVMe: []models.NVMeTemp{
+				{Device: "nvme0400", Temp: 41.0},
+			},
+		},
+		{
+			name:     "Sensor 1 substring match (e.g., 'Sensor 1 temp')",
+			chipName: "nvme-pci-0400",
+			chipMap: map[string]interface{}{
+				"Sensor 1 temp": map[string]interface{}{
+					"temp1_input": 39.0,
+				},
+			},
+			wantNVMe: []models.NVMeTemp{
+				{Device: "nvme0400", Temp: 39.0},
+			},
+		},
+		{
+			name:     "nil sensorData is skipped",
+			chipName: "nvme-pci-0400",
+			chipMap: map[string]interface{}{
+				"Composite": nil,
+			},
+			wantNVMe: nil,
+		},
+		{
+			name:     "temp2_input also works",
+			chipName: "nvme-pci-0400",
+			chipMap: map[string]interface{}{
+				"Composite": map[string]interface{}{
+					"temp2_input": 44.0,
+				},
+			},
+			wantNVMe: []models.NVMeTemp{
+				{Device: "nvme0400", Temp: 44.0},
+			},
+		},
+		{
+			name:     "skips invalid Composite and uses valid Sensor 1",
+			chipName: "nvme-pci-0400",
+			chipMap: map[string]interface{}{
+				"Composite": map[string]interface{}{
+					"temp1_input": 0.0, // invalid (zero)
+				},
+				"Sensor 1": map[string]interface{}{
+					"temp1_input": 42.0,
+				},
+			},
+			wantNVMe: []models.NVMeTemp{
+				{Device: "nvme0400", Temp: 42.0},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			collector := &TemperatureCollector{}
+			temp := &models.Temperature{}
+
+			collector.parseNVMeTemps(tt.chipName, tt.chipMap, temp)
+
+			if tt.wantNVMe == nil {
+				if len(temp.NVMe) != 0 {
+					t.Errorf("parseNVMeTemps() added %d NVMe entries, want 0", len(temp.NVMe))
+				}
+				return
+			}
+
+			if len(temp.NVMe) != len(tt.wantNVMe) {
+				t.Fatalf("parseNVMeTemps() added %d NVMe entries, want %d", len(temp.NVMe), len(tt.wantNVMe))
+			}
+
+			for i, want := range tt.wantNVMe {
+				got := temp.NVMe[i]
+				if got.Device != want.Device {
+					t.Errorf("NVMe[%d].Device = %q, want %q", i, got.Device, want.Device)
+				}
+				if got.Temp != want.Temp {
+					t.Errorf("NVMe[%d].Temp = %v, want %v", i, got.Temp, want.Temp)
+				}
+			}
+		})
+	}
+}
+
+func TestParseNVMeTemps_AppendsToExisting(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{
+		NVMe: []models.NVMeTemp{
+			{Device: "nvme0300", Temp: 30.0},
+		},
+	}
+
+	chipMap := map[string]interface{}{
+		"Composite": map[string]interface{}{
+			"temp1_input": 42.5,
+		},
+	}
+
+	collector.parseNVMeTemps("nvme-pci-0400", chipMap, temp)
+
+	if len(temp.NVMe) != 2 {
+		t.Fatalf("expected 2 NVMe entries after append, got %d", len(temp.NVMe))
+	}
+
+	if temp.NVMe[0].Device != "nvme0300" || temp.NVMe[0].Temp != 30.0 {
+		t.Errorf("first NVMe entry was modified: got %+v", temp.NVMe[0])
+	}
+
+	if temp.NVMe[1].Device != "nvme0400" || temp.NVMe[1].Temp != 42.5 {
+		t.Errorf("second NVMe entry incorrect: got %+v", temp.NVMe[1])
+	}
 }
 
 // Helper functions for test setup
