@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -406,6 +407,166 @@ func TestFormatTimeMaybe(t *testing.T) {
 			result := formatTimeMaybe(tt.input)
 			if result != tt.expected {
 				t.Errorf("formatTimeMaybe() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMatchInstanceNameByHost(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		cfg       *config.Config
+		host      string
+		expected  string
+	}{
+		{
+			name:     "nil config",
+			cfg:      nil,
+			host:     "example.com",
+			expected: "",
+		},
+		{
+			name: "empty host",
+			cfg: &config.Config{
+				PVEInstances: []config.PVEInstance{
+					{Name: "pve1", Host: "pve1.local"},
+				},
+			},
+			host:     "",
+			expected: "",
+		},
+		{
+			name: "whitespace-only host",
+			cfg: &config.Config{
+				PVEInstances: []config.PVEInstance{
+					{Name: "pve1", Host: "pve1.local"},
+				},
+			},
+			host:     "   ",
+			expected: "",
+		},
+		{
+			name: "exact match",
+			cfg: &config.Config{
+				PVEInstances: []config.PVEInstance{
+					{Name: "pve1", Host: "pve1.local"},
+					{Name: "pve2", Host: "pve2.local"},
+				},
+			},
+			host:     "pve1.local",
+			expected: "pve1",
+		},
+		{
+			name: "case insensitive match",
+			cfg: &config.Config{
+				PVEInstances: []config.PVEInstance{
+					{Name: "Production PVE", Host: "PVE.EXAMPLE.COM"},
+				},
+			},
+			host:     "pve.example.com",
+			expected: "Production PVE",
+		},
+		{
+			name: "match with port in config",
+			cfg: &config.Config{
+				PVEInstances: []config.PVEInstance{
+					{Name: "pve1", Host: "pve1.local:8006"},
+				},
+			},
+			host:     "pve1.local",
+			expected: "pve1",
+		},
+		{
+			name: "match with protocol in config",
+			cfg: &config.Config{
+				PVEInstances: []config.PVEInstance{
+					{Name: "pve1", Host: "https://pve1.local:8006"},
+				},
+			},
+			host:     "pve1.local",
+			expected: "pve1",
+		},
+		{
+			name: "match with protocol in search host",
+			cfg: &config.Config{
+				PVEInstances: []config.PVEInstance{
+					{Name: "pve1", Host: "pve1.local"},
+				},
+			},
+			host:     "https://pve1.local:8006",
+			expected: "pve1",
+		},
+		{
+			name: "no match",
+			cfg: &config.Config{
+				PVEInstances: []config.PVEInstance{
+					{Name: "pve1", Host: "pve1.local"},
+					{Name: "pve2", Host: "pve2.local"},
+				},
+			},
+			host:     "pve3.local",
+			expected: "",
+		},
+		{
+			name: "empty instances",
+			cfg: &config.Config{
+				PVEInstances: []config.PVEInstance{},
+			},
+			host:     "pve1.local",
+			expected: "",
+		},
+		{
+			name: "instance with empty host skipped",
+			cfg: &config.Config{
+				PVEInstances: []config.PVEInstance{
+					{Name: "empty", Host: ""},
+					{Name: "pve1", Host: "pve1.local"},
+				},
+			},
+			host:     "pve1.local",
+			expected: "pve1",
+		},
+		{
+			name: "IP address match",
+			cfg: &config.Config{
+				PVEInstances: []config.PVEInstance{
+					{Name: "pve1", Host: "192.168.1.100"},
+				},
+			},
+			host:     "192.168.1.100",
+			expected: "pve1",
+		},
+		{
+			name: "name has leading and trailing whitespace",
+			cfg: &config.Config{
+				PVEInstances: []config.PVEInstance{
+					{Name: "  pve1  ", Host: "pve1.local"},
+				},
+			},
+			host:     "pve1.local",
+			expected: "pve1",
+		},
+		{
+			name: "returns first match when duplicates exist",
+			cfg: &config.Config{
+				PVEInstances: []config.PVEInstance{
+					{Name: "first", Host: "pve.local"},
+					{Name: "second", Host: "pve.local"},
+				},
+			},
+			host:     "pve.local",
+			expected: "first",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := matchInstanceNameByHost(tt.cfg, tt.host)
+			if result != tt.expected {
+				t.Errorf("matchInstanceNameByHost() = %q, want %q", result, tt.expected)
 			}
 		})
 	}

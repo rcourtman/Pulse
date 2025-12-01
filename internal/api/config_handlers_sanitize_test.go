@@ -1,8 +1,11 @@
 package api
 
 import (
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 func TestSanitizeInstallerURL(t *testing.T) {
@@ -326,6 +329,178 @@ func TestSanitizeSetupAuthToken(t *testing.T) {
 				if got != tt.want {
 					t.Errorf("sanitizeSetupAuthToken() = %q, want %q", got, tt.want)
 				}
+			}
+		})
+	}
+}
+
+func TestSanitizeErrorMessage(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		err       error
+		operation string
+		expected  string
+	}{
+		{
+			name:      "create_client operation",
+			err:       errors.New("connection refused"),
+			operation: "create_client",
+			expected:  "Failed to initialize connection",
+		},
+		{
+			name:      "connection operation",
+			err:       errors.New("network unreachable"),
+			operation: "connection",
+			expected:  "Connection failed. Please check your credentials and network settings",
+		},
+		{
+			name:      "validation operation",
+			err:       errors.New("invalid field"),
+			operation: "validation",
+			expected:  "Invalid configuration",
+		},
+		{
+			name:      "unknown operation",
+			err:       errors.New("something went wrong"),
+			operation: "unknown_operation",
+			expected:  "Operation failed",
+		},
+		{
+			name:      "empty operation string",
+			err:       errors.New("error"),
+			operation: "",
+			expected:  "Operation failed",
+		},
+		{
+			name:      "nil error still returns message",
+			err:       nil,
+			operation: "create_client",
+			expected:  "Failed to initialize connection",
+		},
+		{
+			name:      "detailed error hidden from response",
+			err:       errors.New("x509: certificate signed by unknown authority"),
+			operation: "connection",
+			expected:  "Connection failed. Please check your credentials and network settings",
+		},
+		{
+			name:      "sensitive error hidden from response",
+			err:       errors.New("password: secret123"),
+			operation: "validation",
+			expected:  "Invalid configuration",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := sanitizeErrorMessage(tt.err, tt.operation)
+			if result != tt.expected {
+				t.Errorf("sanitizeErrorMessage() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFindExistingGuestURL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		nodeName  string
+		endpoints []config.ClusterEndpoint
+		expected  string
+	}{
+		{
+			name:      "empty endpoints",
+			nodeName:  "node1",
+			endpoints: []config.ClusterEndpoint{},
+			expected:  "",
+		},
+		{
+			name:      "nil endpoints",
+			nodeName:  "node1",
+			endpoints: nil,
+			expected:  "",
+		},
+		{
+			name:     "exact match",
+			nodeName: "pve1",
+			endpoints: []config.ClusterEndpoint{
+				{NodeName: "pve1", GuestURL: "https://pve1.local:8006"},
+				{NodeName: "pve2", GuestURL: "https://pve2.local:8006"},
+			},
+			expected: "https://pve1.local:8006",
+		},
+		{
+			name:     "match second node",
+			nodeName: "pve2",
+			endpoints: []config.ClusterEndpoint{
+				{NodeName: "pve1", GuestURL: "https://pve1.local:8006"},
+				{NodeName: "pve2", GuestURL: "https://pve2.local:8006"},
+			},
+			expected: "https://pve2.local:8006",
+		},
+		{
+			name:     "no match",
+			nodeName: "pve3",
+			endpoints: []config.ClusterEndpoint{
+				{NodeName: "pve1", GuestURL: "https://pve1.local:8006"},
+				{NodeName: "pve2", GuestURL: "https://pve2.local:8006"},
+			},
+			expected: "",
+		},
+		{
+			name:     "empty node name",
+			nodeName: "",
+			endpoints: []config.ClusterEndpoint{
+				{NodeName: "pve1", GuestURL: "https://pve1.local:8006"},
+			},
+			expected: "",
+		},
+		{
+			name:     "case sensitive match",
+			nodeName: "PVE1",
+			endpoints: []config.ClusterEndpoint{
+				{NodeName: "pve1", GuestURL: "https://pve1.local:8006"},
+			},
+			expected: "",
+		},
+		{
+			name:     "returns first match when duplicates exist",
+			nodeName: "pve1",
+			endpoints: []config.ClusterEndpoint{
+				{NodeName: "pve1", GuestURL: "https://first.local:8006"},
+				{NodeName: "pve1", GuestURL: "https://second.local:8006"},
+			},
+			expected: "https://first.local:8006",
+		},
+		{
+			name:     "empty GuestURL returned when matched",
+			nodeName: "pve1",
+			endpoints: []config.ClusterEndpoint{
+				{NodeName: "pve1", GuestURL: ""},
+			},
+			expected: "",
+		},
+		{
+			name:     "single endpoint match",
+			nodeName: "pve1",
+			endpoints: []config.ClusterEndpoint{
+				{NodeName: "pve1", GuestURL: "https://pve1.local:8006"},
+			},
+			expected: "https://pve1.local:8006",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := findExistingGuestURL(tt.nodeName, tt.endpoints)
+			if result != tt.expected {
+				t.Errorf("findExistingGuestURL(%q, endpoints) = %q, want %q", tt.nodeName, result, tt.expected)
 			}
 		})
 	}
