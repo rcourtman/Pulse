@@ -2948,6 +2948,512 @@ func TestParseSensorsJSON_TableDriven(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// Tests for parseGPUTemps
+// =============================================================================
+
+func TestParseGPUTemps_EmptyChipMap(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	collector.parseGPUTemps("amdgpu-pci-0400", map[string]interface{}{}, temp)
+
+	if len(temp.GPU) != 0 {
+		t.Errorf("expected no GPU entries for empty chipMap, got %d", len(temp.GPU))
+	}
+}
+
+func TestParseGPUTemps_EdgeOnly(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	chipMap := map[string]interface{}{
+		"edge": map[string]interface{}{
+			"temp1_input": 55.0,
+		},
+	}
+
+	collector.parseGPUTemps("amdgpu-pci-0400", chipMap, temp)
+
+	if len(temp.GPU) != 1 {
+		t.Fatalf("expected 1 GPU entry, got %d", len(temp.GPU))
+	}
+	if temp.GPU[0].Device != "amdgpu-pci-0400" {
+		t.Errorf("Device = %q, want %q", temp.GPU[0].Device, "amdgpu-pci-0400")
+	}
+	if temp.GPU[0].Edge != 55.0 {
+		t.Errorf("Edge = %v, want 55.0", temp.GPU[0].Edge)
+	}
+	if temp.GPU[0].Junction != 0 {
+		t.Errorf("Junction = %v, want 0", temp.GPU[0].Junction)
+	}
+	if temp.GPU[0].Mem != 0 {
+		t.Errorf("Mem = %v, want 0", temp.GPU[0].Mem)
+	}
+}
+
+func TestParseGPUTemps_JunctionOnly(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	chipMap := map[string]interface{}{
+		"junction": map[string]interface{}{
+			"temp1_input": 72.5,
+		},
+	}
+
+	collector.parseGPUTemps("amdgpu-pci-0400", chipMap, temp)
+
+	if len(temp.GPU) != 1 {
+		t.Fatalf("expected 1 GPU entry, got %d", len(temp.GPU))
+	}
+	if temp.GPU[0].Junction != 72.5 {
+		t.Errorf("Junction = %v, want 72.5", temp.GPU[0].Junction)
+	}
+	if temp.GPU[0].Edge != 0 {
+		t.Errorf("Edge = %v, want 0", temp.GPU[0].Edge)
+	}
+	if temp.GPU[0].Mem != 0 {
+		t.Errorf("Mem = %v, want 0", temp.GPU[0].Mem)
+	}
+}
+
+func TestParseGPUTemps_MemOnly(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	chipMap := map[string]interface{}{
+		"mem": map[string]interface{}{
+			"temp1_input": 68.0,
+		},
+	}
+
+	collector.parseGPUTemps("amdgpu-pci-0400", chipMap, temp)
+
+	if len(temp.GPU) != 1 {
+		t.Fatalf("expected 1 GPU entry, got %d", len(temp.GPU))
+	}
+	if temp.GPU[0].Mem != 68.0 {
+		t.Errorf("Mem = %v, want 68.0", temp.GPU[0].Mem)
+	}
+	if temp.GPU[0].Edge != 0 {
+		t.Errorf("Edge = %v, want 0", temp.GPU[0].Edge)
+	}
+	if temp.GPU[0].Junction != 0 {
+		t.Errorf("Junction = %v, want 0", temp.GPU[0].Junction)
+	}
+}
+
+func TestParseGPUTemps_AllThreeTemperatures(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	chipMap := map[string]interface{}{
+		"edge": map[string]interface{}{
+			"temp1_input": 55.0,
+		},
+		"junction": map[string]interface{}{
+			"temp2_input": 72.5,
+		},
+		"mem": map[string]interface{}{
+			"temp3_input": 68.0,
+		},
+	}
+
+	collector.parseGPUTemps("amdgpu-pci-0400", chipMap, temp)
+
+	if len(temp.GPU) != 1 {
+		t.Fatalf("expected 1 GPU entry, got %d", len(temp.GPU))
+	}
+	if temp.GPU[0].Edge != 55.0 {
+		t.Errorf("Edge = %v, want 55.0", temp.GPU[0].Edge)
+	}
+	if temp.GPU[0].Junction != 72.5 {
+		t.Errorf("Junction = %v, want 72.5", temp.GPU[0].Junction)
+	}
+	if temp.GPU[0].Mem != 68.0 {
+		t.Errorf("Mem = %v, want 68.0", temp.GPU[0].Mem)
+	}
+}
+
+func TestParseGPUTemps_SkipsInvalidSensorData(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	chipMap := map[string]interface{}{
+		"edge":     "not a map",
+		"junction": 12345,
+		"mem":      nil,
+	}
+
+	collector.parseGPUTemps("amdgpu-pci-0400", chipMap, temp)
+
+	if len(temp.GPU) != 0 {
+		t.Errorf("expected no GPU entries when sensor data is invalid, got %d", len(temp.GPU))
+	}
+}
+
+func TestParseGPUTemps_SkipsZeroTemperatures(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	chipMap := map[string]interface{}{
+		"edge": map[string]interface{}{
+			"temp1_input": 0.0,
+		},
+	}
+
+	collector.parseGPUTemps("amdgpu-pci-0400", chipMap, temp)
+
+	if len(temp.GPU) != 0 {
+		t.Errorf("expected no GPU entries when temperature is zero, got %d", len(temp.GPU))
+	}
+}
+
+func TestParseGPUTemps_SkipsNegativeTemperatures(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	chipMap := map[string]interface{}{
+		"edge": map[string]interface{}{
+			"temp1_input": -5.0,
+		},
+	}
+
+	collector.parseGPUTemps("amdgpu-pci-0400", chipMap, temp)
+
+	if len(temp.GPU) != 0 {
+		t.Errorf("expected no GPU entries when temperature is negative, got %d", len(temp.GPU))
+	}
+}
+
+func TestParseGPUTemps_CaseInsensitiveSensorName(t *testing.T) {
+	tests := []struct {
+		name       string
+		sensorName string
+		wantEdge   float64
+		wantJunc   float64
+		wantMem    float64
+	}{
+		{"lowercase edge", "edge", 55.0, 0, 0},
+		{"uppercase EDGE", "EDGE", 55.0, 0, 0},
+		{"mixed case Edge", "Edge", 55.0, 0, 0},
+		{"edge in longer name", "GPU Edge Temp", 55.0, 0, 0},
+		{"lowercase junction", "junction", 0, 72.0, 0},
+		{"uppercase JUNCTION", "JUNCTION", 0, 72.0, 0},
+		{"mixed case Junction", "Junction", 0, 72.0, 0},
+		{"lowercase mem", "mem", 0, 0, 68.0},
+		{"uppercase MEM", "MEM", 0, 0, 68.0},
+		{"mem in longer name", "Memory Temp", 0, 0, 68.0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			collector := &TemperatureCollector{}
+			temp := &models.Temperature{}
+
+			var tempValue float64
+			if tt.wantEdge > 0 {
+				tempValue = tt.wantEdge
+			} else if tt.wantJunc > 0 {
+				tempValue = tt.wantJunc
+			} else {
+				tempValue = tt.wantMem
+			}
+
+			chipMap := map[string]interface{}{
+				tt.sensorName: map[string]interface{}{
+					"temp1_input": tempValue,
+				},
+			}
+
+			collector.parseGPUTemps("amdgpu-pci-0400", chipMap, temp)
+
+			if len(temp.GPU) != 1 {
+				t.Fatalf("expected 1 GPU entry, got %d", len(temp.GPU))
+			}
+			if temp.GPU[0].Edge != tt.wantEdge {
+				t.Errorf("Edge = %v, want %v", temp.GPU[0].Edge, tt.wantEdge)
+			}
+			if temp.GPU[0].Junction != tt.wantJunc {
+				t.Errorf("Junction = %v, want %v", temp.GPU[0].Junction, tt.wantJunc)
+			}
+			if temp.GPU[0].Mem != tt.wantMem {
+				t.Errorf("Mem = %v, want %v", temp.GPU[0].Mem, tt.wantMem)
+			}
+		})
+	}
+}
+
+func TestParseGPUTemps_HotspotMapsToJunction(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	chipMap := map[string]interface{}{
+		"hotspot": map[string]interface{}{
+			"temp1_input": 85.0,
+		},
+	}
+
+	collector.parseGPUTemps("amdgpu-pci-0400", chipMap, temp)
+
+	if len(temp.GPU) != 1 {
+		t.Fatalf("expected 1 GPU entry, got %d", len(temp.GPU))
+	}
+	if temp.GPU[0].Junction != 85.0 {
+		t.Errorf("Junction = %v, want 85.0 (hotspot should map to junction)", temp.GPU[0].Junction)
+	}
+}
+
+func TestParseGPUTemps_AppendsToExisting(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{
+		GPU: []models.GPUTemp{
+			{Device: "amdgpu-pci-0300", Edge: 50.0},
+		},
+	}
+
+	chipMap := map[string]interface{}{
+		"edge": map[string]interface{}{
+			"temp1_input": 55.0,
+		},
+	}
+
+	collector.parseGPUTemps("amdgpu-pci-0400", chipMap, temp)
+
+	if len(temp.GPU) != 2 {
+		t.Fatalf("expected 2 GPU entries, got %d", len(temp.GPU))
+	}
+	if temp.GPU[0].Device != "amdgpu-pci-0300" || temp.GPU[0].Edge != 50.0 {
+		t.Errorf("first GPU entry was modified: got %+v", temp.GPU[0])
+	}
+	if temp.GPU[1].Device != "amdgpu-pci-0400" || temp.GPU[1].Edge != 55.0 {
+		t.Errorf("second GPU entry incorrect: got %+v", temp.GPU[1])
+	}
+}
+
+func TestParseGPUTemps_MixedValidInvalidSensors(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	chipMap := map[string]interface{}{
+		"edge": map[string]interface{}{
+			"temp1_input": 55.0,
+		},
+		"junction": "invalid", // should be skipped
+		"mem": map[string]interface{}{
+			"temp1_input": 0.0, // should be skipped (zero)
+		},
+	}
+
+	collector.parseGPUTemps("amdgpu-pci-0400", chipMap, temp)
+
+	if len(temp.GPU) != 1 {
+		t.Fatalf("expected 1 GPU entry, got %d", len(temp.GPU))
+	}
+	if temp.GPU[0].Edge != 55.0 {
+		t.Errorf("Edge = %v, want 55.0", temp.GPU[0].Edge)
+	}
+	if temp.GPU[0].Junction != 0 {
+		t.Errorf("Junction = %v, want 0 (invalid data)", temp.GPU[0].Junction)
+	}
+	if temp.GPU[0].Mem != 0 {
+		t.Errorf("Mem = %v, want 0 (zero temp)", temp.GPU[0].Mem)
+	}
+}
+
+// =============================================================================
+// Tests for parseNouveauGPUTemps
+// =============================================================================
+
+func TestParseNouveauGPUTemps_EmptyChipMap(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	collector.parseNouveauGPUTemps("nouveau-pci-0100", map[string]interface{}{}, temp)
+
+	if len(temp.GPU) != 0 {
+		t.Errorf("expected no GPU entries for empty chipMap, got %d", len(temp.GPU))
+	}
+}
+
+func TestParseNouveauGPUTemps_GPUCoreSensor(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	chipMap := map[string]interface{}{
+		"GPU core": map[string]interface{}{
+			"temp1_input": 65.0,
+		},
+	}
+
+	collector.parseNouveauGPUTemps("nouveau-pci-0100", chipMap, temp)
+
+	if len(temp.GPU) != 1 {
+		t.Fatalf("expected 1 GPU entry, got %d", len(temp.GPU))
+	}
+	if temp.GPU[0].Device != "nouveau-pci-0100" {
+		t.Errorf("Device = %q, want %q", temp.GPU[0].Device, "nouveau-pci-0100")
+	}
+	if temp.GPU[0].Edge != 65.0 {
+		t.Errorf("Edge = %v, want 65.0", temp.GPU[0].Edge)
+	}
+}
+
+func TestParseNouveauGPUTemps_CaseInsensitiveSensorName(t *testing.T) {
+	tests := []struct {
+		name       string
+		sensorName string
+	}{
+		{"lowercase gpu core", "gpu core"},
+		{"uppercase GPU CORE", "GPU CORE"},
+		{"mixed case GPU Core", "GPU Core"},
+		{"gpu only", "GPU"},
+		{"core only", "core"},
+		{"GPU temp", "GPU temp"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			collector := &TemperatureCollector{}
+			temp := &models.Temperature{}
+
+			chipMap := map[string]interface{}{
+				tt.sensorName: map[string]interface{}{
+					"temp1_input": 60.0,
+				},
+			}
+
+			collector.parseNouveauGPUTemps("nouveau-pci-0100", chipMap, temp)
+
+			if len(temp.GPU) != 1 {
+				t.Fatalf("expected 1 GPU entry, got %d", len(temp.GPU))
+			}
+			if temp.GPU[0].Edge != 60.0 {
+				t.Errorf("Edge = %v, want 60.0", temp.GPU[0].Edge)
+			}
+		})
+	}
+}
+
+func TestParseNouveauGPUTemps_SkipsInvalidSensorData(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	chipMap := map[string]interface{}{
+		"GPU core": "not a map",
+	}
+
+	collector.parseNouveauGPUTemps("nouveau-pci-0100", chipMap, temp)
+
+	if len(temp.GPU) != 0 {
+		t.Errorf("expected no GPU entries when sensor data is invalid, got %d", len(temp.GPU))
+	}
+}
+
+func TestParseNouveauGPUTemps_SkipsZeroTemperatures(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	chipMap := map[string]interface{}{
+		"GPU core": map[string]interface{}{
+			"temp1_input": 0.0,
+		},
+	}
+
+	collector.parseNouveauGPUTemps("nouveau-pci-0100", chipMap, temp)
+
+	if len(temp.GPU) != 0 {
+		t.Errorf("expected no GPU entries when temperature is zero, got %d", len(temp.GPU))
+	}
+}
+
+func TestParseNouveauGPUTemps_SkipsNegativeTemperatures(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	chipMap := map[string]interface{}{
+		"GPU core": map[string]interface{}{
+			"temp1_input": -10.0,
+		},
+	}
+
+	collector.parseNouveauGPUTemps("nouveau-pci-0100", chipMap, temp)
+
+	if len(temp.GPU) != 0 {
+		t.Errorf("expected no GPU entries when temperature is negative, got %d", len(temp.GPU))
+	}
+}
+
+func TestParseNouveauGPUTemps_AppendsToExisting(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{
+		GPU: []models.GPUTemp{
+			{Device: "amdgpu-pci-0300", Edge: 50.0},
+		},
+	}
+
+	chipMap := map[string]interface{}{
+		"GPU core": map[string]interface{}{
+			"temp1_input": 65.0,
+		},
+	}
+
+	collector.parseNouveauGPUTemps("nouveau-pci-0100", chipMap, temp)
+
+	if len(temp.GPU) != 2 {
+		t.Fatalf("expected 2 GPU entries, got %d", len(temp.GPU))
+	}
+	if temp.GPU[0].Device != "amdgpu-pci-0300" || temp.GPU[0].Edge != 50.0 {
+		t.Errorf("first GPU entry was modified: got %+v", temp.GPU[0])
+	}
+	if temp.GPU[1].Device != "nouveau-pci-0100" || temp.GPU[1].Edge != 65.0 {
+		t.Errorf("second GPU entry incorrect: got %+v", temp.GPU[1])
+	}
+}
+
+func TestParseNouveauGPUTemps_OnlyEdgeIsSet(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	chipMap := map[string]interface{}{
+		"GPU core": map[string]interface{}{
+			"temp1_input": 70.0,
+		},
+	}
+
+	collector.parseNouveauGPUTemps("nouveau-pci-0100", chipMap, temp)
+
+	if len(temp.GPU) != 1 {
+		t.Fatalf("expected 1 GPU entry, got %d", len(temp.GPU))
+	}
+	if temp.GPU[0].Edge != 70.0 {
+		t.Errorf("Edge = %v, want 70.0", temp.GPU[0].Edge)
+	}
+	// Nouveau only sets Edge, Junction and Mem should remain zero
+	if temp.GPU[0].Junction != 0 {
+		t.Errorf("Junction = %v, want 0 (nouveau only sets edge)", temp.GPU[0].Junction)
+	}
+	if temp.GPU[0].Mem != 0 {
+		t.Errorf("Mem = %v, want 0 (nouveau only sets edge)", temp.GPU[0].Mem)
+	}
+}
+
+func TestParseNouveauGPUTemps_NilSensorData(t *testing.T) {
+	collector := &TemperatureCollector{}
+	temp := &models.Temperature{}
+
+	chipMap := map[string]interface{}{
+		"GPU core": nil,
+	}
+
+	collector.parseNouveauGPUTemps("nouveau-pci-0100", chipMap, temp)
+
+	if len(temp.GPU) != 0 {
+		t.Errorf("expected no GPU entries when sensor data is nil, got %d", len(temp.GPU))
+	}
+}
+
 // Helper functions for test setup
 
 func intPtr(i int) *int {
