@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 func TestLoadOrCreateBootstrapToken_EmptyDataPath(t *testing.T) {
@@ -289,4 +291,165 @@ func TestGenerateBootstrapToken(t *testing.T) {
 			t.Errorf("generateBootstrapToken() contains non-hex character: %c", c)
 		}
 	}
+}
+
+func TestBootstrapTokenValid(t *testing.T) {
+	t.Run("nil router returns false", func(t *testing.T) {
+		var r *Router = nil
+		if r.bootstrapTokenValid("anything") {
+			t.Error("expected false for nil router")
+		}
+	})
+
+	t.Run("empty hash returns false", func(t *testing.T) {
+		r := &Router{bootstrapTokenHash: ""}
+		if r.bootstrapTokenValid("anything") {
+			t.Error("expected false when bootstrapTokenHash is empty")
+		}
+	})
+
+	t.Run("empty token returns false", func(t *testing.T) {
+		// Generate a token and create a router with its hash
+		token, err := generateBootstrapToken()
+		if err != nil {
+			t.Fatalf("generateBootstrapToken() error: %v", err)
+		}
+		r := &Router{}
+		// Create a token and store its hash - use loadOrCreateBootstrapToken to get a hash indirectly
+		tmpDir := t.TempDir()
+		loadedToken, _, _, err := loadOrCreateBootstrapToken(tmpDir)
+		if err != nil {
+			t.Fatalf("loadOrCreateBootstrapToken() error: %v", err)
+		}
+		// Since we can't directly access HashAPIToken, we need to use initializeBootstrapToken
+		// Instead, let's test with a known hash by using the auth package
+		_ = token
+		_ = loadedToken
+		// For this test, we just need any non-empty hash
+		r.bootstrapTokenHash = "somehash"
+
+		if r.bootstrapTokenValid("") {
+			t.Error("expected false for empty token")
+		}
+		if r.bootstrapTokenValid("   ") {
+			t.Error("expected false for whitespace-only token")
+		}
+	})
+
+	t.Run("valid token returns true", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		token, _, _, err := loadOrCreateBootstrapToken(tmpDir)
+		if err != nil {
+			t.Fatalf("loadOrCreateBootstrapToken() error: %v", err)
+		}
+
+		// Create a router that simulates having loaded the token
+		// We need to use the auth package to hash the token
+		cfg := &config.Config{DataPath: tmpDir}
+		r := &Router{config: cfg}
+		r.initializeBootstrapToken()
+
+		if !r.bootstrapTokenValid(token) {
+			t.Error("expected true for valid token")
+		}
+	})
+
+	t.Run("invalid token returns false", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		_, _, _, err := loadOrCreateBootstrapToken(tmpDir)
+		if err != nil {
+			t.Fatalf("loadOrCreateBootstrapToken() error: %v", err)
+		}
+
+		cfg := &config.Config{DataPath: tmpDir}
+		r := &Router{config: cfg}
+		r.initializeBootstrapToken()
+
+		if r.bootstrapTokenValid("wrongtoken") {
+			t.Error("expected false for wrong token")
+		}
+	})
+
+	t.Run("token with whitespace is trimmed", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		token, _, _, err := loadOrCreateBootstrapToken(tmpDir)
+		if err != nil {
+			t.Fatalf("loadOrCreateBootstrapToken() error: %v", err)
+		}
+
+		cfg := &config.Config{DataPath: tmpDir}
+		r := &Router{config: cfg}
+		r.initializeBootstrapToken()
+
+		// Token with leading/trailing whitespace should still validate
+		if !r.bootstrapTokenValid("  " + token + "  ") {
+			t.Error("expected true for token with surrounding whitespace")
+		}
+	})
+}
+
+func TestClearBootstrapToken(t *testing.T) {
+	t.Run("nil router does not panic", func(t *testing.T) {
+		var r *Router = nil
+		// Should not panic
+		r.clearBootstrapToken()
+	})
+
+	t.Run("clears token hash and path", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		_, _, tokenPath, err := loadOrCreateBootstrapToken(tmpDir)
+		if err != nil {
+			t.Fatalf("loadOrCreateBootstrapToken() error: %v", err)
+		}
+
+		r := &Router{
+			bootstrapTokenHash: "somehash",
+			bootstrapTokenPath: tokenPath,
+		}
+
+		r.clearBootstrapToken()
+
+		if r.bootstrapTokenHash != "" {
+			t.Errorf("expected empty bootstrapTokenHash, got %q", r.bootstrapTokenHash)
+		}
+		if r.bootstrapTokenPath != "" {
+			t.Errorf("expected empty bootstrapTokenPath, got %q", r.bootstrapTokenPath)
+		}
+
+		// Verify file was deleted
+		if _, err := os.Stat(tokenPath); !os.IsNotExist(err) {
+			t.Error("expected token file to be deleted")
+		}
+	})
+
+	t.Run("handles missing file gracefully", func(t *testing.T) {
+		r := &Router{
+			bootstrapTokenHash: "somehash",
+			bootstrapTokenPath: "/nonexistent/path/token",
+		}
+
+		// Should not panic, should clear the hash and path
+		r.clearBootstrapToken()
+
+		if r.bootstrapTokenHash != "" {
+			t.Errorf("expected empty bootstrapTokenHash, got %q", r.bootstrapTokenHash)
+		}
+		if r.bootstrapTokenPath != "" {
+			t.Errorf("expected empty bootstrapTokenPath, got %q", r.bootstrapTokenPath)
+		}
+	})
+
+	t.Run("handles empty path", func(t *testing.T) {
+		r := &Router{
+			bootstrapTokenHash: "somehash",
+			bootstrapTokenPath: "",
+		}
+
+		// Should not panic
+		r.clearBootstrapToken()
+
+		if r.bootstrapTokenHash != "" {
+			t.Errorf("expected empty bootstrapTokenHash, got %q", r.bootstrapTokenHash)
+		}
+	})
 }
