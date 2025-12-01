@@ -1673,3 +1673,478 @@ func TestEnsureValidHysteresis(t *testing.T) {
 		})
 	}
 }
+
+// TestCloneThreshold tests the cloneThreshold function
+func TestCloneThreshold(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		threshold *HysteresisThreshold
+	}{
+		{
+			name:      "nil threshold returns nil",
+			threshold: nil,
+		},
+		{
+			name:      "basic threshold is cloned",
+			threshold: &HysteresisThreshold{Trigger: 80, Clear: 70},
+		},
+		{
+			name:      "zero values threshold",
+			threshold: &HysteresisThreshold{Trigger: 0, Clear: 0},
+		},
+		{
+			name:      "large values threshold",
+			threshold: &HysteresisThreshold{Trigger: 100, Clear: 95},
+		},
+		{
+			name:      "fractional values threshold",
+			threshold: &HysteresisThreshold{Trigger: 85.5, Clear: 80.25},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := cloneThreshold(tc.threshold)
+
+			if tc.threshold == nil {
+				if result != nil {
+					t.Errorf("cloneThreshold(nil) = %v, want nil", result)
+				}
+				return
+			}
+
+			// Result should not be nil
+			if result == nil {
+				t.Fatalf("cloneThreshold() returned nil for non-nil input")
+			}
+
+			// Result should be a different pointer
+			if result == tc.threshold {
+				t.Error("cloneThreshold() returned same pointer, not a clone")
+			}
+
+			// Values should match
+			if result.Trigger != tc.threshold.Trigger {
+				t.Errorf("cloneThreshold().Trigger = %v, want %v", result.Trigger, tc.threshold.Trigger)
+			}
+			if result.Clear != tc.threshold.Clear {
+				t.Errorf("cloneThreshold().Clear = %v, want %v", result.Clear, tc.threshold.Clear)
+			}
+
+			// Modifying clone should not affect original
+			result.Trigger = 999
+			result.Clear = 888
+			if tc.threshold.Trigger == 999 || tc.threshold.Clear == 888 {
+				t.Error("modifying clone affected original threshold")
+			}
+		})
+	}
+}
+
+// TestCloneStringPtr tests the cloneStringPtr function
+func TestCloneStringPtr(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value *string
+	}{
+		{
+			name:  "nil returns nil",
+			value: nil,
+		},
+		{
+			name:  "empty string is cloned",
+			value: strPtr(""),
+		},
+		{
+			name:  "basic string is cloned",
+			value: strPtr("hello"),
+		},
+		{
+			name:  "string with spaces",
+			value: strPtr("hello world"),
+		},
+		{
+			name:  "unicode string",
+			value: strPtr("こんにちは"),
+		},
+		{
+			name:  "long string",
+			value: strPtr(strings.Repeat("a", 1000)),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := cloneStringPtr(tc.value)
+
+			if tc.value == nil {
+				if result != nil {
+					t.Errorf("cloneStringPtr(nil) = %v, want nil", result)
+				}
+				return
+			}
+
+			// Result should not be nil
+			if result == nil {
+				t.Fatalf("cloneStringPtr() returned nil for non-nil input")
+			}
+
+			// Result should be a different pointer
+			if result == tc.value {
+				t.Error("cloneStringPtr() returned same pointer, not a clone")
+			}
+
+			// Values should match
+			if *result != *tc.value {
+				t.Errorf("cloneStringPtr() value = %q, want %q", *result, *tc.value)
+			}
+
+			// Modifying clone should not affect original
+			originalValue := *tc.value
+			*result = "modified"
+			if *tc.value != originalValue {
+				t.Error("modifying clone affected original string")
+			}
+		})
+	}
+}
+
+// strPtr is a helper to create a string pointer
+func strPtr(s string) *string {
+	return &s
+}
+
+// TestCloneThresholdConfig tests the cloneThresholdConfig function
+func TestCloneThresholdConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		config ThresholdConfig
+	}{
+		{
+			name:   "empty config",
+			config: ThresholdConfig{},
+		},
+		{
+			name: "config with CPU threshold",
+			config: ThresholdConfig{
+				CPU: &HysteresisThreshold{Trigger: 80, Clear: 70},
+			},
+		},
+		{
+			name: "config with all thresholds",
+			config: ThresholdConfig{
+				CPU:         &HysteresisThreshold{Trigger: 80, Clear: 70},
+				Memory:      &HysteresisThreshold{Trigger: 85, Clear: 75},
+				Disk:        &HysteresisThreshold{Trigger: 90, Clear: 85},
+				DiskRead:    &HysteresisThreshold{Trigger: 50, Clear: 40},
+				DiskWrite:   &HysteresisThreshold{Trigger: 50, Clear: 40},
+				NetworkIn:   &HysteresisThreshold{Trigger: 80, Clear: 70},
+				NetworkOut:  &HysteresisThreshold{Trigger: 80, Clear: 70},
+				Temperature: &HysteresisThreshold{Trigger: 70, Clear: 60},
+				Usage:       &HysteresisThreshold{Trigger: 85, Clear: 75},
+			},
+		},
+		{
+			name: "config with note",
+			config: ThresholdConfig{
+				CPU:  &HysteresisThreshold{Trigger: 80, Clear: 70},
+				Note: strPtr("Test note for this config"),
+			},
+		},
+		{
+			name: "config with disabled flag",
+			config: ThresholdConfig{
+				Disabled: true,
+				CPU:      &HysteresisThreshold{Trigger: 80, Clear: 70},
+			},
+		},
+		{
+			name: "config with disable connectivity flag",
+			config: ThresholdConfig{
+				DisableConnectivity: true,
+				Memory:              &HysteresisThreshold{Trigger: 90, Clear: 80},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := cloneThresholdConfig(tc.config)
+
+			// Check disabled flags
+			if result.Disabled != tc.config.Disabled {
+				t.Errorf("Disabled = %v, want %v", result.Disabled, tc.config.Disabled)
+			}
+			if result.DisableConnectivity != tc.config.DisableConnectivity {
+				t.Errorf("DisableConnectivity = %v, want %v", result.DisableConnectivity, tc.config.DisableConnectivity)
+			}
+
+			// Check that threshold pointers are different but values match
+			checkThresholdClone(t, "CPU", result.CPU, tc.config.CPU)
+			checkThresholdClone(t, "Memory", result.Memory, tc.config.Memory)
+			checkThresholdClone(t, "Disk", result.Disk, tc.config.Disk)
+			checkThresholdClone(t, "DiskRead", result.DiskRead, tc.config.DiskRead)
+			checkThresholdClone(t, "DiskWrite", result.DiskWrite, tc.config.DiskWrite)
+			checkThresholdClone(t, "NetworkIn", result.NetworkIn, tc.config.NetworkIn)
+			checkThresholdClone(t, "NetworkOut", result.NetworkOut, tc.config.NetworkOut)
+			checkThresholdClone(t, "Temperature", result.Temperature, tc.config.Temperature)
+			checkThresholdClone(t, "Usage", result.Usage, tc.config.Usage)
+
+			// Check Note cloning
+			if tc.config.Note == nil {
+				if result.Note != nil {
+					t.Errorf("Note should be nil")
+				}
+			} else {
+				if result.Note == nil {
+					t.Errorf("Note should not be nil")
+				} else if result.Note == tc.config.Note {
+					t.Error("Note pointer should be different")
+				} else if *result.Note != *tc.config.Note {
+					t.Errorf("Note value = %q, want %q", *result.Note, *tc.config.Note)
+				}
+			}
+
+			// Verify modifying clone doesn't affect original
+			if result.CPU != nil {
+				result.CPU.Trigger = 999
+				if tc.config.CPU != nil && tc.config.CPU.Trigger == 999 {
+					t.Error("modifying cloned CPU affected original")
+				}
+			}
+			if result.Note != nil {
+				*result.Note = "modified"
+				if tc.config.Note != nil && *tc.config.Note == "modified" {
+					t.Error("modifying cloned Note affected original")
+				}
+			}
+		})
+	}
+}
+
+// checkThresholdClone is a helper to verify a threshold was properly cloned
+func checkThresholdClone(t *testing.T, name string, result, original *HysteresisThreshold) {
+	t.Helper()
+	if original == nil {
+		if result != nil {
+			t.Errorf("%s should be nil", name)
+		}
+		return
+	}
+	if result == nil {
+		t.Errorf("%s should not be nil", name)
+		return
+	}
+	if result == original {
+		t.Errorf("%s pointer should be different", name)
+	}
+	if result.Trigger != original.Trigger {
+		t.Errorf("%s.Trigger = %v, want %v", name, result.Trigger, original.Trigger)
+	}
+	if result.Clear != original.Clear {
+		t.Errorf("%s.Clear = %v, want %v", name, result.Clear, original.Clear)
+	}
+}
+
+// TestEnsureHysteresisThreshold tests the ensureHysteresisThreshold function
+func TestEnsureHysteresisThreshold(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		threshold   *HysteresisThreshold
+		wantTrigger float64
+		wantClear   float64
+	}{
+		{
+			name:      "nil threshold returns nil",
+			threshold: nil,
+		},
+		{
+			name:        "threshold with valid clear unchanged",
+			threshold:   &HysteresisThreshold{Trigger: 80, Clear: 70},
+			wantTrigger: 80,
+			wantClear:   70,
+		},
+		{
+			name:        "threshold with zero clear gets default",
+			threshold:   &HysteresisThreshold{Trigger: 80, Clear: 0},
+			wantTrigger: 80,
+			wantClear:   75, // 80 - 5
+		},
+		{
+			name:        "threshold with negative clear gets default",
+			threshold:   &HysteresisThreshold{Trigger: 80, Clear: -10},
+			wantTrigger: 80,
+			wantClear:   75, // 80 - 5
+		},
+		{
+			name:        "low trigger value",
+			threshold:   &HysteresisThreshold{Trigger: 10, Clear: 0},
+			wantTrigger: 10,
+			wantClear:   5, // 10 - 5
+		},
+		{
+			name:        "trigger at 5 with zero clear",
+			threshold:   &HysteresisThreshold{Trigger: 5, Clear: 0},
+			wantTrigger: 5,
+			wantClear:   0, // 5 - 5 = 0
+		},
+		{
+			name:        "trigger below 5 with zero clear",
+			threshold:   &HysteresisThreshold{Trigger: 3, Clear: 0},
+			wantTrigger: 3,
+			wantClear:   -2, // 3 - 5 = -2 (function doesn't clamp)
+		},
+		{
+			name:        "trigger at 100 with zero clear",
+			threshold:   &HysteresisThreshold{Trigger: 100, Clear: 0},
+			wantTrigger: 100,
+			wantClear:   95, // 100 - 5
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := ensureHysteresisThreshold(tc.threshold)
+
+			if tc.threshold == nil {
+				if result != nil {
+					t.Errorf("ensureHysteresisThreshold(nil) = %v, want nil", result)
+				}
+				return
+			}
+
+			if result == nil {
+				t.Fatal("ensureHysteresisThreshold returned nil for non-nil input")
+			}
+
+			// Note: function modifies in place, so result == tc.threshold
+			if result.Trigger != tc.wantTrigger {
+				t.Errorf("Trigger = %v, want %v", result.Trigger, tc.wantTrigger)
+			}
+			if result.Clear != tc.wantClear {
+				t.Errorf("Clear = %v, want %v", result.Clear, tc.wantClear)
+			}
+		})
+	}
+}
+
+// TestParsePulseTags tests the parsePulseTags function
+func TestParsePulseTags(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		tags []string
+		want pulseTagSettings
+	}{
+		{
+			name: "nil tags",
+			tags: nil,
+			want: pulseTagSettings{},
+		},
+		{
+			name: "empty tags",
+			tags: []string{},
+			want: pulseTagSettings{},
+		},
+		{
+			name: "no pulse tags",
+			tags: []string{"production", "web-server", "ubuntu"},
+			want: pulseTagSettings{},
+		},
+		{
+			name: "pulse-no-alerts tag",
+			tags: []string{"pulse-no-alerts"},
+			want: pulseTagSettings{Suppress: true},
+		},
+		{
+			name: "pulse-monitor-only tag",
+			tags: []string{"pulse-monitor-only"},
+			want: pulseTagSettings{MonitorOnly: true},
+		},
+		{
+			name: "pulse-relaxed tag",
+			tags: []string{"pulse-relaxed"},
+			want: pulseTagSettings{Relaxed: true},
+		},
+		{
+			name: "all pulse tags",
+			tags: []string{"pulse-no-alerts", "pulse-monitor-only", "pulse-relaxed"},
+			want: pulseTagSettings{Suppress: true, MonitorOnly: true, Relaxed: true},
+		},
+		{
+			name: "mixed tags with pulse tags",
+			tags: []string{"production", "pulse-no-alerts", "web-server", "pulse-relaxed"},
+			want: pulseTagSettings{Suppress: true, Relaxed: true},
+		},
+		{
+			name: "uppercase pulse tag",
+			tags: []string{"PULSE-NO-ALERTS"},
+			want: pulseTagSettings{Suppress: true},
+		},
+		{
+			name: "mixed case pulse tag",
+			tags: []string{"Pulse-Monitor-Only"},
+			want: pulseTagSettings{MonitorOnly: true},
+		},
+		{
+			name: "pulse tag with whitespace",
+			tags: []string{"  pulse-no-alerts  "},
+			want: pulseTagSettings{Suppress: true},
+		},
+		{
+			name: "pulse tag with leading whitespace",
+			tags: []string{"  pulse-relaxed"},
+			want: pulseTagSettings{Relaxed: true},
+		},
+		{
+			name: "pulse tag with trailing whitespace",
+			tags: []string{"pulse-monitor-only  "},
+			want: pulseTagSettings{MonitorOnly: true},
+		},
+		{
+			name: "similar but not pulse tag",
+			tags: []string{"pulse-alerts", "pulse-monitor", "pulse"},
+			want: pulseTagSettings{},
+		},
+		{
+			name: "pulse tag substring does not match",
+			tags: []string{"mypulse-no-alerts", "pulse-no-alerts-extra"},
+			want: pulseTagSettings{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := parsePulseTags(tc.tags)
+
+			if result.Suppress != tc.want.Suppress {
+				t.Errorf("Suppress = %v, want %v", result.Suppress, tc.want.Suppress)
+			}
+			if result.MonitorOnly != tc.want.MonitorOnly {
+				t.Errorf("MonitorOnly = %v, want %v", result.MonitorOnly, tc.want.MonitorOnly)
+			}
+			if result.Relaxed != tc.want.Relaxed {
+				t.Errorf("Relaxed = %v, want %v", result.Relaxed, tc.want.Relaxed)
+			}
+		})
+	}
+}
