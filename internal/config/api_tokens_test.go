@@ -29,6 +29,146 @@ func TestAPITokenRecordHasScope(t *testing.T) {
 	}
 }
 
+func TestTokenPrefix(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		expected string
+	}{
+		{name: "longer than 6 chars", value: "abcdefghij", expected: "abcdef"},
+		{name: "exactly 6 chars", value: "abcdef", expected: "abcdef"},
+		{name: "shorter than 6 chars", value: "abc", expected: "abc"},
+		{name: "empty string", value: "", expected: ""},
+		{name: "single char", value: "x", expected: "x"},
+		{name: "5 chars", value: "12345", expected: "12345"},
+		{name: "7 chars", value: "1234567", expected: "123456"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tokenPrefix(tt.value)
+			if result != tt.expected {
+				t.Errorf("tokenPrefix(%q) = %q, want %q", tt.value, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestTokenSuffix(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		expected string
+	}{
+		{name: "longer than 4 chars", value: "abcdefghij", expected: "ghij"},
+		{name: "exactly 4 chars", value: "abcd", expected: "abcd"},
+		{name: "shorter than 4 chars", value: "abc", expected: "abc"},
+		{name: "empty string", value: "", expected: ""},
+		{name: "single char", value: "x", expected: "x"},
+		{name: "3 chars", value: "123", expected: "123"},
+		{name: "5 chars", value: "12345", expected: "2345"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tokenSuffix(tt.value)
+			if result != tt.expected {
+				t.Errorf("tokenSuffix(%q) = %q, want %q", tt.value, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNormalizeScopes(t *testing.T) {
+	tests := []struct {
+		name     string
+		scopes   []string
+		expected []string
+	}{
+		{
+			name:     "nil returns wildcard",
+			scopes:   nil,
+			expected: []string{ScopeWildcard},
+		},
+		{
+			name:     "empty returns wildcard",
+			scopes:   []string{},
+			expected: []string{ScopeWildcard},
+		},
+		{
+			name:     "single scope preserved",
+			scopes:   []string{ScopeMonitoringRead},
+			expected: []string{ScopeMonitoringRead},
+		},
+		{
+			name:     "multiple scopes preserved",
+			scopes:   []string{ScopeMonitoringRead, ScopeSettingsWrite},
+			expected: []string{ScopeMonitoringRead, ScopeSettingsWrite},
+		},
+		{
+			name:     "wildcard alone preserved",
+			scopes:   []string{ScopeWildcard},
+			expected: []string{ScopeWildcard},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := normalizeScopes(tt.scopes)
+			if len(result) != len(tt.expected) {
+				t.Fatalf("normalizeScopes(%v) length = %d, want %d", tt.scopes, len(result), len(tt.expected))
+			}
+			for i, v := range result {
+				if v != tt.expected[i] {
+					t.Errorf("normalizeScopes(%v)[%d] = %q, want %q", tt.scopes, i, v, tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
+func TestNormalizeScopes_ReturnsCopy(t *testing.T) {
+	original := []string{ScopeMonitoringRead, ScopeSettingsWrite}
+	result := normalizeScopes(original)
+
+	// Modify result and verify original is unchanged
+	result[0] = "modified"
+	if original[0] != ScopeMonitoringRead {
+		t.Errorf("normalizeScopes did not return a copy; original was modified")
+	}
+}
+
+func TestIsKnownScope(t *testing.T) {
+	tests := []struct {
+		name     string
+		scope    string
+		expected bool
+	}{
+		{name: "wildcard", scope: ScopeWildcard, expected: true},
+		{name: "monitoring:read", scope: ScopeMonitoringRead, expected: true},
+		{name: "monitoring:write", scope: ScopeMonitoringWrite, expected: true},
+		{name: "docker:report", scope: ScopeDockerReport, expected: true},
+		{name: "docker:manage", scope: ScopeDockerManage, expected: true},
+		{name: "host-agent:report", scope: ScopeHostReport, expected: true},
+		{name: "host-agent:manage", scope: ScopeHostManage, expected: true},
+		{name: "settings:read", scope: ScopeSettingsRead, expected: true},
+		{name: "settings:write", scope: ScopeSettingsWrite, expected: true},
+		{name: "unknown scope", scope: "unknown:scope", expected: false},
+		{name: "empty string", scope: "", expected: false},
+		{name: "partial match", scope: "monitoring", expected: false},
+		{name: "case sensitive", scope: "MONITORING:READ", expected: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsKnownScope(tt.scope)
+			if result != tt.expected {
+				t.Errorf("IsKnownScope(%q) = %v, want %v", tt.scope, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestLoadAPITokensAppliesLegacyScopes(t *testing.T) {
 	if len(AllKnownScopes) == 0 {
 		t.Fatal("expected known scopes to be defined")
