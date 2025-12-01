@@ -21,6 +21,21 @@ func TestAPITokenRecordHasScope(t *testing.T) {
 		t.Fatalf("expected wildcard to grant %q", ScopeSettingsWrite)
 	}
 
+	// Empty scope always returns true
+	record.Scopes = []string{ScopeMonitoringRead}
+	if !record.HasScope("") {
+		t.Fatalf("expected empty scope to always be granted")
+	}
+
+	// Explicit wildcard scope in list grants any scope
+	record.Scopes = []string{ScopeWildcard}
+	if !record.HasScope(ScopeSettingsWrite) {
+		t.Fatalf("expected wildcard scope in list to grant %q", ScopeSettingsWrite)
+	}
+	if !record.HasScope(ScopeMonitoringRead) {
+		t.Fatalf("expected wildcard scope in list to grant %q", ScopeMonitoringRead)
+	}
+
 	if !IsKnownScope(ScopeMonitoringRead) {
 		t.Fatalf("expected %q to be known scope", ScopeMonitoringRead)
 	}
