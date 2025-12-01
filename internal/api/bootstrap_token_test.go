@@ -1,9 +1,12 @@
 package api
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -386,6 +389,26 @@ func TestBootstrapTokenValid(t *testing.T) {
 			t.Error("expected true for token with surrounding whitespace")
 		}
 	})
+}
+
+func TestHandleValidateBootstrapToken_InvalidJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{DataPath: tmpDir}
+	r := &Router{config: cfg}
+	r.initializeBootstrapToken()
+
+	// Test invalid JSON body triggers json.Decode error
+	req := httptest.NewRequest(http.MethodPost, "/api/security/validate-bootstrap-token", strings.NewReader("not valid json"))
+	rr := httptest.NewRecorder()
+
+	r.handleValidateBootstrapToken(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid JSON, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Invalid request payload") {
+		t.Errorf("expected 'Invalid request payload' error, got %q", rr.Body.String())
+	}
 }
 
 func TestClearBootstrapToken(t *testing.T) {
