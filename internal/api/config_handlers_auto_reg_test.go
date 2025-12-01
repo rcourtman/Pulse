@@ -7,6 +7,63 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
+func TestMarkAutoRegistered(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		nodeType   string
+		nodeName   string
+		wantStored bool
+	}{
+		{
+			name:       "empty nodeType returns early",
+			nodeType:   "",
+			nodeName:   "node1",
+			wantStored: false,
+		},
+		{
+			name:       "empty nodeName returns early",
+			nodeType:   "pve",
+			nodeName:   "",
+			wantStored: false,
+		},
+		{
+			name:       "valid inputs store entry",
+			nodeType:   "pve",
+			nodeName:   "node1",
+			wantStored: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{
+				DataPath:   t.TempDir(),
+				ConfigPath: t.TempDir(),
+			}
+			h := newTestConfigHandlers(t, cfg)
+
+			h.markAutoRegistered(tt.nodeType, tt.nodeName)
+
+			h.recentAutoRegMutex.Lock()
+			defer h.recentAutoRegMutex.Unlock()
+
+			key := tt.nodeType + ":" + tt.nodeName
+			_, exists := h.recentAutoRegistered[key]
+
+			if tt.wantStored && !exists {
+				t.Errorf("expected key %q to be stored, but it was not", key)
+			}
+			if !tt.wantStored && exists {
+				t.Errorf("expected key %q to not be stored, but it was", key)
+			}
+		})
+	}
+}
+
 func TestIsRecentlyAutoRegistered(t *testing.T) {
 	t.Parallel()
 
