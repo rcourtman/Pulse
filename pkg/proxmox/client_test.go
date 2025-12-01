@@ -609,6 +609,13 @@ func TestCoerceUint64(t *testing.T) {
 			value:   "1.2.3e4",
 			wantErr: true,
 		},
+		// String without .eE that fails ParseUint (covers the ParseUint error branch)
+		{
+			name:    "string invalid no decimal chars",
+			field:   "test",
+			value:   "abc",
+			wantErr: true,
+		},
 		{
 			name:  "string quoted null",
 			field: "test",
