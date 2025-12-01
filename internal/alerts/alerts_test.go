@@ -3095,3 +3095,101 @@ func TestDockerServiceResourceID(t *testing.T) {
 		})
 	}
 }
+
+func TestClearStorageOfflineAlert(t *testing.T) {
+	t.Parallel()
+
+	t.Run("clears existing offline alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		storage := models.Storage{
+			ID:   "storage-1",
+			Name: "local-lvm",
+			Node: "pve1",
+		}
+
+		alertID := fmt.Sprintf("storage-offline-%s", storage.ID)
+
+		// Create an existing offline alert
+		m.mu.Lock()
+		m.activeAlerts[alertID] = &Alert{
+			ID:        alertID,
+			Type:      "storage-offline",
+			Level:     "critical",
+			StartTime: time.Now().Add(-10 * time.Minute),
+		}
+		m.offlineConfirmations[storage.ID] = 3
+		m.mu.Unlock()
+
+		var resolvedID string
+		m.SetResolvedCallback(func(id string) {
+			resolvedID = id
+		})
+
+		m.clearStorageOfflineAlert(storage)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts[alertID]
+		_, confirmExists := m.offlineConfirmations[storage.ID]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected alert to be cleared")
+		}
+		if confirmExists {
+			t.Error("expected offline confirmation to be cleared")
+		}
+		if resolvedID != alertID {
+			t.Errorf("expected resolved callback with %q, got %q", alertID, resolvedID)
+		}
+	})
+
+	t.Run("noop when no alert exists", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		storage := models.Storage{
+			ID:   "storage-2",
+			Name: "local-zfs",
+			Node: "pve1",
+		}
+
+		var callbackCalled bool
+		m.SetResolvedCallback(func(id string) {
+			callbackCalled = true
+		})
+
+		m.clearStorageOfflineAlert(storage)
+
+		if callbackCalled {
+			t.Error("expected no callback when no alert exists")
+		}
+	})
+
+	t.Run("clears offline confirmation even when no alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		storage := models.Storage{
+			ID:   "storage-3",
+			Name: "ceph-pool",
+			Node: "pve2",
+		}
+
+		// Set confirmation without alert
+		m.mu.Lock()
+		m.offlineConfirmations[storage.ID] = 2
+		m.mu.Unlock()
+
+		m.clearStorageOfflineAlert(storage)
+
+		m.mu.RLock()
+		_, confirmExists := m.offlineConfirmations[storage.ID]
+		m.mu.RUnlock()
+
+		if confirmExists {
+			t.Error("expected offline confirmation to be cleared")
+		}
+	})
+}
