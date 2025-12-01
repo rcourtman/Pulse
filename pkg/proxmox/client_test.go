@@ -637,6 +637,119 @@ func TestCoerceUint64(t *testing.T) {
 	}
 }
 
+func TestParseWearoutValue(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want int
+	}{
+		// Empty and whitespace
+		{name: "empty string", raw: "", want: wearoutUnknown},
+		{name: "whitespace only", raw: "   ", want: wearoutUnknown},
+		{name: "tab whitespace", raw: "\t\n", want: wearoutUnknown},
+
+		// Simple numeric strings
+		{name: "zero", raw: "0", want: 0},
+		{name: "simple integer", raw: "81", want: 81},
+		{name: "integer with leading space", raw: "  75", want: 75},
+		{name: "integer with trailing space", raw: "90  ", want: 90},
+		{name: "integer with surrounding space", raw: "  42  ", want: 42},
+		{name: "100 percent", raw: "100", want: 100},
+
+		// Quoted values (API sometimes wraps values in quotes)
+		{name: "double quoted", raw: `"81"`, want: 81},
+		{name: "single quoted", raw: `'75'`, want: 75},
+		{name: "escaped quotes", raw: `\"81\"`, want: 81},
+		{name: "double escaped quotes", raw: `"\"90\""`, want: 90},
+		{name: "mixed quote styles", raw: `"'50'"`, want: 50},
+
+		// Percentage symbols
+		{name: "percentage symbol", raw: "81%", want: 81},
+		{name: "percentage with space before", raw: "82 %", want: 82},
+		{name: "percentage with space after", raw: "83% ", want: 83},
+		{name: "quoted percentage", raw: `"75%"`, want: 75},
+
+		// N/A and similar
+		{name: "N/A uppercase", raw: "N/A", want: wearoutUnknown},
+		{name: "n/a lowercase", raw: "n/a", want: wearoutUnknown},
+		{name: "NA no slash", raw: "NA", want: wearoutUnknown},
+		{name: "na lowercase no slash", raw: "na", want: wearoutUnknown},
+		{name: "none", raw: "none", want: wearoutUnknown},
+		{name: "None capitalized", raw: "None", want: wearoutUnknown},
+		{name: "NONE uppercase", raw: "NONE", want: wearoutUnknown},
+		{name: "unknown", raw: "unknown", want: wearoutUnknown},
+		{name: "Unknown capitalized", raw: "Unknown", want: wearoutUnknown},
+		{name: "UNKNOWN uppercase", raw: "UNKNOWN", want: wearoutUnknown},
+		{name: "quoted N/A", raw: `"N/A"`, want: wearoutUnknown},
+
+		// Float values
+		{name: "float value truncated", raw: "81.5", want: 81},
+		{name: "float zero decimal", raw: "90.0", want: 90},
+		{name: "float high precision", raw: "75.999", want: 75},
+		{name: "negative float", raw: "-5.5", want: -5},
+
+		// Digit extraction fallback (messy SMART data)
+		{name: "percentage text mixed", raw: "about 50 percent", want: 50},
+		{name: "text with digits", raw: "wear level 25 remaining", want: 25},
+		{name: "complex messy string", raw: "SSD: 15% endurance", want: 15},
+
+		// Edge cases
+		{name: "negative value", raw: "-1", want: -1},
+		{name: "large value", raw: "999", want: 999},
+
+		// Non-parseable strings (no digits at all)
+		{name: "no digits text", raw: "not available", want: wearoutUnknown},
+		{name: "symbols only", raw: "---", want: wearoutUnknown},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseWearoutValue(tc.raw)
+			if got != tc.want {
+				t.Errorf("parseWearoutValue(%q) = %d, want %d", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestClampWearoutConsumed(t *testing.T) {
+	tests := []struct {
+		name string
+		val  int
+		want int
+	}{
+		// Unknown value passthrough
+		{name: "unknown passthrough", val: wearoutUnknown, want: wearoutUnknown},
+
+		// Normal range
+		{name: "zero", val: 0, want: 0},
+		{name: "middle value", val: 50, want: 50},
+		{name: "max valid", val: 100, want: 100},
+
+		// Clamping negative
+		{name: "negative clamped to zero", val: -5, want: 0},
+		{name: "large negative clamped", val: -100, want: 0},
+
+		// Clamping over 100
+		{name: "over 100 clamped", val: 105, want: 100},
+		{name: "way over 100", val: 999, want: 100},
+
+		// Edge cases
+		{name: "just under unknown", val: -2, want: 0},
+		{name: "one", val: 1, want: 1},
+		{name: "ninety-nine", val: 99, want: 99},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := clampWearoutConsumed(tc.val)
+			if got != tc.want {
+				t.Errorf("clampWearoutConsumed(%d) = %d, want %d", tc.val, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestMemoryStatusEffectiveAvailable_RegressionIssue435 tests the specific scenarios
 // reported in GitHub issue #435 where memory calculations incorrectly included cache/buffers
 func TestMemoryStatusEffectiveAvailable_RegressionIssue435(t *testing.T) {
