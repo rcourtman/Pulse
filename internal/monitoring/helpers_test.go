@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -534,4 +535,361 @@ func stringSlicesEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// customStringer is a test type implementing fmt.Stringer for testing the fmt.Stringer case
+type customStringer struct {
+	value string
+}
+
+func (c customStringer) String() string {
+	return c.value
+}
+
+func TestStringValue(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		input interface{}
+		want  string
+	}{
+		// String inputs
+		{name: "plain string", input: "hello", want: "hello"},
+		{name: "string with whitespace", input: "  hello  ", want: "hello"},
+		{name: "empty string", input: "", want: ""},
+		{name: "whitespace only string", input: "   ", want: ""},
+
+		// Numeric inputs - integers
+		{name: "int", input: 42, want: "42"},
+		{name: "int zero", input: 0, want: "0"},
+		{name: "int negative", input: -123, want: "-123"},
+		{name: "int32", input: int32(2147483647), want: "2147483647"},
+		{name: "int32 negative", input: int32(-1), want: "-1"},
+		{name: "int64", input: int64(9223372036854775807), want: "9223372036854775807"},
+		{name: "int64 negative", input: int64(-9223372036854775808), want: "-9223372036854775808"},
+		{name: "uint32", input: uint32(4294967295), want: "4294967295"},
+		{name: "uint64", input: uint64(18446744073709551615), want: "18446744073709551615"},
+
+		// Numeric inputs - floats
+		{name: "float64 whole", input: float64(42), want: "42"},
+		{name: "float64 decimal", input: float64(3.14159), want: "3.14159"},
+		{name: "float64 negative", input: float64(-1.5), want: "-1.5"},
+		{name: "float64 zero", input: float64(0), want: "0"},
+		{name: "float32 whole", input: float32(42), want: "42"},
+		{name: "float32 decimal", input: float32(2.5), want: "2.5"},
+
+		// json.Number
+		{name: "json.Number int", input: json.Number("12345"), want: "12345"},
+		{name: "json.Number float", input: json.Number("3.14"), want: "3.14"},
+
+		// fmt.Stringer (custom type)
+		{name: "fmt.Stringer", input: customStringer{value: "custom"}, want: "custom"},
+		{name: "fmt.Stringer with whitespace", input: customStringer{value: "  trimmed  "}, want: "trimmed"},
+		{name: "fmt.Stringer empty", input: customStringer{value: ""}, want: ""},
+
+		// Unsupported types
+		{name: "nil", input: nil, want: ""},
+		{name: "bool true", input: true, want: ""},
+		{name: "bool false", input: false, want: ""},
+		{name: "slice", input: []int{1, 2, 3}, want: ""},
+		{name: "map", input: map[string]int{"a": 1}, want: ""},
+		{name: "struct", input: struct{ X int }{X: 1}, want: ""},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := stringValue(tc.input); got != tc.want {
+				t.Fatalf("stringValue(%v) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAnyToInt64(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		input interface{}
+		want  int64
+	}{
+		// Integer types
+		{name: "int positive", input: 42, want: 42},
+		{name: "int zero", input: 0, want: 0},
+		{name: "int negative", input: -123, want: -123},
+		{name: "int32 positive", input: int32(100), want: 100},
+		{name: "int32 max", input: int32(2147483647), want: 2147483647},
+		{name: "int32 min", input: int32(-2147483648), want: -2147483648},
+		{name: "int64 positive", input: int64(9223372036854775807), want: 9223372036854775807},
+		{name: "int64 negative", input: int64(-9223372036854775808), want: -9223372036854775808},
+		{name: "uint32", input: uint32(4294967295), want: 4294967295},
+
+		// uint64 edge cases
+		{name: "uint64 normal", input: uint64(1000), want: 1000},
+		{name: "uint64 max int64", input: uint64(9223372036854775807), want: 9223372036854775807},
+		{name: "uint64 overflow", input: uint64(18446744073709551615), want: math.MaxInt64},
+
+		// Float types (truncated to int64)
+		{name: "float64 whole", input: float64(42), want: 42},
+		{name: "float64 truncated", input: float64(3.9), want: 3},
+		{name: "float64 negative truncated", input: float64(-2.9), want: -2},
+		{name: "float64 zero", input: float64(0), want: 0},
+		{name: "float32 whole", input: float32(100), want: 100},
+		{name: "float32 truncated", input: float32(5.7), want: 5},
+
+		// String parsing
+		{name: "string int", input: "12345", want: 12345},
+		{name: "string negative", input: "-999", want: -999},
+		{name: "string zero", input: "0", want: 0},
+		{name: "string empty", input: "", want: 0},
+		{name: "string float", input: "3.14", want: 3},
+		{name: "string invalid", input: "abc", want: 0},
+		{name: "string mixed", input: "123abc", want: 0},
+
+		// json.Number
+		{name: "json.Number int", input: json.Number("67890"), want: 67890},
+		{name: "json.Number negative", input: json.Number("-500"), want: -500},
+		{name: "json.Number float", input: json.Number("2.718"), want: 2},
+
+		// Unsupported types
+		{name: "nil", input: nil, want: 0},
+		{name: "bool true", input: true, want: 0},
+		{name: "bool false", input: false, want: 0},
+		{name: "slice", input: []int{1, 2, 3}, want: 0},
+		{name: "map", input: map[string]int{"a": 1}, want: 0},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := anyToInt64(tc.input); got != tc.want {
+				t.Fatalf("anyToInt64(%v) = %d, want %d", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseInterfaceStat(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		stats interface{}
+		key   string
+		want  int64
+	}{
+		// Nil and invalid stats
+		{name: "nil stats", stats: nil, key: "bytes", want: 0},
+		{name: "non-map stats", stats: "not a map", key: "bytes", want: 0},
+		{name: "int stats", stats: 123, key: "bytes", want: 0},
+
+		// Missing key
+		{name: "missing key", stats: map[string]interface{}{"packets": 100}, key: "bytes", want: 0},
+		{name: "empty map", stats: map[string]interface{}{}, key: "bytes", want: 0},
+
+		// Valid keys with various types
+		{name: "int value", stats: map[string]interface{}{"bytes": 1000}, key: "bytes", want: 1000},
+		{name: "int64 value", stats: map[string]interface{}{"bytes": int64(5000000000)}, key: "bytes", want: 5000000000},
+		{name: "float64 value", stats: map[string]interface{}{"bytes": float64(2048.5)}, key: "bytes", want: 2048},
+		{name: "string value", stats: map[string]interface{}{"bytes": "4096"}, key: "bytes", want: 4096},
+		{name: "json.Number value", stats: map[string]interface{}{"bytes": json.Number("8192")}, key: "bytes", want: 8192},
+
+		// Different keys
+		{name: "packets key", stats: map[string]interface{}{"packets": 500, "bytes": 1000}, key: "packets", want: 500},
+		{name: "errors key", stats: map[string]interface{}{"errors": 3}, key: "errors", want: 3},
+
+		// Edge cases
+		{name: "zero value", stats: map[string]interface{}{"bytes": 0}, key: "bytes", want: 0},
+		{name: "negative value", stats: map[string]interface{}{"bytes": -100}, key: "bytes", want: -100},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := parseInterfaceStat(tc.stats, tc.key); got != tc.want {
+				t.Fatalf("parseInterfaceStat(%v, %q) = %d, want %d", tc.stats, tc.key, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestExtractGuestOSInfo(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		data        map[string]interface{}
+		wantName    string
+		wantVersion string
+	}{
+		// Nil and empty
+		{name: "nil data", data: nil, wantName: "", wantVersion: ""},
+		{name: "empty map", data: map[string]interface{}{}, wantName: "", wantVersion: ""},
+
+		// Standard Linux os-release fields
+		{
+			name: "standard linux",
+			data: map[string]interface{}{
+				"name":       "Debian GNU/Linux",
+				"version":    "12 (bookworm)",
+				"version-id": "12",
+			},
+			wantName:    "Debian GNU/Linux",
+			wantVersion: "12 (bookworm)",
+		},
+		{
+			name: "ubuntu with pretty-name",
+			data: map[string]interface{}{
+				"name":        "Ubuntu",
+				"pretty-name": "Ubuntu 22.04.3 LTS",
+				"version":     "22.04.3 LTS (Jammy Jellyfish)",
+				"version-id":  "22.04",
+			},
+			wantName:    "Ubuntu",
+			wantVersion: "22.04.3 LTS (Jammy Jellyfish)",
+		},
+
+		// Fallback scenarios
+		{
+			name: "name fallback to pretty-name",
+			data: map[string]interface{}{
+				"pretty-name": "Alpine Linux v3.18",
+				"version-id":  "3.18",
+			},
+			wantName:    "Alpine Linux v3.18",
+			wantVersion: "3.18",
+		},
+		{
+			name: "name fallback to id",
+			data: map[string]interface{}{
+				"id":         "alpine",
+				"version-id": "3.18",
+			},
+			wantName:    "alpine",
+			wantVersion: "3.18",
+		},
+		{
+			name: "version fallback to version-id",
+			data: map[string]interface{}{
+				"name":       "Fedora",
+				"version-id": "38",
+			},
+			wantName:    "Fedora",
+			wantVersion: "38",
+		},
+		{
+			name: "version fallback to pretty-name when different",
+			data: map[string]interface{}{
+				"name":        "Rocky Linux",
+				"pretty-name": "Rocky Linux 9.2 (Blue Onyx)",
+			},
+			wantName:    "Rocky Linux",
+			wantVersion: "Rocky Linux 9.2 (Blue Onyx)",
+		},
+		{
+			name: "version fallback to kernel-release",
+			data: map[string]interface{}{
+				"name":           "Linux",
+				"kernel-release": "5.15.0-generic",
+			},
+			wantName:    "Linux",
+			wantVersion: "5.15.0-generic",
+		},
+
+		// Special case: version equals name
+		{
+			name: "version equals name cleared",
+			data: map[string]interface{}{
+				"name":    "CentOS",
+				"version": "CentOS",
+			},
+			wantName:    "CentOS",
+			wantVersion: "",
+		},
+
+		// Wrapped in "result" field (QEMU guest agent format)
+		{
+			name: "wrapped in result",
+			data: map[string]interface{}{
+				"result": map[string]interface{}{
+					"name":       "Arch Linux",
+					"version-id": "rolling",
+				},
+			},
+			wantName:    "Arch Linux",
+			wantVersion: "rolling",
+		},
+		{
+			name: "result not a map",
+			data: map[string]interface{}{
+				"result": "not a map",
+				"name":   "Windows",
+			},
+			wantName:    "Windows",
+			wantVersion: "",
+		},
+
+		// Windows-like data
+		{
+			name: "windows style",
+			data: map[string]interface{}{
+				"name":        "Microsoft Windows",
+				"pretty-name": "Windows 11 Pro",
+				"version":     "22H2",
+			},
+			wantName:    "Microsoft Windows",
+			wantVersion: "22H2",
+		},
+
+		// FreeBSD
+		{
+			name: "freebsd",
+			data: map[string]interface{}{
+				"name":       "FreeBSD",
+				"version":    "13.2-RELEASE",
+				"version-id": "13.2",
+			},
+			wantName:    "FreeBSD",
+			wantVersion: "13.2-RELEASE",
+		},
+
+		// Whitespace handling
+		{
+			name: "whitespace trimmed",
+			data: map[string]interface{}{
+				"name":    "  Debian  ",
+				"version": "  12  ",
+			},
+			wantName:    "Debian",
+			wantVersion: "12",
+		},
+
+		// Non-string types converted
+		{
+			name: "numeric version",
+			data: map[string]interface{}{
+				"name":    "Custom OS",
+				"version": float64(10),
+			},
+			wantName:    "Custom OS",
+			wantVersion: "10",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			gotName, gotVersion := extractGuestOSInfo(tc.data)
+			if gotName != tc.wantName || gotVersion != tc.wantVersion {
+				t.Fatalf("extractGuestOSInfo(%v) = (%q, %q), want (%q, %q)",
+					tc.data, gotName, gotVersion, tc.wantName, tc.wantVersion)
+			}
+		})
+	}
 }
