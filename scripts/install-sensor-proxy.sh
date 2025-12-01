@@ -1149,7 +1149,7 @@ EOF
 
 # Parse arguments first to check for standalone mode
 CTID=""
-VERSION="v4.32.0"
+VERSION=""
 LOCAL_BINARY=""
 QUIET=false
 PULSE_SERVER=""
