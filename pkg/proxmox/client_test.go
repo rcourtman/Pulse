@@ -336,6 +336,76 @@ func TestFlexIntUnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestParseUint64Flexible(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   interface{}
+		want    uint64
+		wantErr bool
+	}{
+		// nil
+		{name: "nil", value: nil, want: 0},
+		// uint64
+		{name: "uint64", value: uint64(42), want: 42},
+		{name: "uint64 max", value: uint64(18446744073709551615), want: 18446744073709551615},
+		// int
+		{name: "int positive", value: int(100), want: 100},
+		{name: "int zero", value: int(0), want: 0},
+		{name: "int negative", value: int(-5), want: 0},
+		// int64
+		{name: "int64 positive", value: int64(200), want: 200},
+		{name: "int64 negative", value: int64(-10), want: 0},
+		// float64
+		{name: "float64 positive", value: float64(3.7), want: 3},
+		{name: "float64 truncates down", value: float64(9.9), want: 9},
+		{name: "float64 negative", value: float64(-1.5), want: 0},
+		{name: "float64 zero", value: float64(0.0), want: 0},
+		// json.Number
+		{name: "json.Number integer", value: json.Number("99"), want: 99},
+		{name: "json.Number float", value: json.Number("3.14"), want: 3},
+		{name: "json.Number invalid", value: json.Number("abc"), wantErr: true},
+		// string - empty/whitespace
+		{name: "string empty", value: "", want: 0},
+		{name: "string whitespace", value: "   ", want: 0},
+		// string - decimal
+		{name: "string decimal", value: "12345", want: 12345},
+		{name: "string with whitespace", value: "  678  ", want: 678},
+		{name: "string invalid decimal", value: "abc", wantErr: true},
+		{name: "string negative decimal", value: "-100", wantErr: true},
+		// string - hex
+		{name: "string hex lowercase", value: "0x10", want: 16},
+		{name: "string hex uppercase", value: "0X1F", want: 31},
+		{name: "string hex invalid", value: "0xGG", wantErr: true},
+		// string - float notation
+		{name: "string float", value: "3.14", want: 3},
+		{name: "string scientific", value: "1e3", want: 1000},
+		{name: "string scientific uppercase", value: "1.5E2", want: 150},
+		{name: "string negative float", value: "-2.5", want: 0},
+		{name: "string invalid float", value: "1.2.3", wantErr: true},
+		// unsupported type
+		{name: "unsupported bool", value: true, wantErr: true},
+		{name: "unsupported slice", value: []int{1, 2}, wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseUint64Flexible(tc.value)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil with value %d", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("got %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCoerceUint64(t *testing.T) {
 	tests := []struct {
 		name    string
