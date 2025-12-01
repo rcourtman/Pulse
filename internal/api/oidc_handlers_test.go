@@ -187,6 +187,15 @@ func TestAddQueryParam(t *testing.T) {
 			value: "bar",
 			want:  "/page?foo=bar#section",
 		},
+
+		// Invalid URL (control character causes parse error)
+		{
+			name:  "path with control character returns unchanged",
+			path:  "/page\x00invalid",
+			key:   "foo",
+			value: "bar",
+			want:  "/page\x00invalid",
+		},
 	}
 
 	for _, tc := range tests {
