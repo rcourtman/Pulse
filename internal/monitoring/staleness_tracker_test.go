@@ -358,6 +358,120 @@ func TestStalenessTracker_ConcurrentAccess(t *testing.T) {
 	}
 }
 
+func TestStalenessTracker_StalenessScore_ZeroMaxStaleUsesDefault(t *testing.T) {
+	// Create tracker and directly set maxStale to 0 to test the defensive fallback
+	tracker := &StalenessTracker{
+		entries:  make(map[string]FreshnessSnapshot),
+		maxStale: 0, // Force zero to test default fallback
+	}
+
+	// Set a 2.5 minute old success
+	oldTime := time.Now().Add(-150 * time.Second)
+	tracker.setSnapshot(FreshnessSnapshot{
+		InstanceType: InstanceTypePVE,
+		Instance:     "zero-max-test",
+		LastSuccess:  oldTime,
+	})
+
+	score, ok := tracker.StalenessScore(InstanceTypePVE, "zero-max-test")
+	if !ok {
+		t.Fatal("staleness score should be available")
+	}
+
+	// With default 5 minute maxStale, 2.5 minutes should give ~0.5 score
+	expected := 150.0 / 300.0 // 150s / 300s (5 min)
+	tolerance := 0.05
+	if score < expected-tolerance || score > expected+tolerance {
+		t.Errorf("staleness score = %f, want ~%f (using default 5 min maxStale)", score, expected)
+	}
+}
+
+func TestStalenessTracker_StalenessScore_FutureLastSuccess(t *testing.T) {
+	tracker := NewStalenessTracker(nil)
+
+	// Set LastSuccess in the future (clock skew scenario)
+	futureTime := time.Now().Add(1 * time.Hour)
+	tracker.setSnapshot(FreshnessSnapshot{
+		InstanceType: InstanceTypePVE,
+		Instance:     "future-instance",
+		LastSuccess:  futureTime,
+	})
+
+	score, ok := tracker.StalenessScore(InstanceTypePVE, "future-instance")
+	if !ok {
+		t.Fatal("staleness score should be available")
+	}
+
+	// Future timestamp should return 0 (not stale)
+	if score != 0 {
+		t.Errorf("staleness score = %f, want 0 for future LastSuccess", score)
+	}
+}
+
+func TestStalenessTracker_StalenessScore_WithMetrics(t *testing.T) {
+	// Create a minimal PollMetrics with lastSuccessByKey support
+	pm := &PollMetrics{
+		lastSuccessByKey: make(map[metricKey]time.Time),
+	}
+
+	tracker := NewStalenessTracker(pm)
+	tracker.SetBounds(10*time.Second, 60*time.Second)
+
+	// Set an old success time in the tracker
+	oldTime := time.Now().Add(-45 * time.Second)
+	tracker.setSnapshot(FreshnessSnapshot{
+		InstanceType: InstanceTypePVE,
+		Instance:     "metrics-test",
+		LastSuccess:  oldTime,
+	})
+
+	// Store a newer time in metrics
+	newerTime := time.Now().Add(-15 * time.Second)
+	pm.storeLastSuccess("pve", "metrics-test", newerTime)
+
+	score, ok := tracker.StalenessScore(InstanceTypePVE, "metrics-test")
+	if !ok {
+		t.Fatal("staleness score should be available")
+	}
+
+	// Should use the newer time from metrics: 15s / 60s = 0.25
+	expected := 15.0 / 60.0
+	tolerance := 0.05
+	if score < expected-tolerance || score > expected+tolerance {
+		t.Errorf("staleness score = %f, want ~%f (using metrics time)", score, expected)
+	}
+}
+
+func TestStalenessTracker_StalenessScore_MetricsNotUsedWhenLastSuccessZero(t *testing.T) {
+	// Create a minimal PollMetrics with lastSuccessByKey support
+	pm := &PollMetrics{
+		lastSuccessByKey: make(map[metricKey]time.Time),
+	}
+
+	tracker := NewStalenessTracker(pm)
+
+	// Set a snapshot with zero LastSuccess (error-only entry)
+	tracker.setSnapshot(FreshnessSnapshot{
+		InstanceType: InstanceTypePVE,
+		Instance:     "error-only",
+		LastError:    time.Now(),
+		// LastSuccess is zero
+	})
+
+	// Store a time in metrics (shouldn't be used since tracker LastSuccess is zero)
+	pm.storeLastSuccess("pve", "error-only", time.Now().Add(-10*time.Second))
+
+	score, ok := tracker.StalenessScore(InstanceTypePVE, "error-only")
+	if !ok {
+		t.Fatal("staleness score should be available")
+	}
+
+	// Should return 1.0 because LastSuccess is zero (metrics lookup is conditional on non-zero LastSuccess)
+	if score != 1.0 {
+		t.Errorf("staleness score = %f, want 1.0 when tracker LastSuccess is zero", score)
+	}
+}
+
 func TestTrackerKey(t *testing.T) {
 	tests := []struct {
 		instanceType InstanceType

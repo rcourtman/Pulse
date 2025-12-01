@@ -365,6 +365,360 @@ func TestMarkFailed(t *testing.T) {
 	})
 }
 
+func TestQueueDockerStopCommand(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty hostID returns error", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+
+		_, err := monitor.queueDockerStopCommand("")
+		if err == nil {
+			t.Fatal("expected error for empty hostID")
+		}
+		if !strings.Contains(err.Error(), "docker host id is required") {
+			t.Fatalf("expected 'docker host id is required' error, got %q", err.Error())
+		}
+	})
+
+	t.Run("whitespace-only hostID returns error", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+
+		_, err := monitor.queueDockerStopCommand("   ")
+		if err == nil {
+			t.Fatal("expected error for whitespace-only hostID")
+		}
+		if !strings.Contains(err.Error(), "docker host id is required") {
+			t.Fatalf("expected 'docker host id is required' error, got %q", err.Error())
+		}
+	})
+
+	t.Run("host not found returns error", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+
+		_, err := monitor.queueDockerStopCommand("nonexistent-host")
+		if err == nil {
+			t.Fatal("expected error for nonexistent host")
+		}
+		if !strings.Contains(err.Error(), "not found") {
+			t.Fatalf("expected 'not found' error, got %q", err.Error())
+		}
+	})
+
+	t.Run("existing command in Queued status returns error", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+		host := models.DockerHost{
+			ID:          "host-queued",
+			Hostname:    "node-queued",
+			DisplayName: "node-queued",
+			Status:      "online",
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		// Queue first command
+		_, err := monitor.queueDockerStopCommand(host.ID)
+		if err != nil {
+			t.Fatalf("first queue should succeed: %v", err)
+		}
+
+		// Try to queue second command
+		_, err = monitor.queueDockerStopCommand(host.ID)
+		if err == nil {
+			t.Fatal("expected error for existing queued command")
+		}
+		if !strings.Contains(err.Error(), "already has a command in progress") {
+			t.Fatalf("expected 'already has a command in progress' error, got %q", err.Error())
+		}
+	})
+
+	t.Run("existing command in Dispatched status returns error", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+		host := models.DockerHost{
+			ID:          "host-dispatched",
+			Hostname:    "node-dispatched",
+			DisplayName: "node-dispatched",
+			Status:      "online",
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		// Queue and dispatch command
+		_, err := monitor.queueDockerStopCommand(host.ID)
+		if err != nil {
+			t.Fatalf("queue should succeed: %v", err)
+		}
+		monitor.FetchDockerCommandForHost(host.ID) // This marks it as dispatched
+
+		// Try to queue second command
+		_, err = monitor.queueDockerStopCommand(host.ID)
+		if err == nil {
+			t.Fatal("expected error for existing dispatched command")
+		}
+		if !strings.Contains(err.Error(), "already has a command in progress") {
+			t.Fatalf("expected 'already has a command in progress' error, got %q", err.Error())
+		}
+	})
+
+	t.Run("existing command in Acknowledged status returns error", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+		host := models.DockerHost{
+			ID:          "host-ack",
+			Hostname:    "node-ack",
+			DisplayName: "node-ack",
+			Status:      "online",
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		// Queue, dispatch, and acknowledge command
+		cmdStatus, err := monitor.queueDockerStopCommand(host.ID)
+		if err != nil {
+			t.Fatalf("queue should succeed: %v", err)
+		}
+		monitor.FetchDockerCommandForHost(host.ID)
+		_, _, _, err = monitor.AcknowledgeDockerHostCommand(cmdStatus.ID, host.ID, DockerCommandStatusAcknowledged, "ack")
+		if err != nil {
+			t.Fatalf("acknowledge should succeed: %v", err)
+		}
+
+		// Try to queue second command
+		_, err = monitor.queueDockerStopCommand(host.ID)
+		if err == nil {
+			t.Fatal("expected error for existing acknowledged command")
+		}
+		if !strings.Contains(err.Error(), "already has a command in progress") {
+			t.Fatalf("expected 'already has a command in progress' error, got %q", err.Error())
+		}
+	})
+
+	t.Run("existing completed command allows new command", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+		host := models.DockerHost{
+			ID:          "host-completed",
+			Hostname:    "node-completed",
+			DisplayName: "node-completed",
+			Status:      "online",
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		// Queue, dispatch, and complete command
+		cmdStatus, err := monitor.queueDockerStopCommand(host.ID)
+		if err != nil {
+			t.Fatalf("first queue should succeed: %v", err)
+		}
+		monitor.FetchDockerCommandForHost(host.ID)
+		_, _, _, err = monitor.AcknowledgeDockerHostCommand(cmdStatus.ID, host.ID, DockerCommandStatusCompleted, "done")
+		if err != nil {
+			t.Fatalf("complete should succeed: %v", err)
+		}
+
+		// Queue new command should succeed
+		newStatus, err := monitor.queueDockerStopCommand(host.ID)
+		if err != nil {
+			t.Fatalf("second queue should succeed after completion: %v", err)
+		}
+		if newStatus.Status != DockerCommandStatusQueued {
+			t.Fatalf("expected queued status, got %s", newStatus.Status)
+		}
+	})
+
+	t.Run("existing failed command allows new command", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+		host := models.DockerHost{
+			ID:          "host-failed",
+			Hostname:    "node-failed",
+			DisplayName: "node-failed",
+			Status:      "online",
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		// Queue, dispatch, and fail command
+		cmdStatus, err := monitor.queueDockerStopCommand(host.ID)
+		if err != nil {
+			t.Fatalf("first queue should succeed: %v", err)
+		}
+		monitor.FetchDockerCommandForHost(host.ID)
+		_, _, _, err = monitor.AcknowledgeDockerHostCommand(cmdStatus.ID, host.ID, DockerCommandStatusFailed, "failed")
+		if err != nil {
+			t.Fatalf("fail should succeed: %v", err)
+		}
+
+		// Queue new command should succeed
+		newStatus, err := monitor.queueDockerStopCommand(host.ID)
+		if err != nil {
+			t.Fatalf("second queue should succeed after failure: %v", err)
+		}
+		if newStatus.Status != DockerCommandStatusQueued {
+			t.Fatalf("expected queued status, got %s", newStatus.Status)
+		}
+	})
+
+	t.Run("nil dockerCommands map gets initialized", func(t *testing.T) {
+		t.Parallel()
+
+		state := models.NewState()
+		monitor := &Monitor{
+			state:              state,
+			removedDockerHosts: make(map[string]time.Time),
+			dockerCommands:     nil, // Explicitly nil
+			dockerCommandIndex: make(map[string]string),
+		}
+
+		host := models.DockerHost{
+			ID:          "host-nil-map",
+			Hostname:    "node-nil-map",
+			DisplayName: "node-nil-map",
+			Status:      "online",
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		_, err := monitor.queueDockerStopCommand(host.ID)
+		if err != nil {
+			t.Fatalf("queue should succeed: %v", err)
+		}
+
+		if monitor.dockerCommands == nil {
+			t.Fatal("dockerCommands map should be initialized")
+		}
+		if _, exists := monitor.dockerCommands[host.ID]; !exists {
+			t.Fatal("command should be stored in dockerCommands map")
+		}
+	})
+
+	t.Run("nil dockerCommandIndex map gets initialized", func(t *testing.T) {
+		t.Parallel()
+
+		state := models.NewState()
+		monitor := &Monitor{
+			state:              state,
+			removedDockerHosts: make(map[string]time.Time),
+			dockerCommands:     make(map[string]*dockerHostCommand),
+			dockerCommandIndex: nil, // Explicitly nil
+		}
+
+		host := models.DockerHost{
+			ID:          "host-nil-index",
+			Hostname:    "node-nil-index",
+			DisplayName: "node-nil-index",
+			Status:      "online",
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		cmdStatus, err := monitor.queueDockerStopCommand(host.ID)
+		if err != nil {
+			t.Fatalf("queue should succeed: %v", err)
+		}
+
+		if monitor.dockerCommandIndex == nil {
+			t.Fatal("dockerCommandIndex map should be initialized")
+		}
+		if _, exists := monitor.dockerCommandIndex[cmdStatus.ID]; !exists {
+			t.Fatal("command should be indexed in dockerCommandIndex map")
+		}
+	})
+
+	t.Run("successful queue returns correct status", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+		host := models.DockerHost{
+			ID:          "host-success",
+			Hostname:    "node-success",
+			DisplayName: "node-success",
+			Status:      "online",
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		cmdStatus, err := monitor.queueDockerStopCommand(host.ID)
+		if err != nil {
+			t.Fatalf("queue should succeed: %v", err)
+		}
+
+		// Verify returned status
+		if cmdStatus.ID == "" {
+			t.Fatal("command ID should not be empty")
+		}
+		if cmdStatus.Type != DockerCommandTypeStop {
+			t.Fatalf("expected type %q, got %q", DockerCommandTypeStop, cmdStatus.Type)
+		}
+		if cmdStatus.Status != DockerCommandStatusQueued {
+			t.Fatalf("expected status %q, got %q", DockerCommandStatusQueued, cmdStatus.Status)
+		}
+		if cmdStatus.Message != "Stopping agent" {
+			t.Fatalf("expected message 'Stopping agent', got %q", cmdStatus.Message)
+		}
+		if cmdStatus.CreatedAt.IsZero() {
+			t.Fatal("CreatedAt should be set")
+		}
+		if cmdStatus.UpdatedAt.IsZero() {
+			t.Fatal("UpdatedAt should be set")
+		}
+		if cmdStatus.ExpiresAt == nil {
+			t.Fatal("ExpiresAt should be set")
+		}
+
+		// Verify state updates
+		hostState := findDockerHost(t, monitor, host.ID)
+		if !hostState.PendingUninstall {
+			t.Fatal("host should be marked as pending uninstall")
+		}
+		if hostState.Command == nil {
+			t.Fatal("host command should be set in state")
+		}
+		if hostState.Command.ID != cmdStatus.ID {
+			t.Fatalf("host command ID mismatch: expected %q, got %q", cmdStatus.ID, hostState.Command.ID)
+		}
+
+		// Verify internal maps
+		if _, exists := monitor.dockerCommands[host.ID]; !exists {
+			t.Fatal("command should be in dockerCommands map")
+		}
+		if resolvedHost, exists := monitor.dockerCommandIndex[cmdStatus.ID]; !exists || resolvedHost != host.ID {
+			t.Fatalf("command index mismatch: expected %q, got %q (exists=%v)", host.ID, resolvedHost, exists)
+		}
+	})
+
+	t.Run("hostID with leading/trailing whitespace is normalized", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+		host := models.DockerHost{
+			ID:          "host-whitespace",
+			Hostname:    "node-whitespace",
+			DisplayName: "node-whitespace",
+			Status:      "online",
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		// Queue with whitespace-padded ID
+		cmdStatus, err := monitor.queueDockerStopCommand("  host-whitespace  ")
+		if err != nil {
+			t.Fatalf("queue with whitespace should succeed: %v", err)
+		}
+		if cmdStatus.Status != DockerCommandStatusQueued {
+			t.Fatalf("expected queued status, got %s", cmdStatus.Status)
+		}
+
+		// Verify command is stored under normalized ID
+		if _, exists := monitor.dockerCommands["host-whitespace"]; !exists {
+			t.Fatal("command should be stored under normalized host ID")
+		}
+	})
+}
+
 func TestAcknowledgeDockerCommandErrorPaths(t *testing.T) {
 	t.Parallel()
 
