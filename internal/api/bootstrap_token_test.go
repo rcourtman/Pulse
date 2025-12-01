@@ -519,4 +519,28 @@ func TestClearBootstrapToken(t *testing.T) {
 			t.Errorf("expected empty bootstrapTokenHash, got %q", r.bootstrapTokenHash)
 		}
 	})
+
+	t.Run("remove failure logs warning but clears fields", func(t *testing.T) {
+		// Point to a directory with contents - os.Remove will fail with ENOTEMPTY
+		tmpDir := t.TempDir()
+		subFile := filepath.Join(tmpDir, "subfile")
+		if err := os.WriteFile(subFile, []byte("test"), 0o600); err != nil {
+			t.Fatalf("failed to create subfile: %v", err)
+		}
+
+		r := &Router{
+			bootstrapTokenHash: "somehash",
+			bootstrapTokenPath: tmpDir, // Point to directory, not file
+		}
+
+		// Should not panic and should clear fields even if remove fails
+		r.clearBootstrapToken()
+
+		if r.bootstrapTokenHash != "" {
+			t.Errorf("expected empty bootstrapTokenHash, got %q", r.bootstrapTokenHash)
+		}
+		if r.bootstrapTokenPath != "" {
+			t.Errorf("expected empty bootstrapTokenPath, got %q", r.bootstrapTokenPath)
+		}
+	})
 }
