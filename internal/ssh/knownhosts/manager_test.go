@@ -187,3 +187,109 @@ func TestEnsureWithEntriesAppendsNewKeyTypes(t *testing.T) {
 		t.Fatalf("expected both key types, got %s", got)
 	}
 }
+
+func TestHostKeyChangeErrorError(t *testing.T) {
+	tests := []struct {
+		host string
+		want string
+	}{
+		{"example.com", "knownhosts: host key for example.com changed"},
+		{"192.168.1.1", "knownhosts: host key for 192.168.1.1 changed"},
+		{"[example.com]:2222", "knownhosts: host key for [example.com]:2222 changed"},
+		{"", "knownhosts: host key for  changed"},
+	}
+
+	for _, tt := range tests {
+		err := &HostKeyChangeError{Host: tt.host}
+		if got := err.Error(); got != tt.want {
+			t.Errorf("HostKeyChangeError{Host: %q}.Error() = %q, want %q", tt.host, got, tt.want)
+		}
+	}
+}
+
+func TestHostKeyChangeErrorUnwrap(t *testing.T) {
+	err := &HostKeyChangeError{
+		Host:     "example.com",
+		Existing: "example.com ssh-ed25519 AAAA",
+		Provided: "example.com ssh-ed25519 BBBB",
+	}
+
+	if !errors.Is(err, ErrHostKeyChanged) {
+		t.Error("errors.Is(HostKeyChangeError, ErrHostKeyChanged) = false, want true")
+	}
+
+	unwrapped := err.Unwrap()
+	if unwrapped != ErrHostKeyChanged {
+		t.Errorf("Unwrap() = %v, want %v", unwrapped, ErrHostKeyChanged)
+	}
+}
+
+func TestManagerPath(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+	}{
+		{"simple path", "/tmp/known_hosts"},
+		{"nested path", "/home/user/.ssh/known_hosts"},
+		{"relative-like path", "/opt/pulse/data/known_hosts"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mgr, err := NewManager(tt.path)
+			if err != nil {
+				t.Fatalf("NewManager(%q): %v", tt.path, err)
+			}
+			if got := mgr.Path(); got != tt.path {
+				t.Errorf("Path() = %q, want %q", got, tt.path)
+			}
+		})
+	}
+}
+
+func TestHostFieldMatches(t *testing.T) {
+	tests := []struct {
+		host  string
+		field string
+		want  bool
+	}{
+		// Exact matches
+		{"example.com", "example.com", true},
+		{"192.168.1.1", "192.168.1.1", true},
+
+		// Case insensitive
+		{"EXAMPLE.COM", "example.com", true},
+		{"example.com", "EXAMPLE.COM", true},
+
+		// Comma-separated hosts
+		{"example.com", "example.com,192.168.1.1", true},
+		{"192.168.1.1", "example.com,192.168.1.1", true},
+		{"other.com", "example.com,192.168.1.1", false},
+
+		// Bracketed hosts with ports
+		{"[example.com]:2222", "[example.com]:2222", true},
+		{"example.com", "[example.com]:2222", true},
+
+		// Host:port format
+		{"example.com:2222", "example.com:2222", true},
+		{"example.com", "example.com:2222", true},
+
+		// No match
+		{"other.com", "example.com", false},
+		{"example.org", "example.com", false},
+
+		// Empty cases
+		{"example.com", "", false},
+		{"", "example.com", false},
+		{"", "", false},
+	}
+
+	for _, tt := range tests {
+		name := tt.host + "_" + tt.field
+		t.Run(name, func(t *testing.T) {
+			if got := HostFieldMatches(tt.host, tt.field); got != tt.want {
+				t.Errorf("HostFieldMatches(%q, %q) = %v, want %v", tt.host, tt.field, got, tt.want)
+			}
+		})
+	}
+}
