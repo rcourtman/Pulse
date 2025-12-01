@@ -872,3 +872,140 @@ func TestMemoryStatusEffectiveAvailable_RegressionIssue435(t *testing.T) {
 		})
 	}
 }
+
+func TestAuthHTTPError_Error(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		err      *authHTTPError
+		contains string
+	}{
+		{
+			name:     "unauthorized status includes status code",
+			err:      &authHTTPError{status: 401, body: "invalid credentials"},
+			contains: "status 401",
+		},
+		{
+			name:     "forbidden status includes status code",
+			err:      &authHTTPError{status: 403, body: "access denied"},
+			contains: "status 403",
+		},
+		{
+			name:     "unauthorized includes body",
+			err:      &authHTTPError{status: 401, body: "bad user/pass"},
+			contains: "bad user/pass",
+		},
+		{
+			name:     "forbidden includes body",
+			err:      &authHTTPError{status: 403, body: "permission denied"},
+			contains: "permission denied",
+		},
+		{
+			name:     "other status omits status code",
+			err:      &authHTTPError{status: 500, body: "server error"},
+			contains: "authentication failed: server error",
+		},
+		{
+			name:     "bad request omits status code",
+			err:      &authHTTPError{status: 400, body: "bad request"},
+			contains: "authentication failed: bad request",
+		},
+		{
+			name:     "zero status omits status code",
+			err:      &authHTTPError{status: 0, body: "unknown error"},
+			contains: "authentication failed: unknown error",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			msg := tc.err.Error()
+			if !containsSubstring(msg, tc.contains) {
+				t.Errorf("Error() = %q, want to contain %q", msg, tc.contains)
+			}
+		})
+	}
+}
+
+func TestShouldFallbackToForm(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+			want: false,
+		},
+		{
+			name: "non-authHTTPError",
+			err:  fmt.Errorf("some other error"),
+			want: false,
+		},
+		{
+			name: "bad request triggers fallback",
+			err:  &authHTTPError{status: 400, body: "bad request"},
+			want: true,
+		},
+		{
+			name: "unsupported media type triggers fallback",
+			err:  &authHTTPError{status: 415, body: "unsupported media type"},
+			want: true,
+		},
+		{
+			name: "unauthorized does not trigger fallback",
+			err:  &authHTTPError{status: 401, body: "unauthorized"},
+			want: false,
+		},
+		{
+			name: "forbidden does not trigger fallback",
+			err:  &authHTTPError{status: 403, body: "forbidden"},
+			want: false,
+		},
+		{
+			name: "server error does not trigger fallback",
+			err:  &authHTTPError{status: 500, body: "internal error"},
+			want: false,
+		},
+		{
+			name: "not found does not trigger fallback",
+			err:  &authHTTPError{status: 404, body: "not found"},
+			want: false,
+		},
+		{
+			name: "zero status does not trigger fallback",
+			err:  &authHTTPError{status: 0, body: ""},
+			want: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := shouldFallbackToForm(tc.err)
+			if got != tc.want {
+				t.Errorf("shouldFallbackToForm(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+// containsSubstring checks if s contains substr (helper for error message checks)
+func containsSubstring(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > 0 && len(substr) > 0 && findSubstring(s, substr)))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
