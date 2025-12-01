@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"testing"
+	"time"
 )
 
 func TestMakeNodeSnapshotKey(t *testing.T) {
@@ -329,4 +330,421 @@ func TestVMMemoryRaw_Fields(t *testing.T) {
 	if raw.Agent != 1 {
 		t.Errorf("Agent = %d, want 1", raw.Agent)
 	}
+}
+
+func TestRecordGuestSnapshot(t *testing.T) {
+	t.Run("nil Monitor is no-op", func(t *testing.T) {
+		var m *Monitor
+		// Should not panic
+		m.recordGuestSnapshot("instance", "qemu", "node1", 100, GuestMemorySnapshot{})
+	})
+
+	t.Run("records single guest snapshot", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		m.recordGuestSnapshot("pve1", "qemu", "node1", 100, GuestMemorySnapshot{
+			Name:         "testvm",
+			Status:       "running",
+			MemorySource: "balloon",
+		})
+
+		if len(m.guestSnapshots) != 1 {
+			t.Fatalf("Expected 1 guest snapshot, got %d", len(m.guestSnapshots))
+		}
+
+		key := makeGuestSnapshotKey("pve1", "qemu", "node1", 100)
+		snapshot, ok := m.guestSnapshots[key]
+		if !ok {
+			t.Fatalf("Expected snapshot with key %q not found", key)
+		}
+
+		if snapshot.Name != "testvm" {
+			t.Errorf("Name = %q, want %q", snapshot.Name, "testvm")
+		}
+		if snapshot.Status != "running" {
+			t.Errorf("Status = %q, want %q", snapshot.Status, "running")
+		}
+		if snapshot.MemorySource != "balloon" {
+			t.Errorf("MemorySource = %q, want %q", snapshot.MemorySource, "balloon")
+		}
+	})
+
+	t.Run("sets Instance, GuestType, Node, VMID from parameters", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		m.recordGuestSnapshot("my-instance", "lxc", "my-node", 200, GuestMemorySnapshot{
+			Name: "testct",
+		})
+
+		key := makeGuestSnapshotKey("my-instance", "lxc", "my-node", 200)
+		snapshot := m.guestSnapshots[key]
+
+		if snapshot.Instance != "my-instance" {
+			t.Errorf("Instance = %q, want %q", snapshot.Instance, "my-instance")
+		}
+		if snapshot.GuestType != "lxc" {
+			t.Errorf("GuestType = %q, want %q", snapshot.GuestType, "lxc")
+		}
+		if snapshot.Node != "my-node" {
+			t.Errorf("Node = %q, want %q", snapshot.Node, "my-node")
+		}
+		if snapshot.VMID != 200 {
+			t.Errorf("VMID = %d, want %d", snapshot.VMID, 200)
+		}
+	})
+
+	t.Run("sets RetrievedAt to current time when zero", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		beforeRecord := time.Now()
+		m.recordGuestSnapshot("pve1", "qemu", "node1", 100, GuestMemorySnapshot{})
+		afterRecord := time.Now()
+
+		key := makeGuestSnapshotKey("pve1", "qemu", "node1", 100)
+		snapshot := m.guestSnapshots[key]
+
+		if snapshot.RetrievedAt.Before(beforeRecord) || snapshot.RetrievedAt.After(afterRecord) {
+			t.Errorf("RetrievedAt = %v, want between %v and %v", snapshot.RetrievedAt, beforeRecord, afterRecord)
+		}
+	})
+
+	t.Run("preserves non-zero RetrievedAt", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		specificTime := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
+		m.recordGuestSnapshot("pve1", "qemu", "node1", 100, GuestMemorySnapshot{
+			RetrievedAt: specificTime,
+		})
+
+		key := makeGuestSnapshotKey("pve1", "qemu", "node1", 100)
+		snapshot := m.guestSnapshots[key]
+
+		if !snapshot.RetrievedAt.Equal(specificTime) {
+			t.Errorf("RetrievedAt = %v, want %v", snapshot.RetrievedAt, specificTime)
+		}
+	})
+
+	t.Run("records multiple guests with different keys", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		m.recordGuestSnapshot("pve1", "qemu", "node1", 100, GuestMemorySnapshot{Name: "vm1"})
+		m.recordGuestSnapshot("pve1", "qemu", "node1", 101, GuestMemorySnapshot{Name: "vm2"})
+		m.recordGuestSnapshot("pve1", "lxc", "node1", 200, GuestMemorySnapshot{Name: "ct1"})
+		m.recordGuestSnapshot("pve2", "qemu", "node2", 100, GuestMemorySnapshot{Name: "vm3"})
+
+		if len(m.guestSnapshots) != 4 {
+			t.Fatalf("Expected 4 guest snapshots, got %d", len(m.guestSnapshots))
+		}
+
+		// Verify each one exists
+		key1 := makeGuestSnapshotKey("pve1", "qemu", "node1", 100)
+		key2 := makeGuestSnapshotKey("pve1", "qemu", "node1", 101)
+		key3 := makeGuestSnapshotKey("pve1", "lxc", "node1", 200)
+		key4 := makeGuestSnapshotKey("pve2", "qemu", "node2", 100)
+
+		if m.guestSnapshots[key1].Name != "vm1" {
+			t.Errorf("Snapshot 1 Name = %q, want %q", m.guestSnapshots[key1].Name, "vm1")
+		}
+		if m.guestSnapshots[key2].Name != "vm2" {
+			t.Errorf("Snapshot 2 Name = %q, want %q", m.guestSnapshots[key2].Name, "vm2")
+		}
+		if m.guestSnapshots[key3].Name != "ct1" {
+			t.Errorf("Snapshot 3 Name = %q, want %q", m.guestSnapshots[key3].Name, "ct1")
+		}
+		if m.guestSnapshots[key4].Name != "vm3" {
+			t.Errorf("Snapshot 4 Name = %q, want %q", m.guestSnapshots[key4].Name, "vm3")
+		}
+	})
+
+	t.Run("overwrites existing guest snapshot with same key", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		m.recordGuestSnapshot("pve1", "qemu", "node1", 100, GuestMemorySnapshot{
+			Name:         "oldname",
+			Status:       "stopped",
+			MemorySource: "listing",
+		})
+
+		m.recordGuestSnapshot("pve1", "qemu", "node1", 100, GuestMemorySnapshot{
+			Name:         "newname",
+			Status:       "running",
+			MemorySource: "balloon",
+		})
+
+		if len(m.guestSnapshots) != 1 {
+			t.Fatalf("Expected 1 guest snapshot after overwrite, got %d", len(m.guestSnapshots))
+		}
+
+		key := makeGuestSnapshotKey("pve1", "qemu", "node1", 100)
+		snapshot := m.guestSnapshots[key]
+
+		if snapshot.Name != "newname" {
+			t.Errorf("Name = %q, want %q", snapshot.Name, "newname")
+		}
+		if snapshot.Status != "running" {
+			t.Errorf("Status = %q, want %q", snapshot.Status, "running")
+		}
+		if snapshot.MemorySource != "balloon" {
+			t.Errorf("MemorySource = %q, want %q", snapshot.MemorySource, "balloon")
+		}
+	})
+
+	t.Run("initializes nil guestSnapshots map", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots: make(map[string]NodeMemorySnapshot),
+			// guestSnapshots intentionally nil
+		}
+
+		m.recordGuestSnapshot("pve1", "qemu", "node1", 100, GuestMemorySnapshot{Name: "test"})
+
+		if m.guestSnapshots == nil {
+			t.Fatal("guestSnapshots should have been initialized")
+		}
+		if len(m.guestSnapshots) != 1 {
+			t.Errorf("Expected 1 guest snapshot, got %d", len(m.guestSnapshots))
+		}
+	})
+}
+
+func TestGetDiagnosticSnapshots(t *testing.T) {
+	t.Run("nil Monitor returns empty set with non-nil slices", func(t *testing.T) {
+		var m *Monitor
+		result := m.GetDiagnosticSnapshots()
+
+		if result.Nodes == nil {
+			t.Error("Nodes should not be nil")
+		}
+		if result.Guests == nil {
+			t.Error("Guests should not be nil")
+		}
+		if len(result.Nodes) != 0 {
+			t.Errorf("Nodes length = %d, want 0", len(result.Nodes))
+		}
+		if len(result.Guests) != 0 {
+			t.Errorf("Guests length = %d, want 0", len(result.Guests))
+		}
+	})
+
+	t.Run("empty Monitor returns empty set", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		result := m.GetDiagnosticSnapshots()
+
+		if len(result.Nodes) != 0 {
+			t.Errorf("Nodes length = %d, want 0", len(result.Nodes))
+		}
+		if len(result.Guests) != 0 {
+			t.Errorf("Guests length = %d, want 0", len(result.Guests))
+		}
+	})
+
+	t.Run("single node snapshot is returned", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		m.nodeSnapshots[makeNodeSnapshotKey("pve1", "node1")] = NodeMemorySnapshot{
+			Instance:     "pve1",
+			Node:         "node1",
+			MemorySource: "rrd-available",
+		}
+
+		result := m.GetDiagnosticSnapshots()
+
+		if len(result.Nodes) != 1 {
+			t.Fatalf("Nodes length = %d, want 1", len(result.Nodes))
+		}
+
+		if result.Nodes[0].Instance != "pve1" {
+			t.Errorf("Instance = %q, want %q", result.Nodes[0].Instance, "pve1")
+		}
+		if result.Nodes[0].Node != "node1" {
+			t.Errorf("Node = %q, want %q", result.Nodes[0].Node, "node1")
+		}
+		if result.Nodes[0].MemorySource != "rrd-available" {
+			t.Errorf("MemorySource = %q, want %q", result.Nodes[0].MemorySource, "rrd-available")
+		}
+	})
+
+	t.Run("single guest snapshot is returned", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		m.guestSnapshots[makeGuestSnapshotKey("pve1", "qemu", "node1", 100)] = GuestMemorySnapshot{
+			Instance:     "pve1",
+			GuestType:    "qemu",
+			Node:         "node1",
+			VMID:         100,
+			Name:         "testvm",
+			MemorySource: "balloon",
+		}
+
+		result := m.GetDiagnosticSnapshots()
+
+		if len(result.Guests) != 1 {
+			t.Fatalf("Guests length = %d, want 1", len(result.Guests))
+		}
+
+		if result.Guests[0].Instance != "pve1" {
+			t.Errorf("Instance = %q, want %q", result.Guests[0].Instance, "pve1")
+		}
+		if result.Guests[0].GuestType != "qemu" {
+			t.Errorf("GuestType = %q, want %q", result.Guests[0].GuestType, "qemu")
+		}
+		if result.Guests[0].Node != "node1" {
+			t.Errorf("Node = %q, want %q", result.Guests[0].Node, "node1")
+		}
+		if result.Guests[0].VMID != 100 {
+			t.Errorf("VMID = %d, want %d", result.Guests[0].VMID, 100)
+		}
+		if result.Guests[0].Name != "testvm" {
+			t.Errorf("Name = %q, want %q", result.Guests[0].Name, "testvm")
+		}
+	})
+
+	t.Run("multiple nodes are sorted by instance then node", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// Add in unsorted order
+		m.nodeSnapshots[makeNodeSnapshotKey("pve2", "node2")] = NodeMemorySnapshot{Instance: "pve2", Node: "node2"}
+		m.nodeSnapshots[makeNodeSnapshotKey("pve1", "node2")] = NodeMemorySnapshot{Instance: "pve1", Node: "node2"}
+		m.nodeSnapshots[makeNodeSnapshotKey("pve2", "node1")] = NodeMemorySnapshot{Instance: "pve2", Node: "node1"}
+		m.nodeSnapshots[makeNodeSnapshotKey("pve1", "node1")] = NodeMemorySnapshot{Instance: "pve1", Node: "node1"}
+
+		result := m.GetDiagnosticSnapshots()
+
+		if len(result.Nodes) != 4 {
+			t.Fatalf("Nodes length = %d, want 4", len(result.Nodes))
+		}
+
+		// Expected order: pve1|node1, pve1|node2, pve2|node1, pve2|node2
+		expectedOrder := []struct {
+			instance string
+			node     string
+		}{
+			{"pve1", "node1"},
+			{"pve1", "node2"},
+			{"pve2", "node1"},
+			{"pve2", "node2"},
+		}
+
+		for i, expected := range expectedOrder {
+			if result.Nodes[i].Instance != expected.instance || result.Nodes[i].Node != expected.node {
+				t.Errorf("Nodes[%d] = {%q, %q}, want {%q, %q}",
+					i, result.Nodes[i].Instance, result.Nodes[i].Node, expected.instance, expected.node)
+			}
+		}
+	})
+
+	t.Run("multiple guests are sorted by instance then node then guestType then VMID", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// Add in unsorted order
+		m.guestSnapshots[makeGuestSnapshotKey("pve2", "qemu", "node1", 100)] = GuestMemorySnapshot{Instance: "pve2", Node: "node1", GuestType: "qemu", VMID: 100}
+		m.guestSnapshots[makeGuestSnapshotKey("pve1", "qemu", "node1", 101)] = GuestMemorySnapshot{Instance: "pve1", Node: "node1", GuestType: "qemu", VMID: 101}
+		m.guestSnapshots[makeGuestSnapshotKey("pve1", "lxc", "node1", 200)] = GuestMemorySnapshot{Instance: "pve1", Node: "node1", GuestType: "lxc", VMID: 200}
+		m.guestSnapshots[makeGuestSnapshotKey("pve1", "qemu", "node2", 100)] = GuestMemorySnapshot{Instance: "pve1", Node: "node2", GuestType: "qemu", VMID: 100}
+		m.guestSnapshots[makeGuestSnapshotKey("pve1", "qemu", "node1", 100)] = GuestMemorySnapshot{Instance: "pve1", Node: "node1", GuestType: "qemu", VMID: 100}
+
+		result := m.GetDiagnosticSnapshots()
+
+		if len(result.Guests) != 5 {
+			t.Fatalf("Guests length = %d, want 5", len(result.Guests))
+		}
+
+		// Expected order:
+		// pve1|node1|lxc|200 (lxc < qemu)
+		// pve1|node1|qemu|100
+		// pve1|node1|qemu|101
+		// pve1|node2|qemu|100
+		// pve2|node1|qemu|100
+		expectedOrder := []struct {
+			instance  string
+			node      string
+			guestType string
+			vmid      int
+		}{
+			{"pve1", "node1", "lxc", 200},
+			{"pve1", "node1", "qemu", 100},
+			{"pve1", "node1", "qemu", 101},
+			{"pve1", "node2", "qemu", 100},
+			{"pve2", "node1", "qemu", 100},
+		}
+
+		for i, expected := range expectedOrder {
+			got := result.Guests[i]
+			if got.Instance != expected.instance || got.Node != expected.node ||
+				got.GuestType != expected.guestType || got.VMID != expected.vmid {
+				t.Errorf("Guests[%d] = {%q, %q, %q, %d}, want {%q, %q, %q, %d}",
+					i, got.Instance, got.Node, got.GuestType, got.VMID,
+					expected.instance, expected.node, expected.guestType, expected.vmid)
+			}
+		}
+	})
+
+	t.Run("mix of nodes and guests", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		// Add nodes
+		m.nodeSnapshots[makeNodeSnapshotKey("pve1", "node1")] = NodeMemorySnapshot{Instance: "pve1", Node: "node1"}
+		m.nodeSnapshots[makeNodeSnapshotKey("pve1", "node2")] = NodeMemorySnapshot{Instance: "pve1", Node: "node2"}
+
+		// Add guests
+		m.guestSnapshots[makeGuestSnapshotKey("pve1", "qemu", "node1", 100)] = GuestMemorySnapshot{Instance: "pve1", Node: "node1", GuestType: "qemu", VMID: 100}
+		m.guestSnapshots[makeGuestSnapshotKey("pve1", "lxc", "node2", 200)] = GuestMemorySnapshot{Instance: "pve1", Node: "node2", GuestType: "lxc", VMID: 200}
+
+		result := m.GetDiagnosticSnapshots()
+
+		if len(result.Nodes) != 2 {
+			t.Errorf("Nodes length = %d, want 2", len(result.Nodes))
+		}
+		if len(result.Guests) != 2 {
+			t.Errorf("Guests length = %d, want 2", len(result.Guests))
+		}
+
+		// Verify nodes are sorted
+		if result.Nodes[0].Node != "node1" || result.Nodes[1].Node != "node2" {
+			t.Errorf("Nodes not in expected order: got [%s, %s], want [node1, node2]",
+				result.Nodes[0].Node, result.Nodes[1].Node)
+		}
+
+		// Verify guests are sorted
+		if result.Guests[0].Node != "node1" || result.Guests[1].Node != "node2" {
+			t.Errorf("Guests not in expected order: got [%s, %s], want [node1, node2]",
+				result.Guests[0].Node, result.Guests[1].Node)
+		}
+	})
 }
