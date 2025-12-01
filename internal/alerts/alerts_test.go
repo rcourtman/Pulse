@@ -3880,3 +3880,89 @@ func TestSafeCallEscalateCallback(t *testing.T) {
 		}
 	})
 }
+
+func TestSafeCallResolvedCallback(t *testing.T) {
+	t.Parallel()
+
+	t.Run("calls callback with alert ID synchronously", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		var receivedID string
+		m.SetResolvedCallback(func(alertID string) {
+			receivedID = alertID
+		})
+
+		m.safeCallResolvedCallback("test-alert-123", false)
+
+		if receivedID != "test-alert-123" {
+			t.Errorf("expected alert ID 'test-alert-123', got %q", receivedID)
+		}
+	})
+
+	t.Run("calls callback asynchronously", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		var receivedID string
+		done := make(chan struct{})
+
+		m.SetResolvedCallback(func(alertID string) {
+			receivedID = alertID
+			close(done)
+		})
+
+		m.safeCallResolvedCallback("async-alert", true)
+
+		select {
+		case <-done:
+			if receivedID != "async-alert" {
+				t.Errorf("expected alert ID 'async-alert', got %q", receivedID)
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatal("async callback not called within timeout")
+		}
+	})
+
+	t.Run("noop when callback is nil", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		// No callback set
+
+		// Should not panic
+		m.safeCallResolvedCallback("test-alert", false)
+		m.safeCallResolvedCallback("test-alert", true)
+	})
+
+	t.Run("recovers from panic in sync callback", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.SetResolvedCallback(func(alertID string) {
+			panic("test panic")
+		})
+
+		// Should not panic the caller
+		m.safeCallResolvedCallback("panic-test", false)
+	})
+
+	t.Run("recovers from panic in async callback", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		done := make(chan struct{})
+		m.SetResolvedCallback(func(alertID string) {
+			defer close(done)
+			panic("async panic")
+		})
+
+		m.safeCallResolvedCallback("async-panic", true)
+
+		select {
+		case <-done:
+			// Callback ran (and panicked, but recovered)
+		case <-time.After(1 * time.Second):
+			t.Fatal("async callback not called within timeout")
+		}
+	})
+}
