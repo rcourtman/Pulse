@@ -1317,6 +1317,175 @@ func TestNormalizeSMARTEntries(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// Tests for shouldSkipProxyHost
+// =============================================================================
+
+func TestShouldSkipProxyHost_EmptyHost(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: make(map[string]*proxyHostState),
+	}
+
+	if tc.shouldSkipProxyHost("") {
+		t.Error("expected empty host to return false")
+	}
+}
+
+func TestShouldSkipProxyHost_WhitespaceOnlyHost(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: make(map[string]*proxyHostState),
+	}
+
+	if tc.shouldSkipProxyHost("   ") {
+		t.Error("expected whitespace-only host (trimmed to empty) to return false")
+	}
+	if tc.shouldSkipProxyHost("\t\n") {
+		t.Error("expected tab/newline host (trimmed to empty) to return false")
+	}
+}
+
+func TestShouldSkipProxyHost_NotInMap(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: make(map[string]*proxyHostState),
+	}
+
+	if tc.shouldSkipProxyHost("192.168.1.100") {
+		t.Error("expected host not in map to return false")
+	}
+}
+
+func TestShouldSkipProxyHost_NilState(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: map[string]*proxyHostState{
+			"192.168.1.100": nil,
+		},
+	}
+
+	if tc.shouldSkipProxyHost("192.168.1.100") {
+		t.Error("expected host with nil state to return false")
+	}
+}
+
+func TestShouldSkipProxyHost_ZeroCooldownUntil(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: map[string]*proxyHostState{
+			"192.168.1.100": {
+				failures:      2,
+				cooldownUntil: time.Time{}, // zero value
+			},
+		},
+	}
+
+	if tc.shouldSkipProxyHost("192.168.1.100") {
+		t.Error("expected host with zero cooldownUntil to return false")
+	}
+
+	// Verify the host was cleaned up from the map
+	tc.proxyMu.Lock()
+	_, exists := tc.proxyHostStates["192.168.1.100"]
+	tc.proxyMu.Unlock()
+
+	if exists {
+		t.Error("expected host with zero cooldownUntil to be deleted from map")
+	}
+}
+
+func TestShouldSkipProxyHost_ExpiredCooldown(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: map[string]*proxyHostState{
+			"192.168.1.100": {
+				failures:      2,
+				cooldownUntil: time.Now().Add(-time.Minute), // expired
+				lastError:     "some error",
+			},
+		},
+	}
+
+	if tc.shouldSkipProxyHost("192.168.1.100") {
+		t.Error("expected host with expired cooldown to return false")
+	}
+
+	// Verify the state was reset and host was deleted
+	tc.proxyMu.Lock()
+	_, exists := tc.proxyHostStates["192.168.1.100"]
+	tc.proxyMu.Unlock()
+
+	if exists {
+		t.Error("expected host with expired cooldown to be deleted from map")
+	}
+}
+
+func TestShouldSkipProxyHost_ActiveCooldown(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: map[string]*proxyHostState{
+			"192.168.1.100": {
+				failures:      0,
+				cooldownUntil: time.Now().Add(5 * time.Minute), // active
+				lastError:     "connection refused",
+			},
+		},
+	}
+
+	if !tc.shouldSkipProxyHost("192.168.1.100") {
+		t.Error("expected host with active cooldown to return true")
+	}
+
+	// Verify the host is still in the map
+	tc.proxyMu.Lock()
+	state, exists := tc.proxyHostStates["192.168.1.100"]
+	tc.proxyMu.Unlock()
+
+	if !exists {
+		t.Error("expected host with active cooldown to remain in map")
+	}
+	if state.lastError != "connection refused" {
+		t.Errorf("expected lastError to be preserved, got %q", state.lastError)
+	}
+}
+
+func TestShouldSkipProxyHost_ExpiredCooldownResetsState(t *testing.T) {
+	initialState := &proxyHostState{
+		failures:      5,
+		cooldownUntil: time.Now().Add(-time.Second), // just expired
+		lastError:     "previous error",
+	}
+	tc := &TemperatureCollector{
+		proxyHostStates: map[string]*proxyHostState{
+			"192.168.1.100": initialState,
+		},
+	}
+
+	// This call should reset the state and delete the host
+	result := tc.shouldSkipProxyHost("192.168.1.100")
+	if result {
+		t.Error("expected expired cooldown to return false")
+	}
+
+	// After the call, the host should be deleted from the map
+	tc.proxyMu.Lock()
+	_, exists := tc.proxyHostStates["192.168.1.100"]
+	tc.proxyMu.Unlock()
+
+	if exists {
+		t.Error("expected host to be deleted after cooldown expired")
+	}
+}
+
+func TestShouldSkipProxyHost_TrimsWhitespace(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: map[string]*proxyHostState{
+			"192.168.1.100": {
+				cooldownUntil: time.Now().Add(5 * time.Minute),
+			},
+		},
+	}
+
+	// Host with leading/trailing whitespace should match after trimming
+	if !tc.shouldSkipProxyHost("  192.168.1.100  ") {
+		t.Error("expected trimmed host to match entry in map")
+	}
+}
+
 // Helper functions for test setup
 
 func intPtr(i int) *int {
