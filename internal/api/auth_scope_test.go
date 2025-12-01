@@ -24,6 +24,25 @@ func TestRequireScopeAllowsSession(t *testing.T) {
 	}
 }
 
+func TestRequireScopeEmptyScopeAllowsAll(t *testing.T) {
+	// Empty scope should allow all requests through without checking token
+	handler := RequireScope("", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	// Attach a token with no scopes - should still be allowed through
+	record := config.APITokenRecord{ID: "token-empty", Scopes: []string{}}
+	attachAPITokenRecord(req, &record)
+
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200 when scope is empty, got %d", rr.Code)
+	}
+}
+
 func TestRequireScopeRejectsMissingScope(t *testing.T) {
 	handler := RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
