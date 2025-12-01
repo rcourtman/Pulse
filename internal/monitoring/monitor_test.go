@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
 func TestParseDurationEnv(t *testing.T) {
@@ -1676,4 +1677,111 @@ func TestSchedulerHealth(t *testing.T) {
 			t.Errorf("expected UpdatedAt between %v and %v, got %v", before, after, resp.UpdatedAt)
 		}
 	})
+}
+
+func TestConvertDockerSwarmInfo(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    *agentsdocker.SwarmInfo
+		expected *models.DockerSwarmInfo
+	}{
+		{
+			name:     "nil input returns nil",
+			input:    nil,
+			expected: nil,
+		},
+		{
+			name:     "empty struct returns empty struct",
+			input:    &agentsdocker.SwarmInfo{},
+			expected: &models.DockerSwarmInfo{},
+		},
+		{
+			name: "all fields populated",
+			input: &agentsdocker.SwarmInfo{
+				NodeID:           "node-abc123",
+				NodeRole:         "manager",
+				LocalState:       "active",
+				ControlAvailable: true,
+				ClusterID:        "cluster-xyz789",
+				ClusterName:      "my-swarm",
+				Scope:            "swarm",
+				Error:            "",
+			},
+			expected: &models.DockerSwarmInfo{
+				NodeID:           "node-abc123",
+				NodeRole:         "manager",
+				LocalState:       "active",
+				ControlAvailable: true,
+				ClusterID:        "cluster-xyz789",
+				ClusterName:      "my-swarm",
+				Scope:            "swarm",
+				Error:            "",
+			},
+		},
+		{
+			name: "worker node with error",
+			input: &agentsdocker.SwarmInfo{
+				NodeID:           "node-worker1",
+				NodeRole:         "worker",
+				LocalState:       "pending",
+				ControlAvailable: false,
+				ClusterID:        "",
+				ClusterName:      "",
+				Scope:            "local",
+				Error:            "connection refused",
+			},
+			expected: &models.DockerSwarmInfo{
+				NodeID:           "node-worker1",
+				NodeRole:         "worker",
+				LocalState:       "pending",
+				ControlAvailable: false,
+				ClusterID:        "",
+				ClusterName:      "",
+				Scope:            "local",
+				Error:            "connection refused",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := convertDockerSwarmInfo(tt.input)
+
+			if tt.expected == nil {
+				if result != nil {
+					t.Errorf("expected nil, got %+v", result)
+				}
+				return
+			}
+
+			if result == nil {
+				t.Fatal("expected non-nil result")
+			}
+
+			if result.NodeID != tt.expected.NodeID {
+				t.Errorf("NodeID: expected %q, got %q", tt.expected.NodeID, result.NodeID)
+			}
+			if result.NodeRole != tt.expected.NodeRole {
+				t.Errorf("NodeRole: expected %q, got %q", tt.expected.NodeRole, result.NodeRole)
+			}
+			if result.LocalState != tt.expected.LocalState {
+				t.Errorf("LocalState: expected %q, got %q", tt.expected.LocalState, result.LocalState)
+			}
+			if result.ControlAvailable != tt.expected.ControlAvailable {
+				t.Errorf("ControlAvailable: expected %v, got %v", tt.expected.ControlAvailable, result.ControlAvailable)
+			}
+			if result.ClusterID != tt.expected.ClusterID {
+				t.Errorf("ClusterID: expected %q, got %q", tt.expected.ClusterID, result.ClusterID)
+			}
+			if result.ClusterName != tt.expected.ClusterName {
+				t.Errorf("ClusterName: expected %q, got %q", tt.expected.ClusterName, result.ClusterName)
+			}
+			if result.Scope != tt.expected.Scope {
+				t.Errorf("Scope: expected %q, got %q", tt.expected.Scope, result.Scope)
+			}
+			if result.Error != tt.expected.Error {
+				t.Errorf("Error: expected %q, got %q", tt.expected.Error, result.Error)
+			}
+		})
+	}
 }

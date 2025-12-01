@@ -8134,9 +8134,6 @@ func namespacePathsForDatastore(ds models.PBSDatastore) []string {
 		seen[path] = struct{}{}
 		paths = append(paths, path)
 	}
-	if len(paths) == 0 {
-		paths = append(paths, "")
-	}
 	return paths
 }
 
