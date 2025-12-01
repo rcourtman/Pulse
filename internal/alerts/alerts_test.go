@@ -1954,3 +1954,195 @@ func TestBuildGuestKey(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckFlapping(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name              string
+		flappingEnabled   bool
+		threshold         int
+		windowSeconds     int
+		cooldownMinutes   int
+		historyEntries    int // number of state changes to simulate before the test call
+		expectFlapping    bool
+		expectNewFlapping bool // should this trigger a new flapping detection (vs already flapping)
+	}{
+		{
+			name:            "disabled returns false",
+			flappingEnabled: false,
+			threshold:       5,
+			windowSeconds:   300,
+			historyEntries:  10, // way over threshold
+			expectFlapping:  false,
+		},
+		{
+			name:            "below threshold returns false",
+			flappingEnabled: true,
+			threshold:       5,
+			windowSeconds:   300,
+			historyEntries:  2, // only 2 + 1 (test call) = 3 < 5
+			expectFlapping:  false,
+		},
+		{
+			name:              "at threshold triggers new flapping",
+			flappingEnabled:   true,
+			threshold:         5,
+			windowSeconds:     300,
+			cooldownMinutes:   15,
+			historyEntries:    4, // 4 + 1 (test call) = 5 == threshold
+			expectFlapping:    true,
+			expectNewFlapping: true,
+		},
+		{
+			name:              "above threshold triggers flapping",
+			flappingEnabled:   true,
+			threshold:         5,
+			windowSeconds:     300,
+			cooldownMinutes:   15,
+			historyEntries:    6, // 6 + 1 = 7 > 5
+			expectFlapping:    true,
+			expectNewFlapping: true,
+		},
+		{
+			name:            "single state change below threshold",
+			flappingEnabled: true,
+			threshold:       5,
+			windowSeconds:   300,
+			historyEntries:  0, // only the test call = 1 < 5
+			expectFlapping:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			m := NewManager()
+
+			// Configure flapping settings
+			m.mu.Lock()
+			m.config.FlappingEnabled = tt.flappingEnabled
+			m.config.FlappingThreshold = tt.threshold
+			m.config.FlappingWindowSeconds = tt.windowSeconds
+			m.config.FlappingCooldownMinutes = tt.cooldownMinutes
+
+			alertID := "test-alert-" + tt.name
+
+			// Add history entries within the time window
+			now := time.Now()
+			for i := 0; i < tt.historyEntries; i++ {
+				m.flappingHistory[alertID] = append(m.flappingHistory[alertID], now.Add(-time.Duration(i)*time.Second))
+			}
+			m.mu.Unlock()
+
+			// Call checkFlapping
+			m.mu.Lock()
+			result := m.checkFlapping(alertID)
+			m.mu.Unlock()
+
+			if result != tt.expectFlapping {
+				t.Errorf("checkFlapping() = %v, want %v", result, tt.expectFlapping)
+			}
+
+			// Check if flapping was newly detected
+			m.mu.RLock()
+			isFlappingActive := m.flappingActive[alertID]
+			_, hasSuppression := m.suppressedUntil[alertID]
+			m.mu.RUnlock()
+
+			if tt.expectNewFlapping {
+				if !isFlappingActive {
+					t.Errorf("expected flappingActive[%s] to be true", alertID)
+				}
+				if !hasSuppression {
+					t.Errorf("expected suppressedUntil[%s] to be set", alertID)
+				}
+			}
+		})
+	}
+}
+
+func TestCheckFlappingAlreadyFlapping(t *testing.T) {
+	t.Parallel()
+
+	m := NewManager()
+
+	alertID := "already-flapping-alert"
+
+	m.mu.Lock()
+	m.config.FlappingEnabled = true
+	m.config.FlappingThreshold = 3
+	m.config.FlappingWindowSeconds = 300
+	m.config.FlappingCooldownMinutes = 15
+
+	// Pre-set flapping state
+	m.flappingActive[alertID] = true
+	existingSuppression := time.Now().Add(10 * time.Minute)
+	m.suppressedUntil[alertID] = existingSuppression
+
+	// Add history to exceed threshold
+	now := time.Now()
+	m.flappingHistory[alertID] = []time.Time{
+		now.Add(-10 * time.Second),
+		now.Add(-5 * time.Second),
+	}
+	m.mu.Unlock()
+
+	// Call checkFlapping - should return true but NOT update suppression
+	m.mu.Lock()
+	result := m.checkFlapping(alertID)
+	m.mu.Unlock()
+
+	if !result {
+		t.Errorf("checkFlapping() = false, want true for already flapping alert")
+	}
+
+	// Verify suppression time was NOT updated (existing suppression should remain)
+	m.mu.RLock()
+	currentSuppression := m.suppressedUntil[alertID]
+	m.mu.RUnlock()
+
+	if !currentSuppression.Equal(existingSuppression) {
+		t.Errorf("suppressedUntil was updated from %v to %v; should remain unchanged for already-flapping alert",
+			existingSuppression, currentSuppression)
+	}
+}
+
+func TestCheckFlappingWindowExpiry(t *testing.T) {
+	t.Parallel()
+
+	m := NewManager()
+
+	alertID := "window-expiry-alert"
+
+	m.mu.Lock()
+	m.config.FlappingEnabled = true
+	m.config.FlappingThreshold = 3
+	m.config.FlappingWindowSeconds = 60 // 1 minute window
+
+	// Add old history entries outside the window
+	now := time.Now()
+	m.flappingHistory[alertID] = []time.Time{
+		now.Add(-5 * time.Minute), // outside 1 minute window
+		now.Add(-4 * time.Minute), // outside 1 minute window
+		now.Add(-3 * time.Minute), // outside 1 minute window
+		now.Add(-2 * time.Minute), // outside 1 minute window
+	}
+	m.mu.Unlock()
+
+	// Call checkFlapping - old entries should be pruned
+	m.mu.Lock()
+	result := m.checkFlapping(alertID)
+	historyLen := len(m.flappingHistory[alertID])
+	m.mu.Unlock()
+
+	if result {
+		t.Errorf("checkFlapping() = true, want false (old entries should be pruned)")
+	}
+
+	// Only the current call should remain in history
+	if historyLen != 1 {
+		t.Errorf("history length = %d, want 1 (old entries should be pruned)", historyLen)
+	}
+}
