@@ -1486,6 +1486,155 @@ func TestShouldSkipProxyHost_TrimsWhitespace(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// Tests for handleProxySuccess
+// =============================================================================
+
+func TestHandleProxySuccess_NilProxyClient(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyClient:   nil,
+		proxyFailures: 5, // should remain unchanged
+	}
+
+	tc.handleProxySuccess()
+
+	if tc.proxyFailures != 5 {
+		t.Errorf("expected proxyFailures to remain 5 when proxyClient is nil, got %d", tc.proxyFailures)
+	}
+}
+
+func TestHandleProxySuccess_ResetsFailures(t *testing.T) {
+	stub := &stubTemperatureProxy{}
+
+	tc := &TemperatureCollector{
+		proxyClient:   stub,
+		proxyFailures: 3,
+	}
+
+	tc.handleProxySuccess()
+
+	if tc.proxyFailures != 0 {
+		t.Errorf("expected proxyFailures to be reset to 0, got %d", tc.proxyFailures)
+	}
+}
+
+func TestHandleProxySuccess_AlreadyZeroFailures(t *testing.T) {
+	stub := &stubTemperatureProxy{}
+
+	tc := &TemperatureCollector{
+		proxyClient:   stub,
+		proxyFailures: 0,
+	}
+
+	tc.handleProxySuccess()
+
+	if tc.proxyFailures != 0 {
+		t.Errorf("expected proxyFailures to remain 0, got %d", tc.proxyFailures)
+	}
+}
+
+// =============================================================================
+// Tests for handleProxyHostSuccess
+// =============================================================================
+
+func TestHandleProxyHostSuccess_EmptyHost(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: map[string]*proxyHostState{
+			"192.168.1.100": {failures: 2, cooldownUntil: time.Now().Add(time.Minute)},
+		},
+	}
+
+	tc.handleProxyHostSuccess("")
+
+	// Map should be unchanged
+	tc.proxyMu.Lock()
+	if len(tc.proxyHostStates) != 1 {
+		t.Errorf("expected map to have 1 entry, got %d", len(tc.proxyHostStates))
+	}
+	tc.proxyMu.Unlock()
+}
+
+func TestHandleProxyHostSuccess_WhitespaceOnlyHost(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: map[string]*proxyHostState{
+			"192.168.1.100": {failures: 2, cooldownUntil: time.Now().Add(time.Minute)},
+		},
+	}
+
+	tc.handleProxyHostSuccess("   ")
+
+	// Map should be unchanged
+	tc.proxyMu.Lock()
+	if len(tc.proxyHostStates) != 1 {
+		t.Errorf("expected map to have 1 entry, got %d", len(tc.proxyHostStates))
+	}
+	tc.proxyMu.Unlock()
+}
+
+func TestHandleProxyHostSuccess_RemovesHostFromMap(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: map[string]*proxyHostState{
+			"192.168.1.100": {failures: 5, cooldownUntil: time.Now().Add(time.Minute)},
+			"192.168.1.101": {failures: 3, cooldownUntil: time.Now().Add(time.Minute)},
+		},
+	}
+
+	tc.handleProxyHostSuccess("192.168.1.100")
+
+	tc.proxyMu.Lock()
+	defer tc.proxyMu.Unlock()
+
+	if _, exists := tc.proxyHostStates["192.168.1.100"]; exists {
+		t.Error("expected host 192.168.1.100 to be removed from map")
+	}
+	if _, exists := tc.proxyHostStates["192.168.1.101"]; !exists {
+		t.Error("expected host 192.168.1.101 to remain in map")
+	}
+}
+
+func TestHandleProxyHostSuccess_HostNotInMap(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: map[string]*proxyHostState{
+			"192.168.1.100": {failures: 2},
+		},
+	}
+
+	// Should not panic when host doesn't exist
+	tc.handleProxyHostSuccess("192.168.1.200")
+
+	tc.proxyMu.Lock()
+	if len(tc.proxyHostStates) != 1 {
+		t.Errorf("expected map to have 1 entry, got %d", len(tc.proxyHostStates))
+	}
+	tc.proxyMu.Unlock()
+}
+
+func TestHandleProxyHostSuccess_TrimsWhitespace(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: map[string]*proxyHostState{
+			"192.168.1.100": {failures: 5, cooldownUntil: time.Now().Add(time.Minute)},
+		},
+	}
+
+	tc.handleProxyHostSuccess("  192.168.1.100  ")
+
+	tc.proxyMu.Lock()
+	defer tc.proxyMu.Unlock()
+
+	if _, exists := tc.proxyHostStates["192.168.1.100"]; exists {
+		t.Error("expected host to be removed after trimming whitespace from input")
+	}
+}
+
+func TestHandleProxyHostSuccess_NilMap(t *testing.T) {
+	tc := &TemperatureCollector{
+		proxyHostStates: nil,
+	}
+
+	// Should not panic with nil map
+	tc.handleProxyHostSuccess("192.168.1.100")
+}
+
 // Helper functions for test setup
 
 func intPtr(i int) *int {
