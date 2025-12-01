@@ -6348,3 +6348,257 @@ func TestCheckNodeOffline(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckPBSOffline(t *testing.T) {
+	t.Parallel()
+
+	t.Run("override Disabled clears alert and returns", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Overrides = map[string]ThresholdConfig{
+			"pbs1": {Disabled: true},
+		}
+		m.activeAlerts["pbs-offline-pbs1"] = &Alert{ID: "pbs-offline-pbs1"}
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{ID: "pbs1", Name: "PBS 1"}
+		m.checkPBSOffline(pbs)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["pbs-offline-pbs1"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected alert to be cleared when disabled")
+		}
+	})
+
+	t.Run("override DisableConnectivity clears alert and returns", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Overrides = map[string]ThresholdConfig{
+			"pbs1": {DisableConnectivity: true},
+		}
+		m.activeAlerts["pbs-offline-pbs1"] = &Alert{ID: "pbs-offline-pbs1"}
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{ID: "pbs1", Name: "PBS 1"}
+		m.checkPBSOffline(pbs)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["pbs-offline-pbs1"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected alert to be cleared when connectivity disabled")
+		}
+	})
+
+	t.Run("insufficient confirmations waits", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pbs := models.PBSInstance{ID: "pbs1", Name: "PBS 1"}
+
+		// First two calls - not enough confirmations
+		m.checkPBSOffline(pbs)
+		m.checkPBSOffline(pbs)
+
+		m.mu.RLock()
+		count := m.offlineConfirmations["pbs1"]
+		_, alertExists := m.activeAlerts["pbs-offline-pbs1"]
+		m.mu.RUnlock()
+
+		if count != 2 {
+			t.Errorf("expected count 2, got %d", count)
+		}
+		if alertExists {
+			t.Error("expected no alert after 2 confirmations")
+		}
+	})
+
+	t.Run("creates alert after 3 confirmations", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.offlineConfirmations["pbs1"] = 2
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{ID: "pbs1", Name: "PBS 1", Host: "pbs.local"}
+		m.checkPBSOffline(pbs)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pbs-offline-pbs1"]
+		count := m.offlineConfirmations["pbs1"]
+		m.mu.RUnlock()
+
+		if count != 3 {
+			t.Errorf("expected count 3, got %d", count)
+		}
+		if alert == nil {
+			t.Fatal("expected alert after 3 confirmations")
+		}
+		if alert.Type != "offline" {
+			t.Errorf("expected type offline, got %s", alert.Type)
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level, got %s", alert.Level)
+		}
+	})
+
+	t.Run("existing alert updates LastSeen", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		oldTime := time.Now().Add(-1 * time.Hour)
+		m.mu.Lock()
+		m.offlineConfirmations["pbs1"] = 3
+		m.activeAlerts["pbs-offline-pbs1"] = &Alert{
+			ID:       "pbs-offline-pbs1",
+			LastSeen: oldTime,
+		}
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{ID: "pbs1", Name: "PBS 1"}
+		m.checkPBSOffline(pbs)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pbs-offline-pbs1"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to exist")
+		}
+		if !alert.LastSeen.After(oldTime) {
+			t.Error("expected LastSeen to be updated")
+		}
+	})
+}
+
+func TestCheckPMGOffline(t *testing.T) {
+	t.Parallel()
+
+	t.Run("override Disabled clears alert and returns", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Overrides = map[string]ThresholdConfig{
+			"pmg1": {Disabled: true},
+		}
+		m.activeAlerts["pmg-offline-pmg1"] = &Alert{ID: "pmg-offline-pmg1"}
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1"}
+		m.checkPMGOffline(pmg)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["pmg-offline-pmg1"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected alert to be cleared when disabled")
+		}
+	})
+
+	t.Run("override DisableConnectivity clears alert and returns", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Overrides = map[string]ThresholdConfig{
+			"pmg1": {DisableConnectivity: true},
+		}
+		m.activeAlerts["pmg-offline-pmg1"] = &Alert{ID: "pmg-offline-pmg1"}
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1"}
+		m.checkPMGOffline(pmg)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["pmg-offline-pmg1"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected alert to be cleared when connectivity disabled")
+		}
+	})
+
+	t.Run("insufficient confirmations waits", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1"}
+
+		// First two calls - not enough confirmations
+		m.checkPMGOffline(pmg)
+		m.checkPMGOffline(pmg)
+
+		m.mu.RLock()
+		count := m.offlineConfirmations["pmg1"]
+		_, alertExists := m.activeAlerts["pmg-offline-pmg1"]
+		m.mu.RUnlock()
+
+		if count != 2 {
+			t.Errorf("expected count 2, got %d", count)
+		}
+		if alertExists {
+			t.Error("expected no alert after 2 confirmations")
+		}
+	})
+
+	t.Run("creates alert after 3 confirmations", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.offlineConfirmations["pmg1"] = 2
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1", Host: "pmg.local"}
+		m.checkPMGOffline(pmg)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg-offline-pmg1"]
+		count := m.offlineConfirmations["pmg1"]
+		m.mu.RUnlock()
+
+		if count != 3 {
+			t.Errorf("expected count 3, got %d", count)
+		}
+		if alert == nil {
+			t.Fatal("expected alert after 3 confirmations")
+		}
+		if alert.Type != "offline" {
+			t.Errorf("expected type offline, got %s", alert.Type)
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level, got %s", alert.Level)
+		}
+	})
+
+	t.Run("existing alert updates LastSeen", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		oldTime := time.Now().Add(-1 * time.Hour)
+		m.mu.Lock()
+		m.offlineConfirmations["pmg1"] = 3
+		m.activeAlerts["pmg-offline-pmg1"] = &Alert{
+			ID:       "pmg-offline-pmg1",
+			LastSeen: oldTime,
+		}
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1"}
+		m.checkPMGOffline(pmg)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg-offline-pmg1"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to exist")
+		}
+		if !alert.LastSeen.After(oldTime) {
+			t.Error("expected LastSeen to be updated")
+		}
+	})
+}
