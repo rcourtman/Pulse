@@ -4596,3 +4596,180 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		}
 	})
 }
+
+func TestHandleHostOffline(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty host ID returns early", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.config.Enabled = true
+
+		host := models.Host{ID: "", Hostname: "test-host"}
+		m.HandleHostOffline(host)
+
+		// No alert should be created
+		if len(m.activeAlerts) != 0 {
+			t.Errorf("expected 0 alerts, got %d", len(m.activeAlerts))
+		}
+	})
+
+	t.Run("alerts disabled returns early", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.config.Enabled = false
+
+		host := models.Host{ID: "host1", Hostname: "test-host"}
+		m.HandleHostOffline(host)
+
+		// No alert should be created
+		if len(m.activeAlerts) != 0 {
+			t.Errorf("expected 0 alerts, got %d", len(m.activeAlerts))
+		}
+	})
+
+	t.Run("DisableAllHostsOffline clears alert and returns", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.config.Enabled = true
+		m.config.DisableAllHostsOffline = true
+
+		// Pre-create an alert and confirmation
+		alertID := "host-offline-host1"
+		m.activeAlerts[alertID] = &Alert{ID: alertID, Type: "host-offline"}
+		m.offlineConfirmations["host:host1"] = 5
+
+		host := models.Host{ID: "host1", Hostname: "test-host"}
+		m.HandleHostOffline(host)
+
+		// Alert should be cleared and confirmations removed
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Error("expected alert to be cleared")
+		}
+		if _, exists := m.offlineConfirmations["host:host1"]; exists {
+			t.Error("expected offlineConfirmations to be cleared")
+		}
+	})
+
+	t.Run("override DisableConnectivity clears alert and returns", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.config.Enabled = true
+		m.config.Overrides = map[string]ThresholdConfig{
+			"host1": {DisableConnectivity: true},
+		}
+
+		// Pre-create an alert and confirmation
+		alertID := "host-offline-host1"
+		m.activeAlerts[alertID] = &Alert{ID: alertID, Type: "host-offline"}
+		m.offlineConfirmations["host:host1"] = 5
+
+		host := models.Host{ID: "host1", Hostname: "test-host"}
+		m.HandleHostOffline(host)
+
+		// Alert should be cleared and confirmations removed
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Error("expected alert to be cleared")
+		}
+		if _, exists := m.offlineConfirmations["host:host1"]; exists {
+			t.Error("expected offlineConfirmations to be cleared")
+		}
+	})
+
+	t.Run("override Disabled clears alert and returns", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.config.Enabled = true
+		m.config.Overrides = map[string]ThresholdConfig{
+			"host1": {Disabled: true},
+		}
+
+		host := models.Host{ID: "host1", Hostname: "test-host"}
+		m.HandleHostOffline(host)
+
+		// No alert should be created
+		if len(m.activeAlerts) != 0 {
+			t.Errorf("expected 0 alerts, got %d", len(m.activeAlerts))
+		}
+	})
+
+	t.Run("existing alert updates LastSeen", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.config.Enabled = true
+
+		alertID := "host-offline-host1"
+		oldTime := time.Now().Add(-1 * time.Hour)
+		m.activeAlerts[alertID] = &Alert{ID: alertID, Type: "host-offline", LastSeen: oldTime}
+
+		host := models.Host{ID: "host1", Hostname: "test-host"}
+		m.HandleHostOffline(host)
+
+		// LastSeen should be updated
+		alert := m.activeAlerts[alertID]
+		if alert.LastSeen.Before(time.Now().Add(-1 * time.Minute)) {
+			t.Errorf("expected LastSeen to be updated to recent time, got %v", alert.LastSeen)
+		}
+	})
+
+	t.Run("insufficient confirmations waits", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.config.Enabled = true
+
+		host := models.Host{ID: "host1", Hostname: "test-host"}
+
+		// First two calls should not create alert
+		m.HandleHostOffline(host)
+		if len(m.activeAlerts) != 0 {
+			t.Errorf("expected 0 alerts after 1st call, got %d", len(m.activeAlerts))
+		}
+		if m.offlineConfirmations["host:host1"] != 1 {
+			t.Errorf("expected 1 confirmation, got %d", m.offlineConfirmations["host:host1"])
+		}
+
+		m.HandleHostOffline(host)
+		if len(m.activeAlerts) != 0 {
+			t.Errorf("expected 0 alerts after 2nd call, got %d", len(m.activeAlerts))
+		}
+		if m.offlineConfirmations["host:host1"] != 2 {
+			t.Errorf("expected 2 confirmations, got %d", m.offlineConfirmations["host:host1"])
+		}
+	})
+
+	t.Run("sufficient confirmations creates alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.config.Enabled = true
+
+		host := models.Host{
+			ID:          "host1",
+			Hostname:    "test-host",
+			DisplayName: "Test Host",
+			Platform:    "linux",
+			OSName:      "Ubuntu",
+			OSVersion:   "22.04",
+		}
+
+		// Make 3 calls to reach required confirmations
+		m.HandleHostOffline(host)
+		m.HandleHostOffline(host)
+		m.HandleHostOffline(host)
+
+		// Alert should now be created
+		alertID := "host-offline-host1"
+		alert, exists := m.activeAlerts[alertID]
+		if !exists {
+			t.Fatal("expected alert to be created after 3 confirmations")
+		}
+		if alert.Type != "host-offline" {
+			t.Errorf("expected type 'host-offline', got '%s'", alert.Type)
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected level Critical, got '%s'", alert.Level)
+		}
+		if alert.ResourceName == "" {
+			t.Error("expected ResourceName to be set")
+		}
+	})
+}
