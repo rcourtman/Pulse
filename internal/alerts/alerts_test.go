@@ -6602,3 +6602,247 @@ func TestCheckPMGOffline(t *testing.T) {
 		}
 	})
 }
+
+func TestCalculateTrimmedBaseline(t *testing.T) {
+	t.Parallel()
+
+	t.Run("less than 12 samples returns untrustworthy", func(t *testing.T) {
+		t.Parallel()
+		samples := []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}
+		baseline, trustworthy := calculateTrimmedBaseline(samples)
+		if trustworthy {
+			t.Error("expected untrustworthy with less than 12 samples")
+		}
+		if baseline != 0 {
+			t.Errorf("expected baseline 0, got %f", baseline)
+		}
+	})
+
+	t.Run("empty samples returns untrustworthy", func(t *testing.T) {
+		t.Parallel()
+		samples := []float64{}
+		baseline, trustworthy := calculateTrimmedBaseline(samples)
+		if trustworthy {
+			t.Error("expected untrustworthy with empty samples")
+		}
+		if baseline != 0 {
+			t.Errorf("expected baseline 0, got %f", baseline)
+		}
+	})
+
+	t.Run("12-23 samples uses simple mean", func(t *testing.T) {
+		t.Parallel()
+		// 12 samples summing to 78
+		samples := []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+		baseline, trustworthy := calculateTrimmedBaseline(samples)
+		if !trustworthy {
+			t.Error("expected trustworthy with 12 samples")
+		}
+		// Mean of 1-12 is (1+2+...+12)/12 = 78/12 = 6.5
+		if baseline != 6.5 {
+			t.Errorf("expected baseline 6.5, got %f", baseline)
+		}
+	})
+
+	t.Run("24+ samples uses trimmed mean", func(t *testing.T) {
+		t.Parallel()
+		// 24 identical values - trimmed mean should equal value
+		samples := make([]float64, 24)
+		for i := range samples {
+			samples[i] = 10.0
+		}
+		baseline, trustworthy := calculateTrimmedBaseline(samples)
+		if !trustworthy {
+			t.Error("expected trustworthy with 24 samples")
+		}
+		if baseline != 10.0 {
+			t.Errorf("expected baseline 10.0, got %f", baseline)
+		}
+	})
+
+	t.Run("24+ samples falls back to median when diff > 40%", func(t *testing.T) {
+		t.Parallel()
+		// Create samples where trimmed mean differs significantly from median
+		// Mostly 10s with some extreme outliers that survive trimming
+		samples := make([]float64, 24)
+		for i := range samples {
+			if i < 4 {
+				samples[i] = 100.0 // Extreme high values
+			} else {
+				samples[i] = 10.0 // Normal values
+			}
+		}
+		// After sorting: 10,10,...,10,100,100,100,100
+		// Median is 10 (middle values are 10s)
+		// Trimmed mean (drop 2 highest and 2 lowest): still has 2 100s
+		// So trimmed mean > median * 1.4, should fall back to median
+		baseline, trustworthy := calculateTrimmedBaseline(samples)
+		if !trustworthy {
+			t.Error("expected trustworthy")
+		}
+		// Should use median (10) due to large diff
+		if baseline != 10.0 {
+			t.Errorf("expected baseline 10.0 (median fallback), got %f", baseline)
+		}
+	})
+
+	t.Run("24+ samples uses trimmed mean when diff <= 40%", func(t *testing.T) {
+		t.Parallel()
+		// Sequential values with minimal outlier effect
+		samples := make([]float64, 24)
+		for i := range samples {
+			samples[i] = float64(i + 1) // 1,2,3,...,24
+		}
+		baseline, trustworthy := calculateTrimmedBaseline(samples)
+		if !trustworthy {
+			t.Error("expected trustworthy")
+		}
+		// Median of 1-24 is (12+13)/2 = 12.5
+		// Trimmed mean of 3-22 is (3+4+...+22)/20 = 250/20 = 12.5
+		// Both are close, should use trimmed mean
+		if baseline != 12.5 {
+			t.Errorf("expected baseline 12.5, got %f", baseline)
+		}
+	})
+
+	t.Run("odd length array uses middle element for median", func(t *testing.T) {
+		t.Parallel()
+		// 25 samples: an odd-length array
+		samples := make([]float64, 25)
+		for i := range samples {
+			samples[i] = float64(i + 1) // 1,2,3,...,25
+		}
+		baseline, trustworthy := calculateTrimmedBaseline(samples)
+		if !trustworthy {
+			t.Error("expected trustworthy")
+		}
+		// Median of sorted 1-25 is the 13th element = 13
+		// Trimmed mean excludes top/bottom 2: 3..23 = 21 elements, sum = (3+23)*21/2 = 273, mean = 13
+		// Both are 13, diff is 0%, should use trimmed mean = 13
+		if baseline != 13.0 {
+			t.Errorf("expected baseline 13.0, got %f", baseline)
+		}
+	})
+
+	t.Run("trimmed mean less than median triggers diff calculation", func(t *testing.T) {
+		t.Parallel()
+		// Create samples where trimmed mean < median but within 40%
+		// High outliers at top (excluded by trim), low values in middle
+		samples := make([]float64, 24)
+		// First 2 (will be trimmed): very low
+		samples[0], samples[1] = 1, 2
+		// Middle 20: mostly 50 but some variance
+		for i := 2; i < 22; i++ {
+			samples[i] = 50.0
+		}
+		// Last 2 (will be trimmed): very high
+		samples[22], samples[23] = 100, 200
+
+		baseline, trustworthy := calculateTrimmedBaseline(samples)
+		if !trustworthy {
+			t.Error("expected trustworthy")
+		}
+		// After sorting: 1, 2, 50x20, 100, 200
+		// Median of even array: (50+50)/2 = 50
+		// Trimmed mean: 50x20/20 = 50
+		// Should return 50
+		if baseline != 50.0 {
+			t.Errorf("expected baseline 50.0, got %f", baseline)
+		}
+	})
+}
+
+func TestCreateOrUpdateNodeAlert(t *testing.T) {
+	t.Parallel()
+
+	t.Run("creates new alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1"}
+		m.createOrUpdateNodeAlert(
+			"pmg1-node-queue",
+			pmg,
+			"mail-node1",
+			"pmg-node-queue",
+			AlertLevelWarning,
+			100,
+			50,
+			"Queue depth high",
+		)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg1-node-queue"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to be created")
+		}
+		if alert.Type != "pmg-node-queue" {
+			t.Errorf("expected type pmg-node-queue, got %s", alert.Type)
+		}
+		if alert.Level != AlertLevelWarning {
+			t.Errorf("expected warning level, got %s", alert.Level)
+		}
+		if alert.Value != 100 {
+			t.Errorf("expected value 100, got %f", alert.Value)
+		}
+		if alert.Threshold != 50 {
+			t.Errorf("expected threshold 50, got %f", alert.Threshold)
+		}
+		if alert.Node != "mail-node1" {
+			t.Errorf("expected node mail-node1, got %s", alert.Node)
+		}
+	})
+
+	t.Run("updates existing alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		oldTime := time.Now().Add(-1 * time.Hour)
+		m.mu.Lock()
+		m.activeAlerts["pmg1-node-queue"] = &Alert{
+			ID:        "pmg1-node-queue",
+			Value:     50,
+			Threshold: 40,
+			Level:     AlertLevelWarning,
+			Message:   "Old message",
+			LastSeen:  oldTime,
+		}
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1"}
+		m.createOrUpdateNodeAlert(
+			"pmg1-node-queue",
+			pmg,
+			"mail-node1",
+			"pmg-node-queue",
+			AlertLevelCritical,
+			200,
+			100,
+			"New message",
+		)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg1-node-queue"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to exist")
+		}
+		if alert.Value != 200 {
+			t.Errorf("expected value 200, got %f", alert.Value)
+		}
+		if alert.Threshold != 100 {
+			t.Errorf("expected threshold 100, got %f", alert.Threshold)
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level, got %s", alert.Level)
+		}
+		if alert.Message != "New message" {
+			t.Errorf("expected 'New message', got %s", alert.Message)
+		}
+		if !alert.LastSeen.After(oldTime) {
+			t.Error("expected LastSeen to be updated")
+		}
+	})
+}
