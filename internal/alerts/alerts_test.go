@@ -6846,3 +6846,605 @@ func TestCreateOrUpdateNodeAlert(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckPMGQueueDepths(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no thresholds configured does not create alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{Total: 1000, Deferred: 500, Hold: 300}},
+			},
+		}
+
+		// No thresholds configured (all 0)
+		defaults := PMGThresholdConfig{}
+		m.checkPMGQueueDepths(pmg, defaults)
+
+		m.mu.RLock()
+		totalAlerts := len(m.activeAlerts)
+		m.mu.RUnlock()
+
+		if totalAlerts != 0 {
+			t.Errorf("expected no alerts when no thresholds configured, got %d", totalAlerts)
+		}
+	})
+
+	t.Run("total queue warning alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Host: "pmg-server",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{Total: 300}},
+				{Name: "node2", QueueStatus: &models.PMGQueueStatus{Total: 250}},
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			QueueTotalWarning:  500,
+			QueueTotalCritical: 1000,
+		}
+		m.checkPMGQueueDepths(pmg, defaults)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg1-queue-total"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected warning alert to be created")
+		}
+		if alert.Level != AlertLevelWarning {
+			t.Errorf("expected warning level, got %s", alert.Level)
+		}
+		if alert.Value != 550 {
+			t.Errorf("expected value 550, got %f", alert.Value)
+		}
+	})
+
+	t.Run("total queue critical alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{Total: 600}},
+				{Name: "node2", QueueStatus: &models.PMGQueueStatus{Total: 500}},
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			QueueTotalWarning:  500,
+			QueueTotalCritical: 1000,
+		}
+		m.checkPMGQueueDepths(pmg, defaults)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg1-queue-total"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected critical alert to be created")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level, got %s", alert.Level)
+		}
+		if alert.Value != 1100 {
+			t.Errorf("expected value 1100, got %f", alert.Value)
+		}
+	})
+
+	t.Run("deferred queue warning alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{Deferred: 150}},
+				{Name: "node2", QueueStatus: &models.PMGQueueStatus{Deferred: 100}},
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			DeferredQueueWarn:     200,
+			DeferredQueueCritical: 500,
+		}
+		m.checkPMGQueueDepths(pmg, defaults)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg1-queue-deferred"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected deferred alert to be created")
+		}
+		if alert.Level != AlertLevelWarning {
+			t.Errorf("expected warning level, got %s", alert.Level)
+		}
+		if alert.Value != 250 {
+			t.Errorf("expected value 250, got %f", alert.Value)
+		}
+	})
+
+	t.Run("deferred queue critical alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{Deferred: 300}},
+				{Name: "node2", QueueStatus: &models.PMGQueueStatus{Deferred: 250}},
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			DeferredQueueWarn:     200,
+			DeferredQueueCritical: 500,
+		}
+		m.checkPMGQueueDepths(pmg, defaults)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg1-queue-deferred"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected critical alert to be created")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level, got %s", alert.Level)
+		}
+	})
+
+	t.Run("hold queue warning alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{Hold: 75}},
+				{Name: "node2", QueueStatus: &models.PMGQueueStatus{Hold: 50}},
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			HoldQueueWarn:     100,
+			HoldQueueCritical: 300,
+		}
+		m.checkPMGQueueDepths(pmg, defaults)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg1-queue-hold"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected hold alert to be created")
+		}
+		if alert.Level != AlertLevelWarning {
+			t.Errorf("expected warning level, got %s", alert.Level)
+		}
+		if alert.Value != 125 {
+			t.Errorf("expected value 125, got %f", alert.Value)
+		}
+	})
+
+	t.Run("hold queue critical alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{Hold: 200}},
+				{Name: "node2", QueueStatus: &models.PMGQueueStatus{Hold: 150}},
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			HoldQueueWarn:     100,
+			HoldQueueCritical: 300,
+		}
+		m.checkPMGQueueDepths(pmg, defaults)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg1-queue-hold"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected critical alert to be created")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level, got %s", alert.Level)
+		}
+	})
+
+	t.Run("updates existing alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		oldTime := time.Now().Add(-1 * time.Hour)
+		m.mu.Lock()
+		m.activeAlerts["pmg1-queue-total"] = &Alert{
+			ID:       "pmg1-queue-total",
+			Value:    400,
+			Level:    AlertLevelWarning,
+			LastSeen: oldTime,
+		}
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{Total: 1200}},
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			QueueTotalWarning:  500,
+			QueueTotalCritical: 1000,
+		}
+		m.checkPMGQueueDepths(pmg, defaults)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg1-queue-total"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to exist")
+		}
+		if alert.Value != 1200 {
+			t.Errorf("expected value 1200, got %f", alert.Value)
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level, got %s", alert.Level)
+		}
+		if !alert.LastSeen.After(oldTime) {
+			t.Error("expected LastSeen to be updated")
+		}
+	})
+
+	t.Run("below threshold clears alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.activeAlerts["pmg1-queue-total"] = &Alert{ID: "pmg1-queue-total"}
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{Total: 100}},
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			QueueTotalWarning:  500,
+			QueueTotalCritical: 1000,
+		}
+		m.checkPMGQueueDepths(pmg, defaults)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["pmg1-queue-total"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected alert to be cleared when below threshold")
+		}
+	})
+
+	t.Run("nil QueueStatus is handled", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: nil},
+				{Name: "node2", QueueStatus: &models.PMGQueueStatus{Total: 100}},
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			QueueTotalWarning: 500,
+		}
+		// Should not panic
+		m.checkPMGQueueDepths(pmg, defaults)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["pmg1-queue-total"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected no alert with total below threshold")
+		}
+	})
+}
+
+func TestCheckPMGOldestMessage(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no thresholds configured returns early", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{OldestAge: 7200}}, // 2 hours
+			},
+		}
+
+		defaults := PMGThresholdConfig{} // No thresholds
+		m.checkPMGOldestMessage(pmg, defaults)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["pmg1-oldest-message"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected no alert when no thresholds configured")
+		}
+	})
+
+	t.Run("no messages clears existing alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.activeAlerts["pmg1-oldest-message"] = &Alert{ID: "pmg1-oldest-message"}
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{OldestAge: 0}},
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			OldestMessageWarnMins: 30,
+			OldestMessageCritMins: 60,
+		}
+		m.checkPMGOldestMessage(pmg, defaults)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["pmg1-oldest-message"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected alert to be cleared when no messages in queue")
+		}
+	})
+
+	t.Run("warning alert when message age exceeds warning threshold", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Host: "pmg-server",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{OldestAge: 2400}}, // 40 minutes
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			OldestMessageWarnMins: 30,
+			OldestMessageCritMins: 60,
+		}
+		m.checkPMGOldestMessage(pmg, defaults)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg1-oldest-message"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected warning alert to be created")
+		}
+		if alert.Level != AlertLevelWarning {
+			t.Errorf("expected warning level, got %s", alert.Level)
+		}
+		if alert.Value != 40 {
+			t.Errorf("expected value 40 minutes, got %f", alert.Value)
+		}
+		if alert.Threshold != 30 {
+			t.Errorf("expected threshold 30, got %f", alert.Threshold)
+		}
+	})
+
+	t.Run("critical alert when message age exceeds critical threshold", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{OldestAge: 4200}}, // 70 minutes
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			OldestMessageWarnMins: 30,
+			OldestMessageCritMins: 60,
+		}
+		m.checkPMGOldestMessage(pmg, defaults)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg1-oldest-message"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected critical alert to be created")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level, got %s", alert.Level)
+		}
+		if alert.Threshold != 60 {
+			t.Errorf("expected threshold 60, got %f", alert.Threshold)
+		}
+	})
+
+	t.Run("below threshold clears alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.activeAlerts["pmg1-oldest-message"] = &Alert{ID: "pmg1-oldest-message"}
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{OldestAge: 900}}, // 15 minutes
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			OldestMessageWarnMins: 30,
+			OldestMessageCritMins: 60,
+		}
+		m.checkPMGOldestMessage(pmg, defaults)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["pmg1-oldest-message"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected alert to be cleared when below threshold")
+		}
+	})
+
+	t.Run("finds oldest across multiple nodes", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{OldestAge: 1200}}, // 20 minutes
+				{Name: "node2", QueueStatus: &models.PMGQueueStatus{OldestAge: 3000}}, // 50 minutes (oldest)
+				{Name: "node3", QueueStatus: &models.PMGQueueStatus{OldestAge: 600}},  // 10 minutes
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			OldestMessageWarnMins: 30,
+			OldestMessageCritMins: 60,
+		}
+		m.checkPMGOldestMessage(pmg, defaults)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg1-oldest-message"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to be created")
+		}
+		if alert.Value != 50 {
+			t.Errorf("expected value 50 (oldest across nodes), got %f", alert.Value)
+		}
+	})
+
+	t.Run("updates existing alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		oldTime := time.Now().Add(-1 * time.Hour)
+		m.mu.Lock()
+		m.activeAlerts["pmg1-oldest-message"] = &Alert{
+			ID:       "pmg1-oldest-message",
+			Value:    40,
+			Level:    AlertLevelWarning,
+			LastSeen: oldTime,
+		}
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: &models.PMGQueueStatus{OldestAge: 4800}}, // 80 minutes
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			OldestMessageWarnMins: 30,
+			OldestMessageCritMins: 60,
+		}
+		m.checkPMGOldestMessage(pmg, defaults)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg1-oldest-message"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to exist")
+		}
+		if alert.Value != 80 {
+			t.Errorf("expected value 80, got %f", alert.Value)
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level, got %s", alert.Level)
+		}
+		if !alert.LastSeen.After(oldTime) {
+			t.Error("expected LastSeen to be updated")
+		}
+	})
+
+	t.Run("nil QueueStatus is handled", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "PMG 1",
+			Nodes: []models.PMGNodeStatus{
+				{Name: "node1", QueueStatus: nil},
+				{Name: "node2", QueueStatus: &models.PMGQueueStatus{OldestAge: 2400}}, // 40 minutes
+			},
+		}
+
+		defaults := PMGThresholdConfig{
+			OldestMessageWarnMins: 30,
+		}
+		// Should not panic and should use the valid node's data
+		m.checkPMGOldestMessage(pmg, defaults)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg1-oldest-message"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to be created from valid node data")
+		}
+		if alert.Value != 40 {
+			t.Errorf("expected value 40, got %f", alert.Value)
+		}
+	})
+}
