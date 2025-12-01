@@ -485,6 +485,51 @@ func TestTaskQueue_Upsert(t *testing.T) {
 
 		verifyHeapInvariant(t, queue)
 	})
+
+	t.Run("upsert with same time and priority - uses instance name for tiebreak", func(t *testing.T) {
+		queue := NewTaskQueue()
+		now := time.Now()
+		sameTime := now.Add(10 * time.Second)
+
+		// Same NextRun, same priorities - should use InstanceName for tiebreak
+		tasks := []ScheduledTask{
+			{
+				InstanceName: "pve-zebra",
+				InstanceType: InstanceTypePVE,
+				NextRun:      sameTime,
+				Interval:     30 * time.Second,
+				Priority:     1.0,
+			},
+			{
+				InstanceName: "pve-alpha",
+				InstanceType: InstanceTypePVE,
+				NextRun:      sameTime,
+				Interval:     30 * time.Second,
+				Priority:     1.0,
+			},
+			{
+				InstanceName: "pve-middle",
+				InstanceType: InstanceTypePVE,
+				NextRun:      sameTime,
+				Interval:     30 * time.Second,
+				Priority:     1.0,
+			},
+		}
+
+		for _, task := range tasks {
+			queue.Upsert(task)
+		}
+
+		// When NextRun and Priority are equal, alphabetically earlier name should be first
+		queue.mu.Lock()
+		root := queue.heap[0]
+		if root.task.InstanceName != "pve-alpha" {
+			t.Errorf("heap root = %s, want pve-alpha (alphabetically first when time and priority equal)", root.task.InstanceName)
+		}
+		queue.mu.Unlock()
+
+		verifyHeapInvariant(t, queue)
+	})
 }
 
 func TestTaskQueue_Remove(t *testing.T) {
