@@ -1384,7 +1384,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			Str("dockerHostID", identifier).
 			Time("removedAt", removedAt).
 			Msg("Rejecting report from deliberately removed Docker host")
-		return models.DockerHost{}, fmt.Errorf("docker host %q was removed at %v and cannot report again. Use Allow re-enroll in Settings -> Docker -> Removed hosts or rerun the installer with a docker:manage token to clear this block", identifier, removedAt.Format(time.RFC3339))
+		return models.DockerHost{}, fmt.Errorf("docker host %q was removed at %v and cannot report again. Use Allow re-enroll in Settings -> Agents -> Removed Docker Hosts or rerun the installer with a docker:manage token to clear this block", identifier, removedAt.Format(time.RFC3339))
 	}
 
 	// Enforce token uniqueness: each token can only be bound to one agent
