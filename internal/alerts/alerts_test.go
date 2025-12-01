@@ -5691,3 +5691,264 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		}
 	})
 }
+
+func TestSetMetricHooks(t *testing.T) {
+	// NOT parallel - modifies package-level state
+	// Save existing state and restore after test
+	oldFired := recordAlertFired
+	oldResolved := recordAlertResolved
+	oldSuppressed := recordAlertSuppressed
+	oldAcknowledged := recordAlertAcknowledged
+	defer func() {
+		recordAlertFired = oldFired
+		recordAlertResolved = oldResolved
+		recordAlertSuppressed = oldSuppressed
+		recordAlertAcknowledged = oldAcknowledged
+	}()
+
+	t.Run("sets all hooks", func(t *testing.T) {
+		var firedCalled, resolvedCalled, suppressedCalled, acknowledgedCalled bool
+
+		SetMetricHooks(
+			func(a *Alert) { firedCalled = true },
+			func(a *Alert) { resolvedCalled = true },
+			func(s string) { suppressedCalled = true },
+			func() { acknowledgedCalled = true },
+		)
+
+		// Verify hooks are set by calling them (if they were nil, this would panic)
+		if recordAlertFired != nil {
+			recordAlertFired(&Alert{})
+		}
+		if recordAlertResolved != nil {
+			recordAlertResolved(&Alert{})
+		}
+		if recordAlertSuppressed != nil {
+			recordAlertSuppressed("test")
+		}
+		if recordAlertAcknowledged != nil {
+			recordAlertAcknowledged()
+		}
+
+		if !firedCalled {
+			t.Error("expected fired hook to be called")
+		}
+		if !resolvedCalled {
+			t.Error("expected resolved hook to be called")
+		}
+		if !suppressedCalled {
+			t.Error("expected suppressed hook to be called")
+		}
+		if !acknowledgedCalled {
+			t.Error("expected acknowledged hook to be called")
+		}
+	})
+
+	t.Run("nil hooks are safe", func(t *testing.T) {
+		SetMetricHooks(nil, nil, nil, nil)
+
+		// Should not panic
+		if recordAlertFired != nil {
+			t.Error("expected fired hook to be nil")
+		}
+		if recordAlertResolved != nil {
+			t.Error("expected resolved hook to be nil")
+		}
+	})
+}
+
+func TestNotifyExistingAlert(t *testing.T) {
+	t.Parallel()
+
+	t.Run("non-existent alert is no-op", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Should not panic
+		m.NotifyExistingAlert("non-existent-alert")
+	})
+
+	t.Run("existing alert dispatches notification", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		dispatchedCh := make(chan bool, 1)
+		m.SetAlertCallback(func(a *Alert) {
+			dispatchedCh <- true
+		})
+
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.config.ActivationState = ActivationActive // Must be active to dispatch
+		m.activeAlerts["test-alert"] = &Alert{
+			ID:    "test-alert",
+			Type:  "test",
+			Level: AlertLevelWarning,
+		}
+		m.mu.Unlock()
+
+		m.NotifyExistingAlert("test-alert")
+
+		// Wait for async dispatch with timeout
+		select {
+		case <-dispatchedCh:
+			// Success
+		case <-time.After(1 * time.Second):
+			t.Error("expected alert callback to be called (timeout)")
+		}
+	})
+}
+
+func TestGetResolvedAlert(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns nil for non-existent alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		result := m.GetResolvedAlert("non-existent")
+		if result != nil {
+			t.Error("expected nil for non-existent alert")
+		}
+	})
+
+	t.Run("returns nil for nil resolved entry", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.resolvedMutex.Lock()
+		m.recentlyResolved["test"] = nil
+		m.resolvedMutex.Unlock()
+
+		result := m.GetResolvedAlert("test")
+		if result != nil {
+			t.Error("expected nil for nil resolved entry")
+		}
+	})
+
+	t.Run("returns nil when Alert is nil", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.resolvedMutex.Lock()
+		m.recentlyResolved["test"] = &ResolvedAlert{Alert: nil}
+		m.resolvedMutex.Unlock()
+
+		result := m.GetResolvedAlert("test")
+		if result != nil {
+			t.Error("expected nil when Alert is nil")
+		}
+	})
+
+	t.Run("returns cloned alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		resolvedTime := time.Now()
+		m.resolvedMutex.Lock()
+		m.recentlyResolved["test"] = &ResolvedAlert{
+			Alert: &Alert{
+				ID:           "test",
+				Type:         "cpu",
+				Level:        AlertLevelWarning,
+				ResourceID:   "res1",
+				ResourceName: "Resource 1",
+			},
+			ResolvedTime: resolvedTime,
+		}
+		m.resolvedMutex.Unlock()
+
+		result := m.GetResolvedAlert("test")
+		if result == nil {
+			t.Fatal("expected non-nil result")
+		}
+		if result.Alert.ID != "test" {
+			t.Errorf("expected ID test, got %s", result.Alert.ID)
+		}
+		if result.ResolvedTime != resolvedTime {
+			t.Error("expected resolved time to match")
+		}
+	})
+}
+
+func TestGetAlertHistory(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns history from history manager", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add some alerts to history
+		m.historyManager.AddAlert(Alert{ID: "alert1", Type: "cpu"})
+		m.historyManager.AddAlert(Alert{ID: "alert2", Type: "memory"})
+
+		history := m.GetAlertHistory(10)
+		if len(history) < 2 {
+			t.Errorf("expected at least 2 history entries, got %d", len(history))
+		}
+	})
+
+	t.Run("respects limit", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add alerts
+		for i := 0; i < 5; i++ {
+			m.historyManager.AddAlert(Alert{ID: fmt.Sprintf("alert%d", i), Type: "test"})
+		}
+
+		history := m.GetAlertHistory(2)
+		if len(history) > 2 {
+			t.Errorf("expected max 2 entries, got %d", len(history))
+		}
+	})
+}
+
+func TestGetAlertHistorySince(t *testing.T) {
+	t.Parallel()
+
+	t.Run("zero time returns all history", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.historyManager.AddAlert(Alert{ID: "alert1", Type: "cpu"})
+
+		history := m.GetAlertHistorySince(time.Time{}, 10)
+		if len(history) == 0 {
+			t.Error("expected history entries for zero time")
+		}
+	})
+
+	t.Run("filters by time", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add an alert
+		m.historyManager.AddAlert(Alert{ID: "alert1", Type: "cpu", StartTime: time.Now()})
+
+		// Query for alerts after now + 1 hour (should return none)
+		future := time.Now().Add(1 * time.Hour)
+		history := m.GetAlertHistorySince(future, 10)
+		if len(history) != 0 {
+			t.Errorf("expected 0 entries for future time, got %d", len(history))
+		}
+	})
+}
+
+func TestClearAlertHistory(t *testing.T) {
+	t.Parallel()
+
+	t.Run("clears all history", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Add some alerts
+		m.historyManager.AddAlert(Alert{ID: "alert1", Type: "cpu"})
+		m.historyManager.AddAlert(Alert{ID: "alert2", Type: "memory"})
+
+		err := m.ClearAlertHistory()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		history := m.GetAlertHistory(10)
+		if len(history) != 0 {
+			t.Errorf("expected 0 entries after clear, got %d", len(history))
+		}
+	})
+}
