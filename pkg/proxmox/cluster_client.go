@@ -230,6 +230,14 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		healthyEndpoints = append(healthyEndpoints, coolingEndpoints...)
 	}
 
+	// Count unhealthy endpoints for logging and recovery decisions
+	unhealthyCount := 0
+	for _, healthy := range cc.nodeHealth {
+		if !healthy {
+			unhealthyCount++
+		}
+	}
+
 	// Log at warn level if no healthy endpoints to aid troubleshooting
 	if len(healthyEndpoints) == 0 && len(coolingEndpoints) == 0 {
 		log.Warn().
@@ -248,45 +256,64 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 			Msg("Checking for healthy endpoints")
 	}
 
-	if len(healthyEndpoints) == 0 {
-		// Try to recover by testing all endpoints
-		cc.mu.Unlock()
-		cc.recoverUnhealthyNodes(ctx)
-		cc.mu.Lock()
+	// Trigger recovery if we have any unhealthy endpoints
+	// This ensures degraded clusters recover individual nodes over time,
+	// not just when all nodes are down
+	if unhealthyCount > 0 {
+		// Use an anonymous function to ensure the lock is re-acquired even if
+		// recoverUnhealthyNodes panics, preventing double-unlock from defer
+		func() {
+			cc.mu.Unlock()
+			defer cc.mu.Lock()
+			cc.recoverUnhealthyNodes(ctx)
+		}()
 
-		// Check again
+		// Refresh the healthy/cooling endpoints lists after recovery attempt
+		// since cluster state may have changed while lock was released
+		healthyEndpoints = nil
+		coolingEndpoints = nil
+		now = time.Now() // Refresh time for accurate cooldown checks
 		for endpoint, healthy := range cc.nodeHealth {
 			if healthy {
+				if cooldown, exists := cc.rateLimitUntil[endpoint]; exists && now.Before(cooldown) {
+					coolingEndpoints = append(coolingEndpoints, endpoint)
+					continue
+				}
 				healthyEndpoints = append(healthyEndpoints, endpoint)
 			}
 		}
 
-		if len(healthyEndpoints) == 0 {
-			// If still no healthy endpoints and we only have one endpoint,
-			// try to use it anyway (could be temporarily unreachable)
-			if len(cc.endpoints) == 1 {
-				log.Warn().
-					Str("cluster", cc.name).
-					Str("endpoint", cc.endpoints[0]).
-					Msg("Single endpoint appears unhealthy but attempting to use it anyway")
-				healthyEndpoints = cc.endpoints
-				// Mark it as healthy optimistically
-				cc.nodeHealth[cc.endpoints[0]] = true
-			} else {
-				// Provide detailed error with endpoint status
-				unhealthyList := make([]string, 0, len(cc.endpoints))
-				for _, ep := range cc.endpoints {
-					if !cc.nodeHealth[ep] {
-						unhealthyList = append(unhealthyList, ep)
-					}
+		// Re-apply cooldown fallback if no healthy endpoints but some cooling
+		if len(healthyEndpoints) == 0 && len(coolingEndpoints) > 0 {
+			healthyEndpoints = append(healthyEndpoints, coolingEndpoints...)
+		}
+	}
+
+	if len(healthyEndpoints) == 0 {
+		// If still no healthy endpoints and we only have one endpoint,
+		// try to use it anyway (could be temporarily unreachable)
+		if len(cc.endpoints) == 1 {
+			log.Warn().
+				Str("cluster", cc.name).
+				Str("endpoint", cc.endpoints[0]).
+				Msg("Single endpoint appears unhealthy but attempting to use it anyway")
+			healthyEndpoints = cc.endpoints
+			// Mark it as healthy optimistically
+			cc.nodeHealth[cc.endpoints[0]] = true
+		} else {
+			// Provide detailed error with endpoint status
+			unhealthyList := make([]string, 0, len(cc.endpoints))
+			for _, ep := range cc.endpoints {
+				if !cc.nodeHealth[ep] {
+					unhealthyList = append(unhealthyList, ep)
 				}
-				log.Error().
-					Str("cluster", cc.name).
-					Strs("unhealthyEndpoints", unhealthyList).
-					Int("totalEndpoints", len(cc.endpoints)).
-					Msg("All cluster endpoints are unhealthy - verify network connectivity and API accessibility from Pulse server")
-				return nil, fmt.Errorf("no healthy nodes available in cluster %s (all %d endpoints unreachable: %v)", cc.name, len(cc.endpoints), unhealthyList)
 			}
+			log.Error().
+				Str("cluster", cc.name).
+				Strs("unhealthyEndpoints", unhealthyList).
+				Int("totalEndpoints", len(cc.endpoints)).
+				Msg("All cluster endpoints are unhealthy - verify network connectivity and API accessibility from Pulse server")
+			return nil, fmt.Errorf("no healthy nodes available in cluster %s (all %d endpoints unreachable: %v)", cc.name, len(cc.endpoints), unhealthyList)
 		}
 	}
 
