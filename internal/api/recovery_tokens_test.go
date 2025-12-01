@@ -574,6 +574,33 @@ func TestRecoveryTokenStore_Load_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestRecoveryTokenStore_Load_ReadError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a directory where the tokens file should be - reading it will fail
+	tokensPath := filepath.Join(tmpDir, "recovery_tokens.json")
+	if err := os.Mkdir(tokensPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	store := &RecoveryTokenStore{
+		tokens:      make(map[string]*RecoveryToken),
+		dataPath:    tmpDir,
+		stopCleanup: make(chan struct{}),
+	}
+
+	// Should not panic and should log error
+	store.load()
+
+	store.mu.RLock()
+	count := len(store.tokens)
+	store.mu.RUnlock()
+
+	if count != 0 {
+		t.Errorf("store should be empty after read error, got %d tokens", count)
+	}
+}
+
 func TestRecoveryTokenStore_StopCleanup(t *testing.T) {
 	store := newTestRecoveryStore(t)
 
