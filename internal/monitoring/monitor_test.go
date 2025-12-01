@@ -1067,6 +1067,70 @@ func TestExtractSnapshotName(t *testing.T) {
 	})
 }
 
+func TestEffectivePVEPollingInterval(t *testing.T) {
+	tests := []struct {
+		name     string
+		monitor  *Monitor
+		expected time.Duration
+	}{
+		{
+			name:     "nil monitor returns minInterval",
+			monitor:  nil,
+			expected: 10 * time.Second,
+		},
+		{
+			name:     "nil config returns minInterval",
+			monitor:  &Monitor{config: nil},
+			expected: 10 * time.Second,
+		},
+		{
+			name: "zero PVEPollingInterval returns minInterval",
+			monitor: &Monitor{
+				config: &config.Config{
+					PVEPollingInterval: 0,
+				},
+			},
+			expected: 10 * time.Second,
+		},
+		{
+			name: "valid interval within range",
+			monitor: &Monitor{
+				config: &config.Config{
+					PVEPollingInterval: 30 * time.Second,
+				},
+			},
+			expected: 30 * time.Second,
+		},
+		{
+			name: "interval below minInterval clamped to 10s",
+			monitor: &Monitor{
+				config: &config.Config{
+					PVEPollingInterval: 5 * time.Second,
+				},
+			},
+			expected: 10 * time.Second,
+		},
+		{
+			name: "interval above maxInterval clamped to 1h",
+			monitor: &Monitor{
+				config: &config.Config{
+					PVEPollingInterval: 2 * time.Hour,
+				},
+			},
+			expected: time.Hour,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.monitor.effectivePVEPollingInterval()
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
 func TestClampUint64ToInt64(t *testing.T) {
 	t.Run("zero value returns 0", func(t *testing.T) {
 		result := clampUint64ToInt64(0)
@@ -1100,6 +1164,216 @@ func TestClampUint64ToInt64(t *testing.T) {
 		result := clampUint64ToInt64(math.MaxUint64)
 		if result != math.MaxInt64 {
 			t.Errorf("expected %d, got %d", int64(math.MaxInt64), result)
+		}
+	})
+}
+
+func TestRemoveFailedPBSNode(t *testing.T) {
+	t.Run("removes correct instance from PBSInstances", func(t *testing.T) {
+		state := models.NewState()
+		state.UpdatePBSInstances([]models.PBSInstance{
+			{Name: "pbs1", Host: "192.168.1.1"},
+			{Name: "pbs2", Host: "192.168.1.2"},
+			{Name: "pbs3", Host: "192.168.1.3"},
+		})
+
+		m := &Monitor{state: state}
+		m.removeFailedPBSNode("pbs2")
+
+		if len(state.PBSInstances) != 2 {
+			t.Fatalf("expected 2 instances, got %d", len(state.PBSInstances))
+		}
+		for _, inst := range state.PBSInstances {
+			if inst.Name == "pbs2" {
+				t.Error("expected pbs2 to be removed")
+			}
+		}
+		// Verify other instances remain
+		names := make(map[string]bool)
+		for _, inst := range state.PBSInstances {
+			names[inst.Name] = true
+		}
+		if !names["pbs1"] || !names["pbs3"] {
+			t.Errorf("expected pbs1 and pbs3 to remain, got %v", names)
+		}
+	})
+
+	t.Run("clears PBS backups for that instance", func(t *testing.T) {
+		state := models.NewState()
+		state.UpdatePBSBackups("pbs1", []models.PBSBackup{
+			{ID: "backup1", Instance: "pbs1"},
+			{ID: "backup2", Instance: "pbs1"},
+		})
+		state.UpdatePBSBackups("pbs2", []models.PBSBackup{
+			{ID: "backup3", Instance: "pbs2"},
+		})
+
+		m := &Monitor{state: state}
+		m.removeFailedPBSNode("pbs1")
+
+		// Verify pbs1 backups are gone
+		for _, backup := range state.PBSBackups {
+			if backup.Instance == "pbs1" {
+				t.Errorf("expected pbs1 backups to be cleared, found %s", backup.ID)
+			}
+		}
+		// Verify pbs2 backups remain
+		found := false
+		for _, backup := range state.PBSBackups {
+			if backup.Instance == "pbs2" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected pbs2 backups to remain")
+		}
+	})
+
+	t.Run("sets connection health to false", func(t *testing.T) {
+		state := models.NewState()
+		state.SetConnectionHealth("pbs-pbs1", true)
+		state.SetConnectionHealth("pbs-pbs2", true)
+
+		m := &Monitor{state: state}
+		m.removeFailedPBSNode("pbs1")
+
+		if state.ConnectionHealth["pbs-pbs1"] != false {
+			t.Error("expected pbs-pbs1 connection health to be false")
+		}
+		if state.ConnectionHealth["pbs-pbs2"] != true {
+			t.Error("expected pbs-pbs2 connection health to remain true")
+		}
+	})
+
+	t.Run("handles empty instances list", func(t *testing.T) {
+		state := models.NewState()
+		m := &Monitor{state: state}
+
+		// Should not panic
+		m.removeFailedPBSNode("nonexistent")
+
+		if len(state.PBSInstances) != 0 {
+			t.Errorf("expected empty instances, got %d", len(state.PBSInstances))
+		}
+	})
+
+	t.Run("handles instance not found", func(t *testing.T) {
+		state := models.NewState()
+		state.UpdatePBSInstances([]models.PBSInstance{
+			{Name: "pbs1", Host: "192.168.1.1"},
+		})
+
+		m := &Monitor{state: state}
+		m.removeFailedPBSNode("nonexistent")
+
+		if len(state.PBSInstances) != 1 {
+			t.Errorf("expected 1 instance to remain, got %d", len(state.PBSInstances))
+		}
+	})
+}
+
+func TestRemoveFailedPMGInstance(t *testing.T) {
+	t.Run("removes correct instance from PMGInstances", func(t *testing.T) {
+		state := models.NewState()
+		state.UpdatePMGInstances([]models.PMGInstance{
+			{Name: "pmg1", Host: "192.168.1.1"},
+			{Name: "pmg2", Host: "192.168.1.2"},
+			{Name: "pmg3", Host: "192.168.1.3"},
+		})
+
+		m := &Monitor{state: state}
+		m.removeFailedPMGInstance("pmg2")
+
+		if len(state.PMGInstances) != 2 {
+			t.Fatalf("expected 2 instances, got %d", len(state.PMGInstances))
+		}
+		for _, inst := range state.PMGInstances {
+			if inst.Name == "pmg2" {
+				t.Error("expected pmg2 to be removed")
+			}
+		}
+		// Verify other instances remain
+		names := make(map[string]bool)
+		for _, inst := range state.PMGInstances {
+			names[inst.Name] = true
+		}
+		if !names["pmg1"] || !names["pmg3"] {
+			t.Errorf("expected pmg1 and pmg3 to remain, got %v", names)
+		}
+	})
+
+	t.Run("clears PMG backups for that instance", func(t *testing.T) {
+		state := models.NewState()
+		state.UpdatePMGBackups("pmg1", []models.PMGBackup{
+			{ID: "backup1", Instance: "pmg1"},
+			{ID: "backup2", Instance: "pmg1"},
+		})
+		state.UpdatePMGBackups("pmg2", []models.PMGBackup{
+			{ID: "backup3", Instance: "pmg2"},
+		})
+
+		m := &Monitor{state: state}
+		m.removeFailedPMGInstance("pmg1")
+
+		// Verify pmg1 backups are gone
+		for _, backup := range state.PMGBackups {
+			if backup.Instance == "pmg1" {
+				t.Errorf("expected pmg1 backups to be cleared, found %s", backup.ID)
+			}
+		}
+		// Verify pmg2 backups remain
+		found := false
+		for _, backup := range state.PMGBackups {
+			if backup.Instance == "pmg2" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected pmg2 backups to remain")
+		}
+	})
+
+	t.Run("sets connection health to false", func(t *testing.T) {
+		state := models.NewState()
+		state.SetConnectionHealth("pmg-pmg1", true)
+		state.SetConnectionHealth("pmg-pmg2", true)
+
+		m := &Monitor{state: state}
+		m.removeFailedPMGInstance("pmg1")
+
+		if state.ConnectionHealth["pmg-pmg1"] != false {
+			t.Error("expected pmg-pmg1 connection health to be false")
+		}
+		if state.ConnectionHealth["pmg-pmg2"] != true {
+			t.Error("expected pmg-pmg2 connection health to remain true")
+		}
+	})
+
+	t.Run("handles empty instances list", func(t *testing.T) {
+		state := models.NewState()
+		m := &Monitor{state: state}
+
+		// Should not panic
+		m.removeFailedPMGInstance("nonexistent")
+
+		if len(state.PMGInstances) != 0 {
+			t.Errorf("expected empty instances, got %d", len(state.PMGInstances))
+		}
+	})
+
+	t.Run("handles instance not found", func(t *testing.T) {
+		state := models.NewState()
+		state.UpdatePMGInstances([]models.PMGInstance{
+			{Name: "pmg1", Host: "192.168.1.1"},
+		})
+
+		m := &Monitor{state: state}
+		m.removeFailedPMGInstance("nonexistent")
+
+		if len(state.PMGInstances) != 1 {
+			t.Errorf("expected 1 instance to remain, got %d", len(state.PMGInstances))
 		}
 	})
 }
