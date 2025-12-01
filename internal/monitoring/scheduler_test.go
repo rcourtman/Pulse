@@ -721,6 +721,431 @@ func TestAdaptiveIntervalSelector_CombinedFactors(t *testing.T) {
 	}
 }
 
+// TestAdaptiveIntervalSelector_MaxIntervalEdgeCases tests max interval edge cases
+func TestAdaptiveIntervalSelector_MaxIntervalEdgeCases(t *testing.T) {
+	tests := []struct {
+		name        string
+		minInterval time.Duration
+		maxInterval time.Duration
+		wantMin     time.Duration
+		wantMax     time.Duration
+	}{
+		{
+			name:        "max is zero uses min as max",
+			minInterval: 10 * time.Second,
+			maxInterval: 0,
+			// When max <= 0, max = min, so span = 0, target = min
+			// smoothed = 0.6*10 + 0.4*10 = 10s
+			wantMin: 10 * time.Second,
+			wantMax: 10 * time.Second,
+		},
+		{
+			name:        "max is negative uses min as max",
+			minInterval: 10 * time.Second,
+			maxInterval: -5 * time.Second,
+			// When max < 0, max = min, so span = 0, target = min
+			wantMin: 10 * time.Second,
+			wantMax: 10 * time.Second,
+		},
+		{
+			name:        "max less than min uses min as max",
+			minInterval: 30 * time.Second,
+			maxInterval: 10 * time.Second,
+			// When max < min, max = min, so span = 0, target = min
+			wantMin: 30 * time.Second,
+			wantMax: 30 * time.Second,
+		},
+		{
+			name:        "max equals min uses that value",
+			minInterval: 15 * time.Second,
+			maxInterval: 15 * time.Second,
+			// span = 0, target = min = 15s
+			wantMin: 15 * time.Second,
+			wantMax: 15 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := SchedulerConfig{
+				BaseInterval: tt.minInterval,
+				MinInterval:  tt.minInterval,
+				MaxInterval:  tt.maxInterval,
+			}
+			selector := newAdaptiveIntervalSelector(cfg)
+			selector.jitterFraction = 0
+
+			req := IntervalRequest{
+				BaseInterval:   tt.minInterval,
+				MinInterval:    tt.minInterval,
+				MaxInterval:    tt.maxInterval,
+				StalenessScore: 0.5,
+				InstanceKey:    "test-max-edge-" + tt.name,
+			}
+
+			got := selector.SelectInterval(req)
+
+			if got < tt.wantMin || got > tt.wantMax {
+				t.Errorf("SelectInterval() = %v, want between %v and %v", got, tt.wantMin, tt.wantMax)
+			}
+		})
+	}
+}
+
+// TestAdaptiveIntervalSelector_LastIntervalFallback tests LastInterval <= 0 fallback
+func TestAdaptiveIntervalSelector_LastIntervalFallback(t *testing.T) {
+	cfg := SchedulerConfig{
+		BaseInterval: 20 * time.Second,
+		MinInterval:  5 * time.Second,
+		MaxInterval:  60 * time.Second,
+	}
+
+	tests := []struct {
+		name         string
+		lastInterval time.Duration
+		baseInterval time.Duration
+		wantMin      time.Duration
+		wantMax      time.Duration
+	}{
+		{
+			name:         "zero LastInterval uses BaseInterval",
+			lastInterval: 0,
+			baseInterval: 20 * time.Second,
+			// target=32.5s (score=0.5), base=20s (from BaseInterval)
+			// smoothed = 0.6*32.5 + 0.4*20 = 19.5 + 8 = 27.5s
+			wantMin: 27 * time.Second,
+			wantMax: 28 * time.Second,
+		},
+		{
+			name:         "negative LastInterval uses BaseInterval",
+			lastInterval: -10 * time.Second,
+			baseInterval: 20 * time.Second,
+			// Same calculation as above
+			wantMin: 27 * time.Second,
+			wantMax: 28 * time.Second,
+		},
+		{
+			name:         "positive LastInterval is used directly",
+			lastInterval: 40 * time.Second,
+			baseInterval: 20 * time.Second,
+			// target=32.5s (score=0.5), base=40s (from LastInterval, but prev state overrides)
+			// On first call with no state: smoothed = 0.6*32.5 + 0.4*40 = 19.5 + 16 = 35.5s
+			wantMin: 35 * time.Second,
+			wantMax: 36 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			selector := newAdaptiveIntervalSelector(cfg)
+			selector.jitterFraction = 0
+
+			req := IntervalRequest{
+				BaseInterval:   tt.baseInterval,
+				MinInterval:    cfg.MinInterval,
+				MaxInterval:    cfg.MaxInterval,
+				StalenessScore: 0.5,
+				LastInterval:   tt.lastInterval,
+				InstanceKey:    "test-lastinterval-" + tt.name,
+			}
+
+			got := selector.SelectInterval(req)
+
+			if got < tt.wantMin || got > tt.wantMax {
+				t.Errorf("SelectInterval() = %v, want between %v and %v", got, tt.wantMin, tt.wantMax)
+			}
+		})
+	}
+}
+
+// TestAdaptiveIntervalSelector_InstanceKeyFallback tests empty InstanceKey fallback to InstanceType
+func TestAdaptiveIntervalSelector_InstanceKeyFallback(t *testing.T) {
+	cfg := SchedulerConfig{
+		BaseInterval: 10 * time.Second,
+		MinInterval:  5 * time.Second,
+		MaxInterval:  60 * time.Second,
+	}
+
+	tests := []struct {
+		name         string
+		instanceKey  string
+		instanceType InstanceType
+	}{
+		{
+			name:         "empty key uses PVE type",
+			instanceKey:  "",
+			instanceType: InstanceTypePVE,
+		},
+		{
+			name:         "empty key uses PBS type",
+			instanceKey:  "",
+			instanceType: InstanceTypePBS,
+		},
+		{
+			name:         "non-empty key ignores type",
+			instanceKey:  "custom-key",
+			instanceType: InstanceTypePVE,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			selector := newAdaptiveIntervalSelector(cfg)
+			selector.jitterFraction = 0
+
+			// First call to set state
+			req1 := IntervalRequest{
+				BaseInterval:   cfg.BaseInterval,
+				MinInterval:    cfg.MinInterval,
+				MaxInterval:    cfg.MaxInterval,
+				StalenessScore: 0.0, // max interval target
+				InstanceKey:    tt.instanceKey,
+				InstanceType:   tt.instanceType,
+			}
+			got1 := selector.SelectInterval(req1)
+
+			// Second call should use stored state
+			req2 := IntervalRequest{
+				BaseInterval:   cfg.BaseInterval,
+				MinInterval:    cfg.MinInterval,
+				MaxInterval:    cfg.MaxInterval,
+				StalenessScore: 0.0,
+				InstanceKey:    tt.instanceKey,
+				InstanceType:   tt.instanceType,
+			}
+			got2 := selector.SelectInterval(req2)
+
+			// Second call should trend higher (toward max) due to EMA smoothing
+			if got2 < got1 {
+				t.Errorf("second call should be >= first call with EMA: got %v, first was %v", got2, got1)
+			}
+
+			// Verify the key is correctly derived
+			expectedKey := tt.instanceKey
+			if expectedKey == "" {
+				expectedKey = string(tt.instanceType)
+			}
+
+			selector.mu.Lock()
+			_, exists := selector.state[expectedKey]
+			selector.mu.Unlock()
+
+			if !exists {
+				t.Errorf("expected state to be stored under key %q", expectedKey)
+			}
+		})
+	}
+}
+
+// TestAdaptiveIntervalSelector_ErrorPenaltyCalculation tests error penalty branch details
+func TestAdaptiveIntervalSelector_ErrorPenaltyCalculation(t *testing.T) {
+	cfg := SchedulerConfig{
+		BaseInterval: 10 * time.Second,
+		MinInterval:  5 * time.Second,
+		MaxInterval:  60 * time.Second,
+	}
+
+	tests := []struct {
+		name       string
+		errorCount int
+		score      float64
+		wantMin    time.Duration
+		wantMax    time.Duration
+	}{
+		{
+			name:       "zero errors no penalty applied",
+			errorCount: 0,
+			score:      0.5,
+			// target=32.5s, no penalty, smoothed = 0.6*32.5 + 0.4*10 = 23.5s
+			wantMin: 23 * time.Second,
+			wantMax: 24 * time.Second,
+		},
+		{
+			name:       "one error reduces target",
+			errorCount: 1,
+			score:      0.5,
+			// target=32.5s, penalty = 1 + 0.6*1 = 1.6
+			// target = 32.5 / 1.6 = 20.3125s
+			// smoothed = 0.6*20.3125 + 0.4*10 = 16.1875s
+			wantMin: 15500 * time.Millisecond,
+			wantMax: 17 * time.Second,
+		},
+		{
+			name:       "high errors clamp to min before smoothing",
+			errorCount: 20,
+			score:      0.5,
+			// target=32.5s, penalty = 1 + 0.6*20 = 13
+			// target = 32.5 / 13 = 2.5s -> clamped to 5s (min)
+			// smoothed = 0.6*5 + 0.4*10 = 7s
+			wantMin: 6500 * time.Millisecond,
+			wantMax: 7500 * time.Millisecond,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			selector := newAdaptiveIntervalSelector(cfg)
+			selector.jitterFraction = 0
+
+			req := IntervalRequest{
+				BaseInterval:   cfg.BaseInterval,
+				MinInterval:    cfg.MinInterval,
+				MaxInterval:    cfg.MaxInterval,
+				StalenessScore: tt.score,
+				ErrorCount:     tt.errorCount,
+				QueueDepth:     1,
+				InstanceKey:    "test-error-calc-" + tt.name,
+			}
+
+			got := selector.SelectInterval(req)
+
+			if got < tt.wantMin || got > tt.wantMax {
+				t.Errorf("SelectInterval(errorCount=%d) = %v, want between %v and %v",
+					tt.errorCount, got, tt.wantMin, tt.wantMax)
+			}
+		})
+	}
+}
+
+// TestAdaptiveIntervalSelector_QueueDepthCalculation tests queue depth stretch branch details
+func TestAdaptiveIntervalSelector_QueueDepthCalculation(t *testing.T) {
+	cfg := SchedulerConfig{
+		BaseInterval: 10 * time.Second,
+		MinInterval:  5 * time.Second,
+		MaxInterval:  60 * time.Second,
+	}
+
+	tests := []struct {
+		name       string
+		queueDepth int
+		score      float64
+		wantMin    time.Duration
+		wantMax    time.Duration
+	}{
+		{
+			name:       "queue depth 0 no stretch",
+			queueDepth: 0,
+			score:      0.5,
+			// target=32.5s, no stretch (queueDepth <= 1)
+			// smoothed = 0.6*32.5 + 0.4*10 = 23.5s
+			wantMin: 23 * time.Second,
+			wantMax: 24 * time.Second,
+		},
+		{
+			name:       "queue depth 1 no stretch",
+			queueDepth: 1,
+			score:      0.5,
+			// target=32.5s, no stretch (queueDepth <= 1)
+			// smoothed = 0.6*32.5 + 0.4*10 = 23.5s
+			wantMin: 23 * time.Second,
+			wantMax: 24 * time.Second,
+		},
+		{
+			name:       "queue depth 3 applies stretch",
+			queueDepth: 3,
+			score:      0.5,
+			// target=32.5s, stretch = 1 + 0.1*(3-1) = 1.2
+			// target = 32.5 * 1.2 = 39s
+			// smoothed = 0.6*39 + 0.4*10 = 27.4s
+			wantMin: 27 * time.Second,
+			wantMax: 28 * time.Second,
+		},
+		{
+			name:       "high queue depth clamps to max",
+			queueDepth: 100,
+			score:      0.5,
+			// target=32.5s, stretch = 1 + 0.1*99 = 10.9
+			// target = 32.5 * 10.9 = 354.25s -> clamped to 60s
+			// smoothed = 0.6*60 + 0.4*10 = 40s
+			wantMin: 39 * time.Second,
+			wantMax: 41 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			selector := newAdaptiveIntervalSelector(cfg)
+			selector.jitterFraction = 0
+
+			req := IntervalRequest{
+				BaseInterval:   cfg.BaseInterval,
+				MinInterval:    cfg.MinInterval,
+				MaxInterval:    cfg.MaxInterval,
+				StalenessScore: tt.score,
+				ErrorCount:     0,
+				QueueDepth:     tt.queueDepth,
+				InstanceKey:    "test-queue-calc-" + tt.name,
+			}
+
+			got := selector.SelectInterval(req)
+
+			if got < tt.wantMin || got > tt.wantMax {
+				t.Errorf("SelectInterval(queueDepth=%d) = %v, want between %v and %v",
+					tt.queueDepth, got, tt.wantMin, tt.wantMax)
+			}
+		})
+	}
+}
+
+// TestAdaptiveIntervalSelector_SmoothedBoundsClamping tests smoothed value clamping to bounds
+func TestAdaptiveIntervalSelector_SmoothedBoundsClamping(t *testing.T) {
+	cfg := SchedulerConfig{
+		BaseInterval: 10 * time.Second,
+		MinInterval:  20 * time.Second,
+		MaxInterval:  40 * time.Second,
+	}
+
+	tests := []struct {
+		name    string
+		alpha   float64
+		score   float64
+		base    time.Duration
+		wantMin time.Duration
+		wantMax time.Duration
+	}{
+		{
+			name:  "smoothed clamped to min when base much lower",
+			alpha: 0.1, // 10% new, 90% old - heavily weighted toward base
+			score: 0.5, // target = 30s
+			base:  5 * time.Second,
+			// smoothed = 0.1*30 + 0.9*5 = 3 + 4.5 = 7.5s -> clamped to 20s (min)
+			wantMin: 20 * time.Second,
+			wantMax: 20 * time.Second,
+		},
+		{
+			name:  "smoothed clamped to max when base much higher",
+			alpha: 0.1, // 10% new, 90% old
+			score: 0.5, // target = 30s
+			base:  100 * time.Second,
+			// smoothed = 0.1*30 + 0.9*100 = 3 + 90 = 93s -> clamped to 40s (max)
+			wantMin: 40 * time.Second,
+			wantMax: 40 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			selector := newAdaptiveIntervalSelector(cfg)
+			selector.jitterFraction = 0
+			selector.alpha = tt.alpha
+
+			req := IntervalRequest{
+				BaseInterval:   tt.base,
+				MinInterval:    cfg.MinInterval,
+				MaxInterval:    cfg.MaxInterval,
+				StalenessScore: tt.score,
+				InstanceKey:    "test-smoothed-clamp-" + tt.name,
+			}
+
+			got := selector.SelectInterval(req)
+
+			if got < tt.wantMin || got > tt.wantMax {
+				t.Errorf("SelectInterval() = %v, want between %v and %v", got, tt.wantMin, tt.wantMax)
+			}
+		})
+	}
+}
+
 // TestAdaptiveIntervalSelector_StatePersistence tests state is maintained per instance
 func TestAdaptiveIntervalSelector_StatePersistence(t *testing.T) {
 	cfg := SchedulerConfig{

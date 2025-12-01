@@ -1785,3 +1785,272 @@ func TestConvertDockerSwarmInfo(t *testing.T) {
 		})
 	}
 }
+
+func TestAllowDockerHostReenroll(t *testing.T) {
+	t.Run("empty hostID returns error", func(t *testing.T) {
+		m := &Monitor{
+			state:              models.NewState(),
+			removedDockerHosts: make(map[string]time.Time),
+		}
+
+		err := m.AllowDockerHostReenroll("")
+		if err == nil {
+			t.Error("expected error for empty hostID")
+		}
+		if err.Error() != "docker host id is required" {
+			t.Errorf("expected 'docker host id is required', got %q", err.Error())
+		}
+	})
+
+	t.Run("whitespace-only hostID returns error", func(t *testing.T) {
+		m := &Monitor{
+			state:              models.NewState(),
+			removedDockerHosts: make(map[string]time.Time),
+		}
+
+		err := m.AllowDockerHostReenroll("   ")
+		if err == nil {
+			t.Error("expected error for whitespace-only hostID")
+		}
+		if err.Error() != "docker host id is required" {
+			t.Errorf("expected 'docker host id is required', got %q", err.Error())
+		}
+	})
+
+	t.Run("host not blocked with host in state returns nil", func(t *testing.T) {
+		state := models.NewState()
+		state.UpsertDockerHost(models.DockerHost{ID: "host1", Hostname: "docker-host-1"})
+
+		m := &Monitor{
+			state:              state,
+			removedDockerHosts: make(map[string]time.Time),
+		}
+
+		err := m.AllowDockerHostReenroll("host1")
+		if err != nil {
+			t.Errorf("expected nil error, got %v", err)
+		}
+	})
+
+	t.Run("host not blocked with host not in state returns nil", func(t *testing.T) {
+		state := models.NewState()
+
+		m := &Monitor{
+			state:              state,
+			removedDockerHosts: make(map[string]time.Time),
+		}
+
+		err := m.AllowDockerHostReenroll("nonexistent")
+		if err != nil {
+			t.Errorf("expected nil error, got %v", err)
+		}
+	})
+
+	t.Run("blocked host gets removed and returns nil", func(t *testing.T) {
+		state := models.NewState()
+
+		m := &Monitor{
+			state:              state,
+			removedDockerHosts: map[string]time.Time{"host1": time.Now()},
+			dockerCommands:     make(map[string]*dockerHostCommand),
+			dockerCommandIndex: make(map[string]string),
+		}
+
+		err := m.AllowDockerHostReenroll("host1")
+		if err != nil {
+			t.Errorf("expected nil error, got %v", err)
+		}
+
+		if _, exists := m.removedDockerHosts["host1"]; exists {
+			t.Error("expected host1 to be removed from removedDockerHosts")
+		}
+	})
+
+	t.Run("blocked host with dockerCommands entry gets cleaned up", func(t *testing.T) {
+		state := models.NewState()
+
+		cmd := &dockerHostCommand{
+			status: models.DockerHostCommandStatus{
+				ID: "cmd-123",
+			},
+		}
+
+		m := &Monitor{
+			state:              state,
+			removedDockerHosts: map[string]time.Time{"host1": time.Now()},
+			dockerCommands:     map[string]*dockerHostCommand{"host1": cmd},
+			dockerCommandIndex: map[string]string{"cmd-123": "host1"},
+		}
+
+		err := m.AllowDockerHostReenroll("host1")
+		if err != nil {
+			t.Errorf("expected nil error, got %v", err)
+		}
+
+		if _, exists := m.removedDockerHosts["host1"]; exists {
+			t.Error("expected host1 to be removed from removedDockerHosts")
+		}
+		if _, exists := m.dockerCommands["host1"]; exists {
+			t.Error("expected host1 to be removed from dockerCommands")
+		}
+		if _, exists := m.dockerCommandIndex["cmd-123"]; exists {
+			t.Error("expected cmd-123 to be removed from dockerCommandIndex")
+		}
+	})
+
+	t.Run("hostID with whitespace is trimmed", func(t *testing.T) {
+		state := models.NewState()
+
+		m := &Monitor{
+			state:              state,
+			removedDockerHosts: map[string]time.Time{"host1": time.Now()},
+			dockerCommands:     make(map[string]*dockerHostCommand),
+			dockerCommandIndex: make(map[string]string),
+		}
+
+		err := m.AllowDockerHostReenroll("  host1  ")
+		if err != nil {
+			t.Errorf("expected nil error, got %v", err)
+		}
+
+		if _, exists := m.removedDockerHosts["host1"]; exists {
+			t.Error("expected host1 to be removed from removedDockerHosts after trimming")
+		}
+	})
+}
+
+func TestEnsureBreaker(t *testing.T) {
+	tests := []struct {
+		name                  string
+		circuitBreakers       map[string]*circuitBreaker
+		existingBreaker       *circuitBreaker
+		breakerBaseRetry      time.Duration
+		breakerMaxDelay       time.Duration
+		breakerHalfOpenWindow time.Duration
+		key                   string
+		wantRetryInterval     time.Duration
+		wantMaxDelay          time.Duration
+		wantHalfOpenWindow    time.Duration
+		wantExisting          bool
+	}{
+		{
+			name:                  "nil circuitBreakers map gets initialized",
+			circuitBreakers:       nil,
+			key:                   "test-key",
+			wantRetryInterval:     5 * time.Second,
+			wantMaxDelay:          5 * time.Minute,
+			wantHalfOpenWindow:    30 * time.Second,
+			wantExisting:          false,
+		},
+		{
+			name:                  "existing breaker for key is returned",
+			circuitBreakers:       map[string]*circuitBreaker{},
+			existingBreaker:       newCircuitBreaker(3, 10*time.Second, 10*time.Minute, 60*time.Second),
+			key:                   "existing-key",
+			wantRetryInterval:     10 * time.Second,
+			wantMaxDelay:          10 * time.Minute,
+			wantHalfOpenWindow:    60 * time.Second,
+			wantExisting:          true,
+		},
+		{
+			name:                  "new breaker with default values (all config fields zero)",
+			circuitBreakers:       map[string]*circuitBreaker{},
+			breakerBaseRetry:      0,
+			breakerMaxDelay:       0,
+			breakerHalfOpenWindow: 0,
+			key:                   "new-key",
+			wantRetryInterval:     5 * time.Second,
+			wantMaxDelay:          5 * time.Minute,
+			wantHalfOpenWindow:    30 * time.Second,
+			wantExisting:          false,
+		},
+		{
+			name:                  "new breaker with custom breakerBaseRetry",
+			circuitBreakers:       map[string]*circuitBreaker{},
+			breakerBaseRetry:      2 * time.Second,
+			breakerMaxDelay:       0,
+			breakerHalfOpenWindow: 0,
+			key:                   "custom-retry-key",
+			wantRetryInterval:     2 * time.Second,
+			wantMaxDelay:          5 * time.Minute,
+			wantHalfOpenWindow:    30 * time.Second,
+			wantExisting:          false,
+		},
+		{
+			name:                  "new breaker with custom breakerMaxDelay",
+			circuitBreakers:       map[string]*circuitBreaker{},
+			breakerBaseRetry:      0,
+			breakerMaxDelay:       10 * time.Minute,
+			breakerHalfOpenWindow: 0,
+			key:                   "custom-maxdelay-key",
+			wantRetryInterval:     5 * time.Second,
+			wantMaxDelay:          10 * time.Minute,
+			wantHalfOpenWindow:    30 * time.Second,
+			wantExisting:          false,
+		},
+		{
+			name:                  "new breaker with custom breakerHalfOpenWindow",
+			circuitBreakers:       map[string]*circuitBreaker{},
+			breakerBaseRetry:      0,
+			breakerMaxDelay:       0,
+			breakerHalfOpenWindow: 15 * time.Second,
+			key:                   "custom-halfopen-key",
+			wantRetryInterval:     5 * time.Second,
+			wantMaxDelay:          5 * time.Minute,
+			wantHalfOpenWindow:    15 * time.Second,
+			wantExisting:          false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &Monitor{
+				circuitBreakers:       tt.circuitBreakers,
+				breakerBaseRetry:      tt.breakerBaseRetry,
+				breakerMaxDelay:       tt.breakerMaxDelay,
+				breakerHalfOpenWindow: tt.breakerHalfOpenWindow,
+			}
+
+			// If we have an existing breaker to test, add it before calling ensureBreaker
+			if tt.existingBreaker != nil {
+				m.circuitBreakers[tt.key] = tt.existingBreaker
+			}
+
+			breaker := m.ensureBreaker(tt.key)
+
+			if breaker == nil {
+				t.Fatal("expected non-nil breaker")
+			}
+
+			// Verify the map was initialized if it was nil
+			if tt.circuitBreakers == nil && m.circuitBreakers == nil {
+				t.Error("expected circuitBreakers map to be initialized")
+			}
+
+			// Verify the breaker is stored in the map
+			storedBreaker, ok := m.circuitBreakers[tt.key]
+			if !ok {
+				t.Error("expected breaker to be stored in map")
+			}
+			if storedBreaker != breaker {
+				t.Error("expected stored breaker to be the same as returned breaker")
+			}
+
+			// Verify we got back the existing breaker if expected
+			if tt.wantExisting && breaker != tt.existingBreaker {
+				t.Error("expected to get back the existing breaker")
+			}
+
+			// Verify breaker configuration
+			if breaker.retryInterval != tt.wantRetryInterval {
+				t.Errorf("retryInterval = %v, want %v", breaker.retryInterval, tt.wantRetryInterval)
+			}
+			if breaker.maxDelay != tt.wantMaxDelay {
+				t.Errorf("maxDelay = %v, want %v", breaker.maxDelay, tt.wantMaxDelay)
+			}
+			if breaker.halfOpenWindow != tt.wantHalfOpenWindow {
+				t.Errorf("halfOpenWindow = %v, want %v", breaker.halfOpenWindow, tt.wantHalfOpenWindow)
+			}
+		})
+	}
+}
