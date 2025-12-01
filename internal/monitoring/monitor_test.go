@@ -1273,6 +1273,85 @@ func TestRemoveFailedPBSNode(t *testing.T) {
 	})
 }
 
+func TestGetDockerHost(t *testing.T) {
+	t.Run("empty hostID returns empty host and false", func(t *testing.T) {
+		state := models.NewState()
+		state.UpsertDockerHost(models.DockerHost{ID: "host1", Hostname: "docker1"})
+		m := &Monitor{state: state}
+
+		host, found := m.GetDockerHost("")
+		if found {
+			t.Error("expected found to be false for empty hostID")
+		}
+		if host.ID != "" {
+			t.Errorf("expected empty host, got ID=%q", host.ID)
+		}
+	})
+
+	t.Run("whitespace-only hostID returns empty host and false", func(t *testing.T) {
+		state := models.NewState()
+		state.UpsertDockerHost(models.DockerHost{ID: "host1", Hostname: "docker1"})
+		m := &Monitor{state: state}
+
+		host, found := m.GetDockerHost("   ")
+		if found {
+			t.Error("expected found to be false for whitespace-only hostID")
+		}
+		if host.ID != "" {
+			t.Errorf("expected empty host, got ID=%q", host.ID)
+		}
+	})
+
+	t.Run("host ID not found returns empty host and false", func(t *testing.T) {
+		state := models.NewState()
+		state.UpsertDockerHost(models.DockerHost{ID: "host1", Hostname: "docker1"})
+		m := &Monitor{state: state}
+
+		host, found := m.GetDockerHost("nonexistent")
+		if found {
+			t.Error("expected found to be false for nonexistent hostID")
+		}
+		if host.ID != "" {
+			t.Errorf("expected empty host, got ID=%q", host.ID)
+		}
+	})
+
+	t.Run("host ID found returns the host and true", func(t *testing.T) {
+		state := models.NewState()
+		state.UpsertDockerHost(models.DockerHost{ID: "host1", Hostname: "docker1"})
+		state.UpsertDockerHost(models.DockerHost{ID: "host2", Hostname: "docker2"})
+		m := &Monitor{state: state}
+
+		host, found := m.GetDockerHost("host1")
+		if !found {
+			t.Error("expected found to be true")
+		}
+		if host.ID != "host1" {
+			t.Errorf("expected ID='host1', got %q", host.ID)
+		}
+		if host.Hostname != "docker1" {
+			t.Errorf("expected Hostname='docker1', got %q", host.Hostname)
+		}
+	})
+
+	t.Run("hostID with leading/trailing whitespace is trimmed and found", func(t *testing.T) {
+		state := models.NewState()
+		state.UpsertDockerHost(models.DockerHost{ID: "host1", Hostname: "docker1"})
+		m := &Monitor{state: state}
+
+		host, found := m.GetDockerHost("  host1  ")
+		if !found {
+			t.Error("expected found to be true after trimming whitespace")
+		}
+		if host.ID != "host1" {
+			t.Errorf("expected ID='host1', got %q", host.ID)
+		}
+		if host.Hostname != "docker1" {
+			t.Errorf("expected Hostname='docker1', got %q", host.Hostname)
+		}
+	})
+}
+
 func TestRemoveFailedPMGInstance(t *testing.T) {
 	t.Run("removes correct instance from PMGInstances", func(t *testing.T) {
 		state := models.NewState()
@@ -1374,6 +1453,227 @@ func TestRemoveFailedPMGInstance(t *testing.T) {
 
 		if len(state.PMGInstances) != 1 {
 			t.Errorf("expected 1 instance to remain, got %d", len(state.PMGInstances))
+		}
+	})
+}
+
+func TestSchedulerHealth(t *testing.T) {
+	t.Run("nil config returns Enabled false", func(t *testing.T) {
+		m := &Monitor{config: nil}
+		resp := m.SchedulerHealth()
+		if resp.Enabled {
+			t.Error("expected Enabled to be false when config is nil")
+		}
+	})
+
+	t.Run("config with AdaptivePollingEnabled false returns Enabled false", func(t *testing.T) {
+		m := &Monitor{
+			config: &config.Config{AdaptivePollingEnabled: false},
+		}
+		resp := m.SchedulerHealth()
+		if resp.Enabled {
+			t.Error("expected Enabled to be false when AdaptivePollingEnabled is false")
+		}
+	})
+
+	t.Run("config with AdaptivePollingEnabled true returns Enabled true", func(t *testing.T) {
+		m := &Monitor{
+			config: &config.Config{AdaptivePollingEnabled: true},
+		}
+		resp := m.SchedulerHealth()
+		if !resp.Enabled {
+			t.Error("expected Enabled to be true when AdaptivePollingEnabled is true")
+		}
+	})
+
+	t.Run("nil taskQueue returns empty Queue", func(t *testing.T) {
+		m := &Monitor{
+			config:    &config.Config{},
+			taskQueue: nil,
+		}
+		resp := m.SchedulerHealth()
+		// Queue should be zero value (empty)
+		if resp.Queue.Depth != 0 {
+			t.Errorf("expected Queue.Depth to be 0, got %d", resp.Queue.Depth)
+		}
+		if len(resp.Queue.PerType) != 0 {
+			t.Errorf("expected Queue.PerType to be empty, got %d entries", len(resp.Queue.PerType))
+		}
+	})
+
+	t.Run("non-nil taskQueue returns queue snapshot", func(t *testing.T) {
+		tq := NewTaskQueue()
+		tq.Upsert(ScheduledTask{
+			InstanceType: InstanceTypePVE,
+			InstanceName: "pve1",
+			NextRun:      time.Now().Add(time.Minute),
+		})
+
+		m := &Monitor{
+			config:    &config.Config{},
+			taskQueue: tq,
+		}
+		resp := m.SchedulerHealth()
+		if resp.Queue.Depth != 1 {
+			t.Errorf("expected Queue.Depth to be 1, got %d", resp.Queue.Depth)
+		}
+	})
+
+	t.Run("nil deadLetterQueue returns empty DeadLetter", func(t *testing.T) {
+		m := &Monitor{
+			config:          &config.Config{},
+			deadLetterQueue: nil,
+		}
+		resp := m.SchedulerHealth()
+		if resp.DeadLetter.Count != 0 {
+			t.Errorf("expected DeadLetter.Count to be 0, got %d", resp.DeadLetter.Count)
+		}
+		if len(resp.DeadLetter.Tasks) != 0 {
+			t.Errorf("expected DeadLetter.Tasks to be empty, got %d tasks", len(resp.DeadLetter.Tasks))
+		}
+	})
+
+	t.Run("non-nil deadLetterQueue returns dead letter snapshot", func(t *testing.T) {
+		dlq := NewTaskQueue()
+		dlq.Upsert(ScheduledTask{
+			InstanceType: InstanceTypePVE,
+			InstanceName: "failed-pve",
+			NextRun:      time.Now(),
+		})
+
+		m := &Monitor{
+			config:          &config.Config{},
+			deadLetterQueue: dlq,
+			lastOutcome:     make(map[string]taskOutcome),
+			failureCounts:   make(map[string]int),
+		}
+		resp := m.SchedulerHealth()
+		if resp.DeadLetter.Count != 1 {
+			t.Errorf("expected DeadLetter.Count to be 1, got %d", resp.DeadLetter.Count)
+		}
+	})
+
+	t.Run("circuit breaker key with :: separator extracts type and name", func(t *testing.T) {
+		breaker := newCircuitBreaker(3, 5*time.Second, 5*time.Minute, 30*time.Second)
+		// Record a failure to make the breaker appear in the response
+		breaker.recordFailure(time.Now())
+
+		m := &Monitor{
+			config: &config.Config{},
+			circuitBreakers: map[string]*circuitBreaker{
+				"pve::my-node": breaker,
+			},
+		}
+		resp := m.SchedulerHealth()
+
+		if len(resp.Breakers) != 1 {
+			t.Fatalf("expected 1 breaker, got %d", len(resp.Breakers))
+		}
+		if resp.Breakers[0].Type != "pve" {
+			t.Errorf("expected breaker Type to be 'pve', got %q", resp.Breakers[0].Type)
+		}
+		if resp.Breakers[0].Instance != "my-node" {
+			t.Errorf("expected breaker Instance to be 'my-node', got %q", resp.Breakers[0].Instance)
+		}
+	})
+
+	t.Run("circuit breaker key without :: separator uses unknown type", func(t *testing.T) {
+		breaker := newCircuitBreaker(3, 5*time.Second, 5*time.Minute, 30*time.Second)
+		breaker.recordFailure(time.Now())
+
+		m := &Monitor{
+			config: &config.Config{},
+			circuitBreakers: map[string]*circuitBreaker{
+				"legacy-key-no-separator": breaker,
+			},
+		}
+		resp := m.SchedulerHealth()
+
+		if len(resp.Breakers) != 1 {
+			t.Fatalf("expected 1 breaker, got %d", len(resp.Breakers))
+		}
+		if resp.Breakers[0].Type != "unknown" {
+			t.Errorf("expected breaker Type to be 'unknown', got %q", resp.Breakers[0].Type)
+		}
+		if resp.Breakers[0].Instance != "legacy-key-no-separator" {
+			t.Errorf("expected breaker Instance to be 'legacy-key-no-separator', got %q", resp.Breakers[0].Instance)
+		}
+	})
+
+	t.Run("circuit breaker in closed state with 0 failures is skipped", func(t *testing.T) {
+		// A freshly created breaker is closed with 0 failures
+		breaker := newCircuitBreaker(3, 5*time.Second, 5*time.Minute, 30*time.Second)
+
+		m := &Monitor{
+			config: &config.Config{},
+			circuitBreakers: map[string]*circuitBreaker{
+				"pve::healthy-node": breaker,
+			},
+		}
+		resp := m.SchedulerHealth()
+
+		if len(resp.Breakers) != 0 {
+			t.Errorf("expected 0 breakers (closed with 0 failures should be skipped), got %d", len(resp.Breakers))
+		}
+	})
+
+	t.Run("open breaker is included regardless of failure count", func(t *testing.T) {
+		breaker := newCircuitBreaker(1, 5*time.Second, 5*time.Minute, 30*time.Second)
+		// Trip the breaker open by recording enough failures
+		breaker.recordFailure(time.Now())
+
+		m := &Monitor{
+			config: &config.Config{},
+			circuitBreakers: map[string]*circuitBreaker{
+				"pbs::failed-backup": breaker,
+			},
+		}
+		resp := m.SchedulerHealth()
+
+		if len(resp.Breakers) != 1 {
+			t.Fatalf("expected 1 breaker, got %d", len(resp.Breakers))
+		}
+		if resp.Breakers[0].State != "open" {
+			t.Errorf("expected breaker State to be 'open', got %q", resp.Breakers[0].State)
+		}
+	})
+
+	t.Run("multiple breakers with mixed states", func(t *testing.T) {
+		healthyBreaker := newCircuitBreaker(3, 5*time.Second, 5*time.Minute, 30*time.Second)
+
+		failingBreaker := newCircuitBreaker(3, 5*time.Second, 5*time.Minute, 30*time.Second)
+		failingBreaker.recordFailure(time.Now())
+
+		tripBreaker := newCircuitBreaker(1, 5*time.Second, 5*time.Minute, 30*time.Second)
+		tripBreaker.recordFailure(time.Now())
+
+		m := &Monitor{
+			config: &config.Config{},
+			circuitBreakers: map[string]*circuitBreaker{
+				"pve::healthy":    healthyBreaker,
+				"pve::failing":    failingBreaker,
+				"pbs::tripped":    tripBreaker,
+				"legacy-no-colon": failingBreaker, // shares same breaker but different key
+			},
+		}
+		resp := m.SchedulerHealth()
+
+		// healthyBreaker (closed, 0 failures) should be excluded
+		// failingBreaker (closed, 1 failure) should be included twice (pve::failing and legacy-no-colon)
+		// tripBreaker (open, 1 failure) should be included
+		if len(resp.Breakers) != 3 {
+			t.Errorf("expected 3 breakers (excluding healthy), got %d", len(resp.Breakers))
+		}
+	})
+
+	t.Run("UpdatedAt is set to current time", func(t *testing.T) {
+		before := time.Now()
+		m := &Monitor{config: &config.Config{}}
+		resp := m.SchedulerHealth()
+		after := time.Now()
+
+		if resp.UpdatedAt.Before(before) || resp.UpdatedAt.After(after) {
+			t.Errorf("expected UpdatedAt between %v and %v, got %v", before, after, resp.UpdatedAt)
 		}
 	})
 }

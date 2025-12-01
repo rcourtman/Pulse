@@ -93,37 +93,107 @@ func TestPreserveFailedStorageBackupsSkipsDuplicates(t *testing.T) {
 }
 
 func TestStorageNamesForNode(t *testing.T) {
-	instance := "pve01"
-	snapshot := models.StateSnapshot{
-		Storage: []models.Storage{
-			{
-				Name:     "local-zfs",
-				Instance: instance,
-				Node:     "pve-node1",
-				Content:  "images,rootdir,backup",
+	tests := []struct {
+		name         string
+		instanceName string
+		nodeName     string
+		snapshot     models.StateSnapshot
+		want         []string
+	}{
+		{
+			name:         "empty nodeName returns nil",
+			instanceName: "pve1",
+			nodeName:     "",
+			snapshot: models.StateSnapshot{
+				Storage: []models.Storage{
+					{Instance: "pve1", Name: "local-backup", Node: "node1", Content: "backup"},
+				},
 			},
-			{
-				Name:     "nas-share",
-				Instance: instance,
-				Nodes:    []string{"pve-node2", "pve-node3"},
-				Content:  "backup,iso",
+			want: nil,
+		},
+		{
+			name:         "empty snapshot returns nil",
+			instanceName: "pve1",
+			nodeName:     "node1",
+			snapshot:     models.StateSnapshot{},
+			want:         nil,
+		},
+		{
+			name:         "storage with wrong instance is skipped",
+			instanceName: "pve1",
+			nodeName:     "node1",
+			snapshot: models.StateSnapshot{
+				Storage: []models.Storage{
+					{Instance: "pve2", Name: "local-backup", Node: "node1", Content: "backup"},
+				},
 			},
-			{
-				Name:     "other-instance",
-				Instance: "pve02",
-				Node:     "pve-node1",
-				Content:  "backup",
+			want: nil,
+		},
+		{
+			name:         "storage with empty name is skipped",
+			instanceName: "pve1",
+			nodeName:     "node1",
+			snapshot: models.StateSnapshot{
+				Storage: []models.Storage{
+					{Instance: "pve1", Name: "", Node: "node1", Content: "backup"},
+				},
 			},
+			want: nil,
+		},
+		{
+			name:         "storage without backup in Content is skipped",
+			instanceName: "pve1",
+			nodeName:     "node1",
+			snapshot: models.StateSnapshot{
+				Storage: []models.Storage{
+					{Instance: "pve1", Name: "local", Node: "node1", Content: "images,rootdir"},
+				},
+			},
+			want: nil,
+		},
+		{
+			name:         "storage where Node matches nodeName is included",
+			instanceName: "pve1",
+			nodeName:     "node1",
+			snapshot: models.StateSnapshot{
+				Storage: []models.Storage{
+					{Instance: "pve1", Name: "backup-storage", Node: "node1", Content: "backup"},
+				},
+			},
+			want: []string{"backup-storage"},
+		},
+		{
+			name:         "storage where nodeName is in Nodes slice is included",
+			instanceName: "pve1",
+			nodeName:     "node2",
+			snapshot: models.StateSnapshot{
+				Storage: []models.Storage{
+					{Instance: "pve1", Name: "shared-backup", Node: "node1", Nodes: []string{"node1", "node2", "node3"}, Content: "backup"},
+				},
+			},
+			want: []string{"shared-backup"},
+		},
+		{
+			name:         "multiple matching storages are returned",
+			instanceName: "pve1",
+			nodeName:     "node1",
+			snapshot: models.StateSnapshot{
+				Storage: []models.Storage{
+					{Instance: "pve1", Name: "local-backup", Node: "node1", Content: "backup"},
+					{Instance: "pve1", Name: "nfs-backup", Node: "node1", Content: "backup,images"},
+					{Instance: "pve1", Name: "shared-backup", Node: "node2", Nodes: []string{"node1", "node2"}, Content: "backup"},
+				},
+			},
+			want: []string{"local-backup", "nfs-backup", "shared-backup"},
 		},
 	}
 
-	found := storageNamesForNode(instance, "pve-node2", snapshot)
-	if !slices.Equal(found, []string{"nas-share"}) {
-		t.Fatalf("unexpected storages for node2: %v", found)
-	}
-
-	found = storageNamesForNode(instance, "pve-node1", snapshot)
-	if !slices.Equal(found, []string{"local-zfs"}) {
-		t.Fatalf("unexpected storages for node1: %v", found)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := storageNamesForNode(tt.instanceName, tt.nodeName, tt.snapshot)
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("storageNamesForNode() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
