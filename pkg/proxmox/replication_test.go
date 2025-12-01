@@ -292,9 +292,20 @@ func TestParseReplicationTime(t *testing.T) {
 
 		// unix timestamps as float
 		{"float64 timestamp", float64(refUnix), false, refUnix},
+		{"float64 zero", float64(0), true, 0},
+		{"float64 negative", float64(-1), true, 0},
+		{"float32 timestamp", float32(1000000), false, 1000000}, // smaller value for float32 precision
+		{"float32 zero", float32(0), true, 0},
+		{"float32 negative", float32(-1), true, 0},
 
 		// json.Number
 		{"json.Number timestamp", json.Number("1736936400"), false, 1736936400},
+		{"json.Number zero", json.Number("0"), true, 0},
+		{"json.Number negative", json.Number("-1"), true, 0},
+
+		// int32 and uint32
+		{"int32 timestamp", int32(refUnix), false, refUnix},
+		{"uint32 timestamp", uint32(refUnix), false, refUnix},
 
 		// string unix timestamp
 		{"string unix", "1736936400", false, 1736936400},
@@ -314,6 +325,14 @@ func TestParseReplicationTime(t *testing.T) {
 		// Common date formats
 		{"string date time", "2025-01-15 10:30:00", false, refUnix},
 		{"string date time T", "2025-01-15T10:30:00", false, refUnix},
+
+		// Invalid date format (not matching any layout)
+		{"string invalid date", "invalid-date-format", true, 0},
+		{"string partial date", "2025-01-15", true, 0},
+
+		// Unsupported type
+		{"unsupported type bool", true, true, 0},
+		{"unsupported type slice", []int{1, 2, 3}, true, 0},
 	}
 
 	for _, tc := range tests {
