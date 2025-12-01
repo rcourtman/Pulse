@@ -1679,6 +1679,399 @@ func TestBuildResolvedNotificationContent(t *testing.T) {
 	})
 }
 
+func TestPrepareWebhookData(t *testing.T) {
+	t.Run("uses publicURL as instance when set", func(t *testing.T) {
+		nm := &NotificationManager{publicURL: "http://example.com"}
+		alert := &alerts.Alert{
+			ID:           "test-1",
+			Level:        alerts.AlertLevelWarning,
+			Type:         "cpu",
+			ResourceName: "vm-100",
+			ResourceID:   "100",
+			Node:         "pve1",
+			Instance:     "some-instance",
+			Message:      "CPU high",
+			Value:        85.0,
+			Threshold:    80.0,
+			StartTime:    time.Now().Add(-5 * time.Minute),
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		if result.Instance != "http://example.com" {
+			t.Fatalf("expected instance to be publicURL 'http://example.com', got %q", result.Instance)
+		}
+	})
+
+	t.Run("uses publicURL with trailing slash trimmed", func(t *testing.T) {
+		nm := &NotificationManager{publicURL: "http://example.com/"}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			StartTime: time.Now(),
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		if result.Instance != "http://example.com" {
+			t.Fatalf("expected trailing slash to be trimmed, got %q", result.Instance)
+		}
+	})
+
+	t.Run("uses alert.Instance when it is a URL and publicURL not set", func(t *testing.T) {
+		nm := &NotificationManager{}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			Instance:  "https://alert-instance.example.com",
+			StartTime: time.Now(),
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		if result.Instance != "https://alert-instance.example.com" {
+			t.Fatalf("expected instance to be alert.Instance URL, got %q", result.Instance)
+		}
+	})
+
+	t.Run("uses alert.Instance with http prefix", func(t *testing.T) {
+		nm := &NotificationManager{}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			Instance:  "http://local-instance.example.com",
+			StartTime: time.Now(),
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		if result.Instance != "http://local-instance.example.com" {
+			t.Fatalf("expected instance to be alert.Instance URL, got %q", result.Instance)
+		}
+	})
+
+	t.Run("instance is empty when no publicURL and alert.Instance is not a URL", func(t *testing.T) {
+		nm := &NotificationManager{}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			Instance:  "pve1",
+			StartTime: time.Now(),
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		if result.Instance != "" {
+			t.Fatalf("expected instance to be empty, got %q", result.Instance)
+		}
+	})
+
+	t.Run("extracts resourceType from metadata", func(t *testing.T) {
+		nm := &NotificationManager{}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			StartTime: time.Now(),
+			Metadata: map[string]interface{}{
+				"resourceType": "qemu",
+				"other":        "value",
+			},
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		if result.ResourceType != "qemu" {
+			t.Fatalf("expected resourceType 'qemu', got %q", result.ResourceType)
+		}
+	})
+
+	t.Run("resourceType empty when not in metadata", func(t *testing.T) {
+		nm := &NotificationManager{}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			StartTime: time.Now(),
+			Metadata: map[string]interface{}{
+				"other": "value",
+			},
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		if result.ResourceType != "" {
+			t.Fatalf("expected resourceType to be empty, got %q", result.ResourceType)
+		}
+	})
+
+	t.Run("handles nil metadata", func(t *testing.T) {
+		nm := &NotificationManager{}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			StartTime: time.Now(),
+			Metadata:  nil,
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		if result.ResourceType != "" {
+			t.Fatalf("expected resourceType to be empty with nil metadata, got %q", result.ResourceType)
+		}
+		if result.Metadata != nil {
+			t.Fatalf("expected Metadata to be nil, got %v", result.Metadata)
+		}
+	})
+
+	t.Run("copies metadata to avoid mutation", func(t *testing.T) {
+		nm := &NotificationManager{}
+		originalMetadata := map[string]interface{}{
+			"key1": "value1",
+			"key2": 123,
+		}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			StartTime: time.Now(),
+			Metadata:  originalMetadata,
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		// Modify the result metadata
+		result.Metadata["key1"] = "modified"
+		result.Metadata["key3"] = "new"
+
+		// Original should be unchanged
+		if originalMetadata["key1"] != "value1" {
+			t.Fatalf("expected original metadata to be unchanged, got key1=%v", originalMetadata["key1"])
+		}
+		if _, exists := originalMetadata["key3"]; exists {
+			t.Fatalf("expected original metadata to not have key3")
+		}
+	})
+
+	t.Run("rounds Value and Threshold to 1 decimal place", func(t *testing.T) {
+		nm := &NotificationManager{}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			StartTime: time.Now(),
+			Value:     65.123,
+			Threshold: 80.987,
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		if result.Value != 65.1 {
+			t.Fatalf("expected Value to be 65.1, got %v", result.Value)
+		}
+		if result.Threshold != 81.0 {
+			t.Fatalf("expected Threshold to be 81.0, got %v", result.Threshold)
+		}
+	})
+
+	t.Run("rounds Value that needs rounding down", func(t *testing.T) {
+		nm := &NotificationManager{}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			StartTime: time.Now(),
+			Value:     65.14,
+			Threshold: 80.04,
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		if result.Value != 65.1 {
+			t.Fatalf("expected Value to be 65.1, got %v", result.Value)
+		}
+		if result.Threshold != 80.0 {
+			t.Fatalf("expected Threshold to be 80.0, got %v", result.Threshold)
+		}
+	})
+
+	t.Run("AckTime is empty when alert.AckTime is nil", func(t *testing.T) {
+		nm := &NotificationManager{}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			StartTime: time.Now(),
+			AckTime:   nil,
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		if result.AckTime != "" {
+			t.Fatalf("expected AckTime to be empty, got %q", result.AckTime)
+		}
+	})
+
+	t.Run("AckTime is formatted when alert.AckTime is set", func(t *testing.T) {
+		nm := &NotificationManager{}
+		ackTime := time.Date(2024, 6, 15, 10, 30, 0, 0, time.UTC)
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			StartTime: time.Now(),
+			AckTime:   &ackTime,
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		expected := "2024-06-15T10:30:00Z"
+		if result.AckTime != expected {
+			t.Fatalf("expected AckTime to be %q, got %q", expected, result.AckTime)
+		}
+	})
+
+	t.Run("custom fields are passed through", func(t *testing.T) {
+		nm := &NotificationManager{}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			StartTime: time.Now(),
+		}
+		customFields := map[string]interface{}{
+			"app_token":  "token123",
+			"user_key":   "user456",
+			"priority":   1,
+			"is_enabled": true,
+		}
+
+		result := nm.prepareWebhookData(alert, customFields)
+
+		if result.CustomFields == nil {
+			t.Fatalf("expected CustomFields to be set")
+		}
+		if result.CustomFields["app_token"] != "token123" {
+			t.Fatalf("expected app_token to be 'token123', got %v", result.CustomFields["app_token"])
+		}
+		if result.CustomFields["user_key"] != "user456" {
+			t.Fatalf("expected user_key to be 'user456', got %v", result.CustomFields["user_key"])
+		}
+		if result.CustomFields["priority"] != 1 {
+			t.Fatalf("expected priority to be 1, got %v", result.CustomFields["priority"])
+		}
+		if result.CustomFields["is_enabled"] != true {
+			t.Fatalf("expected is_enabled to be true, got %v", result.CustomFields["is_enabled"])
+		}
+	})
+
+	t.Run("nil custom fields results in nil CustomFields", func(t *testing.T) {
+		nm := &NotificationManager{}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			StartTime: time.Now(),
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		if result.CustomFields != nil {
+			t.Fatalf("expected CustomFields to be nil, got %v", result.CustomFields)
+		}
+	})
+
+	t.Run("all alert fields are copied correctly", func(t *testing.T) {
+		nm := &NotificationManager{publicURL: "http://pulse.local"}
+		ackTime := time.Date(2024, 6, 15, 11, 0, 0, 0, time.UTC)
+		startTime := time.Date(2024, 6, 15, 10, 0, 0, 0, time.UTC)
+		alert := &alerts.Alert{
+			ID:           "alert-123",
+			Level:        alerts.AlertLevelCritical,
+			Type:         "memory",
+			ResourceName: "vm-200",
+			ResourceID:   "200",
+			Node:         "pve2",
+			Instance:     "vm-200-instance",
+			Message:      "Memory usage critical",
+			Value:        95.5,
+			Threshold:    90.0,
+			StartTime:    startTime,
+			Acknowledged: true,
+			AckTime:      &ackTime,
+			AckUser:      "admin",
+			Metadata: map[string]interface{}{
+				"resourceType": "lxc",
+			},
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		if result.ID != "alert-123" {
+			t.Fatalf("expected ID 'alert-123', got %q", result.ID)
+		}
+		if result.Level != "critical" {
+			t.Fatalf("expected Level 'critical', got %q", result.Level)
+		}
+		if result.Type != "memory" {
+			t.Fatalf("expected Type 'memory', got %q", result.Type)
+		}
+		if result.ResourceName != "vm-200" {
+			t.Fatalf("expected ResourceName 'vm-200', got %q", result.ResourceName)
+		}
+		if result.ResourceID != "200" {
+			t.Fatalf("expected ResourceID '200', got %q", result.ResourceID)
+		}
+		if result.Node != "pve2" {
+			t.Fatalf("expected Node 'pve2', got %q", result.Node)
+		}
+		if result.Message != "Memory usage critical" {
+			t.Fatalf("expected Message 'Memory usage critical', got %q", result.Message)
+		}
+		if result.Value != 95.5 {
+			t.Fatalf("expected Value 95.5, got %v", result.Value)
+		}
+		if result.Threshold != 90.0 {
+			t.Fatalf("expected Threshold 90.0, got %v", result.Threshold)
+		}
+		if result.StartTime != "2024-06-15T10:00:00Z" {
+			t.Fatalf("expected StartTime '2024-06-15T10:00:00Z', got %q", result.StartTime)
+		}
+		if result.Acknowledged != true {
+			t.Fatalf("expected Acknowledged true, got %v", result.Acknowledged)
+		}
+		if result.AckTime != "2024-06-15T11:00:00Z" {
+			t.Fatalf("expected AckTime '2024-06-15T11:00:00Z', got %q", result.AckTime)
+		}
+		if result.AckUser != "admin" {
+			t.Fatalf("expected AckUser 'admin', got %q", result.AckUser)
+		}
+		if result.ResourceType != "lxc" {
+			t.Fatalf("expected ResourceType 'lxc', got %q", result.ResourceType)
+		}
+		if result.AlertCount != 1 {
+			t.Fatalf("expected AlertCount 1, got %d", result.AlertCount)
+		}
+	})
+
+	t.Run("duration is formatted", func(t *testing.T) {
+		nm := &NotificationManager{}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			StartTime: time.Now().Add(-65 * time.Minute),
+		}
+
+		result := nm.prepareWebhookData(alert, nil)
+
+		// Duration should be approximately "1h5m" or similar
+		if result.Duration == "" {
+			t.Fatalf("expected Duration to be set, got empty string")
+		}
+		// Duration format is handled by formatWebhookDuration, just verify it's non-empty
+		if !strings.Contains(result.Duration, "h") && !strings.Contains(result.Duration, "m") {
+			t.Fatalf("expected Duration to contain time units, got %q", result.Duration)
+		}
+	})
+
+	t.Run("timestamp is set to current time", func(t *testing.T) {
+		nm := &NotificationManager{}
+		alert := &alerts.Alert{
+			ID:        "test-1",
+			StartTime: time.Now(),
+		}
+
+		before := time.Now()
+		result := nm.prepareWebhookData(alert, nil)
+		after := time.Now()
+
+		parsedTime, err := time.Parse(time.RFC3339, result.Timestamp)
+		if err != nil {
+			t.Fatalf("failed to parse Timestamp: %v", err)
+		}
+
+		if parsedTime.Before(before.Add(-time.Second)) || parsedTime.After(after.Add(time.Second)) {
+			t.Fatalf("expected Timestamp to be between %v and %v, got %v", before, after, parsedTime)
+		}
+	})
+}
+
 func TestCheckWebhookRateLimit(t *testing.T) {
 	t.Run("first request to new URL returns true and creates entry", func(t *testing.T) {
 		nm := NewNotificationManager("")
