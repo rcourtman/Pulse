@@ -1130,3 +1130,76 @@ func TestVMAgentFieldUnmarshalJSON_InVMStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestGetMHzString(t *testing.T) {
+	tests := []struct {
+		name string
+		cpu  CPUInfo
+		want string
+	}{
+		{
+			name: "nil MHz returns empty string",
+			cpu:  CPUInfo{MHz: nil},
+			want: "",
+		},
+		{
+			name: "string MHz returned as-is",
+			cpu:  CPUInfo{MHz: "3600.000"},
+			want: "3600.000",
+		},
+		{
+			name: "empty string MHz",
+			cpu:  CPUInfo{MHz: ""},
+			want: "",
+		},
+		{
+			name: "float64 MHz formatted without decimals",
+			cpu:  CPUInfo{MHz: float64(3600.123)},
+			want: "3600",
+		},
+		{
+			name: "float64 MHz zero",
+			cpu:  CPUInfo{MHz: float64(0)},
+			want: "0",
+		},
+		{
+			name: "float64 MHz large value",
+			cpu:  CPUInfo{MHz: float64(5000.999)},
+			want: "5001",
+		},
+		{
+			name: "int MHz formatted",
+			cpu:  CPUInfo{MHz: int(2400)},
+			want: "2400",
+		},
+		{
+			name: "int MHz zero",
+			cpu:  CPUInfo{MHz: int(0)},
+			want: "0",
+		},
+		{
+			name: "other type uses default formatting",
+			cpu:  CPUInfo{MHz: int64(3200)},
+			want: "3200",
+		},
+		{
+			name: "boolean type uses default formatting",
+			cpu:  CPUInfo{MHz: true},
+			want: "true",
+		},
+		{
+			name: "slice type uses default formatting",
+			cpu:  CPUInfo{MHz: []int{1, 2, 3}},
+			want: "[1 2 3]",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.cpu.GetMHzString()
+			if got != tc.want {
+				t.Errorf("GetMHzString() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
