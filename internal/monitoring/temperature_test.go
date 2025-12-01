@@ -909,6 +909,41 @@ func TestParseSensorsJSON_MultipleSuperioCPUFields(t *testing.T) {
 	}
 }
 
+// TestParseSensorsJSON_CoreTempExceedsPackage tests that CPUMax is updated when a core temp exceeds package temp
+func TestParseSensorsJSON_CoreTempExceedsPackage(t *testing.T) {
+	collector := &TemperatureCollector{}
+
+	// Core 1 has a higher temp than Package id 0
+	jsonStr := `{
+		"coretemp-isa-0000": {
+			"Package id 0": {"temp1_input": 45.0},
+			"Core 0": {"temp2_input": 42.0},
+			"Core 1": {"temp3_input": 52.0}
+		}
+	}`
+
+	temp, err := collector.parseSensorsJSON(jsonStr)
+	if err != nil {
+		t.Fatalf("unexpected error parsing sensors output: %v", err)
+	}
+	if temp == nil {
+		t.Fatalf("expected temperature struct, got nil")
+	}
+	if !temp.Available {
+		t.Fatalf("expected temperature to be available")
+	}
+	if temp.CPUPackage != 45.0 {
+		t.Fatalf("expected cpu package temperature 45.0, got %.2f", temp.CPUPackage)
+	}
+	// CPUMax should be the highest core temp (52.0), not the package temp (45.0)
+	if temp.CPUMax != 52.0 {
+		t.Fatalf("expected cpu max temperature to be highest core temp (52.0), got %.2f", temp.CPUMax)
+	}
+	if len(temp.Cores) != 2 {
+		t.Fatalf("expected two core temperatures, got %d", len(temp.Cores))
+	}
+}
+
 // =============================================================================
 // Unit tests for utility functions
 // =============================================================================
