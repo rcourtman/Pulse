@@ -477,3 +477,34 @@ func TestErrorHandler_PanicRecovery(t *testing.T) {
 		t.Errorf("expected 500 after panic recovery, got %d", rec.Code)
 	}
 }
+
+// failingWriter is a ResponseWriter that fails on Write
+type failingWriter struct {
+	header http.Header
+}
+
+func (fw *failingWriter) Header() http.Header {
+	if fw.header == nil {
+		fw.header = make(http.Header)
+	}
+	return fw.header
+}
+
+func (fw *failingWriter) Write([]byte) (int, error) {
+	return 0, net.ErrClosed
+}
+
+func (fw *failingWriter) WriteHeader(int) {}
+
+func TestWriteErrorResponse_EncodeFails(t *testing.T) {
+	// Test that writeErrorResponse logs but doesn't panic when encode fails
+	fw := &failingWriter{}
+
+	// Should not panic even when Write fails
+	writeErrorResponse(fw, http.StatusInternalServerError, "TEST_ERR", "test error", nil)
+
+	// Verify Content-Type was set before the failed write
+	if ct := fw.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type 'application/json', got %q", ct)
+	}
+}
