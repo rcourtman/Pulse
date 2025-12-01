@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -977,5 +978,512 @@ func assertJSONEqual(t *testing.T, got interface{}, want interface{}, context st
 
 	if !bytes.Equal(gotJSON, wantJSON) {
 		t.Fatalf("%s mismatch:\n got: %s\nwant: %s", context, gotJSON, wantJSON)
+	}
+}
+
+// ============================================================================
+// Error path and edge case tests for persistence functions
+// ============================================================================
+
+func TestLoadAPITokensErrorInvalidJSON(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Write invalid JSON to the api_tokens.json file
+	tokensFile := filepath.Join(tempDir, "api_tokens.json")
+	if err := os.WriteFile(tokensFile, []byte(`{invalid json content`), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := cp.LoadAPITokens()
+	if err == nil {
+		t.Fatal("expected error for invalid JSON, got nil")
+	}
+}
+
+func TestLoadAPITokensEmptyFile(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Write empty file
+	tokensFile := filepath.Join(tempDir, "api_tokens.json")
+	if err := os.WriteFile(tokensFile, []byte{}, 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	tokens, err := cp.LoadAPITokens()
+	if err != nil {
+		t.Fatalf("LoadAPITokens returned error for empty file: %v", err)
+	}
+
+	if len(tokens) != 0 {
+		t.Fatalf("expected empty slice for empty file, got %d tokens", len(tokens))
+	}
+}
+
+func TestLoadAPITokensFileNotExist(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Don't create the file - test that non-existent file returns empty slice
+	tokens, err := cp.LoadAPITokens()
+	if err != nil {
+		t.Fatalf("LoadAPITokens returned error for non-existent file: %v", err)
+	}
+
+	if len(tokens) != 0 {
+		t.Fatalf("expected empty slice for non-existent file, got %d tokens", len(tokens))
+	}
+}
+
+func TestLoadEmailConfigErrorInvalidJSON(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Write invalid JSON to the email.enc file (unencrypted for test without crypto)
+	emailFile := filepath.Join(tempDir, "email.enc")
+	if err := os.WriteFile(emailFile, []byte(`not valid json {{{{`), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := cp.LoadEmailConfig()
+	if err == nil {
+		t.Fatal("expected error for invalid JSON/decryption failure, got nil")
+	}
+}
+
+func TestLoadEmailConfigFileNotExist(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Don't create the file - test default config is returned
+	cfg, err := cp.LoadEmailConfig()
+	if err != nil {
+		t.Fatalf("LoadEmailConfig returned error for non-existent file: %v", err)
+	}
+
+	if cfg == nil {
+		t.Fatal("expected default config, got nil")
+	}
+	if cfg.Enabled {
+		t.Fatal("expected Enabled=false for default config")
+	}
+	if cfg.SMTPPort != 587 {
+		t.Fatalf("expected default SMTPPort=587, got %d", cfg.SMTPPort)
+	}
+}
+
+func TestLoadWebhooksErrorInvalidJSON(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Write invalid JSON to the webhooks.enc file
+	webhooksFile := filepath.Join(tempDir, "webhooks.enc")
+	if err := os.WriteFile(webhooksFile, []byte(`[{"broken`), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := cp.LoadWebhooks()
+	if err == nil {
+		t.Fatal("expected error for invalid JSON/decryption failure, got nil")
+	}
+}
+
+func TestLoadWebhooksFileNotExist(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Don't create the file - test empty slice is returned
+	webhooks, err := cp.LoadWebhooks()
+	if err != nil {
+		t.Fatalf("LoadWebhooks returned error for non-existent file: %v", err)
+	}
+
+	if len(webhooks) != 0 {
+		t.Fatalf("expected empty slice for non-existent file, got %d webhooks", len(webhooks))
+	}
+}
+
+func TestLoadWebhooksMigrationFromLegacyFile(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Create legacy webhooks.json file (unencrypted)
+	legacyWebhooks := []notifications.WebhookConfig{
+		{
+			ID:      "webhook-1",
+			Name:    "test-webhook",
+			URL:     "https://example.com/hook",
+			Method:  "POST",
+			Enabled: true,
+		},
+	}
+	legacyData, err := json.Marshal(legacyWebhooks)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	legacyFile := filepath.Join(tempDir, "webhooks.json")
+	if err := os.WriteFile(legacyFile, legacyData, 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// LoadWebhooks should find and parse the legacy file
+	webhooks, err := cp.LoadWebhooks()
+	if err != nil {
+		t.Fatalf("LoadWebhooks returned error: %v", err)
+	}
+
+	if len(webhooks) != 1 {
+		t.Fatalf("expected 1 webhook from legacy file, got %d", len(webhooks))
+	}
+
+	if webhooks[0].ID != "webhook-1" {
+		t.Fatalf("expected webhook ID 'webhook-1', got %q", webhooks[0].ID)
+	}
+}
+
+func TestLoadNodesConfigEmptyArrays(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Use SaveNodesConfigAllowEmpty with empty slices to properly encrypt the data
+	if err := cp.SaveNodesConfigAllowEmpty([]config.PVEInstance{}, []config.PBSInstance{}, []config.PMGInstance{}); err != nil {
+		t.Fatalf("SaveNodesConfigAllowEmpty: %v", err)
+	}
+
+	cfg, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig returned error: %v", err)
+	}
+
+	if cfg == nil {
+		t.Fatal("expected config, got nil")
+	}
+	if len(cfg.PVEInstances) != 0 {
+		t.Fatalf("expected empty PVEInstances, got %d", len(cfg.PVEInstances))
+	}
+	if len(cfg.PBSInstances) != 0 {
+		t.Fatalf("expected empty PBSInstances, got %d", len(cfg.PBSInstances))
+	}
+	if len(cfg.PMGInstances) != 0 {
+		t.Fatalf("expected empty PMGInstances, got %d", len(cfg.PMGInstances))
+	}
+}
+
+func TestLoadNodesConfigMissingFields(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Save config with only PVE, no PBS and PMG
+	// When we load it back, PBS and PMG should be initialized to empty slices
+	pveInstances := []config.PVEInstance{
+		{
+			Name: "pve-test",
+			Host: "https://pve.local:8006",
+			User: "root@pam",
+		},
+	}
+
+	// Save only PVE, pass nil for PBS and PMG
+	if err := cp.SaveNodesConfig(pveInstances, nil, nil); err != nil {
+		t.Fatalf("SaveNodesConfig: %v", err)
+	}
+
+	cfg, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig returned error: %v", err)
+	}
+
+	if cfg == nil {
+		t.Fatal("expected config, got nil")
+	}
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance, got %d", len(cfg.PVEInstances))
+	}
+	// PBS and PMG should be initialized to empty slices
+	if cfg.PBSInstances == nil {
+		t.Fatal("expected PBSInstances to be initialized (not nil)")
+	}
+	if cfg.PMGInstances == nil {
+		t.Fatal("expected PMGInstances to be initialized (not nil)")
+	}
+}
+
+func TestLoadNodesConfigCorruptedRecoversWithEmptyConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Write corrupted data (invalid encrypted content)
+	// This tests the recovery behavior: when nodes.enc is corrupted and no backup exists,
+	// LoadNodesConfig returns an empty config instead of an error to allow system startup
+	nodesFile := filepath.Join(tempDir, "nodes.enc")
+	if err := os.WriteFile(nodesFile, []byte(`{broken json`), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig should recover gracefully from corruption, got error: %v", err)
+	}
+
+	// Verify we got an empty config (recovery behavior)
+	if cfg == nil {
+		t.Fatal("expected empty config on recovery, got nil")
+	}
+	if len(cfg.PVEInstances) != 0 {
+		t.Fatalf("expected empty PVEInstances on recovery, got %d", len(cfg.PVEInstances))
+	}
+}
+
+func TestLoadNodesConfigFileNotExist(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Don't create the file - test that empty config is returned
+	cfg, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig returned error for non-existent file: %v", err)
+	}
+
+	if cfg == nil {
+		t.Fatal("expected empty config, got nil")
+	}
+	if len(cfg.PVEInstances) != 0 {
+		t.Fatalf("expected empty PVEInstances, got %d", len(cfg.PVEInstances))
+	}
+}
+
+func TestCleanupOldBackupsNonExistentDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Save a valid config so we can trigger cleanup
+	pveInstances := []config.PVEInstance{
+		{
+			Name: "pve-test",
+			Host: "https://pve.local:8006",
+			User: "root@pam",
+		},
+	}
+
+	// First save to create the file
+	if err := cp.SaveNodesConfig(pveInstances, nil, nil); err != nil {
+		t.Fatalf("SaveNodesConfig: %v", err)
+	}
+
+	// Cleanup with non-existent pattern should not error
+	// The pattern won't match anything, but it shouldn't panic or error
+	// This is implicitly tested by the SaveNodesConfig which calls cleanupOldBackups
+	// We just verify no panic occurred and the config was saved
+
+	cfg, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig: %v", err)
+	}
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance, got %d", len(cfg.PVEInstances))
+	}
+}
+
+func TestCleanupOldBackupsMultipleFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	nodesFile := filepath.Join(tempDir, "nodes.enc")
+
+	// Create initial file
+	initialData := []byte(`{"pveInstances":[],"pbsInstances":[],"pmgInstances":[]}`)
+	if err := os.WriteFile(nodesFile, initialData, 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// Create 15 timestamped backup files (more than the 10 limit)
+	baseTime := time.Now()
+	for i := 0; i < 15; i++ {
+		backupTime := baseTime.Add(time.Duration(-i) * time.Hour)
+		backupFile := fmt.Sprintf("%s.backup-%s", nodesFile, backupTime.Format("20060102-150405"))
+		content := fmt.Sprintf(`{"backup": %d}`, i)
+		if err := os.WriteFile(backupFile, []byte(content), 0600); err != nil {
+			t.Fatalf("WriteFile backup %d: %v", i, err)
+		}
+		// Set modification time to simulate different ages
+		if err := os.Chtimes(backupFile, backupTime, backupTime); err != nil {
+			t.Fatalf("Chtimes: %v", err)
+		}
+	}
+
+	// Verify 15 backups exist
+	matches, err := filepath.Glob(nodesFile + ".backup-*")
+	if err != nil {
+		t.Fatalf("Glob: %v", err)
+	}
+	if len(matches) != 15 {
+		t.Fatalf("expected 15 backup files, got %d", len(matches))
+	}
+
+	// Now save a new config, which should trigger cleanup
+	pveInstances := []config.PVEInstance{
+		{
+			Name: "pve-test",
+			Host: "https://pve.local:8006",
+			User: "root@pam",
+		},
+	}
+	if err := cp.SaveNodesConfig(pveInstances, nil, nil); err != nil {
+		t.Fatalf("SaveNodesConfig: %v", err)
+	}
+
+	// Verify that old backups were cleaned up (should have at most 10 + 1 new = 11)
+	// Actually the cleanup runs before the new backup is created, so we should have 10 old + 1 new = 11
+	matches, err = filepath.Glob(nodesFile + ".backup-*")
+	if err != nil {
+		t.Fatalf("Glob after cleanup: %v", err)
+	}
+
+	// After cleanup, we should have max 10 old backups + 1 new backup = 11
+	if len(matches) > 11 {
+		t.Fatalf("expected at most 11 backup files after cleanup, got %d", len(matches))
+	}
+}
+
+func TestLoadAppriseConfigErrorInvalidJSON(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Write invalid JSON to the apprise.enc file
+	appriseFile := filepath.Join(tempDir, "apprise.enc")
+	if err := os.WriteFile(appriseFile, []byte(`{not valid}`), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := cp.LoadAppriseConfig()
+	if err == nil {
+		t.Fatal("expected error for invalid JSON/decryption failure, got nil")
+	}
+}
+
+func TestLoadAppriseConfigFileNotExist(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Don't create the file - test default config is returned
+	cfg, err := cp.LoadAppriseConfig()
+	if err != nil {
+		t.Fatalf("LoadAppriseConfig returned error for non-existent file: %v", err)
+	}
+
+	if cfg == nil {
+		t.Fatal("expected default config, got nil")
+	}
+	if cfg.Enabled {
+		t.Fatal("expected Enabled=false for default config")
+	}
+	if cfg.TimeoutSeconds != 15 {
+		t.Fatalf("expected default TimeoutSeconds=15, got %d", cfg.TimeoutSeconds)
+	}
+}
+
+func TestLoadAlertConfigErrorInvalidJSON(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Write invalid JSON to the alerts.json file
+	alertsFile := filepath.Join(tempDir, "alerts.json")
+	if err := os.WriteFile(alertsFile, []byte(`{"broken": `), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := cp.LoadAlertConfig()
+	if err == nil {
+		t.Fatal("expected error for invalid JSON, got nil")
+	}
+}
+
+func TestLoadSystemSettingsErrorInvalidJSON(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Write invalid JSON to the system.json file
+	systemFile := filepath.Join(tempDir, "system.json")
+	if err := os.WriteFile(systemFile, []byte(`not json at all`), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := cp.LoadSystemSettings()
+	if err == nil {
+		t.Fatal("expected error for invalid JSON, got nil")
+	}
+}
+
+func TestLoadSystemSettingsFileNotExist(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Don't create the file - test nil is returned (env vars take precedence)
+	settings, err := cp.LoadSystemSettings()
+	if err != nil {
+		t.Fatalf("LoadSystemSettings returned error for non-existent file: %v", err)
+	}
+
+	if settings != nil {
+		t.Fatal("expected nil for non-existent system settings file")
 	}
 }
