@@ -723,6 +723,12 @@ func TestParseWearoutValue(t *testing.T) {
 		{name: "float zero decimal", raw: "90.0", want: 90},
 		{name: "float high precision", raw: "75.999", want: 75},
 		{name: "negative float", raw: "-5.5", want: -5},
+		{name: "float zero exactly", raw: "0.0", want: 0},
+		{name: "float negative zero", raw: "-0.0", want: 0},
+
+		// Quoted values that become empty after trimming
+		{name: "only escaped quotes", raw: `\"\"`, want: wearoutUnknown},
+		{name: "quoted whitespace", raw: `"   "`, want: wearoutUnknown},
 
 		// Digit extraction fallback (messy SMART data)
 		{name: "percentage text mixed", raw: "about 50 percent", want: 50},
