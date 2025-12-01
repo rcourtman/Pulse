@@ -1,7 +1,6 @@
 package monitoring
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -662,126 +661,118 @@ func TestGenerateDockerHostIdentifier(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name             string
-		base             string
-		report           agentsdocker.Report
-		tokenRecord      *config.APITokenRecord
-		hosts            []models.DockerHost
-		expectedContains string
-		expectFormat     string // "base", "suffix", "hash", "numeric"
+		name     string
+		base     string
+		report   agentsdocker.Report
+		token    *config.APITokenRecord
+		hosts    []models.DockerHost
+		expected string
 	}{
 		{
-			name:         "empty base uses fallback",
-			base:         "",
-			report:       agentsdocker.Report{Agent: agentsdocker.AgentInfo{ID: "agent-1"}},
-			tokenRecord:  nil,
-			hosts:        []models.DockerHost{},
-			expectFormat: "suffix",
+			name:     "empty base with fallback from report",
+			base:     "",
+			report:   agentsdocker.Report{Agent: agentsdocker.AgentInfo{ID: "agent-1"}},
+			token:    nil,
+			hosts:    []models.DockerHost{},
+			expected: "docker-host-546dbe5233c6::agent-agent-1",
 		},
 		{
-			name: "base available without suffix",
-			base: "my-host",
-			report: agentsdocker.Report{
-				Agent: agentsdocker.AgentInfo{ID: "agent-1"},
-			},
-			tokenRecord: nil,
+			name:     "empty base with fallback from token",
+			base:     "",
+			report:   agentsdocker.Report{},
+			token:    &config.APITokenRecord{ID: "token-abc"},
+			hosts:    []models.DockerHost{},
+			expected: "docker-host-a9bb97f6f774::token-token-abc",
+		},
+		{
+			name:     "empty base no fallback uses docker-host",
+			base:     "",
+			report:   agentsdocker.Report{},
+			token:    nil,
+			hosts:    []models.DockerHost{},
+			expected: "docker-host::hash-bd318191f5b8",
+		},
+		{
+			name:     "whitespace base no fallback uses docker-host",
+			base:     "   ",
+			report:   agentsdocker.Report{},
+			token:    nil,
+			hosts:    []models.DockerHost{},
+			expected: "docker-host::hash-bd318191f5b8",
+		},
+		{
+			name:   "first suffix candidate works",
+			base:   "my-host",
+			report: agentsdocker.Report{Agent: agentsdocker.AgentInfo{ID: "agent-1"}},
+			token:  nil,
 			hosts: []models.DockerHost{
 				{ID: "other-host"},
 			},
-			expectedContains: "my-host::agent-agent-1",
-			expectFormat:     "suffix",
+			expected: "my-host::agent-agent-1",
 		},
 		{
-			name: "tries multiple suffixes",
+			name: "second suffix candidate when first taken",
 			base: "my-host",
 			report: agentsdocker.Report{
 				Agent: agentsdocker.AgentInfo{ID: "agent-1"},
 				Host:  agentsdocker.HostInfo{MachineID: "machine-1"},
 			},
-			tokenRecord: nil,
+			token: nil,
 			hosts: []models.DockerHost{
 				{ID: "my-host::agent-agent-1"},
 			},
-			expectedContains: "my-host::machine-machine-1",
-			expectFormat:     "suffix",
+			expected: "my-host::machine-machine-1",
 		},
 		{
-			name: "uses hash suffix when all suffixes taken",
-			base: "my-host",
-			report: agentsdocker.Report{
-				Agent: agentsdocker.AgentInfo{ID: "agent-1"},
-			},
-			tokenRecord: nil,
+			name:   "hash suffix when all candidates taken",
+			base:   "my-host",
+			report: agentsdocker.Report{Agent: agentsdocker.AgentInfo{ID: "agent-1"}},
+			token:  nil,
 			hosts: []models.DockerHost{
 				{ID: "my-host::agent-agent-1"},
 			},
-			expectFormat: "hash",
+			expected: "my-host::hash-546dbe5233c6",
 		},
 		{
-			name: "uses numeric suffix when hash taken",
-			base: "my-host",
-			report: agentsdocker.Report{
-				Agent: agentsdocker.AgentInfo{ID: "agent-1"},
-			},
-			tokenRecord: nil,
+			name:   "numeric suffix when hash also taken",
+			base:   "my-host",
+			report: agentsdocker.Report{Agent: agentsdocker.AgentInfo{ID: "agent-1"}},
+			token:  nil,
 			hosts: []models.DockerHost{
 				{ID: "my-host::agent-agent-1"},
-				{ID: "my-host::hash-" + func() string {
-					candidates := dockerHostSuffixCandidates(agentsdocker.Report{Agent: agentsdocker.AgentInfo{ID: "agent-1"}}, nil)
-					if len(candidates) > 0 {
-						// This will be computed during test
-						return "placeholder"
-					}
-					return "placeholder"
-				}()},
+				{ID: "my-host::hash-546dbe5233c6"},
 			},
-			expectFormat: "numeric",
+			expected: "my-host::2",
+		},
+		{
+			name:   "numeric suffix increments",
+			base:   "my-host",
+			report: agentsdocker.Report{Agent: agentsdocker.AgentInfo{ID: "agent-1"}},
+			token:  nil,
+			hosts: []models.DockerHost{
+				{ID: "my-host::agent-agent-1"},
+				{ID: "my-host::hash-546dbe5233c6"},
+				{ID: "my-host::2"},
+				{ID: "my-host::3"},
+			},
+			expected: "my-host::4",
+		},
+		{
+			name:     "empty suffixes list seed becomes base",
+			base:     "my-host",
+			report:   agentsdocker.Report{},
+			token:    nil,
+			hosts:    []models.DockerHost{},
+			expected: "my-host::hash-6dd480c53846",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result := generateDockerHostIdentifier(tt.base, tt.report, tt.tokenRecord, tt.hosts)
-			if result == "" {
-				t.Errorf("expected non-empty result")
-			}
-			if tt.expectedContains != "" && result != tt.expectedContains {
-				t.Errorf("got %q, want %q", result, tt.expectedContains)
-			}
-			switch tt.expectFormat {
-			case "suffix":
-				if len(result) < 2 || result[len(result)-2:len(result)-1] != ":" {
-					// Should contain ::
-					hasDoubleColon := false
-					for i := 0; i < len(result)-1; i++ {
-						if result[i] == ':' && result[i+1] == ':' {
-							hasDoubleColon = true
-							break
-						}
-					}
-					if !hasDoubleColon {
-						t.Errorf("expected suffix format with ::, got %q", result)
-					}
-				}
-			case "hash":
-				if len(result) < 7 || result[len(result)-7:len(result)-6] != ":" {
-					// Should contain ::hash-
-					hasHash := false
-					for i := 0; i < len(result)-6; i++ {
-						if result[i:i+7] == "::hash-" {
-							hasHash = true
-							break
-						}
-					}
-					if !hasHash {
-						t.Errorf("expected hash format with ::hash-, got %q", result)
-					}
-				}
-			case "numeric":
-				if len(result) < 3 {
-					t.Errorf("result too short for numeric format: %q", result)
-				}
+			result := generateDockerHostIdentifier(tt.base, tt.report, tt.token, tt.hosts)
+			if result != tt.expected {
+				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -898,51 +889,6 @@ func TestResolveDockerHostIdentifier(t *testing.T) {
 				t.Errorf("fallback count mismatch: got %d, want %d", len(fallbacks), tt.expectFallbacks)
 			}
 		})
-	}
-}
-
-func TestGenerateDockerHostIdentifier_NumericSuffix(t *testing.T) {
-	t.Parallel()
-
-	// Test that numeric suffix increments correctly
-	report := agentsdocker.Report{
-		Agent: agentsdocker.AgentInfo{ID: "agent-1"},
-	}
-
-	// Create hosts that occupy all suffix candidates
-	suffixes := dockerHostSuffixCandidates(report, nil)
-	hosts := []models.DockerHost{}
-
-	// Take all normal suffixes
-	for _, suffix := range suffixes {
-		hosts = append(hosts, models.DockerHost{
-			ID: fmt.Sprintf("my-host::%s", suffix),
-		})
-	}
-
-	// Take the hash suffix
-	hashID := fallbackDockerHostID(report, nil)
-	if hashID != "" {
-		hashSuffix := hashID[len("docker-host-"):]
-		hosts = append(hosts, models.DockerHost{
-			ID: fmt.Sprintf("my-host::hash-%s", hashSuffix),
-		})
-	}
-
-	result := generateDockerHostIdentifier("my-host", report, nil, hosts)
-
-	// Should be my-host::2
-	expected := "my-host::2"
-	if result != expected {
-		t.Errorf("got %q, want %q", result, expected)
-	}
-
-	// Test that it increments further
-	hosts = append(hosts, models.DockerHost{ID: "my-host::2"})
-	result = generateDockerHostIdentifier("my-host", report, nil, hosts)
-	expected = "my-host::3"
-	if result != expected {
-		t.Errorf("got %q, want %q", result, expected)
 	}
 }
 

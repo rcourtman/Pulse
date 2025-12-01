@@ -52,6 +52,10 @@ func TestNormalizeEndpointHost(t *testing.T) {
 		{"just https prefix", "https://", ""},
 		{"just http prefix", "http://", ""},
 
+		// URL with Host but empty Hostname (port-only host)
+		{"URL with port-only host", "http://:8080", ":8080"},
+		{"URL with port-only host and path", "http://:8080/path", ":8080"},
+
 		// Whitespace trimming
 		{"whitespace around hostname", "  node.local  ", "node.local"},
 		{"whitespace around URL", "  https://example.com:8006  ", "example.com"},
