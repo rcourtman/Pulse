@@ -8628,3 +8628,412 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckZFSPoolHealth(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil ZFSPool returns early", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		storage := models.Storage{
+			ID:      "local-zfs",
+			Name:    "Local ZFS",
+			Node:    "pve-node1",
+			ZFSPool: nil,
+		}
+
+		// Should not panic
+		m.checkZFSPoolHealth(storage)
+
+		m.mu.RLock()
+		count := len(m.activeAlerts)
+		m.mu.RUnlock()
+
+		if count != 0 {
+			t.Errorf("expected no alerts for nil pool, got %d", count)
+		}
+	})
+
+	t.Run("ONLINE pool does not create state alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		storage := models.Storage{
+			ID:   "local-zfs",
+			Name: "Local ZFS",
+			Node: "pve-node1",
+			ZFSPool: &models.ZFSPool{
+				Name:  "rpool",
+				State: "ONLINE",
+			},
+		}
+
+		m.checkZFSPoolHealth(storage)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["zfs-pool-state-local-zfs"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected no state alert for ONLINE pool")
+		}
+	})
+
+	t.Run("DEGRADED pool creates warning alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		storage := models.Storage{
+			ID:       "local-zfs",
+			Name:     "Local ZFS",
+			Node:     "pve-node1",
+			Instance: "pve-instance",
+			ZFSPool: &models.ZFSPool{
+				Name:  "rpool",
+				State: "DEGRADED",
+			},
+		}
+
+		m.checkZFSPoolHealth(storage)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["zfs-pool-state-local-zfs"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected state alert for DEGRADED pool")
+		}
+		if alert.Level != AlertLevelWarning {
+			t.Errorf("expected warning level, got %s", alert.Level)
+		}
+		if alert.Type != "zfs-pool-state" {
+			t.Errorf("expected type 'zfs-pool-state', got %s", alert.Type)
+		}
+	})
+
+	t.Run("FAULTED pool creates critical alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		storage := models.Storage{
+			ID:   "local-zfs",
+			Name: "Local ZFS",
+			Node: "pve-node1",
+			ZFSPool: &models.ZFSPool{
+				Name:  "rpool",
+				State: "FAULTED",
+			},
+		}
+
+		m.checkZFSPoolHealth(storage)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["zfs-pool-state-local-zfs"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected state alert for FAULTED pool")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level, got %s", alert.Level)
+		}
+	})
+
+	t.Run("UNAVAIL pool creates critical alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		storage := models.Storage{
+			ID:   "local-zfs",
+			Name: "Local ZFS",
+			Node: "pve-node1",
+			ZFSPool: &models.ZFSPool{
+				Name:  "rpool",
+				State: "UNAVAIL",
+			},
+		}
+
+		m.checkZFSPoolHealth(storage)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["zfs-pool-state-local-zfs"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected state alert for UNAVAIL pool")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level, got %s", alert.Level)
+		}
+	})
+
+	t.Run("pool coming back ONLINE clears state alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Pre-create a state alert
+		m.mu.Lock()
+		m.activeAlerts["zfs-pool-state-local-zfs"] = &Alert{
+			ID:    "zfs-pool-state-local-zfs",
+			Level: AlertLevelWarning,
+		}
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:   "local-zfs",
+			Name: "Local ZFS",
+			Node: "pve-node1",
+			ZFSPool: &models.ZFSPool{
+				Name:  "rpool",
+				State: "ONLINE",
+			},
+		}
+
+		m.checkZFSPoolHealth(storage)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["zfs-pool-state-local-zfs"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected state alert to be cleared when pool is ONLINE")
+		}
+	})
+
+	t.Run("pool with errors creates error alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		storage := models.Storage{
+			ID:   "local-zfs",
+			Name: "Local ZFS",
+			Node: "pve-node1",
+			ZFSPool: &models.ZFSPool{
+				Name:           "rpool",
+				State:          "ONLINE",
+				ReadErrors:     5,
+				WriteErrors:    2,
+				ChecksumErrors: 1,
+			},
+		}
+
+		m.checkZFSPoolHealth(storage)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["zfs-pool-errors-local-zfs"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected errors alert for pool with errors")
+		}
+		if alert.Type != "zfs-pool-errors" {
+			t.Errorf("expected type 'zfs-pool-errors', got %s", alert.Type)
+		}
+		if alert.Value != 8 { // 5 + 2 + 1
+			t.Errorf("expected value 8, got %f", alert.Value)
+		}
+	})
+
+	t.Run("pool error count increase updates alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		oldTime := time.Now().Add(-1 * time.Hour)
+		m.mu.Lock()
+		m.activeAlerts["zfs-pool-errors-local-zfs"] = &Alert{
+			ID:        "zfs-pool-errors-local-zfs",
+			Value:     5,
+			StartTime: oldTime,
+		}
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:   "local-zfs",
+			Name: "Local ZFS",
+			Node: "pve-node1",
+			ZFSPool: &models.ZFSPool{
+				Name:           "rpool",
+				State:          "ONLINE",
+				ReadErrors:     10,
+				WriteErrors:    0,
+				ChecksumErrors: 0,
+			},
+		}
+
+		m.checkZFSPoolHealth(storage)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["zfs-pool-errors-local-zfs"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected errors alert to exist")
+		}
+		if alert.Value != 10 {
+			t.Errorf("expected value 10, got %f", alert.Value)
+		}
+		// Start time should be preserved
+		if !alert.StartTime.Equal(oldTime) {
+			t.Error("expected StartTime to be preserved on update")
+		}
+	})
+
+	t.Run("pool with no errors clears error alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.activeAlerts["zfs-pool-errors-local-zfs"] = &Alert{
+			ID: "zfs-pool-errors-local-zfs",
+		}
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:   "local-zfs",
+			Name: "Local ZFS",
+			Node: "pve-node1",
+			ZFSPool: &models.ZFSPool{
+				Name:           "rpool",
+				State:          "ONLINE",
+				ReadErrors:     0,
+				WriteErrors:    0,
+				ChecksumErrors: 0,
+			},
+		}
+
+		m.checkZFSPoolHealth(storage)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["zfs-pool-errors-local-zfs"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected errors alert to be cleared when no errors")
+		}
+	})
+
+	t.Run("device with errors creates device alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		storage := models.Storage{
+			ID:   "local-zfs",
+			Name: "Local ZFS",
+			Node: "pve-node1",
+			ZFSPool: &models.ZFSPool{
+				Name:  "rpool",
+				State: "ONLINE",
+				Devices: []models.ZFSDevice{
+					{Name: "sda", State: "ONLINE", ReadErrors: 3, WriteErrors: 0, ChecksumErrors: 0},
+				},
+			},
+		}
+
+		m.checkZFSPoolHealth(storage)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["zfs-device-local-zfs-sda"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected device alert for device with errors")
+		}
+		if alert.Type != "zfs-device" {
+			t.Errorf("expected type 'zfs-device', got %s", alert.Type)
+		}
+	})
+
+	t.Run("device in FAULTED state creates critical alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		storage := models.Storage{
+			ID:   "local-zfs",
+			Name: "Local ZFS",
+			Node: "pve-node1",
+			ZFSPool: &models.ZFSPool{
+				Name:  "rpool",
+				State: "DEGRADED",
+				Devices: []models.ZFSDevice{
+					{Name: "sda", State: "FAULTED"},
+				},
+			},
+		}
+
+		m.checkZFSPoolHealth(storage)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["zfs-device-local-zfs-sda"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected device alert for FAULTED device")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level for FAULTED device, got %s", alert.Level)
+		}
+	})
+
+	t.Run("healthy device clears device alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.activeAlerts["zfs-device-local-zfs-sda"] = &Alert{
+			ID: "zfs-device-local-zfs-sda",
+		}
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:   "local-zfs",
+			Name: "Local ZFS",
+			Node: "pve-node1",
+			ZFSPool: &models.ZFSPool{
+				Name:  "rpool",
+				State: "ONLINE",
+				Devices: []models.ZFSDevice{
+					{Name: "sda", State: "ONLINE", ReadErrors: 0, WriteErrors: 0, ChecksumErrors: 0},
+				},
+			},
+		}
+
+		m.checkZFSPoolHealth(storage)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["zfs-device-local-zfs-sda"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected device alert to be cleared for healthy device")
+		}
+	})
+
+	t.Run("SPARE device in normal state does not create alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		storage := models.Storage{
+			ID:   "local-zfs",
+			Name: "Local ZFS",
+			Node: "pve-node1",
+			ZFSPool: &models.ZFSPool{
+				Name:  "rpool",
+				State: "ONLINE",
+				Devices: []models.ZFSDevice{
+					{Name: "sdb", State: "SPARE", ReadErrors: 0, WriteErrors: 0, ChecksumErrors: 0},
+				},
+			},
+		}
+
+		m.checkZFSPoolHealth(storage)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["zfs-device-local-zfs-sdb"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected no alert for SPARE device without errors")
+		}
+	})
+}
