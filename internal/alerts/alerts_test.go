@@ -4121,3 +4121,24 @@ func TestUnacknowledgeAlertSuccess(t *testing.T) {
 		t.Error("expected ackState entry to be deleted")
 	}
 }
+
+func TestClearActiveAlertsEmptyMaps(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+
+	// Ensure maps are empty initially
+	if len(m.activeAlerts) != 0 {
+		t.Fatalf("expected activeAlerts to be empty, got %d", len(m.activeAlerts))
+	}
+	if len(m.pendingAlerts) != 0 {
+		t.Fatalf("expected pendingAlerts to be empty, got %d", len(m.pendingAlerts))
+	}
+
+	// Call ClearActiveAlerts on empty manager - should return early without panic
+	m.ClearActiveAlerts()
+
+	// Verify maps are still empty (function returned early)
+	if len(m.activeAlerts) != 0 {
+		t.Errorf("expected activeAlerts to remain empty, got %d", len(m.activeAlerts))
+	}
+}

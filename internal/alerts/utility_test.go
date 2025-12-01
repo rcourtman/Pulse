@@ -97,6 +97,11 @@ func TestSanitizeAlertKey(t *testing.T) {
 
 		// Edge cases
 		{
+			name:  "only slashes and backslashes becomes root",
+			input: "//\\\\",
+			want:  "root",
+		},
+		{
 			name:  "only special chars becomes disk",
 			input: "@#$%",
 			want:  "disk",
