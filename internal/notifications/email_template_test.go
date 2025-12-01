@@ -1,8 +1,11 @@
 package notifications
 
 import (
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
 
 func TestTitleCase(t *testing.T) {
@@ -511,6 +514,132 @@ func TestFormatMetricThreshold(t *testing.T) {
 			result := formatMetricThreshold(tt.metricType, tt.threshold)
 			if result != tt.expected {
 				t.Errorf("formatMetricThreshold(%q, %v) = %q, want %q", tt.metricType, tt.threshold, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEmailTemplate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                string
+		alerts              []*alerts.Alert
+		isSingle            bool
+		expectSingleSubject bool // subject contains single alert info vs "Multiple Alerts"
+		subjectContains     string
+	}{
+		{
+			name: "single alert with isSingle=true uses single template",
+			alerts: []*alerts.Alert{
+				{
+					ID:           "alert-1",
+					Level:        "critical",
+					Type:         "cpu",
+					ResourceName: "test-vm",
+					Value:        95.5,
+					Threshold:    90.0,
+					StartTime:    time.Now(),
+				},
+			},
+			isSingle:            true,
+			expectSingleSubject: true,
+			subjectContains:     "test-vm",
+		},
+		{
+			name: "single alert with isSingle=false uses grouped template",
+			alerts: []*alerts.Alert{
+				{
+					ID:           "alert-1",
+					Level:        "warning",
+					Type:         "memory",
+					ResourceName: "test-vm",
+					Value:        85.0,
+					Threshold:    80.0,
+					StartTime:    time.Now(),
+				},
+			},
+			isSingle:            false,
+			expectSingleSubject: false,
+			subjectContains:     "1 Warning alert", // Grouped template uses "N Level alert(s)"
+		},
+		{
+			name: "multiple alerts uses grouped template regardless of isSingle",
+			alerts: []*alerts.Alert{
+				{
+					ID:           "alert-1",
+					Level:        "critical",
+					Type:         "cpu",
+					ResourceName: "vm-1",
+					Value:        95.5,
+					Threshold:    90.0,
+					StartTime:    time.Now(),
+				},
+				{
+					ID:           "alert-2",
+					Level:        "warning",
+					Type:         "memory",
+					ResourceName: "vm-2",
+					Value:        85.0,
+					Threshold:    80.0,
+					StartTime:    time.Now(),
+				},
+			},
+			isSingle:            true, // Even with isSingle=true, multiple alerts use grouped
+			expectSingleSubject: false,
+			subjectContains:     "Critical", // Subject shows level counts
+		},
+		{
+			name: "warning level alert",
+			alerts: []*alerts.Alert{
+				{
+					ID:           "alert-1",
+					Level:        "warning",
+					Type:         "disk",
+					ResourceName: "storage-1",
+					Value:        88.0,
+					Threshold:    85.0,
+					StartTime:    time.Now(),
+				},
+			},
+			isSingle:            true,
+			expectSingleSubject: true,
+			subjectContains:     "Warning",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			subject, htmlBody, textBody := EmailTemplate(tt.alerts, tt.isSingle)
+
+			// Check subject contains expected content
+			if !strings.Contains(subject, tt.subjectContains) {
+				t.Errorf("subject = %q, want to contain %q", subject, tt.subjectContains)
+			}
+
+			// Verify HTML body is not empty and contains basic structure
+			if htmlBody == "" {
+				t.Error("htmlBody is empty")
+			}
+			if !strings.Contains(htmlBody, "<!DOCTYPE html>") {
+				t.Error("htmlBody missing DOCTYPE")
+			}
+			if !strings.Contains(htmlBody, "</html>") {
+				t.Error("htmlBody missing closing html tag")
+			}
+
+			// Verify text body is not empty
+			if textBody == "" {
+				t.Error("textBody is empty")
+			}
+
+			// Check for single vs grouped template indicators
+			if tt.expectSingleSubject {
+				if strings.Contains(subject, "Multiple") || strings.Contains(subject, "Alerts]") {
+					t.Errorf("expected single alert subject, got grouped: %q", subject)
+				}
 			}
 		})
 	}
