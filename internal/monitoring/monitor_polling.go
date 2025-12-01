@@ -155,9 +155,6 @@ func convertPoolInfoToModel(poolInfo *proxmox.ZFSPoolInfo) *models.ZFSPool {
 
 	// Use the converter from the proxmox package
 	proxmoxPool := poolInfo.ConvertToModelZFSPool()
-	if proxmoxPool == nil {
-		return nil
-	}
 
 	// Convert to our internal model
 	modelPool := &models.ZFSPool{

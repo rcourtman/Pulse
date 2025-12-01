@@ -365,6 +365,94 @@ func TestCircuitBreaker_ConcurrentAccess(t *testing.T) {
 	}
 }
 
+func TestCircuitBreaker_Allow(t *testing.T) {
+	tests := []struct {
+		name           string
+		setup          func(cb *circuitBreaker, now time.Time)
+		timeOffset     time.Duration
+		want           bool
+		wantStateAfter breakerState
+	}{
+		{
+			name:           "closed state always allows",
+			setup:          func(cb *circuitBreaker, now time.Time) {},
+			timeOffset:     0,
+			want:           true,
+			wantStateAfter: breakerClosed,
+		},
+		{
+			name: "open state denies before retry interval",
+			setup: func(cb *circuitBreaker, now time.Time) {
+				cb.state = breakerOpen
+				cb.openedAt = now
+				cb.retryInterval = 10 * time.Second
+			},
+			timeOffset:     5 * time.Second,
+			want:           false,
+			wantStateAfter: breakerOpen,
+		},
+		{
+			name: "open state allows and transitions to half-open after retry interval",
+			setup: func(cb *circuitBreaker, now time.Time) {
+				cb.state = breakerOpen
+				cb.openedAt = now
+				cb.retryInterval = 10 * time.Second
+			},
+			timeOffset:     10 * time.Second,
+			want:           true,
+			wantStateAfter: breakerHalfOpen,
+		},
+		{
+			name: "half-open state denies during window",
+			setup: func(cb *circuitBreaker, now time.Time) {
+				cb.state = breakerHalfOpen
+				cb.lastAttempt = now
+				cb.halfOpenWindow = 30 * time.Second
+			},
+			timeOffset:     15 * time.Second,
+			want:           false,
+			wantStateAfter: breakerHalfOpen,
+		},
+		{
+			name: "half-open state allows after window passed",
+			setup: func(cb *circuitBreaker, now time.Time) {
+				cb.state = breakerHalfOpen
+				cb.lastAttempt = now
+				cb.halfOpenWindow = 30 * time.Second
+			},
+			timeOffset:     30 * time.Second,
+			want:           true,
+			wantStateAfter: breakerHalfOpen,
+		},
+		{
+			name: "unknown state allows (default branch)",
+			setup: func(cb *circuitBreaker, now time.Time) {
+				cb.state = breakerState(99)
+			},
+			timeOffset:     0,
+			want:           true,
+			wantStateAfter: breakerState(99),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cb := newCircuitBreaker(3, 5*time.Second, 5*time.Minute, 30*time.Second)
+			now := time.Now()
+			tt.setup(cb, now)
+
+			got := cb.allow(now.Add(tt.timeOffset))
+
+			if got != tt.want {
+				t.Errorf("allow() = %v, want %v", got, tt.want)
+			}
+			if cb.state != tt.wantStateAfter {
+				t.Errorf("state after allow() = %v, want %v", cb.state, tt.wantStateAfter)
+			}
+		})
+	}
+}
+
 func TestCircuitBreaker_StateDetails(t *testing.T) {
 	t.Run("closed state", func(t *testing.T) {
 		cb := newCircuitBreaker(3, 5*time.Second, 5*time.Minute, 30*time.Second)
