@@ -298,3 +298,464 @@ func TestApplyDockerReportPodmanRuntimeMetadata(t *testing.T) {
 		t.Fatalf("expected docker version fallback to runtime version, got %q", host.DockerVersion)
 	}
 }
+
+func TestConvertDockerServices(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil input returns nil", func(t *testing.T) {
+		t.Parallel()
+		result := convertDockerServices(nil)
+		if result != nil {
+			t.Fatalf("expected nil, got %v", result)
+		}
+	})
+
+	t.Run("empty slice returns nil", func(t *testing.T) {
+		t.Parallel()
+		result := convertDockerServices([]agentsdocker.Service{})
+		if result != nil {
+			t.Fatalf("expected nil, got %v", result)
+		}
+	})
+
+	t.Run("basic fields are copied", func(t *testing.T) {
+		t.Parallel()
+		input := []agentsdocker.Service{{
+			ID:             "svc-123",
+			Name:           "web",
+			Stack:          "mystack",
+			Image:          "nginx:latest",
+			Mode:           "replicated",
+			DesiredTasks:   3,
+			RunningTasks:   2,
+			CompletedTasks: 1,
+		}}
+
+		result := convertDockerServices(input)
+		if len(result) != 1 {
+			t.Fatalf("expected 1 service, got %d", len(result))
+		}
+
+		svc := result[0]
+		if svc.ID != "svc-123" {
+			t.Errorf("ID = %q, want svc-123", svc.ID)
+		}
+		if svc.Name != "web" {
+			t.Errorf("Name = %q, want web", svc.Name)
+		}
+		if svc.Stack != "mystack" {
+			t.Errorf("Stack = %q, want mystack", svc.Stack)
+		}
+		if svc.Image != "nginx:latest" {
+			t.Errorf("Image = %q, want nginx:latest", svc.Image)
+		}
+		if svc.Mode != "replicated" {
+			t.Errorf("Mode = %q, want replicated", svc.Mode)
+		}
+		if svc.DesiredTasks != 3 {
+			t.Errorf("DesiredTasks = %d, want 3", svc.DesiredTasks)
+		}
+		if svc.RunningTasks != 2 {
+			t.Errorf("RunningTasks = %d, want 2", svc.RunningTasks)
+		}
+		if svc.CompletedTasks != 1 {
+			t.Errorf("CompletedTasks = %d, want 1", svc.CompletedTasks)
+		}
+	})
+
+	t.Run("labels are cloned when present", func(t *testing.T) {
+		t.Parallel()
+		input := []agentsdocker.Service{{
+			ID:   "svc-1",
+			Name: "web",
+			Labels: map[string]string{
+				"env":     "prod",
+				"version": "1.0",
+			},
+		}}
+
+		result := convertDockerServices(input)
+		if result[0].Labels == nil {
+			t.Fatal("expected labels to be present")
+		}
+		if result[0].Labels["env"] != "prod" {
+			t.Errorf("Labels[env] = %q, want prod", result[0].Labels["env"])
+		}
+		if result[0].Labels["version"] != "1.0" {
+			t.Errorf("Labels[version] = %q, want 1.0", result[0].Labels["version"])
+		}
+
+		// Verify it's a clone, not the same map
+		input[0].Labels["env"] = "modified"
+		if result[0].Labels["env"] == "modified" {
+			t.Error("labels should be cloned, not shared")
+		}
+	})
+
+	t.Run("empty labels are not copied", func(t *testing.T) {
+		t.Parallel()
+		input := []agentsdocker.Service{{
+			ID:     "svc-1",
+			Name:   "web",
+			Labels: map[string]string{},
+		}}
+
+		result := convertDockerServices(input)
+		if result[0].Labels != nil {
+			t.Errorf("expected nil labels for empty map, got %v", result[0].Labels)
+		}
+	})
+
+	t.Run("nil labels stay nil", func(t *testing.T) {
+		t.Parallel()
+		input := []agentsdocker.Service{{
+			ID:     "svc-1",
+			Name:   "web",
+			Labels: nil,
+		}}
+
+		result := convertDockerServices(input)
+		if result[0].Labels != nil {
+			t.Errorf("expected nil labels, got %v", result[0].Labels)
+		}
+	})
+
+	t.Run("endpoint ports are converted when present", func(t *testing.T) {
+		t.Parallel()
+		input := []agentsdocker.Service{{
+			ID:   "svc-1",
+			Name: "web",
+			EndpointPorts: []agentsdocker.ServicePort{
+				{
+					Name:          "http",
+					Protocol:      "tcp",
+					TargetPort:    80,
+					PublishedPort: 8080,
+					PublishMode:   "ingress",
+				},
+				{
+					Name:          "https",
+					Protocol:      "tcp",
+					TargetPort:    443,
+					PublishedPort: 8443,
+					PublishMode:   "host",
+				},
+			},
+		}}
+
+		result := convertDockerServices(input)
+		if len(result[0].EndpointPorts) != 2 {
+			t.Fatalf("expected 2 ports, got %d", len(result[0].EndpointPorts))
+		}
+
+		port1 := result[0].EndpointPorts[0]
+		if port1.Name != "http" {
+			t.Errorf("port[0].Name = %q, want http", port1.Name)
+		}
+		if port1.Protocol != "tcp" {
+			t.Errorf("port[0].Protocol = %q, want tcp", port1.Protocol)
+		}
+		if port1.TargetPort != 80 {
+			t.Errorf("port[0].TargetPort = %d, want 80", port1.TargetPort)
+		}
+		if port1.PublishedPort != 8080 {
+			t.Errorf("port[0].PublishedPort = %d, want 8080", port1.PublishedPort)
+		}
+		if port1.PublishMode != "ingress" {
+			t.Errorf("port[0].PublishMode = %q, want ingress", port1.PublishMode)
+		}
+
+		port2 := result[0].EndpointPorts[1]
+		if port2.PublishMode != "host" {
+			t.Errorf("port[1].PublishMode = %q, want host", port2.PublishMode)
+		}
+	})
+
+	t.Run("empty endpoint ports are not copied", func(t *testing.T) {
+		t.Parallel()
+		input := []agentsdocker.Service{{
+			ID:            "svc-1",
+			Name:          "web",
+			EndpointPorts: []agentsdocker.ServicePort{},
+		}}
+
+		result := convertDockerServices(input)
+		if result[0].EndpointPorts != nil {
+			t.Errorf("expected nil endpoint ports for empty slice, got %v", result[0].EndpointPorts)
+		}
+	})
+
+	t.Run("nil endpoint ports stay nil", func(t *testing.T) {
+		t.Parallel()
+		input := []agentsdocker.Service{{
+			ID:            "svc-1",
+			Name:          "web",
+			EndpointPorts: nil,
+		}}
+
+		result := convertDockerServices(input)
+		if result[0].EndpointPorts != nil {
+			t.Errorf("expected nil endpoint ports, got %v", result[0].EndpointPorts)
+		}
+	})
+
+	t.Run("update status is converted when present", func(t *testing.T) {
+		t.Parallel()
+		completedAt := time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC)
+		input := []agentsdocker.Service{{
+			ID:   "svc-1",
+			Name: "web",
+			UpdateStatus: &agentsdocker.ServiceUpdate{
+				State:       "completed",
+				Message:     "update succeeded",
+				CompletedAt: &completedAt,
+			},
+		}}
+
+		result := convertDockerServices(input)
+		if result[0].UpdateStatus == nil {
+			t.Fatal("expected update status to be present")
+		}
+		if result[0].UpdateStatus.State != "completed" {
+			t.Errorf("UpdateStatus.State = %q, want completed", result[0].UpdateStatus.State)
+		}
+		if result[0].UpdateStatus.Message != "update succeeded" {
+			t.Errorf("UpdateStatus.Message = %q, want update succeeded", result[0].UpdateStatus.Message)
+		}
+		if result[0].UpdateStatus.CompletedAt == nil {
+			t.Fatal("expected CompletedAt to be set")
+		}
+		if !result[0].UpdateStatus.CompletedAt.Equal(completedAt) {
+			t.Errorf("UpdateStatus.CompletedAt = %v, want %v", result[0].UpdateStatus.CompletedAt, completedAt)
+		}
+	})
+
+	t.Run("update status with nil CompletedAt", func(t *testing.T) {
+		t.Parallel()
+		input := []agentsdocker.Service{{
+			ID:   "svc-1",
+			Name: "web",
+			UpdateStatus: &agentsdocker.ServiceUpdate{
+				State:       "updating",
+				Message:     "in progress",
+				CompletedAt: nil,
+			},
+		}}
+
+		result := convertDockerServices(input)
+		if result[0].UpdateStatus == nil {
+			t.Fatal("expected update status to be present")
+		}
+		if result[0].UpdateStatus.CompletedAt != nil {
+			t.Errorf("expected nil CompletedAt, got %v", result[0].UpdateStatus.CompletedAt)
+		}
+	})
+
+	t.Run("update status with zero CompletedAt", func(t *testing.T) {
+		t.Parallel()
+		zeroTime := time.Time{}
+		input := []agentsdocker.Service{{
+			ID:   "svc-1",
+			Name: "web",
+			UpdateStatus: &agentsdocker.ServiceUpdate{
+				State:       "updating",
+				CompletedAt: &zeroTime,
+			},
+		}}
+
+		result := convertDockerServices(input)
+		if result[0].UpdateStatus.CompletedAt != nil {
+			t.Errorf("expected nil CompletedAt for zero time, got %v", result[0].UpdateStatus.CompletedAt)
+		}
+	})
+
+	t.Run("nil update status stays nil", func(t *testing.T) {
+		t.Parallel()
+		input := []agentsdocker.Service{{
+			ID:           "svc-1",
+			Name:         "web",
+			UpdateStatus: nil,
+		}}
+
+		result := convertDockerServices(input)
+		if result[0].UpdateStatus != nil {
+			t.Errorf("expected nil update status, got %v", result[0].UpdateStatus)
+		}
+	})
+
+	t.Run("CreatedAt is copied when valid", func(t *testing.T) {
+		t.Parallel()
+		created := time.Date(2025, 1, 10, 8, 0, 0, 0, time.UTC)
+		input := []agentsdocker.Service{{
+			ID:        "svc-1",
+			Name:      "web",
+			CreatedAt: &created,
+		}}
+
+		result := convertDockerServices(input)
+		if result[0].CreatedAt == nil {
+			t.Fatal("expected CreatedAt to be set")
+		}
+		if !result[0].CreatedAt.Equal(created) {
+			t.Errorf("CreatedAt = %v, want %v", result[0].CreatedAt, created)
+		}
+	})
+
+	t.Run("nil CreatedAt stays nil", func(t *testing.T) {
+		t.Parallel()
+		input := []agentsdocker.Service{{
+			ID:        "svc-1",
+			Name:      "web",
+			CreatedAt: nil,
+		}}
+
+		result := convertDockerServices(input)
+		if result[0].CreatedAt != nil {
+			t.Errorf("expected nil CreatedAt, got %v", result[0].CreatedAt)
+		}
+	})
+
+	t.Run("zero CreatedAt is not copied", func(t *testing.T) {
+		t.Parallel()
+		zeroTime := time.Time{}
+		input := []agentsdocker.Service{{
+			ID:        "svc-1",
+			Name:      "web",
+			CreatedAt: &zeroTime,
+		}}
+
+		result := convertDockerServices(input)
+		if result[0].CreatedAt != nil {
+			t.Errorf("expected nil CreatedAt for zero time, got %v", result[0].CreatedAt)
+		}
+	})
+
+	t.Run("UpdatedAt is copied when valid", func(t *testing.T) {
+		t.Parallel()
+		updated := time.Date(2025, 1, 12, 14, 30, 0, 0, time.UTC)
+		input := []agentsdocker.Service{{
+			ID:        "svc-1",
+			Name:      "web",
+			UpdatedAt: &updated,
+		}}
+
+		result := convertDockerServices(input)
+		if result[0].UpdatedAt == nil {
+			t.Fatal("expected UpdatedAt to be set")
+		}
+		if !result[0].UpdatedAt.Equal(updated) {
+			t.Errorf("UpdatedAt = %v, want %v", result[0].UpdatedAt, updated)
+		}
+	})
+
+	t.Run("nil UpdatedAt stays nil", func(t *testing.T) {
+		t.Parallel()
+		input := []agentsdocker.Service{{
+			ID:        "svc-1",
+			Name:      "web",
+			UpdatedAt: nil,
+		}}
+
+		result := convertDockerServices(input)
+		if result[0].UpdatedAt != nil {
+			t.Errorf("expected nil UpdatedAt, got %v", result[0].UpdatedAt)
+		}
+	})
+
+	t.Run("zero UpdatedAt is not copied", func(t *testing.T) {
+		t.Parallel()
+		zeroTime := time.Time{}
+		input := []agentsdocker.Service{{
+			ID:        "svc-1",
+			Name:      "web",
+			UpdatedAt: &zeroTime,
+		}}
+
+		result := convertDockerServices(input)
+		if result[0].UpdatedAt != nil {
+			t.Errorf("expected nil UpdatedAt for zero time, got %v", result[0].UpdatedAt)
+		}
+	})
+
+	t.Run("multiple services are converted", func(t *testing.T) {
+		t.Parallel()
+		input := []agentsdocker.Service{
+			{ID: "svc-1", Name: "web"},
+			{ID: "svc-2", Name: "api"},
+			{ID: "svc-3", Name: "worker"},
+		}
+
+		result := convertDockerServices(input)
+		if len(result) != 3 {
+			t.Fatalf("expected 3 services, got %d", len(result))
+		}
+		if result[0].ID != "svc-1" {
+			t.Errorf("result[0].ID = %q, want svc-1", result[0].ID)
+		}
+		if result[1].ID != "svc-2" {
+			t.Errorf("result[1].ID = %q, want svc-2", result[1].ID)
+		}
+		if result[2].ID != "svc-3" {
+			t.Errorf("result[2].ID = %q, want svc-3", result[2].ID)
+		}
+	})
+
+	t.Run("full service with all fields", func(t *testing.T) {
+		t.Parallel()
+		created := time.Date(2025, 1, 10, 8, 0, 0, 0, time.UTC)
+		updated := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
+		completedAt := time.Date(2025, 1, 15, 11, 30, 0, 0, time.UTC)
+
+		input := []agentsdocker.Service{{
+			ID:             "svc-full",
+			Name:           "fullservice",
+			Stack:          "production",
+			Image:          "myapp:v2.0",
+			Mode:           "global",
+			DesiredTasks:   5,
+			RunningTasks:   5,
+			CompletedTasks: 0,
+			Labels: map[string]string{
+				"com.docker.stack.namespace": "production",
+			},
+			EndpointPorts: []agentsdocker.ServicePort{
+				{Name: "web", Protocol: "tcp", TargetPort: 8080, PublishedPort: 80, PublishMode: "ingress"},
+			},
+			UpdateStatus: &agentsdocker.ServiceUpdate{
+				State:       "completed",
+				Message:     "rollout complete",
+				CompletedAt: &completedAt,
+			},
+			CreatedAt: &created,
+			UpdatedAt: &updated,
+		}}
+
+		result := convertDockerServices(input)
+		if len(result) != 1 {
+			t.Fatalf("expected 1 service, got %d", len(result))
+		}
+
+		svc := result[0]
+		if svc.ID != "svc-full" {
+			t.Errorf("ID mismatch")
+		}
+		if svc.Mode != "global" {
+			t.Errorf("Mode = %q, want global", svc.Mode)
+		}
+		if svc.Labels["com.docker.stack.namespace"] != "production" {
+			t.Errorf("Labels mismatch")
+		}
+		if len(svc.EndpointPorts) != 1 || svc.EndpointPorts[0].PublishedPort != 80 {
+			t.Errorf("EndpointPorts mismatch")
+		}
+		if svc.UpdateStatus == nil || svc.UpdateStatus.State != "completed" {
+			t.Errorf("UpdateStatus mismatch")
+		}
+		if svc.CreatedAt == nil || !svc.CreatedAt.Equal(created) {
+			t.Errorf("CreatedAt mismatch")
+		}
+		if svc.UpdatedAt == nil || !svc.UpdatedAt.Equal(updated) {
+			t.Errorf("UpdatedAt mismatch")
+		}
+	})
+}
