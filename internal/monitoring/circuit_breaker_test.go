@@ -364,3 +364,107 @@ func TestCircuitBreaker_ConcurrentAccess(t *testing.T) {
 		<-done
 	}
 }
+
+func TestCircuitBreaker_StateDetails(t *testing.T) {
+	t.Run("closed state", func(t *testing.T) {
+		cb := newCircuitBreaker(3, 5*time.Second, 5*time.Minute, 30*time.Second)
+		beforeCreate := time.Now().Add(-time.Millisecond)
+
+		state, failures, retryAt, since, lastTransition := cb.stateDetails()
+
+		if state != "closed" {
+			t.Errorf("state = %s, want closed", state)
+		}
+		if failures != 0 {
+			t.Errorf("failures = %d, want 0", failures)
+		}
+		if !retryAt.IsZero() {
+			t.Errorf("retryAt = %v, want zero time", retryAt)
+		}
+		if since.Before(beforeCreate) {
+			t.Errorf("since = %v, should be after %v", since, beforeCreate)
+		}
+		if lastTransition.Before(beforeCreate) {
+			t.Errorf("lastTransition = %v, should be after %v", lastTransition, beforeCreate)
+		}
+	})
+
+	t.Run("open state", func(t *testing.T) {
+		cb := newCircuitBreaker(3, 5*time.Second, 5*time.Minute, 30*time.Second)
+		now := time.Now()
+
+		// Trip the breaker to open state
+		for i := 0; i < 3; i++ {
+			cb.recordFailure(now)
+		}
+
+		state, failures, retryAt, since, lastTransition := cb.stateDetails()
+
+		if state != "open" {
+			t.Errorf("state = %s, want open", state)
+		}
+		if failures != 3 {
+			t.Errorf("failures = %d, want 3", failures)
+		}
+		// retryInterval after 3 failures is 5s << 3 = 40s
+		expectedRetryAt := now.Add(40 * time.Second)
+		if retryAt.Sub(expectedRetryAt).Abs() > time.Millisecond {
+			t.Errorf("retryAt = %v, want %v", retryAt, expectedRetryAt)
+		}
+		// since should be set to when breaker was tripped
+		if since.Sub(now).Abs() > time.Millisecond {
+			t.Errorf("since = %v, want ~%v", since, now)
+		}
+		if lastTransition.Sub(now).Abs() > time.Millisecond {
+			t.Errorf("lastTransition = %v, want ~%v", lastTransition, now)
+		}
+	})
+
+	t.Run("half_open state", func(t *testing.T) {
+		cb := newCircuitBreaker(3, 5*time.Second, 5*time.Minute, 30*time.Second)
+		now := time.Now()
+
+		// Trip the breaker
+		for i := 0; i < 3; i++ {
+			cb.recordFailure(now)
+		}
+
+		// Transition to half-open (retry interval is 5s << 3 = 40s)
+		halfOpenTime := now.Add(41 * time.Second)
+		cb.allow(halfOpenTime)
+
+		state, failures, retryAt, since, lastTransition := cb.stateDetails()
+
+		if state != "half_open" {
+			t.Errorf("state = %s, want half_open", state)
+		}
+		if failures != 3 {
+			t.Errorf("failures = %d, want 3", failures)
+		}
+		// retryAt should be lastAttempt + halfOpenWindow (30s)
+		expectedRetryAt := halfOpenTime.Add(30 * time.Second)
+		if retryAt.Sub(expectedRetryAt).Abs() > time.Millisecond {
+			t.Errorf("retryAt = %v, want %v", retryAt, expectedRetryAt)
+		}
+		// since should be when we transitioned to half-open
+		if since.Sub(halfOpenTime).Abs() > time.Millisecond {
+			t.Errorf("since = %v, want ~%v", since, halfOpenTime)
+		}
+		if lastTransition.Sub(halfOpenTime).Abs() > time.Millisecond {
+			t.Errorf("lastTransition = %v, want ~%v", lastTransition, halfOpenTime)
+		}
+	})
+
+	t.Run("unknown state (invalid internal state)", func(t *testing.T) {
+		cb := newCircuitBreaker(3, 5*time.Second, 5*time.Minute, 30*time.Second)
+
+		// Directly set state to an invalid value to trigger default case
+		cb.state = breakerState(99)
+
+		state, _, _, _, _ := cb.stateDetails()
+
+		if state != "unknown" {
+			t.Errorf("state = %s, want unknown", state)
+		}
+	})
+}

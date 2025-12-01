@@ -1008,6 +1008,60 @@ func TestLookupClusterEndpointLabel(t *testing.T) {
 			t.Errorf("expected 'first.lan', got %q", result)
 		}
 	})
+
+	t.Run("falls back to IP when Host empty and NodeName whitespace-only", func(t *testing.T) {
+		// EqualFold("  ", "  ") returns true, TrimSpace("  ") returns ""
+		// This tests the IP fallback path (lines 295-297)
+		instance := &config.PVEInstance{
+			ClusterEndpoints: []config.ClusterEndpoint{
+				{NodeName: "  ", Host: "", IP: "10.0.0.100"},
+			},
+		}
+		result := lookupClusterEndpointLabel(instance, "  ")
+		if result != "10.0.0.100" {
+			t.Errorf("expected '10.0.0.100', got %q", result)
+		}
+	})
+
+	t.Run("returns empty when all fields empty for matching endpoint", func(t *testing.T) {
+		// Match on empty NodeName, all label fields empty
+		instance := &config.PVEInstance{
+			ClusterEndpoints: []config.ClusterEndpoint{
+				{NodeName: "", Host: "", IP: ""},
+			},
+		}
+		result := lookupClusterEndpointLabel(instance, "")
+		if result != "" {
+			t.Errorf("expected empty string, got %q", result)
+		}
+	})
+
+	t.Run("IP fallback with whitespace in IP field", func(t *testing.T) {
+		instance := &config.PVEInstance{
+			ClusterEndpoints: []config.ClusterEndpoint{
+				{NodeName: "", Host: "", IP: "  192.168.1.50  "},
+			},
+		}
+		result := lookupClusterEndpointLabel(instance, "")
+		if result != "192.168.1.50" {
+			t.Errorf("expected '192.168.1.50', got %q", result)
+		}
+	})
+
+	t.Run("falls back to IP when Host is IP and NodeName is empty string", func(t *testing.T) {
+		instance := &config.PVEInstance{
+			ClusterEndpoints: []config.ClusterEndpoint{
+				{NodeName: "", Host: "https://172.16.0.1:8006", IP: "10.20.30.40"},
+			},
+		}
+		result := lookupClusterEndpointLabel(instance, "")
+		// Host normalizes to "172.16.0.1" which is an IP, so skip it
+		// NodeName is empty after trim, so skip it
+		// Fall back to IP: "10.20.30.40"
+		if result != "10.20.30.40" {
+			t.Errorf("expected '10.20.30.40', got %q", result)
+		}
+	})
 }
 
 func TestExtractSnapshotName(t *testing.T) {

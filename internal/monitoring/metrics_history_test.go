@@ -692,6 +692,7 @@ func TestGetNodeMetrics(t *testing.T) {
 	mh.AddNodeMetric("node1", "cpu", 35.0, now.Add(-30*time.Minute))
 	mh.AddNodeMetric("node1", "cpu", 45.0, now.Add(-15*time.Minute))
 	mh.AddNodeMetric("node1", "memory", 60.0, now.Add(-10*time.Minute))
+	mh.AddNodeMetric("node1", "disk", 75.0, now.Add(-5*time.Minute))
 
 	tests := []struct {
 		name       string
@@ -722,6 +723,13 @@ func TestGetNodeMetrics(t *testing.T) {
 			wantLen:    1,
 		},
 		{
+			name:       "get disk",
+			nodeID:     "node1",
+			metricType: "disk",
+			duration:   time.Hour,
+			wantLen:    1,
+		},
+		{
 			name:       "nonexistent node",
 			nodeID:     "node999",
 			metricType: "cpu",
@@ -735,6 +743,20 @@ func TestGetNodeMetrics(t *testing.T) {
 			duration:   time.Hour,
 			wantLen:    0,
 		},
+		{
+			name:       "zero duration returns nothing",
+			nodeID:     "node1",
+			metricType: "cpu",
+			duration:   0,
+			wantLen:    0,
+		},
+		{
+			name:       "empty nodeID",
+			nodeID:     "",
+			metricType: "cpu",
+			duration:   time.Hour,
+			wantLen:    0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -742,6 +764,136 @@ func TestGetNodeMetrics(t *testing.T) {
 			result := mh.GetNodeMetrics(tt.nodeID, tt.metricType, tt.duration)
 			if len(result) != tt.wantLen {
 				t.Errorf("len(result) = %d, want %d", len(result), tt.wantLen)
+			}
+		})
+	}
+}
+
+func TestGetNodeMetrics_UnknownMetricTypes(t *testing.T) {
+	now := time.Now()
+	mh := NewMetricsHistory(100, time.Hour)
+
+	// Add data for the node
+	mh.AddNodeMetric("node1", "cpu", 50.0, now.Add(-5*time.Minute))
+	mh.AddNodeMetric("node1", "memory", 70.0, now.Add(-5*time.Minute))
+	mh.AddNodeMetric("node1", "disk", 40.0, now.Add(-5*time.Minute))
+
+	unknownTypes := []string{"invalid", "unknown", "netin", "netout", "diskread", "CPU", "Memory", "Disk", ""}
+
+	for _, metricType := range unknownTypes {
+		t.Run("type_"+metricType, func(t *testing.T) {
+			result := mh.GetNodeMetrics("node1", metricType, time.Hour)
+
+			if len(result) != 0 {
+				t.Errorf("expected empty slice for unknown metric type %q, got %d elements", metricType, len(result))
+			}
+			if result == nil {
+				t.Errorf("expected empty slice for unknown metric type %q, got nil", metricType)
+			}
+		})
+	}
+}
+
+func TestGetNodeMetrics_EmptyMetricsData(t *testing.T) {
+	mh := NewMetricsHistory(100, time.Hour)
+
+	// Directly populate an empty node metrics entry (nodes use GuestMetrics type)
+	mh.mu.Lock()
+	mh.nodeMetrics["node-empty"] = &GuestMetrics{
+		CPU:    []MetricPoint{},
+		Memory: []MetricPoint{},
+		Disk:   []MetricPoint{},
+	}
+	mh.mu.Unlock()
+
+	metricTypes := []string{"cpu", "memory", "disk"}
+
+	for _, metricType := range metricTypes {
+		t.Run(metricType, func(t *testing.T) {
+			result := mh.GetNodeMetrics("node-empty", metricType, time.Hour)
+
+			if len(result) != 0 {
+				t.Errorf("expected empty slice for empty %s metrics, got %d elements", metricType, len(result))
+			}
+			if result == nil {
+				t.Errorf("expected empty slice for empty %s metrics, got nil", metricType)
+			}
+		})
+	}
+}
+
+func TestGetNodeMetrics_DurationFiltering(t *testing.T) {
+	now := time.Now()
+	mh := NewMetricsHistory(100, 2*time.Hour)
+
+	// Add points at different times
+	mh.AddNodeMetric("node1", "cpu", 10.0, now.Add(-90*time.Minute)) // old
+	mh.AddNodeMetric("node1", "cpu", 20.0, now.Add(-60*time.Minute)) // old
+	mh.AddNodeMetric("node1", "cpu", 30.0, now.Add(-30*time.Minute)) // recent
+	mh.AddNodeMetric("node1", "cpu", 40.0, now.Add(-15*time.Minute)) // recent
+	mh.AddNodeMetric("node1", "cpu", 50.0, now.Add(-5*time.Minute))  // recent
+
+	tests := []struct {
+		name      string
+		duration  time.Duration
+		wantLen   int
+		wantFirst float64
+		wantLast  float64
+	}{
+		{
+			name:      "all points within 2 hours",
+			duration:  2 * time.Hour,
+			wantLen:   5,
+			wantFirst: 10.0,
+			wantLast:  50.0,
+		},
+		{
+			name:      "points within 45 minutes",
+			duration:  45 * time.Minute,
+			wantLen:   3,
+			wantFirst: 30.0,
+			wantLast:  50.0,
+		},
+		{
+			name:      "points within 20 minutes",
+			duration:  20 * time.Minute,
+			wantLen:   2,
+			wantFirst: 40.0,
+			wantLast:  50.0,
+		},
+		{
+			name:      "points within 10 minutes",
+			duration:  10 * time.Minute,
+			wantLen:   1,
+			wantFirst: 50.0,
+			wantLast:  50.0,
+		},
+		{
+			name:     "zero duration excludes all",
+			duration: 0,
+			wantLen:  0,
+		},
+		{
+			name:     "very short duration excludes all",
+			duration: 1 * time.Minute,
+			wantLen:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := mh.GetNodeMetrics("node1", "cpu", tt.duration)
+
+			if len(result) != tt.wantLen {
+				t.Errorf("len(result) = %d, want %d", len(result), tt.wantLen)
+			}
+			if len(result) > 0 {
+				if result[0].Value != tt.wantFirst {
+					t.Errorf("first value = %v, want %v", result[0].Value, tt.wantFirst)
+				}
+				if result[len(result)-1].Value != tt.wantLast {
+					t.Errorf("last value = %v, want %v", result[len(result)-1].Value, tt.wantLast)
+				}
 			}
 		})
 	}
