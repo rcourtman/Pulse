@@ -391,6 +391,50 @@ func TestBootstrapTokenValid(t *testing.T) {
 	})
 }
 
+func TestInitializeBootstrapToken_NilRouter(t *testing.T) {
+	var r *Router = nil
+	// Should not panic
+	r.initializeBootstrapToken()
+}
+
+func TestInitializeBootstrapToken_NilConfig(t *testing.T) {
+	r := &Router{config: nil}
+	// Should not panic
+	r.initializeBootstrapToken()
+}
+
+func TestInitializeBootstrapToken_OIDCEnabled(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a bootstrap token file first
+	tokenPath := filepath.Join(tmpDir, bootstrapTokenFilename)
+	if err := os.WriteFile(tokenPath, []byte("testtoken\n"), 0o600); err != nil {
+		t.Fatalf("failed to create token file: %v", err)
+	}
+
+	cfg := &config.Config{
+		DataPath: tmpDir,
+		OIDC: &config.OIDCConfig{
+			Enabled: true,
+		},
+	}
+	r := &Router{
+		config:             cfg,
+		bootstrapTokenPath: tokenPath, // Set path so clearBootstrapToken can delete the file
+	}
+	r.initializeBootstrapToken()
+
+	// Token should be cleared when OIDC is enabled
+	if r.bootstrapTokenHash != "" {
+		t.Error("expected empty bootstrapTokenHash when OIDC is enabled")
+	}
+
+	// Token file should be removed
+	if _, err := os.Stat(tokenPath); !os.IsNotExist(err) {
+		t.Error("expected token file to be deleted when OIDC is enabled")
+	}
+}
+
 func TestHandleValidateBootstrapToken_InvalidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{DataPath: tmpDir}
