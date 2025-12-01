@@ -211,3 +211,57 @@ func TestLoadAPITokensAppliesLegacyScopes(t *testing.T) {
 		t.Fatalf("expected legacy token to default to wildcard scope, got %#v", tokens[0].Scopes)
 	}
 }
+
+func TestLoadAPITokens_ErrorPaths(t *testing.T) {
+	t.Run("nonexistent file returns empty slice", func(t *testing.T) {
+		dir := t.TempDir()
+		persistence := NewConfigPersistence(dir)
+
+		tokens, err := persistence.LoadAPITokens()
+		if err != nil {
+			t.Fatalf("expected no error for missing file, got: %v", err)
+		}
+		if len(tokens) != 0 {
+			t.Fatalf("expected empty slice, got %d tokens", len(tokens))
+		}
+	})
+
+	t.Run("empty file returns empty slice", func(t *testing.T) {
+		dir := t.TempDir()
+		persistence := NewConfigPersistence(dir)
+		if err := persistence.EnsureConfigDir(); err != nil {
+			t.Fatalf("EnsureConfigDir: %v", err)
+		}
+
+		// Write empty file
+		if err := os.WriteFile(filepath.Join(dir, "api_tokens.json"), []byte{}, 0600); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		tokens, err := persistence.LoadAPITokens()
+		if err != nil {
+			t.Fatalf("expected no error for empty file, got: %v", err)
+		}
+		if len(tokens) != 0 {
+			t.Fatalf("expected empty slice, got %d tokens", len(tokens))
+		}
+	})
+
+	t.Run("invalid JSON returns error", func(t *testing.T) {
+		dir := t.TempDir()
+		persistence := NewConfigPersistence(dir)
+		if err := persistence.EnsureConfigDir(); err != nil {
+			t.Fatalf("EnsureConfigDir: %v", err)
+		}
+
+		// Write invalid JSON
+		if err := os.WriteFile(filepath.Join(dir, "api_tokens.json"), []byte("not valid json"), 0600); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		_, err := persistence.LoadAPITokens()
+		if err == nil {
+			t.Fatal("expected error for invalid JSON, got nil")
+		}
+	})
+}
