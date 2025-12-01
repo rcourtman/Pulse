@@ -2146,3 +2146,129 @@ func TestCheckFlappingWindowExpiry(t *testing.T) {
 		t.Errorf("history length = %d, want 1 (old entries should be pruned)", historyLen)
 	}
 }
+
+func TestGetGlobalMetricTimeThreshold(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                 string
+		metricTimeThresholds map[string]map[string]int
+		metricType           string
+		wantDelay            int
+		wantFound            bool
+	}{
+		{
+			name:                 "empty MetricTimeThresholds returns false",
+			metricTimeThresholds: nil,
+			metricType:           "cpu",
+			wantDelay:            0,
+			wantFound:            false,
+		},
+		{
+			name:                 "no all key returns false",
+			metricTimeThresholds: map[string]map[string]int{"specific": {"cpu": 60}},
+			metricType:           "cpu",
+			wantDelay:            0,
+			wantFound:            false,
+		},
+		{
+			name:                 "empty all map returns false",
+			metricTimeThresholds: map[string]map[string]int{"all": {}},
+			metricType:           "cpu",
+			wantDelay:            0,
+			wantFound:            false,
+		},
+		{
+			name:                 "empty metricType returns false",
+			metricTimeThresholds: map[string]map[string]int{"all": {"cpu": 60}},
+			metricType:           "",
+			wantDelay:            0,
+			wantFound:            false,
+		},
+		{
+			name:                 "whitespace metricType returns false",
+			metricTimeThresholds: map[string]map[string]int{"all": {"cpu": 60}},
+			metricType:           "   ",
+			wantDelay:            0,
+			wantFound:            false,
+		},
+		{
+			name:                 "direct metric match",
+			metricTimeThresholds: map[string]map[string]int{"all": {"cpu": 120, "memory": 90}},
+			metricType:           "cpu",
+			wantDelay:            120,
+			wantFound:            true,
+		},
+		{
+			name:                 "metric match case insensitive",
+			metricTimeThresholds: map[string]map[string]int{"all": {"cpu": 120}},
+			metricType:           "CPU",
+			wantDelay:            120,
+			wantFound:            true,
+		},
+		{
+			name:                 "metric match with whitespace",
+			metricTimeThresholds: map[string]map[string]int{"all": {"cpu": 120}},
+			metricType:           "  cpu  ",
+			wantDelay:            120,
+			wantFound:            true,
+		},
+		{
+			name:                 "default fallback",
+			metricTimeThresholds: map[string]map[string]int{"all": {"default": 30}},
+			metricType:           "unknown",
+			wantDelay:            30,
+			wantFound:            true,
+		},
+		{
+			name:                 "_default fallback",
+			metricTimeThresholds: map[string]map[string]int{"all": {"_default": 45}},
+			metricType:           "unknown",
+			wantDelay:            45,
+			wantFound:            true,
+		},
+		{
+			name:                 "wildcard fallback",
+			metricTimeThresholds: map[string]map[string]int{"all": {"*": 15}},
+			metricType:           "unknown",
+			wantDelay:            15,
+			wantFound:            true,
+		},
+		{
+			name:                 "direct match takes precedence over default",
+			metricTimeThresholds: map[string]map[string]int{"all": {"cpu": 120, "default": 30}},
+			metricType:           "cpu",
+			wantDelay:            120,
+			wantFound:            true,
+		},
+		{
+			name:                 "no match and no fallback returns false",
+			metricTimeThresholds: map[string]map[string]int{"all": {"cpu": 120, "memory": 90}},
+			metricType:           "disk",
+			wantDelay:            0,
+			wantFound:            false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			m := NewManager()
+			m.mu.Lock()
+			m.config.MetricTimeThresholds = tt.metricTimeThresholds
+			m.mu.Unlock()
+
+			m.mu.RLock()
+			gotDelay, gotFound := m.getGlobalMetricTimeThreshold(tt.metricType)
+			m.mu.RUnlock()
+
+			if gotDelay != tt.wantDelay {
+				t.Errorf("getGlobalMetricTimeThreshold() delay = %d, want %d", gotDelay, tt.wantDelay)
+			}
+			if gotFound != tt.wantFound {
+				t.Errorf("getGlobalMetricTimeThreshold() found = %v, want %v", gotFound, tt.wantFound)
+			}
+		})
+	}
+}
