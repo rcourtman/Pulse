@@ -8252,3 +8252,379 @@ func TestConvertLegacyThreshold(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckEscalations(t *testing.T) {
+	t.Parallel()
+
+	t.Run("does nothing when escalation is disabled", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		oldTime := time.Now().Add(-2 * time.Hour)
+		m.mu.Lock()
+		m.config.Schedule.Escalation.Enabled = false
+		m.config.Schedule.Escalation.Levels = []EscalationLevel{
+			{After: 30, Notify: "email"},
+		}
+		m.activeAlerts["test-alert"] = &Alert{
+			ID:             "test-alert",
+			StartTime:      oldTime,
+			LastEscalation: 0,
+		}
+		m.mu.Unlock()
+
+		m.checkEscalations()
+
+		m.mu.RLock()
+		alert := m.activeAlerts["test-alert"]
+		m.mu.RUnlock()
+
+		if alert.LastEscalation != 0 {
+			t.Errorf("expected no escalation when disabled, got %d", alert.LastEscalation)
+		}
+	})
+
+	t.Run("skips acknowledged alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		oldTime := time.Now().Add(-2 * time.Hour)
+		m.mu.Lock()
+		m.config.Schedule.Escalation.Enabled = true
+		m.config.Schedule.Escalation.Levels = []EscalationLevel{
+			{After: 30, Notify: "email"},
+		}
+		m.activeAlerts["ack-alert"] = &Alert{
+			ID:             "ack-alert",
+			StartTime:      oldTime,
+			LastEscalation: 0,
+			Acknowledged:   true,
+		}
+		m.mu.Unlock()
+
+		m.checkEscalations()
+
+		m.mu.RLock()
+		alert := m.activeAlerts["ack-alert"]
+		m.mu.RUnlock()
+
+		if alert.LastEscalation != 0 {
+			t.Error("expected no escalation for acknowledged alert")
+		}
+	})
+
+	t.Run("escalates alert after threshold time", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		oldTime := time.Now().Add(-45 * time.Minute) // 45 minutes ago
+		m.mu.Lock()
+		m.config.Schedule.Escalation.Enabled = true
+		m.config.Schedule.Escalation.Levels = []EscalationLevel{
+			{After: 30, Notify: "email"},   // 30 minutes
+			{After: 60, Notify: "webhook"}, // 60 minutes
+		}
+		m.activeAlerts["escalate-alert"] = &Alert{
+			ID:             "escalate-alert",
+			StartTime:      oldTime,
+			LastEscalation: 0,
+		}
+		m.mu.Unlock()
+
+		m.checkEscalations()
+
+		m.mu.RLock()
+		alert := m.activeAlerts["escalate-alert"]
+		m.mu.RUnlock()
+
+		if alert.LastEscalation != 1 {
+			t.Errorf("expected escalation to level 1, got %d", alert.LastEscalation)
+		}
+		if len(alert.EscalationTimes) != 1 {
+			t.Errorf("expected 1 escalation time, got %d", len(alert.EscalationTimes))
+		}
+	})
+
+	t.Run("escalates to multiple levels", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		oldTime := time.Now().Add(-90 * time.Minute) // 90 minutes ago
+		m.mu.Lock()
+		m.config.Schedule.Escalation.Enabled = true
+		m.config.Schedule.Escalation.Levels = []EscalationLevel{
+			{After: 30, Notify: "email"},   // 30 minutes
+			{After: 60, Notify: "webhook"}, // 60 minutes
+		}
+		m.activeAlerts["multi-escalate"] = &Alert{
+			ID:             "multi-escalate",
+			StartTime:      oldTime,
+			LastEscalation: 0,
+		}
+		m.mu.Unlock()
+
+		m.checkEscalations()
+
+		m.mu.RLock()
+		alert := m.activeAlerts["multi-escalate"]
+		m.mu.RUnlock()
+
+		if alert.LastEscalation != 2 {
+			t.Errorf("expected escalation to level 2, got %d", alert.LastEscalation)
+		}
+		if len(alert.EscalationTimes) != 2 {
+			t.Errorf("expected 2 escalation times, got %d", len(alert.EscalationTimes))
+		}
+	})
+
+	t.Run("does not re-escalate already escalated level", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		oldTime := time.Now().Add(-45 * time.Minute)
+		m.mu.Lock()
+		m.config.Schedule.Escalation.Enabled = true
+		m.config.Schedule.Escalation.Levels = []EscalationLevel{
+			{After: 30, Notify: "email"},
+		}
+		m.activeAlerts["already-escalated"] = &Alert{
+			ID:              "already-escalated",
+			StartTime:       oldTime,
+			LastEscalation:  1,
+			EscalationTimes: []time.Time{time.Now().Add(-10 * time.Minute)},
+		}
+		m.mu.Unlock()
+
+		m.checkEscalations()
+
+		m.mu.RLock()
+		alert := m.activeAlerts["already-escalated"]
+		m.mu.RUnlock()
+
+		if alert.LastEscalation != 1 {
+			t.Errorf("expected escalation to remain at 1, got %d", alert.LastEscalation)
+		}
+		if len(alert.EscalationTimes) != 1 {
+			t.Errorf("expected 1 escalation time (unchanged), got %d", len(alert.EscalationTimes))
+		}
+	})
+
+	t.Run("does not escalate before threshold time", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		recentTime := time.Now().Add(-10 * time.Minute) // Only 10 minutes ago
+		m.mu.Lock()
+		m.config.Schedule.Escalation.Enabled = true
+		m.config.Schedule.Escalation.Levels = []EscalationLevel{
+			{After: 30, Notify: "email"}, // 30 minutes threshold
+		}
+		m.activeAlerts["recent-alert"] = &Alert{
+			ID:             "recent-alert",
+			StartTime:      recentTime,
+			LastEscalation: 0,
+		}
+		m.mu.Unlock()
+
+		m.checkEscalations()
+
+		m.mu.RLock()
+		alert := m.activeAlerts["recent-alert"]
+		m.mu.RUnlock()
+
+		if alert.LastEscalation != 0 {
+			t.Error("expected no escalation for recent alert")
+		}
+	})
+}
+
+func TestCleanupAlertsForNodes(t *testing.T) {
+	t.Parallel()
+
+	t.Run("removes alerts for non-existent nodes", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.activeAlerts["alert-old-node"] = &Alert{
+			ID:   "alert-old-node",
+			Node: "old-node",
+		}
+		m.activeAlerts["alert-valid-node"] = &Alert{
+			ID:   "alert-valid-node",
+			Node: "valid-node",
+		}
+		m.mu.Unlock()
+
+		existingNodes := map[string]bool{
+			"valid-node": true,
+		}
+
+		m.CleanupAlertsForNodes(existingNodes)
+
+		// Give async save goroutine time to complete
+		time.Sleep(50 * time.Millisecond)
+
+		m.mu.RLock()
+		_, oldExists := m.activeAlerts["alert-old-node"]
+		_, validExists := m.activeAlerts["alert-valid-node"]
+		m.mu.RUnlock()
+
+		if oldExists {
+			t.Error("expected alert for old node to be removed")
+		}
+		if !validExists {
+			t.Error("expected alert for valid node to remain")
+		}
+	})
+
+	t.Run("skips Docker alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.activeAlerts["docker-container-state"] = &Alert{
+			ID:         "docker-container-state",
+			ResourceID: "docker:host1:container1",
+			Node:       "non-existent-node",
+		}
+		m.activeAlerts["alert-with-docker-resource"] = &Alert{
+			ID:         "alert-with-docker-resource",
+			ResourceID: "docker:host2:container2",
+			Node:       "non-existent-node",
+		}
+		m.mu.Unlock()
+
+		existingNodes := map[string]bool{}
+
+		m.CleanupAlertsForNodes(existingNodes)
+
+		m.mu.RLock()
+		_, dockerExists := m.activeAlerts["docker-container-state"]
+		_, dockerResourceExists := m.activeAlerts["alert-with-docker-resource"]
+		m.mu.RUnlock()
+
+		if !dockerExists {
+			t.Error("expected docker alert to be preserved")
+		}
+		if !dockerResourceExists {
+			t.Error("expected alert with docker resource to be preserved")
+		}
+	})
+
+	t.Run("skips PBS alerts", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.activeAlerts["pbs-offline-test"] = &Alert{
+			ID:   "pbs-offline-test",
+			Node: "non-existent-node",
+		}
+		m.activeAlerts["pbs-backup-alert"] = &Alert{
+			ID:   "pbs-backup-alert",
+			Type: "pbs-offline",
+			Node: "non-existent-node",
+		}
+		m.mu.Unlock()
+
+		existingNodes := map[string]bool{}
+
+		m.CleanupAlertsForNodes(existingNodes)
+
+		m.mu.RLock()
+		_, pbsExists := m.activeAlerts["pbs-offline-test"]
+		_, pbsTypeExists := m.activeAlerts["pbs-backup-alert"]
+		m.mu.RUnlock()
+
+		if !pbsExists {
+			t.Error("expected pbs-prefixed alert to be preserved")
+		}
+		if !pbsTypeExists {
+			t.Error("expected pbs-offline type alert to be preserved")
+		}
+	})
+
+	t.Run("removes alerts with empty node", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.activeAlerts["empty-node-alert"] = &Alert{
+			ID:   "empty-node-alert",
+			Node: "",
+		}
+		m.mu.Unlock()
+
+		existingNodes := map[string]bool{
+			"valid-node": true,
+		}
+
+		m.CleanupAlertsForNodes(existingNodes)
+
+		time.Sleep(50 * time.Millisecond)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["empty-node-alert"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected alert with empty node to be removed")
+		}
+	})
+
+	t.Run("handles nil alert in map", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.activeAlerts["nil-alert"] = nil
+		m.activeAlerts["valid-alert"] = &Alert{
+			ID:   "valid-alert",
+			Node: "valid-node",
+		}
+		m.mu.Unlock()
+
+		existingNodes := map[string]bool{
+			"valid-node": true,
+		}
+
+		// Should not panic
+		m.CleanupAlertsForNodes(existingNodes)
+
+		m.mu.RLock()
+		_, validExists := m.activeAlerts["valid-alert"]
+		m.mu.RUnlock()
+
+		if !validExists {
+			t.Error("expected valid alert to remain")
+		}
+	})
+
+	t.Run("no cleanup needed logs correctly", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		m.mu.Lock()
+		m.activeAlerts["valid-alert"] = &Alert{
+			ID:   "valid-alert",
+			Node: "valid-node",
+		}
+		m.mu.Unlock()
+
+		existingNodes := map[string]bool{
+			"valid-node": true,
+		}
+
+		// Should not panic and should not remove any alerts
+		m.CleanupAlertsForNodes(existingNodes)
+
+		m.mu.RLock()
+		count := len(m.activeAlerts)
+		m.mu.RUnlock()
+
+		if count != 1 {
+			t.Errorf("expected 1 alert, got %d", count)
+		}
+	})
+}
