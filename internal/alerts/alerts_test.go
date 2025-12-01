@@ -3193,3 +3193,93 @@ func TestClearStorageOfflineAlert(t *testing.T) {
 		}
 	})
 }
+
+func TestClearHostMetricAlerts(t *testing.T) {
+	t.Parallel()
+
+	t.Run("clears specified metrics", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		hostID := "my-host"
+		resourceID := fmt.Sprintf("host:%s", hostID)
+
+		// Create alerts for cpu and memory
+		m.mu.Lock()
+		m.activeAlerts[fmt.Sprintf("%s-cpu", resourceID)] = &Alert{ID: fmt.Sprintf("%s-cpu", resourceID)}
+		m.activeAlerts[fmt.Sprintf("%s-memory", resourceID)] = &Alert{ID: fmt.Sprintf("%s-memory", resourceID)}
+		m.activeAlerts[fmt.Sprintf("%s-disk", resourceID)] = &Alert{ID: fmt.Sprintf("%s-disk", resourceID)}
+		m.mu.Unlock()
+
+		m.clearHostMetricAlerts(hostID, "cpu", "disk")
+
+		m.mu.RLock()
+		_, cpuExists := m.activeAlerts[fmt.Sprintf("%s-cpu", resourceID)]
+		_, memExists := m.activeAlerts[fmt.Sprintf("%s-memory", resourceID)]
+		_, diskExists := m.activeAlerts[fmt.Sprintf("%s-disk", resourceID)]
+		m.mu.RUnlock()
+
+		if cpuExists {
+			t.Error("expected cpu alert to be cleared")
+		}
+		if !memExists {
+			t.Error("expected memory alert to remain (not specified)")
+		}
+		if diskExists {
+			t.Error("expected disk alert to be cleared")
+		}
+	})
+
+	t.Run("defaults to cpu and memory when no metrics specified", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		hostID := "default-host"
+		resourceID := fmt.Sprintf("host:%s", hostID)
+
+		// Create alerts
+		m.mu.Lock()
+		m.activeAlerts[fmt.Sprintf("%s-cpu", resourceID)] = &Alert{ID: fmt.Sprintf("%s-cpu", resourceID)}
+		m.activeAlerts[fmt.Sprintf("%s-memory", resourceID)] = &Alert{ID: fmt.Sprintf("%s-memory", resourceID)}
+		m.activeAlerts[fmt.Sprintf("%s-disk", resourceID)] = &Alert{ID: fmt.Sprintf("%s-disk", resourceID)}
+		m.mu.Unlock()
+
+		m.clearHostMetricAlerts(hostID) // No metrics specified
+
+		m.mu.RLock()
+		_, cpuExists := m.activeAlerts[fmt.Sprintf("%s-cpu", resourceID)]
+		_, memExists := m.activeAlerts[fmt.Sprintf("%s-memory", resourceID)]
+		_, diskExists := m.activeAlerts[fmt.Sprintf("%s-disk", resourceID)]
+		m.mu.RUnlock()
+
+		if cpuExists {
+			t.Error("expected cpu alert to be cleared (default)")
+		}
+		if memExists {
+			t.Error("expected memory alert to be cleared (default)")
+		}
+		if !diskExists {
+			t.Error("expected disk alert to remain (not in defaults)")
+		}
+	})
+
+	t.Run("empty hostID is noop", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+
+		// Create an alert that should not be touched
+		m.mu.Lock()
+		m.activeAlerts["host:unknown-cpu"] = &Alert{ID: "host:unknown-cpu"}
+		m.mu.Unlock()
+
+		m.clearHostMetricAlerts("", "cpu")
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["host:unknown-cpu"]
+		m.mu.RUnlock()
+
+		if !exists {
+			t.Error("expected alert to remain when hostID is empty")
+		}
+	})
+}
