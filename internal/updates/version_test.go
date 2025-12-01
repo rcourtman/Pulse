@@ -523,3 +523,92 @@ func TestSanitizePrereleaseIdentifier(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeGitDescribeVersion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+		ok       bool
+	}{
+		// Valid git describe outputs
+		{
+			name:     "basic git describe",
+			input:    "4.24.0-45-gabcdef",
+			expected: "4.24.0+git.45.gabcdef",
+			ok:       true,
+		},
+		{
+			name:     "with prerelease",
+			input:    "4.24.0-rc.3-45-gABCDEF",
+			expected: "4.24.0-rc.3+git.45.gabcdef",
+			ok:       true,
+		},
+		{
+			name:     "with dirty flag",
+			input:    "4.24.0-rc.3-45-gabc123-dirty",
+			expected: "4.24.0-rc.3+git.45.gabc123.dirty",
+			ok:       true,
+		},
+		{
+			name:     "uppercase hash normalized",
+			input:    "4.24.0-1-gABCDEF",
+			expected: "4.24.0+git.1.gabcdef",
+			ok:       true,
+		},
+		{
+			name:     "dirty without prerelease",
+			input:    "4.24.0-10-g1234567-dirty",
+			expected: "4.24.0+git.10.g1234567.dirty",
+			ok:       true,
+		},
+
+		// Invalid inputs
+		{
+			name:     "plain version",
+			input:    "4.24.0",
+			expected: "",
+			ok:       false,
+		},
+		{
+			name:     "version with prerelease only",
+			input:    "4.24.0-rc.1",
+			expected: "",
+			ok:       false,
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+			ok:       false,
+		},
+		{
+			name:     "branch name",
+			input:    "feature-branch",
+			expected: "",
+			ok:       false,
+		},
+		{
+			name:     "invalid base version",
+			input:    "invalid-45-gabcdef",
+			expected: "",
+			ok:       false,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, ok := normalizeGitDescribeVersion(tc.input)
+			if ok != tc.ok {
+				t.Fatalf("normalizeGitDescribeVersion(%q) ok = %v, expected %v", tc.input, ok, tc.ok)
+			}
+			if got != tc.expected {
+				t.Fatalf("normalizeGitDescribeVersion(%q) = %q, expected %q", tc.input, got, tc.expected)
+			}
+		})
+	}
+}
