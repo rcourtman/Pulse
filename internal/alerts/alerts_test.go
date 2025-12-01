@@ -2373,3 +2373,143 @@ func TestGetBaseTimeThreshold(t *testing.T) {
 		})
 	}
 }
+
+func TestGetMetricTimeThreshold(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                 string
+		metricTimeThresholds map[string]map[string]int
+		resourceType         string
+		metricType           string
+		wantDelay            int
+		wantFound            bool
+	}{
+		{
+			name:                 "empty MetricTimeThresholds returns false",
+			metricTimeThresholds: nil,
+			resourceType:         "guest",
+			metricType:           "cpu",
+			wantDelay:            0,
+			wantFound:            false,
+		},
+		{
+			name:                 "empty metricType returns false",
+			metricTimeThresholds: map[string]map[string]int{"guest": {"cpu": 60}},
+			resourceType:         "guest",
+			metricType:           "",
+			wantDelay:            0,
+			wantFound:            false,
+		},
+		{
+			name:                 "whitespace metricType returns false",
+			metricTimeThresholds: map[string]map[string]int{"guest": {"cpu": 60}},
+			resourceType:         "guest",
+			metricType:           "   ",
+			wantDelay:            0,
+			wantFound:            false,
+		},
+		{
+			name:                 "direct match on resourceType and metricType",
+			metricTimeThresholds: map[string]map[string]int{"guest": {"cpu": 120, "memory": 90}},
+			resourceType:         "guest",
+			metricType:           "cpu",
+			wantDelay:            120,
+			wantFound:            true,
+		},
+		{
+			name:                 "canonical key match vm to guest",
+			metricTimeThresholds: map[string]map[string]int{"guest": {"cpu": 120}},
+			resourceType:         "vm",
+			metricType:           "cpu",
+			wantDelay:            120,
+			wantFound:            true,
+		},
+		{
+			name:                 "canonical key match container to guest",
+			metricTimeThresholds: map[string]map[string]int{"guest": {"memory": 90}},
+			resourceType:         "container",
+			metricType:           "memory",
+			wantDelay:            90,
+			wantFound:            true,
+		},
+		{
+			name:                 "default fallback within resourceType",
+			metricTimeThresholds: map[string]map[string]int{"guest": {"default": 30}},
+			resourceType:         "guest",
+			metricType:           "unknown",
+			wantDelay:            30,
+			wantFound:            true,
+		},
+		{
+			name:                 "_default fallback within resourceType",
+			metricTimeThresholds: map[string]map[string]int{"guest": {"_default": 45}},
+			resourceType:         "guest",
+			metricType:           "unknown",
+			wantDelay:            45,
+			wantFound:            true,
+		},
+		{
+			name:                 "wildcard fallback within resourceType",
+			metricTimeThresholds: map[string]map[string]int{"guest": {"*": 15}},
+			resourceType:         "guest",
+			metricType:           "unknown",
+			wantDelay:            15,
+			wantFound:            true,
+		},
+		{
+			name:                 "direct match takes precedence over default",
+			metricTimeThresholds: map[string]map[string]int{"guest": {"cpu": 120, "default": 30}},
+			resourceType:         "guest",
+			metricType:           "cpu",
+			wantDelay:            120,
+			wantFound:            true,
+		},
+		{
+			name:                 "no match for resourceType returns false",
+			metricTimeThresholds: map[string]map[string]int{"node": {"cpu": 60}},
+			resourceType:         "guest",
+			metricType:           "cpu",
+			wantDelay:            0,
+			wantFound:            false,
+		},
+		{
+			name:                 "empty perType map skipped",
+			metricTimeThresholds: map[string]map[string]int{"guest": {}},
+			resourceType:         "guest",
+			metricType:           "cpu",
+			wantDelay:            0,
+			wantFound:            false,
+		},
+		{
+			name:                 "metricType case insensitive",
+			metricTimeThresholds: map[string]map[string]int{"guest": {"cpu": 120}},
+			resourceType:         "guest",
+			metricType:           "CPU",
+			wantDelay:            120,
+			wantFound:            true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			m := NewManager()
+			m.mu.Lock()
+			m.config.MetricTimeThresholds = tt.metricTimeThresholds
+			m.mu.Unlock()
+
+			m.mu.RLock()
+			gotDelay, gotFound := m.getMetricTimeThreshold(tt.resourceType, tt.metricType)
+			m.mu.RUnlock()
+
+			if gotDelay != tt.wantDelay {
+				t.Errorf("getMetricTimeThreshold() delay = %d, want %d", gotDelay, tt.wantDelay)
+			}
+			if gotFound != tt.wantFound {
+				t.Errorf("getMetricTimeThreshold() found = %v, want %v", gotFound, tt.wantFound)
+			}
+		})
+	}
+}
