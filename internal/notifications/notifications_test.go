@@ -2210,3 +2210,281 @@ func TestCheckWebhookRateLimit(t *testing.T) {
 		}
 	})
 }
+
+func TestGeneratePayloadFromTemplateWithService(t *testing.T) {
+	t.Run("valid JSON template", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{
+			ResourceName: "test-vm",
+			Message:      "CPU usage high",
+			Level:        "warning",
+		}
+		template := `{"resource": "{{.ResourceName}}", "message": "{{.Message}}", "level": "{{.Level}}"}`
+
+		result, err := nm.generatePayloadFromTemplateWithService(template, data, "generic")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		expected := `{"resource": "test-vm", "message": "CPU usage high", "level": "warning"}`
+		if string(result) != expected {
+			t.Fatalf("expected %q, got %q", expected, string(result))
+		}
+	})
+
+	t.Run("invalid template syntax", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{ResourceName: "test"}
+		// Missing closing brace in template
+		template := `{"resource": "{{.ResourceName}"}`
+
+		_, err := nm.generatePayloadFromTemplateWithService(template, data, "generic")
+		if err == nil {
+			t.Fatal("expected error for invalid template syntax")
+		}
+		if !strings.Contains(err.Error(), "invalid template") {
+			t.Fatalf("expected 'invalid template' in error, got %v", err)
+		}
+	})
+
+	t.Run("template execution error - missing method", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{ResourceName: "test"}
+		// Reference a non-existent field/method
+		template := `{"value": "{{.NonExistentMethod}}"}`
+
+		_, err := nm.generatePayloadFromTemplateWithService(template, data, "generic")
+		if err == nil {
+			t.Fatal("expected error for non-existent method")
+		}
+		if !strings.Contains(err.Error(), "template execution failed") {
+			t.Fatalf("expected 'template execution failed' in error, got %v", err)
+		}
+	})
+
+	t.Run("ntfy service skips JSON validation", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{
+			ResourceName: "server1",
+			Message:      "Alert triggered",
+		}
+		// Plain text template (not valid JSON)
+		template := `Alert: {{.ResourceName}} - {{.Message}}`
+
+		result, err := nm.generatePayloadFromTemplateWithService(template, data, "ntfy")
+		if err != nil {
+			t.Fatalf("expected no error for ntfy plain text, got %v", err)
+		}
+
+		expected := "Alert: server1 - Alert triggered"
+		if string(result) != expected {
+			t.Fatalf("expected %q, got %q", expected, string(result))
+		}
+	})
+
+	t.Run("non-ntfy service validates JSON", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{ResourceName: "test"}
+		// Plain text (invalid JSON) for non-ntfy service
+		template := `Plain text: {{.ResourceName}}`
+
+		_, err := nm.generatePayloadFromTemplateWithService(template, data, "slack")
+		if err == nil {
+			t.Fatal("expected error for non-JSON output on slack service")
+		}
+		if !strings.Contains(err.Error(), "template produced invalid JSON") {
+			t.Fatalf("expected 'template produced invalid JSON' in error, got %v", err)
+		}
+	})
+
+	t.Run("discord service validates JSON", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{
+			ResourceName: "vm-100",
+			Message:      "Memory threshold exceeded",
+		}
+		template := `{"content": "{{.ResourceName}}: {{.Message}}"}`
+
+		result, err := nm.generatePayloadFromTemplateWithService(template, data, "discord")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		expected := `{"content": "vm-100: Memory threshold exceeded"}`
+		if string(result) != expected {
+			t.Fatalf("expected %q, got %q", expected, string(result))
+		}
+	})
+
+	t.Run("telegram service validates JSON", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{
+			ChatID:  "12345",
+			Message: "Alert notification",
+		}
+		template := `{"chat_id": "{{.ChatID}}", "text": "{{.Message}}"}`
+
+		result, err := nm.generatePayloadFromTemplateWithService(template, data, "telegram")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		expected := `{"chat_id": "12345", "text": "Alert notification"}`
+		if string(result) != expected {
+			t.Fatalf("expected %q, got %q", expected, string(result))
+		}
+	})
+
+	t.Run("template with numeric values", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{
+			ResourceName: "vm-100",
+			Value:        85.5,
+			Threshold:    80.0,
+		}
+		template := `{"resource": "{{.ResourceName}}", "value": {{.Value}}, "threshold": {{.Threshold}}}`
+
+		result, err := nm.generatePayloadFromTemplateWithService(template, data, "generic")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		// Verify it's valid JSON
+		var parsed map[string]interface{}
+		if err := json.Unmarshal(result, &parsed); err != nil {
+			t.Fatalf("result is not valid JSON: %v", err)
+		}
+		if parsed["value"].(float64) != 85.5 {
+			t.Fatalf("expected value 85.5, got %v", parsed["value"])
+		}
+	})
+
+	t.Run("template with boolean values", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{
+			ResourceName: "test",
+			Acknowledged: true,
+		}
+		template := `{"resource": "{{.ResourceName}}", "acknowledged": {{.Acknowledged}}}`
+
+		result, err := nm.generatePayloadFromTemplateWithService(template, data, "generic")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		var parsed map[string]interface{}
+		if err := json.Unmarshal(result, &parsed); err != nil {
+			t.Fatalf("result is not valid JSON: %v", err)
+		}
+		if parsed["acknowledged"].(bool) != true {
+			t.Fatalf("expected acknowledged true, got %v", parsed["acknowledged"])
+		}
+	})
+
+	t.Run("template with special characters in strings", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{
+			ResourceName: "test",
+			Message:      `Line1\nLine2 with "quotes" and \t tabs`,
+		}
+		// Use printf to escape for JSON
+		template := `{"message": "{{.Message}}"}`
+
+		// This will produce invalid JSON because of unescaped characters
+		_, err := nm.generatePayloadFromTemplateWithService(template, data, "generic")
+		if err == nil {
+			t.Fatal("expected error for unescaped special characters in JSON")
+		}
+		if !strings.Contains(err.Error(), "template produced invalid JSON") {
+			t.Fatalf("expected 'template produced invalid JSON' in error, got %v", err)
+		}
+	})
+
+	t.Run("empty template", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{}
+		template := ""
+
+		_, err := nm.generatePayloadFromTemplateWithService(template, data, "generic")
+		if err == nil {
+			t.Fatal("expected error for empty template producing invalid JSON")
+		}
+	})
+
+	t.Run("template with template functions", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{
+			ResourceName: "test-server",
+			Level:        "warning",
+		}
+		template := `{"resource": "{{upper .ResourceName}}", "level": "{{title .Level}}"}`
+
+		result, err := nm.generatePayloadFromTemplateWithService(template, data, "generic")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		var parsed map[string]interface{}
+		if err := json.Unmarshal(result, &parsed); err != nil {
+			t.Fatalf("result is not valid JSON: %v", err)
+		}
+		if parsed["resource"] != "TEST-SERVER" {
+			t.Fatalf("expected 'TEST-SERVER', got %v", parsed["resource"])
+		}
+		if parsed["level"] != "Warning" {
+			t.Fatalf("expected 'Warning', got %v", parsed["level"])
+		}
+	})
+
+	t.Run("pagerduty service validates JSON", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{
+			ResourceName: "critical-service",
+			Message:      "Service down",
+			Level:        "critical",
+		}
+		template := `{"routing_key": "test", "event_action": "trigger", "payload": {"summary": "{{.Message}}"}}`
+
+		result, err := nm.generatePayloadFromTemplateWithService(template, data, "pagerduty")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		var parsed map[string]interface{}
+		if err := json.Unmarshal(result, &parsed); err != nil {
+			t.Fatalf("result is not valid JSON: %v", err)
+		}
+	})
+
+	t.Run("generic service validates JSON", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{
+			ResourceName: "test",
+		}
+		template := `not valid json at all`
+
+		_, err := nm.generatePayloadFromTemplateWithService(template, data, "generic")
+		if err == nil {
+			t.Fatal("expected error for invalid JSON")
+		}
+	})
+
+	t.Run("unknown service still validates JSON", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{
+			ResourceName: "test",
+		}
+		// Valid JSON
+		template := `{"test": "{{.ResourceName}}"}`
+
+		result, err := nm.generatePayloadFromTemplateWithService(template, data, "unknown_service")
+		if err != nil {
+			t.Fatalf("expected no error for valid JSON on unknown service, got %v", err)
+		}
+
+		expected := `{"test": "test"}`
+		if string(result) != expected {
+			t.Fatalf("expected %q, got %q", expected, string(result))
+		}
+	})
+}
