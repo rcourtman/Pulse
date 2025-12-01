@@ -1,6 +1,8 @@
 package api
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestExtractHostAndPort(t *testing.T) {
 	tests := []struct {
@@ -198,6 +200,123 @@ func TestExtractHostAndPort(t *testing.T) {
 			}
 			if gotPort != tt.wantPort {
 				t.Errorf("extractHostAndPort(%q) port = %q, want %q", tt.hostStr, gotPort, tt.wantPort)
+			}
+		})
+	}
+}
+
+func TestValidateIPAddress(t *testing.T) {
+	tests := []struct {
+		name string
+		ip   string
+		want bool
+	}{
+		// Valid IPv4 addresses
+		{"valid IPv4 localhost", "127.0.0.1", true},
+		{"valid IPv4 private", "192.168.1.1", true},
+		{"valid IPv4 public", "8.8.8.8", true},
+		{"valid IPv4 zeros", "0.0.0.0", true},
+		{"valid IPv4 broadcast", "255.255.255.255", true},
+		{"valid IPv4 class A", "10.0.0.1", true},
+		{"valid IPv4 class B", "172.16.0.1", true},
+
+		// Valid IPv6 addresses
+		{"valid IPv6 loopback", "::1", true},
+		{"valid IPv6 unspecified", "::", true},
+		{"valid IPv6 full", "2001:0db8:85a3:0000:0000:8a2e:0370:7334", true},
+		{"valid IPv6 compressed", "2001:db8:85a3::8a2e:370:7334", true},
+		{"valid IPv6 link-local", "fe80::1", true},
+		{"valid IPv6 multicast", "ff02::1", true},
+
+		// Invalid addresses
+		{"invalid empty", "", false},
+		{"invalid hostname", "localhost", false},
+		{"invalid domain", "example.com", false},
+		{"invalid IPv4 with port", "192.168.1.1:8080", false},
+		{"invalid IPv4 out of range", "256.256.256.256", false},
+		{"invalid IPv4 too many octets", "192.168.1.1.1", false},
+		{"invalid IPv4 too few octets", "192.168.1", false},
+		{"invalid IPv4 negative", "-1.0.0.0", false},
+		{"invalid IPv4 with letters", "192.168.a.1", false},
+		{"invalid IPv6 with port", "[::1]:8080", false},
+		{"invalid IPv6 brackets only", "[::1]", false},
+		{"invalid random string", "not-an-ip", false},
+		{"invalid whitespace", " 192.168.1.1 ", false},
+		{"invalid URL", "https://192.168.1.1", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := validateIPAddress(tt.ip)
+			if got != tt.want {
+				t.Errorf("validateIPAddress(%q) = %v, want %v", tt.ip, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidatePort(t *testing.T) {
+	tests := []struct {
+		name    string
+		portStr string
+		want    bool
+	}{
+		// Valid ports
+		{"valid minimum port", "1", true},
+		{"valid maximum port", "65535", true},
+		{"valid common HTTP", "80", true},
+		{"valid HTTPS", "443", true},
+		{"valid Proxmox PVE", "8006", true},
+		{"valid Proxmox PBS", "8007", true},
+		{"valid SSH", "22", true},
+		{"valid high port", "49152", true},
+
+		// Invalid ports
+		{"invalid zero", "0", false},
+		{"invalid negative", "-1", false},
+		{"invalid too high", "65536", false},
+		{"invalid way too high", "100000", false},
+		{"invalid empty string", "", false},
+		{"invalid non-numeric", "abc", false},
+		{"invalid float", "80.5", false},
+		{"invalid with spaces", " 80 ", false},
+		{"invalid mixed", "80abc", false},
+		{"invalid hex", "0x50", false},
+		{"invalid with leading zeros that parse ok", "0080", true}, // strconv.Atoi handles leading zeros
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := validatePort(tt.portStr)
+			if got != tt.want {
+				t.Errorf("validatePort(%q) = %v, want %v", tt.portStr, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDefaultPortForNodeType(t *testing.T) {
+	tests := []struct {
+		name     string
+		nodeType string
+		want     string
+	}{
+		{"PVE node", "pve", "8006"},
+		{"PMG node", "pmg", "8006"},
+		{"PBS node", "pbs", "8007"},
+		{"docker node returns empty", "docker", ""},
+		{"unknown type returns empty", "unknown", ""},
+		{"empty type returns empty", "", ""},
+		{"uppercase PVE returns empty", "PVE", ""},     // case sensitive
+		{"mixed case returns empty", "Pve", ""},        // case sensitive
+		{"similar but wrong returns empty", "pvee", ""}, // exact match only
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := defaultPortForNodeType(tt.nodeType)
+			if got != tt.want {
+				t.Errorf("defaultPortForNodeType(%q) = %q, want %q", tt.nodeType, got, tt.want)
 			}
 		})
 	}
