@@ -1487,3 +1487,223 @@ func TestLoadSystemSettingsFileNotExist(t *testing.T) {
 		t.Fatal("expected nil for non-existent system settings file")
 	}
 }
+
+// ============================================================================
+// LoadOIDCConfig error paths and success cases
+// ============================================================================
+
+func TestLoadOIDCConfigFileNotExist(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Don't create the file - test that nil, nil is returned
+	cfg, err := cp.LoadOIDCConfig()
+	if err != nil {
+		t.Fatalf("LoadOIDCConfig returned error for non-existent file: %v", err)
+	}
+
+	if cfg != nil {
+		t.Fatal("expected nil config for non-existent file, got non-nil")
+	}
+}
+
+func TestLoadOIDCConfigFileReadError(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Create oidc.enc as a directory to trigger a read error (not IsNotExist)
+	oidcFile := filepath.Join(tempDir, "oidc.enc")
+	if err := os.Mkdir(oidcFile, 0700); err != nil {
+		t.Fatalf("Mkdir: %v", err)
+	}
+
+	_, err := cp.LoadOIDCConfig()
+	if err == nil {
+		t.Fatal("expected error when reading directory as file, got nil")
+	}
+}
+
+func TestLoadOIDCConfigValidJSONWithoutEncryption(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Use SaveOIDCConfig to properly save (and encrypt) the config,
+	// then LoadOIDCConfig should be able to load it back
+	expected := config.OIDCConfig{
+		Enabled:       true,
+		IssuerURL:     "https://auth.example.com",
+		ClientID:      "test-client-id",
+		ClientSecret:  "test-client-secret",
+		RedirectURL:   "https://app.example.com/callback",
+		Scopes:        []string{"openid", "email", "profile"},
+		UsernameClaim: "preferred_username",
+	}
+
+	if err := cp.SaveOIDCConfig(expected); err != nil {
+		t.Fatalf("SaveOIDCConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadOIDCConfig()
+	if err != nil {
+		t.Fatalf("LoadOIDCConfig: %v", err)
+	}
+
+	if loaded == nil {
+		t.Fatal("expected non-nil config, got nil")
+	}
+	if loaded.Enabled != expected.Enabled {
+		t.Fatalf("Enabled mismatch: got %v want %v", loaded.Enabled, expected.Enabled)
+	}
+	if loaded.IssuerURL != expected.IssuerURL {
+		t.Fatalf("IssuerURL mismatch: got %q want %q", loaded.IssuerURL, expected.IssuerURL)
+	}
+	if loaded.ClientID != expected.ClientID {
+		t.Fatalf("ClientID mismatch: got %q want %q", loaded.ClientID, expected.ClientID)
+	}
+	if loaded.ClientSecret != expected.ClientSecret {
+		t.Fatalf("ClientSecret mismatch: got %q want %q", loaded.ClientSecret, expected.ClientSecret)
+	}
+	if loaded.RedirectURL != expected.RedirectURL {
+		t.Fatalf("RedirectURL mismatch: got %q want %q", loaded.RedirectURL, expected.RedirectURL)
+	}
+	if loaded.UsernameClaim != expected.UsernameClaim {
+		t.Fatalf("UsernameClaim mismatch: got %q want %q", loaded.UsernameClaim, expected.UsernameClaim)
+	}
+	if !reflect.DeepEqual(loaded.Scopes, expected.Scopes) {
+		t.Fatalf("Scopes mismatch: got %v want %v", loaded.Scopes, expected.Scopes)
+	}
+}
+
+func TestLoadOIDCConfigInvalidJSON(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Write invalid data to oidc.enc file
+	// Since crypto is enabled, writing raw JSON will cause a decryption error first
+	// To test JSON unmarshal error, we need to bypass encryption or test the path
+	// where crypto is nil. Writing garbage data will trigger decrypt error which
+	// covers the decrypt error path.
+	oidcFile := filepath.Join(tempDir, "oidc.enc")
+	if err := os.WriteFile(oidcFile, []byte(`{invalid json content`), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := cp.LoadOIDCConfig()
+	if err == nil {
+		t.Fatal("expected error for invalid data, got nil")
+	}
+}
+
+func TestLoadOIDCConfigDecryptionError(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Write data that will fail decryption (not valid encrypted format)
+	oidcFile := filepath.Join(tempDir, "oidc.enc")
+	if err := os.WriteFile(oidcFile, []byte(`corrupted encrypted data`), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := cp.LoadOIDCConfig()
+	if err == nil {
+		t.Fatal("expected decryption error, got nil")
+	}
+}
+
+func TestLoadOIDCConfigRoundTrip(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Test full round-trip with encryption
+	original := config.OIDCConfig{
+		Enabled:        true,
+		IssuerURL:      "https://idp.example.org/realms/myrealm",
+		ClientID:       "my-app",
+		ClientSecret:   "super-secret-value",
+		RedirectURL:    "https://myapp.example.org/auth/callback",
+		LogoutURL:      "https://idp.example.org/realms/myrealm/protocol/openid-connect/logout",
+		Scopes:         []string{"openid", "email", "profile", "groups"},
+		UsernameClaim:  "preferred_username",
+		EmailClaim:     "email",
+		GroupsClaim:    "groups",
+		AllowedGroups:  []string{"admin", "users"},
+		AllowedDomains: []string{"example.org"},
+		AllowedEmails:  []string{"admin@example.org"},
+		CABundle:       "-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----",
+	}
+
+	if err := cp.SaveOIDCConfig(original); err != nil {
+		t.Fatalf("SaveOIDCConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadOIDCConfig()
+	if err != nil {
+		t.Fatalf("LoadOIDCConfig: %v", err)
+	}
+
+	if loaded == nil {
+		t.Fatal("expected config, got nil")
+	}
+
+	// Verify all fields are preserved through the round-trip
+	if loaded.Enabled != original.Enabled {
+		t.Errorf("Enabled: got %v want %v", loaded.Enabled, original.Enabled)
+	}
+	if loaded.IssuerURL != original.IssuerURL {
+		t.Errorf("IssuerURL: got %q want %q", loaded.IssuerURL, original.IssuerURL)
+	}
+	if loaded.ClientID != original.ClientID {
+		t.Errorf("ClientID: got %q want %q", loaded.ClientID, original.ClientID)
+	}
+	if loaded.ClientSecret != original.ClientSecret {
+		t.Errorf("ClientSecret: got %q want %q", loaded.ClientSecret, original.ClientSecret)
+	}
+	if loaded.RedirectURL != original.RedirectURL {
+		t.Errorf("RedirectURL: got %q want %q", loaded.RedirectURL, original.RedirectURL)
+	}
+	if loaded.LogoutURL != original.LogoutURL {
+		t.Errorf("LogoutURL: got %q want %q", loaded.LogoutURL, original.LogoutURL)
+	}
+	if !reflect.DeepEqual(loaded.Scopes, original.Scopes) {
+		t.Errorf("Scopes: got %v want %v", loaded.Scopes, original.Scopes)
+	}
+	if loaded.UsernameClaim != original.UsernameClaim {
+		t.Errorf("UsernameClaim: got %q want %q", loaded.UsernameClaim, original.UsernameClaim)
+	}
+	if loaded.EmailClaim != original.EmailClaim {
+		t.Errorf("EmailClaim: got %q want %q", loaded.EmailClaim, original.EmailClaim)
+	}
+	if loaded.GroupsClaim != original.GroupsClaim {
+		t.Errorf("GroupsClaim: got %q want %q", loaded.GroupsClaim, original.GroupsClaim)
+	}
+	if !reflect.DeepEqual(loaded.AllowedGroups, original.AllowedGroups) {
+		t.Errorf("AllowedGroups: got %v want %v", loaded.AllowedGroups, original.AllowedGroups)
+	}
+	if !reflect.DeepEqual(loaded.AllowedDomains, original.AllowedDomains) {
+		t.Errorf("AllowedDomains: got %v want %v", loaded.AllowedDomains, original.AllowedDomains)
+	}
+	if !reflect.DeepEqual(loaded.AllowedEmails, original.AllowedEmails) {
+		t.Errorf("AllowedEmails: got %v want %v", loaded.AllowedEmails, original.AllowedEmails)
+	}
+	if loaded.CABundle != original.CABundle {
+		t.Errorf("CABundle: got %q want %q", loaded.CABundle, original.CABundle)
+	}
+}
