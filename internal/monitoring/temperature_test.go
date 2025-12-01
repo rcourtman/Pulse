@@ -2634,6 +2634,320 @@ func TestHandleProxyHostFailure_MultipleHostsIndependent(t *testing.T) {
 	}
 }
 
+// TestParseSensorsJSON_TableDriven tests parseSensorsJSON with table-driven test cases
+func TestParseSensorsJSON_TableDriven(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		wantErr      bool
+		errContains  string
+		wantAvail    bool
+		wantHasCPU   bool
+		wantHasNVMe  bool
+		wantHasGPU   bool
+		wantHasSMART bool
+		checkFunc    func(t *testing.T, temp *models.Temperature)
+	}{
+		{
+			name:        "empty string returns error",
+			input:       "",
+			wantErr:     true,
+			errContains: "empty sensors output",
+		},
+		{
+			name:        "whitespace-only string returns error",
+			input:       "   \t\n  ",
+			wantErr:     true,
+			errContains: "empty sensors output",
+		},
+		{
+			name:        "invalid JSON returns error",
+			input:       "not valid json {",
+			wantErr:     true,
+			errContains: "failed to parse sensors JSON",
+		},
+		{
+			name:        "empty JSON object returns no error but unavailable",
+			input:       "{}",
+			wantErr:     false,
+			wantAvail:   false,
+			wantHasCPU:  false,
+			wantHasNVMe: false,
+		},
+		{
+			name: "wrapper format with sensors and smart data",
+			input: `{
+				"sensors": {
+					"coretemp-isa-0000": {
+						"Package id 0": {"temp1_input": 55.0},
+						"Core 0": {"temp2_input": 52.0}
+					}
+				},
+				"smart": [
+					{"device": "/dev/sda", "serial": "ABC123", "model": "TestDisk", "type": "sat", "temperature": 35}
+				]
+			}`,
+			wantErr:      false,
+			wantAvail:    true,
+			wantHasCPU:   true,
+			wantHasNVMe:  false,
+			wantHasGPU:   false,
+			wantHasSMART: true,
+			checkFunc: func(t *testing.T, temp *models.Temperature) {
+				if temp.CPUPackage != 55.0 {
+					t.Errorf("expected CPUPackage 55.0, got %.2f", temp.CPUPackage)
+				}
+				if len(temp.SMART) != 1 {
+					t.Errorf("expected 1 SMART entry, got %d", len(temp.SMART))
+				}
+			},
+		},
+		{
+			name: "legacy format (direct sensors JSON)",
+			input: `{
+				"coretemp-isa-0000": {
+					"Package id 0": {"temp1_input": 48.0},
+					"Core 0": {"temp2_input": 46.0}
+				}
+			}`,
+			wantErr:     false,
+			wantAvail:   true,
+			wantHasCPU:  true,
+			wantHasNVMe: false,
+			checkFunc: func(t *testing.T, temp *models.Temperature) {
+				if temp.CPUPackage != 48.0 {
+					t.Errorf("expected CPUPackage 48.0, got %.2f", temp.CPUPackage)
+				}
+			},
+		},
+		{
+			name: "k10temp chip type",
+			input: `{
+				"k10temp-pci-00c3": {
+					"Tctl": {"temp1_input": 58.5}
+				}
+			}`,
+			wantErr:    false,
+			wantAvail:  true,
+			wantHasCPU: true,
+			checkFunc: func(t *testing.T, temp *models.Temperature) {
+				if temp.CPUPackage != 58.5 {
+					t.Errorf("expected CPUPackage 58.5 from Tctl, got %.2f", temp.CPUPackage)
+				}
+			},
+		},
+		{
+			name: "acpitz chip type",
+			input: `{
+				"acpitz-acpi-0": {
+					"temp1": {"temp1_input": 42.0}
+				}
+			}`,
+			wantErr:    false,
+			wantAvail:  true,
+			wantHasCPU: true,
+		},
+		{
+			name: "nvme chip type",
+			input: `{
+				"nvme-pci-0100": {
+					"Composite": {"temp1_input": 41.85}
+				}
+			}`,
+			wantErr:     false,
+			wantAvail:   true,
+			wantHasCPU:  false,
+			wantHasNVMe: true,
+			checkFunc: func(t *testing.T, temp *models.Temperature) {
+				if len(temp.NVMe) != 1 {
+					t.Fatalf("expected 1 NVMe temp, got %d", len(temp.NVMe))
+				}
+				if temp.NVMe[0].Temp != 41.85 {
+					t.Errorf("expected NVMe temp 41.85, got %.2f", temp.NVMe[0].Temp)
+				}
+			},
+		},
+		{
+			name: "amdgpu chip type",
+			input: `{
+				"amdgpu-pci-0300": {
+					"edge": {"temp1_input": 65.0},
+					"junction": {"temp2_input": 72.0},
+					"mem": {"temp3_input": 68.0}
+				}
+			}`,
+			wantErr:    false,
+			wantAvail:  true,
+			wantHasCPU: false,
+			wantHasGPU: true,
+			checkFunc: func(t *testing.T, temp *models.Temperature) {
+				if len(temp.GPU) == 0 {
+					t.Fatalf("expected GPU temps, got none")
+				}
+			},
+		},
+		{
+			name: "nouveau chip type (NVIDIA)",
+			input: `{
+				"nouveau-pci-0100": {
+					"GPU core": {"temp1_input": 55.0}
+				}
+			}`,
+			wantErr:    false,
+			wantAvail:  true,
+			wantHasCPU: false,
+			wantHasGPU: true,
+			checkFunc: func(t *testing.T, temp *models.Temperature) {
+				if len(temp.GPU) == 0 {
+					t.Fatalf("expected GPU temps for nouveau, got none")
+				}
+			},
+		},
+		{
+			name: "chip data that is not a map should continue",
+			input: `{
+				"coretemp-isa-0000": {
+					"Package id 0": {"temp1_input": 50.0}
+				},
+				"invalid-chip": "not a map"
+			}`,
+			wantErr:    false,
+			wantAvail:  true,
+			wantHasCPU: true,
+			checkFunc: func(t *testing.T, temp *models.Temperature) {
+				if temp.CPUPackage != 50.0 {
+					t.Errorf("expected CPUPackage 50.0 despite invalid chip, got %.2f", temp.CPUPackage)
+				}
+			},
+		},
+		{
+			name: "chip data that is an array should continue",
+			input: `{
+				"k10temp-pci-00c3": {
+					"Tctl": {"temp1_input": 60.0}
+				},
+				"array-chip": [1, 2, 3]
+			}`,
+			wantErr:    false,
+			wantAvail:  true,
+			wantHasCPU: true,
+			checkFunc: func(t *testing.T, temp *models.Temperature) {
+				if temp.CPUPackage != 60.0 {
+					t.Errorf("expected CPUPackage 60.0 despite array chip, got %.2f", temp.CPUPackage)
+				}
+			},
+		},
+		{
+			name: "zenpower chip type",
+			input: `{
+				"zenpower-pci-00c3": {
+					"Tdie": {"temp1_input": 62.5}
+				}
+			}`,
+			wantErr:    false,
+			wantAvail:  true,
+			wantHasCPU: true,
+		},
+		{
+			name: "nct6795 SuperIO chip",
+			input: `{
+				"nct6795-isa-0290": {
+					"CPUTIN": {"temp1_input": 45.0}
+				}
+			}`,
+			wantErr:    false,
+			wantAvail:  true,
+			wantHasCPU: true,
+		},
+		{
+			name: "it87 chip type",
+			input: `{
+				"it87-isa-0a40": {
+					"temp1": {"temp1_input": 38.0}
+				}
+			}`,
+			wantErr:    false,
+			wantAvail:  true,
+			wantHasCPU: true,
+		},
+		{
+			name: "rp1_adc (Raspberry Pi RP1)",
+			input: `{
+				"rp1_adc-isa-0000": {
+					"temp1": {"temp1_input": 49.5}
+				}
+			}`,
+			wantErr:    false,
+			wantAvail:  true,
+			wantHasCPU: true,
+		},
+		{
+			name: "CPUMax calculated from cores when no package temp",
+			input: `{
+				"coretemp-isa-0000": {
+					"Core 0": {"temp2_input": 45.0},
+					"Core 1": {"temp3_input": 52.0},
+					"Core 2": {"temp4_input": 48.0}
+				}
+			}`,
+			wantErr:    false,
+			wantAvail:  true,
+			wantHasCPU: true,
+			checkFunc: func(t *testing.T, temp *models.Temperature) {
+				if temp.CPUMax != 52.0 {
+					t.Errorf("expected CPUMax 52.0 (highest core), got %.2f", temp.CPUMax)
+				}
+				if len(temp.Cores) != 3 {
+					t.Errorf("expected 3 cores, got %d", len(temp.Cores))
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tc := &TemperatureCollector{}
+			temp, err := tc.parseSensorsJSON(tt.input)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.errContains)
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Fatalf("expected error containing %q, got %q", tt.errContains, err.Error())
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if temp == nil {
+				t.Fatalf("expected temperature struct, got nil")
+			}
+			if temp.Available != tt.wantAvail {
+				t.Errorf("Available = %v, want %v", temp.Available, tt.wantAvail)
+			}
+			if temp.HasCPU != tt.wantHasCPU {
+				t.Errorf("HasCPU = %v, want %v", temp.HasCPU, tt.wantHasCPU)
+			}
+			if temp.HasNVMe != tt.wantHasNVMe {
+				t.Errorf("HasNVMe = %v, want %v", temp.HasNVMe, tt.wantHasNVMe)
+			}
+			if temp.HasGPU != tt.wantHasGPU {
+				t.Errorf("HasGPU = %v, want %v", temp.HasGPU, tt.wantHasGPU)
+			}
+			if temp.HasSMART != tt.wantHasSMART {
+				t.Errorf("HasSMART = %v, want %v", temp.HasSMART, tt.wantHasSMART)
+			}
+
+			if tt.checkFunc != nil {
+				tt.checkFunc(t, temp)
+			}
+		})
+	}
+}
+
 // Helper functions for test setup
 
 func intPtr(i int) *int {
