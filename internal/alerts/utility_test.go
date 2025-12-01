@@ -2148,3 +2148,397 @@ func TestParsePulseTags(t *testing.T) {
 		})
 	}
 }
+
+// TestNormalizeMetricTimeThresholds tests the normalizeMetricTimeThresholds function
+func TestNormalizeMetricTimeThresholds(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input map[string]map[string]int
+		want  map[string]map[string]int
+	}{
+		{
+			name:  "nil input returns nil",
+			input: nil,
+			want:  nil,
+		},
+		{
+			name:  "empty input returns nil",
+			input: map[string]map[string]int{},
+			want:  nil,
+		},
+		{
+			name: "valid input is normalized",
+			input: map[string]map[string]int{
+				"guest": {"cpu": 60, "memory": 120},
+			},
+			want: map[string]map[string]int{
+				"guest": {"cpu": 60, "memory": 120},
+			},
+		},
+		{
+			name: "keys are lowercased",
+			input: map[string]map[string]int{
+				"GUEST": {"CPU": 60, "MEMORY": 120},
+			},
+			want: map[string]map[string]int{
+				"guest": {"cpu": 60, "memory": 120},
+			},
+		},
+		{
+			name: "keys are trimmed",
+			input: map[string]map[string]int{
+				"  guest  ": {"  cpu  ": 60},
+			},
+			want: map[string]map[string]int{
+				"guest": {"cpu": 60},
+			},
+		},
+		{
+			name: "negative delays are dropped",
+			input: map[string]map[string]int{
+				"guest": {"cpu": 60, "memory": -1},
+			},
+			want: map[string]map[string]int{
+				"guest": {"cpu": 60},
+			},
+		},
+		{
+			name: "zero delay is valid",
+			input: map[string]map[string]int{
+				"guest": {"cpu": 0},
+			},
+			want: map[string]map[string]int{
+				"guest": {"cpu": 0},
+			},
+		},
+		{
+			name: "empty type key is dropped",
+			input: map[string]map[string]int{
+				"":      {"cpu": 60},
+				"guest": {"memory": 120},
+			},
+			want: map[string]map[string]int{
+				"guest": {"memory": 120},
+			},
+		},
+		{
+			name: "whitespace-only type key is dropped",
+			input: map[string]map[string]int{
+				"   ":   {"cpu": 60},
+				"guest": {"memory": 120},
+			},
+			want: map[string]map[string]int{
+				"guest": {"memory": 120},
+			},
+		},
+		{
+			name: "empty metric key is dropped",
+			input: map[string]map[string]int{
+				"guest": {"": 60, "cpu": 120},
+			},
+			want: map[string]map[string]int{
+				"guest": {"cpu": 120},
+			},
+		},
+		{
+			name: "empty metrics map is dropped",
+			input: map[string]map[string]int{
+				"guest": {},
+				"node":  {"cpu": 60},
+			},
+			want: map[string]map[string]int{
+				"node": {"cpu": 60},
+			},
+		},
+		{
+			name: "all invalid results in nil",
+			input: map[string]map[string]int{
+				"":      {"cpu": 60},
+				"guest": {"": 60, "memory": -1},
+			},
+			want: nil,
+		},
+		{
+			name: "multiple resource types",
+			input: map[string]map[string]int{
+				"guest": {"cpu": 60, "memory": 120},
+				"node":  {"disk": 30},
+			},
+			want: map[string]map[string]int{
+				"guest": {"cpu": 60, "memory": 120},
+				"node":  {"disk": 30},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := normalizeMetricTimeThresholds(tc.input)
+
+			if tc.want == nil {
+				if result != nil {
+					t.Errorf("normalizeMetricTimeThresholds() = %v, want nil", result)
+				}
+				return
+			}
+
+			if result == nil {
+				t.Fatalf("normalizeMetricTimeThresholds() = nil, want %v", tc.want)
+			}
+
+			// Check all expected keys exist with correct values
+			for typeKey, metrics := range tc.want {
+				resultMetrics, exists := result[typeKey]
+				if !exists {
+					t.Errorf("missing type key %q", typeKey)
+					continue
+				}
+				for metricKey, delay := range metrics {
+					resultDelay, exists := resultMetrics[metricKey]
+					if !exists {
+						t.Errorf("missing metric key %q for type %q", metricKey, typeKey)
+						continue
+					}
+					if resultDelay != delay {
+						t.Errorf("result[%q][%q] = %d, want %d", typeKey, metricKey, resultDelay, delay)
+					}
+				}
+				// Check no extra metric keys
+				if len(resultMetrics) != len(metrics) {
+					t.Errorf("result[%q] has %d keys, want %d", typeKey, len(resultMetrics), len(metrics))
+				}
+			}
+			// Check no extra type keys
+			if len(result) != len(tc.want) {
+				t.Errorf("result has %d type keys, want %d", len(result), len(tc.want))
+			}
+		})
+	}
+}
+
+// TestGetThresholdForMetric tests the getThresholdForMetric function
+func TestGetThresholdForMetric(t *testing.T) {
+	t.Parallel()
+
+	cpuThreshold := &HysteresisThreshold{Trigger: 80, Clear: 70}
+	memoryThreshold := &HysteresisThreshold{Trigger: 85, Clear: 75}
+	diskThreshold := &HysteresisThreshold{Trigger: 90, Clear: 85}
+	diskReadThreshold := &HysteresisThreshold{Trigger: 50, Clear: 40}
+	diskWriteThreshold := &HysteresisThreshold{Trigger: 55, Clear: 45}
+	networkInThreshold := &HysteresisThreshold{Trigger: 70, Clear: 60}
+	networkOutThreshold := &HysteresisThreshold{Trigger: 75, Clear: 65}
+	temperatureThreshold := &HysteresisThreshold{Trigger: 65, Clear: 55}
+	usageThreshold := &HysteresisThreshold{Trigger: 88, Clear: 78}
+
+	config := ThresholdConfig{
+		CPU:         cpuThreshold,
+		Memory:      memoryThreshold,
+		Disk:        diskThreshold,
+		DiskRead:    diskReadThreshold,
+		DiskWrite:   diskWriteThreshold,
+		NetworkIn:   networkInThreshold,
+		NetworkOut:  networkOutThreshold,
+		Temperature: temperatureThreshold,
+		Usage:       usageThreshold,
+	}
+
+	tests := []struct {
+		name       string
+		metricType string
+		want       *HysteresisThreshold
+	}{
+		{"cpu", "cpu", cpuThreshold},
+		{"memory", "memory", memoryThreshold},
+		{"disk", "disk", diskThreshold},
+		{"diskRead", "diskRead", diskReadThreshold},
+		{"diskWrite", "diskWrite", diskWriteThreshold},
+		{"networkIn", "networkIn", networkInThreshold},
+		{"networkOut", "networkOut", networkOutThreshold},
+		{"temperature", "temperature", temperatureThreshold},
+		{"usage", "usage", usageThreshold},
+		{"unknown metric", "unknown", nil},
+		{"empty metric", "", nil},
+		{"case sensitive - CPU", "CPU", nil},
+		{"case sensitive - Memory", "Memory", nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := getThresholdForMetric(config, tc.metricType)
+			if result != tc.want {
+				t.Errorf("getThresholdForMetric(%q) = %v, want %v", tc.metricType, result, tc.want)
+			}
+		})
+	}
+}
+
+// TestGetThresholdForMetric_EmptyConfig tests getThresholdForMetric with empty config
+func TestGetThresholdForMetric_EmptyConfig(t *testing.T) {
+	t.Parallel()
+
+	config := ThresholdConfig{}
+
+	metricTypes := []string{"cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut", "temperature", "usage"}
+
+	for _, metricType := range metricTypes {
+		t.Run(metricType, func(t *testing.T) {
+			t.Parallel()
+
+			result := getThresholdForMetric(config, metricType)
+			if result != nil {
+				t.Errorf("getThresholdForMetric(%q) with empty config = %v, want nil", metricType, result)
+			}
+		})
+	}
+}
+
+// TestGetThresholdForMetricFromConfig tests the getThresholdForMetricFromConfig function
+func TestGetThresholdForMetricFromConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		config      ThresholdConfig
+		metricType  string
+		wantNil     bool
+		wantTrigger float64
+		wantClear   float64
+	}{
+		{
+			name:       "empty config returns nil",
+			config:     ThresholdConfig{},
+			metricType: "cpu",
+			wantNil:    true,
+		},
+		{
+			name: "cpu threshold returned",
+			config: ThresholdConfig{
+				CPU: &HysteresisThreshold{Trigger: 80, Clear: 70},
+			},
+			metricType:  "cpu",
+			wantTrigger: 80,
+			wantClear:   70,
+		},
+		{
+			name: "memory threshold returned",
+			config: ThresholdConfig{
+				Memory: &HysteresisThreshold{Trigger: 85, Clear: 75},
+			},
+			metricType:  "memory",
+			wantTrigger: 85,
+			wantClear:   75,
+		},
+		{
+			name: "disk threshold returned",
+			config: ThresholdConfig{
+				Disk: &HysteresisThreshold{Trigger: 90, Clear: 85},
+			},
+			metricType:  "disk",
+			wantTrigger: 90,
+			wantClear:   85,
+		},
+		{
+			name: "diskRead threshold returned",
+			config: ThresholdConfig{
+				DiskRead: &HysteresisThreshold{Trigger: 50, Clear: 40},
+			},
+			metricType:  "diskRead",
+			wantTrigger: 50,
+			wantClear:   40,
+		},
+		{
+			name: "diskWrite threshold returned",
+			config: ThresholdConfig{
+				DiskWrite: &HysteresisThreshold{Trigger: 55, Clear: 45},
+			},
+			metricType:  "diskWrite",
+			wantTrigger: 55,
+			wantClear:   45,
+		},
+		{
+			name: "networkIn threshold returned",
+			config: ThresholdConfig{
+				NetworkIn: &HysteresisThreshold{Trigger: 70, Clear: 60},
+			},
+			metricType:  "networkIn",
+			wantTrigger: 70,
+			wantClear:   60,
+		},
+		{
+			name: "networkOut threshold returned",
+			config: ThresholdConfig{
+				NetworkOut: &HysteresisThreshold{Trigger: 75, Clear: 65},
+			},
+			metricType:  "networkOut",
+			wantTrigger: 75,
+			wantClear:   65,
+		},
+		{
+			name: "temperature threshold returned",
+			config: ThresholdConfig{
+				Temperature: &HysteresisThreshold{Trigger: 65, Clear: 55},
+			},
+			metricType:  "temperature",
+			wantTrigger: 65,
+			wantClear:   55,
+		},
+		{
+			name: "usage threshold returned",
+			config: ThresholdConfig{
+				Usage: &HysteresisThreshold{Trigger: 88, Clear: 78},
+			},
+			metricType:  "usage",
+			wantTrigger: 88,
+			wantClear:   78,
+		},
+		{
+			name: "unknown metric returns nil",
+			config: ThresholdConfig{
+				CPU: &HysteresisThreshold{Trigger: 80, Clear: 70},
+			},
+			metricType: "unknown",
+			wantNil:    true,
+		},
+		{
+			name: "threshold with zero clear gets default hysteresis",
+			config: ThresholdConfig{
+				CPU: &HysteresisThreshold{Trigger: 80, Clear: 0},
+			},
+			metricType:  "cpu",
+			wantTrigger: 80,
+			wantClear:   75, // 80 - 5 default margin
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := getThresholdForMetricFromConfig(tc.config, tc.metricType)
+
+			if tc.wantNil {
+				if result != nil {
+					t.Errorf("getThresholdForMetricFromConfig() = %v, want nil", result)
+				}
+				return
+			}
+
+			if result == nil {
+				t.Fatalf("getThresholdForMetricFromConfig() = nil, want non-nil")
+			}
+
+			if result.Trigger != tc.wantTrigger {
+				t.Errorf("Trigger = %v, want %v", result.Trigger, tc.wantTrigger)
+			}
+			if result.Clear != tc.wantClear {
+				t.Errorf("Clear = %v, want %v", result.Clear, tc.wantClear)
+			}
+		})
+	}
+}
