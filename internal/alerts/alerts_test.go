@@ -5478,3 +5478,216 @@ func TestReevaluateGuestAlert(t *testing.T) {
 		}
 	})
 }
+
+func TestHandleDockerHostOffline(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty host ID is no-op", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		initialCount := len(m.activeAlerts)
+		m.mu.Unlock()
+
+		m.HandleDockerHostOffline(models.DockerHost{ID: ""})
+
+		m.mu.RLock()
+		finalCount := len(m.activeAlerts)
+		m.mu.RUnlock()
+		if finalCount != initialCount {
+			t.Error("expected no change when empty host ID passed")
+		}
+	})
+
+	t.Run("disabled alerts is no-op", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = false
+		m.mu.Unlock()
+
+		m.HandleDockerHostOffline(models.DockerHost{ID: "docker1", DisplayName: "Docker Host 1"})
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["docker-host-offline-docker1"]
+		m.mu.RUnlock()
+		if exists {
+			t.Error("expected no alert when alerts are disabled")
+		}
+	})
+
+	t.Run("DisableAllDockerHostsOffline clears tracking and alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.config.DisableAllDockerHostsOffline = true
+		m.dockerOfflineCount["docker1"] = 5
+		m.activeAlerts["docker-host-offline-docker1"] = &Alert{ID: "docker-host-offline-docker1"}
+		m.mu.Unlock()
+
+		m.HandleDockerHostOffline(models.DockerHost{ID: "docker1", DisplayName: "Docker Host 1"})
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["docker-host-offline-docker1"]
+		_, countExists := m.dockerOfflineCount["docker1"]
+		m.mu.RUnlock()
+		if alertExists {
+			t.Error("expected alert to be cleared")
+		}
+		if countExists {
+			t.Error("expected offline count to be cleared")
+		}
+	})
+
+	t.Run("override DisableConnectivity clears tracking and alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.config.Overrides = map[string]ThresholdConfig{
+			"docker1": {DisableConnectivity: true},
+		}
+		m.dockerOfflineCount["docker1"] = 3
+		m.activeAlerts["docker-host-offline-docker1"] = &Alert{ID: "docker-host-offline-docker1"}
+		m.mu.Unlock()
+
+		m.HandleDockerHostOffline(models.DockerHost{ID: "docker1", DisplayName: "Docker Host 1"})
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["docker-host-offline-docker1"]
+		_, countExists := m.dockerOfflineCount["docker1"]
+		m.mu.RUnlock()
+		if alertExists {
+			t.Error("expected alert to be cleared with override")
+		}
+		if countExists {
+			t.Error("expected offline count to be cleared with override")
+		}
+	})
+
+	t.Run("existing alert updates LastSeen", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		oldTime := time.Now().Add(-1 * time.Hour)
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.activeAlerts["docker-host-offline-docker1"] = &Alert{
+			ID:       "docker-host-offline-docker1",
+			LastSeen: oldTime,
+		}
+		m.mu.Unlock()
+
+		m.HandleDockerHostOffline(models.DockerHost{ID: "docker1", DisplayName: "Docker Host 1"})
+
+		m.mu.RLock()
+		alert := m.activeAlerts["docker-host-offline-docker1"]
+		m.mu.RUnlock()
+		if alert == nil {
+			t.Fatal("expected alert to exist")
+		}
+		if !alert.LastSeen.After(oldTime) {
+			t.Error("expected LastSeen to be updated")
+		}
+	})
+
+	t.Run("requires 3 confirmations before alert", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.mu.Unlock()
+
+		host := models.DockerHost{ID: "docker1", DisplayName: "Docker Host 1", Hostname: "docker-server"}
+
+		// First call - confirmation 1
+		m.HandleDockerHostOffline(host)
+		m.mu.RLock()
+		count1 := m.dockerOfflineCount["docker1"]
+		alert1 := m.activeAlerts["docker-host-offline-docker1"]
+		m.mu.RUnlock()
+		if count1 != 1 {
+			t.Errorf("expected count 1, got %d", count1)
+		}
+		if alert1 != nil {
+			t.Error("expected no alert after 1 confirmation")
+		}
+
+		// Second call - confirmation 2
+		m.HandleDockerHostOffline(host)
+		m.mu.RLock()
+		count2 := m.dockerOfflineCount["docker1"]
+		alert2 := m.activeAlerts["docker-host-offline-docker1"]
+		m.mu.RUnlock()
+		if count2 != 2 {
+			t.Errorf("expected count 2, got %d", count2)
+		}
+		if alert2 != nil {
+			t.Error("expected no alert after 2 confirmations")
+		}
+
+		// Third call - confirmation 3 - should create alert
+		m.HandleDockerHostOffline(host)
+		m.mu.RLock()
+		count3 := m.dockerOfflineCount["docker1"]
+		alert3 := m.activeAlerts["docker-host-offline-docker1"]
+		m.mu.RUnlock()
+		if count3 != 3 {
+			t.Errorf("expected count 3, got %d", count3)
+		}
+		if alert3 == nil {
+			t.Fatal("expected alert after 3 confirmations")
+		}
+		if alert3.Type != "docker-host-offline" {
+			t.Errorf("expected type docker-host-offline, got %s", alert3.Type)
+		}
+		if alert3.Level != AlertLevelCritical {
+			t.Errorf("expected critical level, got %s", alert3.Level)
+		}
+	})
+
+	t.Run("alert has correct metadata", func(t *testing.T) {
+		t.Parallel()
+		m := NewManager()
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.dockerOfflineCount["docker1"] = 2 // Pre-set to trigger on next call
+		m.mu.Unlock()
+
+		host := models.DockerHost{
+			ID:          "docker1",
+			DisplayName: "My Docker Host",
+			Hostname:    "docker-server.local",
+			AgentID:     "agent-123",
+		}
+
+		m.HandleDockerHostOffline(host)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["docker-host-offline-docker1"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected alert to be created")
+		}
+		if alert.ResourceID != "docker:docker1" {
+			t.Errorf("expected resourceID docker:docker1, got %s", alert.ResourceID)
+		}
+		if alert.ResourceName != "My Docker Host" {
+			t.Errorf("expected resourceName 'My Docker Host', got %s", alert.ResourceName)
+		}
+		if alert.Node != "docker-server.local" {
+			t.Errorf("expected node docker-server.local, got %s", alert.Node)
+		}
+		if alert.Metadata["resourceType"] != "DockerHost" {
+			t.Errorf("expected metadata resourceType DockerHost, got %v", alert.Metadata["resourceType"])
+		}
+		if alert.Metadata["hostId"] != "docker1" {
+			t.Errorf("expected metadata hostId docker1, got %v", alert.Metadata["hostId"])
+		}
+		if alert.Metadata["agentId"] != "agent-123" {
+			t.Errorf("expected metadata agentId agent-123, got %v", alert.Metadata["agentId"])
+		}
+	})
+}
