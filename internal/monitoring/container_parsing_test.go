@@ -619,6 +619,84 @@ func TestParseContainerMountMetadataEdgeCases(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "part without equals sign skipped",
+			input: map[string]interface{}{
+				"mp0": "local:volume,readonly,mp=/data,backup",
+			},
+			want: map[string]containerMountMetadata{
+				"mp0": {
+					Key:        "mp0",
+					Mountpoint: "/data",
+					Source:     "local:volume",
+				},
+			},
+		},
+		{
+			name: "rootfs without mountpoint defaults to slash",
+			input: map[string]interface{}{
+				"rootfs": "local:100/vm-100-disk-0.raw,size=8G",
+			},
+			want: map[string]containerMountMetadata{
+				"rootfs": {
+					Key:        "rootfs",
+					Mountpoint: "/",
+					Source:     "local:100/vm-100-disk-0.raw",
+				},
+			},
+		},
+		{
+			name: "non-rootfs without mountpoint has empty mountpoint",
+			input: map[string]interface{}{
+				"mp1": "local:volume,size=10G",
+			},
+			want: map[string]containerMountMetadata{
+				"mp1": {
+					Key:        "mp1",
+					Mountpoint: "",
+					Source:     "local:volume",
+				},
+			},
+		},
+		{
+			name: "key case insensitive",
+			input: map[string]interface{}{
+				"ROOTFS": "local:disk,size=8G",
+				"MP0":    "local:vol,mp=/mnt",
+			},
+			want: map[string]containerMountMetadata{
+				"rootfs": {
+					Key:        "rootfs",
+					Mountpoint: "/",
+					Source:     "local:disk",
+				},
+				"mp0": {
+					Key:        "mp0",
+					Mountpoint: "/mnt",
+					Source:     "local:vol",
+				},
+			},
+		},
+		{
+			name: "whitespace-only value treated as empty",
+			input: map[string]interface{}{
+				"mp0": "   ",
+			},
+			want: nil,
+		},
+		{
+			name: "single source value no comma parts",
+			input: map[string]interface{}{
+				"rootfs": "local:disk",
+			},
+			want: map[string]containerMountMetadata{
+				"rootfs": {
+					Key:        "rootfs",
+					Mountpoint: "/",
+					Source:     "local:disk",
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1142,6 +1220,156 @@ func TestConvertContainerDiskInfo(t *testing.T) {
 					Usage:      50.0,
 					Mountpoint: "/",
 					Type:       "rootfs",
+				},
+			},
+		},
+		{
+			name: "nil metadata does not panic",
+			status: &proxmox.Container{
+				DiskInfo: map[string]proxmox.ContainerDiskUsage{
+					"rootfs": {
+						Total: 1000,
+						Used:  500,
+					},
+				},
+				RootFS: "local:disk",
+			},
+			metadata: nil,
+			want: []models.Disk{
+				{
+					Total:      1000,
+					Used:       500,
+					Free:       500,
+					Usage:      50.0,
+					Mountpoint: "/",
+					Type:       "rootfs",
+					Device:     "local:disk",
+				},
+			},
+		},
+		{
+			name: "disk gets device from metadata when not set",
+			status: &proxmox.Container{
+				DiskInfo: map[string]proxmox.ContainerDiskUsage{
+					"mp0": {
+						Total: 1000,
+						Used:  500,
+					},
+				},
+			},
+			metadata: map[string]containerMountMetadata{
+				"mp0": {
+					Mountpoint: "/data",
+					Source:     "nfs:shared-volume",
+				},
+			},
+			want: []models.Disk{
+				{
+					Total:      1000,
+					Used:       500,
+					Free:       500,
+					Usage:      50.0,
+					Mountpoint: "/data",
+					Type:       "mp0",
+					Device:     "nfs:shared-volume",
+				},
+			},
+		},
+		{
+			name: "negative free clamped to zero",
+			status: &proxmox.Container{
+				DiskInfo: map[string]proxmox.ContainerDiskUsage{
+					"rootfs": {
+						Total: 0,
+						Used:  500, // used > total=0, free = -500 clamped to 0
+					},
+				},
+			},
+			want: []models.Disk{
+				{
+					Total:      0,
+					Used:       500, // Not clamped because total == 0
+					Free:       0,   // Clamped from -500 to 0
+					Usage:      0,   // No calculation when total == 0
+					Mountpoint: "/",
+					Type:       "rootfs",
+				},
+			},
+		},
+		{
+			name: "whitespace label trimmed and treated as rootfs",
+			status: &proxmox.Container{
+				DiskInfo: map[string]proxmox.ContainerDiskUsage{
+					"  ": { // whitespace only, trims to empty
+						Total: 1000,
+						Used:  500,
+					},
+				},
+			},
+			want: []models.Disk{
+				{
+					Total:      1000,
+					Used:       500,
+					Free:       500,
+					Usage:      50.0,
+					Mountpoint: "/",
+					Type:       "rootfs",
+				},
+			},
+		},
+		{
+			name: "rootfs gets device from RootFS when metadata has empty source",
+			status: &proxmox.Container{
+				DiskInfo: map[string]proxmox.ContainerDiskUsage{
+					"rootfs": {
+						Total: 1000,
+						Used:  500,
+					},
+				},
+				RootFS: "local:100/disk.raw,size=8G",
+			},
+			metadata: map[string]containerMountMetadata{
+				"rootfs": {
+					Mountpoint: "/",
+					Source:     "", // empty source
+				},
+			},
+			want: []models.Disk{
+				{
+					Total:      1000,
+					Used:       500,
+					Free:       500,
+					Usage:      50.0,
+					Mountpoint: "/",
+					Type:       "rootfs",
+					Device:     "local:100/disk.raw", // Falls back to RootFS, sanitized
+				},
+			},
+		},
+		{
+			name: "non-rootfs with whitespace label gets type disk",
+			status: &proxmox.Container{
+				DiskInfo: map[string]proxmox.ContainerDiskUsage{
+					"mp0": {
+						Total: 1000,
+						Used:  500,
+					},
+				},
+			},
+			metadata: map[string]containerMountMetadata{
+				"mp0": {
+					Mountpoint: "/mnt/storage",
+					Source:     "",
+				},
+			},
+			want: []models.Disk{
+				{
+					Total:      1000,
+					Used:       500,
+					Free:       500,
+					Usage:      50.0,
+					Mountpoint: "/mnt/storage",
+					Type:       "mp0",
 				},
 			},
 		},
