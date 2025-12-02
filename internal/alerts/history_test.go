@@ -3,6 +3,7 @@ package alerts
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -485,9 +486,9 @@ func TestSaveHistory_CreatesBackup(t *testing.T) {
 		t.Fatalf("saveHistory error: %v", err)
 	}
 
-	// Backup should exist (created from previous file)
-	if _, err := os.Stat(hm.backupFile); os.IsNotExist(err) {
-		t.Error("backup file should exist after save with existing main file")
+	// Backup should be removed after successful save (backup is only for recovery)
+	if _, err := os.Stat(hm.backupFile); !os.IsNotExist(err) {
+		t.Error("backup file should be removed after successful save")
 	}
 }
 
@@ -511,18 +512,19 @@ func TestSaveHistoryWithRetry_CreatesBackup(t *testing.T) {
 		t.Fatalf("saveHistoryWithRetry error: %v", err)
 	}
 
-	// Backup should exist with original content
-	if _, err := os.Stat(hm.backupFile); os.IsNotExist(err) {
-		t.Error("backup file should exist after save")
+	// Backup should be removed after successful save (backup is only for recovery)
+	if _, err := os.Stat(hm.backupFile); !os.IsNotExist(err) {
+		t.Error("backup file should be removed after successful save")
 	}
 
-	backupData, err := os.ReadFile(hm.backupFile)
+	// Verify the main file was written correctly
+	mainData, err := os.ReadFile(hm.historyFile)
 	if err != nil {
-		t.Fatalf("Failed to read backup file: %v", err)
+		t.Fatalf("Failed to read main file: %v", err)
 	}
 
-	if string(backupData) != existingContent {
-		t.Errorf("backup content = %s, want %s", backupData, existingContent)
+	if !strings.Contains(string(mainData), "new-alert") {
+		t.Errorf("main file should contain new-alert, got: %s", mainData)
 	}
 }
 

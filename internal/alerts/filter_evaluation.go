@@ -20,146 +20,143 @@ func (m *Manager) evaluateFilterCondition(guest interface{}, condition FilterCon
 	}
 }
 
-// evaluateVMCondition evaluates a filter condition against a VM
-func (m *Manager) evaluateVMCondition(vm models.VM, condition FilterCondition) bool {
+// guestMetrics holds common metrics for filter evaluation
+type guestMetrics struct {
+	CPU        float64 // CPU usage as percentage (0-100)
+	MemUsage   float64 // Memory usage percentage
+	DiskUsage  float64 // Disk usage percentage
+	DiskRead   int64   // Bytes/s
+	DiskWrite  int64   // Bytes/s
+	NetworkIn  int64   // Bytes/s
+	NetworkOut int64   // Bytes/s
+	Name       string
+	Node       string
+	ID         string
+	Status     string
+}
+
+// extractGuestMetrics extracts common metrics from a VM or Container
+func extractGuestMetrics(guest interface{}) (guestMetrics, bool) {
+	switch g := guest.(type) {
+	case models.VM:
+		return guestMetrics{
+			CPU:        g.CPU * 100,
+			MemUsage:   g.Memory.Usage,
+			DiskUsage:  g.Disk.Usage,
+			DiskRead:   g.DiskRead,
+			DiskWrite:  g.DiskWrite,
+			NetworkIn:  g.NetworkIn,
+			NetworkOut: g.NetworkOut,
+			Name:       g.Name,
+			Node:       g.Node,
+			ID:         g.ID,
+			Status:     g.Status,
+		}, true
+	case models.Container:
+		return guestMetrics{
+			CPU:        g.CPU * 100,
+			MemUsage:   g.Memory.Usage,
+			DiskUsage:  g.Disk.Usage,
+			DiskRead:   g.DiskRead,
+			DiskWrite:  g.DiskWrite,
+			NetworkIn:  g.NetworkIn,
+			NetworkOut: g.NetworkOut,
+			Name:       g.Name,
+			Node:       g.Node,
+			ID:         g.ID,
+			Status:     g.Status,
+		}, true
+	default:
+		return guestMetrics{}, false
+	}
+}
+
+// evaluateGuestCondition evaluates a filter condition against guest metrics
+func evaluateGuestCondition(metrics guestMetrics, condition FilterCondition) bool {
 	switch condition.Type {
 	case "metric":
 		value := 0.0
 		switch strings.ToLower(condition.Field) {
 		case "cpu":
-			value = vm.CPU * 100
+			value = metrics.CPU
 		case "memory":
-			value = vm.Memory.Usage
+			value = metrics.MemUsage
 		case "disk":
-			value = vm.Disk.Usage
+			value = metrics.DiskUsage
 		case "diskread":
-			value = float64(vm.DiskRead) / 1024 / 1024 // Convert to MB/s
+			value = float64(metrics.DiskRead) / 1024 / 1024 // Convert to MB/s
 		case "diskwrite":
-			value = float64(vm.DiskWrite) / 1024 / 1024
+			value = float64(metrics.DiskWrite) / 1024 / 1024
 		case "networkin":
-			value = float64(vm.NetworkIn) / 1024 / 1024
+			value = float64(metrics.NetworkIn) / 1024 / 1024
 		case "networkout":
-			value = float64(vm.NetworkOut) / 1024 / 1024
+			value = float64(metrics.NetworkOut) / 1024 / 1024
 		default:
 			return false
 		}
-
-		condValue, ok := condition.Value.(float64)
-		if !ok {
-			// Try to convert from int
-			if intVal, ok := condition.Value.(int); ok {
-				condValue = float64(intVal)
-			} else {
-				return false
-			}
-		}
-
-		switch condition.Operator {
-		case ">":
-			return value > condValue
-		case "<":
-			return value < condValue
-		case ">=":
-			return value >= condValue
-		case "<=":
-			return value <= condValue
-		case "=", "==":
-			return value >= condValue-0.5 && value <= condValue+0.5
-		}
+		return evaluateNumericCondition(value, condition)
 
 	case "text":
 		searchValue := strings.ToLower(fmt.Sprintf("%v", condition.Value))
 		switch strings.ToLower(condition.Field) {
 		case "name":
-			return strings.Contains(strings.ToLower(vm.Name), searchValue)
+			return strings.Contains(strings.ToLower(metrics.Name), searchValue)
 		case "node":
-			return strings.Contains(strings.ToLower(vm.Node), searchValue)
+			return strings.Contains(strings.ToLower(metrics.Node), searchValue)
 		case "vmid":
-			return strings.Contains(vm.ID, searchValue)
+			return strings.Contains(metrics.ID, searchValue)
 		}
 
 	case "raw":
 		if condition.RawText != "" {
 			term := strings.ToLower(condition.RawText)
-			return strings.Contains(strings.ToLower(vm.Name), term) ||
-				strings.Contains(vm.ID, term) ||
-				strings.Contains(strings.ToLower(vm.Node), term) ||
-				strings.Contains(strings.ToLower(vm.Status), term)
+			return strings.Contains(strings.ToLower(metrics.Name), term) ||
+				strings.Contains(metrics.ID, term) ||
+				strings.Contains(strings.ToLower(metrics.Node), term) ||
+				strings.Contains(strings.ToLower(metrics.Status), term)
 		}
 	}
 
 	return false
 }
 
-// evaluateContainerCondition evaluates a filter condition against a Container
-func (m *Manager) evaluateContainerCondition(ct models.Container, condition FilterCondition) bool {
-	// Similar logic to evaluateVMCondition but for Container type
-	switch condition.Type {
-	case "metric":
-		value := 0.0
-		switch strings.ToLower(condition.Field) {
-		case "cpu":
-			value = ct.CPU * 100
-		case "memory":
-			value = ct.Memory.Usage
-		case "disk":
-			value = ct.Disk.Usage
-		case "diskread":
-			value = float64(ct.DiskRead) / 1024 / 1024
-		case "diskwrite":
-			value = float64(ct.DiskWrite) / 1024 / 1024
-		case "networkin":
-			value = float64(ct.NetworkIn) / 1024 / 1024
-		case "networkout":
-			value = float64(ct.NetworkOut) / 1024 / 1024
-		default:
+// evaluateNumericCondition evaluates a numeric comparison
+func evaluateNumericCondition(value float64, condition FilterCondition) bool {
+	condValue, ok := condition.Value.(float64)
+	if !ok {
+		// Try to convert from int
+		if intVal, ok := condition.Value.(int); ok {
+			condValue = float64(intVal)
+		} else {
 			return false
-		}
-
-		condValue, ok := condition.Value.(float64)
-		if !ok {
-			if intVal, ok := condition.Value.(int); ok {
-				condValue = float64(intVal)
-			} else {
-				return false
-			}
-		}
-
-		switch condition.Operator {
-		case ">":
-			return value > condValue
-		case "<":
-			return value < condValue
-		case ">=":
-			return value >= condValue
-		case "<=":
-			return value <= condValue
-		case "=", "==":
-			return value >= condValue-0.5 && value <= condValue+0.5
-		}
-
-	case "text":
-		searchValue := strings.ToLower(fmt.Sprintf("%v", condition.Value))
-		switch strings.ToLower(condition.Field) {
-		case "name":
-			return strings.Contains(strings.ToLower(ct.Name), searchValue)
-		case "node":
-			return strings.Contains(strings.ToLower(ct.Node), searchValue)
-		case "vmid":
-			return strings.Contains(ct.ID, searchValue)
-		}
-
-	case "raw":
-		if condition.RawText != "" {
-			term := strings.ToLower(condition.RawText)
-			return strings.Contains(strings.ToLower(ct.Name), term) ||
-				strings.Contains(ct.ID, term) ||
-				strings.Contains(strings.ToLower(ct.Node), term) ||
-				strings.Contains(strings.ToLower(ct.Status), term)
 		}
 	}
 
+	switch condition.Operator {
+	case ">":
+		return value > condValue
+	case "<":
+		return value < condValue
+	case ">=":
+		return value >= condValue
+	case "<=":
+		return value <= condValue
+	case "=", "==":
+		return value >= condValue-0.5 && value <= condValue+0.5
+	}
 	return false
+}
+
+// evaluateVMCondition evaluates a filter condition against a VM
+func (m *Manager) evaluateVMCondition(vm models.VM, condition FilterCondition) bool {
+	metrics, _ := extractGuestMetrics(vm)
+	return evaluateGuestCondition(metrics, condition)
+}
+
+// evaluateContainerCondition evaluates a filter condition against a Container
+func (m *Manager) evaluateContainerCondition(ct models.Container, condition FilterCondition) bool {
+	metrics, _ := extractGuestMetrics(ct)
+	return evaluateGuestCondition(metrics, condition)
 }
 
 // evaluateFilterStack evaluates a filter stack against a guest
@@ -270,66 +267,9 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 
 	// If not found, try legacy ID formats for migration
 	if !exists {
-		var legacyID string
-		var node string
-		var vmid int
-		var instance string
-
-		// Extract node, vmid, and instance from the guest object
-		switch g := guest.(type) {
-		case models.VM:
-			node = g.Node
-			vmid = g.VMID
-			instance = g.Instance
-		case models.Container:
-			node = g.Node
-			vmid = g.VMID
-			instance = g.Instance
-		default:
-			// Not a VM or container, skip legacy migration
-			goto skipLegacyMigration
-		}
-
-		// Try legacy format: instance-node-VMID
-		if instance != node {
-			legacyID = fmt.Sprintf("%s-%s-%d", instance, node, vmid)
-			if legacyOverride, legacyExists := m.config.Overrides[legacyID]; legacyExists {
-				log.Info().
-					Str("legacyID", legacyID).
-					Str("newID", guestID).
-					Msg("Migrating guest override from legacy ID format")
-
-				// Move to new ID
-				m.config.Overrides[guestID] = legacyOverride
-				delete(m.config.Overrides, legacyID)
-
-				// Config will be persisted on next save cycle
-				override = legacyOverride
-				exists = true
-			}
-		}
-
-		// If still not found, try standalone format: node-VMID
-		if !exists && instance == node {
-			legacyID = fmt.Sprintf("%s-%d", node, vmid)
-			if legacyOverride, legacyExists := m.config.Overrides[legacyID]; legacyExists {
-				log.Info().
-					Str("legacyID", legacyID).
-					Str("newID", guestID).
-					Msg("Migrating guest override from legacy standalone ID format")
-
-				// Move to new ID
-				m.config.Overrides[guestID] = legacyOverride
-				delete(m.config.Overrides, legacyID)
-
-				// Config will be persisted on next save cycle
-				override = legacyOverride
-				exists = true
-			}
-		}
+		override, exists = m.tryLegacyOverrideMigration(guest, guestID)
 	}
 
-skipLegacyMigration:
 	if exists {
 		// Apply the disabled flag if set
 		if override.Disabled {
@@ -377,4 +317,63 @@ skipLegacyMigration:
 	}
 
 	return thresholds
+}
+
+// tryLegacyOverrideMigration attempts to find and migrate legacy override formats.
+// Returns the override and true if found, or zero value and false otherwise.
+func (m *Manager) tryLegacyOverrideMigration(guest interface{}, guestID string) (ThresholdConfig, bool) {
+	var node string
+	var vmid int
+	var instance string
+
+	// Extract node, vmid, and instance from the guest object
+	switch g := guest.(type) {
+	case models.VM:
+		node = g.Node
+		vmid = g.VMID
+		instance = g.Instance
+	case models.Container:
+		node = g.Node
+		vmid = g.VMID
+		instance = g.Instance
+	default:
+		// Not a VM or container, no legacy migration possible
+		return ThresholdConfig{}, false
+	}
+
+	// Try legacy format: instance-node-VMID
+	if instance != node {
+		legacyID := fmt.Sprintf("%s-%s-%d", instance, node, vmid)
+		if legacyOverride, legacyExists := m.config.Overrides[legacyID]; legacyExists {
+			log.Info().
+				Str("legacyID", legacyID).
+				Str("newID", guestID).
+				Msg("Migrating guest override from legacy ID format")
+
+			// Move to new ID
+			m.config.Overrides[guestID] = legacyOverride
+			delete(m.config.Overrides, legacyID)
+
+			return legacyOverride, true
+		}
+	}
+
+	// Try standalone format: node-VMID
+	if instance == node {
+		legacyID := fmt.Sprintf("%s-%d", node, vmid)
+		if legacyOverride, legacyExists := m.config.Overrides[legacyID]; legacyExists {
+			log.Info().
+				Str("legacyID", legacyID).
+				Str("newID", guestID).
+				Msg("Migrating guest override from legacy standalone ID format")
+
+			// Move to new ID
+			m.config.Overrides[guestID] = legacyOverride
+			delete(m.config.Overrides, legacyID)
+
+			return legacyOverride, true
+		}
+	}
+
+	return ThresholdConfig{}, false
 }

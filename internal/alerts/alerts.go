@@ -34,6 +34,43 @@ const (
 	ActivationSnoozed ActivationState = "snoozed"
 )
 
+// Default thresholds and configuration values
+const (
+	// Default threshold values
+	DefaultCPUTrigger     = 80.0
+	DefaultCPUClear       = 75.0
+	DefaultMemoryTrigger  = 85.0
+	DefaultMemoryClear    = 80.0
+	DefaultDiskTrigger    = 90.0
+	DefaultDiskClear      = 85.0
+	DefaultStorageTrigger = 85.0
+	DefaultStorageClear   = 80.0
+	DefaultTempTrigger    = 80.0
+	DefaultTempClear      = 75.0
+
+	// Time thresholds
+	DefaultDelaySeconds      = 5
+	DefaultSuppressionWindow = 5 // minutes
+
+	// Alert management
+	DefaultMinimumDelta      = 2.0 // minimum % change to trigger new alert
+	DefaultHysteresisMargin  = 5.0 // % margin between trigger and clear
+	DefaultObservationWindow = 24  // hours
+
+	// Flapping detection
+	DefaultFlappingWindow   = 300 // seconds (5 minutes)
+	DefaultFlappingThreshold = 5   // state changes to trigger flapping
+	DefaultFlappingCooldown  = 15  // minutes
+
+	// Confirmation counts for transient state detection
+	RequiredOfflineConfirmations = 3
+	RequiredStateConfirmations   = 2
+
+	// Cleanup intervals
+	StaleTrackingThreshold = 24 * time.Hour
+	RateLimitCleanupWindow = 1 * time.Hour
+)
+
 func normalizePoweredOffSeverity(level AlertLevel) AlertLevel {
 	switch strings.ToLower(string(level)) {
 	case string(AlertLevelCritical):
@@ -220,7 +257,7 @@ type GroupingConfig struct {
 type ScheduleConfig struct {
 	QuietHours      QuietHours       `json:"quietHours"`
 	Cooldown        int              `json:"cooldown"`        // minutes
-	GroupingWindow  int              `json:"groupingWindow"`  // seconds (deprecated, use Grouping.Window)
+	GroupingWindow  int              `json:"groupingWindow,omitempty"` // Deprecated: use Grouping.Window instead. Will be auto-migrated on config update.
 	MaxAlertsHour   int              `json:"maxAlertsHour"`   // max alerts per hour per resource
 	NotifyOnResolve bool             `json:"notifyOnResolve"` // Send notification when alert clears
 	Escalation      EscalationConfig `json:"escalation"`
@@ -432,14 +469,15 @@ var (
 )
 
 // SetMetricHooks registers callbacks for recording alert metrics.
-// Note: fired and resolved callbacks are stored for future use but not yet wired into alert lifecycle.
+// - fired: called when an alert is dispatched (in dispatchAlert)
+// - resolved: called when an alert is cleared (in clearAlertNoLock)
+// - suppressed: called when an alert is suppressed due to flapping
+// - acknowledged: called when an alert is acknowledged
 func SetMetricHooks(fired func(*Alert), resolved func(*Alert), suppressed func(string), acknowledged func()) {
 	recordAlertFired = fired
 	recordAlertResolved = resolved
 	recordAlertSuppressed = suppressed
 	recordAlertAcknowledged = acknowledged
-	// Silence staticcheck U1000 - hooks are stored for future metric integration
-	_, _ = recordAlertFired, recordAlertResolved
 }
 
 type Manager struct {
@@ -476,6 +514,8 @@ type Manager struct {
 	// Flapping detection tracking
 	flappingHistory map[string][]time.Time // Track state change times for flapping detection
 	flappingActive  map[string]bool        // Track which alerts are currently in flapping state
+	// Cleanup control
+	cleanupStop chan struct{} // Signal to stop cleanup goroutine
 }
 
 type ackRecord struct {
@@ -514,6 +554,7 @@ func NewManager() *Manager {
 		ackState:              make(map[string]ackRecord),
 		flappingHistory:       make(map[string][]time.Time),
 		flappingActive:        make(map[string]bool),
+		cleanupStop:           make(chan struct{}),
 		config: AlertConfig{
 			Enabled:                true,
 			ActivationState:        ActivationPending,
@@ -608,9 +649,9 @@ func NewManager() *Manager {
 					},
 					Suppress: QuietHoursSuppression{},
 				},
-				Cooldown:        5,  // ON - 5 minutes prevents spam
-				GroupingWindow:  30, // ON - 30 seconds groups related alerts
-				MaxAlertsHour:   10, // ON - 10 alerts/hour prevents flooding
+				Cooldown:      5,  // ON - 5 minutes prevents spam
+				MaxAlertsHour: 10, // ON - 10 alerts/hour prevents flooding
+				// Note: GroupingWindow is deprecated - use Grouping.Window instead
 				NotifyOnResolve: true,
 				Escalation: EscalationConfig{
 					Enabled: false, // OFF - requires user configuration
@@ -649,6 +690,9 @@ func NewManager() *Manager {
 
 	// Start periodic save of active alerts
 	go m.periodicSaveAlerts()
+
+	// Start periodic cleanup of stale tracking map entries
+	go m.trackingMapCleanup()
 
 	return m
 }
@@ -736,12 +780,10 @@ func (m *Manager) safeCallEscalateCallback(alert *Alert, level int) {
 	}(alertCopy, level)
 }
 
-// dispatchAlert delivers an alert to the configured callback, cloning it first to
-// prevent concurrent mutations from racing with consumers.
-// checkFlapping checks if an alert is flapping (changing state too rapidly)
-// checkFlapping detects alert flapping and returns true if alert should be suppressed.
-// IMPORTANT: Caller MUST hold m.mu (writes to flappingHistory, flappingActive, suppressedUntil maps)
-func (m *Manager) checkFlapping(alertID string) bool {
+// checkFlappingLocked detects alert flapping and returns true if alert should be suppressed.
+// It modifies flappingHistory, flappingActive, and suppressedUntil maps.
+// IMPORTANT: Caller MUST hold m.mu before calling this function.
+func (m *Manager) checkFlappingLocked(alertID string) bool {
 	if !m.config.FlappingEnabled {
 		return false
 	}
@@ -795,8 +837,8 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 		return false
 	}
 
-	// Check for flapping
-	if m.checkFlapping(alert.ID) {
+	// Check for flapping (caller must hold m.mu)
+	if m.checkFlappingLocked(alert.ID) {
 		log.Debug().
 			Str("alertID", alert.ID).
 			Msg("Alert suppressed due to flapping")
@@ -829,6 +871,11 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 			Bool("monitorOnly", true).
 			Msg("Monitor-only alert detected, skipping alert dispatch")
 		return false
+	}
+
+	// Record metric for fired alert
+	if recordAlertFired != nil {
+		recordAlertFired(alert)
 	}
 
 	alertCopy := alert.Clone()
@@ -903,43 +950,93 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Preserve defaults for zero values
+	// Normalize all config sections
+	normalizeStorageDefaults(&config)
+	normalizeDockerDefaults(&config)
+	normalizePMGDefaults(&config)
+	normalizeSnapshotDefaults(&config)
+	normalizeBackupDefaults(&config)
+	normalizeNodeDefaults(&config)
+	normalizeHostDefaults(&config)
+	normalizeGeneralSettings(&config)
+	normalizeTimeThresholds(&config)
+
+	config.GuestDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.GuestDefaults.PoweredOffSeverity)
+	config.NodeDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.NodeDefaults.PoweredOffSeverity)
+	config.DockerIgnoredContainerPrefixes = NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
+
+	// Migration logic for activation state (backward compatibility)
+	m.migrateActivationState(&config)
+
+	// Validate hysteresis thresholds to prevent stuck alerts
+	validateHysteresisThresholds(&config)
+
+	// Validate timezone if quiet hours are enabled
+	validateQuietHoursTimezone(&config)
+
+	m.config = config
+	normalizeOverrides(m.config.Overrides)
+
+	if !m.config.SnapshotDefaults.Enabled {
+		m.clearSnapshotAlertsForInstanceLocked("")
+	}
+	if !m.config.BackupDefaults.Enabled {
+		m.clearBackupAlertsLocked()
+	}
+
+	m.applyGlobalOfflineSettingsLocked()
+
+	log.Info().
+		Bool("enabled", config.Enabled).
+		Interface("guestDefaults", config.GuestDefaults).
+		Msg("Alert configuration updated")
+
+	// Re-evaluate active alerts against new thresholds
+	m.reevaluateActiveAlertsLocked()
+}
+
+// normalizeStorageDefaults ensures storage default thresholds are set
+func normalizeStorageDefaults(config *AlertConfig) {
 	if config.StorageDefault.Trigger <= 0 {
 		config.StorageDefault.Trigger = 85
 		config.StorageDefault.Clear = 80
 	}
+}
 
-	// Initialize Docker defaults while allowing explicit disables (trigger == 0)
-	normalizeDockerThreshold := func(th HysteresisThreshold, defaultTrigger float64, metricName string) HysteresisThreshold {
-		normalized := th
+// normalizeDockerThreshold normalizes a single Docker threshold
+func normalizeDockerThreshold(th HysteresisThreshold, defaultTrigger float64, metricName string) HysteresisThreshold {
+	normalized := th
 
-		// Negative triggers are treated as unset and replaced with defaults.
-		if normalized.Trigger < 0 {
-			normalized.Trigger = defaultTrigger
+	// Negative triggers are treated as unset and replaced with defaults.
+	if normalized.Trigger < 0 {
+		normalized.Trigger = defaultTrigger
+	}
+
+	// Explicit disable: keep trigger at 0 and clamp clear to 0.
+	if normalized.Trigger == 0 {
+		if normalized.Clear < 0 {
+			normalized.Clear = 0
 		}
-
-		// Explicit disable: keep trigger at 0 and clamp clear to 0.
-		if normalized.Trigger == 0 {
-			if normalized.Clear < 0 {
-				normalized.Clear = 0
-			}
-			return normalized
-		}
-
-		if normalized.Clear <= 0 {
-			normalized.Clear = normalized.Trigger - 5
-			if normalized.Clear < 0 {
-				normalized.Clear = 0
-			}
-		}
-
-		ensureValidHysteresis(&normalized, metricName)
 		return normalized
 	}
 
+	if normalized.Clear <= 0 {
+		normalized.Clear = normalized.Trigger - 5
+		if normalized.Clear < 0 {
+			normalized.Clear = 0
+		}
+	}
+
+	ensureValidHysteresis(&normalized, metricName)
+	return normalized
+}
+
+// normalizeDockerDefaults ensures Docker default thresholds are set
+func normalizeDockerDefaults(config *AlertConfig) {
 	config.DockerDefaults.CPU = normalizeDockerThreshold(config.DockerDefaults.CPU, 80, "docker.cpu")
 	config.DockerDefaults.Memory = normalizeDockerThreshold(config.DockerDefaults.Memory, 85, "docker.memory")
 	config.DockerDefaults.Disk = normalizeDockerThreshold(config.DockerDefaults.Disk, 85, "docker.disk")
+
 	if config.DockerDefaults.RestartCount <= 0 {
 		config.DockerDefaults.RestartCount = 3
 	}
@@ -970,8 +1067,10 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 		config.DockerDefaults.StatePoweredOffSeverity = AlertLevelWarning
 	}
 	config.DockerDefaults.StatePoweredOffSeverity = normalizePoweredOffSeverity(config.DockerDefaults.StatePoweredOffSeverity)
+}
 
-	// Initialize PMG defaults if missing/zero
+// normalizePMGDefaults ensures PMG (Proxmox Mail Gateway) defaults are set
+func normalizePMGDefaults(config *AlertConfig) {
 	if config.PMGDefaults.QueueTotalWarning <= 0 {
 		config.PMGDefaults.QueueTotalWarning = 500
 	}
@@ -1020,7 +1119,10 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	if config.PMGDefaults.QuarantineGrowthCritMin <= 0 {
 		config.PMGDefaults.QuarantineGrowthCritMin = 500
 	}
+}
 
+// normalizeSnapshotDefaults ensures snapshot alert thresholds are valid
+func normalizeSnapshotDefaults(config *AlertConfig) {
 	if config.SnapshotDefaults.WarningDays < 0 {
 		config.SnapshotDefaults.WarningDays = 0
 	}
@@ -1045,6 +1147,10 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	if config.SnapshotDefaults.CriticalSizeGiB == 0 && config.SnapshotDefaults.WarningSizeGiB > 0 {
 		config.SnapshotDefaults.CriticalSizeGiB = config.SnapshotDefaults.WarningSizeGiB
 	}
+}
+
+// normalizeBackupDefaults ensures backup alert thresholds are valid
+func normalizeBackupDefaults(config *AlertConfig) {
 	if config.BackupDefaults.WarningDays < 0 {
 		config.BackupDefaults.WarningDays = 0
 	}
@@ -1054,18 +1160,10 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	if config.BackupDefaults.CriticalDays > 0 && config.BackupDefaults.WarningDays > config.BackupDefaults.CriticalDays {
 		config.BackupDefaults.WarningDays = config.BackupDefaults.CriticalDays
 	}
+}
 
-	// Ensure minimums for other important fields
-	if config.MinimumDelta <= 0 {
-		config.MinimumDelta = 2.0
-	}
-	if config.SuppressionWindow <= 0 {
-		config.SuppressionWindow = 5
-	}
-	if config.HysteresisMargin <= 0 {
-		config.HysteresisMargin = 5.0
-	}
-
+// normalizeNodeDefaults ensures node threshold defaults exist
+func normalizeNodeDefaults(config *AlertConfig) {
 	// Ensure temperature defaults exist for nodes so high temps alert out of the box
 	if config.NodeDefaults.Temperature == nil || config.NodeDefaults.Temperature.Trigger <= 0 {
 		config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 75}
@@ -1075,8 +1173,10 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 			config.NodeDefaults.Temperature.Clear = 75
 		}
 	}
+}
 
-	// Ensure host agent defaults exist
+// normalizeHostDefaults ensures host agent threshold defaults exist
+func normalizeHostDefaults(config *AlertConfig) {
 	if config.HostDefaults.CPU == nil || config.HostDefaults.CPU.Trigger <= 0 {
 		config.HostDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
 	} else if config.HostDefaults.CPU.Clear <= 0 {
@@ -1101,8 +1201,26 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 			config.HostDefaults.Disk.Clear = 85
 		}
 	}
+}
 
-	// Normalize any metric-level delay overrides
+// normalizeGeneralSettings ensures general alert settings have valid values
+func normalizeGeneralSettings(config *AlertConfig) {
+	if config.MinimumDelta <= 0 {
+		config.MinimumDelta = 2.0
+	}
+	if config.SuppressionWindow <= 0 {
+		config.SuppressionWindow = 5
+	}
+	if config.HysteresisMargin <= 0 {
+		config.HysteresisMargin = 5.0
+	}
+	if config.ObservationWindowHours <= 0 {
+		config.ObservationWindowHours = 24
+	}
+}
+
+// normalizeTimeThresholds ensures time threshold settings are valid
+func normalizeTimeThresholds(config *AlertConfig) {
 	config.MetricTimeThresholds = normalizeMetricTimeThresholds(config.MetricTimeThresholds)
 
 	const defaultDelaySeconds = 5
@@ -1125,15 +1243,10 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	if delay, ok := config.TimeThresholds["all"]; ok && delay < 0 {
 		config.TimeThresholds["all"] = defaultDelaySeconds
 	}
-	config.DockerIgnoredContainerPrefixes = NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
+}
 
-	config.GuestDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.GuestDefaults.PoweredOffSeverity)
-	config.NodeDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.NodeDefaults.PoweredOffSeverity)
-
-	// Migration logic for activation state (backward compatibility)
-	if config.ObservationWindowHours <= 0 {
-		config.ObservationWindowHours = 24
-	}
+// migrateActivationState handles backward compatibility for activation state
+func (m *Manager) migrateActivationState(config *AlertConfig) {
 	if config.ActivationState == "" {
 		// Determine if this is an existing installation or new
 		// Existing installations have active alerts already
@@ -1150,8 +1263,10 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 			log.Info().Msg("New installation: alerts pending activation")
 		}
 	}
+}
 
-	// Validate hysteresis thresholds to prevent stuck alerts
+// validateHysteresisThresholds ensures hysteresis thresholds won't cause stuck alerts
+func validateHysteresisThresholds(config *AlertConfig) {
 	ensureValidHysteresis(config.GuestDefaults.CPU, "guest.cpu")
 	ensureValidHysteresis(config.GuestDefaults.Memory, "guest.memory")
 	ensureValidHysteresis(config.GuestDefaults.Disk, "guest.disk")
@@ -1159,48 +1274,32 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	ensureValidHysteresis(config.NodeDefaults.Memory, "node.memory")
 	ensureValidHysteresis(config.NodeDefaults.Temperature, "node.temperature")
 	ensureValidHysteresis(&config.StorageDefault, "storage")
+}
 
-	// Validate timezone if quiet hours are enabled
-	if config.Schedule.QuietHours.Enabled {
-		if config.Schedule.QuietHours.Timezone != "" {
-			_, err := time.LoadLocation(config.Schedule.QuietHours.Timezone)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Str("timezone", config.Schedule.QuietHours.Timezone).
-					Msg("Invalid timezone in quiet hours config, disabling quiet hours")
-				// Disable quiet hours rather than silently using wrong timezone
-				config.Schedule.QuietHours.Enabled = false
-			}
+// validateQuietHoursTimezone validates the timezone for quiet hours
+func validateQuietHoursTimezone(config *AlertConfig) {
+	if config.Schedule.QuietHours.Enabled && config.Schedule.QuietHours.Timezone != "" {
+		_, err := time.LoadLocation(config.Schedule.QuietHours.Timezone)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("timezone", config.Schedule.QuietHours.Timezone).
+				Msg("Invalid timezone in quiet hours config, disabling quiet hours")
+			// Disable quiet hours rather than silently using wrong timezone
+			config.Schedule.QuietHours.Enabled = false
 		}
 	}
+}
 
-	m.config = config
-	for id, override := range m.config.Overrides {
+// normalizeOverrides normalizes all threshold overrides
+func normalizeOverrides(overrides map[string]ThresholdConfig) {
+	for id, override := range overrides {
 		override.PoweredOffSeverity = normalizePoweredOffSeverity(override.PoweredOffSeverity)
 		if override.Usage != nil {
 			override.Usage = ensureHysteresisThreshold(override.Usage)
-			m.config.Overrides[id] = override
 		}
-		m.config.Overrides[id] = override
+		overrides[id] = override
 	}
-
-	if !m.config.SnapshotDefaults.Enabled {
-		m.clearSnapshotAlertsForInstanceLocked("")
-	}
-	if !m.config.BackupDefaults.Enabled {
-		m.clearBackupAlertsLocked()
-	}
-
-	m.applyGlobalOfflineSettingsLocked()
-
-	log.Info().
-		Bool("enabled", config.Enabled).
-		Interface("guestDefaults", config.GuestDefaults).
-		Msg("Alert configuration updated")
-
-	// Re-evaluate active alerts against new thresholds
-	m.reevaluateActiveAlertsLocked()
 }
 
 // normalizeMetricTimeThresholds cleans resource/metric keys and drops invalid delay overrides.
@@ -8222,6 +8321,179 @@ func (m *Manager) periodicSaveAlerts() {
 	}
 }
 
+// trackingMapCleanup periodically cleans up stale entries from tracking maps
+// to prevent unbounded memory growth from deleted/decommissioned resources.
+func (m *Manager) trackingMapCleanup() {
+	// Run cleanup every hour
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			m.cleanupStaleMaps()
+		case <-m.cleanupStop:
+			return
+		}
+	}
+}
+
+// cleanupStaleMaps removes stale entries from tracking maps.
+// Entries are considered stale if they haven't been updated in 24 hours
+// and don't correspond to any active alert.
+func (m *Manager) cleanupStaleMaps() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	now := time.Now()
+	staleThreshold := StaleTrackingThreshold
+	cleaned := 0
+
+	// Clean up flapping history for resources without active alerts
+	for alertID, history := range m.flappingHistory {
+		if _, hasAlert := m.activeAlerts[alertID]; !hasAlert {
+			// Check if history is stale (last entry older than threshold)
+			if len(history) == 0 || now.Sub(history[len(history)-1]) > staleThreshold {
+				delete(m.flappingHistory, alertID)
+				delete(m.flappingActive, alertID)
+				cleaned++
+			}
+		}
+	}
+
+	// Clean up suppressedUntil entries that have expired
+	for alertID, suppressUntil := range m.suppressedUntil {
+		if now.After(suppressUntil) {
+			delete(m.suppressedUntil, alertID)
+			cleaned++
+		}
+	}
+
+	// Clean up pending alerts older than threshold without active alerts
+	for alertID, pendingTime := range m.pendingAlerts {
+		if _, hasAlert := m.activeAlerts[alertID]; !hasAlert {
+			if now.Sub(pendingTime) > staleThreshold {
+				delete(m.pendingAlerts, alertID)
+				cleaned++
+			}
+		}
+	}
+
+	// Clean up offline confirmation counts for resources without active alerts
+	for resourceID := range m.offlineConfirmations {
+		hasRelatedAlert := false
+		for alertID := range m.activeAlerts {
+			if strings.Contains(alertID, resourceID) {
+				hasRelatedAlert = true
+				break
+			}
+		}
+		if !hasRelatedAlert {
+			delete(m.offlineConfirmations, resourceID)
+			cleaned++
+		}
+	}
+
+	// Clean up node offline counts (legacy)
+	for nodeID := range m.nodeOfflineCount {
+		hasRelatedAlert := false
+		for alertID := range m.activeAlerts {
+			if strings.Contains(alertID, nodeID) {
+				hasRelatedAlert = true
+				break
+			}
+		}
+		if !hasRelatedAlert {
+			delete(m.nodeOfflineCount, nodeID)
+			cleaned++
+		}
+	}
+
+	// Clean up Docker tracking maps
+	for containerID := range m.dockerStateConfirm {
+		hasRelatedAlert := false
+		for alertID := range m.activeAlerts {
+			if strings.Contains(alertID, containerID) {
+				hasRelatedAlert = true
+				break
+			}
+		}
+		if !hasRelatedAlert {
+			delete(m.dockerStateConfirm, containerID)
+			cleaned++
+		}
+	}
+
+	for hostID := range m.dockerOfflineCount {
+		hasRelatedAlert := false
+		for alertID := range m.activeAlerts {
+			if strings.Contains(alertID, hostID) {
+				hasRelatedAlert = true
+				break
+			}
+		}
+		if !hasRelatedAlert {
+			delete(m.dockerOfflineCount, hostID)
+			cleaned++
+		}
+	}
+
+	// Clean up Docker restart tracking for stale containers
+	for containerID, record := range m.dockerRestartTracking {
+		if record != nil && now.Sub(record.lastChecked) > staleThreshold {
+			delete(m.dockerRestartTracking, containerID)
+			delete(m.dockerLastExitCode, containerID)
+			cleaned++
+		}
+	}
+
+	// Clean up rate limit entries older than 1 hour
+	rateLimitThreshold := RateLimitCleanupWindow
+	for resourceID, times := range m.alertRateLimit {
+		// Filter to keep only recent entries
+		var recent []time.Time
+		for _, t := range times {
+			if now.Sub(t) < rateLimitThreshold {
+				recent = append(recent, t)
+			}
+		}
+		if len(recent) == 0 {
+			delete(m.alertRateLimit, resourceID)
+			cleaned++
+		} else if len(recent) < len(times) {
+			m.alertRateLimit[resourceID] = recent
+		}
+	}
+
+	// Clean up recent alerts older than suppression window
+	suppressWindow := time.Duration(m.config.SuppressionWindow) * time.Minute
+	if suppressWindow <= 0 {
+		suppressWindow = 5 * time.Minute
+	}
+	for alertID, alert := range m.recentAlerts {
+		if now.Sub(alert.LastSeen) > suppressWindow {
+			delete(m.recentAlerts, alertID)
+			cleaned++
+		}
+	}
+
+	// Clean up ackState for alerts that no longer exist and are older than threshold
+	for alertID, record := range m.ackState {
+		if _, hasAlert := m.activeAlerts[alertID]; !hasAlert {
+			if now.Sub(record.time) > staleThreshold {
+				delete(m.ackState, alertID)
+				cleaned++
+			}
+		}
+	}
+
+	if cleaned > 0 {
+		log.Debug().
+			Int("entriesCleaned", cleaned).
+			Msg("Cleaned stale entries from alert tracking maps")
+	}
+}
+
 // hasKnownFirmwareBug checks if a disk model is known to have firmware bugs that cause
 // false health status reports. These drives may report FAILED or other error states
 // due to firmware issues (e.g., incorrect temperature thresholds) even when the drive
@@ -8260,24 +8532,25 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 
 	// Check if disk health is not PASSED
 	normalizedHealth := strings.ToUpper(strings.TrimSpace(disk.Health))
-	if normalizedHealth != "" && normalizedHealth != "UNKNOWN" && normalizedHealth != "PASSED" && normalizedHealth != "OK" {
-		// Skip health alerts for drives with known firmware bugs that cause false reports
-		// These drives may report FAILED status due to firmware issues even when healthy
-		// We still monitor wearout below, which is more reliable for these drives
-		if hasKnownFirmwareBug(disk.Model) {
-			log.Debug().
-				Str("node", node).
-				Str("disk", disk.DevPath).
-				Str("model", disk.Model).
-				Str("health", disk.Health).
-				Msg("Skipping health alert for drive with known firmware bug - health status unreliable")
+	healthCheckNeeded := normalizedHealth != "" && normalizedHealth != "UNKNOWN" && normalizedHealth != "PASSED" && normalizedHealth != "OK"
 
-			// Clear any existing health alert since we now recognize this is a false positive
-			m.clearAlertNoLock(alertID)
+	// Skip health alerts for drives with known firmware bugs that cause false reports
+	// These drives may report FAILED status due to firmware issues even when healthy
+	// We still monitor wearout below, which is more reliable for these drives
+	if healthCheckNeeded && hasKnownFirmwareBug(disk.Model) {
+		log.Debug().
+			Str("node", node).
+			Str("disk", disk.DevPath).
+			Str("model", disk.Model).
+			Str("health", disk.Health).
+			Msg("Skipping health alert for drive with known firmware bug - health status unreliable")
 
-			// Continue to wearout check below - wearout monitoring is still valid
-			goto checkWearout
-		}
+		// Clear any existing health alert since we now recognize this is a false positive
+		m.clearAlertNoLock(alertID)
+		healthCheckNeeded = false // Skip to wearout check
+	}
+
+	if healthCheckNeeded {
 		// Check if alert already exists
 		if _, exists := m.activeAlerts[alertID]; !exists {
 			// Create new health alert
@@ -8324,7 +8597,6 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 		m.clearAlertNoLock(alertID)
 	}
 
-checkWearout:
 	// Check for low wearout (SSD life remaining)
 	if disk.Wearout > 0 && disk.Wearout < 10 {
 		wearoutAlertID := fmt.Sprintf("disk-wearout-%s-%s-%s", instance, node, disk.DevPath)
@@ -8401,6 +8673,11 @@ func (m *Manager) clearAlertNoLock(alertID string) {
 	alert, exists := m.activeAlerts[alertID]
 	if !exists {
 		return
+	}
+
+	// Record metric for resolved alert
+	if recordAlertResolved != nil {
+		recordAlertResolved(alert)
 	}
 
 	m.removeActiveAlertNoLock(alertID)

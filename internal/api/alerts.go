@@ -37,7 +37,9 @@ func (h *AlertHandlers) SetMonitor(m *monitoring.Monitor) {
 	h.monitor = m
 }
 
-// validateAlertID validates an alert ID for security
+// validateAlertID validates an alert ID for security.
+// Alert IDs should be alphanumeric with limited punctuation (hyphens, underscores, colons, periods).
+// This prevents issues with logging, URL encoding, and potential injection attacks.
 func validateAlertID(alertID string) bool {
 	// Guard against empty strings or extremely large payloads that could impact memory usage.
 	if len(alertID) == 0 || len(alertID) > 500 {
@@ -49,12 +51,22 @@ func validateAlertID(alertID string) bool {
 		return false
 	}
 
-	// Permit any printable ASCII character (including spaces) so user supplied identifiers
-	// like instance names remain valid, while excluding control characters and DEL.
+	// Allow alphanumeric characters and safe punctuation commonly used in IDs.
+	// Restrict to a safe character set to avoid issues with logging, URLs, and shell escaping.
 	for _, r := range alertID {
-		if r < 32 || r == 127 {
+		isAlphanumeric := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+		isSafePunctuation := r == '-' || r == '_' || r == ':' || r == '.' || r == '/' || r == '@'
+		// Allow spaces for backward compatibility with existing alert IDs that include instance names
+		isSpace := r == ' '
+
+		if !isAlphanumeric && !isSafePunctuation && !isSpace {
 			return false
 		}
+	}
+
+	// Reject IDs that start or end with spaces (likely malformed)
+	if alertID[0] == ' ' || alertID[len(alertID)-1] == ' ' {
+		return false
 	}
 
 	return true
@@ -85,9 +97,16 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 	// Update notification manager with schedule settings
 	h.monitor.GetNotificationManager().SetCooldown(config.Schedule.Cooldown)
 
+	// Migrate deprecated GroupingWindow to Grouping.Window if needed
 	groupWindow := config.Schedule.Grouping.Window
 	if groupWindow == 0 && config.Schedule.GroupingWindow != 0 {
 		groupWindow = config.Schedule.GroupingWindow
+		// Migrate the value to the new location
+		config.Schedule.Grouping.Window = groupWindow
+		config.Schedule.GroupingWindow = 0 // Clear deprecated field
+		log.Info().
+			Int("window", groupWindow).
+			Msg("Migrated deprecated GroupingWindow to Grouping.Window")
 	}
 	h.monitor.GetNotificationManager().SetGroupingWindow(groupWindow)
 	h.monitor.GetNotificationManager().SetGroupingOptions(
