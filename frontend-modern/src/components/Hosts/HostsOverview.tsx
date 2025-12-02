@@ -83,9 +83,11 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
 
   const connected = () => wsContext.connected();
   const reconnecting = () => wsContext.reconnecting();
+  const reconnect = () => wsContext.reconnect();
 
-  const isLoading = createMemo(() => {
-    return !connected() && !reconnecting();
+  const isInitialLoading = createMemo(() => {
+    // Only show loading spinner when we've never been connected and have no hosts
+    return !connected() && !reconnecting() && props.hosts.length === 0;
   });
 
   const sortedHosts = createMemo(() => {
@@ -194,7 +196,7 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
 
   return (
     <div class="space-y-4">
-      <Show when={isLoading()}>
+      <Show when={isInitialLoading()}>
         <Card padding="lg">
           <EmptyState
             icon={
@@ -219,19 +221,53 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                 />
               </svg>
             }
-            title={reconnecting() ? 'Reconnecting to host agents...' : 'Loading host data...'}
+            title="Loading host data..."
+            description="Connecting to the monitoring service."
+          />
+        </Card>
+      </Show>
+
+      {/* Disconnected State */}
+      <Show when={!connected() && !isInitialLoading()}>
+        <Card padding="lg" tone="danger">
+          <EmptyState
+            icon={
+              <svg
+                class="h-12 w-12 text-red-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            }
+            title="Connection lost"
             description={
               reconnecting()
-                ? 'Re-establishing metrics from the monitoring service.'
-                : connected()
-                  ? 'Waiting for the first host update.'
-                  : 'Connecting to the monitoring service.'
+                ? 'Attempting to reconnect…'
+                : 'Unable to connect to the backend server'
+            }
+            tone="danger"
+            actions={
+              !reconnecting() ? (
+                <button
+                  onClick={() => reconnect()}
+                  class="mt-2 inline-flex items-center px-4 py-2 text-xs font-medium rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
+                >
+                  Reconnect now
+                </button>
+              ) : undefined
             }
           />
         </Card>
       </Show>
 
-      <Show when={!isLoading()}>
+      <Show when={!isInitialLoading()}>
         <Show
           when={sortedHosts().length === 0}
           fallback={
