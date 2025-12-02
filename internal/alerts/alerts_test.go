@@ -9949,3 +9949,337 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 		}
 	})
 }
+
+func TestDockerContainerRestartLoopAlert(t *testing.T) {
+	t.Run("first check - no alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		host := models.DockerHost{
+			ID:          "host-restart-1",
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:           "container-1",
+					Name:         "first-check-app",
+					State:        "running",
+					Status:       "Up 10 minutes",
+					RestartCount: 5, // Even with high restart count, first check just initializes
+				},
+			},
+		}
+
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Fatal("expected no restart loop alert on first check (just initializes tracking)")
+		}
+
+		// Verify tracking was initialized
+		m.mu.Lock()
+		record, exists := m.dockerRestartTracking[resourceID]
+		m.mu.Unlock()
+		if !exists {
+			t.Fatal("expected tracking record to be initialized")
+		}
+		if record.lastCount != 5 {
+			t.Fatalf("expected lastCount=5, got %d", record.lastCount)
+		}
+	})
+
+	t.Run("stable restart count - no alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		hostID := "host-restart-2"
+		containerID := "container-2"
+
+		host := models.DockerHost{
+			ID:          hostID,
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:           containerID,
+					Name:         "stable-app",
+					State:        "running",
+					Status:       "Up 10 minutes",
+					RestartCount: 2,
+				},
+			},
+		}
+
+		// First check - initializes tracking
+		m.CheckDockerHost(host)
+
+		// Second check - same restart count
+		m.CheckDockerHost(host)
+
+		// Third check - still same restart count
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(hostID, containerID)
+		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Fatal("expected no restart loop alert for stable container")
+		}
+	})
+
+	t.Run("restarts under threshold - no alert", func(t *testing.T) {
+		m := newTestManager(t)
+		// Configure threshold to 3 (default)
+		m.config.DockerDefaults.RestartCount = 3
+		m.config.DockerDefaults.RestartWindow = 300
+
+		hostID := "host-restart-3"
+		containerID := "container-3"
+
+		// First check - initializes with RestartCount=0
+		host := models.DockerHost{
+			ID:          hostID,
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:           containerID,
+					Name:         "under-threshold-app",
+					State:        "running",
+					Status:       "Up 10 minutes",
+					RestartCount: 0,
+				},
+			},
+		}
+		m.CheckDockerHost(host)
+
+		// Container restarts twice (under threshold of 3)
+		host.Containers[0].RestartCount = 2
+		m.CheckDockerHost(host)
+
+		// One more restart (now at 3, threshold is >3 so still no alert)
+		host.Containers[0].RestartCount = 3
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(hostID, containerID)
+		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Fatal("expected no restart loop alert when restarts <= threshold")
+		}
+
+		// Verify we tracked 3 restarts
+		m.mu.Lock()
+		record := m.dockerRestartTracking[resourceID]
+		recentCount := len(record.times)
+		m.mu.Unlock()
+		if recentCount != 3 {
+			t.Fatalf("expected 3 tracked restarts, got %d", recentCount)
+		}
+	})
+
+	t.Run("hits restart loop threshold - alert raised", func(t *testing.T) {
+		m := newTestManager(t)
+		// Configure threshold to 3 (alert when >3)
+		m.config.DockerDefaults.RestartCount = 3
+		m.config.DockerDefaults.RestartWindow = 300
+
+		hostID := "host-restart-4"
+		containerID := "container-4"
+
+		// First check - initializes with RestartCount=0
+		host := models.DockerHost{
+			ID:          hostID,
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:           containerID,
+					Name:         "restart-loop-app",
+					State:        "running",
+					Status:       "Up 1 minute",
+					RestartCount: 0,
+				},
+			},
+		}
+		m.CheckDockerHost(host)
+
+		// Container restarts 4 times (exceeds threshold of 3)
+		host.Containers[0].RestartCount = 4
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(hostID, containerID)
+		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
+		alert, exists := m.activeAlerts[alertID]
+		if !exists {
+			t.Fatal("expected restart loop alert when restarts > threshold")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Fatalf("expected critical alert, got %s", alert.Level)
+		}
+		if alert.Type != "docker-container-restart-loop" {
+			t.Fatalf("expected alert type docker-container-restart-loop, got %s", alert.Type)
+		}
+
+		// Verify metadata
+		if alert.Metadata["restartCount"] != 4 {
+			t.Fatalf("expected restartCount=4 in metadata, got %v", alert.Metadata["restartCount"])
+		}
+		if alert.Metadata["recentRestarts"] != 4 {
+			t.Fatalf("expected recentRestarts=4 in metadata, got %v", alert.Metadata["recentRestarts"])
+		}
+	})
+
+	t.Run("restart loop recovery - alert cleared", func(t *testing.T) {
+		m := newTestManager(t)
+		// Configure short window for testing
+		m.config.DockerDefaults.RestartCount = 3
+		m.config.DockerDefaults.RestartWindow = 1 // 1 second window for testing
+
+		hostID := "host-restart-5"
+		containerID := "container-5"
+		resourceID := dockerResourceID(hostID, containerID)
+
+		// Manually set up a restart loop state
+		m.mu.Lock()
+		now := time.Now()
+		m.dockerRestartTracking[resourceID] = &dockerRestartRecord{
+			count:       5,
+			lastCount:   5,
+			times:       []time.Time{now, now, now, now}, // 4 recent restarts
+			lastChecked: now,
+		}
+		m.mu.Unlock()
+
+		// Create initial alert
+		host := models.DockerHost{
+			ID:          hostID,
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:           containerID,
+					Name:         "recovering-app",
+					State:        "running",
+					Status:       "Up 1 minute",
+					RestartCount: 5,
+				},
+			},
+		}
+		m.CheckDockerHost(host)
+
+		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
+		if _, exists := m.activeAlerts[alertID]; !exists {
+			t.Fatal("expected restart loop alert to be raised initially")
+		}
+
+		// Wait for time window to pass
+		time.Sleep(1100 * time.Millisecond)
+
+		// Check again with same restart count - old restarts should be cleaned up
+		m.CheckDockerHost(host)
+
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Fatal("expected restart loop alert to be cleared after window passes")
+		}
+	})
+
+	t.Run("incremental restarts trigger alert", func(t *testing.T) {
+		m := newTestManager(t)
+		m.config.DockerDefaults.RestartCount = 2
+		m.config.DockerDefaults.RestartWindow = 300
+
+		hostID := "host-restart-6"
+		containerID := "container-6"
+
+		host := models.DockerHost{
+			ID:          hostID,
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:           containerID,
+					Name:         "incremental-restart-app",
+					State:        "running",
+					Status:       "Up 1 minute",
+					RestartCount: 0,
+				},
+			},
+		}
+
+		// First check - initializes
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(hostID, containerID)
+		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
+
+		// Restart 1
+		host.Containers[0].RestartCount = 1
+		m.CheckDockerHost(host)
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Fatal("expected no alert after 1 restart")
+		}
+
+		// Restart 2
+		host.Containers[0].RestartCount = 2
+		m.CheckDockerHost(host)
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Fatal("expected no alert after 2 restarts (threshold is >2)")
+		}
+
+		// Restart 3 - exceeds threshold
+		host.Containers[0].RestartCount = 3
+		m.CheckDockerHost(host)
+		if _, exists := m.activeAlerts[alertID]; !exists {
+			t.Fatal("expected alert after 3 restarts (>2 threshold)")
+		}
+	})
+
+	t.Run("alert preserves start time on updates", func(t *testing.T) {
+		m := newTestManager(t)
+		m.config.DockerDefaults.RestartCount = 2
+		m.config.DockerDefaults.RestartWindow = 300
+
+		hostID := "host-restart-7"
+		containerID := "container-7"
+
+		host := models.DockerHost{
+			ID:          hostID,
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:           containerID,
+					Name:         "preserve-time-app",
+					State:        "running",
+					Status:       "Up 1 minute",
+					RestartCount: 0,
+				},
+			},
+		}
+
+		// Initialize and trigger alert
+		m.CheckDockerHost(host)
+		host.Containers[0].RestartCount = 5
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(hostID, containerID)
+		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
+		alert1, exists := m.activeAlerts[alertID]
+		if !exists {
+			t.Fatal("expected alert to be raised")
+		}
+		startTime1 := alert1.StartTime
+
+		// More restarts - alert should update but preserve start time
+		time.Sleep(10 * time.Millisecond)
+		host.Containers[0].RestartCount = 7
+		m.CheckDockerHost(host)
+
+		alert2, exists := m.activeAlerts[alertID]
+		if !exists {
+			t.Fatal("expected alert to still exist")
+		}
+		if !alert2.StartTime.Equal(startTime1) {
+			t.Fatalf("expected start time to be preserved, got %v vs %v", alert2.StartTime, startTime1)
+		}
+	})
+}
