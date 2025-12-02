@@ -652,3 +652,195 @@ func TestGetQueueStats(t *testing.T) {
 		}
 	})
 }
+
+func TestPerformCleanup(t *testing.T) {
+	t.Run("cleanup removes old completed entries", func(t *testing.T) {
+		tempDir := t.TempDir()
+		nq, err := NewNotificationQueue(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create notification queue: %v", err)
+		}
+		defer nq.Stop()
+
+		// Insert a notification directly with old completed_at timestamp
+		oldTime := time.Now().Add(-10 * 24 * time.Hour).Unix() // 10 days ago
+
+		_, err = nq.db.Exec(`
+			INSERT INTO notification_queue
+			(id, type, status, config, alerts, attempts, max_attempts, created_at, completed_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			"old-sent-1", "email", "sent", "{}", "[]", 1, 3, oldTime, oldTime)
+		if err != nil {
+			t.Fatalf("Failed to insert old notification: %v", err)
+		}
+
+		// Insert a recent completed notification (should NOT be cleaned)
+		recentTime := time.Now().Add(-1 * 24 * time.Hour).Unix() // 1 day ago
+		_, err = nq.db.Exec(`
+			INSERT INTO notification_queue
+			(id, type, status, config, alerts, attempts, max_attempts, created_at, completed_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			"recent-sent-1", "email", "sent", "{}", "[]", 1, 3, recentTime, recentTime)
+		if err != nil {
+			t.Fatalf("Failed to insert recent notification: %v", err)
+		}
+
+		// Run cleanup
+		nq.performCleanup()
+
+		// Verify old entry was removed
+		var count int
+		err = nq.db.QueryRow(`SELECT COUNT(*) FROM notification_queue WHERE id = ?`, "old-sent-1").Scan(&count)
+		if err != nil {
+			t.Fatalf("Failed to query: %v", err)
+		}
+		if count != 0 {
+			t.Error("old completed notification should have been cleaned up")
+		}
+
+		// Verify recent entry still exists
+		err = nq.db.QueryRow(`SELECT COUNT(*) FROM notification_queue WHERE id = ?`, "recent-sent-1").Scan(&count)
+		if err != nil {
+			t.Fatalf("Failed to query: %v", err)
+		}
+		if count != 1 {
+			t.Error("recent completed notification should NOT have been cleaned up")
+		}
+	})
+
+	t.Run("cleanup removes old DLQ entries", func(t *testing.T) {
+		tempDir := t.TempDir()
+		nq, err := NewNotificationQueue(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create notification queue: %v", err)
+		}
+		defer nq.Stop()
+
+		// Insert old DLQ entry (> 30 days)
+		oldTime := time.Now().Add(-35 * 24 * time.Hour).Unix()
+		_, err = nq.db.Exec(`
+			INSERT INTO notification_queue
+			(id, type, status, config, alerts, attempts, max_attempts, created_at, completed_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			"old-dlq-1", "webhook", "dlq", "{}", "[]", 5, 3, oldTime, oldTime)
+		if err != nil {
+			t.Fatalf("Failed to insert old DLQ entry: %v", err)
+		}
+
+		// Insert recent DLQ entry (< 30 days)
+		recentTime := time.Now().Add(-20 * 24 * time.Hour).Unix()
+		_, err = nq.db.Exec(`
+			INSERT INTO notification_queue
+			(id, type, status, config, alerts, attempts, max_attempts, created_at, completed_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			"recent-dlq-1", "webhook", "dlq", "{}", "[]", 5, 3, recentTime, recentTime)
+		if err != nil {
+			t.Fatalf("Failed to insert recent DLQ entry: %v", err)
+		}
+
+		// Run cleanup
+		nq.performCleanup()
+
+		// Verify old DLQ was removed
+		var count int
+		err = nq.db.QueryRow(`SELECT COUNT(*) FROM notification_queue WHERE id = ?`, "old-dlq-1").Scan(&count)
+		if err != nil {
+			t.Fatalf("Failed to query: %v", err)
+		}
+		if count != 0 {
+			t.Error("old DLQ entry should have been cleaned up")
+		}
+
+		// Verify recent DLQ still exists
+		err = nq.db.QueryRow(`SELECT COUNT(*) FROM notification_queue WHERE id = ?`, "recent-dlq-1").Scan(&count)
+		if err != nil {
+			t.Fatalf("Failed to query: %v", err)
+		}
+		if count != 1 {
+			t.Error("recent DLQ entry should NOT have been cleaned up")
+		}
+	})
+
+	t.Run("cleanup removes old audit logs", func(t *testing.T) {
+		tempDir := t.TempDir()
+		nq, err := NewNotificationQueue(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create notification queue: %v", err)
+		}
+		defer nq.Stop()
+
+		// Insert parent notifications first (foreign key constraint)
+		oldTime := time.Now().Add(-35 * 24 * time.Hour).Unix()
+		recentTime := time.Now().Add(-5 * 24 * time.Hour).Unix()
+
+		_, err = nq.db.Exec(`
+			INSERT INTO notification_queue
+			(id, type, status, config, alerts, attempts, max_attempts, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			"test-1", "email", "sent", "{}", "[]", 1, 3, oldTime)
+		if err != nil {
+			t.Fatalf("Failed to insert parent notification 1: %v", err)
+		}
+
+		_, err = nq.db.Exec(`
+			INSERT INTO notification_queue
+			(id, type, status, config, alerts, attempts, max_attempts, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			"test-2", "email", "sent", "{}", "[]", 1, 3, recentTime)
+		if err != nil {
+			t.Fatalf("Failed to insert parent notification 2: %v", err)
+		}
+
+		// Insert old audit log (> 30 days)
+		_, err = nq.db.Exec(`
+			INSERT INTO notification_audit (notification_id, type, status, timestamp)
+			VALUES (?, ?, ?, ?)`,
+			"test-1", "email", "created", oldTime)
+		if err != nil {
+			t.Fatalf("Failed to insert old audit: %v", err)
+		}
+
+		// Insert recent audit log (< 30 days)
+		_, err = nq.db.Exec(`
+			INSERT INTO notification_audit (notification_id, type, status, timestamp)
+			VALUES (?, ?, ?, ?)`,
+			"test-2", "email", "sent", recentTime)
+		if err != nil {
+			t.Fatalf("Failed to insert recent audit: %v", err)
+		}
+
+		// Run cleanup
+		nq.performCleanup()
+
+		// Verify old audit was removed
+		var count int
+		err = nq.db.QueryRow(`SELECT COUNT(*) FROM notification_audit WHERE timestamp = ?`, oldTime).Scan(&count)
+		if err != nil {
+			t.Fatalf("Failed to query: %v", err)
+		}
+		if count != 0 {
+			t.Error("old audit log should have been cleaned up")
+		}
+
+		// Verify recent audit still exists
+		err = nq.db.QueryRow(`SELECT COUNT(*) FROM notification_audit WHERE timestamp = ?`, recentTime).Scan(&count)
+		if err != nil {
+			t.Fatalf("Failed to query: %v", err)
+		}
+		if count != 1 {
+			t.Error("recent audit log should NOT have been cleaned up")
+		}
+	})
+
+	t.Run("cleanup with empty database", func(t *testing.T) {
+		tempDir := t.TempDir()
+		nq, err := NewNotificationQueue(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create notification queue: %v", err)
+		}
+		defer nq.Stop()
+
+		// Should not panic or error
+		nq.performCleanup()
+	})
+}
