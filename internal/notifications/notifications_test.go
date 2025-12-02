@@ -2710,6 +2710,45 @@ func TestSendNotificationsDirect_MultipleWebhooks(t *testing.T) {
 	// Goroutines will fail but shouldn't panic
 }
 
+func TestSendNotificationsDirect_EmailEnabled(t *testing.T) {
+	nm := &NotificationManager{}
+
+	// Enable email with invalid host - will fail send but covers code path
+	emailConfig := EmailConfig{
+		Enabled:  true,
+		SMTPHost: "invalid.localhost.test",
+		SMTPPort: 25,
+		To:       []string{"test@example.com"},
+	}
+	webhooks := []WebhookConfig{}
+	appriseConfig := AppriseConfig{Enabled: false}
+	alertList := []*alerts.Alert{}
+
+	// Should enter the email enabled branch and log, goroutine will fail silently
+	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
+	// Allow goroutine to start
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestSendNotificationsDirect_AppriseEnabled(t *testing.T) {
+	nm := &NotificationManager{}
+
+	emailConfig := EmailConfig{Enabled: false}
+	webhooks := []WebhookConfig{}
+	// Enable apprise with invalid config - will fail send but covers code path
+	appriseConfig := AppriseConfig{
+		Enabled:   true,
+		ServerURL: "http://invalid.localhost.test/apprise",
+		Targets:   []string{"mailto://test@example.com"},
+	}
+	alertList := []*alerts.Alert{}
+
+	// Should enter the apprise enabled branch
+	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
+	// Allow goroutine to start
+	time.Sleep(10 * time.Millisecond)
+}
+
 func TestProcessQueuedNotification_InvalidEmailConfig(t *testing.T) {
 	nm := &NotificationManager{}
 	notif := &QueuedNotification{
