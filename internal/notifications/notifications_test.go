@@ -2709,3 +2709,75 @@ func TestSendNotificationsDirect_MultipleWebhooks(t *testing.T) {
 	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
 	// Goroutines will fail but shouldn't panic
 }
+
+func TestProcessQueuedNotification_InvalidEmailConfig(t *testing.T) {
+	nm := &NotificationManager{}
+	notif := &QueuedNotification{
+		ID:     "test-1",
+		Type:   "email",
+		Config: json.RawMessage(`{invalid json`),
+		Alerts: []*alerts.Alert{},
+	}
+
+	err := nm.ProcessQueuedNotification(notif)
+	if err == nil {
+		t.Error("expected error for invalid email config JSON")
+	}
+	if !strings.Contains(err.Error(), "failed to unmarshal email config") {
+		t.Errorf("expected 'failed to unmarshal email config' error, got: %v", err)
+	}
+}
+
+func TestProcessQueuedNotification_InvalidWebhookConfig(t *testing.T) {
+	nm := &NotificationManager{}
+	notif := &QueuedNotification{
+		ID:     "test-2",
+		Type:   "webhook",
+		Config: json.RawMessage(`{not valid`),
+		Alerts: []*alerts.Alert{},
+	}
+
+	err := nm.ProcessQueuedNotification(notif)
+	if err == nil {
+		t.Error("expected error for invalid webhook config JSON")
+	}
+	if !strings.Contains(err.Error(), "failed to unmarshal webhook config") {
+		t.Errorf("expected 'failed to unmarshal webhook config' error, got: %v", err)
+	}
+}
+
+func TestProcessQueuedNotification_InvalidAppriseConfig(t *testing.T) {
+	nm := &NotificationManager{}
+	notif := &QueuedNotification{
+		ID:     "test-3",
+		Type:   "apprise",
+		Config: json.RawMessage(`broken json`),
+		Alerts: []*alerts.Alert{},
+	}
+
+	err := nm.ProcessQueuedNotification(notif)
+	if err == nil {
+		t.Error("expected error for invalid apprise config JSON")
+	}
+	if !strings.Contains(err.Error(), "failed to unmarshal apprise config") {
+		t.Errorf("expected 'failed to unmarshal apprise config' error, got: %v", err)
+	}
+}
+
+func TestProcessQueuedNotification_UnknownType(t *testing.T) {
+	nm := &NotificationManager{}
+	notif := &QueuedNotification{
+		ID:     "test-4",
+		Type:   "unknown-type",
+		Config: json.RawMessage(`{}`),
+		Alerts: []*alerts.Alert{},
+	}
+
+	err := nm.ProcessQueuedNotification(notif)
+	if err == nil {
+		t.Error("expected error for unknown notification type")
+	}
+	if !strings.Contains(err.Error(), "unknown notification type") {
+		t.Errorf("expected 'unknown notification type' error, got: %v", err)
+	}
+}
