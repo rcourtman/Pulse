@@ -2820,3 +2820,112 @@ func TestProcessQueuedNotification_UnknownType(t *testing.T) {
 		t.Errorf("expected 'unknown notification type' error, got: %v", err)
 	}
 }
+
+func TestGetQueue_NilQueue(t *testing.T) {
+	nm := &NotificationManager{}
+
+	queue := nm.GetQueue()
+	if queue != nil {
+		t.Error("expected nil queue for new NotificationManager")
+	}
+}
+
+func TestGetQueue_WithQueue(t *testing.T) {
+	tempDir := t.TempDir()
+	queue, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("failed to create queue: %v", err)
+	}
+	defer queue.Stop()
+
+	nm := &NotificationManager{queue: queue}
+
+	got := nm.GetQueue()
+	if got != queue {
+		t.Error("GetQueue should return the assigned queue")
+	}
+}
+
+func TestAddWebhookDelivery(t *testing.T) {
+	nm := &NotificationManager{
+		webhookHistory: make([]WebhookDelivery, 0),
+	}
+
+	delivery := WebhookDelivery{
+		WebhookName: "test-webhook",
+		WebhookURL:  "https://example.com/webhook",
+		Timestamp:   time.Now(),
+		Success:     true,
+		StatusCode:  200,
+	}
+
+	nm.addWebhookDelivery(delivery)
+
+	if len(nm.webhookHistory) != 1 {
+		t.Fatalf("expected 1 delivery in history, got %d", len(nm.webhookHistory))
+	}
+	if nm.webhookHistory[0].WebhookName != "test-webhook" {
+		t.Errorf("expected webhook name 'test-webhook', got %s", nm.webhookHistory[0].WebhookName)
+	}
+}
+
+func TestAddWebhookDelivery_TrimsToMax100(t *testing.T) {
+	nm := &NotificationManager{
+		webhookHistory: make([]WebhookDelivery, 0),
+	}
+
+	// Add 105 deliveries
+	for i := 0; i < 105; i++ {
+		nm.addWebhookDelivery(WebhookDelivery{
+			WebhookName: "webhook",
+			WebhookURL:  "https://example.com/webhook",
+			Timestamp:   time.Now(),
+			Success:     true,
+			StatusCode:  i, // Use StatusCode to track order
+		})
+	}
+
+	if len(nm.webhookHistory) != 100 {
+		t.Errorf("expected 100 deliveries in history (trimmed), got %d", len(nm.webhookHistory))
+	}
+
+	// Oldest entries should be removed, so first entry should have StatusCode >= 5
+	if nm.webhookHistory[0].StatusCode < 5 {
+		t.Errorf("expected oldest entries to be trimmed, first StatusCode = %d", nm.webhookHistory[0].StatusCode)
+	}
+}
+
+func TestGetWebhookHistory_EmptyHistory(t *testing.T) {
+	nm := &NotificationManager{
+		webhookHistory: make([]WebhookDelivery, 0),
+	}
+
+	history := nm.GetWebhookHistory()
+
+	if len(history) != 0 {
+		t.Errorf("expected empty history, got %d entries", len(history))
+	}
+}
+
+func TestGetWebhookHistory_ReturnsCopy(t *testing.T) {
+	nm := &NotificationManager{
+		webhookHistory: []WebhookDelivery{
+			{WebhookName: "webhook1", Success: true},
+			{WebhookName: "webhook2", Success: false},
+		},
+	}
+
+	history := nm.GetWebhookHistory()
+
+	if len(history) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(history))
+	}
+
+	// Modify the returned copy
+	history[0].WebhookName = "modified"
+
+	// Original should be unchanged
+	if nm.webhookHistory[0].WebhookName != "webhook1" {
+		t.Error("modifying returned history should not affect original")
+	}
+}
