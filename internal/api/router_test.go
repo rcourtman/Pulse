@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -840,6 +841,236 @@ func TestHostAgentSearchCandidates(t *testing.T) {
 			if len(paths) != tt.wantLen {
 				t.Errorf("hostAgentSearchCandidates(%q, %q) returned %d paths, want %d",
 					tt.platform, tt.arch, len(paths), tt.wantLen)
+			}
+		})
+	}
+}
+
+func TestResolvePublicURL_ConfiguredPublicURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		publicURL string
+		want      string
+	}{
+		{
+			name:      "simple URL",
+			publicURL: "https://pulse.example.com",
+			want:      "https://pulse.example.com",
+		},
+		{
+			name:      "URL with trailing slash",
+			publicURL: "https://pulse.example.com/",
+			want:      "https://pulse.example.com",
+		},
+		{
+			name:      "URL with multiple trailing slashes",
+			publicURL: "https://pulse.example.com///",
+			want:      "https://pulse.example.com",
+		},
+		{
+			name:      "URL with port",
+			publicURL: "https://pulse.example.com:8443",
+			want:      "https://pulse.example.com:8443",
+		},
+		{
+			name:      "URL with port and trailing slash",
+			publicURL: "https://pulse.example.com:8443/",
+			want:      "https://pulse.example.com:8443",
+		},
+		{
+			name:      "URL with whitespace",
+			publicURL: "  https://pulse.example.com  ",
+			want:      "https://pulse.example.com",
+		},
+		{
+			name:      "HTTP URL",
+			publicURL: "http://internal.local:7655",
+			want:      "http://internal.local:7655",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Router{
+				config: &config.Config{
+					PublicURL: tt.publicURL,
+				},
+			}
+
+			// Request doesn't matter when PublicURL is configured
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+
+			got := r.resolvePublicURL(req)
+			if got != tt.want {
+				t.Errorf("resolvePublicURL() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolvePublicURL_FromRequest(t *testing.T) {
+	tests := []struct {
+		name           string
+		host           string
+		useTLS         bool
+		xForwardProto  string
+		frontendPort   int
+		want           string
+	}{
+		{
+			name:   "HTTP request with host header",
+			host:   "pulse.example.com",
+			useTLS: false,
+			want:   "http://pulse.example.com",
+		},
+		{
+			name:   "HTTPS request via TLS",
+			host:   "pulse.example.com",
+			useTLS: true,
+			want:   "https://pulse.example.com",
+		},
+		{
+			name:          "HTTP request with X-Forwarded-Proto https",
+			host:          "pulse.example.com",
+			useTLS:        false,
+			xForwardProto: "https",
+			want:          "https://pulse.example.com",
+		},
+		{
+			name:          "X-Forwarded-Proto case insensitive",
+			host:          "pulse.example.com",
+			useTLS:        false,
+			xForwardProto: "HTTPS",
+			want:          "https://pulse.example.com",
+		},
+		{
+			name:          "X-Forwarded-Proto http remains http",
+			host:          "pulse.example.com",
+			useTLS:        false,
+			xForwardProto: "http",
+			want:          "http://pulse.example.com",
+		},
+		{
+			name:   "Host with port",
+			host:   "pulse.example.com:8080",
+			useTLS: false,
+			want:   "http://pulse.example.com:8080",
+		},
+		{
+			name:   "Host with whitespace is trimmed",
+			host:   "  pulse.example.com  ",
+			useTLS: false,
+			want:   "http://pulse.example.com",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Router{
+				config: &config.Config{
+					PublicURL:    "", // not configured
+					FrontendPort: tt.frontendPort,
+				},
+			}
+
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Host = tt.host
+
+			if tt.useTLS {
+				req.TLS = &tls.ConnectionState{} // Non-nil TLS indicates HTTPS
+			}
+
+			if tt.xForwardProto != "" {
+				req.Header.Set("X-Forwarded-Proto", tt.xForwardProto)
+			}
+
+			got := r.resolvePublicURL(req)
+			if got != tt.want {
+				t.Errorf("resolvePublicURL() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolvePublicURL_NoHostFallback(t *testing.T) {
+	tests := []struct {
+		name         string
+		frontendPort int
+		want         string
+	}{
+		{
+			name:         "with configured frontend port",
+			frontendPort: 8080,
+			want:         "http://localhost:8080",
+		},
+		{
+			name:         "with default pulse port",
+			frontendPort: 7655,
+			want:         "http://localhost:7655",
+		},
+		{
+			name:         "with zero port uses default",
+			frontendPort: 0,
+			want:         "http://localhost:7655",
+		},
+		{
+			name:         "with negative port uses default",
+			frontendPort: -1,
+			want:         "http://localhost:7655",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Router{
+				config: &config.Config{
+					PublicURL:    "",
+					FrontendPort: tt.frontendPort,
+				},
+			}
+
+			// Request with empty host
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Host = ""
+
+			got := r.resolvePublicURL(req)
+			if got != tt.want {
+				t.Errorf("resolvePublicURL() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolvePublicURL_NilRequest(t *testing.T) {
+	tests := []struct {
+		name         string
+		frontendPort int
+		want         string
+	}{
+		{
+			name:         "nil request with frontend port",
+			frontendPort: 9000,
+			want:         "http://localhost:9000",
+		},
+		{
+			name:         "nil request with zero port",
+			frontendPort: 0,
+			want:         "http://localhost:7655",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Router{
+				config: &config.Config{
+					PublicURL:    "",
+					FrontendPort: tt.frontendPort,
+				},
+			}
+
+			got := r.resolvePublicURL(nil)
+			if got != tt.want {
+				t.Errorf("resolvePublicURL(nil) = %q, want %q", got, tt.want)
 			}
 		})
 	}
