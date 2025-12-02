@@ -74,7 +74,7 @@ Returns time-series data for CPU, Memory, and Storage.
 **Ranges**: `1h`, `24h`, `7d`, `30d`
 
 ### Storage Stats
-`GET /api/storage`
+`GET /api/storage/`
 Detailed storage usage per node and pool.
 
 ### Backup History
