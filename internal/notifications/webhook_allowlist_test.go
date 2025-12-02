@@ -287,3 +287,16 @@ func TestValidateWebhookURLWithAllowlist(t *testing.T) {
 		t.Error("Expected error for link-local even with allowlist")
 	}
 }
+
+func TestValidateWebhookURL_DNSResolutionFailure(t *testing.T) {
+	nm := NewNotificationManager("")
+
+	// Use a hostname that will definitely not resolve
+	err := nm.ValidateWebhookURL("http://this-hostname-definitely-does-not-exist-12345.invalid/webhook")
+	if err == nil {
+		t.Error("Expected error for unresolvable hostname")
+	}
+	if !strings.Contains(err.Error(), "failed to resolve webhook hostname") {
+		t.Errorf("Expected DNS resolution error, got: %v", err)
+	}
+}
