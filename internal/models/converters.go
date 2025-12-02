@@ -318,12 +318,9 @@ func (h Host) ToFrontend() HostFrontend {
 		LastSeen:        h.LastSeen.Unix() * 1000,
 	}
 
-	if host.DisplayName == "" {
-		if h.DisplayName != "" {
-			host.DisplayName = h.DisplayName
-		} else if h.Hostname != "" {
-			host.DisplayName = h.Hostname
-		}
+	// Fall back to Hostname if DisplayName is empty
+	if host.DisplayName == "" && h.Hostname != "" {
+		host.DisplayName = h.Hostname
 	}
 
 	if len(h.LoadAverage) > 0 {
