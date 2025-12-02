@@ -405,3 +405,153 @@ func TestCSRFTokenStore_EmptyTokensMap(t *testing.T) {
 		t.Error("tokens map should remain empty after cleanup")
 	}
 }
+
+func TestCSRFTokenStore_SaveUnsafe_MkdirAllError(t *testing.T) {
+	// Create a file where the directory should be - MkdirAll will fail
+	tmpDir := t.TempDir()
+	blockedPath := filepath.Join(tmpDir, "blocked")
+
+	// Create a file at the path where dataPath should be
+	if err := os.WriteFile(blockedPath, []byte("blocking file"), 0644); err != nil {
+		t.Fatalf("failed to create blocking file: %v", err)
+	}
+
+	store := &CSRFTokenStore{
+		tokens:   make(map[string]*CSRFToken),
+		dataPath: blockedPath, // This is a file, not a directory
+	}
+
+	// Add a token to save
+	store.tokens["testkey"] = &CSRFToken{
+		Hash:    "testhash",
+		Expires: time.Now().Add(time.Hour),
+	}
+
+	// saveUnsafe should handle error gracefully (logs but doesn't panic)
+	store.saveUnsafe()
+
+	// Verify the blocking file still exists (wasn't overwritten)
+	data, err := os.ReadFile(blockedPath)
+	if err != nil {
+		t.Fatalf("blocking file was removed: %v", err)
+	}
+	if string(data) != "blocking file" {
+		t.Error("blocking file was modified")
+	}
+}
+
+func TestCSRFTokenStore_SaveUnsafe_WriteFileError(t *testing.T) {
+	// Create a read-only directory to prevent file creation
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+
+	if err := os.Mkdir(readOnlyDir, 0755); err != nil {
+		t.Fatalf("failed to create readonly dir: %v", err)
+	}
+
+	store := &CSRFTokenStore{
+		tokens:   make(map[string]*CSRFToken),
+		dataPath: readOnlyDir,
+	}
+
+	// Add a token
+	store.tokens["testkey"] = &CSRFToken{
+		Hash:    "testhash",
+		Expires: time.Now().Add(time.Hour),
+	}
+
+	// Make directory read-only after it exists (MkdirAll succeeds, WriteFile fails)
+	if err := os.Chmod(readOnlyDir, 0555); err != nil {
+		t.Fatalf("failed to make dir readonly: %v", err)
+	}
+	t.Cleanup(func() {
+		os.Chmod(readOnlyDir, 0755) // Restore for cleanup
+	})
+
+	// saveUnsafe should handle error gracefully (logs but doesn't panic)
+	store.saveUnsafe()
+
+	// Verify no file was created
+	csrfFile := filepath.Join(readOnlyDir, "csrf_tokens.json")
+	if _, err := os.Stat(csrfFile); err == nil {
+		t.Error("tokens file should not exist after write failure")
+	}
+}
+
+func TestCSRFTokenStore_SaveUnsafe_RenameError(t *testing.T) {
+	// Create a directory at the target path to cause rename error
+	tmpDir := t.TempDir()
+
+	// Create a directory at the exact path where csrf_tokens.json should go
+	csrfFilePath := filepath.Join(tmpDir, "csrf_tokens.json")
+	if err := os.Mkdir(csrfFilePath, 0755); err != nil {
+		t.Fatalf("failed to create blocking directory: %v", err)
+	}
+
+	store := &CSRFTokenStore{
+		tokens:   make(map[string]*CSRFToken),
+		dataPath: tmpDir,
+	}
+
+	// Add a token
+	store.tokens["testkey"] = &CSRFToken{
+		Hash:    "testhash",
+		Expires: time.Now().Add(time.Hour),
+	}
+
+	// saveUnsafe should handle rename error gracefully
+	store.saveUnsafe()
+
+	// The blocking directory should still exist (rename failed)
+	info, err := os.Stat(csrfFilePath)
+	if err != nil {
+		t.Fatalf("blocking directory was removed: %v", err)
+	}
+	if !info.IsDir() {
+		t.Error("blocking directory was replaced with a file")
+	}
+}
+
+func TestCSRFTokenStore_Load_ReadError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a directory where the tokens file should be - reading it will fail
+	csrfPath := filepath.Join(tmpDir, "csrf_tokens.json")
+	if err := os.Mkdir(csrfPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	store := &CSRFTokenStore{
+		tokens:   make(map[string]*CSRFToken),
+		dataPath: tmpDir,
+	}
+
+	// Should not panic and should log error
+	store.load()
+
+	if len(store.tokens) != 0 {
+		t.Errorf("store should be empty after read error, got %d tokens", len(store.tokens))
+	}
+}
+
+func TestCSRFTokenStore_Load_InvalidJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Write invalid JSON that won't match either format
+	csrfFile := filepath.Join(tmpDir, "csrf_tokens.json")
+	if err := os.WriteFile(csrfFile, []byte("not valid json at all"), 0600); err != nil {
+		t.Fatalf("failed to write invalid JSON: %v", err)
+	}
+
+	store := &CSRFTokenStore{
+		tokens:   make(map[string]*CSRFToken),
+		dataPath: tmpDir,
+	}
+
+	// Should not panic
+	store.load()
+
+	if len(store.tokens) != 0 {
+		t.Errorf("store should be empty after loading invalid JSON, got %d tokens", len(store.tokens))
+	}
+}
