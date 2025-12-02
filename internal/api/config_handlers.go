@@ -579,7 +579,8 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 		// same fingerprint will fail. Fall back to a relaxed TLS check so we can
 		// still detect valid cluster members while keeping other errors (like
 		// auth) as hard failures.
-		isTLSMismatch := strings.Contains(err.Error(), "fingerprint") || strings.Contains(err.Error(), "x509") || strings.Contains(err.Error(), "certificate")
+		errStr := err.Error()
+		isTLSMismatch := strings.Contains(errStr, "fingerprint") || strings.Contains(errStr, "x509") || strings.Contains(errStr, "certificate")
 		if isTLSMismatch {
 			log.Debug().
 				Str("node", clusterNode.Name).
@@ -673,7 +674,8 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string, existi
 		}
 
 		// Check if this is definitely not a cluster (e.g., 501 not implemented)
-		if strings.Contains(lastErr.Error(), "501") || strings.Contains(lastErr.Error(), "not implemented") {
+		lastErrStr := lastErr.Error()
+		if strings.Contains(lastErrStr, "501") || strings.Contains(lastErrStr, "not implemented") {
 			// This is a standalone node, no need to retry
 			log.Debug().Err(lastErr).Msg("Standalone node detected - cluster API not available")
 			return false, "", nil
