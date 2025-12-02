@@ -7,6 +7,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 // fixedTimeForTest returns a fixed time for deterministic testing
@@ -1366,5 +1369,427 @@ func TestCheckCSRF_UnsafeMethods(t *testing.T) {
 				t.Errorf("CheckCSRF(%s) should return false without valid CSRF token", method)
 			}
 		})
+	}
+}
+
+func TestRequireAdmin_NoAuthConfiguredAllowsAccess(t *testing.T) {
+	// When no auth is configured at all, CheckAuth returns true (allows access)
+	cfg := &config.Config{}
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	handler(w, req)
+
+	if !handlerCalled {
+		t.Error("RequireAdmin should call handler when no auth is configured")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestRequireAdmin_APIOnlyModeRejectsNoToken(t *testing.T) {
+	// When only API tokens are configured, requests without token should be rejected
+	rawToken := "test-admin-token-12345"
+	record, _ := config.NewAPITokenRecord(rawToken, "admin-token", []string{"admin"})
+	cfg := &config.Config{
+		APITokens: []config.APITokenRecord{*record},
+	}
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	// No token provided
+	handler(w, req)
+
+	if handlerCalled {
+		t.Error("RequireAdmin should not call handler without API token in API-only mode")
+	}
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestRequireAdmin_InvalidBasicAuthRejectsRequest(t *testing.T) {
+	// When basic auth is configured, invalid credentials should be rejected
+	hashedPass, _ := auth.HashPassword("password123")
+	cfg := &config.Config{
+		AuthUser: "testuser",
+		AuthPass: hashedPass,
+	}
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.SetBasicAuth("testuser", "wrongpassword")
+	handler(w, req)
+
+	if handlerCalled {
+		t.Error("RequireAdmin should not call handler with invalid credentials")
+	}
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestRequireAdmin_InvalidBasicAuthAPIPathReturnsJSON(t *testing.T) {
+	hashedPass, _ := auth.HashPassword("password123")
+	cfg := &config.Config{
+		AuthUser: "testuser",
+		AuthPass: hashedPass,
+	}
+
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.SetBasicAuth("testuser", "wrongpassword")
+	handler(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("RequireAdmin Content-Type = %q, want application/json", ct)
+	}
+	if body := w.Body.String(); !strings.Contains(body, "Authentication required") {
+		t.Errorf("RequireAdmin body = %q, want to contain 'Authentication required'", body)
+	}
+}
+
+func TestRequireAdmin_InvalidBasicAuthAcceptJSONReturnsJSON(t *testing.T) {
+	hashedPass, _ := auth.HashPassword("password123")
+	cfg := &config.Config{
+		AuthUser: "testuser",
+		AuthPass: hashedPass,
+	}
+
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/test", nil)
+	req.Header.Set("Accept", "application/json")
+	req.SetBasicAuth("testuser", "wrongpassword")
+	handler(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("RequireAdmin Content-Type = %q, want application/json", ct)
+	}
+}
+
+func TestRequireAdmin_InvalidBasicAuthNonAPIReturnsPlainText(t *testing.T) {
+	hashedPass, _ := auth.HashPassword("password123")
+	cfg := &config.Config{
+		AuthUser: "testuser",
+		AuthPass: hashedPass,
+	}
+
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/test", nil)
+	req.SetBasicAuth("testuser", "wrongpassword")
+	handler(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+	// Should be plain text error
+	body := w.Body.String()
+	if !strings.Contains(body, "Unauthorized") {
+		t.Errorf("RequireAdmin body = %q, want to contain 'Unauthorized'", body)
+	}
+}
+
+func TestRequireAdmin_ProxyAuthAdminAllowed(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "secret123",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+		ProxyAuthAdminRole:  "admin",
+	}
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.Header.Set("X-Proxy-Secret", "secret123")
+	req.Header.Set("X-Remote-User", "admin-user")
+	req.Header.Set("X-Remote-Roles", "admin|user")
+	handler(w, req)
+
+	if !handlerCalled {
+		t.Error("RequireAdmin should call handler for authenticated admin proxy user")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestRequireAdmin_ProxyAuthNonAdminForbidden(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "secret123",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+		ProxyAuthAdminRole:  "admin",
+	}
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.Header.Set("X-Proxy-Secret", "secret123")
+	req.Header.Set("X-Remote-User", "regular-user")
+	req.Header.Set("X-Remote-Roles", "user|viewer") // No admin role
+	handler(w, req)
+
+	if handlerCalled {
+		t.Error("RequireAdmin should not call handler for non-admin proxy user")
+	}
+	if w.Code != http.StatusForbidden {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestRequireAdmin_ProxyAuthNonAdminAPIPathReturnsJSON(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "secret123",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+		ProxyAuthAdminRole:  "admin",
+	}
+
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.Header.Set("X-Proxy-Secret", "secret123")
+	req.Header.Set("X-Remote-User", "regular-user")
+	req.Header.Set("X-Remote-Roles", "user")
+	handler(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusForbidden)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("RequireAdmin Content-Type = %q, want application/json", ct)
+	}
+	if body := w.Body.String(); !strings.Contains(body, "Admin privileges required") {
+		t.Errorf("RequireAdmin body = %q, want to contain 'Admin privileges required'", body)
+	}
+}
+
+func TestRequireAdmin_ProxyAuthNonAdminAcceptJSONReturnsJSON(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "secret123",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+		ProxyAuthAdminRole:  "admin",
+	}
+
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/test", nil)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Proxy-Secret", "secret123")
+	req.Header.Set("X-Remote-User", "regular-user")
+	req.Header.Set("X-Remote-Roles", "user")
+	handler(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusForbidden)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("RequireAdmin Content-Type = %q, want application/json", ct)
+	}
+}
+
+func TestRequireAdmin_ProxyAuthNonAdminNonAPIReturnsPlainText(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "secret123",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+		ProxyAuthAdminRole:  "admin",
+	}
+
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/test", nil)
+	req.Header.Set("X-Proxy-Secret", "secret123")
+	req.Header.Set("X-Remote-User", "regular-user")
+	req.Header.Set("X-Remote-Roles", "user")
+	handler(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusForbidden)
+	}
+	// Should be plain text error
+	body := w.Body.String()
+	if !strings.Contains(body, "Admin privileges required") {
+		t.Errorf("RequireAdmin body = %q, want to contain 'Admin privileges required'", body)
+	}
+}
+
+func TestRequireAdmin_ProxyAuthNoRoleHeaderDefaultsToAdmin(t *testing.T) {
+	// When ProxyAuthRoleHeader is not configured, all authenticated users are admins
+	cfg := &config.Config{
+		ProxyAuthSecret:     "secret123",
+		ProxyAuthUserHeader: "X-Remote-User",
+		// No ProxyAuthRoleHeader set
+	}
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.Header.Set("X-Proxy-Secret", "secret123")
+	req.Header.Set("X-Remote-User", "any-user")
+	handler(w, req)
+
+	if !handlerCalled {
+		t.Error("RequireAdmin should call handler when no role checking is configured")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestRequireAdmin_ProxyAuthInvalidSecretUnauthorized(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "secret123",
+		ProxyAuthUserHeader: "X-Remote-User",
+	}
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.Header.Set("X-Proxy-Secret", "wrong-secret")
+	req.Header.Set("X-Remote-User", "admin-user")
+	handler(w, req)
+
+	if handlerCalled {
+		t.Error("RequireAdmin should not call handler with invalid proxy secret")
+	}
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestRequireAdmin_ProxyAuthCustomRoleSeparator(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:        "secret123",
+		ProxyAuthUserHeader:    "X-Remote-User",
+		ProxyAuthRoleHeader:    "X-Remote-Roles",
+		ProxyAuthAdminRole:     "administrator",
+		ProxyAuthRoleSeparator: ",",
+	}
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.Header.Set("X-Proxy-Secret", "secret123")
+	req.Header.Set("X-Remote-User", "admin-user")
+	req.Header.Set("X-Remote-Roles", "user,administrator,viewer") // Comma separated
+	handler(w, req)
+
+	if !handlerCalled {
+		t.Error("RequireAdmin should call handler for admin with custom role separator")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestRequireAdmin_ProxyAuthTrimSpacesInRoles(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "secret123",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+		ProxyAuthAdminRole:  "admin",
+	}
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.Header.Set("X-Proxy-Secret", "secret123")
+	req.Header.Set("X-Remote-User", "admin-user")
+	req.Header.Set("X-Remote-Roles", "user| admin |viewer") // Spaces around admin
+	handler(w, req)
+
+	if !handlerCalled {
+		t.Error("RequireAdmin should call handler when role matches after trimming spaces")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestRequireAdmin_NoProxyAuthAuthenticatedAllowed(t *testing.T) {
+	// When proxy auth is not configured, authenticated users are considered admins
+	hashedPass, _ := auth.HashPassword("password123")
+	cfg := &config.Config{
+		AuthUser: "testuser",
+		AuthPass: hashedPass,
+	}
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.SetBasicAuth("testuser", "password123")
+	handler(w, req)
+
+	if !handlerCalled {
+		t.Error("RequireAdmin should call handler for basic auth authenticated user")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusOK)
 	}
 }
