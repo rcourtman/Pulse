@@ -623,6 +623,122 @@ func TestRecoveryTokenStore_StopCleanup(t *testing.T) {
 	}
 }
 
+func TestRecoveryTokenStore_SaveUnsafe_MkdirAllError(t *testing.T) {
+	// Create a file where the directory should be - MkdirAll will fail
+	tmpDir := t.TempDir()
+	blockedPath := filepath.Join(tmpDir, "blocked")
+
+	// Create a file at the path where dataPath should be
+	if err := os.WriteFile(blockedPath, []byte("blocking file"), 0644); err != nil {
+		t.Fatalf("failed to create blocking file: %v", err)
+	}
+
+	store := &RecoveryTokenStore{
+		tokens:      make(map[string]*RecoveryToken),
+		dataPath:    blockedPath, // This is a file, not a directory
+		stopCleanup: make(chan struct{}),
+	}
+
+	// Add a token to save
+	store.tokens["testtoken"] = &RecoveryToken{
+		Token:     "testtoken",
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(time.Hour),
+		Used:      false,
+	}
+
+	// saveUnsafe should handle error gracefully (logs but doesn't panic)
+	store.saveUnsafe()
+
+	// Verify the blocking file still exists (wasn't overwritten)
+	data, err := os.ReadFile(blockedPath)
+	if err != nil {
+		t.Fatalf("blocking file was removed: %v", err)
+	}
+	if string(data) != "blocking file" {
+		t.Error("blocking file was modified")
+	}
+}
+
+func TestRecoveryTokenStore_SaveUnsafe_WriteFileError(t *testing.T) {
+	// Create a read-only directory to prevent file creation
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+
+	if err := os.Mkdir(readOnlyDir, 0755); err != nil {
+		t.Fatalf("failed to create readonly dir: %v", err)
+	}
+
+	store := &RecoveryTokenStore{
+		tokens:      make(map[string]*RecoveryToken),
+		dataPath:    readOnlyDir,
+		stopCleanup: make(chan struct{}),
+	}
+
+	// Add a token
+	store.tokens["testtoken"] = &RecoveryToken{
+		Token:     "testtoken",
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(time.Hour),
+		Used:      false,
+	}
+
+	// Make directory read-only after it exists (MkdirAll succeeds, WriteFile fails)
+	if err := os.Chmod(readOnlyDir, 0555); err != nil {
+		t.Fatalf("failed to make dir readonly: %v", err)
+	}
+	t.Cleanup(func() {
+		os.Chmod(readOnlyDir, 0755) // Restore for cleanup
+	})
+
+	// saveUnsafe should handle error gracefully (logs but doesn't panic)
+	store.saveUnsafe()
+
+	// Verify no file was created
+	tokensFile := filepath.Join(readOnlyDir, "recovery_tokens.json")
+	if _, err := os.Stat(tokensFile); err == nil {
+		t.Error("tokens file should not exist after write failure")
+	}
+}
+
+func TestRecoveryTokenStore_SaveUnsafe_RenameError(t *testing.T) {
+	// This test ensures rename errors are handled.
+	// Creating a rename error is tricky - we'll create a directory at the target path
+	tmpDir := t.TempDir()
+
+	// Create a directory at the exact path where recovery_tokens.json should go
+	tokensFilePath := filepath.Join(tmpDir, "recovery_tokens.json")
+	if err := os.Mkdir(tokensFilePath, 0755); err != nil {
+		t.Fatalf("failed to create blocking directory: %v", err)
+	}
+
+	store := &RecoveryTokenStore{
+		tokens:      make(map[string]*RecoveryToken),
+		dataPath:    tmpDir,
+		stopCleanup: make(chan struct{}),
+	}
+
+	// Add a token
+	store.tokens["testtoken"] = &RecoveryToken{
+		Token:     "testtoken",
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(time.Hour),
+		Used:      false,
+	}
+
+	// saveUnsafe should handle rename error gracefully
+	store.saveUnsafe()
+
+	// The blocking directory should still exist (rename failed)
+	info, err := os.Stat(tokensFilePath)
+	if err != nil {
+		t.Fatalf("blocking directory was removed: %v", err)
+	}
+	if !info.IsDir() {
+		t.Error("blocking directory was replaced with a file")
+	}
+}
+
 // Helper function
 func containsTokenSubstring(s, substr string) bool {
 	if len(substr) == 0 {
