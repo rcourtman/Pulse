@@ -6968,7 +6968,8 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			}
 
 			// Check if it's a timeout error
-			if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline exceeded") {
+			errStr := err.Error()
+			if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded") {
 				if attempt == 1 {
 					log.Warn().
 						Str("node", node.Node).
