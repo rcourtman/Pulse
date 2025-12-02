@@ -300,3 +300,94 @@ func TestValidateWebhookURL_DNSResolutionFailure(t *testing.T) {
 		t.Errorf("Expected DNS resolution error, got: %v", err)
 	}
 }
+
+func TestValidateWebhookURL_EmptyURL(t *testing.T) {
+	nm := NewNotificationManager("")
+
+	err := nm.ValidateWebhookURL("")
+	if err == nil {
+		t.Error("Expected error for empty URL")
+	}
+	if !strings.Contains(err.Error(), "cannot be empty") {
+		t.Errorf("Expected 'cannot be empty' error, got: %v", err)
+	}
+}
+
+func TestValidateWebhookURL_InvalidScheme(t *testing.T) {
+	nm := NewNotificationManager("")
+
+	// Test FTP scheme
+	err := nm.ValidateWebhookURL("ftp://example.com/webhook")
+	if err == nil {
+		t.Error("Expected error for FTP scheme")
+	}
+	if !strings.Contains(err.Error(), "must use http or https") {
+		t.Errorf("Expected scheme error, got: %v", err)
+	}
+
+	// Test file scheme
+	err = nm.ValidateWebhookURL("file:///etc/passwd")
+	if err == nil {
+		t.Error("Expected error for file scheme")
+	}
+}
+
+func TestValidateWebhookURL_MissingHostname(t *testing.T) {
+	nm := NewNotificationManager("")
+
+	// URL with no hostname
+	err := nm.ValidateWebhookURL("http:///path")
+	if err == nil {
+		t.Error("Expected error for missing hostname")
+	}
+	if !strings.Contains(err.Error(), "missing hostname") {
+		t.Errorf("Expected 'missing hostname' error, got: %v", err)
+	}
+}
+
+func TestValidateWebhookURL_CloudMetadataEndpoints(t *testing.T) {
+	nm := NewNotificationManager("")
+
+	metadataEndpoints := []string{
+		"http://169.254.169.254/latest/meta-data/",
+		"http://metadata.google.internal/computeMetadata/v1/",
+		"http://metadata.goog/computeMetadata/v1/",
+	}
+
+	for _, endpoint := range metadataEndpoints {
+		err := nm.ValidateWebhookURL(endpoint)
+		if err == nil {
+			t.Errorf("Expected error for cloud metadata endpoint: %s", endpoint)
+		}
+	}
+}
+
+func TestValidateWebhookURL_LoopbackVariants(t *testing.T) {
+	nm := NewNotificationManager("")
+
+	loopbackURLs := []string{
+		"http://127.0.0.1/webhook",
+		"http://127.0.0.2/webhook",
+		"http://127.255.255.255/webhook",
+		"http://[::1]/webhook",
+	}
+
+	for _, url := range loopbackURLs {
+		err := nm.ValidateWebhookURL(url)
+		if err == nil {
+			t.Errorf("Expected error for loopback URL: %s", url)
+		}
+	}
+}
+
+func TestValidateWebhookURL_LinkLocalIPv6(t *testing.T) {
+	nm := NewNotificationManager("")
+
+	err := nm.ValidateWebhookURL("http://[fe80::1]/webhook")
+	if err == nil {
+		t.Error("Expected error for IPv6 link-local address")
+	}
+	if !strings.Contains(err.Error(), "link-local") {
+		t.Errorf("Expected link-local error, got: %v", err)
+	}
+}
