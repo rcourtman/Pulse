@@ -231,6 +231,7 @@ func (h *TemperatureProxyHandlers) HandleRegister(w http.ResponseWriter, r *http
 	var matchedInstance *config.PVEInstance
 	var matchedIndex int
 	var matchedEndpointIndex = -1 // For cluster nodes, track which endpoint matched
+	hostnameLower := strings.ToLower(hostname)
 
 	for i := range nodesConfig.PVEInstances {
 		instance := &nodesConfig.PVEInstances[i]
@@ -243,7 +244,7 @@ func (h *TemperatureProxyHandlers) HandleRegister(w http.ResponseWriter, r *http
 		}
 
 		// Try to match by hostname in the Host field or cluster endpoints
-		if strings.Contains(strings.ToLower(instance.Host), strings.ToLower(hostname)) {
+		if strings.Contains(strings.ToLower(instance.Host), hostnameLower) {
 			matchedInstance = instance
 			matchedIndex = i
 			break
@@ -252,7 +253,7 @@ func (h *TemperatureProxyHandlers) HandleRegister(w http.ResponseWriter, r *http
 		// Check cluster endpoints
 		if instance.IsCluster {
 			for j, ep := range instance.ClusterEndpoints {
-				if strings.EqualFold(ep.NodeName, hostname) || strings.Contains(strings.ToLower(ep.Host), strings.ToLower(hostname)) {
+				if strings.EqualFold(ep.NodeName, hostname) || strings.Contains(strings.ToLower(ep.Host), hostnameLower) {
 					matchedInstance = instance
 					matchedIndex = i
 					matchedEndpointIndex = j
@@ -480,11 +481,12 @@ func (h *TemperatureProxyHandlers) HandleUnregister(w http.ResponseWriter, r *ht
 	// Find matching PVE instance
 	var matchedIndex = -1
 	var matchedName string
+	hostnameLower := strings.ToLower(hostname)
 
 	for i := range nodesConfig.PVEInstances {
 		instance := &nodesConfig.PVEInstances[i]
 
-		if strings.Contains(strings.ToLower(instance.Host), strings.ToLower(hostname)) {
+		if strings.Contains(strings.ToLower(instance.Host), hostnameLower) {
 			matchedIndex = i
 			matchedName = instance.Name
 			break
@@ -492,7 +494,7 @@ func (h *TemperatureProxyHandlers) HandleUnregister(w http.ResponseWriter, r *ht
 
 		if instance.IsCluster {
 			for _, ep := range instance.ClusterEndpoints {
-				if strings.EqualFold(ep.NodeName, hostname) || strings.Contains(strings.ToLower(ep.Host), strings.ToLower(hostname)) {
+				if strings.EqualFold(ep.NodeName, hostname) || strings.Contains(strings.ToLower(ep.Host), hostnameLower) {
 					matchedIndex = i
 					matchedName = instance.Name
 					break
