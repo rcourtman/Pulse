@@ -567,3 +567,164 @@ func TestUpdatePMGInstance(t *testing.T) {
 		t.Error("Expected pmg-1 to be updated with new name")
 	}
 }
+
+func TestUpdateCephClustersForInstance(t *testing.T) {
+	state := NewState()
+
+	// Add clusters from first instance
+	clusters1 := []CephCluster{
+		{ID: "ceph-1", Instance: "pve-1", Name: "ceph-pool-1"},
+		{ID: "ceph-2", Instance: "pve-1", Name: "ceph-pool-2"},
+	}
+	state.UpdateCephClustersForInstance("pve-1", clusters1)
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.CephClusters) != 2 {
+		t.Fatalf("Expected 2 clusters, got %d", len(snapshot.CephClusters))
+	}
+
+	// Add clusters from second instance
+	clusters2 := []CephCluster{
+		{ID: "ceph-3", Instance: "pve-2", Name: "ceph-pool-1"},
+	}
+	state.UpdateCephClustersForInstance("pve-2", clusters2)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.CephClusters) != 3 {
+		t.Fatalf("Expected 3 clusters, got %d", len(snapshot.CephClusters))
+	}
+
+	// Update first instance with empty (should remove its clusters)
+	state.UpdateCephClustersForInstance("pve-1", []CephCluster{})
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.CephClusters) != 1 {
+		t.Fatalf("Expected 1 cluster after clearing pve-1, got %d", len(snapshot.CephClusters))
+	}
+	if snapshot.CephClusters[0].Instance != "pve-2" {
+		t.Error("Remaining cluster should be from pve-2")
+	}
+}
+
+func TestUpdateBackupTasksForInstance(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+
+	// Add tasks from first instance
+	tasks1 := []BackupTask{
+		{ID: "pve-1-task-1", StartTime: now},
+		{ID: "pve-1-task-2", StartTime: now.Add(-time.Hour)},
+	}
+	state.UpdateBackupTasksForInstance("pve-1", tasks1)
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.PVEBackups.BackupTasks) != 2 {
+		t.Fatalf("Expected 2 tasks, got %d", len(snapshot.PVEBackups.BackupTasks))
+	}
+
+	// Tasks should be sorted by start time descending
+	if snapshot.PVEBackups.BackupTasks[0].StartTime.Before(snapshot.PVEBackups.BackupTasks[1].StartTime) {
+		t.Error("Tasks should be sorted by start time descending")
+	}
+
+	// Add tasks from second instance
+	tasks2 := []BackupTask{
+		{ID: "pve-2-task-1", StartTime: now.Add(-30 * time.Minute)},
+	}
+	state.UpdateBackupTasksForInstance("pve-2", tasks2)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PVEBackups.BackupTasks) != 3 {
+		t.Fatalf("Expected 3 tasks, got %d", len(snapshot.PVEBackups.BackupTasks))
+	}
+
+	// Update first instance (should replace its tasks)
+	tasks1Updated := []BackupTask{
+		{ID: "pve-1-task-3", StartTime: now.Add(time.Hour)},
+	}
+	state.UpdateBackupTasksForInstance("pve-1", tasks1Updated)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PVEBackups.BackupTasks) != 2 {
+		t.Fatalf("Expected 2 tasks after update, got %d", len(snapshot.PVEBackups.BackupTasks))
+	}
+}
+
+func TestUpdateReplicationJobsForInstance(t *testing.T) {
+	state := NewState()
+
+	// Add jobs from first instance
+	jobs1 := []ReplicationJob{
+		{ID: "job-1", Instance: "pve-1", GuestID: 100, JobNumber: 0},
+		{ID: "job-2", Instance: "pve-1", GuestID: 101, JobNumber: 0},
+	}
+	state.UpdateReplicationJobsForInstance("pve-1", jobs1)
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.ReplicationJobs) != 2 {
+		t.Fatalf("Expected 2 jobs, got %d", len(snapshot.ReplicationJobs))
+	}
+
+	// Add jobs from second instance
+	jobs2 := []ReplicationJob{
+		{ID: "job-3", Instance: "pve-2", GuestID: 200, JobNumber: 0},
+	}
+	state.UpdateReplicationJobsForInstance("pve-2", jobs2)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.ReplicationJobs) != 3 {
+		t.Fatalf("Expected 3 jobs, got %d", len(snapshot.ReplicationJobs))
+	}
+
+	// Update first instance with empty (should remove its jobs)
+	state.UpdateReplicationJobsForInstance("pve-1", []ReplicationJob{})
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.ReplicationJobs) != 1 {
+		t.Fatalf("Expected 1 job after clearing pve-1, got %d", len(snapshot.ReplicationJobs))
+	}
+	if snapshot.ReplicationJobs[0].Instance != "pve-2" {
+		t.Error("Remaining job should be from pve-2")
+	}
+}
+
+func TestUpdateGuestSnapshotsForInstance(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+
+	// Add snapshots from first instance
+	snapshots1 := []GuestSnapshot{
+		{ID: "pve-1-snap-1", VMID: 100, Name: "snapshot1", Time: now},
+		{ID: "pve-1-snap-2", VMID: 100, Name: "snapshot2", Time: now.Add(-time.Hour)},
+	}
+	state.UpdateGuestSnapshotsForInstance("pve-1", snapshots1)
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.PVEBackups.GuestSnapshots) != 2 {
+		t.Fatalf("Expected 2 snapshots, got %d", len(snapshot.PVEBackups.GuestSnapshots))
+	}
+
+	// Add snapshots from second instance
+	snapshots2 := []GuestSnapshot{
+		{ID: "pve-2-snap-1", VMID: 200, Name: "snapshot1", Time: now.Add(-30 * time.Minute)},
+	}
+	state.UpdateGuestSnapshotsForInstance("pve-2", snapshots2)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PVEBackups.GuestSnapshots) != 3 {
+		t.Fatalf("Expected 3 snapshots, got %d", len(snapshot.PVEBackups.GuestSnapshots))
+	}
+
+	// Update first instance (should replace its snapshots)
+	snapshots1Updated := []GuestSnapshot{
+		{ID: "pve-1-snap-3", VMID: 100, Name: "new-snapshot", Time: now.Add(time.Hour)},
+	}
+	state.UpdateGuestSnapshotsForInstance("pve-1", snapshots1Updated)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PVEBackups.GuestSnapshots) != 2 {
+		t.Fatalf("Expected 2 snapshots after update, got %d", len(snapshot.PVEBackups.GuestSnapshots))
+	}
+}
