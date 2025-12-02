@@ -213,7 +213,6 @@ func classifyError(err error, respError string) *ProxyError {
 
 // contains checks if any of the substrings are in the main string (case-insensitive)
 func contains(s string, substrs ...string) bool {
-	s = fmt.Sprintf("%v", s)
 	for _, substr := range substrs {
 		if len(s) >= len(substr) {
 			for i := 0; i <= len(s)-len(substr); i++ {
