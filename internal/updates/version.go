@@ -12,6 +12,12 @@ import (
 	"time"
 )
 
+// Pre-compiled regexes for performance (avoid recompilation on each call)
+var (
+	semverRe = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:-([^+]+))?(?:\+(.+))?$`)
+	rcNumRe  = regexp.MustCompile(`rc\.?(\d+)`)
+)
+
 // Version represents a semantic version
 type Version struct {
 	Major      int
@@ -38,9 +44,7 @@ func ParseVersion(versionStr string) (*Version, error) {
 	// Remove 'v' prefix if present
 	versionStr = strings.TrimPrefix(versionStr, "v")
 
-	// Regular expression for semantic versioning
-	re := regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:-([^+]+))?(?:\+(.+))?$`)
-	matches := re.FindStringSubmatch(versionStr)
+	matches := semverRe.FindStringSubmatch(versionStr)
 
 	if len(matches) == 0 {
 		return nil, fmt.Errorf("invalid version format: %s", versionStr)
@@ -405,8 +409,7 @@ func compareInts(a, b int) int {
 
 // extractRCNumber extracts the RC number from a prerelease string like "rc.9" or "rc9"
 func extractRCNumber(prerelease string) int {
-	re := regexp.MustCompile(`rc\.?(\d+)`)
-	matches := re.FindStringSubmatch(strings.ToLower(prerelease))
+	matches := rcNumRe.FindStringSubmatch(strings.ToLower(prerelease))
 	if len(matches) > 1 {
 		num, err := strconv.Atoi(matches[1])
 		if err == nil {
