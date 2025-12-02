@@ -4048,9 +4048,19 @@ func (r *Router) handleTemperatureProxyInstallCommand(w http.ResponseWriter, req
 	baseURL = strings.TrimRight(baseURL, "/")
 
 	node := strings.TrimSpace(req.URL.Query().Get("node"))
+
+	// Use --ctid approach which works for both local and remote Proxmox hosts.
+	// The installer detects when the container doesn't exist locally and
+	// installs in "host monitoring only" mode. This is more reliable than
+	// --standalone --http-mode which is meant for Docker deployments.
+	ctid := "<PULSE_CTID>"
+	if summary, err := loadHostProxySummary(); err == nil && summary != nil && summary.CTID != "" {
+		ctid = summary.CTID
+	}
+
 	command := fmt.Sprintf(
-		"curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | sudo bash -s -- --standalone --http-mode --pulse-server %s",
-		baseURL,
+		"curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | sudo bash -s -- --ctid %s --pulse-server %s",
+		ctid, baseURL,
 	)
 
 	response := map[string]string{
