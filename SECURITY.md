@@ -519,18 +519,14 @@ Navigate to **Settings → System → Monitoring** for visual representation of 
 - ❌ **DON'T**: Share API tokens between users/services
 - ❌ **DON'T**: Embed credentials in client-side code
 
-### Verification
-Run the security verification script to ensure no plain text credentials:
-```bash
-/opt/pulse/testing-tools/security-verification.sh
-```
-
-This checks:
-- No hardcoded credentials in code
-- No credentials exposed in logs
-- All passwords/tokens properly hashed
-- Secure file permissions
-- No credential leaks in API responses
+### Verification Checklist
+Manually verify your deployment follows security best practices:
+- No hardcoded credentials in environment files
+- No credentials exposed in logs (check `docker logs pulse`)
+- All passwords stored as bcrypt hashes (60 characters, starting with `$2a$` or `$2b$`)
+- All API tokens stored as SHA3-256 hashes (64 characters)
+- Secure file permissions on `/etc/pulse/.env` (600)
+- No credential leaks in API responses (test with `curl`)
 
 ## Account Lockout and Recovery
 
