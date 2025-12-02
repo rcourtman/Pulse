@@ -13730,3 +13730,324 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckStorageComprehensive(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns early when alerts disabled", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.Enabled = false
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:     "storage1",
+			Name:   "teststorage",
+			Status: "active",
+			Usage:  95.0,
+		}
+
+		m.CheckStorage(storage)
+
+		m.mu.RLock()
+		alertCount := len(m.activeAlerts)
+		m.mu.RUnlock()
+
+		if alertCount != 0 {
+			t.Errorf("expected no alerts when disabled, got %d", alertCount)
+		}
+	})
+
+	t.Run("DisableAllStorage clears existing alerts", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["storage1-usage"] = &Alert{ID: "storage1-usage", Type: "usage"}
+		m.activeAlerts["storage-offline-storage1"] = &Alert{ID: "storage-offline-storage1", Type: "connectivity"}
+		m.config.DisableAllStorage = true
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:     "storage1",
+			Name:   "teststorage",
+			Status: "active",
+		}
+
+		m.CheckStorage(storage)
+
+		m.mu.RLock()
+		_, usageExists := m.activeAlerts["storage1-usage"]
+		_, offlineExists := m.activeAlerts["storage-offline-storage1"]
+		m.mu.RUnlock()
+
+		if usageExists {
+			t.Error("expected usage alert to be cleared")
+		}
+		if offlineExists {
+			t.Error("expected offline alert to be cleared")
+		}
+	})
+
+	t.Run("override with Disabled clears alerts", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["storage1-usage"] = &Alert{ID: "storage1-usage", Type: "usage"}
+		m.activeAlerts["storage-offline-storage1"] = &Alert{ID: "storage-offline-storage1", Type: "connectivity"}
+		m.config.Overrides = map[string]ThresholdConfig{
+			"storage1": {Disabled: true},
+		}
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:     "storage1",
+			Name:   "teststorage",
+			Status: "active",
+		}
+
+		m.CheckStorage(storage)
+
+		m.mu.RLock()
+		_, usageExists := m.activeAlerts["storage1-usage"]
+		_, offlineExists := m.activeAlerts["storage-offline-storage1"]
+		m.mu.RUnlock()
+
+		if usageExists {
+			t.Error("expected usage alert to be cleared")
+		}
+		if offlineExists {
+			t.Error("expected offline alert to be cleared")
+		}
+	})
+
+	t.Run("checks usage threshold", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.StorageDefault = HysteresisThreshold{Trigger: 80.0, Clear: 70.0}
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:     "storage1",
+			Name:   "teststorage",
+			Node:   "node1",
+			Status: "active",
+			Usage:  95.0,
+		}
+
+		m.CheckStorage(storage)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["storage1-usage"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected usage alert")
+		}
+	})
+
+	t.Run("applies override threshold", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.StorageDefault = HysteresisThreshold{Trigger: 80.0, Clear: 70.0}
+		overrideThreshold := HysteresisThreshold{Trigger: 99.0, Clear: 95.0}
+		m.config.Overrides = map[string]ThresholdConfig{
+			"storage1": {Usage: &overrideThreshold},
+		}
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:     "storage1",
+			Name:   "teststorage",
+			Status: "active",
+			Usage:  95.0, // Below override threshold
+		}
+
+		m.CheckStorage(storage)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["storage1-usage"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected no alert due to higher override threshold")
+		}
+	})
+
+	t.Run("skips usage check when offline", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.StorageDefault = HysteresisThreshold{Trigger: 80.0, Clear: 70.0}
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:     "storage1",
+			Name:   "teststorage",
+			Status: "offline",
+			Usage:  95.0,
+		}
+
+		m.CheckStorage(storage)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["storage1-usage"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected no usage alert when offline")
+		}
+	})
+
+	t.Run("skips usage check when unavailable", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.StorageDefault = HysteresisThreshold{Trigger: 80.0, Clear: 70.0}
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:     "storage1",
+			Name:   "teststorage",
+			Status: "unavailable",
+			Usage:  95.0,
+		}
+
+		m.CheckStorage(storage)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["storage1-usage"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected no usage alert when unavailable")
+		}
+	})
+
+	t.Run("checks offline status", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		// Pre-populate confirmation count (requires 2)
+		m.offlineConfirmations["storage1"] = 1
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:     "storage1",
+			Name:   "teststorage",
+			Status: "offline",
+		}
+
+		m.CheckStorage(storage)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["storage-offline-storage1"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected offline alert")
+		}
+	})
+
+	t.Run("checks unavailable status", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		// Pre-populate confirmation count (requires 2)
+		m.offlineConfirmations["storage1"] = 1
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:     "storage1",
+			Name:   "teststorage",
+			Status: "unavailable",
+		}
+
+		m.CheckStorage(storage)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["storage-offline-storage1"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected offline alert for unavailable status")
+		}
+	})
+
+	t.Run("clears offline alert when back online", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["storage-offline-storage1"] = &Alert{ID: "storage-offline-storage1", Type: "connectivity"}
+		m.offlineConfirmations["storage1"] = 5
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:     "storage1",
+			Name:   "teststorage",
+			Status: "active",
+		}
+
+		m.CheckStorage(storage)
+
+		m.mu.RLock()
+		_, offlineExists := m.activeAlerts["storage-offline-storage1"]
+		_, confirmExists := m.offlineConfirmations["storage1"]
+		m.mu.RUnlock()
+
+		if offlineExists {
+			t.Error("expected offline alert to be cleared when back online")
+		}
+		if confirmExists {
+			t.Error("expected offline confirmation to be cleared")
+		}
+	})
+
+	t.Run("skips usage check when usage is zero", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.StorageDefault = HysteresisThreshold{Trigger: 80.0, Clear: 70.0}
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:     "storage1",
+			Name:   "teststorage",
+			Status: "active",
+			Usage:  0, // No usage data
+		}
+
+		m.CheckStorage(storage)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["storage1-usage"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected no usage alert when usage is zero")
+		}
+	})
+}
