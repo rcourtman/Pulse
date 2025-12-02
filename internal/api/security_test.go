@@ -1793,3 +1793,312 @@ func TestRequireAdmin_NoProxyAuthAuthenticatedAllowed(t *testing.T) {
 		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusOK)
 	}
 }
+
+// RequireAuth tests
+
+func TestRequireAuth_NoAuthConfiguredAllowsAccess(t *testing.T) {
+	// When no auth is configured at all, CheckAuth returns true (allows access)
+	cfg := &config.Config{}
+	handlerCalled := false
+	handler := RequireAuth(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	handler(w, req)
+
+	if !handlerCalled {
+		t.Error("RequireAuth should call handler when no auth is configured")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("RequireAuth returned status %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestRequireAuth_APIOnlyModeRejectsNoToken(t *testing.T) {
+	// When only API tokens are configured, requests without token should be rejected
+	rawToken := "test-api-token-12345"
+	record, _ := config.NewAPITokenRecord(rawToken, "test-token", []string{"read"})
+	cfg := &config.Config{
+		APITokens: []config.APITokenRecord{*record},
+	}
+
+	handlerCalled := false
+	handler := RequireAuth(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	// No token provided
+	handler(w, req)
+
+	if handlerCalled {
+		t.Error("RequireAuth should not call handler without API token in API-only mode")
+	}
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RequireAuth returned status %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestRequireAuth_APIOnlyModeAcceptsValidToken(t *testing.T) {
+	rawToken := "test-api-token-12345"
+	record, _ := config.NewAPITokenRecord(rawToken, "test-token", []string{"read"})
+	cfg := &config.Config{
+		APITokens: []config.APITokenRecord{*record},
+	}
+
+	handlerCalled := false
+	handler := RequireAuth(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	handler(w, req)
+
+	if !handlerCalled {
+		t.Error("RequireAuth should call handler with valid API token")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("RequireAuth returned status %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestRequireAuth_InvalidBasicAuthRejectsRequest(t *testing.T) {
+	hashedPass, _ := auth.HashPassword("password123")
+	cfg := &config.Config{
+		AuthUser: "testuser",
+		AuthPass: hashedPass,
+	}
+
+	handlerCalled := false
+	handler := RequireAuth(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.SetBasicAuth("testuser", "wrongpassword")
+	handler(w, req)
+
+	if handlerCalled {
+		t.Error("RequireAuth should not call handler with invalid credentials")
+	}
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RequireAuth returned status %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestRequireAuth_InvalidBasicAuthAPIPathReturnsJSON(t *testing.T) {
+	hashedPass, _ := auth.HashPassword("password123")
+	cfg := &config.Config{
+		AuthUser: "testuser",
+		AuthPass: hashedPass,
+	}
+
+	handler := RequireAuth(cfg, func(w http.ResponseWriter, r *http.Request) {})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.SetBasicAuth("testuser", "wrongpassword")
+	handler(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RequireAuth returned status %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("RequireAuth Content-Type = %q, want application/json", ct)
+	}
+	if body := w.Body.String(); !strings.Contains(body, "Authentication required") {
+		t.Errorf("RequireAuth body = %q, want to contain 'Authentication required'", body)
+	}
+}
+
+func TestRequireAuth_InvalidBasicAuthAcceptJSONReturnsJSON(t *testing.T) {
+	hashedPass, _ := auth.HashPassword("password123")
+	cfg := &config.Config{
+		AuthUser: "testuser",
+		AuthPass: hashedPass,
+	}
+
+	handler := RequireAuth(cfg, func(w http.ResponseWriter, r *http.Request) {})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Accept", "application/json")
+	req.SetBasicAuth("testuser", "wrongpassword")
+	handler(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RequireAuth returned status %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("RequireAuth Content-Type = %q, want application/json", ct)
+	}
+}
+
+func TestRequireAuth_InvalidBasicAuthNonAPIReturnsPlainText(t *testing.T) {
+	hashedPass, _ := auth.HashPassword("password123")
+	cfg := &config.Config{
+		AuthUser: "testuser",
+		AuthPass: hashedPass,
+	}
+
+	handler := RequireAuth(cfg, func(w http.ResponseWriter, r *http.Request) {})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.SetBasicAuth("testuser", "wrongpassword")
+	handler(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RequireAuth returned status %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+	// Should be plain text error
+	body := w.Body.String()
+	if !strings.Contains(body, "Unauthorized") {
+		t.Errorf("RequireAuth body = %q, want to contain 'Unauthorized'", body)
+	}
+}
+
+func TestRequireAuth_ValidBasicAuthAllowsAccess(t *testing.T) {
+	hashedPass, _ := auth.HashPassword("password123")
+	cfg := &config.Config{
+		AuthUser: "testuser",
+		AuthPass: hashedPass,
+	}
+
+	handlerCalled := false
+	handler := RequireAuth(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.SetBasicAuth("testuser", "password123")
+	handler(w, req)
+
+	if !handlerCalled {
+		t.Error("RequireAuth should call handler for basic auth authenticated user")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("RequireAuth returned status %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestRequireAuth_ProxyAuthAllowsAccess(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "secret123",
+		ProxyAuthUserHeader: "X-Remote-User",
+	}
+
+	handlerCalled := false
+	handler := RequireAuth(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.Header.Set("X-Proxy-Secret", "secret123")
+	req.Header.Set("X-Remote-User", "proxyuser")
+	handler(w, req)
+
+	if !handlerCalled {
+		t.Error("RequireAuth should call handler for proxy authenticated user")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("RequireAuth returned status %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestRequireAuth_ProxyAuthInvalidSecretRejects(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "secret123",
+		ProxyAuthUserHeader: "X-Remote-User",
+	}
+
+	handlerCalled := false
+	handler := RequireAuth(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.Header.Set("X-Proxy-Secret", "wrong-secret")
+	req.Header.Set("X-Remote-User", "proxyuser")
+	handler(w, req)
+
+	if handlerCalled {
+		t.Error("RequireAuth should not call handler with invalid proxy secret")
+	}
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RequireAuth returned status %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestRequireAuth_BearerTokenAllowsAccess(t *testing.T) {
+	// Bearer tokens are only checked when basic auth is also configured
+	// (not in API-only mode)
+	rawToken := "test-bearer-token-12345"
+	record, _ := config.NewAPITokenRecord(rawToken, "bearer-token", []string{"read"})
+	hashedPass, _ := auth.HashPassword("password123")
+	cfg := &config.Config{
+		AuthUser:  "testuser",
+		AuthPass:  hashedPass,
+		APITokens: []config.APITokenRecord{*record},
+	}
+
+	handlerCalled := false
+	handler := RequireAuth(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.Header.Set("Authorization", "Bearer "+rawToken)
+	handler(w, req)
+
+	if !handlerCalled {
+		t.Error("RequireAuth should call handler with valid Bearer token")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("RequireAuth returned status %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestRequireAuth_InvalidBearerTokenRejects(t *testing.T) {
+	// Bearer tokens are only checked when basic auth is also configured
+	rawToken := "test-bearer-token-12345"
+	record, _ := config.NewAPITokenRecord(rawToken, "bearer-token", []string{"read"})
+	hashedPass, _ := auth.HashPassword("password123")
+	cfg := &config.Config{
+		AuthUser:  "testuser",
+		AuthPass:  hashedPass,
+		APITokens: []config.APITokenRecord{*record},
+	}
+
+	handlerCalled := false
+	handler := RequireAuth(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.Header.Set("Authorization", "Bearer invalid-token")
+	handler(w, req)
+
+	if handlerCalled {
+		t.Error("RequireAuth should not call handler with invalid Bearer token")
+	}
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RequireAuth returned status %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
