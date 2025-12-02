@@ -1387,6 +1387,45 @@ func TestGetEmailConfig(t *testing.T) {
 	}
 }
 
+func TestBuildApprisePayload(t *testing.T) {
+	t.Run("nil alerts filtered out", func(t *testing.T) {
+		alertList := []*alerts.Alert{
+			nil,
+			{ID: "test-1", ResourceName: "VM1", Level: "warning", Message: "test", Value: 80, Threshold: 75},
+			nil,
+		}
+		title, body, notifyType := buildApprisePayload(alertList, "")
+		if title == "" || body == "" {
+			t.Fatalf("expected non-empty title and body, got title=%q, body=%q", title, body)
+		}
+		if notifyType != "warning" {
+			t.Fatalf("expected warning notify type, got %q", notifyType)
+		}
+	})
+
+	t.Run("all nil alerts returns empty", func(t *testing.T) {
+		alertList := []*alerts.Alert{nil, nil}
+		title, body, notifyType := buildApprisePayload(alertList, "")
+		if title != "" || body != "" {
+			t.Fatalf("expected empty title and body for all-nil list")
+		}
+		if notifyType != "info" {
+			t.Fatalf("expected info notify type for empty, got %q", notifyType)
+		}
+	})
+
+	t.Run("multiple alerts changes title", func(t *testing.T) {
+		alertList := []*alerts.Alert{
+			{ID: "test-1", ResourceName: "VM1", Level: "warning", Message: "test1", Value: 80, Threshold: 75},
+			{ID: "test-2", ResourceName: "VM2", Level: "critical", Message: "test2", Value: 95, Threshold: 90},
+		}
+		title, _, _ := buildApprisePayload(alertList, "")
+		if !strings.Contains(title, "(2)") {
+			t.Fatalf("expected title to contain count for multiple alerts, got %q", title)
+		}
+	})
+}
+
 func TestBuildResolvedNotificationContent(t *testing.T) {
 	t.Run("nil alert list returns empty strings", func(t *testing.T) {
 		title, htmlBody, textBody := buildResolvedNotificationContent(nil, time.Now(), "")
