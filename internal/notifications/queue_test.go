@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -843,4 +844,22 @@ func TestPerformCleanup(t *testing.T) {
 		// Should not panic or error
 		nq.performCleanup()
 	})
+}
+
+func TestNewNotificationQueue_InvalidPath(t *testing.T) {
+	// Test with a path that cannot be created (file exists where directory expected)
+	tempDir := t.TempDir()
+
+	// Create a file at the path where we'd want to create a directory
+	blockingFile := tempDir + "/blocked"
+	if err := os.WriteFile(blockingFile, []byte("blocking"), 0644); err != nil {
+		t.Fatalf("failed to create blocking file: %v", err)
+	}
+
+	// Try to create queue at a path nested under the blocking file
+	invalidPath := blockingFile + "/subdir"
+	_, err := NewNotificationQueue(invalidPath)
+	if err == nil {
+		t.Error("expected error when creating notification queue with invalid path, got nil")
+	}
 }
