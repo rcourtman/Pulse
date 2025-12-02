@@ -1504,6 +1504,172 @@ func TestLoadNodesConfigFileNotExist(t *testing.T) {
 	}
 }
 
+func TestLoadNodesConfig_PBSTokenClearing(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Save PBS instance with both Password and TokenName (buggy config)
+	pbsInstances := []config.PBSInstance{
+		{
+			Name:           "pbs-buggy",
+			Host:           "https://pbs.local:8007",
+			User:           "root@pam",
+			Password:       "secret-password",
+			TokenName:      "should-be-cleared",
+			TokenValue:     "also-cleared",
+			MonitorBackups: true, // Already set so no migration needed for this
+		},
+	}
+
+	if err := cp.SaveNodesConfig(nil, pbsInstances, nil); err != nil {
+		t.Fatalf("SaveNodesConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig: %v", err)
+	}
+
+	if len(loaded.PBSInstances) != 1 {
+		t.Fatalf("expected 1 PBS instance, got %d", len(loaded.PBSInstances))
+	}
+
+	pbs := loaded.PBSInstances[0]
+	// TokenName/TokenValue should be cleared since Password is set
+	if pbs.TokenName != "" {
+		t.Errorf("expected TokenName cleared, got %q", pbs.TokenName)
+	}
+	if pbs.TokenValue != "" {
+		t.Errorf("expected TokenValue cleared, got %q", pbs.TokenValue)
+	}
+	// Password should remain
+	if pbs.Password != "secret-password" {
+		t.Errorf("expected Password preserved, got %q", pbs.Password)
+	}
+}
+
+func TestLoadNodesConfig_PBSHostNormalization(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Save PBS instance without port (should be normalized to :8007)
+	pbsInstances := []config.PBSInstance{
+		{
+			Name:           "pbs-noport",
+			Host:           "https://pbs.local",
+			User:           "root@pam",
+			Password:       "pass",
+			MonitorBackups: true,
+		},
+	}
+
+	if err := cp.SaveNodesConfig(nil, pbsInstances, nil); err != nil {
+		t.Fatalf("SaveNodesConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig: %v", err)
+	}
+
+	if len(loaded.PBSInstances) != 1 {
+		t.Fatalf("expected 1 PBS instance, got %d", len(loaded.PBSInstances))
+	}
+
+	pbs := loaded.PBSInstances[0]
+	if pbs.Host != "https://pbs.local:8007" {
+		t.Errorf("expected PBS host normalized with port, got %q", pbs.Host)
+	}
+}
+
+func TestLoadNodesConfig_PMGTokenClearing(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Save PMG instance with both Password and TokenName (buggy config)
+	pmgInstances := []config.PMGInstance{
+		{
+			Name:       "pmg-buggy",
+			Host:       "https://pmg.local:8006",
+			User:       "root@pam",
+			Password:   "secret-password",
+			TokenName:  "should-be-cleared",
+			TokenValue: "also-cleared",
+		},
+	}
+
+	if err := cp.SaveNodesConfig(nil, nil, pmgInstances); err != nil {
+		t.Fatalf("SaveNodesConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig: %v", err)
+	}
+
+	if len(loaded.PMGInstances) != 1 {
+		t.Fatalf("expected 1 PMG instance, got %d", len(loaded.PMGInstances))
+	}
+
+	pmg := loaded.PMGInstances[0]
+	// TokenName/TokenValue should be cleared since Password is set
+	if pmg.TokenName != "" {
+		t.Errorf("expected TokenName cleared, got %q", pmg.TokenName)
+	}
+	if pmg.TokenValue != "" {
+		t.Errorf("expected TokenValue cleared, got %q", pmg.TokenValue)
+	}
+	// Password should remain
+	if pmg.Password != "secret-password" {
+		t.Errorf("expected Password preserved, got %q", pmg.Password)
+	}
+}
+
+func TestLoadNodesConfig_PMGHostNormalization(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Save PMG instance without port (should be normalized to :8006)
+	pmgInstances := []config.PMGInstance{
+		{
+			Name:     "pmg-noport",
+			Host:     "https://pmg.local",
+			User:     "root@pam",
+			Password: "pass",
+		},
+	}
+
+	if err := cp.SaveNodesConfig(nil, nil, pmgInstances); err != nil {
+		t.Fatalf("SaveNodesConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig: %v", err)
+	}
+
+	if len(loaded.PMGInstances) != 1 {
+		t.Fatalf("expected 1 PMG instance, got %d", len(loaded.PMGInstances))
+	}
+
+	pmg := loaded.PMGInstances[0]
+	if pmg.Host != "https://pmg.local:8006" {
+		t.Errorf("expected PMG host normalized with port, got %q", pmg.Host)
+	}
+}
+
 func TestCleanupOldBackupsNonExistentDirectory(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
