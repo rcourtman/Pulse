@@ -1,26 +1,27 @@
 # Pulse Architecture
 
-Pulse is a real-time, agentless (mostly) monitoring system designed for Proxmox VE, Proxmox Backup Server, and Docker infrastructure. It is built with a **Go** backend and a **SolidJS** frontend, focusing on low latency, high concurrency, and a premium user experience.
+Pulse is a real-time monitoring system designed for Proxmox VE, Proxmox Backup Server, and Docker/Host infrastructure. It is built with a **Go** backend and a **SolidJS** frontend, focusing on low latency, high concurrency, and a premium user experience.
 
 ## 🏗 High-Level Overview
 
-The system operates as a single binary that serves both the API and the static frontend assets. It connects to infrastructure nodes via SSH (for Proxmox) or local/remote Docker sockets to gather metrics, which are then streamed to connected clients via WebSockets.
+The system operates as a single binary that serves both the API and the static frontend assets. It connects to Proxmox infrastructure via their REST APIs (using API tokens or password auth), while Docker/Host metrics are collected by lightweight agents that push data to Pulse.
 
 ```mermaid
 graph TD
     User[User Browser] <-->|WebSocket / HTTP| Pulse[Pulse Server]
-    
+
     subgraph "Pulse Server (Go)"
         API[REST API]
         WS[WebSocket Hub]
         Monitor[Monitoring Engine]
         Config[Config Manager]
     end
-    
-    Pulse -->|SSH| PVE[Proxmox VE Node]
-    Pulse -->|SSH| PBS[Proxmox Backup Server]
-    Pulse -->|Docker Socket| Docker[Docker Host]
-    
+
+    Pulse -->|HTTPS API :8006| PVE[Proxmox VE Node]
+    Pulse -->|HTTPS API :8007| PBS[Proxmox Backup Server]
+    Agent[Pulse Agent] -->|HTTPS POST| API
+    Agent -.->|Collects from| DockerHost[Docker / Host]
+
     Monitor --> WS
     Monitor --> API
 ```
@@ -37,23 +38,30 @@ The backend is a high-performance Go application designed for concurrent monitor
     *   Launches the HTTP server and WebSocket hub.
 
 2.  **Monitoring Engine (`internal/monitoring`)**:
-    *   **Polymorphic Monitors**: Uses interfaces to treat PVE, PBS, and Docker hosts uniformly where possible.
+    *   **Polymorphic Monitors**: Uses interfaces to treat PVE and PBS hosts uniformly where possible.
     *   **Goroutines**: Each host is monitored in its own lightweight goroutine to ensure non-blocking operations.
-    *   **SSH Connection Pooling**: Maintains persistent SSH connections to Proxmox nodes to avoid handshake overhead during metric collection.
+    *   **API Clients**: Communicates with Proxmox VE/PBS via their REST APIs using API tokens or password-based tickets.
 
-3.  **WebSocket Hub (`internal/websocket`)**:
+3.  **Agent Receivers (`internal/api/agents`)**:
+    *   Receives metrics from `pulse-agent` instances via HTTP POST.
+    *   Agents collect Docker container stats, host metrics, and temperatures locally.
+    *   Push-based model: agents initiate connections to Pulse, not vice versa.
+
+4.  **WebSocket Hub (`internal/websocket`)**:
     *   Manages active client connections.
     *   Broadcasts metric updates in real-time.
     *   Handles "commands" from the frontend (e.g., requesting immediate updates).
 
-4.  **API Layer (`internal/api`)**:
+5.  **API Layer (`internal/api`)**:
     *   RESTful endpoints for configuration (adding nodes, setting thresholds).
     *   Handles authentication and secure token management.
 
 ### Data Flow
 
-1.  **Collection**: The `Monitoring Engine` ticks (default: 2s). It executes commands on remote hosts (e.g., `pvesh`, `docker stats`).
-2.  **Normalization**: Raw JSON/Text output is parsed into standardized Go structs (`HostMetrics`, `ContainerMetrics`).
+1.  **Collection**:
+    *   **Proxmox**: The Monitoring Engine polls PVE/PBS REST APIs (default: 2s interval).
+    *   **Agents**: Docker/Host agents push metrics to Pulse at their configured interval (default: 30s).
+2.  **Normalization**: API responses and agent reports are parsed into standardized Go structs (`HostMetrics`, `ContainerMetrics`).
 3.  **Broadcast**: Normalized data is sent to the `WebSocket Hub`.
 4.  **Delivery**: The Hub serializes the data to JSON and pushes it to all subscribed frontend clients.
 
