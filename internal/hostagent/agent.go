@@ -35,7 +35,6 @@ type Config struct {
 	RunOnce            bool
 	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
-	BufferCapacity     int // Number of reports to buffer when offline (default: 60)
 }
 
 // Agent is responsible for collecting host metrics and shipping them to Pulse.
@@ -167,10 +166,7 @@ func New(cfg Config) (*Agent, error) {
 		agentVersion = Version
 	}
 
-	bufferCapacity := cfg.BufferCapacity
-	if bufferCapacity <= 0 {
-		bufferCapacity = 60
-	}
+	const bufferCapacity = 60
 
 	return &Agent{
 		cfg:             cfg,
