@@ -350,6 +350,46 @@ func TestServerInfoEndpointMethodNotAllowed(t *testing.T) {
 	}
 }
 
+func TestHealthEndpointMethodNotAllowed(t *testing.T) {
+	srv := newIntegrationServer(t)
+
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
+		req, err := http.NewRequest(method, srv.server.URL+"/api/health", nil)
+		if err != nil {
+			t.Fatalf("create request failed: %v", err)
+		}
+
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("health %s request failed: %v", method, err)
+		}
+		res.Body.Close()
+
+		if res.StatusCode != http.StatusMethodNotAllowed {
+			t.Errorf("%s: unexpected status: got %d want %d", method, res.StatusCode, http.StatusMethodNotAllowed)
+		}
+	}
+}
+
+func TestHealthEndpointHeadAllowed(t *testing.T) {
+	srv := newIntegrationServer(t)
+
+	req, err := http.NewRequest(http.MethodHead, srv.server.URL+"/api/health", nil)
+	if err != nil {
+		t.Fatalf("create request failed: %v", err)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("health HEAD request failed: %v", err)
+	}
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("HEAD: unexpected status: got %d want %d", res.StatusCode, http.StatusOK)
+	}
+}
+
 func TestConfigNodesUsesMockTopology(t *testing.T) {
 	srv := newIntegrationServer(t)
 
