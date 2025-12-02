@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 func TestDetectProxy(t *testing.T) {
@@ -372,5 +374,241 @@ func TestValidateSession_ExpiredToken(t *testing.T) {
 	result := ValidateSession(token)
 	if result {
 		t.Error("ValidateSession should return false for expired token")
+	}
+}
+
+// CheckProxyAuth tests
+
+func TestCheckProxyAuth_NotConfigured(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret: "", // Not configured
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+
+	valid, username, isAdmin := CheckProxyAuth(cfg, req)
+	if valid {
+		t.Error("CheckProxyAuth should return false when not configured")
+	}
+	if username != "" {
+		t.Errorf("username should be empty, got %q", username)
+	}
+	if isAdmin {
+		t.Error("isAdmin should be false when not authenticated")
+	}
+}
+
+func TestCheckProxyAuth_InvalidSecret(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret: "correct-secret",
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Proxy-Secret", "wrong-secret")
+
+	valid, username, isAdmin := CheckProxyAuth(cfg, req)
+	if valid {
+		t.Error("CheckProxyAuth should return false for invalid secret")
+	}
+	if username != "" {
+		t.Errorf("username should be empty, got %q", username)
+	}
+	if isAdmin {
+		t.Error("isAdmin should be false when not authenticated")
+	}
+}
+
+func TestCheckProxyAuth_MissingSecret(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret: "correct-secret",
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	// No X-Proxy-Secret header
+
+	valid, username, isAdmin := CheckProxyAuth(cfg, req)
+	if valid {
+		t.Error("CheckProxyAuth should return false when secret header is missing")
+	}
+	if username != "" {
+		t.Errorf("username should be empty, got %q", username)
+	}
+	if isAdmin {
+		t.Error("isAdmin should be false when not authenticated")
+	}
+}
+
+func TestCheckProxyAuth_ValidSecretNoUserHeader(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret: "correct-secret",
+		// No ProxyAuthUserHeader configured
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Proxy-Secret", "correct-secret")
+
+	valid, username, isAdmin := CheckProxyAuth(cfg, req)
+	if !valid {
+		t.Error("CheckProxyAuth should return true for valid secret")
+	}
+	if username != "" {
+		t.Errorf("username should be empty when user header not configured, got %q", username)
+	}
+	if !isAdmin {
+		t.Error("isAdmin should be true by default when no role checking")
+	}
+}
+
+func TestCheckProxyAuth_MissingUserHeader(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "correct-secret",
+		ProxyAuthUserHeader: "X-Remote-User",
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Proxy-Secret", "correct-secret")
+	// Missing X-Remote-User header
+
+	valid, username, isAdmin := CheckProxyAuth(cfg, req)
+	if valid {
+		t.Error("CheckProxyAuth should return false when user header is missing")
+	}
+	if username != "" {
+		t.Errorf("username should be empty, got %q", username)
+	}
+	if isAdmin {
+		t.Error("isAdmin should be false when not authenticated")
+	}
+}
+
+func TestCheckProxyAuth_ValidWithUsername(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "correct-secret",
+		ProxyAuthUserHeader: "X-Remote-User",
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Proxy-Secret", "correct-secret")
+	req.Header.Set("X-Remote-User", "testuser")
+
+	valid, username, isAdmin := CheckProxyAuth(cfg, req)
+	if !valid {
+		t.Error("CheckProxyAuth should return true for valid auth")
+	}
+	if username != "testuser" {
+		t.Errorf("username should be 'testuser', got %q", username)
+	}
+	if !isAdmin {
+		t.Error("isAdmin should be true by default when no role checking")
+	}
+}
+
+func TestCheckProxyAuth_RoleCheckingEmptyRolesHeader(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "correct-secret",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+		ProxyAuthAdminRole:  "admin",
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Proxy-Secret", "correct-secret")
+	req.Header.Set("X-Remote-User", "testuser")
+	// No X-Remote-Roles header
+
+	valid, username, isAdmin := CheckProxyAuth(cfg, req)
+	if !valid {
+		t.Error("CheckProxyAuth should return true for valid auth")
+	}
+	if username != "testuser" {
+		t.Errorf("username should be 'testuser', got %q", username)
+	}
+	// When role header is empty, isAdmin stays true (default)
+	if !isAdmin {
+		t.Error("isAdmin should be true when roles header is empty")
+	}
+}
+
+func TestCheckProxyAuth_RoleCheckingWithAdminRole(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "correct-secret",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+		ProxyAuthAdminRole:  "admin",
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Proxy-Secret", "correct-secret")
+	req.Header.Set("X-Remote-User", "adminuser")
+	req.Header.Set("X-Remote-Roles", "user|admin|viewer")
+
+	valid, username, isAdmin := CheckProxyAuth(cfg, req)
+	if !valid {
+		t.Error("CheckProxyAuth should return true for valid auth")
+	}
+	if username != "adminuser" {
+		t.Errorf("username should be 'adminuser', got %q", username)
+	}
+	if !isAdmin {
+		t.Error("isAdmin should be true when user has admin role")
+	}
+}
+
+func TestCheckProxyAuth_RoleCheckingWithoutAdminRole(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "correct-secret",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+		ProxyAuthAdminRole:  "admin",
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Proxy-Secret", "correct-secret")
+	req.Header.Set("X-Remote-User", "regularuser")
+	req.Header.Set("X-Remote-Roles", "user|viewer")
+
+	valid, username, isAdmin := CheckProxyAuth(cfg, req)
+	if !valid {
+		t.Error("CheckProxyAuth should return true for valid auth")
+	}
+	if username != "regularuser" {
+		t.Errorf("username should be 'regularuser', got %q", username)
+	}
+	if isAdmin {
+		t.Error("isAdmin should be false when user lacks admin role")
+	}
+}
+
+func TestCheckProxyAuth_CustomRoleSeparator(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:        "correct-secret",
+		ProxyAuthUserHeader:    "X-Remote-User",
+		ProxyAuthRoleHeader:    "X-Remote-Roles",
+		ProxyAuthAdminRole:     "administrator",
+		ProxyAuthRoleSeparator: ",",
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Proxy-Secret", "correct-secret")
+	req.Header.Set("X-Remote-User", "adminuser")
+	req.Header.Set("X-Remote-Roles", "user,administrator,viewer")
+
+	valid, _, isAdmin := CheckProxyAuth(cfg, req)
+	if !valid {
+		t.Error("CheckProxyAuth should return true for valid auth")
+	}
+	if !isAdmin {
+		t.Error("isAdmin should be true with custom separator")
+	}
+}
+
+func TestCheckProxyAuth_RoleWithWhitespace(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "correct-secret",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+		ProxyAuthAdminRole:  "admin",
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Proxy-Secret", "correct-secret")
+	req.Header.Set("X-Remote-User", "adminuser")
+	req.Header.Set("X-Remote-Roles", "user| admin |viewer") // Whitespace around admin
+
+	valid, _, isAdmin := CheckProxyAuth(cfg, req)
+	if !valid {
+		t.Error("CheckProxyAuth should return true for valid auth")
+	}
+	if !isAdmin {
+		t.Error("isAdmin should be true when role matches after trimming whitespace")
 	}
 }
