@@ -10893,3 +10893,303 @@ func TestApplyThresholdOverride(t *testing.T) {
 		}
 	})
 }
+
+func TestSuppressGuestAlerts(t *testing.T) {
+	t.Run("no alerts for guest returns false", func(t *testing.T) {
+		m := newTestManager(t)
+
+		result := m.suppressGuestAlerts("vm100")
+		if result {
+			t.Error("expected false when no alerts exist for guest")
+		}
+	})
+
+	t.Run("active alert with exact ResourceID match clears and returns true", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["vm100-cpu"] = &Alert{
+			ID:         "vm100-cpu",
+			ResourceID: "vm100",
+			Type:       "cpu",
+		}
+		m.mu.Unlock()
+
+		result := m.suppressGuestAlerts("vm100")
+		if !result {
+			t.Error("expected true when active alert was cleared")
+		}
+
+		m.mu.RLock()
+		if _, exists := m.activeAlerts["vm100-cpu"]; exists {
+			t.Error("expected alert to be cleared from activeAlerts")
+		}
+		m.mu.RUnlock()
+	})
+
+	t.Run("active alert with prefix match clears", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["vm100/disk1-disk"] = &Alert{
+			ID:         "vm100/disk1-disk",
+			ResourceID: "vm100/disk1",
+			Type:       "disk",
+		}
+		m.mu.Unlock()
+
+		result := m.suppressGuestAlerts("vm100")
+		if !result {
+			t.Error("expected true when active alert was cleared")
+		}
+
+		m.mu.RLock()
+		if _, exists := m.activeAlerts["vm100/disk1-disk"]; exists {
+			t.Error("expected alert with prefix match to be cleared")
+		}
+		m.mu.RUnlock()
+	})
+
+	t.Run("clears from all auxiliary maps", func(t *testing.T) {
+		m := newTestManager(t)
+
+		now := time.Now()
+		m.mu.Lock()
+		m.activeAlerts["vm100-cpu"] = &Alert{
+			ID:         "vm100-cpu",
+			ResourceID: "vm100",
+			Type:       "cpu",
+		}
+		m.pendingAlerts["vm100-memory"] = now
+		m.recentAlerts["vm100-disk"] = &Alert{ID: "vm100-disk", ResourceID: "vm100"}
+		m.suppressedUntil["vm100-network"] = now.Add(time.Hour)
+		m.alertRateLimit["vm100-io"] = []time.Time{now}
+		m.offlineConfirmations["vm100"] = 1
+		m.mu.Unlock()
+
+		result := m.suppressGuestAlerts("vm100")
+		if !result {
+			t.Error("expected true when active alert was cleared")
+		}
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if _, exists := m.activeAlerts["vm100-cpu"]; exists {
+			t.Error("expected activeAlerts to be cleared")
+		}
+		if _, exists := m.pendingAlerts["vm100-memory"]; exists {
+			t.Error("expected pendingAlerts to be cleared")
+		}
+		if _, exists := m.recentAlerts["vm100-disk"]; exists {
+			t.Error("expected recentAlerts to be cleared")
+		}
+		if _, exists := m.suppressedUntil["vm100-network"]; exists {
+			t.Error("expected suppressedUntil to be cleared")
+		}
+		if _, exists := m.alertRateLimit["vm100-io"]; exists {
+			t.Error("expected alertRateLimit to be cleared")
+		}
+		if _, exists := m.offlineConfirmations["vm100"]; exists {
+			t.Error("expected offlineConfirmations to be cleared")
+		}
+	})
+
+	t.Run("multiple alerts cleared", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["vm100-cpu"] = &Alert{
+			ID:         "vm100-cpu",
+			ResourceID: "vm100",
+			Type:       "cpu",
+		}
+		m.activeAlerts["vm100-memory"] = &Alert{
+			ID:         "vm100-memory",
+			ResourceID: "vm100",
+			Type:       "memory",
+		}
+		m.activeAlerts["vm100/disk0-disk"] = &Alert{
+			ID:         "vm100/disk0-disk",
+			ResourceID: "vm100/disk0",
+			Type:       "disk",
+		}
+		// Also add an alert for a different guest that should NOT be cleared
+		m.activeAlerts["vm200-cpu"] = &Alert{
+			ID:         "vm200-cpu",
+			ResourceID: "vm200",
+			Type:       "cpu",
+		}
+		m.mu.Unlock()
+
+		result := m.suppressGuestAlerts("vm100")
+		if !result {
+			t.Error("expected true when alerts were cleared")
+		}
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if _, exists := m.activeAlerts["vm100-cpu"]; exists {
+			t.Error("expected vm100-cpu to be cleared")
+		}
+		if _, exists := m.activeAlerts["vm100-memory"]; exists {
+			t.Error("expected vm100-memory to be cleared")
+		}
+		if _, exists := m.activeAlerts["vm100/disk0-disk"]; exists {
+			t.Error("expected vm100/disk0-disk to be cleared")
+		}
+		if _, exists := m.activeAlerts["vm200-cpu"]; !exists {
+			t.Error("expected vm200-cpu to NOT be cleared")
+		}
+	})
+
+	t.Run("clears auxiliary maps even without active alerts", func(t *testing.T) {
+		m := newTestManager(t)
+
+		now := time.Now()
+		m.mu.Lock()
+		// No active alerts, but has entries in auxiliary maps
+		m.pendingAlerts["vm100-memory"] = now
+		m.recentAlerts["vm100-disk"] = &Alert{ID: "vm100-disk", ResourceID: "vm100"}
+		m.suppressedUntil["vm100-network"] = now.Add(time.Hour)
+		m.alertRateLimit["vm100-io"] = []time.Time{now}
+		m.offlineConfirmations["vm100"] = 1
+		m.mu.Unlock()
+
+		result := m.suppressGuestAlerts("vm100")
+		// Returns false because no active alerts were cleared
+		if result {
+			t.Error("expected false when no active alerts were cleared")
+		}
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		// But auxiliary maps should still be cleared
+		if _, exists := m.pendingAlerts["vm100-memory"]; exists {
+			t.Error("expected pendingAlerts to be cleared")
+		}
+		if _, exists := m.recentAlerts["vm100-disk"]; exists {
+			t.Error("expected recentAlerts to be cleared")
+		}
+		if _, exists := m.suppressedUntil["vm100-network"]; exists {
+			t.Error("expected suppressedUntil to be cleared")
+		}
+		if _, exists := m.alertRateLimit["vm100-io"]; exists {
+			t.Error("expected alertRateLimit to be cleared")
+		}
+		if _, exists := m.offlineConfirmations["vm100"]; exists {
+			t.Error("expected offlineConfirmations to be cleared")
+		}
+	})
+}
+
+func TestGuestHasMonitorOnlyAlerts(t *testing.T) {
+	t.Run("no alerts returns false", func(t *testing.T) {
+		m := newTestManager(t)
+
+		result := m.guestHasMonitorOnlyAlerts("vm100")
+		if result {
+			t.Error("expected false when no alerts exist")
+		}
+	})
+
+	t.Run("has non-monitor-only alert returns false", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["vm100-cpu"] = &Alert{
+			ID:         "vm100-cpu",
+			ResourceID: "vm100",
+			Type:       "cpu",
+			Metadata:   nil, // No metadata means not monitor-only
+		}
+		m.mu.Unlock()
+
+		result := m.guestHasMonitorOnlyAlerts("vm100")
+		if result {
+			t.Error("expected false when alert is not monitor-only")
+		}
+	})
+
+	t.Run("has monitor-only alert with bool metadata returns true", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["vm100-cpu"] = &Alert{
+			ID:         "vm100-cpu",
+			ResourceID: "vm100",
+			Type:       "cpu",
+			Metadata: map[string]interface{}{
+				"monitorOnly": true,
+			},
+		}
+		m.mu.Unlock()
+
+		result := m.guestHasMonitorOnlyAlerts("vm100")
+		if !result {
+			t.Error("expected true when monitor-only alert exists")
+		}
+	})
+
+	t.Run("has monitor-only alert with string metadata returns true", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["vm100-cpu"] = &Alert{
+			ID:         "vm100-cpu",
+			ResourceID: "vm100",
+			Type:       "cpu",
+			Metadata: map[string]interface{}{
+				"monitorOnly": "true",
+			},
+		}
+		m.mu.Unlock()
+
+		result := m.guestHasMonitorOnlyAlerts("vm100")
+		if !result {
+			t.Error("expected true when monitor-only alert exists (string metadata)")
+		}
+	})
+
+	t.Run("alert for different guest not matched", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["vm200-cpu"] = &Alert{
+			ID:         "vm200-cpu",
+			ResourceID: "vm200",
+			Type:       "cpu",
+			Metadata: map[string]interface{}{
+				"monitorOnly": true,
+			},
+		}
+		m.mu.Unlock()
+
+		result := m.guestHasMonitorOnlyAlerts("vm100")
+		if result {
+			t.Error("expected false when monitor-only alert is for different guest")
+		}
+	})
+
+	t.Run("monitorOnly false returns false", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["vm100-cpu"] = &Alert{
+			ID:         "vm100-cpu",
+			ResourceID: "vm100",
+			Type:       "cpu",
+			Metadata: map[string]interface{}{
+				"monitorOnly": false,
+			},
+		}
+		m.mu.Unlock()
+
+		result := m.guestHasMonitorOnlyAlerts("vm100")
+		if result {
+			t.Error("expected false when monitorOnly is explicitly false")
+		}
+	})
+}
