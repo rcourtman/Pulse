@@ -902,9 +902,6 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 		return err
 	}
 
-	// DEBUG: Log the JSON data being saved to check for TemperatureMonitoringEnabled
-	log.Info().Str("json", string(data)).Msg("DEBUG: Saving nodes config JSON")
-
 	if err := c.EnsureConfigDir(); err != nil {
 		return err
 	}
@@ -1059,9 +1056,6 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 			data = decrypted
 		}
 	}
-
-	// DEBUG: Log the JSON data loaded from disk
-	log.Info().Str("json", string(data)).Msg("DEBUG: Loaded nodes config JSON")
 
 	var config NodesConfig
 	if err := json.Unmarshal(data, &config); err != nil {
