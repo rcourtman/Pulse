@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mdadm"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
@@ -34,6 +35,7 @@ type Config struct {
 	RunOnce            bool
 	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
+	BufferCapacity     int // Number of reports to buffer when offline (default: 60)
 }
 
 // Agent is responsible for collecting host metrics and shipping them to Pulse.
@@ -55,6 +57,7 @@ type Agent struct {
 	agentVersion    string
 	interval        time.Duration
 	trimmedPulseURL string
+	reportBuffer    *buffer.Queue[agentshost.Report]
 }
 
 const defaultInterval = 30 * time.Second
@@ -164,6 +167,11 @@ func New(cfg Config) (*Agent, error) {
 		agentVersion = Version
 	}
 
+	bufferCapacity := cfg.BufferCapacity
+	if bufferCapacity <= 0 {
+		bufferCapacity = 60
+	}
+
 	return &Agent{
 		cfg:             cfg,
 		logger:          logger,
@@ -181,6 +189,7 @@ func New(cfg Config) (*Agent, error) {
 		agentVersion:    agentVersion,
 		interval:        cfg.Interval,
 		trimmedPulseURL: pulseURL,
+		reportBuffer:    buffer.New[agentshost.Report](bufferCapacity),
 	}, nil
 }
 
@@ -222,13 +231,43 @@ func (a *Agent) process(ctx context.Context) error {
 		return fmt.Errorf("build report: %w", err)
 	}
 	if err := a.sendReport(ctx, report); err != nil {
-		return fmt.Errorf("send report: %w", err)
+		a.logger.Warn().Err(err).Msg("Failed to send report, buffering")
+		a.reportBuffer.Push(report)
+		return nil
 	}
+
+	// If successful, try to flush buffer
+	a.flushBuffer(ctx)
+
 	a.logger.Debug().
 		Str("hostname", report.Host.Hostname).
 		Str("platform", report.Host.Platform).
 		Msg("host report sent")
 	return nil
+}
+
+func (a *Agent) flushBuffer(ctx context.Context) {
+	if a.reportBuffer.IsEmpty() {
+		return
+	}
+
+	a.logger.Info().Int("count", a.reportBuffer.Len()).Msg("Flushing buffered reports")
+
+	for !a.reportBuffer.IsEmpty() {
+		// Peek first
+		report, ok := a.reportBuffer.Peek()
+		if !ok {
+			break
+		}
+
+		if err := a.sendReport(ctx, report); err != nil {
+			a.logger.Warn().Err(err).Msg("Failed to flush buffered report, stopping flush")
+			return
+		}
+
+		// Pop only on success
+		a.reportBuffer.Pop()
+	}
 }
 
 func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {

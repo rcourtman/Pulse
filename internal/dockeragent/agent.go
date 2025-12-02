@@ -27,6 +27,7 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	systemtypes "github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
+	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
@@ -61,6 +62,7 @@ type Config struct {
 	CollectDiskMetrics bool
 	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
+	BufferCapacity     int // Number of reports to buffer when offline (default: 60)
 }
 
 var allowedContainerStates = map[string]string{
@@ -103,6 +105,7 @@ type Agent struct {
 	hostID              string
 	prevContainerCPU    map[string]cpuSample
 	preCPUStatsFailures int
+	reportBuffer        *buffer.Queue[agentsdocker.Report]
 }
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.
@@ -235,6 +238,11 @@ func New(cfg Config) (*Agent, error) {
 		agentVersion = Version
 	}
 
+	bufferCapacity := cfg.BufferCapacity
+	if bufferCapacity <= 0 {
+		bufferCapacity = 60
+	}
+
 	agent := &Agent{
 		cfg:              cfg,
 		docker:           dockerClient,
@@ -252,6 +260,7 @@ func New(cfg Config) (*Agent, error) {
 		allowedStates:    make(map[string]struct{}, len(stateFilters)),
 		stateFilters:     stateFilters,
 		prevContainerCPU: make(map[string]cpuSample),
+		reportBuffer:     buffer.New[agentsdocker.Report](bufferCapacity),
 	}
 
 	for _, state := range stateFilters {
@@ -583,7 +592,41 @@ func (a *Agent) collectOnce(ctx context.Context) error {
 		return err
 	}
 
-	return a.sendReport(ctx, report)
+	if err := a.sendReport(ctx, report); err != nil {
+		if errors.Is(err, ErrStopRequested) {
+			return nil
+		}
+		a.logger.Warn().Err(err).Msg("Failed to send docker report, buffering")
+		a.reportBuffer.Push(report)
+		return nil
+	}
+
+	a.flushBuffer(ctx)
+	return nil
+}
+
+func (a *Agent) flushBuffer(ctx context.Context) {
+	if a.reportBuffer.IsEmpty() {
+		return
+	}
+
+	a.logger.Info().Int("count", a.reportBuffer.Len()).Msg("Flushing buffered docker reports")
+
+	for !a.reportBuffer.IsEmpty() {
+		report, ok := a.reportBuffer.Peek()
+		if !ok {
+			break
+		}
+
+		if err := a.sendReport(ctx, report); err != nil {
+			if errors.Is(err, ErrStopRequested) {
+				return
+			}
+			a.logger.Warn().Err(err).Msg("Failed to flush buffered docker report, stopping flush")
+			return
+		}
+		a.reportBuffer.Pop()
+	}
 }
 
 func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
