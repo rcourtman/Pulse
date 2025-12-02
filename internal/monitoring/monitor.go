@@ -1856,10 +1856,10 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	disks := make([]models.Disk, 0, len(report.Disks))
 	for _, disk := range report.Disks {
-		// Filter read-only filesystems for backward compatibility with older host agents
-		// that don't have the filter built in. Prevents false alerts for snap mounts,
-		// immutable OS images, etc. (issues #505, #690).
-		if shouldIgnoreReadOnlyFilesystem(disk.Type, uint64(disk.TotalBytes), uint64(disk.UsedBytes)) {
+		// Filter virtual/system filesystems and read-only filesystems to avoid cluttering
+		// the UI with tmpfs, devtmpfs, /dev, /run, /sys, docker overlay mounts, snap mounts,
+		// immutable OS images, etc. (issues #505, #690, #790).
+		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(disk.Type, disk.Mountpoint, uint64(disk.TotalBytes), uint64(disk.UsedBytes)); shouldSkip {
 			continue
 		}
 
