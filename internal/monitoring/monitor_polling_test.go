@@ -381,3 +381,425 @@ func TestDescribeInstancesForScheduler_NilSchedulerAndTracker(t *testing.T) {
 		t.Error("expected LastSuccess to be zero with nil stalenessTracker")
 	}
 }
+
+func TestRescheduleTask_NilTaskQueue(t *testing.T) {
+	m := &Monitor{
+		taskQueue: nil, // nil queue
+	}
+
+	task := ScheduledTask{
+		InstanceName: "pve-1",
+		InstanceType: InstanceTypePVE,
+		Interval:     30 * time.Second,
+		NextRun:      time.Now(),
+	}
+
+	// Should not panic with nil taskQueue, just returns early
+	m.rescheduleTask(task)
+}
+
+func TestRescheduleTask_SuccessfulOutcome(t *testing.T) {
+	cfg := &config.Config{
+		PVEPollingInterval:          30 * time.Second,
+		AdaptivePollingBaseInterval: 10 * time.Second,
+	}
+
+	m := &Monitor{
+		config:        cfg,
+		taskQueue:     NewTaskQueue(),
+		lastOutcome:   make(map[string]taskOutcome),
+		failureCounts: make(map[string]int),
+	}
+
+	task := ScheduledTask{
+		InstanceName: "pve-1",
+		InstanceType: InstanceTypePVE,
+		Interval:     30 * time.Second,
+		NextRun:      time.Now(),
+	}
+
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+
+	// Record a successful outcome
+	m.lastOutcome[key] = taskOutcome{success: true}
+
+	m.rescheduleTask(task)
+
+	// Task should be rescheduled at regular interval (no backoff)
+	m.taskQueue.mu.Lock()
+	entry, ok := m.taskQueue.entries[key]
+	m.taskQueue.mu.Unlock()
+
+	if !ok {
+		t.Fatal("expected task to be rescheduled")
+	}
+
+	// Should use base interval since scheduler is nil
+	if entry.task.Interval != cfg.PVEPollingInterval {
+		t.Errorf("expected interval %v, got %v", cfg.PVEPollingInterval, entry.task.Interval)
+	}
+}
+
+func TestRescheduleTask_TransientFailureWithBackoff(t *testing.T) {
+	cfg := &config.Config{
+		PVEPollingInterval:          30 * time.Second,
+		AdaptivePollingBaseInterval: 10 * time.Second,
+	}
+
+	m := &Monitor{
+		config:           cfg,
+		taskQueue:        NewTaskQueue(),
+		lastOutcome:      make(map[string]taskOutcome),
+		failureCounts:    make(map[string]int),
+		maxRetryAttempts: 5,
+		backoffCfg: backoffConfig{
+			Initial:    5 * time.Second,
+			Multiplier: 2,
+			Jitter:     0, // no jitter for predictable testing
+			Max:        5 * time.Minute,
+		},
+	}
+
+	// Add randomFloat method for backoff calculation
+	m.rng = nil // will use default random
+
+	task := ScheduledTask{
+		InstanceName: "pve-1",
+		InstanceType: InstanceTypePVE,
+		Interval:     30 * time.Second,
+		NextRun:      time.Now(),
+	}
+
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+
+	// Record a transient failure (1st attempt, below maxRetryAttempts)
+	m.failureCounts[key] = 1
+	m.lastOutcome[key] = taskOutcome{
+		success:   false,
+		transient: true,
+		err:       errors.New("connection timeout"),
+	}
+
+	m.rescheduleTask(task)
+
+	// Task should be rescheduled with backoff delay
+	m.taskQueue.mu.Lock()
+	entry, ok := m.taskQueue.entries[key]
+	m.taskQueue.mu.Unlock()
+
+	if !ok {
+		t.Fatal("expected task to be rescheduled with backoff")
+	}
+
+	// With backoff, interval should be modified
+	if entry.task.Interval <= 0 {
+		t.Errorf("expected positive backoff interval, got %v", entry.task.Interval)
+	}
+}
+
+func TestRescheduleTask_NonTransientFailureGoesToDeadLetter(t *testing.T) {
+	cfg := &config.Config{
+		PVEPollingInterval: 30 * time.Second,
+	}
+
+	deadLetterQ := NewTaskQueue()
+
+	m := &Monitor{
+		config:           cfg,
+		taskQueue:        NewTaskQueue(),
+		deadLetterQueue:  deadLetterQ,
+		lastOutcome:      make(map[string]taskOutcome),
+		failureCounts:    make(map[string]int),
+		maxRetryAttempts: 5,
+	}
+
+	task := ScheduledTask{
+		InstanceName: "pve-1",
+		InstanceType: InstanceTypePVE,
+		Interval:     30 * time.Second,
+		NextRun:      time.Now(),
+	}
+
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+
+	// Record a non-transient failure (permanent error)
+	m.failureCounts[key] = 1
+	m.lastOutcome[key] = taskOutcome{
+		success:   false,
+		transient: false, // non-transient
+		err:       errors.New("authentication failed"),
+	}
+
+	m.rescheduleTask(task)
+
+	// Task should NOT be in the main queue
+	m.taskQueue.mu.Lock()
+	_, inMainQueue := m.taskQueue.entries[key]
+	m.taskQueue.mu.Unlock()
+
+	if inMainQueue {
+		t.Error("expected task to NOT be in main queue after non-transient failure")
+	}
+
+	// Task should be in dead letter queue
+	deadLetterQ.mu.Lock()
+	dlqSize := len(deadLetterQ.entries)
+	deadLetterQ.mu.Unlock()
+
+	if dlqSize != 1 {
+		t.Errorf("expected 1 task in dead letter queue, got %d", dlqSize)
+	}
+}
+
+func TestRescheduleTask_ExceededRetryAttemptsGoesToDeadLetter(t *testing.T) {
+	cfg := &config.Config{
+		PVEPollingInterval: 30 * time.Second,
+	}
+
+	deadLetterQ := NewTaskQueue()
+
+	m := &Monitor{
+		config:           cfg,
+		taskQueue:        NewTaskQueue(),
+		deadLetterQueue:  deadLetterQ,
+		lastOutcome:      make(map[string]taskOutcome),
+		failureCounts:    make(map[string]int),
+		maxRetryAttempts: 3,
+	}
+
+	task := ScheduledTask{
+		InstanceName: "pve-1",
+		InstanceType: InstanceTypePVE,
+		Interval:     30 * time.Second,
+		NextRun:      time.Now(),
+	}
+
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+
+	// Exceed max retry attempts (failureCount >= maxRetryAttempts)
+	m.failureCounts[key] = 3
+	m.lastOutcome[key] = taskOutcome{
+		success:   false,
+		transient: true, // transient, but exceeded retries
+		err:       errors.New("connection timeout"),
+	}
+
+	m.rescheduleTask(task)
+
+	// Task should be in dead letter queue
+	deadLetterQ.mu.Lock()
+	dlqSize := len(deadLetterQ.entries)
+	deadLetterQ.mu.Unlock()
+
+	if dlqSize != 1 {
+		t.Errorf("expected 1 task in dead letter queue after exceeding retries, got %d", dlqSize)
+	}
+}
+
+func TestRescheduleTask_NoOutcomeUsesDefaultInterval(t *testing.T) {
+	cfg := &config.Config{
+		PVEPollingInterval:          45 * time.Second,
+		AdaptivePollingBaseInterval: 10 * time.Second,
+	}
+
+	m := &Monitor{
+		config:        cfg,
+		taskQueue:     NewTaskQueue(),
+		lastOutcome:   make(map[string]taskOutcome),
+		failureCounts: make(map[string]int),
+	}
+
+	task := ScheduledTask{
+		InstanceName: "pve-1",
+		InstanceType: InstanceTypePVE,
+		Interval:     0, // no interval set
+		NextRun:      time.Now(),
+	}
+
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+
+	// No outcome recorded - hasOutcome will be false
+	m.rescheduleTask(task)
+
+	m.taskQueue.mu.Lock()
+	entry, ok := m.taskQueue.entries[key]
+	m.taskQueue.mu.Unlock()
+
+	if !ok {
+		t.Fatal("expected task to be rescheduled")
+	}
+
+	// Should use config PVE polling interval
+	if entry.task.Interval != cfg.PVEPollingInterval {
+		t.Errorf("expected interval %v, got %v", cfg.PVEPollingInterval, entry.task.Interval)
+	}
+}
+
+func TestRescheduleTask_PBSInstance(t *testing.T) {
+	cfg := &config.Config{
+		PBSPollingInterval:          60 * time.Second,
+		AdaptivePollingBaseInterval: 10 * time.Second,
+	}
+
+	m := &Monitor{
+		config:        cfg,
+		taskQueue:     NewTaskQueue(),
+		lastOutcome:   make(map[string]taskOutcome),
+		failureCounts: make(map[string]int),
+	}
+
+	task := ScheduledTask{
+		InstanceName: "pbs-1",
+		InstanceType: InstanceTypePBS,
+		Interval:     0,
+		NextRun:      time.Now(),
+	}
+
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+
+	m.rescheduleTask(task)
+
+	m.taskQueue.mu.Lock()
+	entry, ok := m.taskQueue.entries[key]
+	m.taskQueue.mu.Unlock()
+
+	if !ok {
+		t.Fatal("expected PBS task to be rescheduled")
+	}
+
+	if entry.task.Interval != cfg.PBSPollingInterval {
+		t.Errorf("expected PBS interval %v, got %v", cfg.PBSPollingInterval, entry.task.Interval)
+	}
+}
+
+func TestRescheduleTask_PMGInstance(t *testing.T) {
+	cfg := &config.Config{
+		PMGPollingInterval:          90 * time.Second,
+		AdaptivePollingBaseInterval: 10 * time.Second,
+	}
+
+	m := &Monitor{
+		config:        cfg,
+		taskQueue:     NewTaskQueue(),
+		lastOutcome:   make(map[string]taskOutcome),
+		failureCounts: make(map[string]int),
+	}
+
+	task := ScheduledTask{
+		InstanceName: "pmg-1",
+		InstanceType: InstanceTypePMG,
+		Interval:     0,
+		NextRun:      time.Now(),
+	}
+
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+
+	m.rescheduleTask(task)
+
+	m.taskQueue.mu.Lock()
+	entry, ok := m.taskQueue.entries[key]
+	m.taskQueue.mu.Unlock()
+
+	if !ok {
+		t.Fatal("expected PMG task to be rescheduled")
+	}
+
+	if entry.task.Interval != cfg.PMGPollingInterval {
+		t.Errorf("expected PMG interval %v, got %v", cfg.PMGPollingInterval, entry.task.Interval)
+	}
+}
+
+func TestRescheduleTask_AdaptivePollingMaxIntervalLimit(t *testing.T) {
+	cfg := &config.Config{
+		PVEPollingInterval:           30 * time.Second,
+		AdaptivePollingEnabled:       true,
+		AdaptivePollingMaxInterval:   10 * time.Second, // <= 15s enables capping
+		AdaptivePollingBaseInterval:  5 * time.Second,
+	}
+
+	m := &Monitor{
+		config:           cfg,
+		taskQueue:        NewTaskQueue(),
+		lastOutcome:      make(map[string]taskOutcome),
+		failureCounts:    make(map[string]int),
+		maxRetryAttempts: 5,
+		backoffCfg: backoffConfig{
+			Initial:    10 * time.Second, // would normally backoff to 10s+
+			Multiplier: 2,
+			Jitter:     0,
+			Max:        5 * time.Minute,
+		},
+	}
+
+	task := ScheduledTask{
+		InstanceName: "pve-1",
+		InstanceType: InstanceTypePVE,
+		Interval:     30 * time.Second,
+		NextRun:      time.Now(),
+	}
+
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+
+	// Simulate transient failure to trigger backoff
+	m.failureCounts[key] = 1
+	m.lastOutcome[key] = taskOutcome{
+		success:   false,
+		transient: true,
+		err:       errors.New("timeout"),
+	}
+
+	m.rescheduleTask(task)
+
+	m.taskQueue.mu.Lock()
+	entry, ok := m.taskQueue.entries[key]
+	m.taskQueue.mu.Unlock()
+
+	if !ok {
+		t.Fatal("expected task to be rescheduled")
+	}
+
+	// With AdaptivePollingMaxInterval <= 15s, backoff delay should be capped at 4s
+	maxDelay := 4 * time.Second
+	if entry.task.Interval > maxDelay {
+		t.Errorf("expected backoff interval to be capped at %v, got %v", maxDelay, entry.task.Interval)
+	}
+}
+
+func TestRescheduleTask_UsesExistingIntervalWhenSet(t *testing.T) {
+	cfg := &config.Config{
+		PVEPollingInterval:          30 * time.Second,
+		AdaptivePollingBaseInterval: 10 * time.Second,
+	}
+
+	m := &Monitor{
+		config:        cfg,
+		taskQueue:     NewTaskQueue(),
+		lastOutcome:   make(map[string]taskOutcome),
+		failureCounts: make(map[string]int),
+	}
+
+	customInterval := 45 * time.Second
+	task := ScheduledTask{
+		InstanceName: "pve-1",
+		InstanceType: InstanceTypePVE,
+		Interval:     customInterval, // custom interval already set
+		NextRun:      time.Now(),
+	}
+
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+
+	m.rescheduleTask(task)
+
+	m.taskQueue.mu.Lock()
+	entry, ok := m.taskQueue.entries[key]
+	m.taskQueue.mu.Unlock()
+
+	if !ok {
+		t.Fatal("expected task to be rescheduled")
+	}
+
+	// Should use the existing interval when it's already set
+	if entry.task.Interval != customInterval {
+		t.Errorf("expected existing interval %v to be preserved, got %v", customInterval, entry.task.Interval)
+	}
+}
