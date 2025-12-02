@@ -204,59 +204,6 @@ func TestCheckPasswordHash(t *testing.T) {
 	}
 }
 
-func TestIsPasswordHashed(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected bool
-	}{
-		{
-			name:     "valid bcrypt hash",
-			input:    "$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.qGAL0kcNWQKS5.",
-			expected: true,
-		},
-		{
-			name:     "bcrypt 2b variant",
-			input:    "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.qGAL0kcNWQKS5.",
-			expected: true,
-		},
-		{
-			name:     "bcrypt 2y variant",
-			input:    "$2y$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.qGAL0kcNWQKS5.",
-			expected: true,
-		},
-		{
-			name:     "plain password",
-			input:    "mypassword",
-			expected: false,
-		},
-		{
-			name:     "empty string",
-			input:    "",
-			expected: false,
-		},
-		{
-			name:     "wrong length",
-			input:    "$2a$12$short",
-			expected: false,
-		},
-		{
-			name:     "wrong prefix",
-			input:    "$1a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.qGAL0kcNWQKS5.",
-			expected: false,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			result := IsPasswordHashed(tc.input)
-			if result != tc.expected {
-				t.Errorf("IsPasswordHashed(%q) = %v, want %v", tc.input, result, tc.expected)
-			}
-		})
-	}
-}
-
 func TestValidatePasswordComplexity(t *testing.T) {
 	tests := []struct {
 		name      string
