@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -117,5 +118,117 @@ func TestGetAPITokenRecordFromRequestNoValue(t *testing.T) {
 	record := getAPITokenRecordFromRequest(req)
 	if record != nil {
 		t.Fatal("expected nil when no token in context")
+	}
+}
+
+// ensureScope tests
+
+func TestEnsureScope_EmptyScopeAllowsAll(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+
+	// Empty scope should always return true
+	result := ensureScope(rr, req, "")
+	if !result {
+		t.Fatal("expected ensureScope to return true for empty scope")
+	}
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected no status written (200 default), got %d", rr.Code)
+	}
+}
+
+func TestEnsureScope_NoTokenAllowsAccess(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+
+	// No token attached - should allow access (session-based request)
+	result := ensureScope(rr, req, config.ScopeSettingsWrite)
+	if !result {
+		t.Fatal("expected ensureScope to return true when no token (session request)")
+	}
+}
+
+func TestEnsureScope_TokenWithMatchingScopeAllowsAccess(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	record := config.APITokenRecord{ID: "token-1", Scopes: []string{config.ScopeMonitoringRead}}
+	attachAPITokenRecord(req, &record)
+	rr := httptest.NewRecorder()
+
+	result := ensureScope(rr, req, config.ScopeMonitoringRead)
+	if !result {
+		t.Fatal("expected ensureScope to return true when token has matching scope")
+	}
+}
+
+func TestEnsureScope_TokenWithMultipleScopesAllowsAccess(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	record := config.APITokenRecord{
+		ID:     "token-multi",
+		Scopes: []string{config.ScopeMonitoringRead, config.ScopeSettingsWrite, config.ScopeDockerReport},
+	}
+	attachAPITokenRecord(req, &record)
+	rr := httptest.NewRecorder()
+
+	result := ensureScope(rr, req, config.ScopeSettingsWrite)
+	if !result {
+		t.Fatal("expected ensureScope to return true when token has required scope among multiple")
+	}
+}
+
+func TestEnsureScope_TokenMissingScopeRejects(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	record := config.APITokenRecord{ID: "token-2", Scopes: []string{config.ScopeMonitoringRead}}
+	attachAPITokenRecord(req, &record)
+	rr := httptest.NewRecorder()
+
+	result := ensureScope(rr, req, config.ScopeSettingsWrite)
+	if result {
+		t.Fatal("expected ensureScope to return false when token missing required scope")
+	}
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d", rr.Code)
+	}
+}
+
+func TestEnsureScope_TokenWithEmptyScopesDefaultsToWildcard(t *testing.T) {
+	// Note: Empty scopes defaults to wildcard access via ensureScopes()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	record := config.APITokenRecord{ID: "token-empty", Scopes: []string{}}
+	attachAPITokenRecord(req, &record)
+	rr := httptest.NewRecorder()
+
+	// Empty scopes defaults to ScopeWildcard, so any scope should be allowed
+	result := ensureScope(rr, req, config.ScopeDockerReport)
+	if !result {
+		t.Fatal("expected ensureScope to return true (empty scopes defaults to wildcard)")
+	}
+}
+
+func TestEnsureScope_RejectsWithProperJSONResponse(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	record := config.APITokenRecord{ID: "token-3", Scopes: []string{"other:scope"}}
+	attachAPITokenRecord(req, &record)
+	rr := httptest.NewRecorder()
+
+	result := ensureScope(rr, req, config.ScopeSettingsWrite)
+	if result {
+		t.Fatal("expected ensureScope to return false")
+	}
+
+	// Check response format
+	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("expected Content-Type application/json, got %s", ct)
+	}
+
+	body := rr.Body.String()
+	if body == "" {
+		t.Fatal("expected JSON body in response")
+	}
+	// Body should contain error and requiredScope
+	if !strings.Contains(body, "missing_scope") {
+		t.Fatalf("expected 'missing_scope' in body, got: %s", body)
+	}
+	if !strings.Contains(body, config.ScopeSettingsWrite) {
+		t.Fatalf("expected required scope in body, got: %s", body)
 	}
 }
