@@ -38,6 +38,7 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 
 - **[API Reference](API.md)** – Complete REST API documentation.
 - **[Dev Quick Start](../DEV-QUICK-START.md)** – Hot-reload workflow for contributors.
+- **[Architecture](../ARCHITECTURE.md)** – System design and component interaction.
 - **[Contributing](../CONTRIBUTING.md)** – How to contribute to Pulse.
 - **[Mock Mode](development/MOCK_MODE.md)** – Developing without real infrastructure.
 
