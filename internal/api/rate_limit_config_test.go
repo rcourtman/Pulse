@@ -421,6 +421,73 @@ func TestUniversalRateLimitMiddleware_HeaderFormat(t *testing.T) {
 	}
 }
 
+func TestUniversalRateLimitMiddleware_InitializesIfNeeded(t *testing.T) {
+	// Save and restore global state
+	saved := globalRateLimitConfig
+	globalRateLimitConfig = nil
+	t.Cleanup(func() {
+		globalRateLimitConfig = saved
+	})
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// Create middleware with nil config - should initialize
+	middleware := UniversalRateLimitMiddleware(handler)
+
+	if globalRateLimitConfig == nil {
+		t.Fatal("globalRateLimitConfig should have been initialized by middleware creation")
+	}
+
+	// Verify middleware works correctly after initialization
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rr := httptest.NewRecorder()
+	middleware.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+}
+
+func TestUniversalRateLimitMiddleware_StaticAssetBypass(t *testing.T) {
+	InitializeRateLimiters()
+
+	handlerCalled := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+	middleware := UniversalRateLimitMiddleware(handler)
+
+	// Static asset paths (not /api or /ws prefixed) should bypass rate limiting
+	tests := []struct {
+		path string
+	}{
+		{"/index.html"},
+		{"/static/js/app.js"},
+		{"/favicon.ico"},
+		{"/assets/style.css"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			handlerCalled = false
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rr := httptest.NewRecorder()
+
+			middleware.ServeHTTP(rr, req)
+
+			if !handlerCalled {
+				t.Errorf("handler should have been called for static asset path %s", tt.path)
+			}
+			if rr.Code != http.StatusOK {
+				t.Errorf("expected status 200 for static asset, got %d", rr.Code)
+			}
+		})
+	}
+}
+
 func TestResetRateLimitForIP(t *testing.T) {
 	t.Run("nil globalRateLimitConfig does not panic", func(t *testing.T) {
 		// Save current config and restore after test
