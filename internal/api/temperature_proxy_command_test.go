@@ -39,7 +39,10 @@ func TestHandleTemperatureProxyInstallCommand(t *testing.T) {
 	if !strings.Contains(command, cfg.PublicURL) {
 		t.Fatalf("command does not include pulse URL: %s", command)
 	}
-	if !strings.Contains(command, "--standalone --http-mode") {
-		t.Fatalf("command missing expected flags: %s", command)
+	if !strings.Contains(command, "--ctid") {
+		t.Fatalf("command missing expected --ctid flag: %s", command)
+	}
+	if !strings.Contains(command, "--pulse-server") {
+		t.Fatalf("command missing expected --pulse-server flag: %s", command)
 	}
 }
