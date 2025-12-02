@@ -418,6 +418,37 @@ func TestResetLockoutRequiresSettingsScope(t *testing.T) {
 	}
 }
 
+func TestEnsureSettingsWriteScopeWithValidScope(t *testing.T) {
+	dataDir := t.TempDir()
+
+	rawToken := strings.Repeat("ab", 32)
+	record, err := config.NewAPITokenRecord(rawToken, "admin-token", []string{config.ScopeSettingsWrite})
+	if err != nil {
+		t.Fatalf("new token record: %v", err)
+	}
+
+	cfg := &config.Config{
+		DataPath:        dataDir,
+		ConfigPath:      dataDir,
+		APITokens:       []config.APITokenRecord{*record},
+		APITokenEnabled: true,
+	}
+	cfg.SortAPITokens()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
+	attachAPITokenRecord(req, record)
+
+	rr := httptest.NewRecorder()
+	result := ensureSettingsWriteScope(rr, req)
+
+	if !result {
+		t.Error("ensureSettingsWriteScope should return true when token has settings:write scope")
+	}
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected no error response, got status %d", rr.Code)
+	}
+}
+
 func TestValidateBcryptHash(t *testing.T) {
 	tests := []struct {
 		name    string
