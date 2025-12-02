@@ -23,6 +23,28 @@ docker run -d \
   rcourtman/pulse:latest
 ```
 
+### Docker Compose
+Create a `docker-compose.yml` file:
+
+```yaml
+services:
+  pulse:
+    image: rcourtman/pulse:latest
+    container_name: pulse
+    restart: unless-stopped
+    ports:
+      - "7655:7655"
+    volumes:
+      - pulse_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock # Optional: Monitor local Docker
+    environment:
+      - PULSE_AUTH_USER=admin
+      - PULSE_AUTH_PASS=secret123
+
+volumes:
+  pulse_data:
+```
+
 ---
 
 ## 🛠️ Installation Methods

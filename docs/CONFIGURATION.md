@@ -79,10 +79,26 @@ Environment variables take precedence over `system.json`.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `FRONTEND_PORT` | Public listening port | `7655` |
-| `LOG_LEVEL` | Log verbosity | `info` |
-| `DISCOVERY_ENABLED` | Auto-discover nodes | `false` |
+| `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
+| `PULSE_PUBLIC_URL` | Public URL for notifications/OIDC | `""` |
 | `ALLOWED_ORIGINS` | CORS allowed domains | `""` (Same origin) |
-| `PULSE_AUTH_HIDE_LOCAL_LOGIN` | Hide username/password form (useful for SSO) | `false` |
+| `DISCOVERY_ENABLED` | Auto-discover nodes | `false` |
+| `PULSE_AUTH_HIDE_LOCAL_LOGIN` | Hide username/password form | `false` |
+| `DEMO_MODE` | Enable read-only demo mode | `false` |
+
+### Monitoring Overrides
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PVE_POLLING_INTERVAL` | PVE metrics polling frequency | `10s` |
+| `PBS_POLLING_INTERVAL` | PBS metrics polling frequency | `60s` |
+| `PMG_POLLING_INTERVAL` | PMG metrics polling frequency | `60s` |
+| `ENABLE_BACKUP_POLLING` | Enable backup job monitoring | `true` |
+| `BACKUP_POLLING_INTERVAL` | Backup polling frequency | `0` (Auto) |
+| `ENABLE_TEMPERATURE_MONITORING` | Enable SSH temperature checks | `true` |
+| `SSH_PORT` | SSH port for temperature checks | `22` |
+| `ADAPTIVE_POLLING_ENABLED` | Enable smart polling for large clusters | `false` |
+| `WEBHOOK_BATCH_DELAY` | Delay before sending batched webhooks | `10s` |
 
 ---
 

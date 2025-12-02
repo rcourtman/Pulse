@@ -112,6 +112,51 @@ Triggers a test alert to all configured channels.
 
 ---
 
+---
+## 🖥️ Host Agent
+
+### Submit Report
+`POST /api/agents/host/report`
+Used by the Pulse Host Agent to push system metrics.
+
+### Lookup Agent
+`POST /api/agents/host/lookup`
+Check if a host agent is already registered.
+
+### Delete Host
+`DELETE /api/agents/host/<id>`
+Remove a host agent from monitoring.
+
+---
+
+## ⚙️ System Settings
+
+### Get Settings
+`GET /api/config/system`
+Retrieve current system configuration.
+
+### Toggle Mock Mode
+`POST /api/system/mock-mode`
+Enable or disable mock data generation (dev/demo only).
+
+---
+
+## 🔑 OIDC / SSO
+
+### Get OIDC Config
+`GET /api/security/oidc`
+Retrieve current OIDC provider settings.
+
+### Update OIDC Config
+`POST /api/security/oidc`
+Configure OIDC provider details (Issuer, Client ID, etc).
+
+### Login
+`GET /api/oidc/login`
+Initiate OIDC login flow.
+
+---
+
 ## 🐳 Docker Agent
 
 ### Submit Report
