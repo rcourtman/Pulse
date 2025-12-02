@@ -126,6 +126,7 @@ type BackupEntry struct {
 	Timestamp flexibleInt `json:"timestamp"`
 }
 
+// NewClient creates a new PMG (Proxmox Mail Gateway) API client.
 func NewClient(cfg ClientConfig) (*Client, error) {
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 60 * time.Second
@@ -395,6 +396,7 @@ func (c *Client) getJSON(ctx context.Context, path string, params url.Values, ou
 	return nil
 }
 
+// GetVersion returns version information for the PMG instance.
 func (c *Client) GetVersion(ctx context.Context) (*VersionInfo, error) {
 	var resp apiResponse[VersionInfo]
 	if err := c.getJSON(ctx, "/version", nil, &resp); err != nil {
