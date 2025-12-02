@@ -2475,9 +2475,10 @@ func (m *Manager) CheckHost(host models.Host) {
 			}
 
 			// Check for degraded or failed arrays
-			isDegraded := strings.Contains(strings.ToLower(array.State), "degraded") || array.FailedDevices > 0
-			isRebuilding := strings.Contains(strings.ToLower(array.State), "recover") ||
-				strings.Contains(strings.ToLower(array.State), "resync") ||
+			stateLower := strings.ToLower(array.State)
+			isDegraded := strings.Contains(stateLower, "degraded") || array.FailedDevices > 0
+			isRebuilding := strings.Contains(stateLower, "recover") ||
+				strings.Contains(stateLower, "resync") ||
 				array.RebuildPercent > 0
 
 			alertID := fmt.Sprintf("host-%s-raid-%s", host.ID, sanitizeRAIDDevice(array.Device))
