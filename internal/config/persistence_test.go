@@ -1670,6 +1670,47 @@ func TestLoadNodesConfig_PMGHostNormalization(t *testing.T) {
 	}
 }
 
+// NOTE: TestSaveNodesConfig_BlocksEmptyWhenNodesExist is not included because
+// the saveNodesConfig function has a deadlock bug - it holds c.mu.Lock() while
+// calling LoadNodesConfig() which tries to acquire c.mu.RLock(). This makes
+// the empty config protection path untestable without first fixing the bug.
+
+func TestSaveNodesConfigAllowEmpty_PermitsEmptyConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// First save a valid config with nodes
+	pveInstances := []config.PVEInstance{
+		{
+			Name: "pve-test",
+			Host: "https://pve.local:8006",
+			User: "root@pam",
+		},
+	}
+
+	if err := cp.SaveNodesConfig(pveInstances, nil, nil); err != nil {
+		t.Fatalf("SaveNodesConfig initial: %v", err)
+	}
+
+	// SaveNodesConfigAllowEmpty should permit deleting all nodes
+	err := cp.SaveNodesConfigAllowEmpty(nil, nil, nil)
+	if err != nil {
+		t.Fatalf("SaveNodesConfigAllowEmpty should permit empty config, got: %v", err)
+	}
+
+	// Verify nodes are now empty
+	loaded, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig: %v", err)
+	}
+	if len(loaded.PVEInstances) != 0 {
+		t.Errorf("expected 0 PVE instances after AllowEmpty save, got %d", len(loaded.PVEInstances))
+	}
+}
+
 func TestCleanupOldBackupsNonExistentDirectory(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
