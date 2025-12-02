@@ -707,3 +707,80 @@ func TestSanitizeCIDRList(t *testing.T) {
 		})
 	}
 }
+
+func TestDiscoveryConfigUnmarshalJSON_InvalidJSON(t *testing.T) {
+	var cfg DiscoveryConfig
+	err := cfg.UnmarshalJSON([]byte(`{invalid json`))
+	if err == nil {
+		t.Error("expected error for invalid JSON")
+	}
+}
+
+func TestDiscoveryConfigUnmarshalJSON_ModernFields(t *testing.T) {
+	var cfg DiscoveryConfig
+	data := `{
+		"environment_override": "docker_host",
+		"subnet_allowlist": ["192.168.1.0/24"],
+		"subnet_blocklist": ["10.0.0.0/8"],
+		"max_hosts_per_scan": 100,
+		"max_concurrent": 5,
+		"enable_reverse_dns": true,
+		"scan_gateways": false,
+		"dial_timeout_ms": 2000,
+		"http_timeout_ms": 5000
+	}`
+
+	err := cfg.UnmarshalJSON([]byte(data))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.EnvironmentOverride != "docker_host" {
+		t.Errorf("EnvironmentOverride = %q, want 'docker_host'", cfg.EnvironmentOverride)
+	}
+	if len(cfg.SubnetAllowlist) != 1 || cfg.SubnetAllowlist[0] != "192.168.1.0/24" {
+		t.Errorf("SubnetAllowlist = %v, want ['192.168.1.0/24']", cfg.SubnetAllowlist)
+	}
+	if cfg.MaxHostsPerScan != 100 {
+		t.Errorf("MaxHostsPerScan = %d, want 100", cfg.MaxHostsPerScan)
+	}
+}
+
+func TestDiscoveryConfigUnmarshalJSON_LegacyFields(t *testing.T) {
+	var cfg DiscoveryConfig
+	data := `{
+		"environmentOverride": "lxc_privileged",
+		"subnetAllowlist": ["172.16.0.0/12"],
+		"maxHostsPerScan": 50,
+		"enableReverseDns": false
+	}`
+
+	err := cfg.UnmarshalJSON([]byte(data))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.EnvironmentOverride != "lxc_privileged" {
+		t.Errorf("EnvironmentOverride = %q, want 'lxc_privileged'", cfg.EnvironmentOverride)
+	}
+	if len(cfg.SubnetAllowlist) != 1 || cfg.SubnetAllowlist[0] != "172.16.0.0/12" {
+		t.Errorf("SubnetAllowlist = %v, want ['172.16.0.0/12']", cfg.SubnetAllowlist)
+	}
+	if cfg.MaxHostsPerScan != 50 {
+		t.Errorf("MaxHostsPerScan = %d, want 50", cfg.MaxHostsPerScan)
+	}
+}
+
+func TestDiscoveryConfigUnmarshalJSON_EmptyObject(t *testing.T) {
+	var cfg DiscoveryConfig
+	err := cfg.UnmarshalJSON([]byte(`{}`))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should get defaults
+	defaults := DefaultDiscoveryConfig()
+	if cfg.MaxHostsPerScan != defaults.MaxHostsPerScan {
+		t.Errorf("MaxHostsPerScan = %d, want default %d", cfg.MaxHostsPerScan, defaults.MaxHostsPerScan)
+	}
+}
