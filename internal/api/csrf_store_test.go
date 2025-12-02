@@ -555,3 +555,74 @@ func TestCSRFTokenStore_Load_InvalidJSON(t *testing.T) {
 		t.Errorf("store should be empty after loading invalid JSON, got %d tokens", len(store.tokens))
 	}
 }
+
+func TestCSRFTokenStore_Load_LegacyFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create legacy format JSON (map[sessionID]tokenData) with snake_case fields
+	legacyJSON := `{
+		"session-1": {"token": "token-value-1", "session_id": "session-1", "expires_at": "2099-12-31T23:59:59Z"},
+		"session-2": {"token": "token-value-2", "session_id": "session-2", "expires_at": "2099-12-31T23:59:59Z"},
+		"session-expired": {"token": "expired-token", "session_id": "session-expired", "expires_at": "2020-01-01T00:00:00Z"}
+	}`
+	csrfFile := filepath.Join(tmpDir, "csrf_tokens.json")
+	if err := os.WriteFile(csrfFile, []byte(legacyJSON), 0600); err != nil {
+		t.Fatalf("failed to write legacy format JSON: %v", err)
+	}
+
+	store := &CSRFTokenStore{
+		tokens:   make(map[string]*CSRFToken),
+		dataPath: tmpDir,
+	}
+
+	store.load()
+
+	// Should load the two non-expired tokens (session-1 and session-2)
+	// The expired one (session-expired) should be skipped
+	if len(store.tokens) != 2 {
+		t.Errorf("expected 2 tokens from legacy format, got %d", len(store.tokens))
+	}
+
+	// Verify tokens are hashed and can be validated
+	// The legacy format stores raw tokens, which get hashed during migration
+	if !store.ValidateCSRFToken("session-1", "token-value-1") {
+		t.Error("should validate token for session-1 after legacy migration")
+	}
+	if !store.ValidateCSRFToken("session-2", "token-value-2") {
+		t.Error("should validate token for session-2 after legacy migration")
+	}
+}
+
+func TestCSRFTokenStore_Load_CurrentFormat_SkipsNilAndExpired(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create current format JSON with expired and nil entries (snake_case fields)
+	// This tests the nil check and expiration check in lines 238-240
+	currentJSON := `[
+		{"token_hash": "hash1", "session_key": "key1", "expires_at": "2099-12-31T23:59:59Z"},
+		null,
+		{"token_hash": "hash2", "session_key": "key2", "expires_at": "2020-01-01T00:00:00Z"}
+	]`
+	csrfFile := filepath.Join(tmpDir, "csrf_tokens.json")
+	if err := os.WriteFile(csrfFile, []byte(currentJSON), 0600); err != nil {
+		t.Fatalf("failed to write current format JSON: %v", err)
+	}
+
+	store := &CSRFTokenStore{
+		tokens:   make(map[string]*CSRFToken),
+		dataPath: tmpDir,
+	}
+
+	store.load()
+
+	// Should load only the valid, non-expired token (key1)
+	// null entry and expired entry (key2) should be skipped
+	if len(store.tokens) != 1 {
+		t.Errorf("expected 1 token after filtering, got %d", len(store.tokens))
+	}
+
+	// Verify the valid token was loaded
+	if _, exists := store.tokens["key1"]; !exists {
+		t.Error("expected key1 to be loaded")
+	}
+}
