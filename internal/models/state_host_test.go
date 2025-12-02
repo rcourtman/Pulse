@@ -202,3 +202,158 @@ func TestUpdateRecentlyResolved(t *testing.T) {
 	// Since RecentlyResolvedAlerts might be accessed differently, just verify no panic
 	// and method executes correctly
 }
+
+func TestSetConnectionHealth(t *testing.T) {
+	state := NewState()
+
+	// Set connection healthy
+	state.SetConnectionHealth("pve-cluster-1", true)
+
+	snapshot := state.GetSnapshot()
+	if healthy, ok := snapshot.ConnectionHealth["pve-cluster-1"]; !ok || !healthy {
+		t.Error("Expected connection to be healthy")
+	}
+
+	// Set connection unhealthy
+	state.SetConnectionHealth("pve-cluster-1", false)
+
+	snapshot = state.GetSnapshot()
+	if healthy, ok := snapshot.ConnectionHealth["pve-cluster-1"]; !ok || healthy {
+		t.Error("Expected connection to be unhealthy")
+	}
+
+	// Multiple connections
+	state.SetConnectionHealth("pve-cluster-2", true)
+	state.SetConnectionHealth("pbs-instance-1", true)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.ConnectionHealth) != 3 {
+		t.Errorf("Expected 3 connection health entries, got %d", len(snapshot.ConnectionHealth))
+	}
+}
+
+func TestRemoveConnectionHealth(t *testing.T) {
+	state := NewState()
+
+	// Set up connection health entries
+	state.SetConnectionHealth("pve-cluster-1", true)
+	state.SetConnectionHealth("pve-cluster-2", false)
+
+	// Remove one
+	state.RemoveConnectionHealth("pve-cluster-1")
+
+	snapshot := state.GetSnapshot()
+	if _, ok := snapshot.ConnectionHealth["pve-cluster-1"]; ok {
+		t.Error("Expected pve-cluster-1 to be removed")
+	}
+	if _, ok := snapshot.ConnectionHealth["pve-cluster-2"]; !ok {
+		t.Error("Expected pve-cluster-2 to still exist")
+	}
+
+	// Remove non-existent (should not panic)
+	state.RemoveConnectionHealth("non-existent")
+
+	// Remove remaining
+	state.RemoveConnectionHealth("pve-cluster-2")
+	snapshot = state.GetSnapshot()
+	if len(snapshot.ConnectionHealth) != 0 {
+		t.Errorf("Expected empty connection health map, got %d entries", len(snapshot.ConnectionHealth))
+	}
+}
+
+func TestUpdatePBSBackups(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+
+	// Add backups from first instance
+	backups1 := []PBSBackup{
+		{ID: "backup-1", Instance: "pbs-1", BackupTime: now},
+		{ID: "backup-2", Instance: "pbs-1", BackupTime: now.Add(-time.Hour)},
+	}
+	state.UpdatePBSBackups("pbs-1", backups1)
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.PBSBackups) != 2 {
+		t.Fatalf("Expected 2 backups, got %d", len(snapshot.PBSBackups))
+	}
+
+	// Add backups from second instance
+	backups2 := []PBSBackup{
+		{ID: "backup-3", Instance: "pbs-2", BackupTime: now.Add(-30 * time.Minute)},
+	}
+	state.UpdatePBSBackups("pbs-2", backups2)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PBSBackups) != 3 {
+		t.Fatalf("Expected 3 backups, got %d", len(snapshot.PBSBackups))
+	}
+
+	// Update first instance (should replace its backups)
+	backups1Updated := []PBSBackup{
+		{ID: "backup-4", Instance: "pbs-1", BackupTime: now.Add(time.Hour)},
+	}
+	state.UpdatePBSBackups("pbs-1", backups1Updated)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PBSBackups) != 2 {
+		t.Fatalf("Expected 2 backups after update, got %d", len(snapshot.PBSBackups))
+	}
+
+	// Verify pbs-1 backups were replaced
+	hasOldBackup := false
+	for _, b := range snapshot.PBSBackups {
+		if b.ID == "backup-1" || b.ID == "backup-2" {
+			hasOldBackup = true
+			break
+		}
+	}
+	if hasOldBackup {
+		t.Error("Old pbs-1 backups should have been replaced")
+	}
+}
+
+func TestUpdatePMGBackups(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+
+	// Add backups from first instance
+	backups1 := []PMGBackup{
+		{Filename: "backup-1.conf", Instance: "pmg-1", BackupTime: now},
+		{Filename: "backup-2.conf", Instance: "pmg-1", BackupTime: now.Add(-time.Hour)},
+	}
+	state.UpdatePMGBackups("pmg-1", backups1)
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.PMGBackups) != 2 {
+		t.Fatalf("Expected 2 backups, got %d", len(snapshot.PMGBackups))
+	}
+
+	// Backups should be sorted by time (newest first)
+	if snapshot.PMGBackups[0].BackupTime.Before(snapshot.PMGBackups[1].BackupTime) {
+		t.Error("Backups should be sorted by time descending")
+	}
+
+	// Add backups from second instance
+	backups2 := []PMGBackup{
+		{Filename: "backup-3.conf", Instance: "pmg-2", BackupTime: now.Add(-30 * time.Minute)},
+	}
+	state.UpdatePMGBackups("pmg-2", backups2)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PMGBackups) != 3 {
+		t.Fatalf("Expected 3 backups, got %d", len(snapshot.PMGBackups))
+	}
+
+	// Update first instance with empty (should remove its backups)
+	state.UpdatePMGBackups("pmg-1", []PMGBackup{})
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PMGBackups) != 1 {
+		t.Fatalf("Expected 1 backup after clearing pmg-1, got %d", len(snapshot.PMGBackups))
+	}
+	if snapshot.PMGBackups[0].Instance != "pmg-2" {
+		t.Error("Remaining backup should be from pmg-2")
+	}
+}
