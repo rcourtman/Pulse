@@ -13,6 +13,8 @@ interface DashboardFilterProps {
   setViewMode: (value: 'all' | 'vm' | 'lxc') => void;
   statusMode: () => 'all' | 'running' | 'degraded' | 'stopped';
   setStatusMode: (value: 'all' | 'running' | 'degraded' | 'stopped') => void;
+  backupMode: () => 'all' | 'needs-backup';
+  setBackupMode: (value: 'all' | 'needs-backup') => void;
   groupingMode: () => 'grouped' | 'flat';
   setGroupingMode: (value: 'grouped' | 'flat') => void;
   setSortKey: (value: string) => void;
@@ -369,6 +371,25 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
 
           <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
 
+          {/* Backup Filter */}
+          <button
+            type="button"
+            onClick={() => props.setBackupMode(props.backupMode() === 'needs-backup' ? 'all' : 'needs-backup')}
+            class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg transition-all ${props.backupMode() === 'needs-backup'
+              ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 shadow-sm'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+              }`}
+            title="Show guests with stale or missing backups"
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <path d="M12 8v4M12 16h.01" />
+            </svg>
+            Needs Backup
+          </button>
+
+          <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+
           {/* Grouping Mode Toggle */}
           <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
             <button
@@ -410,12 +431,14 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               props.setSortDirection('asc');
               props.setViewMode('all');
               props.setStatusMode('all');
+              props.setBackupMode('all');
               props.setGroupingMode('grouped');
             }}
             title="Reset all filters"
             class={`flex items-center justify-center px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${props.search() ||
               props.viewMode() !== 'all' ||
               props.statusMode() !== 'all' ||
+              props.backupMode() !== 'all' ||
               props.groupingMode() !== 'grouped'
               ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70'
               : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
