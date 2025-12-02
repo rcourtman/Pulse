@@ -14051,3 +14051,228 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		}
 	})
 }
+
+func TestDispatchAlert(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns false when onAlert is nil", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		alert := &Alert{
+			ID:   "test-alert",
+			Type: "cpu",
+		}
+
+		result := m.dispatchAlert(alert, false)
+
+		if result {
+			t.Error("expected false when onAlert callback is nil")
+		}
+	})
+
+	t.Run("returns false when alert is nil", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		called := false
+		m.SetAlertCallback(func(a *Alert) {
+			called = true
+		})
+
+		result := m.dispatchAlert(nil, false)
+
+		if result {
+			t.Error("expected false when alert is nil")
+		}
+		if called {
+			t.Error("callback should not be called for nil alert")
+		}
+	})
+
+	t.Run("returns false when activation state is pending", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		called := false
+		m.SetAlertCallback(func(a *Alert) {
+			called = true
+		})
+
+		m.mu.Lock()
+		m.config.ActivationState = ActivationPending
+		m.mu.Unlock()
+
+		alert := &Alert{
+			ID:   "test-alert",
+			Type: "cpu",
+		}
+
+		result := m.dispatchAlert(alert, false)
+
+		if result {
+			t.Error("expected false when activation is pending")
+		}
+		if called {
+			t.Error("callback should not be called when pending")
+		}
+	})
+
+	t.Run("returns false when activation state is snoozed", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		called := false
+		m.SetAlertCallback(func(a *Alert) {
+			called = true
+		})
+
+		m.mu.Lock()
+		m.config.ActivationState = ActivationSnoozed
+		m.mu.Unlock()
+
+		alert := &Alert{
+			ID:   "test-alert",
+			Type: "cpu",
+		}
+
+		result := m.dispatchAlert(alert, false)
+
+		if result {
+			t.Error("expected false when activation is snoozed")
+		}
+		if called {
+			t.Error("callback should not be called when snoozed")
+		}
+	})
+
+	t.Run("returns false for monitor-only alert", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		called := false
+		m.SetAlertCallback(func(a *Alert) {
+			called = true
+		})
+
+		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
+		m.mu.Unlock()
+
+		alert := &Alert{
+			ID:       "test-alert",
+			Type:     "cpu",
+			Metadata: map[string]interface{}{"monitorOnly": true},
+		}
+
+		result := m.dispatchAlert(alert, false)
+
+		if result {
+			t.Error("expected false for monitor-only alert")
+		}
+		if called {
+			t.Error("callback should not be called for monitor-only alert")
+		}
+	})
+
+	t.Run("dispatches synchronously when async is false", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		var receivedAlert *Alert
+		m.SetAlertCallback(func(a *Alert) {
+			receivedAlert = a
+		})
+
+		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
+		m.mu.Unlock()
+
+		alert := &Alert{
+			ID:           "test-alert",
+			Type:         "cpu",
+			ResourceName: "testvm",
+		}
+
+		result := m.dispatchAlert(alert, false)
+
+		if !result {
+			t.Error("expected true for successful dispatch")
+		}
+		if receivedAlert == nil {
+			t.Fatal("callback should have been called")
+		}
+		if receivedAlert.ID != alert.ID {
+			t.Error("alert ID should match")
+		}
+	})
+
+	t.Run("dispatches asynchronously when async is true", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		var receivedAlert *Alert
+		done := make(chan struct{})
+		m.SetAlertCallback(func(a *Alert) {
+			receivedAlert = a
+			close(done)
+		})
+
+		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
+		m.mu.Unlock()
+
+		alert := &Alert{
+			ID:           "test-alert",
+			Type:         "cpu",
+			ResourceName: "testvm",
+		}
+
+		result := m.dispatchAlert(alert, true)
+
+		if !result {
+			t.Error("expected true for successful dispatch")
+		}
+
+		// Wait for async callback
+		select {
+		case <-done:
+			// Success
+		case <-time.After(time.Second):
+			t.Fatal("async callback not called within timeout")
+		}
+
+		if receivedAlert == nil {
+			t.Fatal("callback should have been called")
+		}
+		if receivedAlert.ID != alert.ID {
+			t.Error("alert ID should match")
+		}
+	})
+
+	t.Run("clones alert before dispatch", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		var receivedAlert *Alert
+		m.SetAlertCallback(func(a *Alert) {
+			receivedAlert = a
+		})
+
+		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
+		m.mu.Unlock()
+
+		alert := &Alert{
+			ID:           "test-alert",
+			Type:         "cpu",
+			ResourceName: "testvm",
+		}
+
+		m.dispatchAlert(alert, false)
+
+		if receivedAlert == alert {
+			t.Error("alert should be cloned, not passed directly")
+		}
+	})
+}
