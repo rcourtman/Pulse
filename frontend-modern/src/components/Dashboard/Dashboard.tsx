@@ -20,6 +20,7 @@ import { getNodeDisplayName } from '@/utils/nodes';
 import { logger } from '@/utils/logger';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { getBackupInfo } from '@/utils/format';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
 type IdleCallbackHandle = number;
@@ -196,6 +197,7 @@ interface DashboardProps {
 
 type ViewMode = 'all' | 'vm' | 'lxc';
 type StatusMode = 'all' | 'running' | 'degraded' | 'stopped';
+type BackupMode = 'all' | 'needs-backup';
 type GroupingMode = 'grouped' | 'flat';
 
 export function Dashboard(props: DashboardProps) {
@@ -234,6 +236,11 @@ export function Dashboard(props: DashboardProps) {
       raw === 'all' || raw === 'running' || raw === 'degraded' || raw === 'stopped'
         ? (raw as StatusMode)
         : 'all',
+  });
+
+  // Backup filter mode - filter by backup status
+  const [backupMode, setBackupMode] = usePersistentSignal<BackupMode>('dashboardBackupMode', 'all', {
+    deserialize: (raw) => (raw === 'all' || raw === 'needs-backup' ? raw : 'all'),
   });
 
   // Grouping mode - grouped by node or flat list
@@ -426,7 +433,8 @@ export function Dashboard(props: DashboardProps) {
           sortDirection() !== 'asc' ||
           selectedNode() !== null ||
           viewMode() !== 'all' ||
-          statusMode() !== 'all';
+          statusMode() !== 'all' ||
+          backupMode() !== 'all';
 
         if (hasActiveFilters) {
           // Clear ALL filters including search text, tag filters, node selection, and view modes
@@ -437,6 +445,7 @@ export function Dashboard(props: DashboardProps) {
           setSelectedNode(null);
           setViewMode('all');
           setStatusMode('all');
+          setBackupMode('all');
 
           // Blur the search input if it's focused
           if (searchInputRef && document.activeElement === searchInputRef) {
@@ -500,6 +509,17 @@ export function Dashboard(props: DashboardProps) {
       });
     } else if (statusMode() === 'stopped') {
       guests = guests.filter((g) => g.status !== 'running');
+    }
+
+    // Filter by backup status
+    if (backupMode() === 'needs-backup') {
+      guests = guests.filter((g) => {
+        // Skip templates - they don't need backups
+        if (g.template) return false;
+        const backupInfo = getBackupInfo(g.lastBackup);
+        // Show guests that need backup: stale, critical, or never backed up
+        return backupInfo.status === 'stale' || backupInfo.status === 'critical' || backupInfo.status === 'never';
+      });
     }
 
     // Apply search/filter
@@ -800,6 +820,8 @@ export function Dashboard(props: DashboardProps) {
         setViewMode={setViewMode}
         statusMode={statusMode}
         setStatusMode={setStatusMode}
+        backupMode={backupMode}
+        setBackupMode={setBackupMode}
         groupingMode={groupingMode}
         setGroupingMode={setGroupingMode}
         setSortKey={setSortKey}
