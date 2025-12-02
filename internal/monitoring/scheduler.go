@@ -305,14 +305,8 @@ func (a *adaptiveIntervalSelector) SelectInterval(req IntervalRequest) time.Dura
 
 	score := clampFloat(req.StalenessScore, 0, 1)
 	span := float64(max - min)
+	// target is mathematically in [min, max] since score ∈ [0,1] and span >= 0
 	target := time.Duration(float64(min) + span*(1-score))
-
-	if target < min {
-		target = min
-	}
-	if target > max {
-		target = max
-	}
 
 	if req.ErrorCount > 0 {
 		penalty := 1 + a.errorPenalty*float64(req.ErrorCount)
