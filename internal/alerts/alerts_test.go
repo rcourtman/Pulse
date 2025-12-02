@@ -1715,6 +1715,292 @@ func TestCheckDiskHealthClearsExistingSamsung980Alerts(t *testing.T) {
 	}
 }
 
+func TestCheckDiskHealthHealthyDiskNoAlert(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	// Non-Samsung disk with PASSED health should not create alert
+	disk := proxmox.Disk{
+		DevPath: "/dev/sda",
+		Model:   "Western Digital WD40EFZX",
+		Serial:  "WD-WCC4E0123456",
+		Type:    "hdd",
+		Health:  "PASSED",
+		Wearout: 0, // N/A for HDD
+		Size:    4000787030016,
+	}
+
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	m.mu.RLock()
+	healthAlertID := "disk-health-test-instance-pve-node1-/dev/sda"
+	if _, exists := m.activeAlerts[healthAlertID]; exists {
+		m.mu.RUnlock()
+		t.Fatalf("expected no health alert for healthy disk with PASSED status")
+	}
+	m.mu.RUnlock()
+
+	// Also test with "OK" status
+	disk.Health = "OK"
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, exists := m.activeAlerts[healthAlertID]; exists {
+		t.Fatalf("expected no health alert for healthy disk with OK status")
+	}
+}
+
+func TestCheckDiskHealthFailedDiskCreatesAlert(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	// Non-Samsung disk with FAILED health should create alert
+	disk := proxmox.Disk{
+		DevPath: "/dev/sdb",
+		Model:   "Seagate ST2000DM008",
+		Serial:  "ZA123456",
+		Type:    "hdd",
+		Health:  "FAILED",
+		Wearout: 0,
+		Size:    2000398934016,
+	}
+
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	healthAlertID := "disk-health-test-instance-pve-node1-/dev/sdb"
+	alert, exists := m.activeAlerts[healthAlertID]
+	if !exists {
+		t.Fatalf("expected health alert to be created for failed disk")
+	}
+
+	if alert.Level != AlertLevelCritical {
+		t.Errorf("expected critical alert level, got %s", alert.Level)
+	}
+	if alert.Type != "disk-health" {
+		t.Errorf("expected type disk-health, got %s", alert.Type)
+	}
+	if alert.Node != "pve-node1" {
+		t.Errorf("expected node pve-node1, got %s", alert.Node)
+	}
+	if alert.Instance != "test-instance" {
+		t.Errorf("expected instance test-instance, got %s", alert.Instance)
+	}
+}
+
+func TestCheckDiskHealthRecoveryAlertCleared(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	disk := proxmox.Disk{
+		DevPath: "/dev/sdc",
+		Model:   "Intel SSDSC2BB480G4",
+		Serial:  "BTWL123456789",
+		Type:    "ssd",
+		Health:  "FAILED",
+		Wearout: 50,
+		Size:    480103981056,
+	}
+
+	// First check creates alert
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	healthAlertID := "disk-health-test-instance-pve-node1-/dev/sdc"
+	m.mu.RLock()
+	if _, exists := m.activeAlerts[healthAlertID]; !exists {
+		m.mu.RUnlock()
+		t.Fatalf("expected health alert to be created")
+	}
+	m.mu.RUnlock()
+
+	// Disk health recovers
+	disk.Health = "PASSED"
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, exists := m.activeAlerts[healthAlertID]; exists {
+		t.Fatalf("expected health alert to be cleared after recovery")
+	}
+}
+
+func TestCheckDiskHealthLowWearoutCreatesAlert(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	// SSD with low wearout (less than 10% life remaining)
+	disk := proxmox.Disk{
+		DevPath: "/dev/nvme1n1",
+		Model:   "Crucial CT1000MX500",
+		Serial:  "12345678ABCD",
+		Type:    "nvme",
+		Health:  "PASSED",
+		Wearout: 5, // Only 5% life remaining
+		Size:    1000204886016,
+	}
+
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	wearoutAlertID := "disk-wearout-test-instance-pve-node1-/dev/nvme1n1"
+	alert, exists := m.activeAlerts[wearoutAlertID]
+	if !exists {
+		t.Fatalf("expected wearout alert to be created for disk with low life remaining")
+	}
+
+	if alert.Level != AlertLevelWarning {
+		t.Errorf("expected warning alert level, got %s", alert.Level)
+	}
+	if alert.Type != "disk-wearout" {
+		t.Errorf("expected type disk-wearout, got %s", alert.Type)
+	}
+	if alert.Value != 5 {
+		t.Errorf("expected value 5, got %f", alert.Value)
+	}
+	if alert.Threshold != 10.0 {
+		t.Errorf("expected threshold 10.0, got %f", alert.Threshold)
+	}
+}
+
+func TestCheckDiskHealthWearoutAlertUpdatesOnSubsequentChecks(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	disk := proxmox.Disk{
+		DevPath: "/dev/nvme2n1",
+		Model:   "Kingston SA2000M8",
+		Serial:  "50026B768A123456",
+		Type:    "nvme",
+		Health:  "PASSED",
+		Wearout: 8,
+		Size:    500107862016,
+	}
+
+	// First check creates alert
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	wearoutAlertID := "disk-wearout-test-instance-pve-node1-/dev/nvme2n1"
+	m.mu.RLock()
+	alert, exists := m.activeAlerts[wearoutAlertID]
+	if !exists {
+		m.mu.RUnlock()
+		t.Fatalf("expected wearout alert to be created")
+	}
+	firstLastSeen := alert.LastSeen
+	m.mu.RUnlock()
+
+	// Wait a moment to ensure time difference
+	time.Sleep(10 * time.Millisecond)
+
+	// Wearout decreases further
+	disk.Wearout = 6
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	alert, exists = m.activeAlerts[wearoutAlertID]
+	if !exists {
+		t.Fatalf("expected wearout alert to still exist")
+	}
+
+	if !alert.LastSeen.After(firstLastSeen) {
+		t.Errorf("expected LastSeen to be updated, got %v (original: %v)", alert.LastSeen, firstLastSeen)
+	}
+	if alert.Value != 6 {
+		t.Errorf("expected value to be updated to 6, got %f", alert.Value)
+	}
+}
+
+func TestCheckDiskHealthWearoutRecoveryAlertCleared(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	disk := proxmox.Disk{
+		DevPath: "/dev/sdd",
+		Model:   "ADATA SU800",
+		Serial:  "2J012345678",
+		Type:    "ssd",
+		Health:  "PASSED",
+		Wearout: 5,
+		Size:    256060514304,
+	}
+
+	// First check creates wearout alert
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	wearoutAlertID := "disk-wearout-test-instance-pve-node1-/dev/sdd"
+	m.mu.RLock()
+	if _, exists := m.activeAlerts[wearoutAlertID]; !exists {
+		m.mu.RUnlock()
+		t.Fatalf("expected wearout alert to be created")
+	}
+	m.mu.RUnlock()
+
+	// Wearout recovers (replaced drive, or misread corrected)
+	disk.Wearout = 95
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, exists := m.activeAlerts[wearoutAlertID]; exists {
+		t.Fatalf("expected wearout alert to be cleared after recovery")
+	}
+}
+
+func TestCheckDiskHealthEmptyOrUnknownHealthNoAlert(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	disk := proxmox.Disk{
+		DevPath: "/dev/sde",
+		Model:   "Generic USB Storage",
+		Serial:  "USB123456",
+		Type:    "hdd",
+		Health:  "", // Empty health - SMART not supported
+		Wearout: 0,
+		Size:    128043712512,
+	}
+
+	healthAlertID := "disk-health-test-instance-pve-node1-/dev/sde"
+
+	// Empty health should not create alert
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	m.mu.RLock()
+	if _, exists := m.activeAlerts[healthAlertID]; exists {
+		m.mu.RUnlock()
+		t.Fatalf("expected no health alert for disk with empty health status")
+	}
+	m.mu.RUnlock()
+
+	// UNKNOWN health should not create alert
+	disk.Health = "UNKNOWN"
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	m.mu.RLock()
+	if _, exists := m.activeAlerts[healthAlertID]; exists {
+		m.mu.RUnlock()
+		t.Fatalf("expected no health alert for disk with UNKNOWN health status")
+	}
+	m.mu.RUnlock()
+
+	// Lowercase "unknown" should also not create alert (normalized to uppercase)
+	disk.Health = "unknown"
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, exists := m.activeAlerts[healthAlertID]; exists {
+		t.Fatalf("expected no health alert for disk with lowercase unknown health status")
+	}
+}
+
 func TestDisableAllStorageClearsExistingAlerts(t *testing.T) {
 	m := newTestManager(t)
 
