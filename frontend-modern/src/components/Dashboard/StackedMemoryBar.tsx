@@ -42,38 +42,46 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
         if (props.total <= 0) return [];
 
         const balloon = props.balloon || 0;
-        // Active memory is used minus balloon (since balloon is "used" but reclaimed)
-        // Note: This is a simplification. Proxmox reports 'used' including balloon.
-        const active = Math.max(0, props.used - balloon);
 
-        // Calculate percentages relative to RAM total (swap is extra)
-        // We visualize swap as an overlay or separate segment if we want to show it relative to RAM
-        // But typically swap is separate. 
-        // Let's stack RAM components (Active + Balloon) within the RAM bar.
-        // And maybe show Swap as a separate indicator or just in tooltip?
-        // The user asked for "Detailed Memory Composition".
-        // Let's stack Active and Balloon within the main bar.
-        // If Swap is used, we can perhaps show it as a segment that "overflows" or just a separate color if we treat total as RAM+Swap?
-        // Standard approach: Bar represents RAM. Segments are Active, Balloon.
-        // Swap is usually separate. But we can include it if we want to show "Memory Pressure".
+        // Proxmox balloon semantics:
+        // - balloon = 0: ballooning not enabled/configured
+        // - balloon = total (maxmem): ballooning configured but at max (no actual ballooning)
+        // - balloon < total: active ballooning, guest limited to 'balloon' bytes
+        //
+        // Only show balloon segment when actual ballooning is in effect
+        const hasActiveBallooning = balloon > 0 && balloon < props.total;
 
-        // Let's stick to RAM composition for the bar: Active (Green), Balloon (Yellow).
-        // Swap usage will be shown in tooltip and maybe change the bar color if critical?
-        // Actually, let's try to include Swap if it's significant, but it might be confusing if it exceeds 100% of RAM.
+        // Used memory is what the guest is actually consuming
+        const usedPercent = (props.used / props.total) * 100;
 
-        // Alternative: The bar is RAM.
-        // Green: Active
-        // Yellow: Balloon
+        if (hasActiveBallooning) {
+            // With active ballooning:
+            // - Green: actual used memory
+            // - Yellow: balloon limit marker (shows where the guest is capped)
+            // The balloon limit shows as a segment from used to balloon
+            const balloonLimitPercent = Math.max(0, (balloon / props.total) * 100 - usedPercent);
 
-        const activePercent = (active / props.total) * 100;
-        const balloonPercent = (balloon / props.total) * 100;
+            const segs = [
+                { type: 'Active', bytes: props.used, percent: usedPercent, color: MEMORY_COLORS.active },
+            ];
 
-        const segs = [
-            { type: 'Active', bytes: active, percent: activePercent, color: MEMORY_COLORS.active },
-            { type: 'Balloon', bytes: balloon, percent: balloonPercent, color: MEMORY_COLORS.balloon },
+            // Only show balloon segment if there's room between used and balloon limit
+            if (balloonLimitPercent > 0 && balloon > props.used) {
+                segs.push({
+                    type: 'Balloon',
+                    bytes: balloon - props.used,
+                    percent: balloonLimitPercent,
+                    color: MEMORY_COLORS.balloon,
+                });
+            }
+
+            return segs.filter(s => s.bytes > 0);
+        }
+
+        // No active ballooning - just show used memory as green
+        return [
+            { type: 'Active', bytes: props.used, percent: usedPercent, color: MEMORY_COLORS.active },
         ].filter(s => s.bytes > 0);
-
-        return segs;
     });
 
     const swapPercent = createMemo(() => {
@@ -185,15 +193,15 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
 
                             {/* RAM Breakdown */}
                             <div class="flex justify-between gap-3 py-0.5">
-                                <span class="text-green-400">Active</span>
+                                <span class="text-green-400">Used</span>
                                 <span class="whitespace-nowrap text-gray-300">
-                                    {formatBytes(Math.max(0, props.used - (props.balloon || 0)), 0)}
+                                    {formatBytes(props.used, 0)}
                                 </span>
                             </div>
 
-                            <Show when={(props.balloon || 0) > 0}>
+                            <Show when={(props.balloon || 0) > 0 && props.balloon < props.total}>
                                 <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
-                                    <span class="text-yellow-400">Balloon</span>
+                                    <span class="text-yellow-400">Balloon Limit</span>
                                     <span class="whitespace-nowrap text-gray-300">
                                         {formatBytes(props.balloon || 0, 0)}
                                     </span>
