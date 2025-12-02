@@ -1069,3 +1069,90 @@ func TestLogAuditEvent_EmptyFields(t *testing.T) {
 	LogAuditEvent("", "", "", "", false, "")
 	// If we got here without panic, the test passes
 }
+
+func TestLoadTrustedProxyCIDRs_InvalidCIDR(t *testing.T) {
+	// Test that invalid CIDR is logged and skipped
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "invalid/cidr, 10.0.0.0/8")
+	resetTrustedProxyConfig()
+
+	// Trigger loading
+	_ = isTrustedProxyIP("10.0.0.1")
+
+	// The valid CIDR should still work
+	if !isTrustedProxyIP("10.0.0.1") {
+		t.Error("10.0.0.1 should be trusted after loading valid CIDR")
+	}
+}
+
+func TestLoadTrustedProxyCIDRs_InvalidIP(t *testing.T) {
+	// Test that invalid IP (no CIDR notation) is logged and skipped
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "not-an-ip, 192.168.1.1")
+	resetTrustedProxyConfig()
+
+	// Trigger loading
+	_ = isTrustedProxyIP("192.168.1.1")
+
+	// The valid IP should still work
+	if !isTrustedProxyIP("192.168.1.1") {
+		t.Error("192.168.1.1 should be trusted after loading valid IP")
+	}
+}
+
+func TestLoadTrustedProxyCIDRs_IPv6(t *testing.T) {
+	// Test IPv6 address handling (uses 128 bits for mask)
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "::1, 2001:db8::1")
+	resetTrustedProxyConfig()
+
+	// Trigger loading
+	_ = isTrustedProxyIP("::1")
+
+	// IPv6 addresses should be trusted
+	if !isTrustedProxyIP("::1") {
+		t.Error("::1 should be trusted")
+	}
+	if !isTrustedProxyIP("2001:db8::1") {
+		t.Error("2001:db8::1 should be trusted")
+	}
+}
+
+func TestLoadTrustedProxyCIDRs_EmptyEntries(t *testing.T) {
+	// Test that empty entries in the list are skipped
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "10.0.0.0/8, , ,  , 192.168.0.0/16")
+	resetTrustedProxyConfig()
+
+	// Trigger loading
+	_ = isTrustedProxyIP("10.0.0.1")
+
+	// Both valid CIDRs should work
+	if !isTrustedProxyIP("10.0.0.1") {
+		t.Error("10.0.0.1 should be trusted")
+	}
+	if !isTrustedProxyIP("192.168.1.1") {
+		t.Error("192.168.1.1 should be trusted")
+	}
+}
+
+func TestLoadTrustedProxyCIDRs_MixedValidInvalid(t *testing.T) {
+	// Test mix of valid CIDRs, valid IPs, invalid CIDRs, and invalid IPs
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "10.0.0.0/8, bad-cidr/99, 172.16.0.1, not-valid, ::1")
+	resetTrustedProxyConfig()
+
+	// Trigger loading
+	_ = isTrustedProxyIP("10.0.0.1")
+
+	// Valid entries should work
+	if !isTrustedProxyIP("10.0.0.1") {
+		t.Error("10.0.0.1 should be trusted (from valid CIDR)")
+	}
+	if !isTrustedProxyIP("172.16.0.1") {
+		t.Error("172.16.0.1 should be trusted (from valid IP)")
+	}
+	if !isTrustedProxyIP("::1") {
+		t.Error("::1 should be trusted (from valid IPv6)")
+	}
+
+	// Invalid entries should not cause problems
+	if isTrustedProxyIP("192.168.1.1") {
+		t.Error("192.168.1.1 should not be trusted (not in any valid entry)")
+	}
+}
