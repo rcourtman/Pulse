@@ -655,3 +655,97 @@ func TestParseReplicationJob_StatusFallback(t *testing.T) {
 		t.Errorf("Status = %q, want %q (from state)", job.Status, "syncing")
 	}
 }
+
+func TestParseReplicationJob_JobIDFallback(t *testing.T) {
+	// Test fallback from "id" to "jobid" field when id is missing
+	entry := map[string]json.RawMessage{
+		"jobid": json.RawMessage(`"200-1"`),
+		"guest": json.RawMessage(`200`),
+	}
+
+	job := parseReplicationJob(entry)
+
+	if job.ID != "200-1" {
+		t.Errorf("ID = %q, want %q (from jobid fallback)", job.ID, "200-1")
+	}
+	if job.JobNumber != 1 {
+		t.Errorf("JobNumber = %d, want %d (parsed from ID)", job.JobNumber, 1)
+	}
+}
+
+func TestParseReplicationJob_JobNumField(t *testing.T) {
+	// Test jobnum field takes precedence over parsing from ID
+	entry := map[string]json.RawMessage{
+		"id":     json.RawMessage(`"100-0"`),
+		"jobnum": json.RawMessage(`5`),
+	}
+
+	job := parseReplicationJob(entry)
+
+	if job.JobNumber != 5 {
+		t.Errorf("JobNumber = %d, want %d (from jobnum field)", job.JobNumber, 5)
+	}
+}
+
+func TestParseReplicationJob_DurationFields(t *testing.T) {
+	// Test last_sync_duration field
+	entry := map[string]json.RawMessage{
+		"id":                 json.RawMessage(`"100-0"`),
+		"last_sync_duration": json.RawMessage(`120`),
+		"duration":           json.RawMessage(`60`),
+	}
+
+	job := parseReplicationJob(entry)
+
+	if job.LastSyncDurationSeconds != 120 {
+		t.Errorf("LastSyncDurationSeconds = %d, want %d", job.LastSyncDurationSeconds, 120)
+	}
+	if job.DurationSeconds != 60 {
+		t.Errorf("DurationSeconds = %d, want %d", job.DurationSeconds, 60)
+	}
+}
+
+func TestParseReplicationJob_DurationFallback(t *testing.T) {
+	// Test fallback to last-sync-duration when last_sync_duration is missing
+	entry := map[string]json.RawMessage{
+		"id":                 json.RawMessage(`"100-0"`),
+		"last-sync-duration": json.RawMessage(`90`),
+	}
+
+	job := parseReplicationJob(entry)
+
+	if job.LastSyncDurationSeconds != 90 {
+		t.Errorf("LastSyncDurationSeconds = %d, want %d (from last-sync-duration fallback)", job.LastSyncDurationSeconds, 90)
+	}
+}
+
+func TestParseReplicationJob_NextSyncFields(t *testing.T) {
+	// Test next_sync field
+	entry := map[string]json.RawMessage{
+		"id":        json.RawMessage(`"100-0"`),
+		"next_sync": json.RawMessage(`1736936500`),
+	}
+
+	job := parseReplicationJob(entry)
+
+	if job.NextSyncUnix != 1736936500 {
+		t.Errorf("NextSyncUnix = %d, want %d", job.NextSyncUnix, 1736936500)
+	}
+	if job.NextSyncTime == nil {
+		t.Error("NextSyncTime should not be nil")
+	}
+}
+
+func TestParseReplicationJob_NextSyncFallback(t *testing.T) {
+	// Test fallback to next-sync when next_sync is missing
+	entry := map[string]json.RawMessage{
+		"id":        json.RawMessage(`"100-0"`),
+		"next-sync": json.RawMessage(`1736936600`),
+	}
+
+	job := parseReplicationJob(entry)
+
+	if job.NextSyncUnix != 1736936600 {
+		t.Errorf("NextSyncUnix = %d, want %d (from next-sync fallback)", job.NextSyncUnix, 1736936600)
+	}
+}
