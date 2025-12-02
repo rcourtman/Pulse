@@ -13050,3 +13050,392 @@ func TestCheckHostComprehensive(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckPBSComprehensive(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns early when alerts disabled", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.Enabled = false
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{
+			ID:   "pbs1",
+			Name: "testpbs",
+			CPU:  95.0,
+		}
+
+		m.CheckPBS(pbs)
+
+		m.mu.RLock()
+		alertCount := len(m.activeAlerts)
+		m.mu.RUnlock()
+
+		if alertCount != 0 {
+			t.Errorf("expected no alerts when disabled, got %d", alertCount)
+		}
+	})
+
+	t.Run("DisableAllPBS clears existing alerts", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["pbs1-cpu"] = &Alert{ID: "pbs1-cpu", Type: "cpu"}
+		m.activeAlerts["pbs1-memory"] = &Alert{ID: "pbs1-memory", Type: "memory"}
+		m.activeAlerts["pbs-offline-pbs1"] = &Alert{ID: "pbs-offline-pbs1", Type: "connectivity"}
+		m.offlineConfirmations["pbs1"] = 3
+		m.config.DisableAllPBS = true
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{
+			ID:   "pbs1",
+			Name: "testpbs",
+		}
+
+		m.CheckPBS(pbs)
+
+		m.mu.RLock()
+		_, cpuExists := m.activeAlerts["pbs1-cpu"]
+		_, memExists := m.activeAlerts["pbs1-memory"]
+		_, offlineExists := m.activeAlerts["pbs-offline-pbs1"]
+		_, confirmExists := m.offlineConfirmations["pbs1"]
+		m.mu.RUnlock()
+
+		if cpuExists {
+			t.Error("expected CPU alert to be cleared")
+		}
+		if memExists {
+			t.Error("expected memory alert to be cleared")
+		}
+		if offlineExists {
+			t.Error("expected offline alert to be cleared")
+		}
+		if confirmExists {
+			t.Error("expected offline confirmation to be cleared")
+		}
+	})
+
+	t.Run("override with Disabled clears alerts", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["pbs1-cpu"] = &Alert{ID: "pbs1-cpu", Type: "cpu"}
+		m.activeAlerts["pbs1-memory"] = &Alert{ID: "pbs1-memory", Type: "memory"}
+		m.activeAlerts["pbs-offline-pbs1"] = &Alert{ID: "pbs-offline-pbs1", Type: "connectivity"}
+		m.offlineConfirmations["pbs1"] = 3
+		m.config.Overrides = map[string]ThresholdConfig{
+			"pbs1": {Disabled: true},
+		}
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{
+			ID:   "pbs1",
+			Name: "testpbs",
+		}
+
+		m.CheckPBS(pbs)
+
+		m.mu.RLock()
+		_, cpuExists := m.activeAlerts["pbs1-cpu"]
+		_, memExists := m.activeAlerts["pbs1-memory"]
+		_, offlineExists := m.activeAlerts["pbs-offline-pbs1"]
+		_, confirmExists := m.offlineConfirmations["pbs1"]
+		m.mu.RUnlock()
+
+		if cpuExists {
+			t.Error("expected CPU alert to be cleared")
+		}
+		if memExists {
+			t.Error("expected memory alert to be cleared")
+		}
+		if offlineExists {
+			t.Error("expected offline alert to be cleared")
+		}
+		if confirmExists {
+			t.Error("expected offline confirmation to be cleared")
+		}
+	})
+
+	t.Run("DisableAllPBSOffline clears offline alert", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["pbs-offline-pbs1"] = &Alert{ID: "pbs-offline-pbs1", Type: "connectivity"}
+		m.offlineConfirmations["pbs1"] = 3
+		m.config.DisableAllPBSOffline = true
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{
+			ID:     "pbs1",
+			Name:   "testpbs",
+			Status: "offline",
+		}
+
+		m.CheckPBS(pbs)
+
+		m.mu.RLock()
+		_, offlineExists := m.activeAlerts["pbs-offline-pbs1"]
+		_, confirmExists := m.offlineConfirmations["pbs1"]
+		m.mu.RUnlock()
+
+		if offlineExists {
+			t.Error("expected offline alert to be cleared when DisableAllPBSOffline is true")
+		}
+		if confirmExists {
+			t.Error("expected offline confirmation to be cleared")
+		}
+	})
+
+	t.Run("checks CPU threshold when online", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults = ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{
+			ID:     "pbs1",
+			Name:   "testpbs",
+			Host:   "pbshost",
+			Status: "online",
+			CPU:    95.0,
+		}
+
+		m.CheckPBS(pbs)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pbs1-cpu"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected CPU alert")
+		}
+	})
+
+	t.Run("checks memory threshold when online", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults = ThresholdConfig{
+			Memory: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{
+			ID:     "pbs1",
+			Name:   "testpbs",
+			Host:   "pbshost",
+			Status: "online",
+			Memory: 95.0,
+		}
+
+		m.CheckPBS(pbs)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pbs1-memory"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected memory alert")
+		}
+	})
+
+	t.Run("skips metrics when PBS is offline", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults = ThresholdConfig{
+			CPU:    &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+			Memory: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{
+			ID:     "pbs1",
+			Name:   "testpbs",
+			Status: "offline",
+			CPU:    95.0,
+			Memory: 95.0,
+		}
+
+		m.CheckPBS(pbs)
+
+		m.mu.RLock()
+		_, cpuExists := m.activeAlerts["pbs1-cpu"]
+		_, memExists := m.activeAlerts["pbs1-memory"]
+		m.mu.RUnlock()
+
+		if cpuExists {
+			t.Error("expected no CPU alert when offline")
+		}
+		if memExists {
+			t.Error("expected no memory alert when offline")
+		}
+	})
+
+	t.Run("applies override thresholds", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults = ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.config.Overrides = map[string]ThresholdConfig{
+			"pbs1": {
+				CPU: &HysteresisThreshold{Trigger: 99.0, Clear: 95.0}, // Higher threshold
+			},
+		}
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{
+			ID:     "pbs1",
+			Name:   "testpbs",
+			Status: "online",
+			CPU:    95.0, // Below override trigger
+		}
+
+		m.CheckPBS(pbs)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["pbs1-cpu"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected no alert due to higher override threshold")
+		}
+	})
+
+	t.Run("checks offline status", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		// Pre-populate confirmation count to bypass waiting period
+		m.offlineConfirmations["pbs1"] = 2
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{
+			ID:     "pbs1",
+			Name:   "testpbs",
+			Status: "offline",
+		}
+
+		m.CheckPBS(pbs)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pbs-offline-pbs1"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected offline alert")
+		}
+		if alert.Type != "offline" {
+			t.Errorf("expected offline type, got %s", alert.Type)
+		}
+	})
+
+	t.Run("checks connection health error", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		// Pre-populate confirmation count to bypass waiting period
+		m.offlineConfirmations["pbs1"] = 2
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{
+			ID:               "pbs1",
+			Name:             "testpbs",
+			Status:           "online",
+			ConnectionHealth: "error",
+		}
+
+		m.CheckPBS(pbs)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pbs-offline-pbs1"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected offline alert for connection health error")
+		}
+	})
+
+	t.Run("checks connection health unhealthy", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		// Pre-populate confirmation count to bypass waiting period
+		m.offlineConfirmations["pbs1"] = 2
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{
+			ID:               "pbs1",
+			Name:             "testpbs",
+			Status:           "online",
+			ConnectionHealth: "unhealthy",
+		}
+
+		m.CheckPBS(pbs)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pbs-offline-pbs1"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected offline alert for connection health unhealthy")
+		}
+	})
+
+	t.Run("clears offline alert when back online", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["pbs-offline-pbs1"] = &Alert{ID: "pbs-offline-pbs1", Type: "connectivity"}
+		m.offlineConfirmations["pbs1"] = 5
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{
+			ID:               "pbs1",
+			Name:             "testpbs",
+			Status:           "online",
+			ConnectionHealth: "healthy",
+		}
+
+		m.CheckPBS(pbs)
+
+		m.mu.RLock()
+		_, offlineExists := m.activeAlerts["pbs-offline-pbs1"]
+		_, confirmExists := m.offlineConfirmations["pbs1"]
+		m.mu.RUnlock()
+
+		if offlineExists {
+			t.Error("expected offline alert to be cleared when back online")
+		}
+		if confirmExists {
+			t.Error("expected offline confirmation to be cleared")
+		}
+	})
+}
