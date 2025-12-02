@@ -10,6 +10,7 @@ installer tooling.
 
 - **Backend (`cmd/`, `internal/`, `pkg/`)** – Go 1.23+ web server that embeds
   the built frontend and exposes REST + WebSocket APIs.
+- **Architecture (`ARCHITECTURE.md`)** – High-level system design diagrams and explanations.
 - **Frontend (`frontend-modern/`)** – Vite + React app built with TypeScript.
 - **Agents (`cmd/pulse-*-agent`)** – Go binaries distributed alongside Pulse for
   host and Docker telemetry.

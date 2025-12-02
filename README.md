@@ -58,6 +58,7 @@ Access the dashboard at `http://<your-ip>:7655`.
 - **[Configuration](docs/CONFIGURATION.md)**: Setup authentication, notifications, and advanced settings.
 - **[Security](SECURITY.md)**: Learn about Pulse's security model and best practices.
 - **[API Reference](docs/API.md)**: Integrate Pulse with your own tools.
+- **[Architecture](ARCHITECTURE.md)**: High-level system design and data flow.
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)**: Solutions to common issues.
 
 ## ❤️ Support Pulse Development
