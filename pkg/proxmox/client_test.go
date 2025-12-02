@@ -1,10 +1,14 @@
 package proxmox
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestDiskUnmarshalWearout(t *testing.T) {
@@ -1250,5 +1254,34 @@ func TestGetMHzString(t *testing.T) {
 				t.Errorf("GetMHzString() = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestGetNodes_InvalidJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		// Return invalid JSON that will cause decode error
+		fmt.Fprint(w, `{"data": [{"node": "test" invalid json}`)
+	}))
+	defer server.Close()
+
+	cfg := ClientConfig{
+		Host:       server.URL,
+		TokenName:  "test@pve!token",
+		TokenValue: "secret",
+		VerifySSL:  false,
+		Timeout:    2 * time.Second,
+	}
+
+	client, err := NewClient(cfg)
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+
+	ctx := context.Background()
+	_, err = client.GetNodes(ctx)
+	if err == nil {
+		t.Fatal("expected JSON decode error, got nil")
 	}
 }
