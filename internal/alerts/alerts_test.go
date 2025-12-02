@@ -13439,3 +13439,294 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckPMGComprehensive(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns early when alerts disabled", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.Enabled = false
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "testpmg",
+		}
+
+		m.CheckPMG(pmg)
+
+		m.mu.RLock()
+		alertCount := len(m.activeAlerts)
+		m.mu.RUnlock()
+
+		if alertCount != 0 {
+			t.Errorf("expected no alerts when disabled, got %d", alertCount)
+		}
+	})
+
+	t.Run("DisableAllPMG clears existing alerts", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["pmg1-queue-total"] = &Alert{ID: "pmg1-queue-total", Type: "queue-total"}
+		m.activeAlerts["pmg1-queue-deferred"] = &Alert{ID: "pmg1-queue-deferred", Type: "queue-deferred"}
+		m.activeAlerts["pmg1-queue-hold"] = &Alert{ID: "pmg1-queue-hold", Type: "queue-hold"}
+		m.activeAlerts["pmg1-oldest-message"] = &Alert{ID: "pmg1-oldest-message", Type: "oldest-message"}
+		m.activeAlerts["pmg-offline-pmg1"] = &Alert{ID: "pmg-offline-pmg1", Type: "connectivity"}
+		m.offlineConfirmations["pmg1"] = 3
+		m.config.DisableAllPMG = true
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "testpmg",
+		}
+
+		m.CheckPMG(pmg)
+
+		m.mu.RLock()
+		_, queueTotalExists := m.activeAlerts["pmg1-queue-total"]
+		_, queueDeferredExists := m.activeAlerts["pmg1-queue-deferred"]
+		_, queueHoldExists := m.activeAlerts["pmg1-queue-hold"]
+		_, oldestMsgExists := m.activeAlerts["pmg1-oldest-message"]
+		_, offlineExists := m.activeAlerts["pmg-offline-pmg1"]
+		_, confirmExists := m.offlineConfirmations["pmg1"]
+		m.mu.RUnlock()
+
+		if queueTotalExists {
+			t.Error("expected queue-total alert to be cleared")
+		}
+		if queueDeferredExists {
+			t.Error("expected queue-deferred alert to be cleared")
+		}
+		if queueHoldExists {
+			t.Error("expected queue-hold alert to be cleared")
+		}
+		if oldestMsgExists {
+			t.Error("expected oldest-message alert to be cleared")
+		}
+		if offlineExists {
+			t.Error("expected offline alert to be cleared")
+		}
+		if confirmExists {
+			t.Error("expected offline confirmation to be cleared")
+		}
+	})
+
+	t.Run("override with Disabled clears alerts", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["pmg1-queue-total"] = &Alert{ID: "pmg1-queue-total", Type: "queue-total"}
+		m.activeAlerts["pmg1-oldest-message"] = &Alert{ID: "pmg1-oldest-message", Type: "oldest-message"}
+		m.activeAlerts["pmg-offline-pmg1"] = &Alert{ID: "pmg-offline-pmg1", Type: "connectivity"}
+		m.offlineConfirmations["pmg1"] = 3
+		m.config.Overrides = map[string]ThresholdConfig{
+			"pmg1": {Disabled: true},
+		}
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "testpmg",
+		}
+
+		m.CheckPMG(pmg)
+
+		m.mu.RLock()
+		_, queueExists := m.activeAlerts["pmg1-queue-total"]
+		_, oldestExists := m.activeAlerts["pmg1-oldest-message"]
+		_, offlineExists := m.activeAlerts["pmg-offline-pmg1"]
+		_, confirmExists := m.offlineConfirmations["pmg1"]
+		m.mu.RUnlock()
+
+		if queueExists {
+			t.Error("expected queue alert to be cleared")
+		}
+		if oldestExists {
+			t.Error("expected oldest-message alert to be cleared")
+		}
+		if offlineExists {
+			t.Error("expected offline alert to be cleared")
+		}
+		if confirmExists {
+			t.Error("expected offline confirmation to be cleared")
+		}
+	})
+
+	t.Run("DisableAllPMGOffline clears offline alert", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["pmg-offline-pmg1"] = &Alert{ID: "pmg-offline-pmg1", Type: "connectivity"}
+		m.offlineConfirmations["pmg1"] = 3
+		m.config.DisableAllPMGOffline = true
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:     "pmg1",
+			Name:   "testpmg",
+			Status: "offline",
+		}
+
+		m.CheckPMG(pmg)
+
+		m.mu.RLock()
+		_, offlineExists := m.activeAlerts["pmg-offline-pmg1"]
+		_, confirmExists := m.offlineConfirmations["pmg1"]
+		m.mu.RUnlock()
+
+		if offlineExists {
+			t.Error("expected offline alert to be cleared when DisableAllPMGOffline is true")
+		}
+		if confirmExists {
+			t.Error("expected offline confirmation to be cleared")
+		}
+	})
+
+	t.Run("checks offline status", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		// Pre-populate confirmation count to bypass waiting period (3 required)
+		m.offlineConfirmations["pmg1"] = 2
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:     "pmg1",
+			Name:   "testpmg",
+			Status: "offline",
+		}
+
+		m.CheckPMG(pmg)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg-offline-pmg1"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected offline alert")
+		}
+		if alert.Type != "offline" {
+			t.Errorf("expected offline type, got %s", alert.Type)
+		}
+	})
+
+	t.Run("checks connection health error", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		// Pre-populate confirmation count to bypass waiting period
+		m.offlineConfirmations["pmg1"] = 2
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:               "pmg1",
+			Name:             "testpmg",
+			Status:           "online",
+			ConnectionHealth: "error",
+		}
+
+		m.CheckPMG(pmg)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg-offline-pmg1"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected offline alert for connection health error")
+		}
+	})
+
+	t.Run("checks connection health unhealthy", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		// Pre-populate confirmation count to bypass waiting period
+		m.offlineConfirmations["pmg1"] = 2
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:               "pmg1",
+			Name:             "testpmg",
+			Status:           "online",
+			ConnectionHealth: "unhealthy",
+		}
+
+		m.CheckPMG(pmg)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg-offline-pmg1"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected offline alert for connection health unhealthy")
+		}
+	})
+
+	t.Run("clears offline alert when back online", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["pmg-offline-pmg1"] = &Alert{ID: "pmg-offline-pmg1", Type: "connectivity"}
+		m.offlineConfirmations["pmg1"] = 5
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:               "pmg1",
+			Name:             "testpmg",
+			Status:           "online",
+			ConnectionHealth: "healthy",
+		}
+
+		m.CheckPMG(pmg)
+
+		m.mu.RLock()
+		_, offlineExists := m.activeAlerts["pmg-offline-pmg1"]
+		_, confirmExists := m.offlineConfirmations["pmg1"]
+		m.mu.RUnlock()
+
+		if offlineExists {
+			t.Error("expected offline alert to be cleared when back online")
+		}
+		if confirmExists {
+			t.Error("expected offline confirmation to be cleared")
+		}
+	})
+
+	t.Run("skips metrics when PMG is offline", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		pmg := models.PMGInstance{
+			ID:     "pmg1",
+			Name:   "testpmg",
+			Status: "offline",
+		}
+
+		m.CheckPMG(pmg)
+
+		m.mu.RLock()
+		var queueAlertCount int
+		for alertID := range m.activeAlerts {
+			if strings.Contains(alertID, "pmg1-queue") || strings.Contains(alertID, "pmg1-oldest") {
+				queueAlertCount++
+			}
+		}
+		m.mu.RUnlock()
+
+		if queueAlertCount != 0 {
+			t.Error("expected no queue alerts when offline")
+		}
+	})
+}
