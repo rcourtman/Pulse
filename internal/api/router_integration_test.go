@@ -784,7 +784,21 @@ func TestSessionCookieAllowsAuthenticatedAccess(t *testing.T) {
 }
 
 func TestPublicURLDetectionUsesForwardedHeaders(t *testing.T) {
-	srv := newIntegrationServer(t)
+	const apiToken = "public-url-detection-token-12345"
+
+	// Configure 127.0.0.1 as trusted proxy so X-Forwarded-* headers are read
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
+	api.ResetTrustedProxyConfigForTests()
+
+	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
+		cfg.APITokenEnabled = true
+		record, err := config.NewAPITokenRecord(apiToken, "Public URL detection test", nil)
+		if err != nil {
+			t.Fatalf("create API token record: %v", err)
+		}
+		cfg.APITokens = []config.APITokenRecord{*record}
+		cfg.SortAPITokens()
+	})
 
 	req, err := http.NewRequest(http.MethodGet, srv.server.URL+"/api/health", nil)
 	if err != nil {
@@ -793,6 +807,7 @@ func TestPublicURLDetectionUsesForwardedHeaders(t *testing.T) {
 	req.Header.Set("X-Forwarded-Proto", "https")
 	req.Header.Set("X-Forwarded-Host", "pulse.example.com")
 	req.Header.Set("X-Forwarded-Port", "8443")
+	req.Header.Set("X-API-Token", apiToken)
 
 	res, err := srv.server.Client().Do(req)
 	if err != nil {
