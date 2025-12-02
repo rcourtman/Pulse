@@ -862,9 +862,6 @@ func (m *Monitor) shouldRunBackupPoll(last time.Time, now time.Time) (bool, stri
 	}
 
 	remaining := int64(backupCycles) - (m.pollCounter % int64(backupCycles))
-	if remaining <= 0 {
-		remaining = int64(backupCycles)
-	}
 	return false, fmt.Sprintf("next run in %d polling cycles", remaining), last
 }
 

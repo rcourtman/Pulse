@@ -1645,9 +1645,6 @@ func firstForwardedValue(header string) string {
 		return ""
 	}
 	parts := strings.Split(header, ",")
-	if len(parts) == 0 {
-		return ""
-	}
 	return strings.TrimSpace(parts[0])
 }
 

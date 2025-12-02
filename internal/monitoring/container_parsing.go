@@ -111,11 +111,7 @@ func convertContainerDiskInfo(status *proxmox.Container, metadata map[string]con
 			if mountpoint == "" {
 				mountpoint = label
 			}
-			if lowerLabel != "" {
-				disk.Type = lowerLabel
-			} else {
-				disk.Type = "disk"
-			}
+			disk.Type = lowerLabel
 		}
 
 		disk.Mountpoint = mountpoint

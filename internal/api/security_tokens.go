@@ -76,10 +76,6 @@ func normalizeRequestedScopes(raw *[]string) ([]string, error) {
 		return []string{config.ScopeWildcard}, nil
 	}
 
-	if len(normalized) == 0 {
-		return nil, fmt.Errorf("select at least one scope")
-	}
-
 	sort.Strings(normalized)
 	return normalized, nil
 }
