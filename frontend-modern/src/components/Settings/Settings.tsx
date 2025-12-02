@@ -39,7 +39,6 @@ import { SettingsSectionNav } from './SettingsSectionNav';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
-import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
