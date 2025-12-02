@@ -2040,7 +2040,9 @@ const Settings: Component<SettingsProps> = (props) => {
         setVersionInfo(version);
         // Also set it in the store so it's available globally
         updateStore.checkForUpdates(); // This will load version info too
-        if (version.channel) {
+        // Only use version.channel as fallback if user hasn't configured a preference
+        // The user's saved updateChannel preference should take priority
+        if (version.channel && !systemSettings.updateChannel) {
           setUpdateChannel(version.channel as 'stable' | 'rc');
         }
       } catch (error) {
