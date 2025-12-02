@@ -84,6 +84,7 @@ func (h *TemperatureProxyHandlers) recordSync(instance string, refreshSeconds in
 	}
 }
 
+// SnapshotSyncStatus returns a copy of the current sync status for all temperature proxies.
 func (h *TemperatureProxyHandlers) SnapshotSyncStatus() map[string]proxySyncState {
 	if h == nil {
 		return nil

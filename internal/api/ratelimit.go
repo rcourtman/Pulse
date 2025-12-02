@@ -14,6 +14,8 @@ type RateLimiter struct {
 	stopCleanup chan struct{}
 }
 
+// NewRateLimiter creates a rate limiter that allows limit requests per window duration.
+// It starts a background goroutine to periodically clean up old entries.
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	rl := &RateLimiter{
 		attempts:    make(map[string][]time.Time),
@@ -45,6 +47,8 @@ func (rl *RateLimiter) Stop() {
 	close(rl.stopCleanup)
 }
 
+// Allow checks if a request from the given IP address is within the rate limit.
+// Returns true if the request is allowed, false if the rate limit is exceeded.
 func (rl *RateLimiter) Allow(ip string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
