@@ -96,6 +96,26 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- if .Values.agent.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.agent.livenessProbe.path }}
+              port: {{ .Values.agent.healthPort }}
+            initialDelaySeconds: {{ .Values.agent.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.agent.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.agent.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.agent.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.agent.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.agent.readinessProbe.path }}
+              port: {{ .Values.agent.healthPort }}
+            initialDelaySeconds: {{ .Values.agent.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.agent.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.agent.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.agent.readinessProbe.failureThreshold }}
+          {{- end }}
       {{- if or .Values.agent.dockerSocket.enabled .Values.agent.extraVolumes }}
       volumes:
         {{- if .Values.agent.dockerSocket.enabled }}

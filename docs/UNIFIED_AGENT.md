@@ -45,6 +45,7 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 | `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
 | `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
 | `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(machine-id)* |
+| `--health-addr` | `PULSE_HEALTH_ADDR` | Health/metrics server address | `:9191` |
 
 ## Installation Options
 
@@ -104,6 +105,47 @@ The install script automatically removes legacy agents when installing the unifi
 - Binaries are deleted from `/usr/local/bin/`
 
 No manual cleanup is required.
+
+## Health Checks & Metrics
+
+The agent exposes HTTP endpoints for health checks and Prometheus metrics on port 9191 by default.
+
+### Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `/healthz` | Liveness probe - returns 200 if agent is running |
+| `/readyz` | Readiness probe - returns 200 when agents are initialized |
+| `/metrics` | Prometheus metrics |
+
+### Prometheus Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `pulse_agent_info` | Gauge | Agent info with version, host_enabled, docker_enabled labels |
+| `pulse_agent_up` | Gauge | 1 when running, 0 when shutting down |
+
+### Kubernetes Probes
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 9191
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: 9191
+  initialDelaySeconds: 5
+  periodSeconds: 5
+```
+
+### Disable Health Server
+
+Set `--health-addr=""` or `PULSE_HEALTH_ADDR=""` to disable the health/metrics server.
 
 ## Troubleshooting
 
