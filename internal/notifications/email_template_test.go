@@ -606,6 +606,32 @@ func TestEmailTemplate(t *testing.T) {
 			expectSingleSubject: true,
 			subjectContains:     "Warning",
 		},
+		{
+			name: "multiple critical alerts only uses grouped template",
+			alerts: []*alerts.Alert{
+				{
+					ID:           "alert-1",
+					Level:        "critical",
+					Type:         "cpu",
+					ResourceName: "vm-1",
+					Value:        95.5,
+					Threshold:    90.0,
+					StartTime:    time.Now(),
+				},
+				{
+					ID:           "alert-2",
+					Level:        "critical",
+					Type:         "memory",
+					ResourceName: "vm-2",
+					Value:        98.0,
+					Threshold:    90.0,
+					StartTime:    time.Now(),
+				},
+			},
+			isSingle:            false,
+			expectSingleSubject: false,
+			subjectContains:     "2 Critical alerts",
+		},
 	}
 
 	for _, tt := range tests {
