@@ -1231,7 +1231,8 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			}
 			if err != nil {
 				// Handle timeout gracefully - unavailable storage (e.g., NFS mounts) can cause this
-				if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline exceeded") {
+				errStr := err.Error()
+				if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded") {
 					log.Warn().
 						Str("node", n.Node).
 						Str("instance", instanceName).
