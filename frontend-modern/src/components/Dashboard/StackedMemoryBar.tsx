@@ -199,7 +199,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                                 </span>
                             </div>
 
-                            <Show when={(props.balloon || 0) > 0 && props.balloon < props.total}>
+                            <Show when={(props.balloon || 0) > 0 && (props.balloon || 0) < props.total}>
                                 <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
                                     <span class="text-yellow-400">Balloon Limit</span>
                                     <span class="whitespace-nowrap text-gray-300">
