@@ -157,10 +157,8 @@ func parseDetail(device, output string) (host.RAIDArray, error) {
 
 		// Parse key-value pairs
 		if strings.Contains(line, ":") {
+			// SplitN with n=2 always returns 2 elements when ":" exists
 			parts := strings.SplitN(line, ":", 2)
-			if len(parts) != 2 {
-				continue
-			}
 			key := strings.TrimSpace(parts[0])
 			value := strings.TrimSpace(parts[1])
 
