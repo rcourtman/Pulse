@@ -124,9 +124,9 @@ Pulse can self-update to the latest stable version.
 | **Systemd** | Re-download binary and restart service |
 
 ### Rollback
-If an update causes issues, you can roll back to a previous version.
+If an update causes issues on systemd installations, backups are created automatically during the update process.
 
-**Via UI**: Settings → System → Updates → "Restore previous version"
+**Manual rollback**: Check for backup directories at `/etc/pulse/backup-<timestamp>/` created during updates. Restore the previous binary manually if needed.
 
 ---
 
