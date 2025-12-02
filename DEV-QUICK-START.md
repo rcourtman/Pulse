@@ -6,6 +6,8 @@
 - Node.js 20+
 - pnpm 9+ (for frontend work)
 
+> **Tip**: Read [`ARCHITECTURE.md`](ARCHITECTURE.md) to understand the system design before diving in.
+
 ## Hot-Reload Development Mode
 
 Start the development environment with hot-reload:
