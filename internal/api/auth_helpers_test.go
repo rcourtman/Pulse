@@ -612,3 +612,201 @@ func TestCheckProxyAuth_RoleWithWhitespace(t *testing.T) {
 		t.Error("isAdmin should be true when role matches after trimming whitespace")
 	}
 }
+
+// CheckAuth tests
+
+func TestCheckAuth_ProxyAuthSetsHeaders(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "secret123",
+		ProxyAuthUserHeader: "X-Remote-User",
+	}
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.Header.Set("X-Proxy-Secret", "secret123")
+	req.Header.Set("X-Remote-User", "proxyuser")
+	w := httptest.NewRecorder()
+
+	result := CheckAuth(cfg, w, req)
+	if !result {
+		t.Error("CheckAuth should return true for valid proxy auth")
+	}
+	if w.Header().Get("X-Authenticated-User") != "proxyuser" {
+		t.Errorf("X-Authenticated-User header = %q, want 'proxyuser'", w.Header().Get("X-Authenticated-User"))
+	}
+	if w.Header().Get("X-Auth-Method") != "proxy" {
+		t.Errorf("X-Auth-Method header = %q, want 'proxy'", w.Header().Get("X-Auth-Method"))
+	}
+}
+
+func TestCheckAuth_ProxyAuthNoUsernameHeader(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret: "secret123",
+		// No ProxyAuthUserHeader configured
+	}
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.Header.Set("X-Proxy-Secret", "secret123")
+	w := httptest.NewRecorder()
+
+	result := CheckAuth(cfg, w, req)
+	if !result {
+		t.Error("CheckAuth should return true for valid proxy auth without user header")
+	}
+	// X-Authenticated-User should not be set when username is empty
+	if w.Header().Get("X-Authenticated-User") != "" {
+		t.Errorf("X-Authenticated-User should be empty, got %q", w.Header().Get("X-Authenticated-User"))
+	}
+	if w.Header().Get("X-Auth-Method") != "proxy" {
+		t.Errorf("X-Auth-Method header = %q, want 'proxy'", w.Header().Get("X-Auth-Method"))
+	}
+}
+
+func TestCheckAuth_OIDCEnabledWithoutCredentials(t *testing.T) {
+	cfg := &config.Config{
+		OIDC: &config.OIDCConfig{
+			Enabled: true,
+		},
+		// No AuthUser, AuthPass, or APITokens
+	}
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	w := httptest.NewRecorder()
+
+	result := CheckAuth(cfg, w, req)
+	// Should return false - OIDC enabled requires authentication
+	if result {
+		t.Error("CheckAuth should return false when OIDC is enabled without credentials")
+	}
+}
+
+func TestCheckAuth_OIDCSessionValid(t *testing.T) {
+	dir := t.TempDir()
+	InitSessionStore(dir)
+
+	// Create a session and track it for a user
+	store := GetSessionStore()
+	sessionToken := generateSessionToken()
+	store.CreateSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1")
+	TrackUserSession("oidcuser", sessionToken)
+
+	cfg := &config.Config{
+		OIDC: &config.OIDCConfig{
+			Enabled: true,
+		},
+	}
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  "pulse_session",
+		Value: sessionToken,
+	})
+	w := httptest.NewRecorder()
+
+	result := CheckAuth(cfg, w, req)
+	if !result {
+		t.Error("CheckAuth should return true for valid OIDC session")
+	}
+	if w.Header().Get("X-Authenticated-User") != "oidcuser" {
+		t.Errorf("X-Authenticated-User = %q, want 'oidcuser'", w.Header().Get("X-Authenticated-User"))
+	}
+	if w.Header().Get("X-Auth-Method") != "oidc" {
+		t.Errorf("X-Auth-Method = %q, want 'oidc'", w.Header().Get("X-Auth-Method"))
+	}
+}
+
+func TestCheckAuth_OIDCSessionInvalid(t *testing.T) {
+	dir := t.TempDir()
+	InitSessionStore(dir)
+
+	cfg := &config.Config{
+		OIDC: &config.OIDCConfig{
+			Enabled: true,
+		},
+	}
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  "pulse_session",
+		Value: "invalid-session-token",
+	})
+	w := httptest.NewRecorder()
+
+	result := CheckAuth(cfg, w, req)
+	// Should return false - invalid session
+	if result {
+		t.Error("CheckAuth should return false for invalid OIDC session")
+	}
+}
+
+func TestCheckAuth_SessionCookieValid(t *testing.T) {
+	dir := t.TempDir()
+	InitSessionStore(dir)
+
+	// Create a session
+	store := GetSessionStore()
+	sessionToken := generateSessionToken()
+	store.CreateSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1")
+
+	cfg := &config.Config{
+		AuthUser: "testuser",
+		AuthPass: "$2a$10$dummy", // Has auth configured but using session
+	}
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  "pulse_session",
+		Value: sessionToken,
+	})
+	w := httptest.NewRecorder()
+
+	result := CheckAuth(cfg, w, req)
+	if !result {
+		t.Error("CheckAuth should return true for valid session cookie")
+	}
+}
+
+func TestCheckAuth_SessionCookieExpired(t *testing.T) {
+	dir := t.TempDir()
+	InitSessionStore(dir)
+
+	// Create and expire a session
+	store := GetSessionStore()
+	sessionToken := generateSessionToken()
+	store.CreateSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1")
+
+	// Manually expire the session
+	store.mu.Lock()
+	hash := sessionHash(sessionToken)
+	if session, exists := store.sessions[hash]; exists {
+		session.ExpiresAt = time.Now().Add(-1 * time.Hour)
+		store.sessions[hash] = session
+	}
+	store.mu.Unlock()
+
+	cfg := &config.Config{
+		AuthUser: "testuser",
+		AuthPass: "$2a$10$dummy",
+	}
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  "pulse_session",
+		Value: sessionToken,
+	})
+	w := httptest.NewRecorder()
+
+	result := CheckAuth(cfg, w, req)
+	// Should return false - expired session, no valid basic auth
+	if result {
+		t.Error("CheckAuth should return false for expired session with invalid basic auth")
+	}
+}
+
+func TestCheckAuth_NoSessionCookie(t *testing.T) {
+	cfg := &config.Config{
+		AuthUser: "testuser",
+		AuthPass: "$2a$10$dummy",
+	}
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	// No session cookie
+	w := httptest.NewRecorder()
+
+	result := CheckAuth(cfg, w, req)
+	// Should return false - no session and no valid auth header
+	if result {
+		t.Error("CheckAuth should return false without session or valid auth")
+	}
+}
