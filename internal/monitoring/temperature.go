@@ -259,7 +259,7 @@ func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command
 		"-o", "BatchMode=yes",
 		"-o", "LogLevel=ERROR", // Suppress host key warnings that break JSON parsing
 		"-o", "ConnectTimeout=5",
-		"-p", fmt.Sprintf("%d", tc.sshPort), // Use configured SSH port
+		"-p", strconv.Itoa(tc.sshPort), // Use configured SSH port
 	}
 
 	if tc.hostKeys != nil && tc.hostKeys.Path() != "" {
