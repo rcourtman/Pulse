@@ -3,8 +3,10 @@ package alerts
 import (
 	"fmt"
 	"math"
+	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,8 +14,60 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
-func TestAcknowledgePersistsThroughCheckMetric(t *testing.T) {
+// testEnvMu protects concurrent access to PULSE_DATA_DIR during parallel tests.
+// Tests using newTestManager are effectively serialized because the Manager
+// calls GetDataDir() repeatedly (not just at creation time).
+var testEnvMu sync.Mutex
+
+// newTestManager creates a Manager with an isolated temp directory for testing.
+// It uses os.Setenv with a mutex to safely handle parallel tests that call t.Parallel()
+// before invoking this function (t.Setenv cannot be used after t.Parallel).
+//
+// IMPORTANT: The mutex is held for the entire duration of the test because the
+// Manager calls GetDataDir() not just at creation time, but also during operations
+// like SaveActiveAlerts() and LoadActiveAlerts(). This effectively serializes
+// tests that use newTestManager, but ensures correct isolation.
+func newTestManager(t *testing.T) *Manager {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+
+	testEnvMu.Lock()
+	oldVal, hadOld := os.LookupEnv("PULSE_DATA_DIR")
+	os.Setenv("PULSE_DATA_DIR", tmpDir)
+
 	m := NewManager()
+
+	// Restore env var and release mutex when test completes.
+	// We also stop the history manager's background goroutines (but not the
+	// full manager Stop which includes a 100ms sleep) to prevent writes to
+	// the temp directory after the test completes.
+	t.Cleanup(func() {
+		// Stop the history manager to halt background save routines
+		m.historyManager.Stop()
+		// Close escalation channel to stop that goroutine too
+		select {
+		case <-m.escalationStop:
+			// Already closed
+		default:
+			close(m.escalationStop)
+		}
+		// Brief pause to let goroutines finish any in-flight operations
+		time.Sleep(10 * time.Millisecond)
+
+		if hadOld {
+			os.Setenv("PULSE_DATA_DIR", oldVal)
+		} else {
+			os.Unsetenv("PULSE_DATA_DIR")
+		}
+		testEnvMu.Unlock()
+	})
+
+	return m
+}
+
+func TestAcknowledgePersistsThroughCheckMetric(t *testing.T) {
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	// Set config fields directly to bypass UpdateConfig's default value enforcement
 	m.mu.Lock()
@@ -49,7 +103,7 @@ func TestAcknowledgePersistsThroughCheckMetric(t *testing.T) {
 }
 
 func TestCheckGuestSkipsAlertsWhenMetricDisabled(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 
 	vmID := "instance-node-101"
 	instanceName := "instance"
@@ -177,7 +231,7 @@ func TestCheckGuestSkipsAlertsWhenMetricDisabled(t *testing.T) {
 }
 
 func TestPulseNoAlertsSuppressesGuestAlerts(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
 	m.config.TimeThreshold = 0
@@ -218,7 +272,7 @@ func TestPulseNoAlertsSuppressesGuestAlerts(t *testing.T) {
 }
 
 func TestPulseMonitorOnlySkipsDispatchButRetainsAlert(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
 	m.config.TimeThreshold = 0
@@ -260,7 +314,7 @@ func TestPulseMonitorOnlySkipsDispatchButRetainsAlert(t *testing.T) {
 }
 
 func TestPulseRelaxedThresholdsIncreaseCpuTrigger(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
 	m.config.TimeThreshold = 0
@@ -294,7 +348,7 @@ func TestPulseRelaxedThresholdsIncreaseCpuTrigger(t *testing.T) {
 }
 
 func TestClearAlertMarksResolutionAndReturnsStatus(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
 	m.config.TimeThreshold = 0
@@ -338,7 +392,7 @@ func TestClearAlertMarksResolutionAndReturnsStatus(t *testing.T) {
 }
 
 func TestHandleDockerHostRemovedClearsAlertsAndTracking(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	host := models.DockerHost{ID: "host1", DisplayName: "Host One", Hostname: "host-one"}
 	containerResourceID := "docker:host1/container1"
 	containerAlertID := "docker-container-state-" + containerResourceID
@@ -379,7 +433,7 @@ func TestHandleDockerHostRemovedClearsAlertsAndTracking(t *testing.T) {
 }
 
 func TestCheckHostGeneratesMetricAlerts(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
 	m.config.TimeThreshold = 0
@@ -438,7 +492,7 @@ func TestCheckHostGeneratesMetricAlerts(t *testing.T) {
 }
 
 func TestHandleHostOfflineRequiresConfirmations(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	host := models.Host{ID: "host-2", DisplayName: "Second Host", Hostname: "host-two"}
 	alertID := fmt.Sprintf("host-offline-%s", host.ID)
@@ -483,7 +537,7 @@ func TestHandleHostOfflineRequiresConfirmations(t *testing.T) {
 }
 
 func TestCheckHostDisabledOverrideClearsAlerts(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
 	m.config.TimeThreshold = 0
@@ -540,7 +594,7 @@ func TestCheckHostDisabledOverrideClearsAlerts(t *testing.T) {
 }
 
 func TestCheckSnapshotsForInstanceCreatesAndClearsAlerts(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 
 	cfg := AlertConfig{
@@ -604,7 +658,7 @@ func TestCheckSnapshotsForInstanceCreatesAndClearsAlerts(t *testing.T) {
 }
 
 func TestCheckSnapshotsForInstanceTriggersOnSnapshotSize(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 
 	cfg := AlertConfig{
@@ -685,7 +739,7 @@ func TestCheckSnapshotsForInstanceTriggersOnSnapshotSize(t *testing.T) {
 }
 
 func TestCheckSnapshotsForInstanceIncludesAgeAndSizeReasons(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 
 	cfg := AlertConfig{
@@ -753,7 +807,7 @@ func TestCheckSnapshotsForInstanceIncludesAgeAndSizeReasons(t *testing.T) {
 }
 
 func TestCheckBackupsCreatesAndClearsAlerts(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 
 	m.mu.Lock()
@@ -819,7 +873,7 @@ func TestCheckBackupsCreatesAndClearsAlerts(t *testing.T) {
 }
 
 func TestCheckBackupsHandlesPbsOnlyGuests(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 
 	m.mu.Lock()
@@ -863,7 +917,7 @@ func TestCheckBackupsHandlesPbsOnlyGuests(t *testing.T) {
 }
 
 func TestCheckBackupsHandlesPmgBackups(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 
 	m.mu.Lock()
@@ -907,7 +961,7 @@ func TestCheckBackupsHandlesPmgBackups(t *testing.T) {
 }
 
 func TestCheckDockerHostIgnoresContainersByPrefix(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 
 	m.mu.Lock()
 	m.config.DockerIgnoredContainerPrefixes = []string{"runner-"}
@@ -943,7 +997,7 @@ func TestCheckDockerHostIgnoresContainersByPrefix(t *testing.T) {
 }
 
 func TestDockerServiceReplicaAlerts(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 
 	m.mu.RLock()
@@ -992,7 +1046,7 @@ func TestDockerServiceReplicaAlerts(t *testing.T) {
 }
 
 func TestDockerServiceUpdateStateAlert(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	cfg := m.GetConfig()
 	cfg.Enabled = true
 	m.UpdateConfig(cfg)
@@ -1034,7 +1088,7 @@ func TestDockerServiceUpdateStateAlert(t *testing.T) {
 }
 
 func TestDockerContainerStateUsesDockerDefaults(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	cfg := m.GetConfig()
 	cfg.DockerDefaults.StatePoweredOffSeverity = AlertLevelCritical
 	m.UpdateConfig(cfg)
@@ -1067,7 +1121,7 @@ func TestDockerContainerStateUsesDockerDefaults(t *testing.T) {
 }
 
 func TestDockerContainerStateRespectsDisableDefault(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	cfg := m.GetConfig()
 	cfg.DockerDefaults.StateDisableConnectivity = true
 	m.UpdateConfig(cfg)
@@ -1096,7 +1150,7 @@ func TestDockerContainerStateRespectsDisableDefault(t *testing.T) {
 }
 
 func TestDockerContainerMemoryLimitHysteresis(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 
 	hostID := "host-mem"
 	containerID := "container-mem"
@@ -1148,7 +1202,7 @@ func TestDockerContainerMemoryLimitHysteresis(t *testing.T) {
 }
 
 func TestDockerContainerDiskUsageAlert(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 
 	cfg := m.GetConfig()
 	cfg.Enabled = true
@@ -1212,7 +1266,7 @@ func TestDockerContainerDiskUsageAlert(t *testing.T) {
 func TestUpdateConfigClampsDockerServiceCriticalGap(t *testing.T) {
 	t.Parallel()
 
-	m := NewManager()
+	m := newTestManager(t)
 
 	cfg := AlertConfig{
 		Enabled:        true,
@@ -1245,7 +1299,7 @@ func TestUpdateConfigClampsDockerServiceCriticalGap(t *testing.T) {
 }
 
 func TestDockerServiceAlertUsesClampedCriticalGap(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 
 	cfg := AlertConfig{
@@ -1342,7 +1396,7 @@ func TestNormalizeDockerIgnoredPrefixes(t *testing.T) {
 }
 
 func TestCheckDockerHostIgnoredPrefixClearsExistingAlerts(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 
 	container := models.DockerContainer{
 		ID:     "abc123456789",
@@ -1403,7 +1457,7 @@ func TestUpdateConfigNormalizesDockerIgnoredPrefixes(t *testing.T) {
 	t.Run("nil input remains nil", func(t *testing.T) {
 		t.Parallel()
 
-		m := NewManager()
+		m := newTestManager(t)
 		m.UpdateConfig(AlertConfig{})
 
 		m.mu.RLock()
@@ -1417,7 +1471,7 @@ func TestUpdateConfigNormalizesDockerIgnoredPrefixes(t *testing.T) {
 	t.Run("duplicates trimmed and deduplicated", func(t *testing.T) {
 		t.Parallel()
 
-		m := NewManager()
+		m := newTestManager(t)
 		cfg := AlertConfig{
 			DockerIgnoredContainerPrefixes: []string{
 				"  Foo ",
@@ -1583,7 +1637,7 @@ func TestHasKnownFirmwareBug(t *testing.T) {
 }
 
 func TestCheckDiskHealthSkipsSamsung980FalseAlerts(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 
 	// Samsung 980 reporting FAILED health (firmware bug) but actually healthy
@@ -1622,7 +1676,7 @@ func TestCheckDiskHealthSkipsSamsung980FalseAlerts(t *testing.T) {
 }
 
 func TestCheckDiskHealthClearsExistingSamsung980Alerts(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.ClearActiveAlerts()
 
 	disk := proxmox.Disk{
@@ -1662,7 +1716,7 @@ func TestCheckDiskHealthClearsExistingSamsung980Alerts(t *testing.T) {
 }
 
 func TestDisableAllStorageClearsExistingAlerts(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 
 	storageID := "local-lvm"
 
@@ -1781,7 +1835,7 @@ func TestDisableAllStorageClearsExistingAlerts(t *testing.T) {
 func TestUpdateConfigPreservesZeroDockerThresholds(t *testing.T) {
 	t.Helper()
 
-	m := NewManager()
+	m := newTestManager(t)
 	config := m.GetConfig()
 	config.DockerDefaults.Memory = HysteresisThreshold{Trigger: 0, Clear: 0}
 
@@ -1799,7 +1853,7 @@ func TestUpdateConfigPreservesZeroDockerThresholds(t *testing.T) {
 }
 
 func TestReevaluateClearsDockerContainerAlertWhenOverrideDisabled(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 
 	resourceID := "docker:host-1/container-1"
 	alertID := resourceID + "-memory"
@@ -1852,7 +1906,7 @@ func TestReevaluateClearsDockerContainerAlertWhenOverrideDisabled(t *testing.T) 
 }
 
 func TestReevaluateClearsDockerContainerAlertWhenIgnoredPrefixAdded(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 
 	resourceID := "docker:host-2/container-abc123"
 	alertID := resourceID + "-cpu"
@@ -2023,7 +2077,7 @@ func TestCheckFlapping(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			m := NewManager()
+			m := newTestManager(t)
 
 			// Configure flapping settings
 			m.mu.Lock()
@@ -2071,7 +2125,7 @@ func TestCheckFlapping(t *testing.T) {
 func TestCheckFlappingAlreadyFlapping(t *testing.T) {
 	t.Parallel()
 
-	m := NewManager()
+	m := newTestManager(t)
 
 	alertID := "already-flapping-alert"
 
@@ -2117,7 +2171,7 @@ func TestCheckFlappingAlreadyFlapping(t *testing.T) {
 func TestCheckFlappingWindowExpiry(t *testing.T) {
 	t.Parallel()
 
-	m := NewManager()
+	m := newTestManager(t)
 
 	alertID := "window-expiry-alert"
 
@@ -2259,7 +2313,7 @@ func TestGetGlobalMetricTimeThreshold(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			m := NewManager()
+			m := newTestManager(t)
 			m.mu.Lock()
 			m.config.MetricTimeThresholds = tt.metricTimeThresholds
 			m.mu.Unlock()
@@ -2359,7 +2413,7 @@ func TestGetBaseTimeThreshold(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			m := NewManager()
+			m := newTestManager(t)
 			m.mu.Lock()
 			m.config.TimeThresholds = tt.timeThresholds
 			m.config.TimeThreshold = tt.timeThreshold
@@ -2500,7 +2554,7 @@ func TestGetMetricTimeThreshold(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			m := NewManager()
+			m := newTestManager(t)
 			m.mu.Lock()
 			m.config.MetricTimeThresholds = tt.metricTimeThresholds
 			m.mu.Unlock()
@@ -2524,7 +2578,7 @@ func TestCheckRateLimit(t *testing.T) {
 
 	t.Run("no rate limit when MaxAlertsHour is zero", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Schedule.MaxAlertsHour = 0
 		m.mu.Unlock()
@@ -2540,7 +2594,7 @@ func TestCheckRateLimit(t *testing.T) {
 
 	t.Run("no rate limit when MaxAlertsHour is negative", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Schedule.MaxAlertsHour = -1
 		m.mu.Unlock()
@@ -2556,7 +2610,7 @@ func TestCheckRateLimit(t *testing.T) {
 
 	t.Run("allows alerts under rate limit", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Schedule.MaxAlertsHour = 5
 		m.mu.Unlock()
@@ -2575,7 +2629,7 @@ func TestCheckRateLimit(t *testing.T) {
 
 	t.Run("blocks alerts at rate limit", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Schedule.MaxAlertsHour = 3
 		m.mu.Unlock()
@@ -2599,7 +2653,7 @@ func TestCheckRateLimit(t *testing.T) {
 
 	t.Run("different alert IDs have separate limits", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Schedule.MaxAlertsHour = 2
 		m.mu.Unlock()
@@ -2623,7 +2677,7 @@ func TestCheckRateLimit(t *testing.T) {
 
 	t.Run("old entries are cleaned up", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Schedule.MaxAlertsHour = 2
 
@@ -2644,7 +2698,7 @@ func TestCheckRateLimit(t *testing.T) {
 
 	t.Run("mixed old and recent entries", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Schedule.MaxAlertsHour = 2
 
@@ -2813,7 +2867,7 @@ func TestShouldNotifyAfterCooldown(t *testing.T) {
 
 	t.Run("cooldown disabled allows notification", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Schedule.Cooldown = 0
 		m.mu.Unlock()
@@ -2830,7 +2884,7 @@ func TestShouldNotifyAfterCooldown(t *testing.T) {
 
 	t.Run("negative cooldown allows notification", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Schedule.Cooldown = -5
 		m.mu.Unlock()
@@ -2848,7 +2902,7 @@ func TestShouldNotifyAfterCooldown(t *testing.T) {
 
 	t.Run("first notification allowed when never notified", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Schedule.Cooldown = 30 // 30 minutes
 		m.mu.Unlock()
@@ -2865,7 +2919,7 @@ func TestShouldNotifyAfterCooldown(t *testing.T) {
 
 	t.Run("notification blocked during cooldown period", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Schedule.Cooldown = 30 // 30 minutes
 		m.mu.Unlock()
@@ -2883,7 +2937,7 @@ func TestShouldNotifyAfterCooldown(t *testing.T) {
 
 	t.Run("notification allowed after cooldown expires", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Schedule.Cooldown = 30 // 30 minutes
 		m.mu.Unlock()
@@ -2901,7 +2955,7 @@ func TestShouldNotifyAfterCooldown(t *testing.T) {
 
 	t.Run("notification allowed at exact cooldown boundary", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Schedule.Cooldown = 30 // 30 minutes
 		m.mu.Unlock()
@@ -3106,7 +3160,7 @@ func TestClearStorageOfflineAlert(t *testing.T) {
 
 	t.Run("clears existing offline alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		storage := models.Storage{
 			ID:   "storage-1",
@@ -3152,7 +3206,7 @@ func TestClearStorageOfflineAlert(t *testing.T) {
 
 	t.Run("noop when no alert exists", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		storage := models.Storage{
 			ID:   "storage-2",
@@ -3174,7 +3228,7 @@ func TestClearStorageOfflineAlert(t *testing.T) {
 
 	t.Run("clears offline confirmation even when no alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		storage := models.Storage{
 			ID:   "storage-3",
@@ -3204,7 +3258,7 @@ func TestClearHostMetricAlerts(t *testing.T) {
 
 	t.Run("clears specified metrics", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		hostID := "my-host"
 		resourceID := fmt.Sprintf("host:%s", hostID)
@@ -3237,7 +3291,7 @@ func TestClearHostMetricAlerts(t *testing.T) {
 
 	t.Run("defaults to cpu and memory when no metrics specified", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		hostID := "default-host"
 		resourceID := fmt.Sprintf("host:%s", hostID)
@@ -3270,7 +3324,7 @@ func TestClearHostMetricAlerts(t *testing.T) {
 
 	t.Run("empty hostID is noop", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Create an alert that should not be touched
 		m.mu.Lock()
@@ -3294,7 +3348,7 @@ func TestClearHostDiskAlerts(t *testing.T) {
 
 	t.Run("clears all disk alerts for host", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		hostID := "disk-host"
 		resourceID := fmt.Sprintf("host:%s", hostID)
@@ -3336,7 +3390,7 @@ func TestClearHostDiskAlerts(t *testing.T) {
 
 	t.Run("empty hostID is noop", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Create an alert
 		m.mu.Lock()
@@ -3359,7 +3413,7 @@ func TestClearHostDiskAlerts(t *testing.T) {
 
 	t.Run("skips nil alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		hostID := "nil-test"
 		resourceID := fmt.Sprintf("host:%s", hostID)
@@ -3386,7 +3440,7 @@ func TestClearHostDiskAlerts(t *testing.T) {
 
 	t.Run("noop when no matching alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.activeAlerts["other-alert"] = &Alert{
@@ -3412,7 +3466,7 @@ func TestCleanupHostDiskAlerts(t *testing.T) {
 
 	t.Run("clears alerts not in seen set", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		host := models.Host{ID: "host-1"}
 		resourceID := fmt.Sprintf("host:%s", host.ID)
@@ -3460,7 +3514,7 @@ func TestCleanupHostDiskAlerts(t *testing.T) {
 
 	t.Run("empty host ID is noop", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.activeAlerts["disk-alert"] = &Alert{
@@ -3483,7 +3537,7 @@ func TestCleanupHostDiskAlerts(t *testing.T) {
 
 	t.Run("skips nil alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		host := models.Host{ID: "host-2"}
 		resourceID := fmt.Sprintf("host:%s", host.ID)
@@ -3512,7 +3566,7 @@ func TestCleanupHostDiskAlerts(t *testing.T) {
 
 	t.Run("skips non-matching prefix", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		host := models.Host{ID: "host-3"}
 		resourceID := fmt.Sprintf("host:%s", host.ID)
@@ -3548,7 +3602,7 @@ func TestCleanupHostDiskAlerts(t *testing.T) {
 
 func TestHandleDockerHostRemovedEmptyID(t *testing.T) {
 	t.Parallel()
-	m := NewManager()
+	m := newTestManager(t)
 
 	// Create some alerts that should not be touched
 	m.mu.Lock()
@@ -3578,7 +3632,7 @@ func TestHandleDockerHostOnline(t *testing.T) {
 
 	t.Run("clears offline alert and tracking", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		host := models.DockerHost{ID: "docker-host-1", DisplayName: "My Host"}
 		alertID := fmt.Sprintf("docker-host-offline-%s", host.ID)
@@ -3606,7 +3660,7 @@ func TestHandleDockerHostOnline(t *testing.T) {
 
 	t.Run("noop when no offline alert exists", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		host := models.DockerHost{ID: "docker-host-2"}
 
@@ -3628,7 +3682,7 @@ func TestHandleDockerHostOnline(t *testing.T) {
 
 	t.Run("empty host ID is noop", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Create some data that should not be touched
 		m.mu.Lock()
@@ -3658,7 +3712,7 @@ func TestCleanupDockerContainerAlerts(t *testing.T) {
 
 	t.Run("clears alerts not in seen set", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		host := models.DockerHost{ID: "docker-host-1"}
 		prefix := fmt.Sprintf("docker:%s/", host.ID)
@@ -3721,7 +3775,7 @@ func TestCleanupDockerContainerAlerts(t *testing.T) {
 
 	t.Run("skips alerts from other hosts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		host := models.DockerHost{ID: "host-a"}
 
@@ -3748,7 +3802,7 @@ func TestCleanupDockerContainerAlerts(t *testing.T) {
 
 	t.Run("handles empty seen set", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		host := models.DockerHost{ID: "host-c"}
 		prefix := fmt.Sprintf("docker:%s/", host.ID)
@@ -3782,7 +3836,7 @@ func TestSafeCallEscalateCallback(t *testing.T) {
 
 	t.Run("calls callback with alert and level", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		var receivedAlert *Alert
 		var receivedLevel int
@@ -3820,7 +3874,7 @@ func TestSafeCallEscalateCallback(t *testing.T) {
 
 	t.Run("noop when callback is nil", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		// No callback set
 
 		alert := &Alert{ID: "test-alert"}
@@ -3831,7 +3885,7 @@ func TestSafeCallEscalateCallback(t *testing.T) {
 
 	t.Run("recovers from panic in callback", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		done := make(chan struct{})
 		m.SetEscalateCallback(func(alert *Alert, level int) {
@@ -3854,7 +3908,7 @@ func TestSafeCallEscalateCallback(t *testing.T) {
 
 	t.Run("clones alert to prevent modification", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		var receivedAlert *Alert
 		done := make(chan struct{})
@@ -3891,7 +3945,7 @@ func TestSafeCallResolvedCallback(t *testing.T) {
 
 	t.Run("calls callback with alert ID synchronously", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		var receivedID string
 		m.SetResolvedCallback(func(alertID string) {
@@ -3907,7 +3961,7 @@ func TestSafeCallResolvedCallback(t *testing.T) {
 
 	t.Run("calls callback asynchronously", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		var receivedID string
 		done := make(chan struct{})
@@ -3931,7 +3985,7 @@ func TestSafeCallResolvedCallback(t *testing.T) {
 
 	t.Run("noop when callback is nil", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		// No callback set
 
 		// Should not panic
@@ -3941,7 +3995,7 @@ func TestSafeCallResolvedCallback(t *testing.T) {
 
 	t.Run("recovers from panic in sync callback", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.SetResolvedCallback(func(alertID string) {
 			panic("test panic")
@@ -3953,7 +4007,7 @@ func TestSafeCallResolvedCallback(t *testing.T) {
 
 	t.Run("recovers from panic in async callback", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		done := make(chan struct{})
 		m.SetResolvedCallback(func(alertID string) {
@@ -3977,7 +4031,7 @@ func TestHandleHostOnline(t *testing.T) {
 
 	t.Run("clears offline alert and confirmation tracking", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		host := models.Host{ID: "host-1", Hostname: "my-host"}
 		alertID := fmt.Sprintf("host-offline-%s", host.ID)
@@ -4006,7 +4060,7 @@ func TestHandleHostOnline(t *testing.T) {
 
 	t.Run("clears confirmation even without alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		host := models.Host{ID: "host-2"}
 		resourceKey := fmt.Sprintf("host:%s", host.ID)
@@ -4029,7 +4083,7 @@ func TestHandleHostOnline(t *testing.T) {
 
 	t.Run("empty host ID is noop", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Create data that should not be touched
 		m.mu.Lock()
@@ -4056,7 +4110,7 @@ func TestHandleHostOnline(t *testing.T) {
 
 func TestAcknowledgeAlertNotFound(t *testing.T) {
 	t.Parallel()
-	m := NewManager()
+	m := newTestManager(t)
 
 	err := m.AcknowledgeAlert("nonexistent-alert", "user1")
 
@@ -4070,7 +4124,7 @@ func TestAcknowledgeAlertNotFound(t *testing.T) {
 
 func TestUnacknowledgeAlertNotFound(t *testing.T) {
 	t.Parallel()
-	m := NewManager()
+	m := newTestManager(t)
 
 	err := m.UnacknowledgeAlert("nonexistent-alert")
 
@@ -4084,7 +4138,7 @@ func TestUnacknowledgeAlertNotFound(t *testing.T) {
 
 func TestUnacknowledgeAlertSuccess(t *testing.T) {
 	t.Parallel()
-	m := NewManager()
+	m := newTestManager(t)
 
 	// Create and acknowledge an alert first
 	alertID := "test-alert-123"
@@ -4124,7 +4178,7 @@ func TestUnacknowledgeAlertSuccess(t *testing.T) {
 
 func TestClearActiveAlertsEmptyMaps(t *testing.T) {
 	t.Parallel()
-	m := NewManager()
+	m := newTestManager(t)
 
 	// Ensure maps are empty initially
 	if len(m.activeAlerts) != 0 {
@@ -4148,7 +4202,7 @@ func TestClearBackupAlertsLocked(t *testing.T) {
 
 	t.Run("clears backup-age alerts only", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add a backup-age alert
 		m.activeAlerts["backup-alert-1"] = &Alert{
@@ -4191,7 +4245,7 @@ func TestClearBackupAlertsLocked(t *testing.T) {
 
 	t.Run("handles nil alert in map", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add a nil alert entry
 		m.activeAlerts["nil-alert"] = nil
@@ -4217,7 +4271,7 @@ func TestClearBackupAlertsLocked(t *testing.T) {
 
 	t.Run("empty alerts map is no-op", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.clearBackupAlertsLocked()
@@ -4231,7 +4285,7 @@ func TestClearBackupAlertsLocked(t *testing.T) {
 
 func TestClearBackupAlerts(t *testing.T) {
 	t.Parallel()
-	m := NewManager()
+	m := newTestManager(t)
 
 	// Add a backup-age alert
 	m.activeAlerts["backup-alert"] = &Alert{
@@ -4261,7 +4315,7 @@ func TestClearSnapshotAlertsForInstanceLocked(t *testing.T) {
 
 	t.Run("clears snapshot alerts for specific instance", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add snapshot alerts for different instances
 		m.activeAlerts["snap-inst1"] = &Alert{
@@ -4298,7 +4352,7 @@ func TestClearSnapshotAlertsForInstanceLocked(t *testing.T) {
 
 	t.Run("clears all snapshot alerts when instance is empty", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add snapshot alerts for different instances
 		m.activeAlerts["snap-inst1"] = &Alert{
@@ -4332,7 +4386,7 @@ func TestClearSnapshotAlertsForInstanceLocked(t *testing.T) {
 
 	t.Run("handles nil alert in map", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add nil entry and valid snapshot alert
 		m.activeAlerts["nil-alert"] = nil
@@ -4358,7 +4412,7 @@ func TestClearSnapshotAlertsForInstanceLocked(t *testing.T) {
 
 func TestClearSnapshotAlertsForInstance(t *testing.T) {
 	t.Parallel()
-	m := NewManager()
+	m := newTestManager(t)
 
 	// Add a snapshot alert
 	m.activeAlerts["snap-alert"] = &Alert{
@@ -4380,7 +4434,7 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 
 	t.Run("DisableAllNodesOffline clears node offline alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add node offline alerts
 		m.activeAlerts["node-offline-node1"] = &Alert{ID: "node-offline-node1", Type: "offline"}
@@ -4416,7 +4470,7 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 
 	t.Run("DisableAllPBSOffline clears PBS offline alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add PBS offline alerts
 		m.activeAlerts["pbs-offline-pbs1"] = &Alert{ID: "pbs-offline-pbs1", ResourceID: "pbs1", Type: "offline"}
@@ -4447,7 +4501,7 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 
 	t.Run("DisableAllGuestsOffline clears guest powered off alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add guest powered off alerts
 		m.activeAlerts["guest-powered-off-vm1"] = &Alert{ID: "guest-powered-off-vm1", ResourceID: "vm1", Type: "powered-off"}
@@ -4478,7 +4532,7 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 
 	t.Run("DisableAllDockerHostsOffline clears docker host alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add docker host offline alerts
 		m.activeAlerts["docker-host-offline-host1"] = &Alert{ID: "docker-host-offline-host1", Type: "offline"}
@@ -4509,7 +4563,7 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 
 	t.Run("DisableAllDockerContainers clears docker container alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add docker container alerts
 		m.activeAlerts["docker-container-unhealthy-c1"] = &Alert{ID: "docker-container-unhealthy-c1", Type: "unhealthy"}
@@ -4552,7 +4606,7 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 
 	t.Run("DisableAllDockerServices clears docker service alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add docker service alerts
 		m.activeAlerts["docker-service-unhealthy-svc1"] = &Alert{ID: "docker-service-unhealthy-svc1", Type: "unhealthy"}
@@ -4577,7 +4631,7 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 
 	t.Run("no settings enabled does nothing", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add various alerts
 		m.activeAlerts["node-offline-node1"] = &Alert{ID: "node-offline-node1", Type: "offline"}
@@ -4602,7 +4656,7 @@ func TestHandleHostOffline(t *testing.T) {
 
 	t.Run("empty host ID returns early", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.config.Enabled = true
 
 		host := models.Host{ID: "", Hostname: "test-host"}
@@ -4616,7 +4670,7 @@ func TestHandleHostOffline(t *testing.T) {
 
 	t.Run("alerts disabled returns early", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.config.Enabled = false
 
 		host := models.Host{ID: "host1", Hostname: "test-host"}
@@ -4630,7 +4684,7 @@ func TestHandleHostOffline(t *testing.T) {
 
 	t.Run("DisableAllHostsOffline clears alert and returns", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.config.Enabled = true
 		m.config.DisableAllHostsOffline = true
 
@@ -4653,7 +4707,7 @@ func TestHandleHostOffline(t *testing.T) {
 
 	t.Run("override DisableConnectivity clears alert and returns", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.config.Enabled = true
 		m.config.Overrides = map[string]ThresholdConfig{
 			"host1": {DisableConnectivity: true},
@@ -4678,7 +4732,7 @@ func TestHandleHostOffline(t *testing.T) {
 
 	t.Run("override Disabled clears alert and returns", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.config.Enabled = true
 		m.config.Overrides = map[string]ThresholdConfig{
 			"host1": {Disabled: true},
@@ -4695,7 +4749,7 @@ func TestHandleHostOffline(t *testing.T) {
 
 	t.Run("existing alert updates LastSeen", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.config.Enabled = true
 
 		alertID := "host-offline-host1"
@@ -4714,7 +4768,7 @@ func TestHandleHostOffline(t *testing.T) {
 
 	t.Run("insufficient confirmations waits", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.config.Enabled = true
 
 		host := models.Host{ID: "host1", Hostname: "test-host"}
@@ -4739,7 +4793,7 @@ func TestHandleHostOffline(t *testing.T) {
 
 	t.Run("sufficient confirmations creates alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.config.Enabled = true
 
 		host := models.Host{
@@ -4779,7 +4833,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 
 	t.Run("empty alerts map is no-op", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.reevaluateActiveAlertsLocked()
@@ -4792,7 +4846,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 
 	t.Run("alert with insufficient ID parts is skipped", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Alert ID without dash separator
 		m.activeAlerts["singlepart"] = &Alert{ID: "singlepart", Type: "cpu", Value: 90}
@@ -4809,7 +4863,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 
 	t.Run("DisableAllPMG resolves PMG queue alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add PMG queue alert
 		m.activeAlerts["pmg-queue-cpu"] = &Alert{
@@ -4831,7 +4885,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 
 	t.Run("DisableAllHosts resolves Host alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add host alert with resourceType metadata
 		m.activeAlerts["host-1-cpu"] = &Alert{
@@ -4857,7 +4911,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 
 	t.Run("Docker host offline alerts are skipped", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add docker host offline alert
 		m.activeAlerts["docker-host-1-offline"] = &Alert{
@@ -4877,7 +4931,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 
 	t.Run("DisableAllDockerHosts resolves dockerhost alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add dockerhost metric alert
 		m.activeAlerts["dockerhost-1-cpu"] = &Alert{
@@ -4903,7 +4957,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 
 	t.Run("DisableAllNodes resolves Node alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add node alert with Instance = "Node"
 		m.activeAlerts["node1-cpu"] = &Alert{
@@ -4927,7 +4981,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 
 	t.Run("DisableAllStorage resolves Storage alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add storage alert with Instance = "Storage"
 		m.activeAlerts["storage1-usage"] = &Alert{
@@ -4951,7 +5005,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 
 	t.Run("DisableAllPBS resolves PBS alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add PBS alert with Instance = "PBS"
 		m.activeAlerts["pbs1-cpu"] = &Alert{
@@ -4975,7 +5029,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 
 	t.Run("DisableAllGuests resolves Guest alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add guest alert with Instance set to something other than "Node"/"Storage"/"PBS"
 		// Note: If both Instance and Node are empty, it matches the node branch
@@ -5001,7 +5055,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 
 	t.Run("alert with disabled override is resolved", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add guest alert with override
 		m.activeAlerts["guest1-cpu"] = &Alert{
@@ -5027,7 +5081,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 
 	t.Run("alert below clear threshold is resolved", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add guest alert below new clear threshold
 		m.activeAlerts["guest1-cpu"] = &Alert{
@@ -5052,7 +5106,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 
 	t.Run("alert between clear and trigger is resolved on config change", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add guest alert between clear and new higher trigger
 		m.activeAlerts["guest1-cpu"] = &Alert{
@@ -5081,7 +5135,7 @@ func TestHandleHostRemoved(t *testing.T) {
 
 	t.Run("empty host ID is no-op", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.activeAlerts["host-offline-host1"] = &Alert{ID: "host-offline-host1"}
 		m.mu.Unlock()
@@ -5100,7 +5154,7 @@ func TestHandleHostRemoved(t *testing.T) {
 
 	t.Run("clears host offline alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		m.activeAlerts["host-offline-host1"] = &Alert{
@@ -5127,7 +5181,7 @@ func TestHandleHostRemoved(t *testing.T) {
 
 	t.Run("clears host metric alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		// Add CPU and memory alerts for host
@@ -5158,7 +5212,7 @@ func TestHandleHostRemoved(t *testing.T) {
 
 	t.Run("clears host disk alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		// Add disk alerts for host
@@ -5189,7 +5243,7 @@ func TestHandleHostRemoved(t *testing.T) {
 
 	t.Run("clears all alert types together", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		// Add multiple alert types
@@ -5226,7 +5280,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 
 	t.Run("no active alerts is no-op", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		m.config.GuestDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 70}
@@ -5245,7 +5299,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 
 	t.Run("clears alert when threshold disabled (nil)", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		m.activeAlerts["guest1-cpu"] = &Alert{
@@ -5268,7 +5322,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 
 	t.Run("clears alert when trigger is zero", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		m.activeAlerts["guest1-memory"] = &Alert{
@@ -5291,7 +5345,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 
 	t.Run("clears alert when value below clear threshold", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		m.activeAlerts["guest1-cpu"] = &Alert{
@@ -5314,7 +5368,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 
 	t.Run("clears alert when value below trigger threshold", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		m.activeAlerts["guest1-disk"] = &Alert{
@@ -5337,7 +5391,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 
 	t.Run("keeps alert when value above both thresholds", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		m.activeAlerts["guest1-cpu"] = &Alert{
@@ -5360,7 +5414,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 
 	t.Run("processes all metric types", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		// Add alerts for all metric types with values below threshold
@@ -5394,7 +5448,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 
 	t.Run("clears pending alert when threshold disabled", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		m.activeAlerts["guest1-cpu"] = &Alert{
@@ -5422,7 +5476,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 
 	t.Run("uses clear equals trigger when clear is zero", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		m.activeAlerts["guest1-cpu"] = &Alert{
@@ -5446,7 +5500,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 
 	t.Run("ignores alerts for different guests", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		m.activeAlerts["guest1-cpu"] = &Alert{
@@ -5484,7 +5538,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 
 	t.Run("empty host ID is no-op", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		initialCount := len(m.activeAlerts)
@@ -5502,7 +5556,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 
 	t.Run("disabled alerts is no-op", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = false
 		m.mu.Unlock()
@@ -5519,7 +5573,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 
 	t.Run("DisableAllDockerHostsOffline clears tracking and alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		m.config.DisableAllDockerHostsOffline = true
@@ -5543,7 +5597,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 
 	t.Run("override DisableConnectivity clears tracking and alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		m.config.Overrides = map[string]ThresholdConfig{
@@ -5569,7 +5623,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 
 	t.Run("existing alert updates LastSeen", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		oldTime := time.Now().Add(-1 * time.Hour)
 		m.mu.Lock()
 		m.config.Enabled = true
@@ -5594,7 +5648,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 
 	t.Run("requires 3 confirmations before alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		m.mu.Unlock()
@@ -5649,7 +5703,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 
 	t.Run("alert has correct metadata", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Enabled = true
 		m.dockerOfflineCount["docker1"] = 2 // Pre-set to trigger on next call
@@ -5762,7 +5816,7 @@ func TestNotifyExistingAlert(t *testing.T) {
 
 	t.Run("non-existent alert is no-op", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Should not panic
 		m.NotifyExistingAlert("non-existent-alert")
@@ -5770,7 +5824,7 @@ func TestNotifyExistingAlert(t *testing.T) {
 
 	t.Run("existing alert dispatches notification", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		dispatchedCh := make(chan bool, 1)
 		m.SetAlertCallback(func(a *Alert) {
 			dispatchedCh <- true
@@ -5803,7 +5857,7 @@ func TestGetResolvedAlert(t *testing.T) {
 
 	t.Run("returns nil for non-existent alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		result := m.GetResolvedAlert("non-existent")
 		if result != nil {
@@ -5813,7 +5867,7 @@ func TestGetResolvedAlert(t *testing.T) {
 
 	t.Run("returns nil for nil resolved entry", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.resolvedMutex.Lock()
 		m.recentlyResolved["test"] = nil
 		m.resolvedMutex.Unlock()
@@ -5826,7 +5880,7 @@ func TestGetResolvedAlert(t *testing.T) {
 
 	t.Run("returns nil when Alert is nil", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.resolvedMutex.Lock()
 		m.recentlyResolved["test"] = &ResolvedAlert{Alert: nil}
 		m.resolvedMutex.Unlock()
@@ -5839,7 +5893,7 @@ func TestGetResolvedAlert(t *testing.T) {
 
 	t.Run("returns cloned alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		resolvedTime := time.Now()
 		m.resolvedMutex.Lock()
 		m.recentlyResolved["test"] = &ResolvedAlert{
@@ -5872,7 +5926,7 @@ func TestGetAlertHistory(t *testing.T) {
 
 	t.Run("returns history from history manager", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add some alerts to history
 		m.historyManager.AddAlert(Alert{ID: "alert1", Type: "cpu"})
@@ -5886,7 +5940,7 @@ func TestGetAlertHistory(t *testing.T) {
 
 	t.Run("respects limit", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add alerts
 		for i := 0; i < 5; i++ {
@@ -5905,7 +5959,7 @@ func TestGetAlertHistorySince(t *testing.T) {
 
 	t.Run("zero time returns all history", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.historyManager.AddAlert(Alert{ID: "alert1", Type: "cpu"})
 
 		history := m.GetAlertHistorySince(time.Time{}, 10)
@@ -5916,7 +5970,7 @@ func TestGetAlertHistorySince(t *testing.T) {
 
 	t.Run("filters by time", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add an alert
 		m.historyManager.AddAlert(Alert{ID: "alert1", Type: "cpu", StartTime: time.Now()})
@@ -5935,7 +5989,7 @@ func TestClearAlertHistory(t *testing.T) {
 
 	t.Run("clears all history", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Add some alerts
 		m.historyManager.AddAlert(Alert{ID: "alert1", Type: "cpu"})
@@ -5958,7 +6012,7 @@ func TestClearNodeOfflineAlert(t *testing.T) {
 
 	t.Run("no alert and no count is no-op", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		node := models.Node{ID: "node1", Name: "Node 1"}
 		m.clearNodeOfflineAlert(node)
@@ -5973,7 +6027,7 @@ func TestClearNodeOfflineAlert(t *testing.T) {
 
 	t.Run("resets offline count when node comes online", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.nodeOfflineCount["node1"] = 5
 		m.mu.Unlock()
@@ -5991,7 +6045,7 @@ func TestClearNodeOfflineAlert(t *testing.T) {
 
 	t.Run("clears existing alert and adds to resolved", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		var resolvedCalled bool
 		m.SetResolvedCallback(func(alertID string) {
 			resolvedCalled = true
@@ -6039,7 +6093,7 @@ func TestClearPBSOfflineAlert(t *testing.T) {
 
 	t.Run("no alert and no count is no-op", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pbs := models.PBSInstance{ID: "pbs1", Name: "PBS 1"}
 		m.clearPBSOfflineAlert(pbs)
@@ -6054,7 +6108,7 @@ func TestClearPBSOfflineAlert(t *testing.T) {
 
 	t.Run("resets offline confirmation count", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.offlineConfirmations["pbs1"] = 5
 		m.mu.Unlock()
@@ -6072,7 +6126,7 @@ func TestClearPBSOfflineAlert(t *testing.T) {
 
 	t.Run("clears existing alert and adds to resolved", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		var resolvedCalled bool
 		m.SetResolvedCallback(func(alertID string) {
 			resolvedCalled = true
@@ -6120,7 +6174,7 @@ func TestClearPMGOfflineAlert(t *testing.T) {
 
 	t.Run("no alert and no count is no-op", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1"}
 		m.clearPMGOfflineAlert(pmg)
@@ -6135,7 +6189,7 @@ func TestClearPMGOfflineAlert(t *testing.T) {
 
 	t.Run("resets offline confirmation count", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.offlineConfirmations["pmg1"] = 5
 		m.mu.Unlock()
@@ -6153,7 +6207,7 @@ func TestClearPMGOfflineAlert(t *testing.T) {
 
 	t.Run("clears existing alert and adds to resolved", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		var resolvedCalled bool
 		m.SetResolvedCallback(func(alertID string) {
 			resolvedCalled = true
@@ -6201,7 +6255,7 @@ func TestCheckNodeOffline(t *testing.T) {
 
 	t.Run("override DisableConnectivity clears alert and returns", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Overrides = map[string]ThresholdConfig{
 			"node1": {DisableConnectivity: true},
@@ -6228,7 +6282,7 @@ func TestCheckNodeOffline(t *testing.T) {
 
 	t.Run("existing alert updates StartTime", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		oldTime := time.Now().Add(-1 * time.Hour)
 		m.mu.Lock()
 		m.activeAlerts["node-offline-node1"] = &Alert{
@@ -6254,7 +6308,7 @@ func TestCheckNodeOffline(t *testing.T) {
 
 	t.Run("insufficient confirmations waits", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		node := models.Node{ID: "node1", Name: "Node 1", Instance: "pve1"}
 
@@ -6287,7 +6341,7 @@ func TestCheckNodeOffline(t *testing.T) {
 
 	t.Run("creates alert after 3 confirmations", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.nodeOfflineCount["node1"] = 2 // Pre-set to trigger on next call
 		m.mu.Unlock()
@@ -6326,7 +6380,7 @@ func TestCheckNodeOffline(t *testing.T) {
 
 	t.Run("alert added to history", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.nodeOfflineCount["node1"] = 2
 		m.mu.Unlock()
@@ -6354,7 +6408,7 @@ func TestCheckPBSOffline(t *testing.T) {
 
 	t.Run("override Disabled clears alert and returns", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Overrides = map[string]ThresholdConfig{
 			"pbs1": {Disabled: true},
@@ -6376,7 +6430,7 @@ func TestCheckPBSOffline(t *testing.T) {
 
 	t.Run("override DisableConnectivity clears alert and returns", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Overrides = map[string]ThresholdConfig{
 			"pbs1": {DisableConnectivity: true},
@@ -6398,7 +6452,7 @@ func TestCheckPBSOffline(t *testing.T) {
 
 	t.Run("insufficient confirmations waits", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pbs := models.PBSInstance{ID: "pbs1", Name: "PBS 1"}
 
@@ -6421,7 +6475,7 @@ func TestCheckPBSOffline(t *testing.T) {
 
 	t.Run("creates alert after 3 confirmations", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.offlineConfirmations["pbs1"] = 2
 		m.mu.Unlock()
@@ -6450,7 +6504,7 @@ func TestCheckPBSOffline(t *testing.T) {
 
 	t.Run("existing alert updates LastSeen", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		oldTime := time.Now().Add(-1 * time.Hour)
 		m.mu.Lock()
 		m.offlineConfirmations["pbs1"] = 3
@@ -6481,7 +6535,7 @@ func TestCheckPMGOffline(t *testing.T) {
 
 	t.Run("override Disabled clears alert and returns", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Overrides = map[string]ThresholdConfig{
 			"pmg1": {Disabled: true},
@@ -6503,7 +6557,7 @@ func TestCheckPMGOffline(t *testing.T) {
 
 	t.Run("override DisableConnectivity clears alert and returns", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Overrides = map[string]ThresholdConfig{
 			"pmg1": {DisableConnectivity: true},
@@ -6525,7 +6579,7 @@ func TestCheckPMGOffline(t *testing.T) {
 
 	t.Run("insufficient confirmations waits", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1"}
 
@@ -6548,7 +6602,7 @@ func TestCheckPMGOffline(t *testing.T) {
 
 	t.Run("creates alert after 3 confirmations", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		m.mu.Lock()
 		m.offlineConfirmations["pmg1"] = 2
 		m.mu.Unlock()
@@ -6577,7 +6631,7 @@ func TestCheckPMGOffline(t *testing.T) {
 
 	t.Run("existing alert updates LastSeen", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		oldTime := time.Now().Add(-1 * time.Hour)
 		m.mu.Lock()
 		m.offlineConfirmations["pmg1"] = 3
@@ -6757,7 +6811,7 @@ func TestCreateOrUpdateNodeAlert(t *testing.T) {
 
 	t.Run("creates new alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1"}
 		m.createOrUpdateNodeAlert(
@@ -6797,7 +6851,7 @@ func TestCreateOrUpdateNodeAlert(t *testing.T) {
 
 	t.Run("updates existing alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 		oldTime := time.Now().Add(-1 * time.Hour)
 		m.mu.Lock()
 		m.activeAlerts["pmg1-node-queue"] = &Alert{
@@ -6852,7 +6906,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 
 	t.Run("no thresholds configured does not create alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -6877,7 +6931,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 
 	t.Run("total queue warning alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -6912,7 +6966,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 
 	t.Run("total queue critical alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -6946,7 +7000,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 
 	t.Run("deferred queue warning alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -6980,7 +7034,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 
 	t.Run("deferred queue critical alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -7011,7 +7065,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 
 	t.Run("hold queue warning alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -7045,7 +7099,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 
 	t.Run("hold queue critical alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -7076,7 +7130,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 
 	t.Run("updates existing alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-1 * time.Hour)
 		m.mu.Lock()
@@ -7122,7 +7176,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 
 	t.Run("below threshold clears alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.activeAlerts["pmg1-queue-total"] = &Alert{ID: "pmg1-queue-total"}
@@ -7153,7 +7207,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 
 	t.Run("nil QueueStatus is handled", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -7185,7 +7239,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 
 	t.Run("no thresholds configured returns early", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -7209,7 +7263,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 
 	t.Run("no messages clears existing alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.activeAlerts["pmg1-oldest-message"] = &Alert{ID: "pmg1-oldest-message"}
@@ -7240,7 +7294,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 
 	t.Run("warning alert when message age exceeds warning threshold", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -7277,7 +7331,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 
 	t.Run("critical alert when message age exceeds critical threshold", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -7310,7 +7364,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 
 	t.Run("below threshold clears alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.activeAlerts["pmg1-oldest-message"] = &Alert{ID: "pmg1-oldest-message"}
@@ -7341,7 +7395,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 
 	t.Run("finds oldest across multiple nodes", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -7373,7 +7427,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 
 	t.Run("updates existing alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-1 * time.Hour)
 		m.mu.Lock()
@@ -7419,7 +7473,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 
 	t.Run("nil QueueStatus is handled", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -7454,7 +7508,7 @@ func TestCheckStorageOffline(t *testing.T) {
 
 	t.Run("first poll increments confirmation but does not create alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		storage := models.Storage{
 			ID:   "local-lvm",
@@ -7479,7 +7533,7 @@ func TestCheckStorageOffline(t *testing.T) {
 
 	t.Run("second poll creates alert after confirmation", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		storage := models.Storage{
 			ID:       "local-lvm",
@@ -7516,7 +7570,7 @@ func TestCheckStorageOffline(t *testing.T) {
 
 	t.Run("existing alert updates LastSeen", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-1 * time.Hour)
 		m.mu.Lock()
@@ -7546,7 +7600,7 @@ func TestCheckStorageOffline(t *testing.T) {
 
 	t.Run("disabled storage clears existing alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Pre-create an alert
 		m.mu.Lock()
@@ -7575,7 +7629,7 @@ func TestCheckStorageOffline(t *testing.T) {
 
 	t.Run("disabled storage does not create alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.config.Overrides = map[string]ThresholdConfig{
@@ -7609,7 +7663,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 
 	t.Run("first poll increments confirmation but does not create alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
 
@@ -7628,7 +7682,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 
 	t.Run("second poll creates alert after confirmation", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// First poll - confirmation
 		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
@@ -7655,7 +7709,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 
 	t.Run("existing alert updates LastSeen and level", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-1 * time.Hour)
 		m.mu.Lock()
@@ -7679,7 +7733,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 
 	t.Run("monitorOnly flag is set in metadata", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// First poll
 		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", true)
@@ -7703,7 +7757,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 
 	t.Run("disabled guest clears existing alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Pre-create an alert and confirmation count
 		m.mu.Lock()
@@ -7731,7 +7785,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 
 	t.Run("disableConnectivity clears existing alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Pre-create an alert
 		m.mu.Lock()
@@ -7754,7 +7808,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 
 	t.Run("uses override severity when configured", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.config.Overrides = map[string]ThresholdConfig{
@@ -7781,7 +7835,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 
 	t.Run("uses default severity when no override", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.config.GuestDefaults.PoweredOffSeverity = AlertLevelCritical
@@ -7806,7 +7860,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 
 	t.Run("container type in message", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// First poll
 		m.checkGuestPoweredOff("ct200", "TestContainer", "pve-node1", "pve-instance", "Container", false)
@@ -7834,7 +7888,7 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("auto-acknowledges old alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-3 * time.Hour)
 		m.mu.Lock()
@@ -7865,7 +7919,7 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("removes old acknowledged alerts by TTL", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldAckTime := time.Now().Add(-10 * 24 * time.Hour) // 10 days ago
 		m.mu.Lock()
@@ -7890,7 +7944,7 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("removes old unacknowledged alerts by TTL", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-40 * 24 * time.Hour) // 40 days ago
 		m.mu.Lock()
@@ -7916,7 +7970,7 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("removes acknowledged alerts by maxAge fallback", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldAckTime := time.Now().Add(-2 * time.Hour)
 		m.mu.Lock()
@@ -7940,7 +7994,7 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("cleans up old recent alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-10 * time.Minute)
 		m.mu.Lock()
@@ -7963,7 +8017,7 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("cleans up expired suppressions", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.suppressedUntil["suppressed-alert"] = time.Now().Add(-1 * time.Hour)
@@ -7982,7 +8036,7 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("cleans up old rate limit entries", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.alertRateLimit["rate-limited"] = []time.Time{
@@ -8004,7 +8058,7 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("removes empty rate limit entries", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.alertRateLimit["all-old"] = []time.Time{
@@ -8025,7 +8079,7 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("cleans up old recently resolved alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.resolvedMutex.Lock()
 		m.recentlyResolved["old-resolved"] = &ResolvedAlert{
@@ -8047,7 +8101,7 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("cleans up stale pending alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.pendingAlerts["stale-pending"] = time.Now().Add(-15 * time.Minute)
@@ -8066,7 +8120,7 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("cleans up flapping history for inactive alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.flappingHistory["inactive-alert"] = []time.Time{
@@ -8093,7 +8147,7 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("cleans up stale Docker restart tracking", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.dockerRestartTracking["stale-container"] = &dockerRestartRecord{
@@ -8114,7 +8168,7 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("cleans up stale PMG anomaly trackers", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.pmgAnomalyTrackers["stale-pmg"] = &pmgAnomalyTracker{
@@ -8135,7 +8189,7 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("cleans up empty PMG quarantine history", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.pmgQuarantineHistory["empty-pmg"] = []pmgQuarantineSnapshot{}
@@ -8154,7 +8208,7 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("cleans up stale PMG quarantine history", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.pmgQuarantineHistory["stale-pmg"] = []pmgQuarantineSnapshot{
@@ -8179,7 +8233,7 @@ func TestConvertLegacyThreshold(t *testing.T) {
 
 	t.Run("nil input returns nil", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		result := m.convertLegacyThreshold(nil)
 
@@ -8190,7 +8244,7 @@ func TestConvertLegacyThreshold(t *testing.T) {
 
 	t.Run("zero value returns nil", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		zero := 0.0
 		result := m.convertLegacyThreshold(&zero)
@@ -8202,7 +8256,7 @@ func TestConvertLegacyThreshold(t *testing.T) {
 
 	t.Run("negative value returns nil", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		neg := -5.0
 		result := m.convertLegacyThreshold(&neg)
@@ -8214,7 +8268,7 @@ func TestConvertLegacyThreshold(t *testing.T) {
 
 	t.Run("positive value with default margin", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		threshold := 80.0
 		result := m.convertLegacyThreshold(&threshold)
@@ -8232,7 +8286,7 @@ func TestConvertLegacyThreshold(t *testing.T) {
 
 	t.Run("positive value with custom margin", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.config.HysteresisMargin = 10.0
@@ -8258,7 +8312,7 @@ func TestCheckEscalations(t *testing.T) {
 
 	t.Run("does nothing when escalation is disabled", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-2 * time.Hour)
 		m.mu.Lock()
@@ -8286,7 +8340,7 @@ func TestCheckEscalations(t *testing.T) {
 
 	t.Run("skips acknowledged alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-2 * time.Hour)
 		m.mu.Lock()
@@ -8315,7 +8369,7 @@ func TestCheckEscalations(t *testing.T) {
 
 	t.Run("escalates alert after threshold time", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-45 * time.Minute) // 45 minutes ago
 		m.mu.Lock()
@@ -8347,7 +8401,7 @@ func TestCheckEscalations(t *testing.T) {
 
 	t.Run("escalates to multiple levels", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-90 * time.Minute) // 90 minutes ago
 		m.mu.Lock()
@@ -8379,7 +8433,7 @@ func TestCheckEscalations(t *testing.T) {
 
 	t.Run("does not re-escalate already escalated level", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-45 * time.Minute)
 		m.mu.Lock()
@@ -8411,7 +8465,7 @@ func TestCheckEscalations(t *testing.T) {
 
 	t.Run("does not escalate before threshold time", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		recentTime := time.Now().Add(-10 * time.Minute) // Only 10 minutes ago
 		m.mu.Lock()
@@ -8443,7 +8497,7 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 
 	t.Run("removes alerts for non-existent nodes", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.activeAlerts["alert-old-node"] = &Alert{
@@ -8480,7 +8534,7 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 
 	t.Run("skips Docker alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.activeAlerts["docker-container-state"] = &Alert{
@@ -8514,7 +8568,7 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 
 	t.Run("skips PBS alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.activeAlerts["pbs-offline-test"] = &Alert{
@@ -8547,7 +8601,7 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 
 	t.Run("removes alerts with empty node", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.activeAlerts["empty-node-alert"] = &Alert{
@@ -8575,7 +8629,7 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 
 	t.Run("handles nil alert in map", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.activeAlerts["nil-alert"] = nil
@@ -8603,7 +8657,7 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 
 	t.Run("no cleanup needed logs correctly", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.activeAlerts["valid-alert"] = &Alert{
@@ -8634,7 +8688,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 
 	t.Run("nil ZFSPool returns early", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		storage := models.Storage{
 			ID:      "local-zfs",
@@ -8657,7 +8711,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 
 	t.Run("ONLINE pool does not create state alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		storage := models.Storage{
 			ID:   "local-zfs",
@@ -8682,7 +8736,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 
 	t.Run("DEGRADED pool creates warning alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		storage := models.Storage{
 			ID:       "local-zfs",
@@ -8714,7 +8768,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 
 	t.Run("FAULTED pool creates critical alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		storage := models.Storage{
 			ID:   "local-zfs",
@@ -8742,7 +8796,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 
 	t.Run("UNAVAIL pool creates critical alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		storage := models.Storage{
 			ID:   "local-zfs",
@@ -8770,7 +8824,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 
 	t.Run("pool coming back ONLINE clears state alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Pre-create a state alert
 		m.mu.Lock()
@@ -8803,7 +8857,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 
 	t.Run("pool with errors creates error alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		storage := models.Storage{
 			ID:   "local-zfs",
@@ -8837,7 +8891,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 
 	t.Run("pool error count increase updates alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-1 * time.Hour)
 		m.mu.Lock()
@@ -8881,7 +8935,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 
 	t.Run("pool with no errors clears error alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.activeAlerts["zfs-pool-errors-local-zfs"] = &Alert{
@@ -8915,7 +8969,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 
 	t.Run("device with errors creates device alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		storage := models.Storage{
 			ID:   "local-zfs",
@@ -8946,7 +9000,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 
 	t.Run("device in FAULTED state creates critical alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		storage := models.Storage{
 			ID:   "local-zfs",
@@ -8977,7 +9031,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 
 	t.Run("healthy device clears device alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		m.mu.Lock()
 		m.activeAlerts["zfs-device-local-zfs-sda"] = &Alert{
@@ -9011,7 +9065,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 
 	t.Run("SPARE device in normal state does not create alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		storage := models.Storage{
 			ID:   "local-zfs",
@@ -9043,7 +9097,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 
 	t.Run("empty nodes returns early", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:    "pmg1",
@@ -9069,7 +9123,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 
 	t.Run("nil QueueStatus is skipped", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -9096,7 +9150,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 
 	t.Run("total queue warning alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -9130,7 +9184,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 
 	t.Run("total queue critical alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -9161,7 +9215,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 
 	t.Run("deferred queue warning alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -9192,7 +9246,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 
 	t.Run("hold queue warning alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -9223,7 +9277,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 
 	t.Run("oldest message age warning alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -9257,7 +9311,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 
 	t.Run("below threshold clears alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		// Pre-create an alert
 		m.mu.Lock()
@@ -9290,7 +9344,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 
 	t.Run("outlier detection adds note to message", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -9323,7 +9377,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 
 	t.Run("no thresholds configured does not create alerts", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		pmg := models.PMGInstance{
 			ID:   "pmg1",
@@ -9348,7 +9402,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 
 	t.Run("updates existing alert", func(t *testing.T) {
 		t.Parallel()
-		m := NewManager()
+		m := newTestManager(t)
 
 		oldTime := time.Now().Add(-1 * time.Hour)
 		m.mu.Lock()
