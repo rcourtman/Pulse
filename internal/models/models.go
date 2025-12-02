@@ -1083,6 +1083,14 @@ func (s *State) UpdateVMsForInstance(instanceName string, vms []VM) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Build a lookup of existing VMs for this instance to preserve LastBackup
+	existingByVMID := make(map[int]VM)
+	for _, vm := range s.VMs {
+		if vm.Instance == instanceName {
+			existingByVMID[vm.VMID] = vm
+		}
+	}
+
 	// Create a map of existing VMs, excluding those from this instance
 	vmMap := make(map[string]VM)
 	for _, vm := range s.VMs {
@@ -1091,8 +1099,11 @@ func (s *State) UpdateVMsForInstance(instanceName string, vms []VM) {
 		}
 	}
 
-	// Add or update VMs from this instance
+	// Add or update VMs from this instance, preserving LastBackup from existing data
 	for _, vm := range vms {
+		if existing, ok := existingByVMID[vm.VMID]; ok && vm.LastBackup.IsZero() {
+			vm.LastBackup = existing.LastBackup
+		}
 		vmMap[vm.ID] = vm
 	}
 
@@ -1169,6 +1180,14 @@ func (s *State) UpdateContainersForInstance(instanceName string, containers []Co
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Build a lookup of existing containers for this instance to preserve LastBackup
+	existingByVMID := make(map[int]Container)
+	for _, ct := range s.Containers {
+		if ct.Instance == instanceName {
+			existingByVMID[ct.VMID] = ct
+		}
+	}
+
 	// Create a map of existing containers, excluding those from this instance
 	containerMap := make(map[string]Container)
 	for _, container := range s.Containers {
@@ -1177,8 +1196,11 @@ func (s *State) UpdateContainersForInstance(instanceName string, containers []Co
 		}
 	}
 
-	// Add or update containers from this instance
+	// Add or update containers from this instance, preserving LastBackup from existing data
 	for _, container := range containers {
+		if existing, ok := existingByVMID[container.VMID]; ok && container.LastBackup.IsZero() {
+			container.LastBackup = existing.LastBackup
+		}
 		containerMap[container.ID] = container
 	}
 

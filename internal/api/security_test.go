@@ -616,6 +616,31 @@ func TestGetLockoutInfo(t *testing.T) {
 			t.Error("expected lockedUntil to be set")
 		}
 	})
+
+	t.Run("expired lockout returns zeros", func(t *testing.T) {
+		resetFailedLogins()
+		identifier := "expired-lockout-user"
+
+		// Directly set an expired lockout entry
+		failedMu.Lock()
+		failedLogins[identifier] = &FailedLogin{
+			Count:       maxFailedAttempts,
+			LastAttempt: time.Now().Add(-time.Hour),
+			LockedUntil: time.Now().Add(-time.Minute), // Expired
+		}
+		failedMu.Unlock()
+
+		attempts, lockedUntil, isLocked := GetLockoutInfo(identifier)
+		if attempts != 0 {
+			t.Errorf("attempts = %d, want 0 for expired lockout", attempts)
+		}
+		if !lockedUntil.IsZero() {
+			t.Errorf("lockedUntil = %v, want zero time for expired lockout", lockedUntil)
+		}
+		if isLocked {
+			t.Error("expected isLocked = false for expired lockout")
+		}
+	})
 }
 
 func TestResetLockout(t *testing.T) {
