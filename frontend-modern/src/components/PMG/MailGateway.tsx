@@ -22,7 +22,7 @@ const parseTimestamp = (value?: string) => {
 };
 
 const MailGateway: Component = () => {
-  const { state, connected } = useWebSocket();
+  const { state, connected, reconnecting, reconnect } = useWebSocket();
   const instances = createMemo(() => state.pmg ?? []);
 
   return (
@@ -30,15 +30,30 @@ const MailGateway: Component = () => {
       <ProxmoxSectionNav current="mail" />
 
       <Show when={!connected()}>
-        <Card padding="lg" tone="warning">
+        <Card padding="lg" tone="danger">
           <EmptyState
             icon={
-              <svg class="h-12 w-12 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg class="h-12 w-12 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             }
-            title="Disconnected from backend"
-            description="Waiting for backend to reconnect before loading Mail Gateway details."
+            title="Connection lost"
+            description={
+              reconnecting()
+                ? 'Attempting to reconnect…'
+                : 'Unable to connect to the backend server'
+            }
+            tone="danger"
+            actions={
+              !reconnecting() ? (
+                <button
+                  onClick={() => reconnect()}
+                  class="mt-2 inline-flex items-center px-4 py-2 text-xs font-medium rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
+                >
+                  Reconnect now
+                </button>
+              ) : undefined
+            }
           />
         </Card>
       </Show>
