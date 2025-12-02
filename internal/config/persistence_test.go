@@ -1171,6 +1171,70 @@ func TestLoadEmailConfigFileNotExist(t *testing.T) {
 	}
 }
 
+func TestLoadEmailConfig_EncryptedRoundTrip(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Create a config with all fields populated
+	original := notifications.EmailConfig{
+		Enabled:  true,
+		Provider: "smtp",
+		SMTPHost: "mail.example.com",
+		SMTPPort: 465,
+		Username: "user@example.com",
+		Password: "secret-password",
+		From:     "alerts@example.com",
+		To:       []string{"admin@example.com", "ops@example.com"},
+		TLS:      true,
+		StartTLS: false,
+	}
+
+	// Save (encrypts) then Load (decrypts)
+	if err := cp.SaveEmailConfig(original); err != nil {
+		t.Fatalf("SaveEmailConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadEmailConfig()
+	if err != nil {
+		t.Fatalf("LoadEmailConfig: %v", err)
+	}
+
+	// Verify round-trip preserved all fields
+	if loaded.Enabled != original.Enabled {
+		t.Errorf("Enabled mismatch: got %v, want %v", loaded.Enabled, original.Enabled)
+	}
+	if loaded.Provider != original.Provider {
+		t.Errorf("Provider mismatch: got %v, want %v", loaded.Provider, original.Provider)
+	}
+	if loaded.SMTPHost != original.SMTPHost {
+		t.Errorf("SMTPHost mismatch: got %v, want %v", loaded.SMTPHost, original.SMTPHost)
+	}
+	if loaded.SMTPPort != original.SMTPPort {
+		t.Errorf("SMTPPort mismatch: got %v, want %v", loaded.SMTPPort, original.SMTPPort)
+	}
+	if loaded.Username != original.Username {
+		t.Errorf("Username mismatch: got %v, want %v", loaded.Username, original.Username)
+	}
+	if loaded.Password != original.Password {
+		t.Errorf("Password mismatch: got %v, want %v", loaded.Password, original.Password)
+	}
+	if loaded.From != original.From {
+		t.Errorf("From mismatch: got %v, want %v", loaded.From, original.From)
+	}
+	if len(loaded.To) != len(original.To) {
+		t.Errorf("To length mismatch: got %d, want %d", len(loaded.To), len(original.To))
+	}
+	if loaded.TLS != original.TLS {
+		t.Errorf("TLS mismatch: got %v, want %v", loaded.TLS, original.TLS)
+	}
+	if loaded.StartTLS != original.StartTLS {
+		t.Errorf("StartTLS mismatch: got %v, want %v", loaded.StartTLS, original.StartTLS)
+	}
+}
+
 func TestLoadWebhooksErrorInvalidJSON(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
