@@ -258,3 +258,126 @@ func TestRecordTaskResult_NilMaps(t *testing.T) {
 		t.Error("expected pollStatusMap to be updated even with nil failureCounts/lastOutcome")
 	}
 }
+
+func TestDescribeInstancesForScheduler_NoClients(t *testing.T) {
+	m := &Monitor{
+		pveClients: make(map[string]PVEClientInterface),
+		pbsClients: make(map[string]*pbs.Client),
+		pmgClients: make(map[string]*pmg.Client),
+	}
+
+	descriptors := m.describeInstancesForScheduler()
+	if descriptors != nil {
+		t.Errorf("expected nil for empty clients, got %v", descriptors)
+	}
+}
+
+func TestDescribeInstancesForScheduler_PVEOnly(t *testing.T) {
+	m := &Monitor{
+		pveClients: map[string]PVEClientInterface{"pve-1": nil, "pve-2": nil},
+		pbsClients: make(map[string]*pbs.Client),
+		pmgClients: make(map[string]*pmg.Client),
+	}
+
+	descriptors := m.describeInstancesForScheduler()
+	if len(descriptors) != 2 {
+		t.Fatalf("expected 2 descriptors, got %d", len(descriptors))
+	}
+
+	// Should be sorted
+	if descriptors[0].Name != "pve-1" || descriptors[1].Name != "pve-2" {
+		t.Errorf("expected sorted order [pve-1, pve-2], got [%s, %s]", descriptors[0].Name, descriptors[1].Name)
+	}
+
+	for _, desc := range descriptors {
+		if desc.Type != InstanceTypePVE {
+			t.Errorf("expected type PVE, got %v", desc.Type)
+		}
+	}
+}
+
+func TestDescribeInstancesForScheduler_PBSOnly(t *testing.T) {
+	m := &Monitor{
+		pveClients: make(map[string]PVEClientInterface),
+		pbsClients: map[string]*pbs.Client{"pbs-backup": nil},
+		pmgClients: make(map[string]*pmg.Client),
+	}
+
+	descriptors := m.describeInstancesForScheduler()
+	if len(descriptors) != 1 {
+		t.Fatalf("expected 1 descriptor, got %d", len(descriptors))
+	}
+
+	if descriptors[0].Name != "pbs-backup" {
+		t.Errorf("expected name 'pbs-backup', got %q", descriptors[0].Name)
+	}
+	if descriptors[0].Type != InstanceTypePBS {
+		t.Errorf("expected type PBS, got %v", descriptors[0].Type)
+	}
+}
+
+func TestDescribeInstancesForScheduler_PMGOnly(t *testing.T) {
+	m := &Monitor{
+		pveClients: make(map[string]PVEClientInterface),
+		pbsClients: make(map[string]*pbs.Client),
+		pmgClients: map[string]*pmg.Client{"pmg-mail": nil},
+	}
+
+	descriptors := m.describeInstancesForScheduler()
+	if len(descriptors) != 1 {
+		t.Fatalf("expected 1 descriptor, got %d", len(descriptors))
+	}
+
+	if descriptors[0].Name != "pmg-mail" {
+		t.Errorf("expected name 'pmg-mail', got %q", descriptors[0].Name)
+	}
+	if descriptors[0].Type != InstanceTypePMG {
+		t.Errorf("expected type PMG, got %v", descriptors[0].Type)
+	}
+}
+
+func TestDescribeInstancesForScheduler_AllTypes(t *testing.T) {
+	m := &Monitor{
+		pveClients: map[string]PVEClientInterface{"pve-1": nil},
+		pbsClients: map[string]*pbs.Client{"pbs-1": nil},
+		pmgClients: map[string]*pmg.Client{"pmg-1": nil},
+	}
+
+	descriptors := m.describeInstancesForScheduler()
+	if len(descriptors) != 3 {
+		t.Fatalf("expected 3 descriptors, got %d", len(descriptors))
+	}
+
+	// Check we have one of each type
+	types := make(map[InstanceType]bool)
+	for _, desc := range descriptors {
+		types[desc.Type] = true
+	}
+	if !types[InstanceTypePVE] || !types[InstanceTypePBS] || !types[InstanceTypePMG] {
+		t.Error("expected one descriptor of each type")
+	}
+}
+
+func TestDescribeInstancesForScheduler_NilSchedulerAndTracker(t *testing.T) {
+	m := &Monitor{
+		pveClients:       map[string]PVEClientInterface{"pve-1": nil},
+		pbsClients:       make(map[string]*pbs.Client),
+		pmgClients:       make(map[string]*pmg.Client),
+		scheduler:        nil, // explicitly nil
+		stalenessTracker: nil, // explicitly nil
+	}
+
+	// Should not panic with nil scheduler and stalenessTracker
+	descriptors := m.describeInstancesForScheduler()
+	if len(descriptors) != 1 {
+		t.Fatalf("expected 1 descriptor, got %d", len(descriptors))
+	}
+
+	// LastScheduled and LastSuccess should be zero values
+	if !descriptors[0].LastScheduled.IsZero() {
+		t.Error("expected LastScheduled to be zero with nil scheduler")
+	}
+	if !descriptors[0].LastSuccess.IsZero() {
+		t.Error("expected LastSuccess to be zero with nil stalenessTracker")
+	}
+}
