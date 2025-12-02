@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -1382,5 +1383,55 @@ func TestGetNodes_InvalidJSON(t *testing.T) {
 	_, err = client.GetNodes(ctx)
 	if err == nil {
 		t.Fatal("expected JSON decode error, got nil")
+	}
+}
+
+func TestNewClient_InvalidUserFormat(t *testing.T) {
+	tests := []struct {
+		name        string
+		user        string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:        "missing realm separator",
+			user:        "userwithoutrealm",
+			wantErr:     true,
+			errContains: "invalid user format",
+		},
+		{
+			name:        "empty user",
+			user:        "",
+			wantErr:     true,
+			errContains: "invalid user format",
+		},
+		{
+			name:        "multiple @ symbols",
+			user:        "user@realm@extra",
+			wantErr:     true,
+			errContains: "invalid user format",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := ClientConfig{
+				Host:     "https://localhost:8006",
+				User:     tc.user,
+				Password: "testpass",
+			}
+
+			_, err := NewClient(cfg)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("expected error for user %q, got nil", tc.user)
+				} else if !strings.Contains(err.Error(), tc.errContains) {
+					t.Errorf("expected error containing %q, got: %v", tc.errContains, err)
+				}
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("unexpected error for user %q: %v", tc.user, err)
+			}
+		})
 	}
 }
