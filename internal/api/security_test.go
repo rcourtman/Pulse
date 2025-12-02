@@ -1333,6 +1333,32 @@ func TestCheckCSRF_InvalidCSRFToken(t *testing.T) {
 	}
 }
 
+func TestCheckCSRF_ValidCSRFToken(t *testing.T) {
+	// Initialize stores with temp directory
+	dir := t.TempDir()
+	InitCSRFStore(dir)
+
+	// Create a session ID
+	sessionID := "valid-session-id-12345678"
+
+	// Generate a valid CSRF token for this session
+	validToken := generateCSRFToken(sessionID)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/test", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  "pulse_session",
+		Value: sessionID,
+	})
+	req.Header.Set("X-CSRF-Token", validToken)
+
+	// Valid CSRF token should pass
+	result := CheckCSRF(w, req)
+	if !result {
+		t.Error("CheckCSRF should return true when CSRF token is valid")
+	}
+}
+
 func TestCheckCSRF_CSRFTokenFromFormValue(t *testing.T) {
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/test?csrf_token=form-token-value", nil)
