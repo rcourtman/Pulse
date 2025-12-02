@@ -113,6 +113,53 @@ func TestVMFileSystemUnmarshalFlexibleNumbers(t *testing.T) {
 	})
 }
 
+func TestVMFileSystemUnmarshalJSON_InvalidValues(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		wantErr bool
+	}{
+		{
+			name:    "invalid JSON",
+			payload: `{invalid json}`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid total-bytes field type",
+			payload: `{"name":"rootfs","type":"zfs","mountpoint":"/","total-bytes":true,"used-bytes":1000}`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid used-bytes field type",
+			payload: `{"name":"rootfs","type":"zfs","mountpoint":"/","total-bytes":1000,"used-bytes":[1,2,3]}`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid string value for total-bytes",
+			payload: `{"name":"rootfs","type":"zfs","mountpoint":"/","total-bytes":"not-a-number","used-bytes":1000}`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid string value for used-bytes",
+			payload: `{"name":"rootfs","type":"zfs","mountpoint":"/","total-bytes":1000,"used-bytes":"invalid"}`,
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var fs VMFileSystem
+			err := json.Unmarshal([]byte(tc.payload), &fs)
+			if tc.wantErr && err == nil {
+				t.Errorf("expected error for %s, got nil", tc.name)
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("unexpected error for %s: %v", tc.name, err)
+			}
+		})
+	}
+}
+
 func TestMemoryStatusEffectiveAvailable(t *testing.T) {
 	t.Run("nil receiver returns zero", func(t *testing.T) {
 		var status *MemoryStatus
