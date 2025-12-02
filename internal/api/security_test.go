@@ -43,6 +43,77 @@ func TestGetClientIPUsesForwardedForTrustedProxy(t *testing.T) {
 	}
 }
 
+func TestGetClientIPEmptyRemoteAddr(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	resetTrustedProxyConfig()
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "" // Empty remote addr
+
+	if got := GetClientIP(req); got != "" {
+		t.Fatalf("expected empty string for empty RemoteAddr, got %q", got)
+	}
+}
+
+func TestGetClientIPUsesXRealIPTrustedProxy(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
+	resetTrustedProxyConfig()
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:54321"
+	// No X-Forwarded-For, but has X-Real-IP
+	req.Header.Set("X-Real-IP", "203.0.113.55")
+
+	if got := GetClientIP(req); got != "203.0.113.55" {
+		t.Fatalf("expected X-Real-IP for trusted proxy, got %q", got)
+	}
+}
+
+func TestIsTrustedProxyIP(t *testing.T) {
+	tests := []struct {
+		name    string
+		envCIDR string
+		ipStr   string
+		want    bool
+	}{
+		{
+			name:    "empty string returns false",
+			envCIDR: "127.0.0.1/32",
+			ipStr:   "",
+			want:    false,
+		},
+		{
+			name:    "invalid IP returns false",
+			envCIDR: "127.0.0.1/32",
+			ipStr:   "not-an-ip",
+			want:    false,
+		},
+		{
+			name:    "IP not in CIDR range returns false",
+			envCIDR: "10.0.0.0/8",
+			ipStr:   "192.168.1.1",
+			want:    false,
+		},
+		{
+			name:    "IP in CIDR range returns true",
+			envCIDR: "10.0.0.0/8",
+			ipStr:   "10.1.2.3",
+			want:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", tt.envCIDR)
+			resetTrustedProxyConfig()
+
+			if got := isTrustedProxyIP(tt.ipStr); got != tt.want {
+				t.Errorf("isTrustedProxyIP(%q) = %v, want %v", tt.ipStr, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsPrivateIP(t *testing.T) {
 	cases := []struct {
 		name string
