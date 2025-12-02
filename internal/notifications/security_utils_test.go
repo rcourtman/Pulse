@@ -319,6 +319,12 @@ func TestExtractTelegramChatID(t *testing.T) {
 			expectError: true,
 			errorSubstr: "missing chat_id parameter",
 		},
+		{
+			name:        "URL with control characters",
+			webhookURL:  "https://api.telegram.org/bot\x00/sendMessage?chat_id=12345",
+			expectError: true,
+			errorSubstr: "invalid URL format",
+		},
 	}
 
 	for _, tt := range tests {
