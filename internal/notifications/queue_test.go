@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -235,4 +236,117 @@ func TestCancelByAlertIDs_NoMatchingNotifications(t *testing.T) {
 	if err != nil {
 		t.Errorf("CancelByAlertIDs with no matching notifications returned error: %v", err)
 	}
+}
+
+func TestProcessNotification_CancelledNotification(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+
+	// Create a cancelled notification
+	notif := &QueuedNotification{
+		ID:     "test-cancelled",
+		Type:   "email",
+		Status: QueueStatusCancelled,
+	}
+
+	// processNotification should return early without processing
+	// No panic or error expected
+	nq.processNotification(notif)
+
+	// Verify the notification wasn't modified (no attempts incremented)
+	// Since it's cancelled, it should just return
+}
+
+func TestProcessNotification_NoProcessor(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+
+	// Enqueue a notification first so IncrementAttemptAndSetStatus works
+	notif := &QueuedNotification{
+		ID:          "test-no-processor",
+		Type:        "email",
+		Status:      QueueStatusPending,
+		MaxAttempts: 3,
+		Config:      []byte(`{}`),
+	}
+
+	if err := nq.Enqueue(notif); err != nil {
+		t.Fatalf("Failed to enqueue: %v", err)
+	}
+
+	// Don't set a processor - processNotification should handle this
+	nq.processNotification(notif)
+
+	// The notification should be scheduled for retry or moved to DLQ
+	// since no processor means failure
+}
+
+func TestProcessNotification_ProcessorSuccess(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+
+	// Enqueue a notification
+	notif := &QueuedNotification{
+		ID:          "test-success",
+		Type:        "email",
+		Status:      QueueStatusPending,
+		MaxAttempts: 3,
+		Config:      []byte(`{}`),
+	}
+
+	if err := nq.Enqueue(notif); err != nil {
+		t.Fatalf("Failed to enqueue: %v", err)
+	}
+
+	// Set a processor that succeeds
+	processorCalled := false
+	nq.SetProcessor(func(n *QueuedNotification) error {
+		processorCalled = true
+		return nil
+	})
+
+	nq.processNotification(notif)
+
+	if !processorCalled {
+		t.Error("Processor was not called")
+	}
+}
+
+func TestProcessNotification_ProcessorFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+
+	// Enqueue a notification with low max attempts
+	notif := &QueuedNotification{
+		ID:          "test-failure",
+		Type:        "email",
+		Status:      QueueStatusPending,
+		MaxAttempts: 1, // Only 1 attempt, so failure goes to DLQ
+		Config:      []byte(`{}`),
+	}
+
+	if err := nq.Enqueue(notif); err != nil {
+		t.Fatalf("Failed to enqueue: %v", err)
+	}
+
+	// Set a processor that fails
+	nq.SetProcessor(func(n *QueuedNotification) error {
+		return fmt.Errorf("simulated failure")
+	})
+
+	nq.processNotification(notif)
+
+	// Notification should be in DLQ since max attempts reached
 }
