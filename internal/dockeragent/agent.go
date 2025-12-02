@@ -62,7 +62,6 @@ type Config struct {
 	CollectDiskMetrics bool
 	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
-	BufferCapacity     int // Number of reports to buffer when offline (default: 60)
 }
 
 var allowedContainerStates = map[string]string{
@@ -238,10 +237,7 @@ func New(cfg Config) (*Agent, error) {
 		agentVersion = Version
 	}
 
-	bufferCapacity := cfg.BufferCapacity
-	if bufferCapacity <= 0 {
-		bufferCapacity = 60
-	}
+	const bufferCapacity = 60
 
 	agent := &Agent{
 		cfg:              cfg,

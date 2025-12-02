@@ -4,7 +4,7 @@ import (
 	"sync"
 )
 
-// Queue is a thread-safe ring buffer for storing failed reports.
+// Queue is a thread-safe bounded FIFO queue. When full, the oldest item is dropped.
 type Queue[T any] struct {
 	mu       sync.Mutex
 	data     []T

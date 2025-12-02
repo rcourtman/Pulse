@@ -13,66 +13,56 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type testWriter struct {
-	t *testing.T
-}
-
-func (w *testWriter) Write(p []byte) (n int, err error) {
-	w.t.Log(string(p))
-	return len(p), nil
-}
-
 func TestAgentBuffering(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
 
-	// 1. Setup Mock Server
 	var (
 		mu              sync.Mutex
 		receivedReports []host.Report
 		shouldFail      bool
+		failedAttempts  int
 	)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		defer mu.Unlock()
+		fail := shouldFail
+		mu.Unlock()
 
-		t.Logf("Server received request: %s %s", r.Method, r.URL.Path)
-
-		if shouldFail {
-			t.Log("Server simulating failure (500)")
-			w.WriteHeader(http.StatusInternalServerError)
+		if r.URL.Path != "/api/agents/host/report" {
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
-		if r.URL.Path != "/api/agents/host/report" {
-			t.Logf("Server 404 for path: %s", r.URL.Path)
-			w.WriteHeader(http.StatusNotFound)
+		if fail {
+			mu.Lock()
+			failedAttempts++
+			mu.Unlock()
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		var report host.Report
 		if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
-			t.Logf("Server failed to decode body: %v", err)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		t.Logf("Server accepted report from %s", report.Host.Hostname)
+		mu.Lock()
 		receivedReports = append(receivedReports, report)
+		mu.Unlock()
+
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
-	// 2. Configure Agent
-	// Use testWriter to capture logs in test output
-	logger := zerolog.New(zerolog.ConsoleWriter{Out: &testWriter{t}}).Level(zerolog.DebugLevel)
+	logger := zerolog.New(zerolog.NewConsoleWriter()).Level(zerolog.WarnLevel)
 
 	cfg := Config{
 		PulseURL:         server.URL,
 		APIToken:         "test-token",
-		Interval:         250 * time.Millisecond,
+		Interval:         50 * time.Millisecond,
 		HostnameOverride: "test-host",
 		Logger:           &logger,
 	}
@@ -82,75 +72,104 @@ func TestAgentBuffering(t *testing.T) {
 		t.Fatalf("Failed to create agent: %v", err)
 	}
 
-	// 3. Run Agent in background
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	var wg sync.WaitGroup
 	wg.Add(1)
-
 	go func() {
 		defer wg.Done()
-		t.Log("Starting agent...")
-		if err := agent.Run(ctx); err != nil && err != context.Canceled {
-			t.Errorf("Agent run failed: %v", err)
-		}
-		t.Log("Agent stopped")
+		_ = agent.Run(ctx)
 	}()
 
-	// 4. Wait for initial successful report
-	t.Log("Waiting for initial report...")
-	time.Sleep(2 * time.Second)
+	// Wait for condition with polling
+	waitFor := func(cond func() bool, timeout time.Duration) bool {
+		deadline := time.After(timeout)
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			if cond() {
+				return true
+			}
+			select {
+			case <-ticker.C:
+			case <-deadline:
+				return false
+			}
+		}
+	}
+
+	// Wait for first successful report
+	if !waitFor(func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(receivedReports) >= 1
+	}, 10*time.Second) {
+		t.Fatal("Timed out waiting for initial report")
+	}
 
 	mu.Lock()
 	initialCount := len(receivedReports)
 	mu.Unlock()
+	t.Logf("Initial reports: %d", initialCount)
 
-	t.Logf("Initial reports received: %d", initialCount)
-	if initialCount == 0 {
-		t.Fatal("Expected at least one initial report")
-	}
-
-	// 5. Simulate Outage
-	t.Log("Simulating outage...")
+	// Simulate outage
 	mu.Lock()
 	shouldFail = true
 	mu.Unlock()
 
-	// Wait for a few cycles (should buffer)
-	time.Sleep(3 * time.Second)
+	// Wait for at least 3 failed attempts (these should be buffered)
+	if !waitFor(func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return failedAttempts >= 3
+	}, 10*time.Second) {
+		mu.Lock()
+		got := failedAttempts
+		mu.Unlock()
+		t.Fatalf("Timed out waiting for failed attempts: got %d", got)
+	}
 
 	mu.Lock()
-	// Should not have received any new reports during outage
-	if len(receivedReports) > initialCount {
-		t.Errorf("Received reports during outage! Expected %d, got %d", initialCount, len(receivedReports))
-	}
+	countDuringOutage := len(receivedReports)
 	mu.Unlock()
 
-	// 6. Recover
-	t.Log("Recovering server...")
+	if countDuringOutage != initialCount {
+		t.Errorf("Reports received during outage: expected %d, got %d", initialCount, countDuringOutage)
+	}
+
+	// Check buffer has items
+	bufferLen := agent.reportBuffer.Len()
+	if bufferLen == 0 {
+		t.Fatal("Buffer should have items after failed sends")
+	}
+	t.Logf("Buffer has %d items after outage", bufferLen)
+
+	// Recover
 	mu.Lock()
 	shouldFail = false
 	mu.Unlock()
 
-	// Wait for flush (flush happens after next successful report)
-	time.Sleep(3 * time.Second)
+	// Wait for buffer to empty (flush complete)
+	if !waitFor(func() bool {
+		return agent.reportBuffer.IsEmpty()
+	}, 10*time.Second) {
+		t.Fatalf("Timed out waiting for buffer to empty, still has %d items", agent.reportBuffer.Len())
+	}
 
-	// Stop agent
-	cancel()
-	wg.Wait()
-
+	// Get final count before stopping
 	mu.Lock()
 	finalCount := len(receivedReports)
 	mu.Unlock()
 
-	t.Logf("Final reports received: %d", finalCount)
+	cancel()
+	wg.Wait()
 
-	// We expect: initial + (buffered during outage) + (new ones after recovery)
-	// If collection is slow (e.g. 1s), we might get 1-2 buffered.
-	// We just want to ensure we got MORE than just the initial ones.
-	// And ideally more than just initial + 1 (which would be just the next report).
-	if finalCount <= initialCount+1 {
-		t.Errorf("Buffered reports were not flushed? Initial: %d, Final: %d", initialCount, finalCount)
+	// Verify we received the buffered reports
+	if finalCount < initialCount+bufferLen {
+		t.Errorf("Expected at least %d reports (initial %d + buffered %d), got %d",
+			initialCount+bufferLen, initialCount, bufferLen, finalCount)
 	}
 
-	t.Logf("Test passed. Initial: %d, Final: %d", initialCount, finalCount)
+	t.Logf("Initial: %d, Buffered: %d, Final: %d", initialCount, bufferLen, finalCount)
 }
