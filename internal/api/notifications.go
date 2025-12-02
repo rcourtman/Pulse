@@ -44,6 +44,9 @@ func (h *NotificationHandlers) GetEmailConfig(w http.ResponseWriter, r *http.Req
 
 // UpdateEmailConfig updates the email configuration
 func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.Request) {
+	// Limit request body to 32KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+
 	// Read raw body for debugging
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -100,6 +103,9 @@ func (h *NotificationHandlers) GetAppriseConfig(w http.ResponseWriter, r *http.R
 
 // UpdateAppriseConfig updates the Apprise configuration.
 func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *http.Request) {
+	// Limit request body to 64KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -187,6 +193,9 @@ func (h *NotificationHandlers) GetWebhooks(w http.ResponseWriter, r *http.Reques
 
 // CreateWebhook creates a new webhook
 func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Request) {
+	// Limit request body to 64KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+
 	// Read the raw body to preserve all fields
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -243,6 +252,9 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Invalid URL - missing webhook ID", http.StatusBadRequest)
 		return
 	}
+
+	// Limit request body to 64KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 
 	// Read the raw body to preserve all fields
 	bodyBytes, err := io.ReadAll(r.Body)
