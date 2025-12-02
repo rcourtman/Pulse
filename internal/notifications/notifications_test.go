@@ -2592,3 +2592,77 @@ func TestSendGroupedApprise_EmptyPayload(t *testing.T) {
 		t.Errorf("expected 'failed to build apprise payload' error, got: %v", err)
 	}
 }
+
+func TestSendHTMLEmailWithError_EmptyToUsesFrom(t *testing.T) {
+	nm := &NotificationManager{}
+	config := EmailConfig{
+		From:     "sender@example.com",
+		To:       []string{}, // Empty To
+		SMTPHost: "invalid.localhost.test",
+		SMTPPort: 25,
+	}
+
+	// Will fail at SMTP connection but exercises the "use From as recipient" path
+	err := nm.sendHTMLEmailWithError("Test Subject", "<p>test</p>", "test", config)
+	if err == nil {
+		t.Error("expected error for invalid SMTP host")
+	}
+	// The key test is that it tried to send - error message should mention SMTP failure
+	if err != nil && !strings.Contains(err.Error(), "failed to send email") {
+		t.Errorf("expected 'failed to send email' error, got: %v", err)
+	}
+}
+
+func TestSendHTMLEmailWithError_NilEmailManager(t *testing.T) {
+	nm := &NotificationManager{
+		emailManager: nil, // Explicitly nil
+	}
+	config := EmailConfig{
+		From:     "sender@example.com",
+		To:       []string{"recipient@example.com"},
+		SMTPHost: "invalid.localhost.test",
+		SMTPPort: 587,
+		Username: "user",
+		Password: "pass",
+	}
+
+	// Will fail but exercises the nil emailManager path (creates a new one)
+	err := nm.sendHTMLEmailWithError("Test Subject", "<p>test</p>", "test", config)
+	if err == nil {
+		t.Error("expected error for invalid SMTP host")
+	}
+}
+
+func TestSendHTMLEmailWithError_ExistingEmailManager(t *testing.T) {
+	// Create an email manager first
+	existingManager := NewEnhancedEmailManager(EmailProviderConfig{
+		EmailConfig: EmailConfig{
+			From:     "old@example.com",
+			To:       []string{"old-recipient@example.com"},
+			SMTPHost: "old.localhost.test",
+			SMTPPort: 25,
+		},
+	})
+
+	nm := &NotificationManager{
+		emailManager: existingManager,
+	}
+
+	config := EmailConfig{
+		From:     "new@example.com",
+		To:       []string{"new-recipient@example.com"},
+		SMTPHost: "invalid.localhost.test",
+		SMTPPort: 587,
+	}
+
+	// Will fail but exercises the "update existing manager config" path
+	err := nm.sendHTMLEmailWithError("Test Subject", "<p>test</p>", "test", config)
+	if err == nil {
+		t.Error("expected error for invalid SMTP host")
+	}
+
+	// Verify the manager's config was updated
+	if existingManager.config.EmailConfig.From != "new@example.com" {
+		t.Errorf("expected From to be updated to 'new@example.com', got %q", existingManager.config.EmailConfig.From)
+	}
+}
