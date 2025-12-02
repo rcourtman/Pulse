@@ -3,10 +3,12 @@
 ## 🛠️ Installation & Setup
 
 ### What's the easiest way to install?
-Run this one-liner on your Proxmox host:
+Use Docker:
 ```bash
-curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
+docker run -d --name pulse -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
 ```
+
+See [INSTALL.md](INSTALL.md) for all options (Docker Compose, Kubernetes, systemd).
 
 ### How do I add a node?
 **Auto-discovery (Recommended)**: Go to **Settings → Nodes**, find your node in the "Discovered" list, click "Setup Script", and run the provided command on your Proxmox host.

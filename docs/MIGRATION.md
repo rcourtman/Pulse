@@ -35,11 +35,11 @@ Never copy `/etc/pulse` or `/var/lib/pulse` manually. Encryption keys and creden
 ### Moving to New Hardware
 Export from old → Install new → Import.
 
-### Docker ↔ Systemd ↔ LXC
-The export file works across all installation methods. You can migrate from Docker to LXC or vice versa seamlessly.
+### Docker ↔ Systemd ↔ Kubernetes
+The export file works across all installation methods. You can migrate from Docker to Kubernetes or vice versa seamlessly.
 
 ### Disaster Recovery
-1.  Install Pulse: `curl -sL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash`
+1.  Install Pulse using Docker or your preferred method (see [INSTALL.md](INSTALL.md)).
 2.  Import your latest backup.
 3.  Restored in < 5 minutes.
 
