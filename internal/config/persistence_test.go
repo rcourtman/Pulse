@@ -1250,6 +1250,73 @@ func TestLoadWebhooksMigrationFromLegacyFile(t *testing.T) {
 	}
 }
 
+func TestLoadWebhooksMigrationFromUnencryptedEncFile(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Write plain JSON to webhooks.enc (migration scenario where file
+	// was written before encryption was enabled)
+	plainWebhooks := []notifications.WebhookConfig{
+		{
+			ID:      "unencrypted-webhook",
+			Name:    "plain-webhook",
+			URL:     "https://example.com/plain",
+			Method:  "POST",
+			Enabled: true,
+		},
+	}
+	plainData, err := json.Marshal(plainWebhooks)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	encFile := filepath.Join(tempDir, "webhooks.enc")
+	if err := os.WriteFile(encFile, plainData, 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// LoadWebhooks should fall back to parsing as plain JSON when decryption fails
+	webhooks, err := cp.LoadWebhooks()
+	if err != nil {
+		t.Fatalf("LoadWebhooks returned error: %v", err)
+	}
+
+	if len(webhooks) != 1 {
+		t.Fatalf("expected 1 webhook, got %d", len(webhooks))
+	}
+
+	if webhooks[0].ID != "unencrypted-webhook" {
+		t.Fatalf("expected ID 'unencrypted-webhook', got %q", webhooks[0].ID)
+	}
+}
+
+func TestLoadWebhooksLegacyFileInvalidJSON(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Create legacy file with invalid JSON - should be ignored, return empty
+	legacyFile := filepath.Join(tempDir, "webhooks.json")
+	if err := os.WriteFile(legacyFile, []byte(`{invalid json`), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// Should return empty slice since legacy file is invalid
+	webhooks, err := cp.LoadWebhooks()
+	if err != nil {
+		t.Fatalf("LoadWebhooks returned error: %v", err)
+	}
+
+	if len(webhooks) != 0 {
+		t.Fatalf("expected empty slice for invalid legacy file, got %d webhooks", len(webhooks))
+	}
+}
+
 func TestLoadNodesConfigEmptyArrays(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
