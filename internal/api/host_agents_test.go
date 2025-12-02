@@ -14,6 +14,51 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
 
+func TestHandleLookupMethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	handler := newHostAgentHandlerForTests(t)
+
+	// Only GET is allowed
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
+		req := httptest.NewRequest(method, "/api/agents/host/lookup?id=test", nil)
+		rec := httptest.NewRecorder()
+
+		handler.HandleLookup(rec, req)
+
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Errorf("%s: expected status %d, got %d", method, http.StatusMethodNotAllowed, rec.Code)
+		}
+	}
+}
+
+func TestHandleLookupMissingParams(t *testing.T) {
+	t.Parallel()
+
+	handler := newHostAgentHandlerForTests(t)
+
+	// Neither id nor hostname provided
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/lookup", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleLookup(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+
+	var resp struct {
+		Error string `json:"error"`
+		Code  string `json:"code"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Code != "missing_lookup_param" {
+		t.Errorf("expected error code 'missing_lookup_param', got %q", resp.Code)
+	}
+}
+
 func TestHandleLookupByIDSuccess(t *testing.T) {
 	t.Parallel()
 
