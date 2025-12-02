@@ -12495,3 +12495,558 @@ func TestCheckGuest(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckHostComprehensive(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns early for empty host ID", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.HostDefaults = ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID:       "",
+			CPUUsage: 95.0,
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		alertCount := len(m.activeAlerts)
+		m.mu.RUnlock()
+
+		if alertCount != 0 {
+			t.Errorf("expected no alerts for empty host ID, got %d", alertCount)
+		}
+	})
+
+	t.Run("returns early when alerts disabled", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.Enabled = false
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID:       "host1",
+			CPUUsage: 95.0,
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		alertCount := len(m.activeAlerts)
+		m.mu.RUnlock()
+
+		if alertCount != 0 {
+			t.Errorf("expected no alerts when disabled, got %d", alertCount)
+		}
+	})
+
+	t.Run("DisableAllHosts clears existing alerts", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["host:host1-cpu"] = &Alert{ID: "host:host1-cpu", ResourceID: "host:host1", Type: "cpu"}
+		m.activeAlerts["host:host1-memory"] = &Alert{ID: "host:host1-memory", ResourceID: "host:host1", Type: "memory"}
+		m.config.DisableAllHosts = true
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID:       "host1",
+			CPUUsage: 95.0,
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		_, cpuExists := m.activeAlerts["host:host1-cpu"]
+		_, memExists := m.activeAlerts["host:host1-memory"]
+		m.mu.RUnlock()
+
+		if cpuExists {
+			t.Error("expected cpu alert to be cleared")
+		}
+		if memExists {
+			t.Error("expected memory alert to be cleared")
+		}
+	})
+
+	t.Run("override with Disabled clears alerts", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["host:host1-cpu"] = &Alert{ID: "host:host1-cpu", ResourceID: "host:host1", Type: "cpu"}
+		m.config.Overrides = map[string]ThresholdConfig{
+			"host1": {Disabled: true},
+		}
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID:       "host1",
+			CPUUsage: 95.0,
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["host:host1-cpu"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected alert to be cleared when host has alerts disabled")
+		}
+	})
+
+	t.Run("clears CPU alerts when threshold nil", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["host:host1-cpu"] = &Alert{ID: "host:host1-cpu", ResourceID: "host:host1", Type: "cpu"}
+		m.config.HostDefaults = ThresholdConfig{
+			CPU: nil, // No CPU threshold
+		}
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID:       "host1",
+			CPUUsage: 95.0,
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["host:host1-cpu"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected CPU alert to be cleared when threshold is nil")
+		}
+	})
+
+	t.Run("clears memory alerts when threshold nil", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["host:host1-memory"] = &Alert{ID: "host:host1-memory", ResourceID: "host:host1", Type: "memory"}
+		m.config.HostDefaults = ThresholdConfig{
+			Memory: nil, // No memory threshold
+		}
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID: "host1",
+			Memory: models.Memory{
+				Usage: 95.0,
+			},
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["host:host1-memory"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected memory alert to be cleared when threshold is nil")
+		}
+	})
+
+	t.Run("clears disk alerts when threshold nil", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		// Disk alert ID format: {resourceID}-disk where resourceID is host:hostID/disk:mountpoint
+		alertID := "host:host1/disk:/-disk"
+		m.mu.Lock()
+		m.activeAlerts[alertID] = &Alert{ID: alertID, ResourceID: "host:host1/disk:/", Type: "disk"}
+		m.config.HostDefaults = ThresholdConfig{
+			Disk: nil, // No disk threshold
+		}
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID: "host1",
+			Disks: []models.Disk{
+				{Mountpoint: "/", Usage: 95.0, Total: 100},
+			},
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts[alertID]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected disk alert to be cleared when threshold is nil")
+		}
+	})
+
+	t.Run("RAID degraded creates critical alert", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		host := models.Host{
+			ID:       "host1",
+			Hostname: "testhost",
+			RAID: []models.HostRAIDArray{
+				{
+					Device:        "/dev/md0",
+					Level:         "raid1",
+					State:         "degraded",
+					TotalDevices:  2,
+					ActiveDevices: 1,
+					FailedDevices: 1,
+				},
+			},
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["host-host1-raid-md0"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected RAID degraded alert")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level, got %s", alert.Level)
+		}
+	})
+
+	t.Run("RAID rebuilding creates warning alert", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		host := models.Host{
+			ID:       "host1",
+			Hostname: "testhost",
+			RAID: []models.HostRAIDArray{
+				{
+					Device:         "/dev/md0",
+					Level:          "raid1",
+					State:          "recovering",
+					TotalDevices:   2,
+					ActiveDevices:  2,
+					FailedDevices:  0,
+					RebuildPercent: 50.0,
+				},
+			},
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["host-host1-raid-md0"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected RAID rebuilding alert")
+		}
+		if alert.Level != AlertLevelWarning {
+			t.Errorf("expected warning level, got %s", alert.Level)
+		}
+	})
+
+	t.Run("RAID healthy clears alert", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["host-host1-raid-md0"] = &Alert{
+			ID:    "host-host1-raid-md0",
+			Type:  "raid",
+			Level: AlertLevelCritical,
+		}
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID:       "host1",
+			Hostname: "testhost",
+			RAID: []models.HostRAIDArray{
+				{
+					Device:        "/dev/md0",
+					Level:         "raid1",
+					State:         "active",
+					TotalDevices:  2,
+					ActiveDevices: 2,
+					FailedDevices: 0,
+				},
+			},
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["host-host1-raid-md0"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected RAID alert to be cleared for healthy array")
+		}
+	})
+
+	t.Run("RAID with failed devices triggers degraded", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		host := models.Host{
+			ID:       "host1",
+			Hostname: "testhost",
+			RAID: []models.HostRAIDArray{
+				{
+					Device:        "/dev/md0",
+					Level:         "raid1",
+					State:         "active", // State might say active but with failed devices
+					TotalDevices:  2,
+					ActiveDevices: 1,
+					FailedDevices: 1, // This triggers degraded alert
+				},
+			},
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["host-host1-raid-md0"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected RAID alert for failed devices")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("expected critical level for failed devices, got %s", alert.Level)
+		}
+	})
+
+	t.Run("RAID resync triggers rebuilding alert", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		host := models.Host{
+			ID:       "host1",
+			Hostname: "testhost",
+			RAID: []models.HostRAIDArray{
+				{
+					Device:        "/dev/md0",
+					Level:         "raid1",
+					State:         "resync",
+					TotalDevices:  2,
+					ActiveDevices: 2,
+					FailedDevices: 0,
+				},
+			},
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["host-host1-raid-md0"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected RAID rebuilding alert for resync")
+		}
+		if alert.Level != AlertLevelWarning {
+			t.Errorf("expected warning level for resync, got %s", alert.Level)
+		}
+	})
+
+	t.Run("existing RAID alert not duplicated", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		originalTime := time.Now().Add(-1 * time.Hour)
+		m.mu.Lock()
+		m.activeAlerts["host-host1-raid-md0"] = &Alert{
+			ID:        "host-host1-raid-md0",
+			Type:      "raid",
+			Level:     AlertLevelCritical,
+			StartTime: originalTime,
+		}
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID:       "host1",
+			Hostname: "testhost",
+			RAID: []models.HostRAIDArray{
+				{
+					Device:        "/dev/md0",
+					Level:         "raid1",
+					State:         "degraded",
+					TotalDevices:  2,
+					ActiveDevices: 1,
+					FailedDevices: 1,
+				},
+			},
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["host-host1-raid-md0"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected RAID alert to still exist")
+		}
+		// The alert should preserve its original start time
+		if !alert.StartTime.Equal(originalTime) {
+			t.Error("expected alert start time to be preserved")
+		}
+	})
+
+	t.Run("applies override thresholds", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.HostDefaults = ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.config.Overrides = map[string]ThresholdConfig{
+			"host1": {
+				CPU: &HysteresisThreshold{Trigger: 99.0, Clear: 95.0}, // Higher threshold
+			},
+		}
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID:       "host1",
+			Hostname: "testhost",
+			CPUUsage: 95.0, // Below override trigger
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["host:host1-cpu"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected no alert due to higher override threshold")
+		}
+	})
+
+	t.Run("checks multiple disks", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.HostDefaults = ThresholdConfig{
+			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID:       "host1",
+			Hostname: "testhost",
+			Disks: []models.Disk{
+				{Mountpoint: "/", Usage: 95.0, Total: 100},
+				{Mountpoint: "/data", Usage: 50.0, Total: 100}, // Below threshold
+			},
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		var diskAlertCount int
+		for alertID := range m.activeAlerts {
+			// Disk alert ID format: host:hostID/disk:label-disk
+			if strings.Contains(alertID, "host:host1/disk:") {
+				diskAlertCount++
+			}
+		}
+		m.mu.RUnlock()
+
+		if diskAlertCount != 1 {
+			t.Errorf("expected 1 disk alert, got %d", diskAlertCount)
+		}
+	})
+
+	t.Run("clears offline alert when host comes online", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		resourceKey := hostResourceID("host1")
+		m.mu.Lock()
+		m.activeAlerts["host-offline-host1"] = &Alert{
+			ID:   "host-offline-host1",
+			Type: "connectivity",
+		}
+		m.offlineConfirmations[resourceKey] = 5
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID:       "host1",
+			Hostname: "testhost",
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["host-offline-host1"]
+		_, countExists := m.offlineConfirmations[resourceKey]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected offline alert to be cleared")
+		}
+		if countExists {
+			t.Error("expected offline count to be cleared")
+		}
+	})
+
+	t.Run("includes tags in metadata", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.HostDefaults = ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID:       "host1",
+			Hostname: "testhost",
+			CPUUsage: 95.0,
+			Tags:     []string{"production", "critical"},
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["host:host1-cpu"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected CPU alert")
+		}
+		if alert.Metadata == nil {
+			t.Fatal("expected metadata in alert")
+		}
+		tags, ok := alert.Metadata["tags"].([]string)
+		if !ok || len(tags) != 2 {
+			t.Error("expected tags in metadata")
+		}
+	})
+}
