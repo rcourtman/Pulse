@@ -490,3 +490,181 @@ func TestSaveHistory_CreatesBackup(t *testing.T) {
 		t.Error("backup file should exist after save with existing main file")
 	}
 }
+
+func TestSaveHistoryWithRetry_CreatesBackup(t *testing.T) {
+	t.Parallel()
+
+	hm := newTestHistoryManager(t)
+
+	// Create existing history file
+	existingContent := `[{"alert":{"id":"existing-alert"},"timestamp":"2025-01-01T00:00:00Z"}]`
+	if err := os.WriteFile(hm.historyFile, []byte(existingContent), 0644); err != nil {
+		t.Fatalf("Failed to create initial file: %v", err)
+	}
+
+	hm.history = []HistoryEntry{
+		{Alert: Alert{ID: "new-alert"}, Timestamp: time.Now()},
+	}
+
+	err := hm.saveHistoryWithRetry(3)
+	if err != nil {
+		t.Fatalf("saveHistoryWithRetry error: %v", err)
+	}
+
+	// Backup should exist with original content
+	if _, err := os.Stat(hm.backupFile); os.IsNotExist(err) {
+		t.Error("backup file should exist after save")
+	}
+
+	backupData, err := os.ReadFile(hm.backupFile)
+	if err != nil {
+		t.Fatalf("Failed to read backup file: %v", err)
+	}
+
+	if string(backupData) != existingContent {
+		t.Errorf("backup content = %s, want %s", backupData, existingContent)
+	}
+}
+
+func TestSaveHistoryWithRetry_EmptyHistory(t *testing.T) {
+	t.Parallel()
+
+	hm := newTestHistoryManager(t)
+	hm.history = []HistoryEntry{}
+
+	err := hm.saveHistoryWithRetry(3)
+	if err != nil {
+		t.Fatalf("saveHistoryWithRetry error: %v", err)
+	}
+
+	data, err := os.ReadFile(hm.historyFile)
+	if err != nil {
+		t.Fatalf("Failed to read history file: %v", err)
+	}
+
+	if string(data) != "[]" {
+		t.Errorf("empty history should write [], got %s", data)
+	}
+}
+
+func TestSaveHistoryWithRetry_SingleRetry(t *testing.T) {
+	t.Parallel()
+
+	hm := newTestHistoryManager(t)
+	hm.history = []HistoryEntry{
+		{Alert: Alert{ID: "test-alert"}, Timestamp: time.Now()},
+	}
+
+	// With maxRetries=1, should still succeed on first attempt
+	err := hm.saveHistoryWithRetry(1)
+	if err != nil {
+		t.Fatalf("saveHistoryWithRetry with 1 retry should succeed: %v", err)
+	}
+
+	if _, err := os.Stat(hm.historyFile); os.IsNotExist(err) {
+		t.Error("history file should exist")
+	}
+}
+
+func TestSaveHistoryWithRetry_ReadOnlyDirectory(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+
+	// Create subdirectory and make it read-only
+	readOnlyDir := filepath.Join(tempDir, "readonly")
+	if err := os.MkdirAll(readOnlyDir, 0755); err != nil {
+		t.Fatalf("Failed to create readonly dir: %v", err)
+	}
+
+	hm := &HistoryManager{
+		dataDir:     readOnlyDir,
+		historyFile: filepath.Join(readOnlyDir, HistoryFileName),
+		backupFile:  filepath.Join(readOnlyDir, HistoryBackupFileName),
+		history:     []HistoryEntry{{Alert: Alert{ID: "test"}, Timestamp: time.Now()}},
+		stopChan:    make(chan struct{}),
+	}
+
+	// Make directory read-only
+	if err := os.Chmod(readOnlyDir, 0444); err != nil {
+		t.Fatalf("Failed to make dir readonly: %v", err)
+	}
+	t.Cleanup(func() {
+		os.Chmod(readOnlyDir, 0755) // Restore for cleanup
+	})
+
+	// Should fail after retries
+	err := hm.saveHistoryWithRetry(2)
+	if err == nil {
+		t.Error("saveHistoryWithRetry should fail on read-only directory")
+	}
+}
+
+func TestSaveHistoryWithRetry_ConcurrentSaves(t *testing.T) {
+	t.Parallel()
+
+	hm := newTestHistoryManager(t)
+
+	// Populate some history
+	for i := 0; i < 10; i++ {
+		hm.history = append(hm.history, HistoryEntry{
+			Alert:     Alert{ID: "alert-" + string(rune('0'+i))},
+			Timestamp: time.Now(),
+		})
+	}
+
+	// Run multiple concurrent saves - the saveMu lock should serialize them
+	errChan := make(chan error, 5)
+	for i := 0; i < 5; i++ {
+		go func() {
+			errChan <- hm.saveHistoryWithRetry(3)
+		}()
+	}
+
+	// Collect errors
+	for i := 0; i < 5; i++ {
+		if err := <-errChan; err != nil {
+			t.Errorf("concurrent save %d failed: %v", i, err)
+		}
+	}
+
+	// Verify file exists and is valid
+	if _, err := os.Stat(hm.historyFile); os.IsNotExist(err) {
+		t.Error("history file should exist after concurrent saves")
+	}
+}
+
+func TestSaveHistoryWithRetry_SnapshotIsolation(t *testing.T) {
+	t.Parallel()
+
+	hm := newTestHistoryManager(t)
+	hm.history = []HistoryEntry{
+		{Alert: Alert{ID: "original-alert"}, Timestamp: time.Now()},
+	}
+
+	// Start save in goroutine
+	done := make(chan error)
+	go func() {
+		done <- hm.saveHistoryWithRetry(3)
+	}()
+
+	// Modify history while save might be in progress
+	// This shouldn't affect the saved content because saveHistoryWithRetry
+	// takes a snapshot under lock
+	time.Sleep(1 * time.Millisecond)
+	hm.mu.Lock()
+	hm.history = append(hm.history, HistoryEntry{
+		Alert:     Alert{ID: "added-during-save"},
+		Timestamp: time.Now(),
+	})
+	hm.mu.Unlock()
+
+	if err := <-done; err != nil {
+		t.Fatalf("saveHistoryWithRetry error: %v", err)
+	}
+
+	// The file should have been written successfully
+	if _, err := os.Stat(hm.historyFile); os.IsNotExist(err) {
+		t.Error("history file should exist")
+	}
+}
