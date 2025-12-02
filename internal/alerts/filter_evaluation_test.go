@@ -1097,3 +1097,591 @@ func TestEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+func TestGetGuestThresholds(t *testing.T) {
+	t.Run("returns defaults when no overrides or rules", func(t *testing.T) {
+		m := &Manager{
+			config: AlertConfig{
+				GuestDefaults: ThresholdConfig{
+					CPU: &HysteresisThreshold{
+						Trigger: 80,
+						Clear:   75,
+					},
+				},
+				Overrides:   make(map[string]ThresholdConfig),
+				CustomRules: []CustomAlertRule{},
+			},
+		}
+
+		vm := models.VM{
+			Name:     "test-vm",
+			Node:     "pve1",
+			Instance: "pve1",
+			VMID:     100,
+		}
+
+		result := m.getGuestThresholds(vm, "pve1-100")
+
+		if result.CPU == nil {
+			t.Fatal("CPU threshold should not be nil")
+		}
+		if result.CPU.Trigger != 80 {
+			t.Errorf("expected CPU trigger 80, got %v", result.CPU.Trigger)
+		}
+	})
+
+	t.Run("applies guest-specific override", func(t *testing.T) {
+		m := &Manager{
+			config: AlertConfig{
+				GuestDefaults: ThresholdConfig{
+					CPU: &HysteresisThreshold{
+						Trigger: 80,
+						Clear:   75,
+					},
+				},
+				Overrides: map[string]ThresholdConfig{
+					"pve1-100": {
+						CPU: &HysteresisThreshold{
+							Trigger: 95,
+							Clear:   90,
+						},
+					},
+				},
+				CustomRules: []CustomAlertRule{},
+			},
+		}
+
+		vm := models.VM{
+			Name:     "test-vm",
+			Node:     "pve1",
+			Instance: "pve1",
+			VMID:     100,
+		}
+
+		result := m.getGuestThresholds(vm, "pve1-100")
+
+		if result.CPU == nil {
+			t.Fatal("CPU threshold should not be nil")
+		}
+		if result.CPU.Trigger != 95 {
+			t.Errorf("expected CPU trigger 95 from override, got %v", result.CPU.Trigger)
+		}
+	})
+
+	t.Run("applies custom rule matching filter", func(t *testing.T) {
+		m := &Manager{
+			config: AlertConfig{
+				GuestDefaults: ThresholdConfig{
+					CPU: &HysteresisThreshold{
+						Trigger: 80,
+						Clear:   75,
+					},
+				},
+				Overrides: make(map[string]ThresholdConfig),
+				CustomRules: []CustomAlertRule{
+					{
+						Name:     "high-cpu-vms",
+						Enabled:  true,
+						Priority: 10,
+						FilterConditions: FilterStack{
+							LogicalOperator: "AND",
+							Filters: []FilterCondition{
+								{
+									Type:  "text",
+									Field: "name",
+									Value: "test",
+								},
+							},
+						},
+						Thresholds: ThresholdConfig{
+							CPU: &HysteresisThreshold{
+								Trigger: 70,
+								Clear:   65,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		vm := models.VM{
+			Name:     "test-vm",
+			Node:     "pve1",
+			Instance: "pve1",
+			VMID:     100,
+		}
+
+		result := m.getGuestThresholds(vm, "pve1-100")
+
+		if result.CPU == nil {
+			t.Fatal("CPU threshold should not be nil")
+		}
+		if result.CPU.Trigger != 70 {
+			t.Errorf("expected CPU trigger 70 from custom rule, got %v", result.CPU.Trigger)
+		}
+	})
+
+	t.Run("override takes precedence over custom rule", func(t *testing.T) {
+		m := &Manager{
+			config: AlertConfig{
+				GuestDefaults: ThresholdConfig{
+					CPU: &HysteresisThreshold{
+						Trigger: 80,
+						Clear:   75,
+					},
+				},
+				Overrides: map[string]ThresholdConfig{
+					"pve1-100": {
+						CPU: &HysteresisThreshold{
+							Trigger: 95,
+							Clear:   90,
+						},
+					},
+				},
+				CustomRules: []CustomAlertRule{
+					{
+						Name:     "high-cpu-vms",
+						Enabled:  true,
+						Priority: 10,
+						FilterConditions: FilterStack{
+							LogicalOperator: "AND",
+							Filters: []FilterCondition{
+								{
+									Type:  "text",
+									Field: "name",
+									Value: "test",
+								},
+							},
+						},
+						Thresholds: ThresholdConfig{
+							CPU: &HysteresisThreshold{
+								Trigger: 70,
+								Clear:   65,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		vm := models.VM{
+			Name:     "test-vm",
+			Node:     "pve1",
+			Instance: "pve1",
+			VMID:     100,
+		}
+
+		result := m.getGuestThresholds(vm, "pve1-100")
+
+		if result.CPU == nil {
+			t.Fatal("CPU threshold should not be nil")
+		}
+		// Override takes precedence over custom rule
+		if result.CPU.Trigger != 95 {
+			t.Errorf("expected CPU trigger 95 from override, got %v", result.CPU.Trigger)
+		}
+	})
+
+	t.Run("higher priority rule wins", func(t *testing.T) {
+		m := &Manager{
+			config: AlertConfig{
+				GuestDefaults: ThresholdConfig{
+					CPU: &HysteresisThreshold{
+						Trigger: 80,
+						Clear:   75,
+					},
+				},
+				Overrides: make(map[string]ThresholdConfig),
+				CustomRules: []CustomAlertRule{
+					{
+						Name:     "low-priority-rule",
+						Enabled:  true,
+						Priority: 5,
+						FilterConditions: FilterStack{
+							LogicalOperator: "AND",
+							Filters: []FilterCondition{
+								{Type: "text", Field: "name", Value: "test"},
+							},
+						},
+						Thresholds: ThresholdConfig{
+							CPU: &HysteresisThreshold{Trigger: 60, Clear: 55},
+						},
+					},
+					{
+						Name:     "high-priority-rule",
+						Enabled:  true,
+						Priority: 20,
+						FilterConditions: FilterStack{
+							LogicalOperator: "AND",
+							Filters: []FilterCondition{
+								{Type: "text", Field: "name", Value: "test"},
+							},
+						},
+						Thresholds: ThresholdConfig{
+							CPU: &HysteresisThreshold{Trigger: 75, Clear: 70},
+						},
+					},
+				},
+			},
+		}
+
+		vm := models.VM{
+			Name:     "test-vm",
+			Node:     "pve1",
+			Instance: "pve1",
+			VMID:     100,
+		}
+
+		result := m.getGuestThresholds(vm, "pve1-100")
+
+		if result.CPU == nil {
+			t.Fatal("CPU threshold should not be nil")
+		}
+		if result.CPU.Trigger != 75 {
+			t.Errorf("expected CPU trigger 75 from high-priority rule, got %v", result.CPU.Trigger)
+		}
+	})
+
+	t.Run("disabled rule is skipped", func(t *testing.T) {
+		m := &Manager{
+			config: AlertConfig{
+				GuestDefaults: ThresholdConfig{
+					CPU: &HysteresisThreshold{
+						Trigger: 80,
+						Clear:   75,
+					},
+				},
+				Overrides: make(map[string]ThresholdConfig),
+				CustomRules: []CustomAlertRule{
+					{
+						Name:     "disabled-rule",
+						Enabled:  false,
+						Priority: 100,
+						FilterConditions: FilterStack{
+							LogicalOperator: "AND",
+							Filters: []FilterCondition{
+								{Type: "text", Field: "name", Value: "test"},
+							},
+						},
+						Thresholds: ThresholdConfig{
+							CPU: &HysteresisThreshold{Trigger: 50, Clear: 45},
+						},
+					},
+				},
+			},
+		}
+
+		vm := models.VM{
+			Name:     "test-vm",
+			Node:     "pve1",
+			Instance: "pve1",
+			VMID:     100,
+		}
+
+		result := m.getGuestThresholds(vm, "pve1-100")
+
+		if result.CPU == nil {
+			t.Fatal("CPU threshold should not be nil")
+		}
+		// Should use defaults since rule is disabled
+		if result.CPU.Trigger != 80 {
+			t.Errorf("expected CPU trigger 80 from defaults, got %v", result.CPU.Trigger)
+		}
+	})
+
+	t.Run("disabled override disables thresholds", func(t *testing.T) {
+		m := &Manager{
+			config: AlertConfig{
+				GuestDefaults: ThresholdConfig{
+					CPU: &HysteresisThreshold{
+						Trigger: 80,
+						Clear:   75,
+					},
+				},
+				Overrides: map[string]ThresholdConfig{
+					"pve1-100": {
+						Disabled: true,
+					},
+				},
+				CustomRules: []CustomAlertRule{},
+			},
+		}
+
+		vm := models.VM{
+			Name:     "test-vm",
+			Node:     "pve1",
+			Instance: "pve1",
+			VMID:     100,
+		}
+
+		result := m.getGuestThresholds(vm, "pve1-100")
+
+		if !result.Disabled {
+			t.Error("expected thresholds to be disabled")
+		}
+	})
+
+	t.Run("applies disable connectivity from override", func(t *testing.T) {
+		m := &Manager{
+			config: AlertConfig{
+				GuestDefaults: ThresholdConfig{
+					CPU: &HysteresisThreshold{
+						Trigger: 80,
+						Clear:   75,
+					},
+				},
+				Overrides: map[string]ThresholdConfig{
+					"pve1-100": {
+						DisableConnectivity: true,
+					},
+				},
+				CustomRules: []CustomAlertRule{},
+			},
+		}
+
+		vm := models.VM{
+			Name:     "test-vm",
+			Node:     "pve1",
+			Instance: "pve1",
+			VMID:     100,
+		}
+
+		result := m.getGuestThresholds(vm, "pve1-100")
+
+		if !result.DisableConnectivity {
+			t.Error("expected DisableConnectivity to be true")
+		}
+	})
+
+	t.Run("applies disable connectivity from custom rule", func(t *testing.T) {
+		m := &Manager{
+			config: AlertConfig{
+				GuestDefaults: ThresholdConfig{},
+				Overrides:     make(map[string]ThresholdConfig),
+				CustomRules: []CustomAlertRule{
+					{
+						Name:     "no-connectivity-rule",
+						Enabled:  true,
+						Priority: 10,
+						FilterConditions: FilterStack{
+							LogicalOperator: "AND",
+							Filters: []FilterCondition{
+								{Type: "text", Field: "name", Value: "test"},
+							},
+						},
+						Thresholds: ThresholdConfig{
+							DisableConnectivity: true,
+						},
+					},
+				},
+			},
+		}
+
+		vm := models.VM{
+			Name:     "test-vm",
+			Node:     "pve1",
+			Instance: "pve1",
+			VMID:     100,
+		}
+
+		result := m.getGuestThresholds(vm, "pve1-100")
+
+		if !result.DisableConnectivity {
+			t.Error("expected DisableConnectivity to be true from custom rule")
+		}
+	})
+
+	t.Run("applies legacy CPU threshold", func(t *testing.T) {
+		legacyThreshold := float64(85)
+		m := &Manager{
+			config: AlertConfig{
+				GuestDefaults: ThresholdConfig{},
+				Overrides: map[string]ThresholdConfig{
+					"pve1-100": {
+						CPULegacy: &legacyThreshold,
+					},
+				},
+				CustomRules: []CustomAlertRule{},
+			},
+		}
+
+		vm := models.VM{
+			Name:     "test-vm",
+			Node:     "pve1",
+			Instance: "pve1",
+			VMID:     100,
+		}
+
+		result := m.getGuestThresholds(vm, "pve1-100")
+
+		if result.CPU == nil {
+			t.Fatal("CPU threshold should not be nil")
+		}
+		// Legacy threshold becomes trigger with calculated clear
+		if result.CPU.Trigger != 85 {
+			t.Errorf("expected CPU trigger 85 from legacy threshold, got %v", result.CPU.Trigger)
+		}
+	})
+
+	t.Run("legacy ID migration for clustered VM", func(t *testing.T) {
+		m := &Manager{
+			config: AlertConfig{
+				GuestDefaults: ThresholdConfig{},
+				Overrides: map[string]ThresholdConfig{
+					// Legacy format: instance-node-vmid
+					"pve1-node1-100": {
+						CPU: &HysteresisThreshold{Trigger: 60, Clear: 55},
+					},
+				},
+				CustomRules: []CustomAlertRule{},
+			},
+		}
+
+		vm := models.VM{
+			Name:     "test-vm",
+			Node:     "node1",
+			Instance: "pve1",
+			VMID:     100,
+		}
+
+		// Query with new format
+		result := m.getGuestThresholds(vm, "pve1-100")
+
+		if result.CPU == nil {
+			t.Fatal("CPU threshold should not be nil after legacy migration")
+		}
+		if result.CPU.Trigger != 60 {
+			t.Errorf("expected CPU trigger 60 from migrated legacy override, got %v", result.CPU.Trigger)
+		}
+
+		// Verify the override was migrated to new ID
+		if _, exists := m.config.Overrides["pve1-100"]; !exists {
+			t.Error("override should be migrated to new ID format")
+		}
+		if _, exists := m.config.Overrides["pve1-node1-100"]; exists {
+			t.Error("old legacy override should be removed after migration")
+		}
+	})
+
+	t.Run("legacy ID migration for standalone VM", func(t *testing.T) {
+		m := &Manager{
+			config: AlertConfig{
+				GuestDefaults: ThresholdConfig{},
+				Overrides: map[string]ThresholdConfig{
+					// Legacy standalone format: node-vmid
+					"pve1-100": {
+						CPU: &HysteresisThreshold{Trigger: 55, Clear: 50},
+					},
+				},
+				CustomRules: []CustomAlertRule{},
+			},
+		}
+
+		// For standalone, node == instance
+		vm := models.VM{
+			Name:     "test-vm",
+			Node:     "pve1",
+			Instance: "pve1",
+			VMID:     100,
+		}
+
+		result := m.getGuestThresholds(vm, "pve1-100")
+
+		if result.CPU == nil {
+			t.Fatal("CPU threshold should not be nil")
+		}
+		if result.CPU.Trigger != 55 {
+			t.Errorf("expected CPU trigger 55, got %v", result.CPU.Trigger)
+		}
+	})
+
+	t.Run("works with container type", func(t *testing.T) {
+		m := &Manager{
+			config: AlertConfig{
+				GuestDefaults: ThresholdConfig{
+					Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
+				},
+				Overrides:   make(map[string]ThresholdConfig),
+				CustomRules: []CustomAlertRule{},
+			},
+		}
+
+		container := models.Container{
+			Name:     "test-container",
+			Node:     "pve1",
+			Instance: "pve1",
+			VMID:     200,
+		}
+
+		result := m.getGuestThresholds(container, "pve1-200")
+
+		if result.Memory == nil {
+			t.Fatal("Memory threshold should not be nil")
+		}
+		if result.Memory.Trigger != 85 {
+			t.Errorf("expected Memory trigger 85, got %v", result.Memory.Trigger)
+		}
+	})
+
+	t.Run("applies all metric thresholds from rule", func(t *testing.T) {
+		m := &Manager{
+			config: AlertConfig{
+				GuestDefaults: ThresholdConfig{},
+				Overrides:     make(map[string]ThresholdConfig),
+				CustomRules: []CustomAlertRule{
+					{
+						Name:     "full-metrics-rule",
+						Enabled:  true,
+						Priority: 10,
+						FilterConditions: FilterStack{
+							LogicalOperator: "AND",
+							Filters: []FilterCondition{
+								{Type: "text", Field: "name", Value: "test"},
+							},
+						},
+						Thresholds: ThresholdConfig{
+							CPU:        &HysteresisThreshold{Trigger: 70, Clear: 65},
+							Memory:     &HysteresisThreshold{Trigger: 75, Clear: 70},
+							Disk:       &HysteresisThreshold{Trigger: 80, Clear: 75},
+							DiskRead:   &HysteresisThreshold{Trigger: 50, Clear: 45},
+							DiskWrite:  &HysteresisThreshold{Trigger: 55, Clear: 50},
+							NetworkIn:  &HysteresisThreshold{Trigger: 60, Clear: 55},
+							NetworkOut: &HysteresisThreshold{Trigger: 65, Clear: 60},
+						},
+					},
+				},
+			},
+		}
+
+		vm := models.VM{
+			Name:     "test-vm",
+			Node:     "pve1",
+			Instance: "pve1",
+			VMID:     100,
+		}
+
+		result := m.getGuestThresholds(vm, "pve1-100")
+
+		if result.CPU == nil || result.CPU.Trigger != 70 {
+			t.Errorf("CPU threshold not applied correctly")
+		}
+		if result.Memory == nil || result.Memory.Trigger != 75 {
+			t.Errorf("Memory threshold not applied correctly")
+		}
+		if result.Disk == nil || result.Disk.Trigger != 80 {
+			t.Errorf("Disk threshold not applied correctly")
+		}
+		if result.DiskRead == nil || result.DiskRead.Trigger != 50 {
+			t.Errorf("DiskRead threshold not applied correctly")
+		}
+		if result.DiskWrite == nil || result.DiskWrite.Trigger != 55 {
+			t.Errorf("DiskWrite threshold not applied correctly")
+		}
+		if result.NetworkIn == nil || result.NetworkIn.Trigger != 60 {
+			t.Errorf("NetworkIn threshold not applied correctly")
+		}
+		if result.NetworkOut == nil || result.NetworkOut.Trigger != 65 {
+			t.Errorf("NetworkOut threshold not applied correctly")
+		}
+	})
+}
