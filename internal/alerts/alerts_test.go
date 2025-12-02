@@ -10639,3 +10639,257 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		}
 	})
 }
+
+func TestApplyThresholdOverride(t *testing.T) {
+	t.Run("empty override returns base unchanged", func(t *testing.T) {
+		m := newTestManager(t)
+		base := ThresholdConfig{
+			CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+			Memory: &HysteresisThreshold{Trigger: 90, Clear: 85},
+		}
+		override := ThresholdConfig{}
+		result := m.applyThresholdOverride(base, override)
+
+		if result.CPU == nil || result.CPU.Trigger != 80 || result.CPU.Clear != 75 {
+			t.Errorf("expected CPU to match base, got %+v", result.CPU)
+		}
+		if result.Memory == nil || result.Memory.Trigger != 90 || result.Memory.Clear != 85 {
+			t.Errorf("expected Memory to match base, got %+v", result.Memory)
+		}
+		if result.Disabled {
+			t.Error("expected Disabled to remain false")
+		}
+	})
+
+	t.Run("Disabled flag override", func(t *testing.T) {
+		m := newTestManager(t)
+		base := ThresholdConfig{Disabled: false}
+		override := ThresholdConfig{Disabled: true}
+		result := m.applyThresholdOverride(base, override)
+
+		if !result.Disabled {
+			t.Error("expected Disabled to be true after override")
+		}
+	})
+
+	t.Run("DisableConnectivity override", func(t *testing.T) {
+		m := newTestManager(t)
+		base := ThresholdConfig{DisableConnectivity: false}
+		override := ThresholdConfig{DisableConnectivity: true}
+		result := m.applyThresholdOverride(base, override)
+
+		if !result.DisableConnectivity {
+			t.Error("expected DisableConnectivity to be true after override")
+		}
+	})
+
+	t.Run("CPU threshold override", func(t *testing.T) {
+		m := newTestManager(t)
+		base := ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80, Clear: 75},
+		}
+		override := ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 95, Clear: 90},
+		}
+		result := m.applyThresholdOverride(base, override)
+
+		if result.CPU == nil {
+			t.Fatal("expected CPU to be set")
+		}
+		if result.CPU.Trigger != 95 || result.CPU.Clear != 90 {
+			t.Errorf("expected CPU override values, got Trigger=%v Clear=%v", result.CPU.Trigger, result.CPU.Clear)
+		}
+	})
+
+	t.Run("legacy CPU threshold conversion", func(t *testing.T) {
+		m := newTestManager(t)
+		m.config.HysteresisMargin = 5.0
+		base := ThresholdConfig{}
+		legacyVal := 85.0
+		override := ThresholdConfig{
+			CPULegacy: &legacyVal,
+		}
+		result := m.applyThresholdOverride(base, override)
+
+		if result.CPU == nil {
+			t.Fatal("expected CPU to be converted from legacy")
+		}
+		if result.CPU.Trigger != 85.0 {
+			t.Errorf("expected Trigger=85, got %v", result.CPU.Trigger)
+		}
+		if result.CPU.Clear != 80.0 {
+			t.Errorf("expected Clear=80 (85-5 margin), got %v", result.CPU.Clear)
+		}
+	})
+
+	t.Run("modern CPU takes precedence over legacy", func(t *testing.T) {
+		m := newTestManager(t)
+		legacyVal := 70.0
+		base := ThresholdConfig{}
+		override := ThresholdConfig{
+			CPU:       &HysteresisThreshold{Trigger: 95, Clear: 90},
+			CPULegacy: &legacyVal,
+		}
+		result := m.applyThresholdOverride(base, override)
+
+		if result.CPU.Trigger != 95 {
+			t.Errorf("expected modern CPU to take precedence, got Trigger=%v", result.CPU.Trigger)
+		}
+	})
+
+	t.Run("multiple metrics override", func(t *testing.T) {
+		m := newTestManager(t)
+		base := ThresholdConfig{
+			CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+			Memory: &HysteresisThreshold{Trigger: 80, Clear: 75},
+			Disk:   &HysteresisThreshold{Trigger: 80, Clear: 75},
+		}
+		override := ThresholdConfig{
+			CPU:        &HysteresisThreshold{Trigger: 90, Clear: 85},
+			Memory:     &HysteresisThreshold{Trigger: 95, Clear: 90},
+			NetworkIn:  &HysteresisThreshold{Trigger: 100, Clear: 95},
+			NetworkOut: &HysteresisThreshold{Trigger: 200, Clear: 190},
+		}
+		result := m.applyThresholdOverride(base, override)
+
+		if result.CPU.Trigger != 90 {
+			t.Errorf("expected CPU override, got %v", result.CPU.Trigger)
+		}
+		if result.Memory.Trigger != 95 {
+			t.Errorf("expected Memory override, got %v", result.Memory.Trigger)
+		}
+		// Disk should remain unchanged (not in override)
+		if result.Disk.Trigger != 80 {
+			t.Errorf("expected Disk unchanged, got %v", result.Disk.Trigger)
+		}
+		if result.NetworkIn == nil || result.NetworkIn.Trigger != 100 {
+			t.Errorf("expected NetworkIn to be added, got %+v", result.NetworkIn)
+		}
+		if result.NetworkOut == nil || result.NetworkOut.Trigger != 200 {
+			t.Errorf("expected NetworkOut to be added, got %+v", result.NetworkOut)
+		}
+	})
+
+	t.Run("Note override", func(t *testing.T) {
+		m := newTestManager(t)
+		base := ThresholdConfig{}
+		note := "test note"
+		override := ThresholdConfig{Note: &note}
+		result := m.applyThresholdOverride(base, override)
+
+		if result.Note == nil || *result.Note != "test note" {
+			t.Errorf("expected Note to be set, got %v", result.Note)
+		}
+	})
+
+	t.Run("Note cleared when empty string", func(t *testing.T) {
+		m := newTestManager(t)
+		existingNote := "existing note"
+		base := ThresholdConfig{Note: &existingNote}
+		emptyNote := ""
+		override := ThresholdConfig{Note: &emptyNote}
+		result := m.applyThresholdOverride(base, override)
+
+		if result.Note != nil {
+			t.Errorf("expected Note to be nil when empty string override, got %v", *result.Note)
+		}
+	})
+
+	t.Run("Note trimmed of whitespace", func(t *testing.T) {
+		m := newTestManager(t)
+		base := ThresholdConfig{}
+		note := "  trimmed note  "
+		override := ThresholdConfig{Note: &note}
+		result := m.applyThresholdOverride(base, override)
+
+		if result.Note == nil || *result.Note != "trimmed note" {
+			t.Errorf("expected Note to be trimmed, got %v", result.Note)
+		}
+	})
+
+	t.Run("whitespace-only Note becomes nil", func(t *testing.T) {
+		m := newTestManager(t)
+		existingNote := "existing"
+		base := ThresholdConfig{Note: &existingNote}
+		whitespaceNote := "   "
+		override := ThresholdConfig{Note: &whitespaceNote}
+		result := m.applyThresholdOverride(base, override)
+
+		if result.Note != nil {
+			t.Errorf("expected whitespace-only Note to become nil, got %v", *result.Note)
+		}
+	})
+
+	t.Run("all metric types with legacy conversion", func(t *testing.T) {
+		m := newTestManager(t)
+		m.config.HysteresisMargin = 5.0
+		base := ThresholdConfig{}
+
+		val80 := 80.0
+		val90 := 90.0
+		val100 := 100.0
+		val200 := 200.0
+		override := ThresholdConfig{
+			MemoryLegacy:     &val80,
+			DiskLegacy:       &val90,
+			DiskReadLegacy:   &val100,
+			DiskWriteLegacy:  &val100,
+			NetworkInLegacy:  &val200,
+			NetworkOutLegacy: &val200,
+		}
+		result := m.applyThresholdOverride(base, override)
+
+		if result.Memory == nil || result.Memory.Trigger != 80 {
+			t.Errorf("expected Memory converted, got %+v", result.Memory)
+		}
+		if result.Disk == nil || result.Disk.Trigger != 90 {
+			t.Errorf("expected Disk converted, got %+v", result.Disk)
+		}
+		if result.DiskRead == nil || result.DiskRead.Trigger != 100 {
+			t.Errorf("expected DiskRead converted, got %+v", result.DiskRead)
+		}
+		if result.DiskWrite == nil || result.DiskWrite.Trigger != 100 {
+			t.Errorf("expected DiskWrite converted, got %+v", result.DiskWrite)
+		}
+		if result.NetworkIn == nil || result.NetworkIn.Trigger != 200 {
+			t.Errorf("expected NetworkIn converted, got %+v", result.NetworkIn)
+		}
+		if result.NetworkOut == nil || result.NetworkOut.Trigger != 200 {
+			t.Errorf("expected NetworkOut converted, got %+v", result.NetworkOut)
+		}
+	})
+
+	t.Run("Temperature and Usage override", func(t *testing.T) {
+		m := newTestManager(t)
+		base := ThresholdConfig{}
+		override := ThresholdConfig{
+			Temperature: &HysteresisThreshold{Trigger: 85, Clear: 80},
+			Usage:       &HysteresisThreshold{Trigger: 90, Clear: 85},
+		}
+		result := m.applyThresholdOverride(base, override)
+
+		if result.Temperature == nil || result.Temperature.Trigger != 85 {
+			t.Errorf("expected Temperature override, got %+v", result.Temperature)
+		}
+		if result.Usage == nil || result.Usage.Trigger != 90 {
+			t.Errorf("expected Usage override, got %+v", result.Usage)
+		}
+	})
+
+	t.Run("ensureHysteresisThreshold fills missing Clear", func(t *testing.T) {
+		m := newTestManager(t)
+		base := ThresholdConfig{}
+		override := ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80, Clear: 0}, // Clear not set
+		}
+		result := m.applyThresholdOverride(base, override)
+
+		if result.CPU == nil {
+			t.Fatal("expected CPU to be set")
+		}
+		// ensureHysteresisThreshold sets Clear to Trigger - 5 when Clear <= 0
+		if result.CPU.Clear != 75 {
+			t.Errorf("expected Clear to be 75 (80-5 default), got %v", result.CPU.Clear)
+		}
+	})
+}
