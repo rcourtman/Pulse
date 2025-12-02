@@ -14,6 +14,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -157,9 +158,9 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 	case "4.1", "":
 		// current version, nothing to do
 	case "4.0":
-		fmt.Printf("Notice: Config was exported from version 4.0. API tokens were not included in that format.\n")
+		log.Info().Msg("Config was exported from version 4.0. API tokens were not included in that format.")
 	default:
-		fmt.Printf("Warning: Config was exported from unsupported version %s. Proceeding with best effort.\n", exportData.Version)
+		log.Warn().Str("version", exportData.Version).Msg("Config was exported from unsupported version. Proceeding with best effort.")
 	}
 
 	tx, err := newImportTransaction(c.configDir)
@@ -240,7 +241,7 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 	}
 	guestMetadataStore := NewGuestMetadataStore(dataPath)
 	if err := guestMetadataStore.ReplaceAll(exportData.GuestMetadata); err != nil {
-		fmt.Printf("Warning: Failed to import guest metadata: %v\n", err)
+		log.Warn().Err(err).Msg("Failed to import guest metadata")
 	}
 
 	return nil
