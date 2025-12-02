@@ -327,3 +327,34 @@ func TestIsAuthError(t *testing.T) {
 		})
 	}
 }
+
+func TestClusterClient_GetNodes_PermanentFailure(t *testing.T) {
+	// Server that always returns auth error - not retryable
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, `{"data":null,"errors":{"username":"invalid credentials"}}`)
+	}))
+	defer server.Close()
+
+	cfg := ClientConfig{
+		Host:       server.URL,
+		TokenName:  "invalid@pve!token",
+		TokenValue: "badvalue",
+		VerifySSL:  false,
+		Timeout:    2 * time.Second,
+	}
+
+	cc := NewClusterClient("test-cluster", cfg, []string{server.URL})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	nodes, err := cc.GetNodes(ctx)
+	if err == nil {
+		t.Fatal("expected GetNodes to fail with auth error, got nil")
+	}
+	if nodes != nil {
+		t.Errorf("expected nil nodes on error, got %v", nodes)
+	}
+}
