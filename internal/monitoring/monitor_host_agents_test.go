@@ -616,3 +616,131 @@ func TestRemoveHostAgent_NilAlertManager(t *testing.T) {
 		t.Errorf("expected host.ID = %q, got %q", hostID, host.ID)
 	}
 }
+
+func TestApplyHostReport_MissingHostname(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	// Report with empty hostname should fail
+	report := agentshost.Report{
+		Host: agentshost.HostInfo{
+			Hostname: "", // Missing hostname
+			ID:       "machine-id",
+		},
+		Agent: agentshost.AgentInfo{
+			ID:      "agent-id",
+			Version: "1.0.0",
+		},
+		Timestamp: time.Now(),
+	}
+
+	_, err := monitor.ApplyHostReport(report, nil)
+	if err == nil {
+		t.Error("expected error for missing hostname")
+	}
+	if err != nil && err.Error() != "host report missing hostname" {
+		t.Errorf("expected 'host report missing hostname' error, got: %v", err)
+	}
+}
+
+func TestApplyHostReport_WhitespaceHostname(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	// Report with whitespace-only hostname should fail
+	report := agentshost.Report{
+		Host: agentshost.HostInfo{
+			Hostname: "   ", // Whitespace only
+			ID:       "machine-id",
+		},
+		Agent: agentshost.AgentInfo{
+			ID:      "agent-id",
+			Version: "1.0.0",
+		},
+		Timestamp: time.Now(),
+	}
+
+	_, err := monitor.ApplyHostReport(report, nil)
+	if err == nil {
+		t.Error("expected error for whitespace-only hostname")
+	}
+}
+
+func TestApplyHostReport_NilTokenBindingsMap(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: nil, // Nil map
+		config:            &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	report := agentshost.Report{
+		Host: agentshost.HostInfo{
+			Hostname: "test-host",
+			ID:       "machine-id",
+		},
+		Agent: agentshost.AgentInfo{
+			ID:      "agent-id",
+			Version: "1.0.0",
+		},
+		Timestamp: time.Now(),
+	}
+
+	token := &config.APITokenRecord{ID: "token-id", Name: "Test Token"}
+
+	// Should not panic with nil hostTokenBindings - map should be initialized
+	host, err := monitor.ApplyHostReport(report, token)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if host.Hostname != "test-host" {
+		t.Errorf("expected hostname 'test-host', got %q", host.Hostname)
+	}
+}
+
+func TestApplyHostReport_FallbackIdentifier(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	// Report with no ID fields - should generate fallback identifier
+	report := agentshost.Report{
+		Host: agentshost.HostInfo{
+			Hostname: "fallback-host",
+			// No ID, MachineID
+		},
+		Agent: agentshost.AgentInfo{
+			// No ID
+			Version: "1.0.0",
+		},
+		Timestamp: time.Now(),
+	}
+
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should use hostname as fallback identifier
+	if host.ID == "" {
+		t.Error("expected host to have an identifier")
+	}
+	if host.Hostname != "fallback-host" {
+		t.Errorf("expected hostname 'fallback-host', got %q", host.Hostname)
+	}
+}
