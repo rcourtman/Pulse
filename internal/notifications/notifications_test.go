@@ -2929,3 +2929,177 @@ func TestGetWebhookHistory_ReturnsCopy(t *testing.T) {
 		t.Error("modifying returned history should not affect original")
 	}
 }
+
+func TestSendResolvedEmail_EmptyAlertList(t *testing.T) {
+	nm := &NotificationManager{}
+	config := EmailConfig{
+		From:     "sender@example.com",
+		To:       []string{"recipient@example.com"},
+		SMTPHost: "localhost",
+		SMTPPort: 25,
+	}
+
+	err := nm.sendResolvedEmail(config, []*alerts.Alert{}, time.Now())
+	if err == nil {
+		t.Error("expected error for empty alert list")
+	}
+	if err != nil && !strings.Contains(err.Error(), "no alerts to send") {
+		t.Errorf("expected 'no alerts to send' error, got: %v", err)
+	}
+}
+
+func TestSendResolvedEmail_NilAlertList(t *testing.T) {
+	nm := &NotificationManager{}
+	config := EmailConfig{
+		From:     "sender@example.com",
+		To:       []string{"recipient@example.com"},
+		SMTPHost: "localhost",
+		SMTPPort: 25,
+	}
+
+	err := nm.sendResolvedEmail(config, nil, time.Now())
+	if err == nil {
+		t.Error("expected error for nil alert list")
+	}
+	if err != nil && !strings.Contains(err.Error(), "no alerts to send") {
+		t.Errorf("expected 'no alerts to send' error, got: %v", err)
+	}
+}
+
+func TestSendResolvedEmail_AllNilAlerts(t *testing.T) {
+	nm := &NotificationManager{}
+	config := EmailConfig{
+		From:     "sender@example.com",
+		To:       []string{"recipient@example.com"},
+		SMTPHost: "localhost",
+		SMTPPort: 25,
+	}
+
+	// All nil alerts should result in error from buildResolvedNotificationContent
+	err := nm.sendResolvedEmail(config, []*alerts.Alert{nil, nil}, time.Now())
+	if err == nil {
+		t.Error("expected error for all nil alerts")
+	}
+	if err != nil && !strings.Contains(err.Error(), "failed to build resolved email content") {
+		t.Errorf("expected 'failed to build resolved email content' error, got: %v", err)
+	}
+}
+
+func TestSendResolvedEmail_SingleAlert(t *testing.T) {
+	nm := &NotificationManager{}
+	config := EmailConfig{
+		From:     "sender@example.com",
+		To:       []string{"recipient@example.com"},
+		SMTPHost: "invalid.localhost.test", // Will fail SMTP but exercise the code path
+		SMTPPort: 25,
+	}
+
+	alert := &alerts.Alert{
+		ID:           "test-alert-1",
+		ResourceName: "test-vm",
+		Level:        alerts.AlertLevelWarning,
+		Message:      "CPU usage high",
+		StartTime:    time.Now().Add(-1 * time.Hour),
+	}
+
+	err := nm.sendResolvedEmail(config, []*alerts.Alert{alert}, time.Now())
+	// Should fail at SMTP connection but exercise the sendHTMLEmailWithError path
+	if err == nil {
+		t.Error("expected error for invalid SMTP host")
+	}
+	if err != nil && !strings.Contains(err.Error(), "failed to send email") {
+		t.Errorf("expected 'failed to send email' error, got: %v", err)
+	}
+}
+
+func TestSendResolvedEmail_MultipleAlerts(t *testing.T) {
+	nm := &NotificationManager{}
+	config := EmailConfig{
+		From:     "sender@example.com",
+		To:       []string{"recipient@example.com"},
+		SMTPHost: "invalid.localhost.test",
+		SMTPPort: 25,
+	}
+
+	alertList := []*alerts.Alert{
+		{
+			ID:           "test-alert-1",
+			ResourceName: "vm-1",
+			Level:        alerts.AlertLevelWarning,
+			Message:      "CPU usage high",
+			StartTime:    time.Now().Add(-2 * time.Hour),
+		},
+		{
+			ID:           "test-alert-2",
+			ResourceName: "vm-2",
+			Level:        alerts.AlertLevelCritical,
+			Message:      "Memory exhausted",
+			StartTime:    time.Now().Add(-1 * time.Hour),
+		},
+	}
+
+	err := nm.sendResolvedEmail(config, alertList, time.Now())
+	if err == nil {
+		t.Error("expected error for invalid SMTP host")
+	}
+	if err != nil && !strings.Contains(err.Error(), "failed to send email") {
+		t.Errorf("expected 'failed to send email' error, got: %v", err)
+	}
+}
+
+func TestSendResolvedEmail_WithNilInMixedAlerts(t *testing.T) {
+	nm := &NotificationManager{}
+	config := EmailConfig{
+		From:     "sender@example.com",
+		To:       []string{"recipient@example.com"},
+		SMTPHost: "invalid.localhost.test",
+		SMTPPort: 25,
+	}
+
+	// Mix of valid alert and nil should still work (nil filtered out)
+	alertList := []*alerts.Alert{
+		nil,
+		{
+			ID:           "test-alert-1",
+			ResourceName: "test-vm",
+			Level:        alerts.AlertLevelWarning,
+			Message:      "Test message",
+			StartTime:    time.Now().Add(-1 * time.Hour),
+		},
+		nil,
+	}
+
+	err := nm.sendResolvedEmail(config, alertList, time.Now())
+	if err == nil {
+		t.Error("expected error for invalid SMTP host")
+	}
+	if err != nil && !strings.Contains(err.Error(), "failed to send email") {
+		t.Errorf("expected 'failed to send email' error, got: %v", err)
+	}
+}
+
+func TestSendResolvedEmail_ZeroResolvedTime(t *testing.T) {
+	nm := &NotificationManager{}
+	config := EmailConfig{
+		From:     "sender@example.com",
+		To:       []string{"recipient@example.com"},
+		SMTPHost: "invalid.localhost.test",
+		SMTPPort: 25,
+	}
+
+	alert := &alerts.Alert{
+		ID:           "test-alert-1",
+		ResourceName: "test-vm",
+		Level:        alerts.AlertLevelWarning,
+		Message:      "Test message",
+	}
+
+	// Zero time should still work (buildResolvedNotificationContent handles it)
+	err := nm.sendResolvedEmail(config, []*alerts.Alert{alert}, time.Time{})
+	if err == nil {
+		t.Error("expected error for invalid SMTP host")
+	}
+	if err != nil && !strings.Contains(err.Error(), "failed to send email") {
+		t.Errorf("expected 'failed to send email' error, got: %v", err)
+	}
+}
