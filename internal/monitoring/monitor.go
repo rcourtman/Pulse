@@ -7264,7 +7264,7 @@ func buildGuestLookups(snapshot models.StateSnapshot, metadataStore *config.Gues
 		key := alerts.BuildGuestKey(vm.Instance, vm.Node, vm.VMID)
 		byKey[key] = info
 
-		vmidKey := fmt.Sprintf("%d", vm.VMID)
+		vmidKey := strconv.Itoa(vm.VMID)
 		byVMID[vmidKey] = append(byVMID[vmidKey], info)
 
 		// Persist last-known name and type for this guest
@@ -7286,7 +7286,7 @@ func buildGuestLookups(snapshot models.StateSnapshot, metadataStore *config.Gues
 			byKey[key] = info
 		}
 
-		vmidKey := fmt.Sprintf("%d", ct.VMID)
+		vmidKey := strconv.Itoa(ct.VMID)
 		byVMID[vmidKey] = append(byVMID[vmidKey], info)
 
 		// Persist last-known name and type for this guest
@@ -7320,7 +7320,7 @@ func enrichWithPersistedMetadata(metadataStore *config.GuestMetadataStore, byVMI
 			continue // Invalid key format
 		}
 
-		vmidKey := fmt.Sprintf("%d", vmid)
+		vmidKey := strconv.Itoa(vmid)
 
 		// Check if we already have a live entry for this exact guest
 		hasLiveEntry := false
