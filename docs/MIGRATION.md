@@ -43,6 +43,19 @@ The export file works across all installation methods. You can migrate from Dock
 2.  Import your latest backup.
 3.  Restored in < 5 minutes.
 
+## 📋 Post-Migration Checklist
+
+Because authentication secrets are excluded from exports, you must:
+
+1.  **Re-create Admin User**: If not using `.env` overrides, create your admin account on the new instance.
+2.  **Re-issue API Tokens**:
+    *   Go to **Settings → Security**.
+    *   Generate new tokens for your agents and scripts.
+3.  **Update Agents**:
+    *   **Unified Agent**: Update the `--token` flag in your service definition.
+    *   **Docker**: Update `PULSE_TOKEN` in your container config.
+    *   *Tip: You can use the "Install New Agent" wizard to generate updated install commands.*
+
 ## 🔒 Security
 
 *   **Encryption**: Exports are encrypted with PBKDF2 (100k iterations).
