@@ -665,3 +665,97 @@ func TestImportTransaction_CommitRestoreOnFailure(t *testing.T) {
 		}
 	})
 }
+
+func TestStageFile_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	tx, err := newImportTransaction(tmpDir)
+	if err != nil {
+		t.Fatalf("newImportTransaction: %v", err)
+	}
+	defer tx.Cleanup()
+
+	target := filepath.Join(tmpDir, "test.txt")
+	data := []byte("test content")
+
+	err = tx.StageFile(target, data, 0600)
+	if err != nil {
+		t.Fatalf("StageFile: %v", err)
+	}
+
+	// Verify file was staged
+	if _, ok := tx.staged[target]; !ok {
+		t.Error("target should be in staged map")
+	}
+}
+
+func TestStageFile_AlreadyCommitted(t *testing.T) {
+	tmpDir := t.TempDir()
+	tx, err := newImportTransaction(tmpDir)
+	if err != nil {
+		t.Fatalf("newImportTransaction: %v", err)
+	}
+	defer tx.Cleanup()
+
+	// Mark as committed
+	tx.committed = true
+
+	target := filepath.Join(tmpDir, "test.txt")
+	err = tx.StageFile(target, []byte("data"), 0600)
+	if err == nil {
+		t.Error("expected error for already committed transaction")
+	}
+	if err != nil && err.Error() != "transaction already committed" {
+		t.Errorf("expected 'transaction already committed' error, got: %v", err)
+	}
+}
+
+func TestStageFile_ReplacesExistingStaged(t *testing.T) {
+	tmpDir := t.TempDir()
+	tx, err := newImportTransaction(tmpDir)
+	if err != nil {
+		t.Fatalf("newImportTransaction: %v", err)
+	}
+	defer tx.Cleanup()
+
+	target := filepath.Join(tmpDir, "test.txt")
+
+	// Stage first version
+	err = tx.StageFile(target, []byte("first"), 0600)
+	if err != nil {
+		t.Fatalf("first StageFile: %v", err)
+	}
+	firstStaged := tx.staged[target]
+
+	// Stage second version (should replace)
+	err = tx.StageFile(target, []byte("second"), 0600)
+	if err != nil {
+		t.Fatalf("second StageFile: %v", err)
+	}
+	secondStaged := tx.staged[target]
+
+	// Verify different file was staged
+	if firstStaged == secondStaged {
+		t.Error("second staging should create new file")
+	}
+
+	// Verify first staged file was removed
+	if _, err := os.Stat(firstStaged); !os.IsNotExist(err) {
+		t.Error("first staged file should have been removed")
+	}
+}
+
+func TestStageFile_EmptyBasename(t *testing.T) {
+	tmpDir := t.TempDir()
+	tx, err := newImportTransaction(tmpDir)
+	if err != nil {
+		t.Fatalf("newImportTransaction: %v", err)
+	}
+	defer tx.Cleanup()
+
+	// Target with trailing slash gets empty basename
+	target := tmpDir + string(os.PathSeparator)
+	err = tx.StageFile(target, []byte("data"), 0600)
+	if err != nil {
+		t.Fatalf("StageFile with empty basename: %v", err)
+	}
+}
