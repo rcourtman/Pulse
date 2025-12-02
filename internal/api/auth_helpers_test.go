@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestDetectProxy(t *testing.T) {
@@ -312,5 +313,64 @@ func TestGenerateSessionToken(t *testing.T) {
 		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
 			t.Errorf("generateSessionToken() contains non-hex character: %c", c)
 		}
+	}
+}
+
+func TestValidateSession_NonExistentToken(t *testing.T) {
+	// Ensure session store is initialized
+	InitSessionStore(t.TempDir())
+
+	// A random token that doesn't exist should return false
+	result := ValidateSession("nonexistent-token-12345")
+	if result {
+		t.Error("ValidateSession should return false for non-existent token")
+	}
+}
+
+func TestValidateSession_EmptyToken(t *testing.T) {
+	InitSessionStore(t.TempDir())
+
+	result := ValidateSession("")
+	if result {
+		t.Error("ValidateSession should return false for empty token")
+	}
+}
+
+func TestValidateSession_ValidToken(t *testing.T) {
+	dir := t.TempDir()
+	InitSessionStore(dir)
+
+	// Create a valid session with a generated token
+	store := GetSessionStore()
+	token := generateSessionToken()
+	store.CreateSession(token, 24*time.Hour, "test-agent", "127.0.0.1")
+
+	result := ValidateSession(token)
+	if !result {
+		t.Error("ValidateSession should return true for valid token")
+	}
+}
+
+func TestValidateSession_ExpiredToken(t *testing.T) {
+	dir := t.TempDir()
+	InitSessionStore(dir)
+
+	// Create a session and manually expire it
+	store := GetSessionStore()
+	token := generateSessionToken()
+	store.CreateSession(token, 24*time.Hour, "test-agent", "127.0.0.1")
+
+	// Manually expire the session by modifying the store
+	store.mu.Lock()
+	hash := sessionHash(token)
+	if session, exists := store.sessions[hash]; exists {
+		session.ExpiresAt = time.Now().Add(-1 * time.Hour) // Set to past
+		store.sessions[hash] = session
+	}
+	store.mu.Unlock()
+
+	result := ValidateSession(token)
+	if result {
+		t.Error("ValidateSession should return false for expired token")
 	}
 }
