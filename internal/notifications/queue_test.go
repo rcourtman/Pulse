@@ -652,6 +652,20 @@ func TestGetQueueStats(t *testing.T) {
 			t.Errorf("failed count = %d, want 1", stats["failed"])
 		}
 	})
+
+	t.Run("UpdateStatus returns error for non-existent notification", func(t *testing.T) {
+		tempDir := t.TempDir()
+		nq, err := NewNotificationQueue(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create notification queue: %v", err)
+		}
+		defer nq.Stop()
+
+		err = nq.UpdateStatus("non-existent-id", QueueStatusSent, "")
+		if err == nil {
+			t.Error("expected error when updating non-existent notification, got nil")
+		}
+	})
 }
 
 func TestPerformCleanup(t *testing.T) {
