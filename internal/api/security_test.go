@@ -1156,3 +1156,73 @@ func TestLoadTrustedProxyCIDRs_MixedValidInvalid(t *testing.T) {
 		t.Error("192.168.1.1 should not be trusted (not in any valid entry)")
 	}
 }
+
+// resetAdminBypassState resets the admin bypass state for testing
+func resetAdminBypassState() {
+	adminBypassState.once = sync.Once{}
+	adminBypassState.enabled = false
+	adminBypassState.declined = false
+}
+
+func TestAdminBypassEnabled_NotRequested(t *testing.T) {
+	// When ALLOW_ADMIN_BYPASS is not set to "1", bypass should be disabled
+	t.Setenv("ALLOW_ADMIN_BYPASS", "")
+	resetAdminBypassState()
+
+	if adminBypassEnabled() {
+		t.Error("adminBypassEnabled() should return false when ALLOW_ADMIN_BYPASS is not '1'")
+	}
+}
+
+func TestAdminBypassEnabled_WithPulseDev(t *testing.T) {
+	// When ALLOW_ADMIN_BYPASS=1 and PULSE_DEV=true, bypass should be enabled
+	t.Setenv("ALLOW_ADMIN_BYPASS", "1")
+	t.Setenv("PULSE_DEV", "true")
+	t.Setenv("NODE_ENV", "")
+	resetAdminBypassState()
+
+	if !adminBypassEnabled() {
+		t.Error("adminBypassEnabled() should return true when ALLOW_ADMIN_BYPASS=1 and PULSE_DEV=true")
+	}
+}
+
+func TestAdminBypassEnabled_WithNodeEnvDevelopment(t *testing.T) {
+	// When ALLOW_ADMIN_BYPASS=1 and NODE_ENV=development, bypass should be enabled
+	t.Setenv("ALLOW_ADMIN_BYPASS", "1")
+	t.Setenv("PULSE_DEV", "")
+	t.Setenv("NODE_ENV", "development")
+	resetAdminBypassState()
+
+	if !adminBypassEnabled() {
+		t.Error("adminBypassEnabled() should return true when ALLOW_ADMIN_BYPASS=1 and NODE_ENV=development")
+	}
+}
+
+func TestAdminBypassEnabled_NodeEnvCaseInsensitive(t *testing.T) {
+	// NODE_ENV comparison should be case-insensitive
+	t.Setenv("ALLOW_ADMIN_BYPASS", "1")
+	t.Setenv("PULSE_DEV", "")
+	t.Setenv("NODE_ENV", "DEVELOPMENT")
+	resetAdminBypassState()
+
+	if !adminBypassEnabled() {
+		t.Error("adminBypassEnabled() should return true when NODE_ENV=DEVELOPMENT (case-insensitive)")
+	}
+}
+
+func TestAdminBypassEnabled_DeclinedOutsideDevMode(t *testing.T) {
+	// When ALLOW_ADMIN_BYPASS=1 but not in dev mode, bypass should be declined
+	t.Setenv("ALLOW_ADMIN_BYPASS", "1")
+	t.Setenv("PULSE_DEV", "")
+	t.Setenv("NODE_ENV", "production")
+	resetAdminBypassState()
+
+	if adminBypassEnabled() {
+		t.Error("adminBypassEnabled() should return false when ALLOW_ADMIN_BYPASS=1 but not in dev mode")
+	}
+
+	// Verify the declined flag was set
+	if !adminBypassState.declined {
+		t.Error("adminBypassState.declined should be true when bypass is ignored outside dev mode")
+	}
+}
