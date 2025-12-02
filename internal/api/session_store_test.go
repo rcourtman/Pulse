@@ -522,3 +522,161 @@ func TestSessionPersistedStruct_Fields(t *testing.T) {
 		t.Errorf("OriginalDuration = %v, want %v", persisted.OriginalDuration, duration)
 	}
 }
+
+func TestSessionStore_SaveUnsafe_MkdirAllError(t *testing.T) {
+	// Create a file where the directory should be - MkdirAll will fail
+	tmpDir := t.TempDir()
+	blockedPath := filepath.Join(tmpDir, "blocked")
+
+	// Create a file at the path where dataPath should be
+	if err := os.WriteFile(blockedPath, []byte("blocking file"), 0644); err != nil {
+		t.Fatalf("failed to create blocking file: %v", err)
+	}
+
+	store := &SessionStore{
+		sessions: make(map[string]*SessionData),
+		dataPath: blockedPath, // This is a file, not a directory
+		stopChan: make(chan bool),
+	}
+
+	// Add a session to save
+	key := sessionHash("test-token")
+	store.sessions[key] = &SessionData{
+		ExpiresAt: time.Now().Add(time.Hour),
+		CreatedAt: time.Now(),
+	}
+
+	// saveUnsafe should handle error gracefully (logs but doesn't panic)
+	store.saveUnsafe()
+
+	// Verify the blocking file still exists (wasn't overwritten)
+	data, err := os.ReadFile(blockedPath)
+	if err != nil {
+		t.Fatalf("blocking file was removed: %v", err)
+	}
+	if string(data) != "blocking file" {
+		t.Error("blocking file was modified")
+	}
+}
+
+func TestSessionStore_SaveUnsafe_WriteFileError(t *testing.T) {
+	// Create a read-only directory to prevent file creation
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+
+	if err := os.Mkdir(readOnlyDir, 0755); err != nil {
+		t.Fatalf("failed to create readonly dir: %v", err)
+	}
+
+	store := &SessionStore{
+		sessions: make(map[string]*SessionData),
+		dataPath: readOnlyDir,
+		stopChan: make(chan bool),
+	}
+
+	// Add a session
+	key := sessionHash("test-token")
+	store.sessions[key] = &SessionData{
+		ExpiresAt: time.Now().Add(time.Hour),
+		CreatedAt: time.Now(),
+	}
+
+	// Make directory read-only after it exists (MkdirAll succeeds, WriteFile fails)
+	if err := os.Chmod(readOnlyDir, 0555); err != nil {
+		t.Fatalf("failed to make dir readonly: %v", err)
+	}
+	t.Cleanup(func() {
+		os.Chmod(readOnlyDir, 0755) // Restore for cleanup
+	})
+
+	// saveUnsafe should handle error gracefully (logs but doesn't panic)
+	store.saveUnsafe()
+
+	// Verify no file was created
+	sessionsFile := filepath.Join(readOnlyDir, "sessions.json")
+	if _, err := os.Stat(sessionsFile); err == nil {
+		t.Error("sessions file should not exist after write failure")
+	}
+}
+
+func TestSessionStore_SaveUnsafe_RenameError(t *testing.T) {
+	// Create a directory at the target path to cause rename error
+	tmpDir := t.TempDir()
+
+	// Create a directory at the exact path where sessions.json should go
+	sessionsFilePath := filepath.Join(tmpDir, "sessions.json")
+	if err := os.Mkdir(sessionsFilePath, 0755); err != nil {
+		t.Fatalf("failed to create blocking directory: %v", err)
+	}
+
+	store := &SessionStore{
+		sessions: make(map[string]*SessionData),
+		dataPath: tmpDir,
+		stopChan: make(chan bool),
+	}
+
+	// Add a session
+	key := sessionHash("test-token")
+	store.sessions[key] = &SessionData{
+		ExpiresAt: time.Now().Add(time.Hour),
+		CreatedAt: time.Now(),
+	}
+
+	// saveUnsafe should handle rename error gracefully
+	store.saveUnsafe()
+
+	// The blocking directory should still exist (rename failed)
+	info, err := os.Stat(sessionsFilePath)
+	if err != nil {
+		t.Fatalf("blocking directory was removed: %v", err)
+	}
+	if !info.IsDir() {
+		t.Error("blocking directory was replaced with a file")
+	}
+}
+
+func TestSessionStore_Load_ReadError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a directory where the sessions file should be - reading it will fail
+	sessionsPath := filepath.Join(tmpDir, "sessions.json")
+	if err := os.Mkdir(sessionsPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	store := &SessionStore{
+		sessions: make(map[string]*SessionData),
+		dataPath: tmpDir,
+		stopChan: make(chan bool),
+	}
+
+	// Should not panic and should log error
+	store.load()
+
+	if len(store.sessions) != 0 {
+		t.Errorf("store should be empty after read error, got %d sessions", len(store.sessions))
+	}
+}
+
+func TestSessionStore_Load_InvalidJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Write invalid JSON that won't match either format
+	sessionsFile := filepath.Join(tmpDir, "sessions.json")
+	if err := os.WriteFile(sessionsFile, []byte("not valid json at all"), 0600); err != nil {
+		t.Fatalf("failed to write invalid JSON: %v", err)
+	}
+
+	store := &SessionStore{
+		sessions: make(map[string]*SessionData),
+		dataPath: tmpDir,
+		stopChan: make(chan bool),
+	}
+
+	// Should not panic
+	store.load()
+
+	if len(store.sessions) != 0 {
+		t.Errorf("store should be empty after loading invalid JSON, got %d sessions", len(store.sessions))
+	}
+}
