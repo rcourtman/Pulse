@@ -83,6 +83,9 @@ func (h *UpdateHandlers) HandleApplyUpdate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Limit request body to 8KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
+
 	var req struct {
 		DownloadURL string `json:"downloadUrl"`
 	}

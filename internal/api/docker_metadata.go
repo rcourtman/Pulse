@@ -78,6 +78,9 @@ func (h *DockerMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Limit request body to 16KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+
 	var meta config.DockerMetadata
 	if err := json.NewDecoder(r.Body).Decode(&meta); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)

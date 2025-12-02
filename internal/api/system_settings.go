@@ -462,6 +462,9 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		existingSettings = config.DefaultSystemSettings()
 	}
 
+	// Limit request body to 64KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+
 	// Read the request body into a map to check which fields were provided
 	var rawRequest map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&rawRequest); err != nil {

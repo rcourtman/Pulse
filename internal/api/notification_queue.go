@@ -85,6 +85,9 @@ func (h *NotificationQueueHandlers) RetryDLQItem(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Limit request body to 8KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
+
 	var request struct {
 		ID string `json:"id"`
 	}
@@ -128,6 +131,9 @@ func (h *NotificationQueueHandlers) DeleteDLQItem(w http.ResponseWriter, r *http
 	if !ensureScope(w, r, config.ScopeMonitoringWrite) {
 		return
 	}
+
+	// Limit request body to 8KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 
 	var request struct {
 		ID string `json:"id"`
