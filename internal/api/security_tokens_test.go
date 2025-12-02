@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -48,5 +49,27 @@ func TestNormalizeRequestedScopesRejectsEmpty(t *testing.T) {
 	raw := []string{}
 	if _, err := normalizeRequestedScopes(&raw); err == nil {
 		t.Fatal("expected error for empty scopes array")
+	}
+}
+
+func TestNormalizeRequestedScopesRejectsBlankScope(t *testing.T) {
+	raw := []string{config.ScopeHostReport, "   ", config.ScopeSettingsRead}
+	_, err := normalizeRequestedScopes(&raw)
+	if err == nil {
+		t.Fatal("expected error for blank scope identifier")
+	}
+	if !strings.Contains(err.Error(), "cannot be blank") {
+		t.Errorf("expected blank scope error, got: %v", err)
+	}
+}
+
+func TestNormalizeRequestedScopesWildcardOnly(t *testing.T) {
+	raw := []string{config.ScopeWildcard}
+	scopes, err := normalizeRequestedScopes(&raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(scopes) != 1 || scopes[0] != config.ScopeWildcard {
+		t.Fatalf("expected wildcard scope only, got %#v", scopes)
 	}
 }
