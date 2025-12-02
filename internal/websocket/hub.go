@@ -151,11 +151,7 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 			return true
 		}
 
-		// Still check for exact same-origin match
-		if origin == requestOrigin {
-			return true
-		}
-
+		// Note: same-origin match already handled above (line 116)
 		log.Warn().
 			Str("origin", origin).
 			Str("requestOrigin", requestOrigin).
