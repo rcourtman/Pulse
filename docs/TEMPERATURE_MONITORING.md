@@ -83,24 +83,11 @@ journalctl -u pulse-sensor-proxy -f
 3.  **Transport**:
     *   **Local**: Uses a Unix socket (`/run/pulse-sensor-proxy`) for zero-latency, secure access.
     *   **Remote**: Uses mutual TLS over HTTPS (port 8443).
-4.  **No SSH Keys**: Pulse containers no longer need SSH keys to read temperatures.    user     = "root"
-    private_key = file(var.ssh_private_key)
-  }
+4.  **No SSH Keys**: Pulse containers no longer need SSH keys to read temperatures.
 
-  provisioner "remote-exec" {
-    inline = [
-      "curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh -o /tmp/install-sensor-proxy.sh",
-      "chmod +x /tmp/install-sensor-proxy.sh",
-      "/tmp/install-sensor-proxy.sh --standalone --pulse-server ${var.pulse_server_url} --quiet",
-      "systemctl is-active pulse-sensor-proxy || exit 1"
-    ]
-  }
+---
 
-  triggers = {
-    pulse_version = var.pulse_version
-  }
-}
-```
+## 🔧 Advanced Configuration
 
 #### Manual Configuration (No Script)
 
