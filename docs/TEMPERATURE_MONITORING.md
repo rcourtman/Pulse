@@ -35,16 +35,26 @@ If running Pulse in Docker, you must install the proxy on the host and share the
 
 3.  **Restart Pulse**: `docker compose up -d`
 
-## 🌐 Remote Nodes (HTTP Mode)
+## 🌐 Multi-Server Proxmox Setup
 
-For nodes *other* than the one running Pulse, install the proxy in HTTP mode.
+If you have Pulse running on **Server A** and want to monitor temperatures on **Server B** (a separate Proxmox host without Pulse):
 
-1.  **Run Installer on Remote Node**:
+1.  **Run Installer on Server B** (the remote Proxmox host):
     ```bash
     curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | \
-      sudo bash -s -- --standalone --http-mode --pulse-server http://<pulse-ip>:7655
+      sudo bash -s -- --ctid <PULSE_CONTAINER_ID> --pulse-server http://<pulse-ip>:7655
     ```
-2.  **Verify**: Pulse will automatically detect the proxy and start collecting data.
+    Replace `<PULSE_CONTAINER_ID>` with the LXC container ID where Pulse runs on Server A (e.g., `100`).
+
+2.  The installer will detect that the container doesn't exist locally and install in **host monitoring only** mode:
+    ```
+    [WARN] Container 100 does not exist on this node
+    [WARN] Will install sensor-proxy for host temperature monitoring only
+    ```
+
+3.  **Verify**: `systemctl status pulse-sensor-proxy`
+
+> **Note**: The `--standalone --http-mode` flags shown in the Pulse UI quick-setup are for Docker deployments, not bare Proxmox hosts. For multi-server Proxmox setups, use the `--ctid` approach above.
 
 ## 🔧 Troubleshooting
 
