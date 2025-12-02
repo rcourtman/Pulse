@@ -1,7 +1,9 @@
 package api
 
 import (
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -900,5 +902,137 @@ func TestAuditEvent_Fields(t *testing.T) {
 	}
 	if ae.Details != "successful login" {
 		t.Errorf("Details = %q, want 'successful login'", ae.Details)
+	}
+}
+
+func TestSecurityHeadersWithConfig_EmbeddingDisabled(t *testing.T) {
+	handler := SecurityHeadersWithConfig(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+		false, // allowEmbedding
+		"",    // allowedOrigins
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	// Check X-Frame-Options is set to DENY when embedding is disabled
+	if got := rec.Header().Get("X-Frame-Options"); got != "DENY" {
+		t.Errorf("X-Frame-Options = %q, want DENY", got)
+	}
+
+	// Check CSP has frame-ancestors 'none'
+	csp := rec.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "frame-ancestors 'none'") {
+		t.Errorf("CSP should contain frame-ancestors 'none', got: %s", csp)
+	}
+
+	// Check other security headers are present
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
+	}
+	if got := rec.Header().Get("X-XSS-Protection"); got != "1; mode=block" {
+		t.Errorf("X-XSS-Protection = %q, want '1; mode=block'", got)
+	}
+	if got := rec.Header().Get("Referrer-Policy"); got != "strict-origin-when-cross-origin" {
+		t.Errorf("Referrer-Policy = %q, want strict-origin-when-cross-origin", got)
+	}
+}
+
+func TestSecurityHeadersWithConfig_EmbeddingEnabledNoOrigins(t *testing.T) {
+	handler := SecurityHeadersWithConfig(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+		true, // allowEmbedding
+		"",   // allowedOrigins - empty means allow all
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	// X-Frame-Options should NOT be set when embedding is allowed
+	if got := rec.Header().Get("X-Frame-Options"); got != "" {
+		t.Errorf("X-Frame-Options = %q, want empty (not set)", got)
+	}
+
+	// Check CSP has frame-ancestors * (allow any)
+	csp := rec.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "frame-ancestors *") {
+		t.Errorf("CSP should contain 'frame-ancestors *', got: %s", csp)
+	}
+}
+
+func TestSecurityHeadersWithConfig_EmbeddingEnabledWithOrigins(t *testing.T) {
+	handler := SecurityHeadersWithConfig(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+		true,                                     // allowEmbedding
+		"https://example.com, https://other.com", // allowedOrigins
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	// X-Frame-Options should NOT be set when embedding is allowed
+	if got := rec.Header().Get("X-Frame-Options"); got != "" {
+		t.Errorf("X-Frame-Options = %q, want empty (not set)", got)
+	}
+
+	// Check CSP has frame-ancestors with specific origins
+	csp := rec.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "frame-ancestors 'self' https://example.com https://other.com") {
+		t.Errorf("CSP should contain specific frame-ancestors, got: %s", csp)
+	}
+}
+
+func TestSecurityHeadersWithConfig_EmbeddingWithEmptyOriginEntries(t *testing.T) {
+	// Test handling of origins with empty entries (e.g., trailing comma)
+	handler := SecurityHeadersWithConfig(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+		true,                       // allowEmbedding
+		"https://example.com, , ,", // allowedOrigins with empty entries
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	// Check CSP has frame-ancestors with only non-empty origins
+	csp := rec.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "frame-ancestors 'self' https://example.com") {
+		t.Errorf("CSP should contain frame-ancestors with filtered origins, got: %s", csp)
+	}
+}
+
+func TestSecurityHeadersWithConfig_NextHandlerCalled(t *testing.T) {
+	called := false
+	handler := SecurityHeadersWithConfig(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			called = true
+			w.WriteHeader(http.StatusOK)
+		}),
+		false,
+		"",
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if !called {
+		t.Error("next handler was not called")
 	}
 }
