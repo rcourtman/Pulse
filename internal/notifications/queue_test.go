@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
 
 func TestCalculateBackoff(t *testing.T) {
@@ -230,11 +232,126 @@ func TestCancelByAlertIDs_NoMatchingNotifications(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
+	defer nq.Stop()
 
-	// With an empty queue, no notifications should match
-	err = nq.CancelByAlertIDs([]string{"alert-1", "alert-2"})
+	// Enqueue a notification with alert-1 (far future NextRetryAt so background processor doesn't pick it up)
+	futureRetry := time.Now().Add(1 * time.Hour)
+	notif := &QueuedNotification{
+		ID:          "notif-1",
+		Type:        "email",
+		Status:      QueueStatusPending,
+		MaxAttempts: 3,
+		Config:      []byte(`{}`),
+		NextRetryAt: &futureRetry,
+		Alerts:      []*alerts.Alert{{ID: "alert-1"}},
+	}
+	if err := nq.Enqueue(notif); err != nil {
+		t.Fatalf("Failed to enqueue: %v", err)
+	}
+
+	// Cancel with non-matching alert ID
+	err = nq.CancelByAlertIDs([]string{"alert-2"})
 	if err != nil {
-		t.Errorf("CancelByAlertIDs with no matching notifications returned error: %v", err)
+		t.Errorf("CancelByAlertIDs returned error: %v", err)
+	}
+
+	// Verify the notification is still pending using GetQueueStats
+	stats, err := nq.GetQueueStats()
+	if err != nil {
+		t.Fatalf("GetQueueStats failed: %v", err)
+	}
+	if stats["pending"] != 1 {
+		t.Errorf("Expected 1 pending notification, got %d (stats: %v)", stats["pending"], stats)
+	}
+	if stats["cancelled"] != 0 {
+		t.Errorf("Expected 0 cancelled notifications, got %d", stats["cancelled"])
+	}
+}
+
+func TestCancelByAlertIDs_MatchingNotificationCancelled(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+	defer nq.Stop()
+
+	// Enqueue a notification with alert-1 (far future NextRetryAt so background processor doesn't pick it up)
+	futureRetry := time.Now().Add(1 * time.Hour)
+	notif := &QueuedNotification{
+		ID:          "notif-1",
+		Type:        "email",
+		Status:      QueueStatusPending,
+		MaxAttempts: 3,
+		Config:      []byte(`{}`),
+		NextRetryAt: &futureRetry,
+		Alerts:      []*alerts.Alert{{ID: "alert-1"}},
+	}
+	if err := nq.Enqueue(notif); err != nil {
+		t.Fatalf("Failed to enqueue: %v", err)
+	}
+
+	// Cancel with matching alert ID
+	err = nq.CancelByAlertIDs([]string{"alert-1"})
+	if err != nil {
+		t.Errorf("CancelByAlertIDs returned error: %v", err)
+	}
+
+	// Verify the notification is now cancelled using GetQueueStats
+	stats, err := nq.GetQueueStats()
+	if err != nil {
+		t.Fatalf("GetQueueStats failed: %v", err)
+	}
+	if stats["pending"] != 0 {
+		t.Errorf("Expected 0 pending notifications, got %d", stats["pending"])
+	}
+	if stats["cancelled"] != 1 {
+		t.Errorf("Expected 1 cancelled notification, got %d (stats: %v)", stats["cancelled"], stats)
+	}
+}
+
+func TestCancelByAlertIDs_MultipleAlertsPartialMatch(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+	defer nq.Stop()
+
+	// Enqueue a notification with multiple alerts (far future NextRetryAt so background processor doesn't pick it up)
+	futureRetry := time.Now().Add(1 * time.Hour)
+	notif := &QueuedNotification{
+		ID:          "notif-multi",
+		Type:        "webhook",
+		Status:      QueueStatusPending,
+		MaxAttempts: 3,
+		Config:      []byte(`{}`),
+		NextRetryAt: &futureRetry,
+		Alerts: []*alerts.Alert{
+			{ID: "alert-1"},
+			{ID: "alert-2"},
+		},
+	}
+	if err := nq.Enqueue(notif); err != nil {
+		t.Fatalf("Failed to enqueue: %v", err)
+	}
+
+	// Cancel with only one matching alert ID - should still cancel the notification
+	err = nq.CancelByAlertIDs([]string{"alert-1"})
+	if err != nil {
+		t.Errorf("CancelByAlertIDs returned error: %v", err)
+	}
+
+	// Verify the notification is cancelled (any matching alert should cancel)
+	stats, err := nq.GetQueueStats()
+	if err != nil {
+		t.Fatalf("GetQueueStats failed: %v", err)
+	}
+	if stats["pending"] != 0 {
+		t.Errorf("Expected 0 pending notifications after partial match cancel, got %d", stats["pending"])
+	}
+	if stats["cancelled"] != 1 {
+		t.Errorf("Expected 1 cancelled notification, got %d (stats: %v)", stats["cancelled"], stats)
 	}
 }
 

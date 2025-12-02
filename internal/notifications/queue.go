@@ -785,10 +785,16 @@ func (nq *NotificationQueue) CancelByAlertIDs(alertIDs []string) error {
 		return fmt.Errorf("error iterating notifications for cancellation: %w", err)
 	}
 
-	// Cancel the matched notifications
+	// Cancel the matched notifications (using direct SQL since we already hold the lock)
 	if len(toCancelIDs) > 0 {
+		now := time.Now().Unix()
+		updateQuery := `
+			UPDATE notification_queue
+			SET status = ?, last_attempt = ?, last_error = ?
+			WHERE id = ?
+		`
 		for _, notifID := range toCancelIDs {
-			if err := nq.UpdateStatus(notifID, QueueStatusCancelled, "Alert resolved"); err != nil {
+			if _, err := nq.db.Exec(updateQuery, QueueStatusCancelled, now, "Alert resolved", notifID); err != nil {
 				log.Error().Err(err).Str("notifID", notifID).Msg("Failed to mark notification as cancelled")
 			}
 		}
