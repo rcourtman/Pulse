@@ -37,6 +37,8 @@ func (h *HostAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Limit request body to 256KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
 	defer r.Body.Close()
 
 	var report agentshost.Report
