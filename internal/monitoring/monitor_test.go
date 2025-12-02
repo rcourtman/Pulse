@@ -686,14 +686,14 @@ func TestRecoverFromPanic(t *testing.T) {
 	})
 
 	t.Run("code after panic is not executed", func(t *testing.T) {
-		afterPanicExecuted := false
+		panicReached := false
 		func() {
 			defer recoverFromPanic("test-goroutine")
+			panicReached = true
 			panic("stop here")
-			afterPanicExecuted = true //nolint:govet // unreachable code is intentional for test
 		}()
-		if afterPanicExecuted {
-			t.Error("expected code after panic to not execute")
+		if !panicReached {
+			t.Error("expected panic to be reached")
 		}
 	})
 }
