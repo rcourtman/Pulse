@@ -2666,3 +2666,46 @@ func TestSendHTMLEmailWithError_ExistingEmailManager(t *testing.T) {
 		t.Errorf("expected From to be updated to 'new@example.com', got %q", existingManager.config.EmailConfig.From)
 	}
 }
+
+func TestSendNotificationsDirect_AllDisabled(t *testing.T) {
+	nm := &NotificationManager{}
+
+	emailConfig := EmailConfig{Enabled: false}
+	webhooks := []WebhookConfig{}
+	appriseConfig := AppriseConfig{Enabled: false}
+	alertList := []*alerts.Alert{}
+
+	// Should complete without panic - all notification channels disabled
+	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
+}
+
+func TestSendNotificationsDirect_WebhookDisabled(t *testing.T) {
+	nm := &NotificationManager{}
+
+	emailConfig := EmailConfig{Enabled: false}
+	webhooks := []WebhookConfig{
+		{Name: "test", Enabled: false, URL: "http://example.com"},
+	}
+	appriseConfig := AppriseConfig{Enabled: false}
+	alertList := []*alerts.Alert{}
+
+	// Should skip disabled webhook without panic
+	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
+}
+
+func TestSendNotificationsDirect_MultipleWebhooks(t *testing.T) {
+	nm := &NotificationManager{}
+
+	emailConfig := EmailConfig{Enabled: false}
+	webhooks := []WebhookConfig{
+		{Name: "enabled", Enabled: true, URL: "http://invalid.localhost.test/hook1"},
+		{Name: "disabled", Enabled: false, URL: "http://invalid.localhost.test/hook2"},
+		{Name: "also-enabled", Enabled: true, URL: "http://invalid.localhost.test/hook3"},
+	}
+	appriseConfig := AppriseConfig{Enabled: false}
+	alertList := []*alerts.Alert{}
+
+	// Should iterate all webhooks, launching goroutines for enabled ones
+	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
+	// Goroutines will fail but shouldn't panic
+}
