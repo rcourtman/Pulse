@@ -9,7 +9,7 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `nodes.enc` | Node Credentials | 🔒 **Encrypted** (AES-256-GCM) |
 | `alerts.json` | Alert Rules | 📝 Standard |
 
-All files are located in `/etc/pulse/` (Linux/LXC) or `/data/` (Docker).
+All files are located in `/etc/pulse/` (Systemd) or `/data/` (Docker/Kubernetes).
 
 ---
 
@@ -135,7 +135,7 @@ Pulse uses a powerful alerting engine with hysteresis (separate trigger/clear th
 Enable HTTPS by providing certificate files via environment variables.
 
 ```bash
-# Systemd / LXC
+# Systemd
 HTTPS_ENABLED=true
 TLS_CERT_FILE=/etc/pulse/cert.pem
 TLS_KEY_FILE=/etc/pulse/key.pem
