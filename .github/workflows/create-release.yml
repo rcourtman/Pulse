@@ -444,6 +444,20 @@ jobs:
 
           echo "✓ Release published as latest: ${TAG}"
 
+      - name: Trigger Docker image publish
+        continue-on-error: true  # Non-fatal if dispatch fails
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+        run: |
+          TAG="${{ needs.extract_version.outputs.tag }}"
+          echo "Triggering Docker image publish for ${TAG}..."
+
+          # Publishing via API doesn't fire the release webhook, so we dispatch manually
+          # Requires WORKFLOW_PAT secret with 'repo' and 'workflow' scopes
+          gh workflow run publish-docker.yml -f tag="${TAG}"
+
+          echo "✓ Docker publish workflow dispatched"
+
       - name: Trigger demo server update
         continue-on-error: true  # Non-fatal if dispatch fails
         env:
@@ -452,8 +466,6 @@ jobs:
           TAG="${{ needs.extract_version.outputs.tag }}"
           echo "Triggering demo server update for ${TAG}..."
 
-          # Publishing via API doesn't fire the release webhook, so we dispatch manually
-          # Requires WORKFLOW_PAT secret with 'repo' and 'workflow' scopes
           gh workflow run update-demo-server.yml -f tag="${TAG}"
 
           echo "✓ Demo server update workflow dispatched"
