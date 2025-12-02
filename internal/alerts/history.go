@@ -192,15 +192,19 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 	historyFile := hm.historyFile
 	backupFile := hm.backupFile
 
+	// Create backup of existing file once before any write attempts.
+	// This ensures we don't lose data if all retries fail.
+	backupCreated := false
+	if _, err := os.Stat(historyFile); err == nil {
+		if err := os.Rename(historyFile, backupFile); err != nil {
+			log.Warn().Err(err).Msg("Failed to create backup file")
+		} else {
+			backupCreated = true
+		}
+	}
+
 	var lastErr error
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		// Create backup of existing file before writing
-		if _, err := os.Stat(historyFile); err == nil {
-			if err := os.Rename(historyFile, backupFile); err != nil {
-				log.Warn().Err(err).Msg("Failed to create backup file")
-			}
-		}
-
 		// Write new file
 		if err := os.WriteFile(historyFile, data, 0644); err != nil {
 			lastErr = err
@@ -210,13 +214,6 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 				Int("maxRetries", maxRetries).
 				Msg("Failed to write history file, will retry")
 
-			// Restore backup if write failed
-			if _, statErr := os.Stat(backupFile); statErr == nil {
-				if restoreErr := os.Rename(backupFile, historyFile); restoreErr != nil {
-					log.Error().Err(restoreErr).Msg("Failed to restore backup after write failure")
-				}
-			}
-
 			// Exponential backoff: 100ms, 200ms, 400ms
 			if attempt < maxRetries {
 				backoff := time.Duration(100*(1<<uint(attempt-1))) * time.Millisecond
@@ -225,9 +222,21 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 			continue
 		}
 
-		// Success
+		// Success - remove backup file now that we've successfully written
+		if backupCreated {
+			_ = os.Remove(backupFile)
+		}
 		log.Debug().Int("entries", len(snapshot)).Msg("Saved alert history")
 		return nil
+	}
+
+	// All retries failed - restore backup if we have one
+	if backupCreated {
+		if restoreErr := os.Rename(backupFile, historyFile); restoreErr != nil {
+			log.Error().Err(restoreErr).Msg("Failed to restore backup after all write attempts failed")
+		} else {
+			log.Info().Msg("Restored backup after history save failure")
+		}
 	}
 
 	return fmt.Errorf("failed to write history file after %d attempts: %w", maxRetries, lastErr)

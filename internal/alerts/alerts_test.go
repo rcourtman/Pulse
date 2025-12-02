@@ -2384,13 +2384,13 @@ func TestCheckFlapping(t *testing.T) {
 			}
 			m.mu.Unlock()
 
-			// Call checkFlapping
+			// Call checkFlappingLocked
 			m.mu.Lock()
-			result := m.checkFlapping(alertID)
+			result := m.checkFlappingLocked(alertID)
 			m.mu.Unlock()
 
 			if result != tt.expectFlapping {
-				t.Errorf("checkFlapping() = %v, want %v", result, tt.expectFlapping)
+				t.Errorf("checkFlappingLocked() = %v, want %v", result, tt.expectFlapping)
 			}
 
 			// Check if flapping was newly detected
@@ -2437,13 +2437,13 @@ func TestCheckFlappingAlreadyFlapping(t *testing.T) {
 	}
 	m.mu.Unlock()
 
-	// Call checkFlapping - should return true but NOT update suppression
+	// Call checkFlappingLocked - should return true but NOT update suppression
 	m.mu.Lock()
-	result := m.checkFlapping(alertID)
+	result := m.checkFlappingLocked(alertID)
 	m.mu.Unlock()
 
 	if !result {
-		t.Errorf("checkFlapping() = false, want true for already flapping alert")
+		t.Errorf("checkFlappingLocked() = false, want true for already flapping alert")
 	}
 
 	// Verify suppression time was NOT updated (existing suppression should remain)
@@ -2479,14 +2479,14 @@ func TestCheckFlappingWindowExpiry(t *testing.T) {
 	}
 	m.mu.Unlock()
 
-	// Call checkFlapping - old entries should be pruned
+	// Call checkFlappingLocked - old entries should be pruned
 	m.mu.Lock()
-	result := m.checkFlapping(alertID)
+	result := m.checkFlappingLocked(alertID)
 	historyLen := len(m.flappingHistory[alertID])
 	m.mu.Unlock()
 
 	if result {
-		t.Errorf("checkFlapping() = true, want false (old entries should be pruned)")
+		t.Errorf("checkFlappingLocked() = true, want false (old entries should be pruned)")
 	}
 
 	// Only the current call should remain in history
