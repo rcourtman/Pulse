@@ -1319,6 +1319,7 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 				shared := hasClusterConfig && clusterConfig.Shared == 1
 
 				// Create storage model
+				// Initialize Enabled/Active from per-node API response
 				modelStorage := models.Storage{
 					ID:       storageID,
 					Name:     storage.Storage,
@@ -1332,8 +1333,8 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 					Usage:    safePercentage(float64(storage.Used), float64(storage.Total)),
 					Content:  sortContent(storage.Content),
 					Shared:   shared,
-					Enabled:  true,
-					Active:   true,
+					Enabled:  storage.Enabled == 1,
+					Active:   storage.Active == 1,
 				}
 
 				// If this is ZFS storage, attach pool status information
@@ -1380,13 +1381,14 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 					}
 				}
 
-				// Determine status based on active/enabled flags
-				if storage.Active == 1 || modelStorage.Active {
-					modelStorage.Status = "available"
-				} else if modelStorage.Enabled {
-					modelStorage.Status = "inactive"
-				} else {
+				// Determine status based on enabled/active flags
+				// Priority: disabled storage always shows as "disabled", regardless of active state
+				if !modelStorage.Enabled {
 					modelStorage.Status = "disabled"
+				} else if modelStorage.Active {
+					modelStorage.Status = "available"
+				} else {
+					modelStorage.Status = "inactive"
 				}
 
 				nodeStorageList = append(nodeStorageList, modelStorage)
