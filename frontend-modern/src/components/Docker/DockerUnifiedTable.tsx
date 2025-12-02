@@ -1292,7 +1292,7 @@ const DockerContainerRow: Component<{
       <Show when={expanded() && hasDrawerContent()}>
         <tr>
           <td colspan={DOCKER_COLUMNS.length} class="p-0">
-            <div class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 overflow-hidden">
+            <div class="w-0 min-w-full bg-gray-50 dark:bg-gray-900/50 px-4 py-3 overflow-hidden">
               <div class="flex flex-wrap justify-start gap-3">
                 <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
@@ -1997,7 +1997,7 @@ const DockerServiceRow: Component<{
       <Show when={expanded() && hasTasks()}>
         <tr>
           <td colspan={DOCKER_COLUMNS.length} class="p-0">
-            <div class="bg-gray-50 dark:bg-gray-900/60 px-4 py-3 overflow-hidden">
+            <div class="w-0 min-w-full bg-gray-50 dark:bg-gray-900/60 px-4 py-3 overflow-hidden">
               <div class="flex flex-wrap justify-start gap-3">
                 <div class="min-w-[320px] flex-1 rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                   <div class="flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
