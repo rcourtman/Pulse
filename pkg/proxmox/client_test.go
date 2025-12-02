@@ -251,6 +251,58 @@ func TestMemoryStatusUnmarshalFlexibleValues(t *testing.T) {
 	}
 }
 
+func TestMemoryStatusUnmarshalJSON_InvalidValues(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		wantErr bool
+	}{
+		{
+			name:    "invalid JSON",
+			payload: `{invalid json}`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid total field type",
+			payload: `{"total":true,"used":1000,"free":500}`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid used field type",
+			payload: `{"total":1000,"used":[1,2,3],"free":500}`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid free field type",
+			payload: `{"total":1000,"used":500,"free":{"nested":"object"}}`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid available field type",
+			payload: `{"total":1000,"used":500,"free":300,"available":true}`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid string value for total",
+			payload: `{"total":"not-a-number","used":500}`,
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var status MemoryStatus
+			err := json.Unmarshal([]byte(tc.payload), &status)
+			if tc.wantErr && err == nil {
+				t.Errorf("expected error for %s, got nil", tc.name)
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("unexpected error for %s: %v", tc.name, err)
+			}
+		})
+	}
+}
+
 func TestFlexIntUnmarshalJSON(t *testing.T) {
 	tests := []struct {
 		name    string
