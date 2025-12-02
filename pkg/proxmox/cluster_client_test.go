@@ -145,10 +145,10 @@ func TestExtractStatusCode(t *testing.T) {
 
 func TestIsTransientRateLimitError(t *testing.T) {
 	tests := []struct {
-		name         string
-		err          error
+		name          string
+		err           error
 		wantTransient bool
-		wantCode     int
+		wantCode      int
 	}{
 		{"nil error", nil, false, 0},
 		{"generic error", errors.New("connection refused"), false, 0},

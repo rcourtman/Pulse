@@ -7,11 +7,11 @@ import (
 
 func TestGetClientIP(t *testing.T) {
 	tests := []struct {
-		name        string
-		xff         string // X-Forwarded-For header
-		xri         string // X-Real-IP header
-		remoteAddr  string // Request.RemoteAddr
-		expectedIP  string
+		name       string
+		xff        string // X-Forwarded-For header
+		xri        string // X-Real-IP header
+		remoteAddr string // Request.RemoteAddr
+		expectedIP string
 	}{
 		// X-Forwarded-For takes priority
 		{

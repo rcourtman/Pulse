@@ -11,17 +11,17 @@ func TestEvaluateVMCondition(t *testing.T) {
 	m := NewManager()
 
 	testVM := models.VM{
-		ID:     "test-vm-1",
-		VMID:   100,
-		Name:   "test-vm",
-		Node:   "node1",
-		Status: "running",
-		CPU:    0.50, // 50%
-		Memory: models.Memory{Usage: 75.0},
-		Disk:   models.Disk{Usage: 60.0},
-		DiskRead:  100 * 1024 * 1024, // 100 MB/s in bytes
-		DiskWrite: 50 * 1024 * 1024,  // 50 MB/s in bytes
-		NetworkIn: 200 * 1024 * 1024, // 200 MB/s in bytes
+		ID:         "test-vm-1",
+		VMID:       100,
+		Name:       "test-vm",
+		Node:       "node1",
+		Status:     "running",
+		CPU:        0.50, // 50%
+		Memory:     models.Memory{Usage: 75.0},
+		Disk:       models.Disk{Usage: 60.0},
+		DiskRead:   100 * 1024 * 1024, // 100 MB/s in bytes
+		DiskWrite:  50 * 1024 * 1024,  // 50 MB/s in bytes
+		NetworkIn:  200 * 1024 * 1024, // 200 MB/s in bytes
 		NetworkOut: 150 * 1024 * 1024, // 150 MB/s in bytes
 	}
 
@@ -958,12 +958,12 @@ func TestMetricOperators(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		field     string
-		operator  string
-		value     float64
-		vmValue   float64 // expected processed value
-		want      bool
+		name     string
+		field    string
+		operator string
+		value    float64
+		vmValue  float64 // expected processed value
+		want     bool
 	}{
 		// Greater than
 		{"GT true", "cpu", ">", 40.0, 50.0, true},

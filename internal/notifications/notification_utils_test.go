@@ -312,9 +312,9 @@ func TestResolvedTimeFromAlerts(t *testing.T) {
 	fixedTimeStr := fixedTime.Format(time.RFC3339)
 
 	tests := []struct {
-		name     string
-		alerts   []*alerts.Alert
-		checkFn  func(*testing.T, time.Time)
+		name    string
+		alerts  []*alerts.Alert
+		checkFn func(*testing.T, time.Time)
 	}{
 		{
 			name:   "nil slice - returns current time",
@@ -679,9 +679,9 @@ func TestCopyWebhookConfigs(t *testing.T) {
 			name: "multiple webhooks with all fields",
 			webhooks: []WebhookConfig{
 				{
-					Enabled: true,
-					URL:     "https://discord.com/api/webhooks/123",
-					Headers: map[string]string{"X-Custom": "value"},
+					Enabled:      true,
+					URL:          "https://discord.com/api/webhooks/123",
+					Headers:      map[string]string{"X-Custom": "value"},
 					CustomFields: map[string]string{"key": "val"},
 				},
 				{

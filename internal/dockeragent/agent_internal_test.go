@@ -187,8 +187,8 @@ func TestCalculateCPUPercent(t *testing.T) {
 			stats: containertypes.StatsResponse{
 				CPUStats: containertypes.CPUStats{
 					CPUUsage: containertypes.CPUUsage{
-						TotalUsage:   200000000,
-						PercpuUsage:  []uint64{1, 2, 3, 4}, // 4 CPUs
+						TotalUsage:  200000000,
+						PercpuUsage: []uint64{1, 2, 3, 4}, // 4 CPUs
 					},
 					SystemUsage: 2000000000,
 					OnlineCPUs:  0,
@@ -1018,10 +1018,10 @@ func TestDetermineSelfUpdateArch(t *testing.T) {
 
 	// Should be one of the known values or empty (if architecture unknown)
 	validArches := map[string]bool{
-		"":             true,
-		"linux-amd64":  true,
-		"linux-arm64":  true,
-		"linux-armv7":  true,
+		"":            true,
+		"linux-amd64": true,
+		"linux-arm64": true,
+		"linux-armv7": true,
 	}
 
 	if !validArches[got] {

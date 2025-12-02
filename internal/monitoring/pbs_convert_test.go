@@ -142,7 +142,7 @@ func TestConvertPBSSnapshots(t *testing.T) {
 				Files: []interface{}{
 					map[string]interface{}{"filename": "valid.raw"},
 					map[string]interface{}{"name": "invalid.raw"}, // Wrong field name
-					map[string]interface{}{},                       // Empty object
+					map[string]interface{}{},                      // Empty object
 				},
 			},
 		}

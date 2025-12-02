@@ -359,10 +359,10 @@ func TestParseReplicationTime(t *testing.T) {
 
 func TestParseDurationSeconds(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      interface{}
-		wantSecs   int
-		wantHuman  string
+		name      string
+		input     interface{}
+		wantSecs  int
+		wantHuman string
 	}{
 		// nil
 		{"nil", nil, 0, ""},
@@ -526,17 +526,17 @@ func TestCopyFloat(t *testing.T) {
 
 func TestParseReplicationJob(t *testing.T) {
 	entry := map[string]json.RawMessage{
-		"id":              json.RawMessage(`"100-0"`),
-		"guest":           json.RawMessage(`100`),
-		"source":          json.RawMessage(`"node1"`),
-		"target":          json.RawMessage(`"node2"`),
-		"schedule":        json.RawMessage(`"*/15"`),
-		"type":            json.RawMessage(`"local"`),
-		"state":           json.RawMessage(`"ok"`),
-		"enabled":         json.RawMessage(`1`),
-		"last_sync":       json.RawMessage(`1736936400`),
-		"fail_count":      json.RawMessage(`0`),
-		"rate":            json.RawMessage(`10.5`),
+		"id":         json.RawMessage(`"100-0"`),
+		"guest":      json.RawMessage(`100`),
+		"source":     json.RawMessage(`"node1"`),
+		"target":     json.RawMessage(`"node2"`),
+		"schedule":   json.RawMessage(`"*/15"`),
+		"type":       json.RawMessage(`"local"`),
+		"state":      json.RawMessage(`"ok"`),
+		"enabled":    json.RawMessage(`1`),
+		"last_sync":  json.RawMessage(`1736936400`),
+		"fail_count": json.RawMessage(`0`),
+		"rate":       json.RawMessage(`10.5`),
 	}
 
 	job := parseReplicationJob(entry)

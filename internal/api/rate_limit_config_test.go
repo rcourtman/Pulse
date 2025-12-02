@@ -315,11 +315,11 @@ func TestGetRateLimiterForEndpoint_PriorityOrder(t *testing.T) {
 	InitializeRateLimiters()
 
 	tests := []struct {
-		name           string
-		path           string
-		method         string
-		wantLimiterNm  string
-		reason         string
+		name          string
+		path          string
+		method        string
+		wantLimiterNm string
+		reason        string
 	}{
 		{
 			name:          "recovery takes priority over security status",

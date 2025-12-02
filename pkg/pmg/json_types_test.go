@@ -440,12 +440,12 @@ func TestFlexibleTypes_InStruct(t *testing.T) {
 func TestFlexibleTypes_PMGResponsePatterns(t *testing.T) {
 	// Simulates real PMG API response patterns observed in production
 	type MailStats struct {
-		Count       flexibleFloat `json:"count"`
-		CountIn     flexibleFloat `json:"count_in"`
-		SpamCount   flexibleFloat `json:"spamcount_in"`
-		BouncesIn   flexibleFloat `json:"bounces_in"`
-		BytesIn     flexibleFloat `json:"bytes_in"`
-		AvgTime     flexibleFloat `json:"avptime"`
+		Count     flexibleFloat `json:"count"`
+		CountIn   flexibleFloat `json:"count_in"`
+		SpamCount flexibleFloat `json:"spamcount_in"`
+		BouncesIn flexibleFloat `json:"bounces_in"`
+		BytesIn   flexibleFloat `json:"bytes_in"`
+		AvgTime   flexibleFloat `json:"avptime"`
 	}
 
 	input := `{

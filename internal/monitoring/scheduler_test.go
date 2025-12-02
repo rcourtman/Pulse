@@ -849,8 +849,8 @@ func TestAdaptiveIntervalSelector_JitterDeterministic(t *testing.T) {
 			name:       "jitter within bounds",
 			seed:       12345,
 			score:      0.5,
-			wantMin:    19 * time.Second,  // slightly below min due to jitter
-			wantMax:    41 * time.Second,  // slightly above base due to jitter
+			wantMin:    19 * time.Second, // slightly below min due to jitter
+			wantMax:    41 * time.Second, // slightly above base due to jitter
 			iterations: 50,
 		},
 		{
@@ -905,11 +905,11 @@ func TestAdaptiveIntervalSelector_JitterDeterministic(t *testing.T) {
 // TestAdaptiveIntervalSelector_BoundaryConditions tests edge cases
 func TestAdaptiveIntervalSelector_BoundaryConditions(t *testing.T) {
 	tests := []struct {
-		name        string
-		cfg         SchedulerConfig
-		req         IntervalRequest
-		wantMin     time.Duration
-		wantMax     time.Duration
+		name    string
+		cfg     SchedulerConfig
+		req     IntervalRequest
+		wantMin time.Duration
+		wantMax time.Duration
 	}{
 		{
 			name: "zero intervals default to min",
@@ -1696,7 +1696,7 @@ func TestAdaptiveIntervalSelector_TargetBelowMinClamp(t *testing.T) {
 	// This hits the code path but with corrected values
 	req := IntervalRequest{
 		BaseInterval:   cfg.BaseInterval,
-		MinInterval:    -5 * time.Second, // negative min
+		MinInterval:    -5 * time.Second,  // negative min
 		MaxInterval:    -10 * time.Second, // negative max < negative min
 		StalenessScore: 0.5,
 		InstanceKey:    "test-target-below-min",

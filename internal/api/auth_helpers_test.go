@@ -104,10 +104,10 @@ func TestDetectProxy(t *testing.T) {
 
 func TestIsConnectionSecure(t *testing.T) {
 	tests := []struct {
-		name       string
-		useTLS     bool
-		headers    map[string]string
-		want       bool
+		name    string
+		useTLS  bool
+		headers map[string]string
+		want    bool
 	}{
 		{
 			name:    "plain HTTP no headers",
@@ -158,7 +158,7 @@ func TestIsConnectionSecure(t *testing.T) {
 			want:    true,
 		},
 		{
-			name: "both X-Forwarded-Proto and Forwarded present",
+			name:   "both X-Forwarded-Proto and Forwarded present",
 			useTLS: false,
 			headers: map[string]string{
 				"X-Forwarded-Proto": "https",

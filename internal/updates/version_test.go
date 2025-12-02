@@ -77,9 +77,9 @@ func TestParseVersion(t *testing.T) {
 			wantMajor: 4, wantMinor: 24, wantPatch: 0,
 		},
 		{
-			name:       "with prerelease",
-			input:      "4.24.0-rc.3",
-			wantMajor:  4, wantMinor: 24, wantPatch: 0,
+			name:      "with prerelease",
+			input:     "4.24.0-rc.3",
+			wantMajor: 4, wantMinor: 24, wantPatch: 0,
 			wantPrerel: "rc.3",
 		},
 		{
@@ -89,9 +89,9 @@ func TestParseVersion(t *testing.T) {
 			wantBuild: "build.123",
 		},
 		{
-			name:       "with prerelease and build",
-			input:      "4.24.0-rc.3+build.123",
-			wantMajor:  4, wantMinor: 24, wantPatch: 0,
+			name:      "with prerelease and build",
+			input:     "4.24.0-rc.3+build.123",
+			wantMajor: 4, wantMinor: 24, wantPatch: 0,
 			wantPrerel: "rc.3",
 			wantBuild:  "build.123",
 		},

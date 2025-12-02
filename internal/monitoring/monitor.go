@@ -875,8 +875,8 @@ const (
 	hostMinimumHealthWindow      = 30 * time.Second
 	hostMaximumHealthWindow      = 10 * time.Minute
 	nodeOfflineGracePeriod       = 60 * time.Second // Grace period before marking Proxmox nodes offline
-	nodeRRDCacheTTL       = 30 * time.Second
-	nodeRRDRequestTimeout = 2 * time.Second
+	nodeRRDCacheTTL              = 30 * time.Second
+	nodeRRDRequestTimeout        = 2 * time.Second
 )
 
 type taskOutcome struct {

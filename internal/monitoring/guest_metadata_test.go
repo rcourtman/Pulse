@@ -816,7 +816,7 @@ func TestTryReserveGuestMetadataFetch(t *testing.T) {
 		t.Parallel()
 
 		m := &Monitor{
-			guestMetadataLimiter:     make(map[string]time.Time),
+			guestMetadataLimiter:      make(map[string]time.Time),
 			guestMetadataHoldDuration: 15 * time.Second,
 		}
 		now := time.Now()
@@ -885,7 +885,7 @@ func TestTryReserveGuestMetadataFetch(t *testing.T) {
 		t.Parallel()
 
 		m := &Monitor{
-			guestMetadataLimiter:     make(map[string]time.Time),
+			guestMetadataLimiter:      make(map[string]time.Time),
 			guestMetadataHoldDuration: 0, // zero triggers default
 		}
 		now := time.Now()
@@ -905,7 +905,7 @@ func TestTryReserveGuestMetadataFetch(t *testing.T) {
 		t.Parallel()
 
 		m := &Monitor{
-			guestMetadataLimiter:     make(map[string]time.Time),
+			guestMetadataLimiter:      make(map[string]time.Time),
 			guestMetadataHoldDuration: -5 * time.Second, // negative triggers default
 		}
 		now := time.Now()
@@ -1016,10 +1016,10 @@ func TestScheduleNextGuestMetadataFetch(t *testing.T) {
 		rng := newDeterministicRng(42)
 
 		m := &Monitor{
-			guestMetadataLimiter:      make(map[string]time.Time),
-			guestMetadataMinRefresh:   1 * time.Minute,
+			guestMetadataLimiter:       make(map[string]time.Time),
+			guestMetadataMinRefresh:    1 * time.Minute,
 			guestMetadataRefreshJitter: 30 * time.Second,
-			rng:                       rng,
+			rng:                        rng,
 		}
 		now := time.Now()
 
@@ -1038,10 +1038,10 @@ func TestScheduleNextGuestMetadataFetch(t *testing.T) {
 		t.Parallel()
 
 		m := &Monitor{
-			guestMetadataLimiter:      make(map[string]time.Time),
-			guestMetadataMinRefresh:   1 * time.Minute,
+			guestMetadataLimiter:       make(map[string]time.Time),
+			guestMetadataMinRefresh:    1 * time.Minute,
 			guestMetadataRefreshJitter: 30 * time.Second, // jitter configured but rng is nil
-			rng:                       nil,
+			rng:                        nil,
 		}
 		now := time.Now()
 
@@ -1060,10 +1060,10 @@ func TestScheduleNextGuestMetadataFetch(t *testing.T) {
 		rng := newDeterministicRng(42)
 
 		m := &Monitor{
-			guestMetadataLimiter:      make(map[string]time.Time),
-			guestMetadataMinRefresh:   1 * time.Minute,
+			guestMetadataLimiter:       make(map[string]time.Time),
+			guestMetadataMinRefresh:    1 * time.Minute,
 			guestMetadataRefreshJitter: 0, // zero jitter
-			rng:                       rng,
+			rng:                        rng,
 		}
 		now := time.Now()
 
@@ -1082,10 +1082,10 @@ func TestScheduleNextGuestMetadataFetch(t *testing.T) {
 		rng := newDeterministicRng(42)
 
 		m := &Monitor{
-			guestMetadataLimiter:      make(map[string]time.Time),
-			guestMetadataMinRefresh:   1 * time.Minute,
+			guestMetadataLimiter:       make(map[string]time.Time),
+			guestMetadataMinRefresh:    1 * time.Minute,
 			guestMetadataRefreshJitter: -10 * time.Second, // negative jitter
-			rng:                       rng,
+			rng:                        rng,
 		}
 		now := time.Now()
 
@@ -1135,7 +1135,7 @@ func TestDeferGuestMetadataRetry(t *testing.T) {
 		t.Parallel()
 
 		m := &Monitor{
-			guestMetadataLimiter:       make(map[string]time.Time),
+			guestMetadataLimiter:      make(map[string]time.Time),
 			guestMetadataRetryBackoff: 0, // zero triggers default
 		}
 		now := time.Now()
@@ -1157,7 +1157,7 @@ func TestDeferGuestMetadataRetry(t *testing.T) {
 		t.Parallel()
 
 		m := &Monitor{
-			guestMetadataLimiter:       make(map[string]time.Time),
+			guestMetadataLimiter:      make(map[string]time.Time),
 			guestMetadataRetryBackoff: -10 * time.Second, // negative triggers default
 		}
 		now := time.Now()
@@ -1175,7 +1175,7 @@ func TestDeferGuestMetadataRetry(t *testing.T) {
 		t.Parallel()
 
 		m := &Monitor{
-			guestMetadataLimiter:       make(map[string]time.Time),
+			guestMetadataLimiter:      make(map[string]time.Time),
 			guestMetadataRetryBackoff: 45 * time.Second,
 		}
 		now := time.Now()

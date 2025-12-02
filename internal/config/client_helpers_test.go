@@ -82,16 +82,16 @@ func TestCreateProxmoxConfigFromFields(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		host           string
-		user           string
-		password       string
-		tokenName      string
-		tokenValue     string
-		fingerprint    string
-		verifySSL      bool
-		expectedUser   string
-		expectedHost   string
+		name         string
+		host         string
+		user         string
+		password     string
+		tokenName    string
+		tokenValue   string
+		fingerprint  string
+		verifySSL    bool
+		expectedUser string
+		expectedHost string
 	}{
 		{
 			name:         "user without realm gets @pam appended (password auth)",

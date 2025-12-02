@@ -96,9 +96,9 @@ func TestRecordTaskResult_NilMonitor(t *testing.T) {
 
 func TestRecordTaskResult_Success(t *testing.T) {
 	m := &Monitor{
-		pollStatusMap: make(map[string]*pollStatus),
-		failureCounts: make(map[string]int),
-		lastOutcome:   make(map[string]taskOutcome),
+		pollStatusMap:   make(map[string]*pollStatus),
+		failureCounts:   make(map[string]int),
+		lastOutcome:     make(map[string]taskOutcome),
 		circuitBreakers: make(map[string]*circuitBreaker),
 	}
 
@@ -133,9 +133,9 @@ func TestRecordTaskResult_Success(t *testing.T) {
 
 func TestRecordTaskResult_Failure(t *testing.T) {
 	m := &Monitor{
-		pollStatusMap: make(map[string]*pollStatus),
-		failureCounts: make(map[string]int),
-		lastOutcome:   make(map[string]taskOutcome),
+		pollStatusMap:   make(map[string]*pollStatus),
+		failureCounts:   make(map[string]int),
+		lastOutcome:     make(map[string]taskOutcome),
 		circuitBreakers: make(map[string]*circuitBreaker),
 	}
 
@@ -178,9 +178,9 @@ func TestRecordTaskResult_Failure(t *testing.T) {
 
 func TestRecordTaskResult_ConsecutiveFailures(t *testing.T) {
 	m := &Monitor{
-		pollStatusMap: make(map[string]*pollStatus),
-		failureCounts: make(map[string]int),
-		lastOutcome:   make(map[string]taskOutcome),
+		pollStatusMap:   make(map[string]*pollStatus),
+		failureCounts:   make(map[string]int),
+		lastOutcome:     make(map[string]taskOutcome),
 		circuitBreakers: make(map[string]*circuitBreaker),
 	}
 
@@ -207,9 +207,9 @@ func TestRecordTaskResult_ConsecutiveFailures(t *testing.T) {
 
 func TestRecordTaskResult_SuccessResetsFailures(t *testing.T) {
 	m := &Monitor{
-		pollStatusMap: make(map[string]*pollStatus),
-		failureCounts: make(map[string]int),
-		lastOutcome:   make(map[string]taskOutcome),
+		pollStatusMap:   make(map[string]*pollStatus),
+		failureCounts:   make(map[string]int),
+		lastOutcome:     make(map[string]taskOutcome),
 		circuitBreakers: make(map[string]*circuitBreaker),
 	}
 
@@ -242,9 +242,9 @@ func TestRecordTaskResult_SuccessResetsFailures(t *testing.T) {
 func TestRecordTaskResult_NilMaps(t *testing.T) {
 	// Monitor with nil internal maps - should not panic
 	m := &Monitor{
-		pollStatusMap: make(map[string]*pollStatus),
-		failureCounts: nil, // nil
-		lastOutcome:   nil, // nil
+		pollStatusMap:   make(map[string]*pollStatus),
+		failureCounts:   nil, // nil
+		lastOutcome:     nil, // nil
 		circuitBreakers: make(map[string]*circuitBreaker),
 	}
 
@@ -711,10 +711,10 @@ func TestRescheduleTask_PMGInstance(t *testing.T) {
 
 func TestRescheduleTask_AdaptivePollingMaxIntervalLimit(t *testing.T) {
 	cfg := &config.Config{
-		PVEPollingInterval:           30 * time.Second,
-		AdaptivePollingEnabled:       true,
-		AdaptivePollingMaxInterval:   10 * time.Second, // <= 15s enables capping
-		AdaptivePollingBaseInterval:  5 * time.Second,
+		PVEPollingInterval:          30 * time.Second,
+		AdaptivePollingEnabled:      true,
+		AdaptivePollingMaxInterval:  10 * time.Second, // <= 15s enables capping
+		AdaptivePollingBaseInterval: 5 * time.Second,
 	}
 
 	m := &Monitor{

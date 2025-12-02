@@ -311,8 +311,8 @@ func TestCleanOldEntries(t *testing.T) {
 
 	now := time.Now()
 	hm.history = []HistoryEntry{
-		{Alert: Alert{ID: "old1"}, Timestamp: now.AddDate(0, 0, -40)},  // 40 days old - should be removed
-		{Alert: Alert{ID: "old2"}, Timestamp: now.AddDate(0, 0, -35)},  // 35 days old - should be removed
+		{Alert: Alert{ID: "old1"}, Timestamp: now.AddDate(0, 0, -40)},    // 40 days old - should be removed
+		{Alert: Alert{ID: "old2"}, Timestamp: now.AddDate(0, 0, -35)},    // 35 days old - should be removed
 		{Alert: Alert{ID: "recent1"}, Timestamp: now.AddDate(0, 0, -25)}, // 25 days old - should stay
 		{Alert: Alert{ID: "recent2"}, Timestamp: now.AddDate(0, 0, -1)},  // 1 day old - should stay
 	}

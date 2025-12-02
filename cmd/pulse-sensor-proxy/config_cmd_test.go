@@ -45,8 +45,8 @@ other_key: value`,
 			expected: []string{"node1", "node2", "node3"},
 		},
 		{
-			name: "list format single item",
-			input: `- single-node`,
+			name:     "list format single item",
+			input:    `- single-node`,
 			expected: []string{"single-node"},
 		},
 
@@ -94,8 +94,8 @@ allowed_nodes:
 			expected: []string{"node1", "node2"},
 		},
 		{
-			name: "map format allowed_nodes not a list",
-			input: `allowed_nodes: not-a-list`,
+			name:     "map format allowed_nodes not a list",
+			input:    `allowed_nodes: not-a-list`,
 			expected: nil,
 		},
 

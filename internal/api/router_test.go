@@ -912,12 +912,12 @@ func TestResolvePublicURL_ConfiguredPublicURL(t *testing.T) {
 
 func TestResolvePublicURL_FromRequest(t *testing.T) {
 	tests := []struct {
-		name           string
-		host           string
-		useTLS         bool
-		xForwardProto  string
-		frontendPort   int
-		want           string
+		name          string
+		host          string
+		useTLS        bool
+		xForwardProto string
+		frontendPort  int
+		want          string
 	}{
 		{
 			name:   "HTTP request with host header",
