@@ -331,6 +331,25 @@ func TestServerInfoEndpointReportsDevelopment(t *testing.T) {
 	}
 }
 
+func TestServerInfoEndpointMethodNotAllowed(t *testing.T) {
+	srv := newIntegrationServer(t)
+
+	req, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/server/info", nil)
+	if err != nil {
+		t.Fatalf("create request failed: %v", err)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("server info POST request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("unexpected status: got %d want %d", res.StatusCode, http.StatusMethodNotAllowed)
+	}
+}
+
 func TestConfigNodesUsesMockTopology(t *testing.T) {
 	srv := newIntegrationServer(t)
 
