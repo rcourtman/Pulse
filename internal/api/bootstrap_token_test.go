@@ -403,6 +403,36 @@ func TestInitializeBootstrapToken_NilConfig(t *testing.T) {
 	r.initializeBootstrapToken()
 }
 
+func TestInitializeBootstrapToken_LoadOrCreateFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission tests not reliable on Windows")
+	}
+	if os.Getuid() == 0 {
+		t.Skip("cannot test permission errors as root")
+	}
+
+	// Create a temp directory with a file where the data path expects a directory
+	tmpDir := t.TempDir()
+	blockingFile := filepath.Join(tmpDir, "blocked")
+	if err := os.WriteFile(blockingFile, []byte("block"), 0o600); err != nil {
+		t.Fatalf("failed to create blocking file: %v", err)
+	}
+
+	// DataPath points to a file, so MkdirAll will fail inside loadOrCreateBootstrapToken
+	cfg := &config.Config{DataPath: blockingFile}
+	r := &Router{config: cfg}
+
+	// Should not panic, but should fail and leave bootstrapTokenHash empty
+	r.initializeBootstrapToken()
+
+	if r.bootstrapTokenHash != "" {
+		t.Errorf("expected empty bootstrapTokenHash when loadOrCreateBootstrapToken fails, got %q", r.bootstrapTokenHash)
+	}
+	if r.bootstrapTokenPath != "" {
+		t.Errorf("expected empty bootstrapTokenPath when loadOrCreateBootstrapToken fails, got %q", r.bootstrapTokenPath)
+	}
+}
+
 func TestInitializeBootstrapToken_OIDCEnabled(t *testing.T) {
 	tmpDir := t.TempDir()
 
