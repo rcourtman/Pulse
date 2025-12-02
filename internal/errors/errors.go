@@ -116,14 +116,13 @@ func isRetryable(errorType ErrorType, err error) bool {
 		return true
 	case ErrorTypeAuth, ErrorTypeValidation, ErrorTypeNotFound:
 		return false
-	case ErrorTypeInternal, ErrorTypeAPI:
+	default: // ErrorTypeInternal, ErrorTypeAPI
 		// Check the underlying error
 		if err != nil {
 			return !errors.Is(err, ErrInvalidInput) && !errors.Is(err, ErrForbidden)
 		}
 		return true
 	}
-	return false
 }
 
 // Helper functions
