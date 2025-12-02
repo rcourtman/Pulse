@@ -502,6 +502,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						if err != nil {
 							// Handle errors
 							errStr := err.Error()
+							errStrLower := strings.ToLower(errStr)
 							log.Warn().
 								Str("instance", instanceName).
 								Str("vm", vm.Name).
@@ -530,7 +531,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 									Int("vmid", vm.VMID).
 									Msg("Guest agent communication failed (API error 500). Install and start qemu-guest-agent in the VM")
 							} else if (strings.Contains(errStr, "403") || strings.Contains(errStr, "401")) &&
-								(strings.Contains(strings.ToLower(errStr), "permission") || strings.Contains(strings.ToLower(errStr), "forbidden") || strings.Contains(strings.ToLower(errStr), "not allowed")) {
+								(strings.Contains(errStrLower, "permission") || strings.Contains(errStrLower, "forbidden") || strings.Contains(errStrLower, "not allowed")) {
 								// Only treat as permission-denied if we get explicit auth/permission error codes (401/403)
 								// This distinguishes actual permission issues from guest agent unavailability
 								diskStatusReason = "permission-denied"
