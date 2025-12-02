@@ -810,3 +810,41 @@ func TestCheckAuth_NoSessionCookie(t *testing.T) {
 		t.Error("CheckAuth should return false without session or valid auth")
 	}
 }
+
+func TestCheckAuth_ValidSessionWithSlidingExpiration(t *testing.T) {
+	dir := t.TempDir()
+	InitSessionStore(dir)
+
+	store := GetSessionStore()
+	sessionToken := generateSessionToken()
+	store.CreateSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1")
+
+	cfg := &config.Config{
+		// No auth configured, so session alone should work
+	}
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  "pulse_session",
+		Value: sessionToken,
+	})
+	w := httptest.NewRecorder()
+
+	result := CheckAuth(cfg, w, req)
+	if !result {
+		t.Error("CheckAuth should return true for valid session with sliding expiration")
+	}
+}
+
+func TestCheckAuth_NoAuthConfigured(t *testing.T) {
+	cfg := &config.Config{
+		// No auth configured at all
+	}
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	w := httptest.NewRecorder()
+
+	result := CheckAuth(cfg, w, req)
+	// Should return true when no auth is configured
+	if !result {
+		t.Error("CheckAuth should return true when no auth is configured")
+	}
+}
