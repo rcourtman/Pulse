@@ -632,6 +632,40 @@ func TestEmailTemplate(t *testing.T) {
 			expectSingleSubject: false,
 			subjectContains:     "2 Critical alerts",
 		},
+		{
+			name: "io type alert formats as I/O",
+			alerts: []*alerts.Alert{
+				{
+					ID:           "alert-io",
+					Level:        "warning",
+					Type:         "io",
+					ResourceName: "storage-pool",
+					Value:        150.0,
+					Threshold:    100.0,
+					StartTime:    time.Now(),
+				},
+			},
+			isSingle:            true,
+			expectSingleSubject: true,
+			subjectContains:     "I/O",
+		},
+		{
+			name: "custom type alert uses title case",
+			alerts: []*alerts.Alert{
+				{
+					ID:           "alert-custom",
+					Level:        "critical",
+					Type:         "network_latency",
+					ResourceName: "router-1",
+					Value:        500.0,
+					Threshold:    100.0,
+					StartTime:    time.Now(),
+				},
+			},
+			isSingle:            true,
+			expectSingleSubject: true,
+			subjectContains:     "router-1",
+		},
 	}
 
 	for _, tt := range tests {
