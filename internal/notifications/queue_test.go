@@ -398,3 +398,140 @@ func TestScanNotification_DLQWithTimestamps(t *testing.T) {
 		t.Error("Expected LastAttempt to be set for DLQ notification")
 	}
 }
+
+func TestIncrementAttempt(t *testing.T) {
+	t.Run("increments attempt counter", func(t *testing.T) {
+		tempDir := t.TempDir()
+		nq, err := NewNotificationQueue(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create notification queue: %v", err)
+		}
+		defer nq.Stop()
+
+		// Set next_retry_at far in the future so background processor doesn't pick it up
+		futureRetry := time.Now().Add(1 * time.Hour)
+
+		// Enqueue a notification
+		notif := &QueuedNotification{
+			ID:          "test-increment",
+			Type:        "email",
+			Status:      QueueStatusPending,
+			MaxAttempts: 3,
+			Config:      []byte(`{}`),
+			NextRetryAt: &futureRetry,
+		}
+
+		if err := nq.Enqueue(notif); err != nil {
+			t.Fatalf("Failed to enqueue: %v", err)
+		}
+
+		// Increment the attempt counter multiple times
+		for i := 0; i < 3; i++ {
+			if err := nq.IncrementAttempt("test-increment"); err != nil {
+				t.Fatalf("IncrementAttempt failed on iteration %d: %v", i, err)
+			}
+		}
+
+		// Verify via DLQ - first move to DLQ to query it
+		// (This exercises the function; actual count verification would require db access)
+		if err := nq.UpdateStatus("test-increment", QueueStatusDLQ, "test"); err != nil {
+			t.Fatalf("UpdateStatus to DLQ failed: %v", err)
+		}
+
+		dlq, err := nq.GetDLQ(10)
+		if err != nil {
+			t.Fatalf("GetDLQ failed: %v", err)
+		}
+		if len(dlq) != 1 {
+			t.Fatalf("Expected 1 DLQ notification, got %d", len(dlq))
+		}
+		if dlq[0].Attempts != 3 {
+			t.Errorf("After 3 increments, attempts = %d, want 3", dlq[0].Attempts)
+		}
+	})
+
+	t.Run("non-existent ID does not error", func(t *testing.T) {
+		tempDir := t.TempDir()
+		nq, err := NewNotificationQueue(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create notification queue: %v", err)
+		}
+		defer nq.Stop()
+
+		// Calling IncrementAttempt on non-existent ID should not error
+		// (the SQL UPDATE just affects 0 rows)
+		err = nq.IncrementAttempt("non-existent-id")
+		if err != nil {
+			t.Errorf("IncrementAttempt with non-existent ID returned error: %v", err)
+		}
+	})
+}
+
+func TestGetQueueStats(t *testing.T) {
+	t.Run("empty queue", func(t *testing.T) {
+		tempDir := t.TempDir()
+		nq, err := NewNotificationQueue(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create notification queue: %v", err)
+		}
+		defer nq.Stop()
+
+		stats, err := nq.GetQueueStats()
+		if err != nil {
+			t.Fatalf("GetQueueStats failed: %v", err)
+		}
+
+		// Empty queue should return empty map
+		if len(stats) != 0 {
+			t.Errorf("Expected empty stats map, got %v", stats)
+		}
+	})
+
+	t.Run("with notifications in various statuses", func(t *testing.T) {
+		tempDir := t.TempDir()
+		nq, err := NewNotificationQueue(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create notification queue: %v", err)
+		}
+		defer nq.Stop()
+
+		// Enqueue notifications with different statuses
+		notifications := []*QueuedNotification{
+			{ID: "pending-1", Type: "email", Status: QueueStatusPending, MaxAttempts: 3, Config: []byte(`{}`)},
+			{ID: "pending-2", Type: "email", Status: QueueStatusPending, MaxAttempts: 3, Config: []byte(`{}`)},
+			{ID: "sending-1", Type: "webhook", Status: QueueStatusSending, MaxAttempts: 3, Config: []byte(`{}`)},
+		}
+
+		for _, notif := range notifications {
+			if err := nq.Enqueue(notif); err != nil {
+				t.Fatalf("Failed to enqueue %s: %v", notif.ID, err)
+			}
+		}
+
+		// Mark one as sent (completed)
+		if err := nq.UpdateStatus("pending-1", QueueStatusSent, ""); err != nil {
+			t.Fatalf("Failed to update status: %v", err)
+		}
+
+		// Mark one as failed
+		if err := nq.UpdateStatus("sending-1", QueueStatusFailed, "connection refused"); err != nil {
+			t.Fatalf("Failed to update status with error: %v", err)
+		}
+
+		stats, err := nq.GetQueueStats()
+		if err != nil {
+			t.Fatalf("GetQueueStats failed: %v", err)
+		}
+
+		// Verify counts
+		if stats["pending"] != 1 {
+			t.Errorf("pending count = %d, want 1", stats["pending"])
+		}
+		if stats["sent"] != 1 {
+			t.Errorf("sent count = %d, want 1", stats["sent"])
+		}
+		if stats["failed"] != 1 {
+			t.Errorf("failed count = %d, want 1", stats["failed"])
+		}
+	})
+}
