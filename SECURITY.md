@@ -4,6 +4,9 @@ This document is the canonical security policy for Pulse. It combines our
 ongoing hardening guidance with the operational checklists that previously lived
 in `docs/SECURITY.md`.
 
+For a high-level overview of the system design and data flow, please refer to
+[`ARCHITECTURE.md`](ARCHITECTURE.md).
+
 ---
 
 ## Critical Security Notice for Container Deployments
