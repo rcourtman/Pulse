@@ -357,3 +357,213 @@ func TestUpdatePMGBackups(t *testing.T) {
 		t.Error("Remaining backup should be from pmg-2")
 	}
 }
+
+func TestUpdatePhysicalDisks(t *testing.T) {
+	state := NewState()
+
+	// Add disks from first instance
+	disks1 := []PhysicalDisk{
+		{ID: "disk-1", Instance: "pve-1", Node: "node1", DevPath: "/dev/sda"},
+		{ID: "disk-2", Instance: "pve-1", Node: "node1", DevPath: "/dev/sdb"},
+	}
+	state.UpdatePhysicalDisks("pve-1", disks1)
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.PhysicalDisks) != 2 {
+		t.Fatalf("Expected 2 disks, got %d", len(snapshot.PhysicalDisks))
+	}
+
+	// Add disks from second instance
+	disks2 := []PhysicalDisk{
+		{ID: "disk-3", Instance: "pve-2", Node: "node2", DevPath: "/dev/sda"},
+	}
+	state.UpdatePhysicalDisks("pve-2", disks2)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PhysicalDisks) != 3 {
+		t.Fatalf("Expected 3 disks, got %d", len(snapshot.PhysicalDisks))
+	}
+
+	// Update first instance (should replace its disks)
+	disks1Updated := []PhysicalDisk{
+		{ID: "disk-4", Instance: "pve-1", Node: "node1", DevPath: "/dev/nvme0n1"},
+	}
+	state.UpdatePhysicalDisks("pve-1", disks1Updated)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PhysicalDisks) != 2 {
+		t.Fatalf("Expected 2 disks after update, got %d", len(snapshot.PhysicalDisks))
+	}
+
+	// Verify sorting by node then devpath
+	if snapshot.PhysicalDisks[0].Node > snapshot.PhysicalDisks[1].Node {
+		t.Error("Disks should be sorted by node")
+	}
+}
+
+func TestUpdateStorageForInstance(t *testing.T) {
+	state := NewState()
+
+	// Add storage from first instance
+	storage1 := []Storage{
+		{ID: "storage-1", Instance: "pve-1", Name: "local"},
+		{ID: "storage-2", Instance: "pve-1", Name: "ceph-pool"},
+	}
+	state.UpdateStorageForInstance("pve-1", storage1)
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.Storage) != 2 {
+		t.Fatalf("Expected 2 storage entries, got %d", len(snapshot.Storage))
+	}
+
+	// Add storage from second instance
+	storage2 := []Storage{
+		{ID: "storage-3", Instance: "pve-2", Name: "local"},
+	}
+	state.UpdateStorageForInstance("pve-2", storage2)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.Storage) != 3 {
+		t.Fatalf("Expected 3 storage entries, got %d", len(snapshot.Storage))
+	}
+
+	// Update first instance with empty (should remove its storage)
+	state.UpdateStorageForInstance("pve-1", []Storage{})
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.Storage) != 1 {
+		t.Fatalf("Expected 1 storage after clearing pve-1, got %d", len(snapshot.Storage))
+	}
+}
+
+func TestUpdatePBSInstances(t *testing.T) {
+	state := NewState()
+
+	instances := []PBSInstance{
+		{ID: "pbs-1", Name: "Backup Server 1"},
+		{ID: "pbs-2", Name: "Backup Server 2"},
+	}
+	state.UpdatePBSInstances(instances)
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.PBSInstances) != 2 {
+		t.Fatalf("Expected 2 PBS instances, got %d", len(snapshot.PBSInstances))
+	}
+
+	// Replace with different instances
+	newInstances := []PBSInstance{
+		{ID: "pbs-3", Name: "New Backup Server"},
+	}
+	state.UpdatePBSInstances(newInstances)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PBSInstances) != 1 {
+		t.Fatalf("Expected 1 PBS instance after replacement, got %d", len(snapshot.PBSInstances))
+	}
+	if snapshot.PBSInstances[0].ID != "pbs-3" {
+		t.Error("Expected pbs-3 instance")
+	}
+}
+
+func TestUpdatePBSInstance(t *testing.T) {
+	state := NewState()
+
+	// Add first instance
+	state.UpdatePBSInstance(PBSInstance{ID: "pbs-1", Name: "Server 1"})
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.PBSInstances) != 1 {
+		t.Fatalf("Expected 1 PBS instance, got %d", len(snapshot.PBSInstances))
+	}
+
+	// Add second instance
+	state.UpdatePBSInstance(PBSInstance{ID: "pbs-2", Name: "Server 2"})
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PBSInstances) != 2 {
+		t.Fatalf("Expected 2 PBS instances, got %d", len(snapshot.PBSInstances))
+	}
+
+	// Update existing instance
+	state.UpdatePBSInstance(PBSInstance{ID: "pbs-1", Name: "Server 1 Updated"})
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PBSInstances) != 2 {
+		t.Fatalf("Expected 2 PBS instances after update, got %d", len(snapshot.PBSInstances))
+	}
+
+	// Find updated instance
+	var found bool
+	for _, inst := range snapshot.PBSInstances {
+		if inst.ID == "pbs-1" && inst.Name == "Server 1 Updated" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Expected pbs-1 to be updated with new name")
+	}
+}
+
+func TestUpdatePMGInstances(t *testing.T) {
+	state := NewState()
+
+	instances := []PMGInstance{
+		{ID: "pmg-1", Name: "Mail Gateway 1"},
+		{ID: "pmg-2", Name: "Mail Gateway 2"},
+	}
+	state.UpdatePMGInstances(instances)
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.PMGInstances) != 2 {
+		t.Fatalf("Expected 2 PMG instances, got %d", len(snapshot.PMGInstances))
+	}
+
+	// Replace with empty
+	state.UpdatePMGInstances([]PMGInstance{})
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PMGInstances) != 0 {
+		t.Fatalf("Expected 0 PMG instances after clearing, got %d", len(snapshot.PMGInstances))
+	}
+}
+
+func TestUpdatePMGInstance(t *testing.T) {
+	state := NewState()
+
+	// Add first instance
+	state.UpdatePMGInstance(PMGInstance{ID: "pmg-1", Name: "Gateway 1"})
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.PMGInstances) != 1 {
+		t.Fatalf("Expected 1 PMG instance, got %d", len(snapshot.PMGInstances))
+	}
+
+	// Add second instance
+	state.UpdatePMGInstance(PMGInstance{ID: "pmg-2", Name: "Gateway 2"})
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PMGInstances) != 2 {
+		t.Fatalf("Expected 2 PMG instances, got %d", len(snapshot.PMGInstances))
+	}
+
+	// Update existing instance
+	state.UpdatePMGInstance(PMGInstance{ID: "pmg-1", Name: "Gateway 1 Updated"})
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PMGInstances) != 2 {
+		t.Fatalf("Expected 2 PMG instances after update, got %d", len(snapshot.PMGInstances))
+	}
+
+	// Verify update
+	var found bool
+	for _, inst := range snapshot.PMGInstances {
+		if inst.ID == "pmg-1" && inst.Name == "Gateway 1 Updated" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Expected pmg-1 to be updated with new name")
+	}
+}
