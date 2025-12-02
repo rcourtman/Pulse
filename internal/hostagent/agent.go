@@ -325,15 +325,6 @@ func normalisePlatform(platform string) string {
 	}
 }
 
-func isLoopback(flags []string) bool {
-	for _, flag := range flags {
-		if strings.EqualFold(flag, "loopback") {
-			return true
-		}
-	}
-	return false
-}
-
 // collectTemperatures attempts to collect temperature data from the local system.
 // Returns an empty Sensors struct if collection fails (best-effort).
 func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
