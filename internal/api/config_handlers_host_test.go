@@ -106,9 +106,9 @@ func TestExtractHostAndPort(t *testing.T) {
 			wantPort: "8006",
 		},
 		{
-			name:     "IPv6 with brackets no port returns error",
-			hostStr:  "[2001:db8::1]",
-			wantErr:  true, // net.SplitHostPort fails on bracketed IPv6 without port
+			name:    "IPv6 with brackets no port returns error",
+			hostStr: "[2001:db8::1]",
+			wantErr: true, // net.SplitHostPort fails on bracketed IPv6 without port
 		},
 		{
 			name:     "IPv6 with scheme brackets and port",
@@ -171,14 +171,14 @@ func TestExtractHostAndPort(t *testing.T) {
 
 		// Error cases
 		{
-			name:     "malformed brackets",
-			hostStr:  "[2001:db8::1:8006",
-			wantErr:  true,
+			name:    "malformed brackets",
+			hostStr: "[2001:db8::1:8006",
+			wantErr: true,
 		},
 		{
-			name:     "brackets without closing with port attempt",
-			hostStr:  "[invalid:8006",
-			wantErr:  true,
+			name:    "brackets without closing with port attempt",
+			hostStr: "[invalid:8006",
+			wantErr: true,
 		},
 	}
 
@@ -307,8 +307,8 @@ func TestDefaultPortForNodeType(t *testing.T) {
 		{"docker node returns empty", "docker", ""},
 		{"unknown type returns empty", "unknown", ""},
 		{"empty type returns empty", "", ""},
-		{"uppercase PVE returns empty", "PVE", ""},     // case sensitive
-		{"mixed case returns empty", "Pve", ""},        // case sensitive
+		{"uppercase PVE returns empty", "PVE", ""},      // case sensitive
+		{"mixed case returns empty", "Pve", ""},         // case sensitive
 		{"similar but wrong returns empty", "pvee", ""}, // exact match only
 	}
 

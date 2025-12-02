@@ -464,10 +464,10 @@ func TestCalculateRates_DoesNotUpdatePreviousOnStaleData(t *testing.T) {
 
 	// Second call with stale data (same values, different timestamp)
 	metrics2 := types.IOMetrics{
-		DiskRead:   1000, // same
-		DiskWrite:  2000, // same
-		NetworkIn:  3000, // same
-		NetworkOut: 4000, // same
+		DiskRead:   1000,                           // same
+		DiskWrite:  2000,                           // same
+		NetworkIn:  3000,                           // same
+		NetworkOut: 4000,                           // same
 		Timestamp:  baseTime.Add(10 * time.Second), // different time
 	}
 	rt.CalculateRates("vm-100", metrics2)

@@ -8399,7 +8399,7 @@ func TestCleanup(t *testing.T) {
 
 		m.mu.Lock()
 		m.alertRateLimit["rate-limited"] = []time.Time{
-			time.Now().Add(-2 * time.Hour), // Old, should be removed
+			time.Now().Add(-2 * time.Hour),    // Old, should be removed
 			time.Now().Add(-30 * time.Minute), // Recent, should remain
 		}
 		m.mu.Unlock()
@@ -14443,9 +14443,9 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 		}
 
 		thresholds := PMGThresholdConfig{
-			QuarantineSpamWarn:     2000,
-			QuarantineSpamCritical: 5000,
-			QuarantineVirusWarn:    2000,
+			QuarantineSpamWarn:      2000,
+			QuarantineSpamCritical:  5000,
+			QuarantineVirusWarn:     2000,
 			QuarantineVirusCritical: 5000,
 		}
 
@@ -14482,9 +14482,9 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 		}
 
 		thresholds := PMGThresholdConfig{
-			QuarantineSpamWarn:     2000,
-			QuarantineSpamCritical: 5000,
-			QuarantineVirusWarn:    2000,
+			QuarantineSpamWarn:      2000,
+			QuarantineSpamCritical:  5000,
+			QuarantineVirusWarn:     2000,
 			QuarantineVirusCritical: 5000,
 		}
 

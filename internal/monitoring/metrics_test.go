@@ -792,8 +792,8 @@ func TestRecordResult_LabelsSanitized(t *testing.T) {
 	pm := newFullTestPollMetrics(t)
 
 	pm.RecordResult(PollResult{
-		InstanceType: "",    // Should become "unknown"
-		InstanceName: "  ",  // Should become "unknown"
+		InstanceType: "",   // Should become "unknown"
+		InstanceName: "  ", // Should become "unknown"
 		StartTime:    time.Now().Add(-time.Second),
 		EndTime:      time.Now(),
 		Success:      true,

@@ -418,10 +418,10 @@ func TestMatchInstanceNameByHost(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		cfg       *config.Config
-		host      string
-		expected  string
+		name     string
+		cfg      *config.Config
+		host     string
+		expected string
 	}{
 		{
 			name:     "nil config",

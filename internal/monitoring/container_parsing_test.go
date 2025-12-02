@@ -278,7 +278,7 @@ func TestParseContainerConfigNetworks(t *testing.T) {
 		{
 			name: "no net keys",
 			input: map[string]interface{}{
-				"cores": 2,
+				"cores":  2,
 				"memory": 2048,
 			},
 			want: nil,

@@ -96,8 +96,8 @@ func TestShouldRunBackupPoll(t *testing.T) {
 			name: "cycle-based: pollCounter=1 returns true",
 			monitor: &Monitor{
 				config: &config.Config{
-					EnableBackupPolling:  true,
-					BackupPollingCycles:  10,
+					EnableBackupPolling:   true,
+					BackupPollingCycles:   10,
 					BackupPollingInterval: 0,
 				},
 				pollCounter: 1,
@@ -112,8 +112,8 @@ func TestShouldRunBackupPoll(t *testing.T) {
 			name: "cycle-based: pollCounter divisible by cycles returns true",
 			monitor: &Monitor{
 				config: &config.Config{
-					EnableBackupPolling:  true,
-					BackupPollingCycles:  5,
+					EnableBackupPolling:   true,
+					BackupPollingCycles:   5,
 					BackupPollingInterval: 0,
 				},
 				pollCounter: 15, // 15 % 5 == 0
@@ -128,8 +128,8 @@ func TestShouldRunBackupPoll(t *testing.T) {
 			name: "cycle-based: pollCounter not divisible returns false",
 			monitor: &Monitor{
 				config: &config.Config{
-					EnableBackupPolling:  true,
-					BackupPollingCycles:  5,
+					EnableBackupPolling:   true,
+					BackupPollingCycles:   5,
 					BackupPollingInterval: 0,
 				},
 				pollCounter: 7, // 7 % 5 == 2, remaining = 3
@@ -144,8 +144,8 @@ func TestShouldRunBackupPoll(t *testing.T) {
 			name: "default cycles (10) when BackupPollingCycles is 0",
 			monitor: &Monitor{
 				config: &config.Config{
-					EnableBackupPolling:  true,
-					BackupPollingCycles:  0, // should default to 10
+					EnableBackupPolling:   true,
+					BackupPollingCycles:   0, // should default to 10
 					BackupPollingInterval: 0,
 				},
 				pollCounter: 10, // 10 % 10 == 0
@@ -160,8 +160,8 @@ func TestShouldRunBackupPoll(t *testing.T) {
 			name: "default cycles (10) when BackupPollingCycles is negative",
 			monitor: &Monitor{
 				config: &config.Config{
-					EnableBackupPolling:  true,
-					BackupPollingCycles:  -5, // should default to 10
+					EnableBackupPolling:   true,
+					BackupPollingCycles:   -5, // should default to 10
 					BackupPollingInterval: 0,
 				},
 				pollCounter: 20, // 20 % 10 == 0
@@ -176,8 +176,8 @@ func TestShouldRunBackupPoll(t *testing.T) {
 			name: "default cycles (10) not divisible returns false with correct remaining",
 			monitor: &Monitor{
 				config: &config.Config{
-					EnableBackupPolling:  true,
-					BackupPollingCycles:  0, // defaults to 10
+					EnableBackupPolling:   true,
+					BackupPollingCycles:   0, // defaults to 10
 					BackupPollingInterval: 0,
 				},
 				pollCounter: 3, // 3 % 10 == 3, remaining = 7

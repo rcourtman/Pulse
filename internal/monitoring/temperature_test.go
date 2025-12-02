@@ -452,7 +452,6 @@ func TestParseRPiTemperature(t *testing.T) {
 	}
 }
 
-
 func TestParseSensorsJSON_PiPartialSensors(t *testing.T) {
 	collector := &TemperatureCollector{}
 
@@ -1096,19 +1095,19 @@ func TestExtractCoreNumber(t *testing.T) {
 		{"Core 10", 10},
 		{"Core 99", 99},
 		{"Core 127", 127},
-		{"Core", 0},           // missing number
-		{"Core ", 0},          // trailing space, no number
-		{"core 5", 5},         // lowercase
-		{"CORE 7", 7},         // uppercase
-		{"Core  12", 12},      // extra space (Fields handles this)
-		{"", 0},               // empty string
-		{"   ", 0},            // whitespace only
-		{"Core abc", 0},       // non-numeric
-		{"Package id 0", 0},   // last part is "0"
-		{"temp1", 0},          // no spaces
-		{"Core 1000", 1000},   // large core number
-		{"Prefix Core 5", 5},  // core not at start
-		{"Core 0 extra", 0},   // text after number - "extra" is last field
+		{"Core", 0},          // missing number
+		{"Core ", 0},         // trailing space, no number
+		{"core 5", 5},        // lowercase
+		{"CORE 7", 7},        // uppercase
+		{"Core  12", 12},     // extra space (Fields handles this)
+		{"", 0},              // empty string
+		{"   ", 0},           // whitespace only
+		{"Core abc", 0},      // non-numeric
+		{"Package id 0", 0},  // last part is "0"
+		{"temp1", 0},         // no spaces
+		{"Core 1000", 1000},  // large core number
+		{"Prefix Core 5", 5}, // core not at start
+		{"Core 0 extra", 0},  // text after number - "extra" is last field
 	}
 
 	for _, tt := range tests {

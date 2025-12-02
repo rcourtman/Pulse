@@ -782,14 +782,14 @@ func TestResolveDockerHostIdentifier(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name             string
-		report           agentsdocker.Report
-		tokenRecord      *config.APITokenRecord
-		hosts            []models.DockerHost
-		expectMatch      bool
-		expectFallbacks  int
-		expectedID       string
-		checkIDFormat    bool
+		name            string
+		report          agentsdocker.Report
+		tokenRecord     *config.APITokenRecord
+		hosts           []models.DockerHost
+		expectMatch     bool
+		expectFallbacks int
+		expectedID      string
+		checkIDFormat   bool
 	}{
 		{
 			name: "existing host match",

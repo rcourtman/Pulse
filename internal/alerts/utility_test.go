@@ -1636,7 +1636,7 @@ func TestEnsureValidHysteresis(t *testing.T) {
 			threshold:    &HysteresisThreshold{Trigger: 0, Clear: 0},
 			metricName:   "disabled",
 			wantTrigger:  0,
-			wantClear:    0, // 0 - 5 = -5, clamped to 0 (same value, but fix attempted)
+			wantClear:    0,     // 0 - 5 = -5, clamped to 0 (same value, but fix attempted)
 			expectChange: false, // Result same as input, even though fix was attempted
 		},
 		{

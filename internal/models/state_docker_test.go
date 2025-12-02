@@ -72,8 +72,8 @@ func TestUpsertDockerHost(t *testing.T) {
 	// Test PendingUninstall flag preservation
 	state.SetDockerHostPendingUninstall("host-1", true)
 	host1Reset2 := DockerHost{
-		ID:              "host-1",
-		Hostname:        "docker-host-1",
+		ID:               "host-1",
+		Hostname:         "docker-host-1",
 		PendingUninstall: false,
 	}
 	state.UpsertDockerHost(host1Reset2)

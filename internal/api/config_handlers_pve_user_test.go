@@ -145,10 +145,10 @@ func TestNormalizePVEUser(t *testing.T) {
 
 func TestShouldSkipClusterAutoDetection(t *testing.T) {
 	tests := []struct {
-		name string
-		host string
+		name   string
+		host   string
 		vmName string
-		want bool
+		want   bool
 	}{
 		// Empty host cases
 		{

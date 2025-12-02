@@ -373,13 +373,13 @@ func TestVersionPatternValidation(t *testing.T) {
 		{"master", false},
 		{"main", false},
 		{"HEAD", false},
-		{"1.0.0-", false},     // trailing dash
-		{"1.0.0+", false},     // trailing plus
-		{"-1.0.0", false},     // leading dash
-		{"v-1.0.0", false},    // invalid prefix
-		{"V1.0.0", false},     // uppercase V not allowed
-		{"1.0.0--alpha", true}, // double dash allowed (not a security risk)
-		{"1.0.0++build", false}, // double plus
+		{"1.0.0-", false},        // trailing dash
+		{"1.0.0+", false},        // trailing plus
+		{"-1.0.0", false},        // leading dash
+		{"v-1.0.0", false},       // invalid prefix
+		{"V1.0.0", false},        // uppercase V not allowed
+		{"1.0.0--alpha", true},   // double dash allowed (not a security risk)
+		{"1.0.0++build", false},  // double plus
 		{"1.0.0-alpha_1", false}, // underscore not allowed in prerelease
 		{"1.0.0+build_1", false}, // underscore not allowed in build metadata
 	}

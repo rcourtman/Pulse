@@ -113,7 +113,7 @@ func TestAppendMetric(t *testing.T) {
 			maxDataPoints: 100,
 			retentionTime: 30 * time.Minute,
 			existing: []MetricPoint{
-				{Value: 10.0, Timestamp: now.Add(-2 * time.Hour)},  // beyond retention
+				{Value: 10.0, Timestamp: now.Add(-2 * time.Hour)},    // beyond retention
 				{Value: 20.0, Timestamp: now.Add(-90 * time.Minute)}, // beyond retention
 				{Value: 30.0, Timestamp: now.Add(-20 * time.Minute)}, // within retention
 			},
@@ -1111,12 +1111,12 @@ func TestRetentionTimeEnforced(t *testing.T) {
 	mh := NewMetricsHistory(100, retentionTime)
 
 	// Add points at various times
-	mh.AddGuestMetric("vm-100", "cpu", 10.0, now.Add(-2*time.Hour))   // beyond retention
-	mh.AddGuestMetric("vm-100", "cpu", 20.0, now.Add(-1*time.Hour))   // beyond retention
+	mh.AddGuestMetric("vm-100", "cpu", 10.0, now.Add(-2*time.Hour))    // beyond retention
+	mh.AddGuestMetric("vm-100", "cpu", 20.0, now.Add(-1*time.Hour))    // beyond retention
 	mh.AddGuestMetric("vm-100", "cpu", 30.0, now.Add(-45*time.Minute)) // beyond retention
 	mh.AddGuestMetric("vm-100", "cpu", 40.0, now.Add(-20*time.Minute)) // within retention
 	mh.AddGuestMetric("vm-100", "cpu", 50.0, now.Add(-10*time.Minute)) // within retention
-	mh.AddGuestMetric("vm-100", "cpu", 60.0, now)                       // within retention
+	mh.AddGuestMetric("vm-100", "cpu", 60.0, now)                      // within retention
 
 	// appendMetric removes old points on each add
 	result := mh.GetGuestMetrics("vm-100", "cpu", time.Hour)

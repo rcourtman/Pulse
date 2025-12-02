@@ -322,10 +322,10 @@ func TestSendEmailOnce_BuildsMultipartMessage(t *testing.T) {
 
 func TestTestConnection_TLSRouting(t *testing.T) {
 	tests := []struct {
-		name     string
-		tls      bool
-		port     int
-		wantTLS  bool
+		name    string
+		tls     bool
+		port    int
+		wantTLS bool
 	}{
 		{"TLS true uses TLS dial", true, 587, true},
 		{"Port 465 uses TLS dial", false, 465, true},

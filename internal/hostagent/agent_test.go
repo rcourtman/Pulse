@@ -71,4 +71,3 @@ func TestNormalisePlatform(t *testing.T) {
 		})
 	}
 }
-
