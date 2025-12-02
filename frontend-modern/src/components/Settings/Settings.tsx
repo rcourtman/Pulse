@@ -2208,6 +2208,26 @@ const Settings: Component<SettingsProps> = (props) => {
     }
   };
 
+  const refreshClusterNodes = async (nodeId: string) => {
+    try {
+      notificationStore.info('Refreshing cluster membership...', 2000);
+      const result = await NodesAPI.refreshClusterNodes(nodeId);
+      if (result.status === 'success') {
+        if (result.nodesAdded && result.nodesAdded > 0) {
+          showSuccess(`Found ${result.nodesAdded} new node(s) in cluster "${result.clusterName}"`);
+        } else {
+          showSuccess(`Cluster "${result.clusterName}" membership verified (${result.newNodeCount} nodes)`);
+        }
+        // Refresh nodes list to show updated cluster info
+        await loadNodes();
+      } else {
+        throw new Error('Failed to refresh cluster');
+      }
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to refresh cluster membership');
+    }
+  };
+
   const checkForUpdates = async () => {
     setCheckingForUpdates(true);
     try {
@@ -2800,6 +2820,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 setShowNodeModal(true);
                               }}
                               onDelete={requestDeleteNode}
+                              onRefreshCluster={refreshClusterNodes}
                             />
                           </Show>
 

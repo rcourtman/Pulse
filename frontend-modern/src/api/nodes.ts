@@ -58,4 +58,22 @@ export class NodesAPI {
       method: 'POST',
     });
   }
+
+  static async refreshClusterNodes(nodeId: string): Promise<{
+    status: string;
+    clusterName?: string;
+    oldNodeCount?: number;
+    newNodeCount?: number;
+    nodesAdded?: number;
+    clusterNodes?: Array<{
+      nodeId: string;
+      nodeName: string;
+      host: string;
+      online: boolean;
+    }>;
+  }> {
+    return apiFetchJSON(`${this.baseUrl}/${nodeId}/refresh-cluster`, {
+      method: 'POST',
+    });
+  }
 }

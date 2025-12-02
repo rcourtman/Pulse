@@ -310,9 +310,11 @@ func (r *Router) setupRoutes() {
 		case http.MethodDelete:
 			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleDeleteNode))(w, req)
 		case http.MethodPost:
-			// Handle test endpoint
+			// Handle test endpoint and refresh-cluster endpoint
 			if strings.HasSuffix(req.URL.Path, "/test") {
 				RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestNode))(w, req)
+			} else if strings.HasSuffix(req.URL.Path, "/refresh-cluster") {
+				RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleRefreshClusterNodes))(w, req)
 			} else {
 				http.Error(w, "Not found", http.StatusNotFound)
 			}
