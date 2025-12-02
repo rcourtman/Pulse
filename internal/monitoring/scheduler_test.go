@@ -1805,3 +1805,492 @@ func TestAdaptiveIntervalSelector_InstanceTypeAsKey(t *testing.T) {
 		})
 	}
 }
+
+// TestBuildPlan_EmptyInventory tests that BuildPlan returns nil for empty inventory
+func TestBuildPlan_EmptyInventory(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultSchedulerConfig()
+	scheduler := NewAdaptiveScheduler(cfg, nil, nil, nil)
+
+	result := scheduler.BuildPlan(time.Now(), nil, 0)
+	if result != nil {
+		t.Errorf("BuildPlan with nil inventory should return nil, got %v", result)
+	}
+
+	result = scheduler.BuildPlan(time.Now(), []InstanceDescriptor{}, 0)
+	if result != nil {
+		t.Errorf("BuildPlan with empty inventory should return nil, got %v", result)
+	}
+}
+
+// TestBuildPlan_SingleInstance tests scheduling a single instance
+func TestBuildPlan_SingleInstance(t *testing.T) {
+	t.Parallel()
+
+	cfg := SchedulerConfig{
+		BaseInterval: 10 * time.Second,
+		MinInterval:  5 * time.Second,
+		MaxInterval:  60 * time.Second,
+	}
+
+	scheduler := NewAdaptiveScheduler(cfg, nil, mockIntervalSelector{interval: 10 * time.Second}, nil)
+
+	now := time.Now()
+	inventory := []InstanceDescriptor{
+		{
+			Name: "pve1",
+			Type: InstanceTypePVE,
+		},
+	}
+
+	tasks := scheduler.BuildPlan(now, inventory, 0)
+
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+
+	if tasks[0].InstanceName != "pve1" {
+		t.Errorf("expected instance name pve1, got %s", tasks[0].InstanceName)
+	}
+	if tasks[0].InstanceType != InstanceTypePVE {
+		t.Errorf("expected instance type pve, got %s", tasks[0].InstanceType)
+	}
+	if tasks[0].Interval != 10*time.Second {
+		t.Errorf("expected interval 10s, got %v", tasks[0].Interval)
+	}
+}
+
+// TestBuildPlan_MultipleInstances tests scheduling multiple instances and ordering
+func TestBuildPlan_MultipleInstances(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultSchedulerConfig()
+
+	// Use staleness source to control priority ordering
+	staleness := mockStalenessSource{
+		scores: map[string]float64{
+			"pve:pve1": 0.8,
+			"pbs:pbs1": 0.5,
+			"pmg:pmg1": 0.2,
+		},
+	}
+
+	scheduler := NewAdaptiveScheduler(cfg, staleness, mockIntervalSelector{interval: 10 * time.Second}, nil)
+
+	now := time.Now()
+	inventory := []InstanceDescriptor{
+		{Name: "pve1", Type: InstanceTypePVE},
+		{Name: "pbs1", Type: InstanceTypePBS},
+		{Name: "pmg1", Type: InstanceTypePMG},
+	}
+
+	tasks := scheduler.BuildPlan(now, inventory, 0)
+
+	if len(tasks) != 3 {
+		t.Fatalf("expected 3 tasks, got %d", len(tasks))
+	}
+
+	// All tasks should have the same NextRun (now), so they should be sorted by priority (descending)
+	if tasks[0].Priority < tasks[1].Priority {
+		t.Errorf("expected first task to have higher priority: first=%v, second=%v", tasks[0].Priority, tasks[1].Priority)
+	}
+	if tasks[1].Priority < tasks[2].Priority {
+		t.Errorf("expected second task to have higher priority than third: second=%v, third=%v", tasks[1].Priority, tasks[2].Priority)
+	}
+}
+
+// TestBuildPlan_WithLastSuccess tests scheduling with previous success time
+func TestBuildPlan_WithLastSuccess(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultSchedulerConfig()
+	scheduler := NewAdaptiveScheduler(cfg, nil, mockIntervalSelector{interval: 10 * time.Second}, nil)
+
+	now := time.Now()
+	lastSuccess := now.Add(-5 * time.Second)
+
+	inventory := []InstanceDescriptor{
+		{
+			Name:        "pve1",
+			Type:        InstanceTypePVE,
+			LastSuccess: lastSuccess,
+		},
+	}
+
+	tasks := scheduler.BuildPlan(now, inventory, 0)
+
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+
+	// NextRun should be based on LastSuccess + Interval
+	expectedNextRun := lastSuccess.Add(10 * time.Second)
+	if !tasks[0].NextRun.Equal(expectedNextRun) {
+		t.Errorf("expected NextRun %v, got %v", expectedNextRun, tasks[0].NextRun)
+	}
+}
+
+// TestBuildPlan_CachesLastPlan tests that BuildPlan caches tasks for subsequent calls
+func TestBuildPlan_CachesLastPlan(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultSchedulerConfig()
+	scheduler := NewAdaptiveScheduler(cfg, nil, mockIntervalSelector{interval: 10 * time.Second}, nil)
+
+	now := time.Now()
+	inventory := []InstanceDescriptor{
+		{Name: "pve1", Type: InstanceTypePVE},
+	}
+
+	// First call
+	tasks1 := scheduler.BuildPlan(now, inventory, 0)
+	if len(tasks1) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks1))
+	}
+
+	// Second call should use cached LastScheduled
+	tasks2 := scheduler.BuildPlan(now.Add(5*time.Second), inventory, 0)
+	if len(tasks2) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks2))
+	}
+
+	// The second task should have NextRun based on cached LastScheduled
+	if tasks2[0].NextRun.Before(tasks1[0].NextRun) {
+		t.Errorf("second plan's NextRun should not be before first plan's NextRun")
+	}
+}
+
+// TestBuildPlan_IntervalClampedToMin tests that intervals below min get clamped
+func TestBuildPlan_IntervalClampedToMin(t *testing.T) {
+	t.Parallel()
+
+	cfg := SchedulerConfig{
+		BaseInterval: 10 * time.Second,
+		MinInterval:  5 * time.Second,
+		MaxInterval:  60 * time.Second,
+	}
+
+	// Return interval below minimum
+	scheduler := NewAdaptiveScheduler(cfg, nil, mockIntervalSelector{interval: 2 * time.Second}, nil)
+
+	now := time.Now()
+	inventory := []InstanceDescriptor{
+		{Name: "pve1", Type: InstanceTypePVE},
+	}
+
+	tasks := scheduler.BuildPlan(now, inventory, 0)
+
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+
+	if tasks[0].Interval < cfg.MinInterval {
+		t.Errorf("interval should be clamped to min %v, got %v", cfg.MinInterval, tasks[0].Interval)
+	}
+}
+
+// TestBuildPlan_IntervalClampedToMax tests that intervals above max get clamped
+func TestBuildPlan_IntervalClampedToMax(t *testing.T) {
+	t.Parallel()
+
+	cfg := SchedulerConfig{
+		BaseInterval: 10 * time.Second,
+		MinInterval:  5 * time.Second,
+		MaxInterval:  60 * time.Second,
+	}
+
+	// Return interval above maximum
+	scheduler := NewAdaptiveScheduler(cfg, nil, mockIntervalSelector{interval: 5 * time.Minute}, nil)
+
+	now := time.Now()
+	inventory := []InstanceDescriptor{
+		{Name: "pve1", Type: InstanceTypePVE},
+	}
+
+	tasks := scheduler.BuildPlan(now, inventory, 0)
+
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+
+	if tasks[0].Interval > cfg.MaxInterval {
+		t.Errorf("interval should be clamped to max %v, got %v", cfg.MaxInterval, tasks[0].Interval)
+	}
+}
+
+// TestBuildPlan_ZeroIntervalUsesBase tests that zero interval from selector uses base
+func TestBuildPlan_ZeroIntervalUsesBase(t *testing.T) {
+	t.Parallel()
+
+	cfg := SchedulerConfig{
+		BaseInterval: 10 * time.Second,
+		MinInterval:  5 * time.Second,
+		MaxInterval:  60 * time.Second,
+	}
+
+	// Return zero interval
+	scheduler := NewAdaptiveScheduler(cfg, nil, mockIntervalSelector{interval: 0}, nil)
+
+	now := time.Now()
+	inventory := []InstanceDescriptor{
+		{Name: "pve1", Type: InstanceTypePVE},
+	}
+
+	tasks := scheduler.BuildPlan(now, inventory, 0)
+
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+
+	// Zero interval should be replaced with base interval (or at least min)
+	if tasks[0].Interval < cfg.MinInterval {
+		t.Errorf("expected interval >= %v, got %v", cfg.MinInterval, tasks[0].Interval)
+	}
+}
+
+// TestBuildPlan_NegativeIntervalUsesBase tests that negative interval from selector uses base
+func TestBuildPlan_NegativeIntervalUsesBase(t *testing.T) {
+	t.Parallel()
+
+	cfg := SchedulerConfig{
+		BaseInterval: 10 * time.Second,
+		MinInterval:  5 * time.Second,
+		MaxInterval:  60 * time.Second,
+	}
+
+	// Return negative interval
+	scheduler := NewAdaptiveScheduler(cfg, nil, mockIntervalSelector{interval: -5 * time.Second}, nil)
+
+	now := time.Now()
+	inventory := []InstanceDescriptor{
+		{Name: "pve1", Type: InstanceTypePVE},
+	}
+
+	tasks := scheduler.BuildPlan(now, inventory, 0)
+
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+
+	// Negative interval should be replaced with base interval (or at least min)
+	if tasks[0].Interval < cfg.MinInterval {
+		t.Errorf("expected interval >= %v, got %v", cfg.MinInterval, tasks[0].Interval)
+	}
+}
+
+// TestFilterDue_EmptyTasks tests FilterDue with empty input
+func TestFilterDue_EmptyTasks(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultSchedulerConfig()
+	scheduler := NewAdaptiveScheduler(cfg, nil, nil, nil)
+
+	result := scheduler.FilterDue(time.Now(), nil)
+	if result != nil {
+		t.Errorf("FilterDue with nil tasks should return nil, got %v", result)
+	}
+
+	result = scheduler.FilterDue(time.Now(), []ScheduledTask{})
+	if result != nil {
+		t.Errorf("FilterDue with empty tasks should return nil, got %v", result)
+	}
+}
+
+// TestFilterDue_AllDue tests FilterDue when all tasks are due
+func TestFilterDue_AllDue(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultSchedulerConfig()
+	scheduler := NewAdaptiveScheduler(cfg, nil, nil, nil)
+
+	now := time.Now()
+	tasks := []ScheduledTask{
+		{InstanceName: "pve1", NextRun: now.Add(-1 * time.Second)},
+		{InstanceName: "pbs1", NextRun: now},
+		{InstanceName: "pmg1", NextRun: now.Add(-5 * time.Second)},
+	}
+
+	due := scheduler.FilterDue(now, tasks)
+
+	if len(due) != 3 {
+		t.Fatalf("expected 3 due tasks, got %d", len(due))
+	}
+}
+
+// TestFilterDue_NoneDue tests FilterDue when no tasks are due
+func TestFilterDue_NoneDue(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultSchedulerConfig()
+	scheduler := NewAdaptiveScheduler(cfg, nil, nil, nil)
+
+	now := time.Now()
+	tasks := []ScheduledTask{
+		{InstanceName: "pve1", NextRun: now.Add(10 * time.Second)},
+		{InstanceName: "pbs1", NextRun: now.Add(20 * time.Second)},
+	}
+
+	due := scheduler.FilterDue(now, tasks)
+
+	if len(due) != 0 {
+		t.Fatalf("expected 0 due tasks, got %d", len(due))
+	}
+}
+
+// TestFilterDue_SomeDue tests FilterDue when some tasks are due
+func TestFilterDue_SomeDue(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultSchedulerConfig()
+	scheduler := NewAdaptiveScheduler(cfg, nil, nil, nil)
+
+	now := time.Now()
+	tasks := []ScheduledTask{
+		{InstanceName: "pve1", NextRun: now.Add(-1 * time.Second)}, // due
+		{InstanceName: "pbs1", NextRun: now.Add(10 * time.Second)}, // not due
+		{InstanceName: "pmg1", NextRun: now},                       // due (exactly now)
+	}
+
+	due := scheduler.FilterDue(now, tasks)
+
+	if len(due) != 2 {
+		t.Fatalf("expected 2 due tasks, got %d", len(due))
+	}
+}
+
+// TestDispatchDue_NilScheduler tests DispatchDue with nil scheduler
+func TestDispatchDue_NilScheduler(t *testing.T) {
+	t.Parallel()
+
+	var scheduler *AdaptiveScheduler
+	tasks := []ScheduledTask{
+		{InstanceName: "pve1", NextRun: time.Now()},
+	}
+
+	// Should not panic and return original tasks
+	result := scheduler.DispatchDue(context.Background(), time.Now(), tasks)
+	if len(result) != len(tasks) {
+		t.Errorf("DispatchDue with nil scheduler should return original tasks")
+	}
+}
+
+// TestDispatchDue_EnqueuesTasks tests that DispatchDue enqueues due tasks
+func TestDispatchDue_EnqueuesTasks(t *testing.T) {
+	t.Parallel()
+
+	enqueuer := &mockTaskEnqueuer{}
+	cfg := DefaultSchedulerConfig()
+	scheduler := NewAdaptiveScheduler(cfg, nil, nil, enqueuer)
+
+	now := time.Now()
+	tasks := []ScheduledTask{
+		{InstanceName: "pve1", InstanceType: InstanceTypePVE, NextRun: now.Add(-1 * time.Second)},
+		{InstanceName: "pbs1", InstanceType: InstanceTypePBS, NextRun: now.Add(10 * time.Second)}, // not due
+		{InstanceName: "pmg1", InstanceType: InstanceTypePMG, NextRun: now},
+	}
+
+	due := scheduler.DispatchDue(context.Background(), now, tasks)
+
+	if len(due) != 2 {
+		t.Fatalf("expected 2 due tasks returned, got %d", len(due))
+	}
+
+	if len(enqueuer.tasks) != 2 {
+		t.Fatalf("expected 2 tasks enqueued, got %d", len(enqueuer.tasks))
+	}
+}
+
+// TestDispatchDue_NoDueTasks tests DispatchDue when no tasks are due
+func TestDispatchDue_NoDueTasks(t *testing.T) {
+	t.Parallel()
+
+	enqueuer := &mockTaskEnqueuer{}
+	cfg := DefaultSchedulerConfig()
+	scheduler := NewAdaptiveScheduler(cfg, nil, nil, enqueuer)
+
+	now := time.Now()
+	tasks := []ScheduledTask{
+		{InstanceName: "pve1", NextRun: now.Add(10 * time.Second)},
+	}
+
+	due := scheduler.DispatchDue(context.Background(), now, tasks)
+
+	if len(due) != 0 {
+		t.Fatalf("expected 0 due tasks returned, got %d", len(due))
+	}
+
+	if len(enqueuer.tasks) != 0 {
+		t.Fatalf("expected 0 tasks enqueued, got %d", len(enqueuer.tasks))
+	}
+}
+
+// TestLastScheduled_NilScheduler tests LastScheduled with nil scheduler
+func TestLastScheduled_NilScheduler(t *testing.T) {
+	t.Parallel()
+
+	var scheduler *AdaptiveScheduler
+	task, ok := scheduler.LastScheduled(InstanceTypePVE, "pve1")
+
+	if ok {
+		t.Error("LastScheduled with nil scheduler should return false")
+	}
+	if task.InstanceName != "" {
+		t.Error("LastScheduled with nil scheduler should return empty task")
+	}
+}
+
+// TestLastScheduled_NotFound tests LastScheduled when instance not in cache
+func TestLastScheduled_NotFound(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultSchedulerConfig()
+	scheduler := NewAdaptiveScheduler(cfg, nil, nil, nil)
+
+	task, ok := scheduler.LastScheduled(InstanceTypePVE, "nonexistent")
+
+	if ok {
+		t.Error("LastScheduled for nonexistent instance should return false")
+	}
+	if task.InstanceName != "" {
+		t.Error("LastScheduled for nonexistent instance should return empty task")
+	}
+}
+
+// TestLastScheduled_Found tests LastScheduled after BuildPlan populates cache
+func TestLastScheduled_Found(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultSchedulerConfig()
+	scheduler := NewAdaptiveScheduler(cfg, nil, mockIntervalSelector{interval: 10 * time.Second}, nil)
+
+	now := time.Now()
+	inventory := []InstanceDescriptor{
+		{Name: "pve1", Type: InstanceTypePVE},
+		{Name: "pbs1", Type: InstanceTypePBS},
+	}
+
+	// BuildPlan should populate the cache
+	scheduler.BuildPlan(now, inventory, 0)
+
+	// Now LastScheduled should find the task
+	task, ok := scheduler.LastScheduled(InstanceTypePVE, "pve1")
+	if !ok {
+		t.Fatal("LastScheduled should return true for cached instance")
+	}
+	if task.InstanceName != "pve1" {
+		t.Errorf("expected instance name pve1, got %s", task.InstanceName)
+	}
+	if task.InstanceType != InstanceTypePVE {
+		t.Errorf("expected instance type pve, got %s", task.InstanceType)
+	}
+
+	// Check different type
+	task, ok = scheduler.LastScheduled(InstanceTypePBS, "pbs1")
+	if !ok {
+		t.Fatal("LastScheduled should return true for cached PBS instance")
+	}
+	if task.InstanceName != "pbs1" {
+		t.Errorf("expected instance name pbs1, got %s", task.InstanceName)
+	}
+}
