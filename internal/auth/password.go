@@ -2,7 +2,6 @@ package auth
 
 import (
 	"fmt"
-	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -30,12 +29,6 @@ func HashPassword(password string) (string, error) {
 func CheckPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
-}
-
-// IsPasswordHashed checks if a string looks like a bcrypt hash
-func IsPasswordHashed(password string) bool {
-	// Bcrypt hashes start with $2a$, $2b$, or $2y$ and are 60 characters long
-	return strings.HasPrefix(password, "$2") && len(password) == 60
 }
 
 // ValidatePasswordComplexity checks if a password meets complexity requirements
