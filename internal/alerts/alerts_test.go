@@ -11193,3 +11193,540 @@ func TestGuestHasMonitorOnlyAlerts(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckNode(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns early when alerts disabled", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.Enabled = false
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:     "node1",
+			Name:   "Node 1",
+			CPU:    0.95, // Would trigger alert if enabled
+			Status: "online",
+		}
+
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		alertCount := len(m.activeAlerts)
+		m.mu.RUnlock()
+
+		if alertCount != 0 {
+			t.Errorf("expected no alerts when disabled, got %d", alertCount)
+		}
+	})
+
+	t.Run("DisableAllNodes clears existing alerts", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		// Pre-create alerts that should be cleared
+		m.mu.Lock()
+		m.activeAlerts["node1-cpu"] = &Alert{ID: "node1-cpu", ResourceID: "node1", Type: "cpu"}
+		m.activeAlerts["node1-memory"] = &Alert{ID: "node1-memory", ResourceID: "node1", Type: "memory"}
+		m.activeAlerts["node1-disk"] = &Alert{ID: "node1-disk", ResourceID: "node1", Type: "disk"}
+		m.activeAlerts["node1-temperature"] = &Alert{ID: "node1-temperature", ResourceID: "node1", Type: "temperature"}
+		m.activeAlerts["node-offline-node1"] = &Alert{ID: "node-offline-node1", ResourceID: "node1", Type: "connectivity"}
+		m.nodeOfflineCount["node1"] = 5
+		m.config.DisableAllNodes = true
+		m.mu.Unlock()
+
+		node := models.Node{ID: "node1", Name: "Node 1", Status: "online"}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		_, cpuExists := m.activeAlerts["node1-cpu"]
+		_, memExists := m.activeAlerts["node1-memory"]
+		_, diskExists := m.activeAlerts["node1-disk"]
+		_, tempExists := m.activeAlerts["node1-temperature"]
+		_, offlineExists := m.activeAlerts["node-offline-node1"]
+		_, countExists := m.nodeOfflineCount["node1"]
+		m.mu.RUnlock()
+
+		if cpuExists {
+			t.Error("expected cpu alert to be cleared")
+		}
+		if memExists {
+			t.Error("expected memory alert to be cleared")
+		}
+		if diskExists {
+			t.Error("expected disk alert to be cleared")
+		}
+		if tempExists {
+			t.Error("expected temperature alert to be cleared")
+		}
+		if offlineExists {
+			t.Error("expected offline alert to be cleared")
+		}
+		if countExists {
+			t.Error("expected offline count to be cleared")
+		}
+	})
+
+	t.Run("DisableNodesOffline clears tracking and offline alerts", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		// Pre-create offline alert and tracking
+		m.mu.Lock()
+		m.activeAlerts["node-offline-node1"] = &Alert{ID: "node-offline-node1", ResourceID: "node1", Type: "connectivity"}
+		m.nodeOfflineCount["node1"] = 3
+		m.config.DisableAllNodesOffline = true
+		m.mu.Unlock()
+
+		node := models.Node{ID: "node1", Name: "Node 1", Status: "offline"}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["node-offline-node1"]
+		_, countExists := m.nodeOfflineCount["node1"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected offline alert to be cleared")
+		}
+		if countExists {
+			t.Error("expected offline count to be cleared")
+		}
+	})
+
+	t.Run("offline node triggers offline check", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		// Pre-set count to trigger alert on this call
+		m.mu.Lock()
+		m.nodeOfflineCount["node1"] = 2
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:       "node1",
+			Name:     "Node 1",
+			Instance: "pve1",
+			Status:   "offline",
+		}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["node-offline-node1"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected offline alert to be created")
+		}
+		if alert.Type != "connectivity" {
+			t.Errorf("expected type connectivity, got %s", alert.Type)
+		}
+	})
+
+	t.Run("node with connection error triggers offline check", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.nodeOfflineCount["node1"] = 2
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:               "node1",
+			Name:             "Node 1",
+			Instance:         "pve1",
+			Status:           "online",
+			ConnectionHealth: "error",
+		}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["node-offline-node1"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected offline alert for connection error")
+		}
+	})
+
+	t.Run("node with connection failed triggers offline check", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.nodeOfflineCount["node1"] = 2
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:               "node1",
+			Name:             "Node 1",
+			Instance:         "pve1",
+			Status:           "online",
+			ConnectionHealth: "failed",
+		}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["node-offline-node1"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected offline alert for connection failed")
+		}
+	})
+
+	t.Run("online node clears offline alert", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		// Pre-create offline alert
+		m.mu.Lock()
+		m.activeAlerts["node-offline-node1"] = &Alert{
+			ID:         "node-offline-node1",
+			ResourceID: "node1",
+			Type:       "connectivity",
+		}
+		m.nodeOfflineCount["node1"] = 5
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:               "node1",
+			Name:             "Node 1",
+			Instance:         "pve1",
+			Status:           "online",
+			ConnectionHealth: "connected",
+		}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["node-offline-node1"]
+		_, countExists := m.nodeOfflineCount["node1"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected offline alert to be cleared")
+		}
+		if countExists {
+			t.Error("expected offline count to be cleared")
+		}
+	})
+
+	t.Run("online node triggers metric checks", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		// Set thresholds that will trigger and disable time threshold
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults = ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:       "node1",
+			Name:     "Node 1",
+			Instance: "pve1",
+			Status:   "online",
+			CPU:      0.95, // 95% - above trigger
+		}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["node1-cpu"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected cpu alert to be created")
+		}
+		if alert.Type != "cpu" {
+			t.Errorf("expected type cpu, got %s", alert.Type)
+		}
+	})
+
+	t.Run("offline node skips metric checks", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.NodeDefaults = ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:     "node1",
+			Name:   "Node 1",
+			Status: "offline",
+			CPU:    0.95, // Would trigger if checked
+		}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		_, cpuExists := m.activeAlerts["node1-cpu"]
+		m.mu.RUnlock()
+
+		if cpuExists {
+			t.Error("expected no cpu alert for offline node")
+		}
+	})
+
+	t.Run("applies override thresholds", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.NodeDefaults = ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.config.Overrides = map[string]ThresholdConfig{
+			"node1": {
+				CPU: &HysteresisThreshold{Trigger: 99.0, Clear: 90.0}, // Higher threshold
+			},
+		}
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:       "node1",
+			Name:     "Node 1",
+			Instance: "pve1",
+			Status:   "online",
+			CPU:      0.95, // 95% - below override trigger of 99%
+		}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		_, cpuExists := m.activeAlerts["node1-cpu"]
+		m.mu.RUnlock()
+
+		if cpuExists {
+			t.Error("expected no alert due to higher override threshold")
+		}
+	})
+
+	t.Run("checks temperature with package temp", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults = ThresholdConfig{
+			Temperature: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:       "node1",
+			Name:     "Node 1",
+			Instance: "pve1",
+			Status:   "online",
+			Temperature: &models.Temperature{
+				Available:  true,
+				CPUPackage: 90.0, // Above trigger
+				CPUMax:     85.0,
+			},
+		}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["node1-temperature"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected temperature alert")
+		}
+	})
+
+	t.Run("checks temperature with max temp fallback", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults = ThresholdConfig{
+			Temperature: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:       "node1",
+			Name:     "Node 1",
+			Instance: "pve1",
+			Status:   "online",
+			Temperature: &models.Temperature{
+				Available:  true,
+				CPUPackage: 0,    // Zero - will use max
+				CPUMax:     90.0, // Above trigger
+			},
+		}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["node1-temperature"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected temperature alert using max temp fallback")
+		}
+	})
+
+	t.Run("skips temperature when not available", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.NodeDefaults = ThresholdConfig{
+			Temperature: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:       "node1",
+			Name:     "Node 1",
+			Instance: "pve1",
+			Status:   "online",
+			Temperature: &models.Temperature{
+				Available:  false, // Not available
+				CPUPackage: 90.0,
+			},
+		}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		_, tempExists := m.activeAlerts["node1-temperature"]
+		m.mu.RUnlock()
+
+		if tempExists {
+			t.Error("expected no temperature alert when not available")
+		}
+	})
+
+	t.Run("skips temperature when nil", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.NodeDefaults = ThresholdConfig{
+			Temperature: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:          "node1",
+			Name:        "Node 1",
+			Instance:    "pve1",
+			Status:      "online",
+			Temperature: nil, // Nil temperature
+		}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		_, tempExists := m.activeAlerts["node1-temperature"]
+		m.mu.RUnlock()
+
+		if tempExists {
+			t.Error("expected no temperature alert when temp is nil")
+		}
+	})
+
+	t.Run("skips temperature when threshold nil", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		// No temperature threshold set
+		m.mu.Lock()
+		m.config.NodeDefaults = ThresholdConfig{
+			Temperature: nil,
+		}
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:       "node1",
+			Name:     "Node 1",
+			Instance: "pve1",
+			Status:   "online",
+			Temperature: &models.Temperature{
+				Available:  true,
+				CPUPackage: 90.0,
+			},
+		}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		_, tempExists := m.activeAlerts["node1-temperature"]
+		m.mu.RUnlock()
+
+		if tempExists {
+			t.Error("expected no temperature alert when threshold nil")
+		}
+	})
+
+	t.Run("checks memory metric", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults = ThresholdConfig{
+			Memory: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:       "node1",
+			Name:     "Node 1",
+			Instance: "pve1",
+			Status:   "online",
+			Memory: models.Memory{
+				Usage: 95.0, // Above trigger
+			},
+		}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["node1-memory"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected memory alert")
+		}
+	})
+
+	t.Run("checks disk metric", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults = ThresholdConfig{
+			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		node := models.Node{
+			ID:       "node1",
+			Name:     "Node 1",
+			Instance: "pve1",
+			Status:   "online",
+			Disk: models.Disk{
+				Usage: 95.0, // Above trigger
+			},
+		}
+		m.CheckNode(node)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["node1-disk"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected disk alert")
+		}
+	})
+}
