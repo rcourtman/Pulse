@@ -142,9 +142,6 @@ func (t *StalenessTracker) StalenessScore(instanceType InstanceType, instance st
 	if score > 1 {
 		score = 1
 	}
-	if score < 0 {
-		score = 0
-	}
 	return score, true
 }
 
