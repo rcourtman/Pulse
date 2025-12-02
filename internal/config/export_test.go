@@ -278,3 +278,63 @@ func TestEncryptWithPassphrase_EmptyPassphrase(t *testing.T) {
 		t.Errorf("roundtrip with empty passphrase failed")
 	}
 }
+
+func TestImportConfig_EmptyPassphrase(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := NewConfigPersistence(tempDir)
+
+	err := cp.ImportConfig("somedata", "")
+	if err == nil {
+		t.Error("expected error for empty passphrase")
+	}
+	if err.Error() != "passphrase is required for import" {
+		t.Errorf("expected 'passphrase is required' error, got: %v", err)
+	}
+}
+
+func TestImportConfig_InvalidBase64(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := NewConfigPersistence(tempDir)
+
+	err := cp.ImportConfig("not-valid-base64!!!", "somepass")
+	if err == nil {
+		t.Error("expected error for invalid base64")
+	}
+}
+
+func TestImportConfig_WrongPassphrase(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := NewConfigPersistence(tempDir)
+
+	// Create valid encrypted data with one passphrase
+	plaintext := []byte(`{"version":"4.1","nodes":{"pve":[],"pbs":[],"pmg":[]},"alerts":{},"email":{},"apprise":{},"webhooks":[],"system":{}}`)
+	encrypted, err := encryptWithPassphrase(plaintext, "correct-pass")
+	if err != nil {
+		t.Fatalf("failed to create test data: %v", err)
+	}
+	encoded := base64.StdEncoding.EncodeToString(encrypted)
+
+	// Try to import with wrong passphrase
+	err = cp.ImportConfig(encoded, "wrong-pass")
+	if err == nil {
+		t.Error("expected error for wrong passphrase")
+	}
+}
+
+func TestImportConfig_InvalidJSON(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := NewConfigPersistence(tempDir)
+
+	// Create valid encrypted data but with invalid JSON content
+	plaintext := []byte(`{not valid json`)
+	encrypted, err := encryptWithPassphrase(plaintext, "test-pass")
+	if err != nil {
+		t.Fatalf("failed to create test data: %v", err)
+	}
+	encoded := base64.StdEncoding.EncodeToString(encrypted)
+
+	err = cp.ImportConfig(encoded, "test-pass")
+	if err == nil {
+		t.Error("expected error for invalid JSON")
+	}
+}
