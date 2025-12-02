@@ -6,7 +6,7 @@ import UnifiedBackups from './UnifiedBackups';
 import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 
 const Backups: Component = () => {
-  const { state, connected, initialDataReceived } = useWebSocket();
+  const { state, connected, initialDataReceived, reconnecting, reconnect } = useWebSocket();
 
   const hasBackupData = () =>
     Boolean(
@@ -75,8 +75,22 @@ const Backups: Component = () => {
               </svg>
             }
             title="Connection lost"
-            description="Unable to connect to the backend server. Attempting to reconnect..."
+            description={
+              reconnecting()
+                ? 'Attempting to reconnect…'
+                : 'Unable to connect to the backend server'
+            }
             tone="danger"
+            actions={
+              !reconnecting() ? (
+                <button
+                  onClick={() => reconnect()}
+                  class="mt-2 inline-flex items-center px-4 py-2 text-xs font-medium rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
+                >
+                  Reconnect now
+                </button>
+              ) : undefined
+            }
           />
         </Card>
       </Show>

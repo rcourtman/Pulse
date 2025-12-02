@@ -33,7 +33,7 @@ function formatRate(limit?: number): string {
 }
 
 const Replication: Component = () => {
-  const { state, connected } = useWebSocket();
+  const { state, connected, reconnecting, reconnect } = useWebSocket();
 
   const replicationJobs = createMemo(() => {
     const jobs = state.replicationJobs ?? [];
@@ -59,8 +59,22 @@ const Replication: Component = () => {
               </svg>
             }
             title="Connection lost"
-            description="Unable to connect to the backend server. Attempting to reconnect..."
+            description={
+              reconnecting()
+                ? 'Attempting to reconnect…'
+                : 'Unable to connect to the backend server'
+            }
             tone="danger"
+            actions={
+              !reconnecting() ? (
+                <button
+                  onClick={() => reconnect()}
+                  class="mt-2 inline-flex items-center px-4 py-2 text-xs font-medium rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
+                >
+                  Reconnect now
+                </button>
+              ) : undefined
+            }
           />
         </Card>
       }>
