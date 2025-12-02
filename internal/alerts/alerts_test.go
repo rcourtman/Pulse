@@ -9448,3 +9448,504 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 		}
 	})
 }
+
+func TestDockerContainerHealthAlert(t *testing.T) {
+	t.Run("healthy container - no alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		host := models.DockerHost{
+			ID:          "host-health-1",
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:     "container-1",
+					Name:   "healthy-app",
+					State:  "running",
+					Status: "Up 10 minutes",
+					Health: "healthy",
+				},
+			},
+		}
+
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Fatal("expected no health alert for healthy container")
+		}
+	})
+
+	t.Run("container with empty health - no alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		host := models.DockerHost{
+			ID:          "host-health-2",
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:     "container-2",
+					Name:   "no-health-check",
+					State:  "running",
+					Status: "Up 10 minutes",
+					Health: "",
+				},
+			},
+		}
+
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Fatal("expected no health alert for container with empty health")
+		}
+	})
+
+	t.Run("container with none health - no alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		host := models.DockerHost{
+			ID:          "host-health-3",
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:     "container-3",
+					Name:   "no-health-check",
+					State:  "running",
+					Status: "Up 10 minutes",
+					Health: "none",
+				},
+			},
+		}
+
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Fatal("expected no health alert for container with none health")
+		}
+	})
+
+	t.Run("container starting - no alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		host := models.DockerHost{
+			ID:          "host-health-4",
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:     "container-4",
+					Name:   "starting-app",
+					State:  "running",
+					Status: "Up 5 seconds",
+					Health: "starting",
+				},
+			},
+		}
+
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Fatal("expected no health alert for starting container")
+		}
+	})
+
+	t.Run("unhealthy container - critical alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		host := models.DockerHost{
+			ID:          "host-health-5",
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:     "container-5",
+					Name:   "unhealthy-app",
+					State:  "running",
+					Status: "Up 10 minutes (unhealthy)",
+					Health: "unhealthy",
+				},
+			},
+		}
+
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
+		alert, exists := m.activeAlerts[alertID]
+		if !exists {
+			t.Fatal("expected health alert for unhealthy container")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Fatalf("expected critical alert for unhealthy container, got %s", alert.Level)
+		}
+		if alert.Type != "docker-container-health" {
+			t.Fatalf("expected alert type docker-container-health, got %s", alert.Type)
+		}
+	})
+
+	t.Run("container with other health status - warning alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		host := models.DockerHost{
+			ID:          "host-health-6",
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:     "container-6",
+					Name:   "degraded-app",
+					State:  "running",
+					Status: "Up 10 minutes",
+					Health: "degraded",
+				},
+			},
+		}
+
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
+		alert, exists := m.activeAlerts[alertID]
+		if !exists {
+			t.Fatal("expected health alert for degraded container")
+		}
+		if alert.Level != AlertLevelWarning {
+			t.Fatalf("expected warning alert for non-unhealthy bad status, got %s", alert.Level)
+		}
+	})
+
+	t.Run("alert cleared when container becomes healthy", func(t *testing.T) {
+		m := newTestManager(t)
+
+		hostID := "host-health-7"
+		containerID := "container-7"
+
+		// First check with unhealthy container
+		hostUnhealthy := models.DockerHost{
+			ID:          hostID,
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:     containerID,
+					Name:   "recovering-app",
+					State:  "running",
+					Status: "Up 10 minutes (unhealthy)",
+					Health: "unhealthy",
+				},
+			},
+		}
+
+		m.CheckDockerHost(hostUnhealthy)
+
+		resourceID := dockerResourceID(hostID, containerID)
+		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
+		if _, exists := m.activeAlerts[alertID]; !exists {
+			t.Fatal("expected health alert to be raised")
+		}
+
+		// Now container becomes healthy
+		hostHealthy := models.DockerHost{
+			ID:          hostID,
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:     containerID,
+					Name:   "recovering-app",
+					State:  "running",
+					Status: "Up 15 minutes",
+					Health: "healthy",
+				},
+			},
+		}
+
+		m.CheckDockerHost(hostHealthy)
+
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Fatal("expected health alert to be cleared when container became healthy")
+		}
+	})
+}
+
+func TestDockerContainerOOMKillAlert(t *testing.T) {
+	t.Run("running container - no alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		host := models.DockerHost{
+			ID:          "host-oom-1",
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:       "container-1",
+					Name:     "running-app",
+					State:    "running",
+					Status:   "Up 10 minutes",
+					ExitCode: 0,
+				},
+			},
+		}
+
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Fatal("expected no OOM alert for running container")
+		}
+	})
+
+	t.Run("exited container with non-137 exit code - no alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		host := models.DockerHost{
+			ID:          "host-oom-2",
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:       "container-2",
+					Name:     "normal-exit-app",
+					State:    "exited",
+					Status:   "Exited (1) 5 minutes ago",
+					ExitCode: 1,
+				},
+			},
+		}
+
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Fatal("expected no OOM alert for container with exit code 1")
+		}
+	})
+
+	t.Run("exited container with exit code 137 - critical OOM alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		host := models.DockerHost{
+			ID:          "host-oom-3",
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:          "container-3",
+					Name:        "oom-killed-app",
+					State:       "exited",
+					Status:      "Exited (137) 1 minute ago",
+					ExitCode:    137,
+					MemoryUsage: 512 * 1024 * 1024,
+					MemoryLimit: 512 * 1024 * 1024,
+				},
+			},
+		}
+
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
+		alert, exists := m.activeAlerts[alertID]
+		if !exists {
+			t.Fatal("expected OOM alert for container with exit code 137")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Fatalf("expected critical OOM alert, got %s", alert.Level)
+		}
+		if alert.Type != "docker-container-oom-kill" {
+			t.Fatalf("expected alert type docker-container-oom-kill, got %s", alert.Type)
+		}
+	})
+
+	t.Run("dead container with exit code 137 - critical OOM alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		host := models.DockerHost{
+			ID:          "host-oom-dead",
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:       "container-dead",
+					Name:     "dead-oom-app",
+					State:    "dead",
+					Status:   "Dead",
+					ExitCode: 137,
+				},
+			},
+		}
+
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
+		alert, exists := m.activeAlerts[alertID]
+		if !exists {
+			t.Fatal("expected OOM alert for dead container with exit code 137")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Fatalf("expected critical OOM alert, got %s", alert.Level)
+		}
+	})
+
+	t.Run("repeated 137 exit code - no new alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		hostID := "host-oom-4"
+		containerID := "container-4"
+
+		host := models.DockerHost{
+			ID:          hostID,
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:       containerID,
+					Name:     "oom-killed-app",
+					State:    "exited",
+					Status:   "Exited (137) 1 minute ago",
+					ExitCode: 137,
+				},
+			},
+		}
+
+		// First check - should create alert
+		m.CheckDockerHost(host)
+
+		resourceID := dockerResourceID(hostID, containerID)
+		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
+		alert1, exists := m.activeAlerts[alertID]
+		if !exists {
+			t.Fatal("expected OOM alert on first check")
+		}
+		startTime := alert1.StartTime
+
+		// Second check with same exit code - should not create new alert
+		m.CheckDockerHost(host)
+
+		alert2, exists := m.activeAlerts[alertID]
+		if !exists {
+			t.Fatal("expected OOM alert to still exist on second check")
+		}
+		if alert2.StartTime != startTime {
+			t.Fatal("expected alert start time to be preserved (not a new alert)")
+		}
+	})
+
+	t.Run("container recovers - alert cleared", func(t *testing.T) {
+		m := newTestManager(t)
+
+		hostID := "host-oom-5"
+		containerID := "container-5"
+
+		// First check with OOM killed container
+		hostOOM := models.DockerHost{
+			ID:          hostID,
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:       containerID,
+					Name:     "recovering-app",
+					State:    "exited",
+					Status:   "Exited (137) 1 minute ago",
+					ExitCode: 137,
+				},
+			},
+		}
+
+		m.CheckDockerHost(hostOOM)
+
+		resourceID := dockerResourceID(hostID, containerID)
+		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
+		if _, exists := m.activeAlerts[alertID]; !exists {
+			t.Fatal("expected OOM alert to be raised")
+		}
+
+		// Container is restarted and running again
+		hostRunning := models.DockerHost{
+			ID:          hostID,
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:       containerID,
+					Name:     "recovering-app",
+					State:    "running",
+					Status:   "Up 30 seconds",
+					ExitCode: 0,
+				},
+			},
+		}
+
+		m.CheckDockerHost(hostRunning)
+
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Fatal("expected OOM alert to be cleared when container started running")
+		}
+	})
+
+	t.Run("container exits with different code - alert cleared", func(t *testing.T) {
+		m := newTestManager(t)
+
+		hostID := "host-oom-6"
+		containerID := "container-6"
+
+		// First check with OOM killed container
+		hostOOM := models.DockerHost{
+			ID:          hostID,
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:       containerID,
+					Name:     "multi-exit-app",
+					State:    "exited",
+					Status:   "Exited (137) 1 minute ago",
+					ExitCode: 137,
+				},
+			},
+		}
+
+		m.CheckDockerHost(hostOOM)
+
+		resourceID := dockerResourceID(hostID, containerID)
+		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
+		if _, exists := m.activeAlerts[alertID]; !exists {
+			t.Fatal("expected OOM alert to be raised")
+		}
+
+		// Container exits with different exit code (normal error)
+		hostNormalExit := models.DockerHost{
+			ID:          hostID,
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:       containerID,
+					Name:     "multi-exit-app",
+					State:    "exited",
+					Status:   "Exited (1) 30 seconds ago",
+					ExitCode: 1,
+				},
+			},
+		}
+
+		m.CheckDockerHost(hostNormalExit)
+
+		if _, exists := m.activeAlerts[alertID]; exists {
+			t.Fatal("expected OOM alert to be cleared when container exited with different code")
+		}
+	})
+}
