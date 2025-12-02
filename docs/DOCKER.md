@@ -1,6 +1,6 @@
 # 🐳 Docker Guide
 
-Pulse is distributed as a lightweight, scratch-based Docker image.
+Pulse is distributed as a lightweight, Alpine-based Docker image.
 
 ## 🚀 Quick Start
 
@@ -114,4 +114,6 @@ docker compose up -d
   ```
 
 - **Shell Access**
-  Pulse uses a minimal scratch image, so there is no shell. Use `docker logs` for debugging.
+  ```bash
+  docker exec -it pulse /bin/sh
+  ```
