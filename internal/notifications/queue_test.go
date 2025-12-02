@@ -201,3 +201,38 @@ func TestQueuedNotification_ZeroValues(t *testing.T) {
 		t.Error("CompletedAt should be nil by default")
 	}
 }
+
+func TestCancelByAlertIDs_EmptyInput(t *testing.T) {
+	// Create a temporary queue for testing
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+
+	// Empty slice should return nil without error
+	err = nq.CancelByAlertIDs([]string{})
+	if err != nil {
+		t.Errorf("CancelByAlertIDs with empty slice returned error: %v", err)
+	}
+
+	// Nil slice should also return nil without error
+	err = nq.CancelByAlertIDs(nil)
+	if err != nil {
+		t.Errorf("CancelByAlertIDs with nil slice returned error: %v", err)
+	}
+}
+
+func TestCancelByAlertIDs_NoMatchingNotifications(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+
+	// With an empty queue, no notifications should match
+	err = nq.CancelByAlertIDs([]string{"alert-1", "alert-2"})
+	if err != nil {
+		t.Errorf("CancelByAlertIDs with no matching notifications returned error: %v", err)
+	}
+}
