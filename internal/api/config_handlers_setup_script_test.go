@@ -203,3 +203,121 @@ func TestHandleSetupScript_InvalidHostParameter(t *testing.T) {
 		t.Fatalf("expected 400 Bad Request for invalid host, got %d (%s)", rr.Code, rr.Body.String())
 	}
 }
+
+func TestHandleSetupScript_PBSTypeGeneratesScript(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/setup-script?type=pbs&host=https://192.168.0.10:8007&pulse_url=http://pulse.local:7656", nil)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for PBS type, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	script := rr.Body.String()
+
+	// Verify PBS-specific content
+	tests := []struct {
+		name     string
+		contains string
+		desc     string
+	}{
+		{
+			name:     "pbs_header",
+			contains: "Pulse Monitoring Setup for PBS",
+			desc:     "Should have PBS-specific header",
+		},
+		{
+			name:     "proxmox_backup_manager_check",
+			contains: "proxmox-backup-manager",
+			desc:     "Should check for proxmox-backup-manager command",
+		},
+		{
+			name:     "pbs_user_realm",
+			contains: "pulse-monitor@pbs",
+			desc:     "Should use @pbs realm for user",
+		},
+		{
+			name:     "pbs_acl_update",
+			contains: "proxmox-backup-manager acl update",
+			desc:     "Should set PBS ACLs",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !containsString(script, tt.contains) {
+				t.Errorf("%s\nExpected to find: %s", tt.desc, tt.contains)
+			}
+		})
+	}
+
+	// Verify PBS script does NOT contain PVE-specific content
+	if containsString(script, "pveum user add") {
+		t.Error("PBS script should not contain PVE commands like 'pveum user add'")
+	}
+}
+
+func TestHandleSetupScript_PBSWithAuthToken(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	// Valid auth token (64 hex chars)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/setup-script?type=pbs&host=https://192.168.0.10:8007&auth_token=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", nil)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	script := rr.Body.String()
+
+	// Verify auth token handling in PBS script
+	if !containsString(script, "AUTH_TOKEN=") {
+		t.Error("PBS script should define AUTH_TOKEN variable")
+	}
+}
+
+func TestHandleSetupScript_PBSNoHostUsesPlaceholder(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	// No host parameter for PBS
+	req := httptest.NewRequest(http.MethodGet, "/api/setup-script?type=pbs", nil)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	script := rr.Body.String()
+
+	// Should use PBS placeholder when no host provided
+	if !containsString(script, "YOUR_PBS_HOST:8007") {
+		t.Error("PBS script should use YOUR_PBS_HOST:8007 placeholder when no host provided")
+	}
+}
