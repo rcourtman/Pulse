@@ -597,7 +597,9 @@ const Settings: Component<SettingsProps> = (props) => {
   );
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = usePersistentSignal('settings-sidebar-collapsed', false);
+  // Sidebar always starts expanded for discoverability (issue #764)
+  // Users can collapse during session but it resets on page reload
+  const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
   const [nodes, setNodes] = createSignal<NodeConfigWithStatus[]>([]);
   const [discoveredNodes, setDiscoveredNodes] = createSignal<DiscoveredServer[]>([]);
   const [showNodeModal, setShowNodeModal] = createSignal(false);
