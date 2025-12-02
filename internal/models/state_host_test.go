@@ -728,3 +728,140 @@ func TestUpdateGuestSnapshotsForInstance(t *testing.T) {
 		t.Fatalf("Expected 2 snapshots after update, got %d", len(snapshot.PVEBackups.GuestSnapshots))
 	}
 }
+
+func TestSyncGuestBackupTimes(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+	oldBackup := now.Add(-24 * time.Hour)
+	newBackup := now.Add(-1 * time.Hour)
+
+	// Set up VMs and containers
+	state.UpdateVMs([]VM{
+		{VMID: 100, Name: "vm-100", Instance: "pve-1"},
+		{VMID: 101, Name: "vm-101", Instance: "pve-1"},
+	})
+	state.UpdateContainers([]Container{
+		{VMID: 200, Name: "ct-200", Instance: "pve-1"},
+	})
+
+	// Add storage backups for VM 100
+	state.mu.Lock()
+	state.PVEBackups.StorageBackups = []StorageBackup{
+		{ID: "pve-1-backup-1", VMID: 100, Time: oldBackup},
+		{ID: "pve-1-backup-2", VMID: 100, Time: newBackup}, // newer
+	}
+	state.mu.Unlock()
+
+	// Add PBS backup for container 200
+	state.UpdatePBSBackups("pbs-1", []PBSBackup{
+		{ID: "pbs-backup-1", VMID: "200", BackupTime: newBackup},
+	})
+
+	// Sync backup times
+	state.SyncGuestBackupTimes()
+
+	snapshot := state.GetSnapshot()
+
+	// VM 100 should have the newer backup time
+	var vm100 *VM
+	for i := range snapshot.VMs {
+		if snapshot.VMs[i].VMID == 100 {
+			vm100 = &snapshot.VMs[i]
+			break
+		}
+	}
+	if vm100 == nil {
+		t.Fatal("VM 100 not found")
+	}
+	if !vm100.LastBackup.Equal(newBackup) {
+		t.Errorf("VM 100 LastBackup = %v, expected %v", vm100.LastBackup, newBackup)
+	}
+
+	// VM 101 should have no backup time (zero)
+	var vm101 *VM
+	for i := range snapshot.VMs {
+		if snapshot.VMs[i].VMID == 101 {
+			vm101 = &snapshot.VMs[i]
+			break
+		}
+	}
+	if vm101 == nil {
+		t.Fatal("VM 101 not found")
+	}
+	if !vm101.LastBackup.IsZero() {
+		t.Errorf("VM 101 LastBackup should be zero, got %v", vm101.LastBackup)
+	}
+
+	// Container 200 should have backup time from PBS
+	var ct200 *Container
+	for i := range snapshot.Containers {
+		if snapshot.Containers[i].VMID == 200 {
+			ct200 = &snapshot.Containers[i]
+			break
+		}
+	}
+	if ct200 == nil {
+		t.Fatal("Container 200 not found")
+	}
+	if !ct200.LastBackup.Equal(newBackup) {
+		t.Errorf("Container 200 LastBackup = %v, expected %v", ct200.LastBackup, newBackup)
+	}
+}
+
+func TestUpdateStorageBackupsForInstance(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+
+	// Set up a VM so node normalization has something to work with
+	state.UpdateVMsForInstance("pve-1", []VM{
+		{VMID: 100, Instance: "pve-1", Node: "node1"},
+	})
+
+	// Add backups from first instance
+	backups1 := []StorageBackup{
+		{ID: "pve-1-backup-1", VMID: 100, Time: now, Node: "node1"},
+		{ID: "pve-1-backup-2", VMID: 100, Time: now.Add(-time.Hour), Node: "node1"},
+	}
+	state.UpdateStorageBackupsForInstance("pve-1", backups1)
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.PVEBackups.StorageBackups) != 2 {
+		t.Fatalf("Expected 2 backups, got %d", len(snapshot.PVEBackups.StorageBackups))
+	}
+
+	// Backups should be sorted by time descending
+	if snapshot.PVEBackups.StorageBackups[0].Time.Before(snapshot.PVEBackups.StorageBackups[1].Time) {
+		t.Error("Backups should be sorted by time descending")
+	}
+
+	// Add backups from second instance
+	backups2 := []StorageBackup{
+		{ID: "pve-2-backup-1", VMID: 200, Time: now.Add(-30 * time.Minute), Node: "node2"},
+	}
+	state.UpdateStorageBackupsForInstance("pve-2", backups2)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PVEBackups.StorageBackups) != 3 {
+		t.Fatalf("Expected 3 backups, got %d", len(snapshot.PVEBackups.StorageBackups))
+	}
+
+	// Update first instance (should replace its backups)
+	backups1Updated := []StorageBackup{
+		{ID: "pve-1-backup-3", VMID: 100, Time: now.Add(time.Hour), Node: "node1"},
+	}
+	state.UpdateStorageBackupsForInstance("pve-1", backups1Updated)
+
+	snapshot = state.GetSnapshot()
+	if len(snapshot.PVEBackups.StorageBackups) != 2 {
+		t.Fatalf("Expected 2 backups after update, got %d", len(snapshot.PVEBackups.StorageBackups))
+	}
+
+	// Verify old pve-1 backups were replaced
+	for _, b := range snapshot.PVEBackups.StorageBackups {
+		if b.ID == "pve-1-backup-1" || b.ID == "pve-1-backup-2" {
+			t.Error("Old pve-1 backups should have been replaced")
+		}
+	}
+}
