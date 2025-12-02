@@ -240,6 +240,10 @@ export const UnifiedAgents: Component = () => {
         return `curl -fsSL ${pulseUrl()}/install.sh | sudo bash -s -- --uninstall`;
     };
 
+    // Track previously seen host types to prevent flapping when one source temporarily has no data
+    // This preserves types we've seen before even if one array briefly becomes empty
+    let previousHostTypes = new Map<string, Set<'host' | 'docker'>>();
+
     const allHosts = createMemo(() => {
         const hosts = state.hosts || [];
         const dockerHosts = state.dockerHosts || [];
@@ -295,6 +299,33 @@ export const UnifiedAgents: Component = () => {
                 });
             }
         });
+
+        // Preserve previously seen types to prevent flapping
+        // If we previously saw both 'host' and 'docker' for a hostname, keep both
+        // unless BOTH sources are now empty (indicating intentional removal)
+        const newHostTypes = new Map<string, Set<'host' | 'docker'>>();
+        unified.forEach((entry, key) => {
+            const currentTypes = new Set(entry.types);
+            const prevTypes = previousHostTypes.get(key);
+
+            if (prevTypes && prevTypes.size > currentTypes.size) {
+                // We previously had more types - check if source data exists
+                // Only add back types if the corresponding source has ANY data
+                // (prevents permanent stickiness if a host is truly removed)
+                if (prevTypes.has('host') && !currentTypes.has('host') && hosts.length > 0) {
+                    // Host type disappeared but we still have host data overall
+                    // This is likely a transient state - preserve the host type
+                    entry.types = Array.from(new Set([...entry.types, 'host']));
+                }
+                if (prevTypes.has('docker') && !currentTypes.has('docker') && dockerHosts.length > 0) {
+                    // Docker type disappeared but we still have docker data overall
+                    entry.types = Array.from(new Set([...entry.types, 'docker']));
+                }
+            }
+
+            newHostTypes.set(key, new Set(entry.types));
+        });
+        previousHostTypes = newHostTypes;
 
         return Array.from(unified.values()).sort((a, b) => a.hostname.localeCompare(b.hostname));
     });
