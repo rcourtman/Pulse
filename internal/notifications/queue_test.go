@@ -350,3 +350,51 @@ func TestProcessNotification_ProcessorFailure(t *testing.T) {
 
 	// Notification should be in DLQ since max attempts reached
 }
+
+func TestScanNotification_DLQWithTimestamps(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+
+	// Enqueue a notification with max 1 attempt
+	notif := &QueuedNotification{
+		ID:          "test-dlq-timestamps",
+		Type:        "webhook",
+		Status:      QueueStatusPending,
+		MaxAttempts: 1, // Will go to DLQ on first failure
+		Config:      []byte(`{"url":"http://example.com"}`),
+	}
+
+	if err := nq.Enqueue(notif); err != nil {
+		t.Fatalf("Failed to enqueue: %v", err)
+	}
+
+	// Set a failing processor to trigger DLQ
+	nq.SetProcessor(func(n *QueuedNotification) error {
+		return fmt.Errorf("simulated failure")
+	})
+
+	nq.processNotification(notif)
+
+	// Get DLQ notifications - this exercises scanNotification with timestamps
+	dlq, err := nq.GetDLQ(10)
+	if err != nil {
+		t.Fatalf("GetDLQ failed: %v", err)
+	}
+
+	if len(dlq) != 1 {
+		t.Fatalf("Expected 1 DLQ notification, got %d", len(dlq))
+	}
+
+	// DLQ notification should have CompletedAt set (when it was moved to DLQ)
+	if dlq[0].CompletedAt == nil {
+		t.Error("Expected CompletedAt to be set for DLQ notification")
+	}
+
+	// Also verify LastAttempt is set
+	if dlq[0].LastAttempt == nil {
+		t.Error("Expected LastAttempt to be set for DLQ notification")
+	}
+}
