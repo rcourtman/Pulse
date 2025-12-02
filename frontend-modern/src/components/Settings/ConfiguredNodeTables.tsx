@@ -28,6 +28,7 @@ interface PveNodesTableProps {
   onTestConnection: (nodeId: string) => void;
   onEdit: (node: NodeConfigWithStatus) => void;
   onDelete: (node: NodeConfigWithStatus) => void;
+  onRefreshCluster?: (nodeId: string) => void;
 }
 
 type StatusMeta = { dotClass: string; label: string; labelClass: string };
@@ -381,12 +382,29 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                               </For>
                             </div>
                           </Show>
-                          <p class="flex items-center gap-1 text-[0.7rem] text-gray-600 dark:text-gray-400">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <path d="M5 12h14M12 5l7 7-7 7" />
-                            </svg>
-                            Automatic failover enabled between cluster nodes
-                          </p>
+                          <div class="flex items-center justify-between gap-2">
+                            <p class="flex items-center gap-1 text-[0.7rem] text-gray-600 dark:text-gray-400">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14M12 5l7 7-7 7" />
+                              </svg>
+                              Automatic failover enabled
+                            </p>
+                            <Show when={props.onRefreshCluster}>
+                              <button
+                                type="button"
+                                onClick={() => props.onRefreshCluster?.(node.id)}
+                                class="flex items-center gap-1 px-2 py-1 text-[0.65rem] font-medium text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                                title="Re-detect cluster membership (use if nodes were added to the Proxmox cluster)"
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                  <polyline points="23 4 23 10 17 10"></polyline>
+                                  <polyline points="1 20 1 14 7 14"></polyline>
+                                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                </svg>
+                                Refresh
+                              </button>
+                            </Show>
+                          </div>
                         </div>
                       </Show>
                     </div>

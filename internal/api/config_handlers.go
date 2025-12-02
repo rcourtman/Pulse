@@ -2318,6 +2318,123 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
+// HandleRefreshClusterNodes re-detects cluster membership and updates endpoints
+// This handles the case where nodes are added to a Proxmox cluster after initial configuration
+func (h *ConfigHandlers) HandleRefreshClusterNodes(w http.ResponseWriter, r *http.Request) {
+	// Prevent modifications in mock mode
+	if mock.IsMockEnabled() {
+		http.Error(w, "Cannot refresh cluster in mock mode", http.StatusForbidden)
+		return
+	}
+
+	// Path format: /api/config/nodes/{id}/refresh-cluster
+	path := strings.TrimPrefix(r.URL.Path, "/api/config/nodes/")
+	path = strings.TrimSuffix(path, "/refresh-cluster")
+	nodeID := path
+
+	if nodeID == "" {
+		http.Error(w, "Node ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Parse node ID
+	parts := strings.Split(nodeID, "-")
+	if len(parts) != 2 {
+		http.Error(w, "Invalid node ID", http.StatusBadRequest)
+		return
+	}
+
+	nodeType := parts[0]
+	index := 0
+	if _, err := fmt.Sscanf(parts[1], "%d", &index); err != nil {
+		http.Error(w, "Invalid node ID", http.StatusBadRequest)
+		return
+	}
+
+	// Only PVE nodes can have clusters
+	if nodeType != "pve" {
+		http.Error(w, "Only PVE nodes can be cluster members", http.StatusBadRequest)
+		return
+	}
+
+	if index >= len(h.config.PVEInstances) {
+		http.Error(w, "Node not found", http.StatusNotFound)
+		return
+	}
+
+	pve := &h.config.PVEInstances[index]
+
+	// Create client config for cluster detection
+	clientConfig := config.CreateProxmoxConfig(pve)
+
+	// Force cluster re-detection (ignore existing endpoints)
+	isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, pve.Name, pve.ClusterEndpoints)
+
+	if !isCluster {
+		http.Error(w, "Node is not part of a cluster", http.StatusBadRequest)
+		return
+	}
+
+	if len(clusterEndpoints) == 0 {
+		http.Error(w, "Could not detect cluster nodes", http.StatusInternalServerError)
+		return
+	}
+
+	oldEndpointCount := len(pve.ClusterEndpoints)
+	newEndpointCount := len(clusterEndpoints)
+
+	// Update cluster info
+	pve.IsCluster = true
+	if clusterName != "" && !strings.EqualFold(clusterName, "unknown cluster") {
+		pve.ClusterName = clusterName
+	}
+	pve.ClusterEndpoints = clusterEndpoints
+
+	// Save configuration
+	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
+		log.Error().Err(err).Msg("Failed to save nodes configuration after cluster refresh")
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+
+	log.Info().
+		Str("instance", pve.Name).
+		Str("cluster", pve.ClusterName).
+		Int("old_endpoints", oldEndpointCount).
+		Int("new_endpoints", newEndpointCount).
+		Msg("Refreshed cluster membership")
+
+	// Reload monitor with new configuration
+	if h.reloadFunc != nil {
+		if err := h.reloadFunc(); err != nil {
+			log.Error().Err(err).Msg("Failed to reload monitor after cluster refresh")
+			// Don't fail the request, config was saved successfully
+		}
+	}
+
+	// Broadcast update to refresh frontend
+	if h.wsHub != nil {
+		h.wsHub.BroadcastMessage(websocket.Message{
+			Type: "nodes_updated",
+			Data: map[string]interface{}{
+				"nodeType": "pve",
+				"action":   "cluster_refresh",
+			},
+			Timestamp: time.Now().Format(time.RFC3339),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":        "success",
+		"clusterName":   pve.ClusterName,
+		"oldNodeCount":  oldEndpointCount,
+		"newNodeCount":  newEndpointCount,
+		"nodesAdded":    newEndpointCount - oldEndpointCount,
+		"clusterNodes":  clusterEndpoints,
+	})
+}
+
 func (h *ConfigHandlers) triggerPVEHostCleanup(host string) {
 	client := tempproxy.NewClient()
 	if client == nil || !client.IsAvailable() {
