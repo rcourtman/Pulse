@@ -1226,3 +1226,145 @@ func TestAdminBypassEnabled_DeclinedOutsideDevMode(t *testing.T) {
 		t.Error("adminBypassState.declined should be true when bypass is ignored outside dev mode")
 	}
 }
+
+func TestCheckCSRF_SafeMethods(t *testing.T) {
+	tests := []struct {
+		method string
+	}{
+		{"GET"},
+		{"HEAD"},
+		{"OPTIONS"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.method, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(tt.method, "/api/test", nil)
+
+			// Safe methods should always return true regardless of CSRF state
+			result := CheckCSRF(w, req)
+			if !result {
+				t.Errorf("CheckCSRF(%s) = false, want true for safe method", tt.method)
+			}
+		})
+	}
+}
+
+func TestCheckCSRF_APITokenAuth(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/test", nil)
+	req.Header.Set("X-API-Token", "some-api-token")
+
+	// API token auth bypasses CSRF check
+	result := CheckCSRF(w, req)
+	if !result {
+		t.Error("CheckCSRF should return true when X-API-Token is present")
+	}
+}
+
+func TestCheckCSRF_BasicAuth(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/test", nil)
+	req.Header.Set("Authorization", "Basic dXNlcjpwYXNz")
+
+	// Basic auth bypasses CSRF check
+	result := CheckCSRF(w, req)
+	if !result {
+		t.Error("CheckCSRF should return true when Authorization header is present")
+	}
+}
+
+func TestCheckCSRF_NoSessionCookie(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/test", nil)
+	// No session cookie set
+
+	// Without session cookie, CSRF check is not needed
+	result := CheckCSRF(w, req)
+	if !result {
+		t.Error("CheckCSRF should return true when no session cookie is present")
+	}
+}
+
+func TestCheckCSRF_MissingCSRFToken(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/test", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  "pulse_session",
+		Value: "test-session-id-1234567890",
+	})
+	// No CSRF token set
+
+	// Missing CSRF token should fail
+	result := CheckCSRF(w, req)
+	if result {
+		t.Error("CheckCSRF should return false when CSRF token is missing")
+	}
+
+	// Should set X-CSRF-Token header with new token
+	newToken := w.Header().Get("X-CSRF-Token")
+	if newToken == "" {
+		t.Error("CheckCSRF should issue new CSRF token in header when missing")
+	}
+}
+
+func TestCheckCSRF_InvalidCSRFToken(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/test", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  "pulse_session",
+		Value: "test-session-id-1234567890",
+	})
+	req.Header.Set("X-CSRF-Token", "invalid-csrf-token")
+
+	// Invalid CSRF token should fail
+	result := CheckCSRF(w, req)
+	if result {
+		t.Error("CheckCSRF should return false when CSRF token is invalid")
+	}
+
+	// Should set X-CSRF-Token header with new token
+	newToken := w.Header().Get("X-CSRF-Token")
+	if newToken == "" {
+		t.Error("CheckCSRF should issue new CSRF token in header when invalid")
+	}
+}
+
+func TestCheckCSRF_CSRFTokenFromFormValue(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/test?csrf_token=form-token-value", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  "pulse_session",
+		Value: "test-session-id-1234567890",
+	})
+	// csrf_token is set as query param which is read by FormValue
+
+	// The token won't validate, but we're testing that FormValue is checked
+	result := CheckCSRF(w, req)
+	// Will fail because token doesn't match session
+	if result {
+		t.Error("CheckCSRF should still validate the token from FormValue")
+	}
+}
+
+func TestCheckCSRF_UnsafeMethods(t *testing.T) {
+	methods := []string{"POST", "PUT", "DELETE", "PATCH"}
+
+	for _, method := range methods {
+		t.Run(method, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(method, "/api/test", nil)
+			req.AddCookie(&http.Cookie{
+				Name:  "pulse_session",
+				Value: "test-session-id-1234567890",
+			})
+			// No CSRF token
+
+			// Unsafe methods without valid CSRF should fail
+			result := CheckCSRF(w, req)
+			if result {
+				t.Errorf("CheckCSRF(%s) should return false without valid CSRF token", method)
+			}
+		})
+	}
+}
