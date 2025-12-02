@@ -63,14 +63,15 @@ Controls runtime behavior like ports, logging, and polling intervals. Most of th
 ```json
 {
   "pvePollingInterval": 10,       // Seconds
-  "backendPort": 3000,            // Internal port
+  "backendPort": 3000,            // Internal port (default: 3000)
   "frontendPort": 7655,           // Public port
   "logLevel": "info",             // debug, info, warn, error
-  "logFormat": "auto",            // auto, json, console
-  "autoUpdateEnabled": false,     // Enable auto-updates
+  "autoUpdateEnabled": false,     // Enable auto-update checks
   "adaptivePollingEnabled": true  // Smart polling for large clusters
 }
 ```
+
+> **Note**: `logFormat` is only configurable via the `LOG_FORMAT` environment variable, not in `system.json`.
 </details>
 
 ### Common Overrides (Environment Variables)
@@ -80,6 +81,7 @@ Environment variables take precedence over `system.json`.
 |----------|-------------|---------|
 | `FRONTEND_PORT` | Public listening port | `7655` |
 | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
+| `LOG_FORMAT` | Log output format (`auto`, `json`, `console`) | `auto` |
 | `PULSE_PUBLIC_URL` | Public URL for notifications/OIDC | `""` |
 | `ALLOWED_ORIGINS` | CORS allowed domains | `""` (Same origin) |
 | `DISCOVERY_ENABLED` | Auto-discover nodes | `false` |
