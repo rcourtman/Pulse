@@ -680,3 +680,46 @@ func TestSessionStore_Load_InvalidJSON(t *testing.T) {
 		t.Errorf("store should be empty after loading invalid JSON, got %d sessions", len(store.sessions))
 	}
 }
+
+func TestSessionStore_Load_LegacyFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create legacy format JSON (map[token]sessionData) with snake_case fields
+	// The legacy format uses raw tokens as keys
+	legacyJSON := `{
+		"raw-token-1": {"expires_at": "2099-12-31T23:59:59Z", "created_at": "2024-01-01T00:00:00Z", "user_agent": "Agent1", "ip": "1.1.1.1"},
+		"raw-token-2": {"expires_at": "2099-12-31T23:59:59Z", "created_at": "2024-01-01T00:00:00Z", "user_agent": "Agent2", "ip": "2.2.2.2"},
+		"raw-token-expired": {"expires_at": "2020-01-01T00:00:00Z", "created_at": "2019-01-01T00:00:00Z", "user_agent": "ExpiredAgent", "ip": "3.3.3.3"}
+	}`
+	sessionsFile := filepath.Join(tmpDir, "sessions.json")
+	if err := os.WriteFile(sessionsFile, []byte(legacyJSON), 0600); err != nil {
+		t.Fatalf("failed to write legacy format JSON: %v", err)
+	}
+
+	store := &SessionStore{
+		sessions: make(map[string]*SessionData),
+		dataPath: tmpDir,
+		stopChan: make(chan bool),
+	}
+
+	store.load()
+
+	// Should load the two non-expired sessions (raw-token-1 and raw-token-2)
+	// The expired one (raw-token-expired) should be skipped
+	if len(store.sessions) != 2 {
+		t.Errorf("expected 2 sessions from legacy format, got %d", len(store.sessions))
+	}
+
+	// Verify sessions are hashed and can be validated
+	// The legacy format stores raw tokens as keys, which get hashed during migration
+	if !store.ValidateSession("raw-token-1") {
+		t.Error("should validate session for raw-token-1 after legacy migration")
+	}
+	if !store.ValidateSession("raw-token-2") {
+		t.Error("should validate session for raw-token-2 after legacy migration")
+	}
+	// Expired token should not be valid
+	if store.ValidateSession("raw-token-expired") {
+		t.Error("expired session should not be loaded from legacy format")
+	}
+}
