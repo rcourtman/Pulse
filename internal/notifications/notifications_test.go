@@ -2538,3 +2538,57 @@ func TestGeneratePayloadFromTemplateWithService(t *testing.T) {
 		}
 	})
 }
+
+func TestSendGroupedApprise_NoAlerts(t *testing.T) {
+	nm := &NotificationManager{}
+	config := AppriseConfig{Enabled: true}
+
+	err := nm.sendGroupedApprise(config, nil)
+	if err == nil {
+		t.Error("expected error for nil alerts")
+	}
+	if err != nil && !strings.Contains(err.Error(), "no alerts") {
+		t.Errorf("expected 'no alerts' error, got: %v", err)
+	}
+
+	err = nm.sendGroupedApprise(config, []*alerts.Alert{})
+	if err == nil {
+		t.Error("expected error for empty alerts")
+	}
+}
+
+func TestSendGroupedApprise_NotEnabled(t *testing.T) {
+	nm := &NotificationManager{}
+	config := AppriseConfig{Enabled: false}
+	alertList := []*alerts.Alert{
+		{ID: "test-1", ResourceName: "VM1", Level: "warning", Message: "test"},
+	}
+
+	err := nm.sendGroupedApprise(config, alertList)
+	if err == nil {
+		t.Error("expected error when apprise not enabled")
+	}
+	if err != nil && !strings.Contains(err.Error(), "not enabled") {
+		t.Errorf("expected 'not enabled' error, got: %v", err)
+	}
+}
+
+func TestSendGroupedApprise_EmptyPayload(t *testing.T) {
+	nm := &NotificationManager{}
+	// Provide targets so config stays enabled after normalization
+	config := AppriseConfig{
+		Enabled: true,
+		Mode:    AppriseModeCLI,
+		Targets: []string{"discord://token"},
+	}
+	// All nil alerts - will produce empty payload
+	alertList := []*alerts.Alert{nil, nil}
+
+	err := nm.sendGroupedApprise(config, alertList)
+	if err == nil {
+		t.Error("expected error for empty payload")
+	}
+	if err != nil && !strings.Contains(err.Error(), "failed to build apprise payload") {
+		t.Errorf("expected 'failed to build apprise payload' error, got: %v", err)
+	}
+}
