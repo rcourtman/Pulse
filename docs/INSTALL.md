@@ -1,15 +1,8 @@
 # 📦 Installation Guide
 
-Pulse offers flexible installation options ranging from a simple one-liner for Proxmox to enterprise-ready Kubernetes charts.
+Pulse offers flexible installation options from Docker to enterprise-ready Kubernetes charts.
 
 ## 🚀 Quick Start (Recommended)
-
-### Proxmox VE (LXC)
-The easiest way to run Pulse on Proxmox. This script creates a lightweight LXC container, configures networking, and starts the service.
-
-```bash
-curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
-```
 
 ### Docker
 Ideal for containerized environments or testing.
@@ -49,35 +42,48 @@ volumes:
 
 ## 🛠️ Installation Methods
 
-### 1. Proxmox LXC (Advanced)
-The installer supports advanced flags for automation or custom setups.
-
-```bash
-# Install specific version
-curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash -s -- --version v4.24.0
-
-# Install from source (dev branch)
-curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash -s -- --source develop
-```
-
-### 2. Kubernetes (Helm)
+### 1. Kubernetes (Helm)
 Deploy to your cluster using our Helm chart.
 
 ```bash
-helm registry login ghcr.io
-helm install pulse oci://ghcr.io/rcourtman/pulse-chart \
-  --version $(curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/VERSION) \
+helm repo add pulse https://rcourtman.github.io/Pulse/
+helm repo update
+helm install pulse pulse/pulse \
   --namespace pulse \
   --create-namespace
 ```
 See [KUBERNETES.md](KUBERNETES.md) for ingress and persistence configuration.
 
-### 3. Manual / Systemd
-For bare-metal Linux servers (Debian/Ubuntu).
+### 2. Bare Metal / Systemd
+For bare-metal Linux servers, download the release binary directly.
 
 ```bash
-# The installer detects non-Proxmox systems and installs as a systemd service
-curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
+# Download and extract
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/pulse-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m).tar.gz | tar xz
+sudo mv pulse /usr/local/bin/
+sudo chmod +x /usr/local/bin/pulse
+
+# Create systemd service
+sudo tee /etc/systemd/system/pulse.service > /dev/null << 'EOF'
+[Unit]
+Description=Pulse Monitoring
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/pulse
+Restart=always
+RestartSec=10
+Environment=PULSE_DATA_DIR=/etc/pulse
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Start service
+sudo mkdir -p /etc/pulse
+sudo systemctl daemon-reload
+sudo systemctl enable --now pulse
 ```
 
 ---
@@ -90,10 +96,9 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
 
 | Platform | Command |
 |----------|---------|
-| **Proxmox LXC** | `pct exec <ID> -- cat /etc/pulse/.bootstrap_token` |
 | **Docker** | `docker exec pulse cat /data/.bootstrap_token` |
 | **Kubernetes** | `kubectl exec -it <pod> -- cat /data/.bootstrap_token` |
-| **Systemd** | `cat /etc/pulse/.bootstrap_token` |
+| **Systemd** | `sudo cat /etc/pulse/.bootstrap_token` |
 
 ### Step 2: Create Admin Account
 1. Open `http://<your-ip>:7655`
@@ -106,33 +111,40 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
 
 ## 🔄 Updates
 
-### Automatic Updates (Systemd/LXC only)
+### Automatic Updates (Systemd only)
 Pulse can self-update to the latest stable version.
 
-**Enable via UI**: Settings → System → Automatic Updates  
-**Enable via CLI**: `systemctl enable --now pulse-update.timer`
+**Enable via UI**: Settings → System → Automatic Updates
 
 ### Manual Update
 | Platform | Command |
 |----------|---------|
-| **LXC** | `pct exec <ID> -- update` |
-| **Systemd** | Re-run the install script |
 | **Docker** | `docker pull rcourtman/pulse:latest && docker restart pulse` |
+| **Kubernetes** | `helm repo update && helm upgrade pulse pulse/pulse -n pulse` |
+| **Systemd** | Re-download binary and restart service |
 
 ### Rollback
-If an update causes issues, you can roll back to the previous version instantly.
+If an update causes issues, you can roll back to a previous version.
 
-**Via UI**: Settings → System → Updates → "Restore previous version"  
-**Via CLI**: `pulse config rollback`
+**Via UI**: Settings → System → Updates → "Restore previous version"
 
 ---
 
 ## 🗑️ Uninstall
 
-**LXC**: `pct destroy <ID>`  
-**Docker**: `docker rm -f pulse && docker volume rm pulse_data`  
+**Docker**:
+```bash
+docker rm -f pulse && docker volume rm pulse_data
+```
+
+**Kubernetes**:
+```bash
+helm uninstall pulse -n pulse
+```
+
 **Systemd**:
 ```bash
-systemctl disable --now pulse
-rm -rf /opt/pulse /etc/pulse /etc/systemd/system/pulse.service
+sudo systemctl disable --now pulse
+sudo rm -rf /etc/pulse /etc/systemd/system/pulse.service /usr/local/bin/pulse
+sudo systemctl daemon-reload
 ```
