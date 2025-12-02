@@ -247,6 +247,7 @@ func generateVirtualDisks() ([]models.Disk, models.Disk) {
 	return disks, aggregated
 }
 
+// GenerateMockData creates a simulated state snapshot for demo/test environments.
 func GenerateMockData(config MockConfig) models.StateSnapshot {
 	// rand is automatically seeded in Go 1.20+
 
