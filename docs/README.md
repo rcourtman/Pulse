@@ -28,8 +28,7 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 
 ## 📡 Monitoring & Agents
 
-- **[Docker Monitoring](DOCKER_MONITORING.md)** – Docker/Podman agent installation.
-- **[Host Agent](HOST_AGENT.md)** – Host agent installers for Linux, macOS, Windows.
+- **[Unified Agent](UNIFIED_AGENT.md)** – Single binary for Host and Docker monitoring.
 - **[VM Disk Monitoring](VM_DISK_MONITORING.md)** – Enabling QEMU Guest Agent for disk stats.
 - **[Temperature Monitoring](TEMPERATURE_MONITORING.md)** – Setting up hardware sensors.
 - **[Webhooks](WEBHOOKS.md)** – Custom notification payloads.
