@@ -142,3 +142,64 @@ func truncate(s string, maxLen int) string {
 	}
 	return s[:maxLen] + "..."
 }
+
+func TestHandleSetupScript_MethodNotAllowed(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
+		req := httptest.NewRequest(method, "/api/setup-script?type=pve", nil)
+		rr := httptest.NewRecorder()
+
+		handlers.HandleSetupScript(rr, req)
+
+		if rr.Code != http.StatusMethodNotAllowed {
+			t.Errorf("%s: expected 405 Method Not Allowed, got %d", method, rr.Code)
+		}
+	}
+}
+
+func TestHandleSetupScript_MissingTypeParameter(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	// No type parameter
+	req := httptest.NewRequest(http.MethodGet, "/api/setup-script?host=https://example.com", nil)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for missing type, got %d", rr.Code)
+	}
+}
+
+func TestHandleSetupScript_InvalidHostParameter(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	// Host with shell injection attempt
+	req := httptest.NewRequest(http.MethodGet, "/api/setup-script?type=pve&host=https://example.com%5C%0Aecho%20pwned", nil)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for invalid host, got %d (%s)", rr.Code, rr.Body.String())
+	}
+}
