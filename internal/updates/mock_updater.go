@@ -9,6 +9,7 @@ import (
 // MockUpdater simulates update plans for mock/demo environments.
 type MockUpdater struct{}
 
+// NewMockUpdater creates an updater that simulates update operations.
 func NewMockUpdater() *MockUpdater {
 	return &MockUpdater{}
 }

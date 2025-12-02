@@ -649,6 +649,7 @@ func (a *InstallShAdapter) readLastLines(filepath string, n int) string {
 // DockerUpdater provides instructions for Docker deployments
 type DockerUpdater struct{}
 
+// NewDockerUpdater creates an updater for Docker deployments.
 func NewDockerUpdater() *DockerUpdater {
 	return &DockerUpdater{}
 }
@@ -686,6 +687,7 @@ func (u *DockerUpdater) Rollback(ctx context.Context, eventID string) error {
 // AURUpdater provides instructions for Arch Linux AUR deployments
 type AURUpdater struct{}
 
+// NewAURUpdater creates an updater for Arch Linux AUR deployments.
 func NewAURUpdater() *AURUpdater {
 	return &AURUpdater{}
 }

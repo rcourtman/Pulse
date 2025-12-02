@@ -4172,6 +4172,7 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 	}
 }
 
+// BuildGuestKey constructs a unique key for a guest from instance, node, and VMID.
 func BuildGuestKey(instance, node string, vmid int) string {
 	instance = strings.TrimSpace(instance)
 	node = strings.TrimSpace(node)
