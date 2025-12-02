@@ -104,6 +104,17 @@ func TestNormalizeAppriseConfig(t *testing.T) {
 	if disabledHTTP.Enabled {
 		t.Fatalf("expected HTTP config without server URL to disable notifications")
 	}
+
+	// Test timeout below minimum (1-4 seconds should clamp to 5)
+	lowTimeout := NormalizeAppriseConfig(AppriseConfig{
+		Enabled:        true,
+		Mode:           AppriseModeHTTP,
+		ServerURL:      "https://apprise.example.com",
+		TimeoutSeconds: 3,
+	})
+	if lowTimeout.TimeoutSeconds != 5 {
+		t.Fatalf("expected timeout to clamp to 5 for values 1-4, got %d", lowTimeout.TimeoutSeconds)
+	}
 }
 
 func TestSetCooldownClampsNegativeValues(t *testing.T) {
