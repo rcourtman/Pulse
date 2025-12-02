@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -67,6 +68,29 @@ func TestNewOIDCHTTPClient_InvalidBundle(t *testing.T) {
 	client, _, err := newOIDCHTTPClient("/nonexistent/oidc-ca.pem")
 	if err == nil {
 		t.Fatalf("expected error for missing CA bundle, got client: %+v", client)
+	}
+}
+
+func TestNewOIDCHTTPClient_InvalidPEMData(t *testing.T) {
+	// Create a temp file with invalid PEM data
+	tempFile, err := os.CreateTemp("", "invalid-ca-*.pem")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tempFile.Name())
+
+	// Write invalid data that's not a valid PEM certificate
+	if _, err := tempFile.WriteString("not a valid PEM certificate"); err != nil {
+		t.Fatalf("failed to write invalid data: %v", err)
+	}
+	tempFile.Close()
+
+	client, _, err := newOIDCHTTPClient(tempFile.Name())
+	if err == nil {
+		t.Fatalf("expected error for invalid PEM data, got client: %+v", client)
+	}
+	if !strings.Contains(err.Error(), "does not contain any certificates") {
+		t.Errorf("expected 'does not contain any certificates' error, got: %v", err)
 	}
 }
 
