@@ -92,7 +92,7 @@ export interface VM {
   diskWrite: number;
   uptime: number;
   template: boolean;
-  lastBackup: string;
+  lastBackup: number;
   tags: string[] | string | null;
   lock: string;
   lastSeen: string;
@@ -122,7 +122,7 @@ export interface Container {
   diskWrite: number;
   uptime: number;
   template: boolean;
-  lastBackup: string;
+  lastBackup: number;
   tags: string[] | string | null;
   lock: string;
   lastSeen: string;
