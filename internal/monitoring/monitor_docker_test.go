@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -758,4 +759,113 @@ func TestConvertDockerServices(t *testing.T) {
 			t.Errorf("UpdatedAt mismatch")
 		}
 	})
+}
+
+func TestApplyDockerReport_MissingIdentifier(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	// Report with no agent ID and no hostname - should fail
+	report := agentsdocker.Report{
+		Host: agentsdocker.HostInfo{
+			Hostname: "", // Empty hostname
+		},
+		Agent: agentsdocker.AgentInfo{
+			ID: "", // Empty agent ID
+		},
+		Timestamp: time.Now(),
+	}
+
+	_, err := monitor.ApplyDockerReport(report, nil)
+	if err == nil {
+		t.Error("expected error for missing identifier")
+	}
+	if err != nil && !strings.Contains(err.Error(), "missing") {
+		t.Errorf("expected 'missing' in error message, got: %v", err)
+	}
+}
+
+func TestApplyDockerReport_RemovedHostRejection(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	// Mark host as removed
+	hostID := "removed-docker-host"
+	removedAt := time.Now().Add(-1 * time.Hour)
+	monitor.mu.Lock()
+	monitor.removedDockerHosts[hostID] = removedAt
+	monitor.mu.Unlock()
+
+	report := agentsdocker.Report{
+		Host: agentsdocker.HostInfo{
+			Hostname: hostID,
+		},
+		Agent: agentsdocker.AgentInfo{
+			ID: hostID,
+		},
+		Timestamp: time.Now(),
+	}
+
+	_, err := monitor.ApplyDockerReport(report, nil)
+	if err == nil {
+		t.Error("expected error for removed host")
+	}
+	if err != nil && !strings.Contains(err.Error(), "was removed") {
+		t.Errorf("expected 'was removed' in error message, got: %v", err)
+	}
+}
+
+func TestApplyDockerReport_TokenBoundToDifferentAgent(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	tokenID := "shared-token"
+	firstAgentID := "agent-first"
+	secondAgentID := "agent-second"
+
+	// Pre-bind token to first agent
+	monitor.mu.Lock()
+	monitor.dockerTokenBindings[tokenID] = firstAgentID
+	monitor.mu.Unlock()
+
+	// Report from second agent using same token
+	report := agentsdocker.Report{
+		Host: agentsdocker.HostInfo{
+			Hostname: "second-host",
+		},
+		Agent: agentsdocker.AgentInfo{
+			ID: secondAgentID,
+		},
+		Timestamp: time.Now(),
+	}
+
+	token := &config.APITokenRecord{ID: tokenID, Name: "TestToken"}
+
+	_, err := monitor.ApplyDockerReport(report, token)
+	if err == nil {
+		t.Error("expected error for token bound to different agent")
+	}
+	if err != nil && !strings.Contains(err.Error(), "already in use by agent") {
+		t.Errorf("expected 'already in use by agent' in error message, got: %v", err)
+	}
+}
+
+func TestApplyDockerReport_MissingHostname(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	// Report with agent ID but no hostname
+	report := agentsdocker.Report{
+		Host: agentsdocker.HostInfo{
+			Hostname: "", // Missing hostname
+		},
+		Agent: agentsdocker.AgentInfo{
+			ID: "agent-with-id",
+		},
+		Timestamp: time.Now(),
+	}
+
+	_, err := monitor.ApplyDockerReport(report, nil)
+	if err == nil {
+		t.Error("expected error for missing hostname")
+	}
+	if err != nil && !strings.Contains(err.Error(), "missing hostname") {
+		t.Errorf("expected 'missing hostname' in error message, got: %v", err)
+	}
 }
