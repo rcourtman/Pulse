@@ -100,6 +100,89 @@ func TestSaveAlertConfig_DoesNotOverwriteExistingClear(t *testing.T) {
 	}
 }
 
+func TestSaveAlertConfig_NormalizesHostDefaults(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Config with nil/zero HostDefaults - should get defaults
+	cfg := alerts.AlertConfig{
+		Enabled:        true,
+		StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
+		HostDefaults:   alerts.ThresholdConfig{}, // Empty - needs defaults
+	}
+
+	if err := cp.SaveAlertConfig(cfg); err != nil {
+		t.Fatalf("SaveAlertConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadAlertConfig()
+	if err != nil {
+		t.Fatalf("LoadAlertConfig: %v", err)
+	}
+
+	// Verify host defaults were applied
+	if loaded.HostDefaults.CPU == nil {
+		t.Fatal("CPU defaults should be set")
+	}
+	if loaded.HostDefaults.CPU.Trigger != 80 {
+		t.Errorf("CPU trigger = %v, want 80", loaded.HostDefaults.CPU.Trigger)
+	}
+	if loaded.HostDefaults.Memory == nil {
+		t.Fatal("Memory defaults should be set")
+	}
+	if loaded.HostDefaults.Memory.Trigger != 85 {
+		t.Errorf("Memory trigger = %v, want 85", loaded.HostDefaults.Memory.Trigger)
+	}
+	if loaded.HostDefaults.Disk == nil {
+		t.Fatal("Disk defaults should be set")
+	}
+	if loaded.HostDefaults.Disk.Trigger != 90 {
+		t.Errorf("Disk trigger = %v, want 90", loaded.HostDefaults.Disk.Trigger)
+	}
+}
+
+func TestSaveAlertConfig_NormalizesHostDefaultsClear(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Config with trigger set but clear=0 - should compute clear
+	cfg := alerts.AlertConfig{
+		Enabled:        true,
+		StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
+		HostDefaults: alerts.ThresholdConfig{
+			CPU:    &alerts.HysteresisThreshold{Trigger: 90, Clear: 0},
+			Memory: &alerts.HysteresisThreshold{Trigger: 95, Clear: 0},
+			Disk:   &alerts.HysteresisThreshold{Trigger: 92, Clear: 0},
+		},
+	}
+
+	if err := cp.SaveAlertConfig(cfg); err != nil {
+		t.Fatalf("SaveAlertConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadAlertConfig()
+	if err != nil {
+		t.Fatalf("LoadAlertConfig: %v", err)
+	}
+
+	// Clear should be trigger - 5
+	if loaded.HostDefaults.CPU.Clear != 85 {
+		t.Errorf("CPU clear = %v, want 85", loaded.HostDefaults.CPU.Clear)
+	}
+	if loaded.HostDefaults.Memory.Clear != 90 {
+		t.Errorf("Memory clear = %v, want 90", loaded.HostDefaults.Memory.Clear)
+	}
+	if loaded.HostDefaults.Disk.Clear != 87 {
+		t.Errorf("Disk clear = %v, want 87", loaded.HostDefaults.Disk.Clear)
+	}
+}
+
 func TestAlertConfigPersistenceNormalizesDockerIgnoredPrefixes(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
