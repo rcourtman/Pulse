@@ -11730,3 +11730,768 @@ func TestCheckNode(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckGuest(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns early when alerts disabled", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.Enabled = false
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "running",
+			CPU:    0.95,
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		alertCount := len(m.activeAlerts)
+		m.mu.RUnlock()
+
+		if alertCount != 0 {
+			t.Errorf("expected no alerts when disabled, got %d", alertCount)
+		}
+	})
+
+	t.Run("returns early when all guests disabled", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.DisableAllGuests = true
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "running",
+			CPU:    0.95,
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		alertCount := len(m.activeAlerts)
+		m.mu.RUnlock()
+
+		if alertCount != 0 {
+			t.Errorf("expected no alerts when all guests disabled, got %d", alertCount)
+		}
+	})
+
+	t.Run("handles VM type correctly", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.GuestDefaults = ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "running",
+			CPU:    0.95, // 95%
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		alert := m.activeAlerts["vm100-cpu"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected cpu alert for VM")
+		}
+	})
+
+	t.Run("handles Container type correctly", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.GuestDefaults = ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		ct := models.Container{
+			ID:     "ct101",
+			Name:   "TestCT",
+			Node:   "node1",
+			Status: "running",
+			CPU:    0.95, // 95%
+		}
+
+		m.CheckGuest(ct, "pve1")
+
+		m.mu.RLock()
+		alert := m.activeAlerts["ct101-cpu"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected cpu alert for Container")
+		}
+	})
+
+	t.Run("returns for unsupported guest type", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		// Pass a string which is unsupported
+		m.CheckGuest("invalid", "pve1")
+
+		m.mu.RLock()
+		alertCount := len(m.activeAlerts)
+		m.mu.RUnlock()
+
+		if alertCount != 0 {
+			t.Errorf("expected no alerts for unsupported type, got %d", alertCount)
+		}
+	})
+
+	t.Run("suppresses alerts with pulse-no-alerts tag", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		// Pre-create an alert
+		m.mu.Lock()
+		m.activeAlerts["vm100-cpu"] = &Alert{
+			ID:         "vm100-cpu",
+			ResourceID: "vm100",
+			Type:       "cpu",
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "running",
+			CPU:    0.95,
+			Tags:   []string{"pulse-no-alerts"},
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["vm100-cpu"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected alert to be suppressed with pulse-no-alerts tag")
+		}
+	})
+
+	t.Run("stopped guest triggers powered-off check", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		// Pre-set confirmation count to trigger alert
+		m.mu.Lock()
+		m.offlineConfirmations["vm100"] = 2
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "stopped",
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		alert := m.activeAlerts["guest-powered-off-vm100"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected powered-off alert for stopped guest")
+		}
+	})
+
+	t.Run("stopped guest with DisableAllGuestsOffline clears tracking", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.config.DisableAllGuestsOffline = true
+		m.offlineConfirmations["vm100"] = 5
+		m.activeAlerts["guest-powered-off-vm100"] = &Alert{
+			ID:         "guest-powered-off-vm100",
+			ResourceID: "vm100",
+			Type:       "powered-off",
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "stopped",
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["guest-powered-off-vm100"]
+		_, countExists := m.offlineConfirmations["vm100"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Error("expected powered-off alert to be cleared")
+		}
+		if countExists {
+			t.Error("expected offline count to be cleared")
+		}
+	})
+
+	t.Run("paused guest clears powered-off alert", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["guest-powered-off-vm100"] = &Alert{
+			ID:         "guest-powered-off-vm100",
+			ResourceID: "vm100",
+			Type:       "powered-off",
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "paused",
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["guest-powered-off-vm100"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected powered-off alert to be cleared for paused guest")
+		}
+	})
+
+	t.Run("non-running guest clears metric alerts", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["vm100-cpu"] = &Alert{
+			ID:         "vm100-cpu",
+			ResourceID: "vm100",
+			Type:       "cpu",
+		}
+		m.activeAlerts["vm100-memory"] = &Alert{
+			ID:         "vm100-memory",
+			ResourceID: "vm100",
+			Type:       "memory",
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "stopped",
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		_, cpuExists := m.activeAlerts["vm100-cpu"]
+		_, memExists := m.activeAlerts["vm100-memory"]
+		m.mu.RUnlock()
+
+		if cpuExists {
+			t.Error("expected cpu alert to be cleared for non-running guest")
+		}
+		if memExists {
+			t.Error("expected memory alert to be cleared for non-running guest")
+		}
+	})
+
+	t.Run("running guest clears powered-off alert", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["guest-powered-off-vm100"] = &Alert{
+			ID:         "guest-powered-off-vm100",
+			ResourceID: "vm100",
+			Type:       "powered-off",
+		}
+		m.offlineConfirmations["vm100"] = 5
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "running",
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["guest-powered-off-vm100"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected powered-off alert to be cleared for running guest")
+		}
+	})
+
+	t.Run("disabled thresholds clear existing alerts", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["vm100-cpu"] = &Alert{
+			ID:         "vm100-cpu",
+			ResourceID: "vm100",
+			Type:       "cpu",
+		}
+		m.config.Overrides = map[string]ThresholdConfig{
+			"vm100": {Disabled: true},
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "running",
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["vm100-cpu"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected alert to be cleared when guest has alerts disabled")
+		}
+	})
+
+	t.Run("checks memory metric", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.GuestDefaults = ThresholdConfig{
+			Memory: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "running",
+			Memory: models.Memory{Usage: 95.0},
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		alert := m.activeAlerts["vm100-memory"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected memory alert")
+		}
+	})
+
+	t.Run("checks disk metric", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.GuestDefaults = ThresholdConfig{
+			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "running",
+			Disk:   models.Disk{Usage: 95.0},
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		alert := m.activeAlerts["vm100-disk"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected disk alert")
+		}
+	})
+
+	t.Run("checks individual disks", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.GuestDefaults = ThresholdConfig{
+			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "running",
+			Disks: []models.Disk{
+				{Mountpoint: "/", Usage: 95.0, Total: 100},
+				{Mountpoint: "/data", Usage: 50.0, Total: 100},
+			},
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		// Check that alert for high disk was created
+		var foundDiskAlert bool
+		for alertID := range m.activeAlerts {
+			if strings.Contains(alertID, "vm100-disk-") {
+				foundDiskAlert = true
+				break
+			}
+		}
+		m.mu.RUnlock()
+
+		if !foundDiskAlert {
+			t.Fatal("expected individual disk alert")
+		}
+	})
+
+	t.Run("skips disk with zero total", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.GuestDefaults = ThresholdConfig{
+			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "running",
+			Disks: []models.Disk{
+				{Mountpoint: "/", Usage: 95.0, Total: 0}, // Zero total - should skip
+			},
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		var foundDiskAlert bool
+		for alertID := range m.activeAlerts {
+			if strings.Contains(alertID, "vm100-disk-") {
+				foundDiskAlert = true
+				break
+			}
+		}
+		m.mu.RUnlock()
+
+		if foundDiskAlert {
+			t.Error("expected no disk alert for disk with zero total")
+		}
+	})
+
+	t.Run("skips disk with negative usage", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.GuestDefaults = ThresholdConfig{
+			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "running",
+			Disks: []models.Disk{
+				{Mountpoint: "/", Usage: -1.0, Total: 100}, // Negative usage - should skip
+			},
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		var foundDiskAlert bool
+		for alertID := range m.activeAlerts {
+			if strings.Contains(alertID, "vm100-disk-") {
+				foundDiskAlert = true
+				break
+			}
+		}
+		m.mu.RUnlock()
+
+		if foundDiskAlert {
+			t.Error("expected no disk alert for disk with negative usage")
+		}
+	})
+
+	t.Run("checks diskRead metric", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.GuestDefaults = ThresholdConfig{
+			DiskRead: &HysteresisThreshold{Trigger: 100.0, Clear: 80.0}, // MB/s
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:       "vm100",
+			Name:     "TestVM",
+			Node:     "node1",
+			Status:   "running",
+			DiskRead: 200 * 1024 * 1024, // 200 MB/s in bytes
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		alert := m.activeAlerts["vm100-diskRead"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected diskRead alert")
+		}
+	})
+
+	t.Run("checks diskWrite metric", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.GuestDefaults = ThresholdConfig{
+			DiskWrite: &HysteresisThreshold{Trigger: 100.0, Clear: 80.0}, // MB/s
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:        "vm100",
+			Name:      "TestVM",
+			Node:      "node1",
+			Status:    "running",
+			DiskWrite: 200 * 1024 * 1024, // 200 MB/s in bytes
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		alert := m.activeAlerts["vm100-diskWrite"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected diskWrite alert")
+		}
+	})
+
+	t.Run("checks networkIn metric", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.GuestDefaults = ThresholdConfig{
+			NetworkIn: &HysteresisThreshold{Trigger: 100.0, Clear: 80.0}, // MB/s
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:        "vm100",
+			Name:      "TestVM",
+			Node:      "node1",
+			Status:    "running",
+			NetworkIn: 200 * 1024 * 1024, // 200 MB/s in bytes
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		alert := m.activeAlerts["vm100-networkIn"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected networkIn alert")
+		}
+	})
+
+	t.Run("checks networkOut metric", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.GuestDefaults = ThresholdConfig{
+			NetworkOut: &HysteresisThreshold{Trigger: 100.0, Clear: 80.0}, // MB/s
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:         "vm100",
+			Name:       "TestVM",
+			Node:       "node1",
+			Status:     "running",
+			NetworkOut: 200 * 1024 * 1024, // 200 MB/s in bytes
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		alert := m.activeAlerts["vm100-networkOut"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected networkOut alert")
+		}
+	})
+
+	t.Run("applies relaxed thresholds with pulse-relaxed tag", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.GuestDefaults = ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		// CPU at 90% - would trigger normally but relaxed threshold is 95%
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "running",
+			CPU:    0.90, // 90%
+			Tags:   []string{"pulse-relaxed"},
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["vm100-cpu"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("expected no alert due to relaxed thresholds")
+		}
+	})
+
+	t.Run("disk uses device as label fallback", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.GuestDefaults = ThresholdConfig{
+			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "running",
+			Disks: []models.Disk{
+				{Device: "sda1", Usage: 95.0, Total: 100}, // No mountpoint, has device
+			},
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		var foundDiskAlert bool
+		for alertID := range m.activeAlerts {
+			if strings.Contains(alertID, "vm100-disk-") {
+				foundDiskAlert = true
+				break
+			}
+		}
+		m.mu.RUnlock()
+
+		if !foundDiskAlert {
+			t.Fatal("expected disk alert using device as label")
+		}
+	})
+
+	t.Run("disk uses index as label when no mountpoint or device", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.config.GuestDefaults = ThresholdConfig{
+			Disk: &HysteresisThreshold{Trigger: 80.0, Clear: 70.0},
+		}
+		m.mu.Unlock()
+
+		vm := models.VM{
+			ID:     "vm100",
+			Name:   "TestVM",
+			Node:   "node1",
+			Status: "running",
+			Disks: []models.Disk{
+				{Usage: 95.0, Total: 100}, // No mountpoint or device
+			},
+		}
+
+		m.CheckGuest(vm, "pve1")
+
+		m.mu.RLock()
+		var foundDiskAlert bool
+		for alertID := range m.activeAlerts {
+			if strings.Contains(alertID, "vm100-disk-") {
+				foundDiskAlert = true
+				break
+			}
+		}
+		m.mu.RUnlock()
+
+		if !foundDiskAlert {
+			t.Fatal("expected disk alert using index as label")
+		}
+	})
+}
