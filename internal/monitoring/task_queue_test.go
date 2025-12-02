@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -928,5 +929,205 @@ func verifyHeapInvariant(t *testing.T, queue *TaskQueue) {
 				t.Errorf("heap violation: child at %d is less than parent at %d", rightChild, i)
 			}
 		}
+	}
+}
+
+// TestScheduledTaskEntry_Key tests the key() method on scheduledTaskEntry
+func TestScheduledTaskEntry_Key(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		instType InstanceType
+		instName string
+		wantKey  string
+	}{
+		{
+			name:     "PVE instance",
+			instType: InstanceTypePVE,
+			instName: "pve1",
+			wantKey:  "pve::pve1",
+		},
+		{
+			name:     "PBS instance",
+			instType: InstanceTypePBS,
+			instName: "pbs-cluster",
+			wantKey:  "pbs::pbs-cluster",
+		},
+		{
+			name:     "PMG instance",
+			instType: InstanceTypePMG,
+			instName: "pmg-01",
+			wantKey:  "pmg::pmg-01",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entry := &scheduledTaskEntry{
+				task: ScheduledTask{
+					InstanceType: tt.instType,
+					InstanceName: tt.instName,
+				},
+			}
+
+			got := entry.key()
+			if got != tt.wantKey {
+				t.Errorf("key() = %q, want %q", got, tt.wantKey)
+			}
+		})
+	}
+}
+
+// TestWaitNext_ContextCancelled tests WaitNext returns when context is cancelled
+func TestWaitNext_ContextCancelled(t *testing.T) {
+	t.Parallel()
+
+	queue := NewTaskQueue()
+
+	// Create a context that's already cancelled
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	task, ok := queue.WaitNext(ctx)
+	if ok {
+		t.Error("WaitNext should return false when context is cancelled")
+	}
+	if task.InstanceName != "" {
+		t.Error("WaitNext should return empty task when context is cancelled")
+	}
+}
+
+// TestWaitNext_ImmediatelyDue tests WaitNext returns immediately for due tasks
+func TestWaitNext_ImmediatelyDue(t *testing.T) {
+	t.Parallel()
+
+	queue := NewTaskQueue()
+
+	// Add a task that's already due (NextRun in the past)
+	queue.Upsert(ScheduledTask{
+		InstanceName: "pve1",
+		InstanceType: InstanceTypePVE,
+		NextRun:      time.Now().Add(-1 * time.Second),
+		Interval:     30 * time.Second,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	task, ok := queue.WaitNext(ctx)
+	if !ok {
+		t.Fatal("WaitNext should return true for immediately due task")
+	}
+	if task.InstanceName != "pve1" {
+		t.Errorf("expected task pve1, got %s", task.InstanceName)
+	}
+
+	// Task should be removed from queue
+	if queue.Size() != 0 {
+		t.Errorf("queue size should be 0 after WaitNext, got %d", queue.Size())
+	}
+}
+
+// TestWaitNext_WaitsForDue tests WaitNext waits until task is due
+func TestWaitNext_WaitsForDue(t *testing.T) {
+	t.Parallel()
+
+	queue := NewTaskQueue()
+
+	// Add a task due 200ms in the future
+	dueTime := time.Now().Add(200 * time.Millisecond)
+	queue.Upsert(ScheduledTask{
+		InstanceName: "pve1",
+		InstanceType: InstanceTypePVE,
+		NextRun:      dueTime,
+		Interval:     30 * time.Second,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	task, ok := queue.WaitNext(ctx)
+	elapsed := time.Since(start)
+
+	if !ok {
+		t.Fatal("WaitNext should return true")
+	}
+	if task.InstanceName != "pve1" {
+		t.Errorf("expected task pve1, got %s", task.InstanceName)
+	}
+
+	// Should have waited at least ~150ms (allowing some tolerance)
+	if elapsed < 150*time.Millisecond {
+		t.Errorf("WaitNext returned too early: elapsed %v, expected >= 150ms", elapsed)
+	}
+}
+
+// TestWaitNext_EmptyQueueContextCancel tests WaitNext with empty queue and context cancel
+func TestWaitNext_EmptyQueueContextCancel(t *testing.T) {
+	t.Parallel()
+
+	queue := NewTaskQueue()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	task, ok := queue.WaitNext(ctx)
+	elapsed := time.Since(start)
+
+	if ok {
+		t.Error("WaitNext should return false when context times out on empty queue")
+	}
+	if task.InstanceName != "" {
+		t.Error("WaitNext should return empty task")
+	}
+
+	// Should have waited close to the timeout
+	if elapsed < 150*time.Millisecond {
+		t.Errorf("WaitNext returned too early: elapsed %v", elapsed)
+	}
+}
+
+// TestWaitNext_MultipleTasks tests WaitNext returns earliest due task
+func TestWaitNext_MultipleTasks(t *testing.T) {
+	t.Parallel()
+
+	queue := NewTaskQueue()
+	now := time.Now()
+
+	// Add tasks with different due times
+	queue.Upsert(ScheduledTask{
+		InstanceName: "pve3",
+		InstanceType: InstanceTypePVE,
+		NextRun:      now.Add(300 * time.Millisecond),
+	})
+	queue.Upsert(ScheduledTask{
+		InstanceName: "pve1",
+		InstanceType: InstanceTypePVE,
+		NextRun:      now.Add(-10 * time.Millisecond), // Already due
+	})
+	queue.Upsert(ScheduledTask{
+		InstanceName: "pve2",
+		InstanceType: InstanceTypePVE,
+		NextRun:      now.Add(200 * time.Millisecond),
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Should return pve1 first (earliest due)
+	task, ok := queue.WaitNext(ctx)
+	if !ok {
+		t.Fatal("WaitNext should return true")
+	}
+	if task.InstanceName != "pve1" {
+		t.Errorf("expected pve1 (earliest), got %s", task.InstanceName)
+	}
+
+	// Queue should still have 2 tasks
+	if queue.Size() != 2 {
+		t.Errorf("queue size should be 2, got %d", queue.Size())
 	}
 }
