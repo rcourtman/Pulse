@@ -71,6 +71,9 @@ func (h *AlertHandlers) GetAlertConfig(w http.ResponseWriter, r *http.Request) {
 
 // UpdateAlertConfig updates the alert configuration
 func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request) {
+	// Limit request body to 64KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+
 	var config alerts.AlertConfig
 	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -561,6 +564,9 @@ func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 
 // BulkAcknowledgeAlerts acknowledges multiple alerts at once
 func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Request) {
+	// Limit request body to 32KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+
 	var request struct {
 		AlertIDs []string `json:"alertIds"`
 		User     string   `json:"user,omitempty"`
@@ -623,6 +629,9 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 
 // BulkClearAlerts clears multiple alerts at once
 func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) {
+	// Limit request body to 32KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+
 	var request struct {
 		AlertIDs []string `json:"alertIds"`
 	}

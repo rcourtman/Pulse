@@ -67,6 +67,8 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Limit request body to 512KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 512*1024)
 	defer r.Body.Close()
 
 	var report agentsdocker.Report
@@ -159,6 +161,9 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
 		return
 	}
+
+	// Limit request body to 8KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 
 	trimmed := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/commands/")
 	if !strings.HasSuffix(trimmed, "/ack") {
@@ -420,6 +425,8 @@ func (h *DockerAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWriter, 
 		return
 	}
 
+	// Limit request body to 8KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 	defer r.Body.Close()
 
 	var req struct {

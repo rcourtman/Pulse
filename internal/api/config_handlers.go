@@ -1155,6 +1155,9 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Limit request body to 32KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+
 	var req NodeConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode add node request")
@@ -1528,6 +1531,9 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 
 // HandleTestConnection tests a node connection without saving
 func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Request) {
+	// Limit request body to 32KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+
 	var req NodeConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode test connection request")
@@ -1835,6 +1841,9 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Node ID required", http.StatusBadRequest)
 		return
 	}
+
+	// Limit request body to 32KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 
 	var req NodeConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -2333,6 +2342,9 @@ func (h *ConfigHandlers) triggerPVEHostCleanup(host string) {
 
 // HandleTestNodeConfig tests a node connection from provided configuration
 func (h *ConfigHandlers) HandleTestNodeConfig(w http.ResponseWriter, r *http.Request) {
+	// Limit request body to 32KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+
 	var req NodeConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -2750,6 +2762,9 @@ func (h *ConfigHandlers) HandleVerifyTemperatureSSH(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// Limit request body to 8KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
+
 	var req struct {
 		Nodes string `json:"nodes"`
 	}
@@ -2838,6 +2853,9 @@ type ImportConfigRequest struct {
 
 // HandleExportConfig exports all configuration with encryption
 func (h *ConfigHandlers) HandleExportConfig(w http.ResponseWriter, r *http.Request) {
+	// Limit request body to 8KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
+
 	var req ExportConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode export request")
@@ -2877,6 +2895,9 @@ func (h *ConfigHandlers) HandleExportConfig(w http.ResponseWriter, r *http.Reque
 
 // HandleImportConfig imports configuration from encrypted export
 func (h *ConfigHandlers) HandleImportConfig(w http.ResponseWriter, r *http.Request) {
+	// Limit request body to 1MB to prevent memory exhaustion (config imports can be large)
+	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
+
 	var req ImportConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode import request")
@@ -3022,6 +3043,9 @@ func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Re
 		return
 
 	case http.MethodPost:
+		// Limit request body to 8KB to prevent memory exhaustion
+		r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
+
 		var req struct {
 			Subnet   string `json:"subnet"`
 			UseCache bool   `json:"use_cache"`
@@ -5199,6 +5223,9 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Limit request body to 8KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
+
 	// Parse request
 	var req struct {
 		Type        string `json:"type"`
@@ -5325,6 +5352,9 @@ type mockModeRequest struct {
 
 // HandleUpdateMockMode updates mock mode and optionally its configuration.
 func (h *ConfigHandlers) HandleUpdateMockMode(w http.ResponseWriter, r *http.Request) {
+	// Limit request body to 16KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+
 	var req mockModeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode mock mode request")
