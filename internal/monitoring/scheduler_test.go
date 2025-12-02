@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"testing"
 	"time"
@@ -2222,6 +2223,35 @@ func TestDispatchDue_NoDueTasks(t *testing.T) {
 
 	if len(enqueuer.tasks) != 0 {
 		t.Fatalf("expected 0 tasks enqueued, got %d", len(enqueuer.tasks))
+	}
+}
+
+// mockFailingEnqueuer is a test enqueuer that always returns an error
+type mockFailingEnqueuer struct{}
+
+func (m *mockFailingEnqueuer) Enqueue(ctx context.Context, task ScheduledTask) error {
+	return errors.New("enqueue failed")
+}
+
+// TestDispatchDue_EnqueueError tests DispatchDue when enqueue returns an error
+func TestDispatchDue_EnqueueError(t *testing.T) {
+	t.Parallel()
+
+	enqueuer := &mockFailingEnqueuer{}
+	cfg := DefaultSchedulerConfig()
+	scheduler := NewAdaptiveScheduler(cfg, nil, nil, enqueuer)
+
+	now := time.Now()
+	tasks := []ScheduledTask{
+		{InstanceName: "pve1", NextRun: now.Add(-1 * time.Second)},
+		{InstanceName: "pve2", NextRun: now.Add(-2 * time.Second)},
+	}
+
+	// Should still return due tasks even if enqueue fails
+	due := scheduler.DispatchDue(context.Background(), now, tasks)
+
+	if len(due) != 2 {
+		t.Fatalf("expected 2 due tasks returned even with enqueue error, got %d", len(due))
 	}
 }
 
