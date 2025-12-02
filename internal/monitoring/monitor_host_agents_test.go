@@ -515,3 +515,104 @@ func TestEvaluateHostAgentsNilAlertManagerOffline(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoveHostAgent_EmptyHostID(t *testing.T) {
+	monitor := &Monitor{
+		state:        models.NewState(),
+		alertManager: alerts.NewManager(),
+		config:       &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	// Empty hostID should return an error
+	_, err := monitor.RemoveHostAgent("")
+	if err == nil {
+		t.Error("expected error for empty hostID")
+	}
+	if err != nil && err.Error() != "host id is required" {
+		t.Errorf("expected 'host id is required' error, got: %v", err)
+	}
+
+	// Whitespace-only hostID should also return an error
+	_, err = monitor.RemoveHostAgent("   ")
+	if err == nil {
+		t.Error("expected error for whitespace-only hostID")
+	}
+}
+
+func TestRemoveHostAgent_NotFound(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	// Host does not exist in state - should return synthetic host without error
+	host, err := monitor.RemoveHostAgent("nonexistent-host")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should return a synthetic host with ID/Hostname matching the requested ID
+	if host.ID != "nonexistent-host" {
+		t.Errorf("expected host.ID = 'nonexistent-host', got %q", host.ID)
+	}
+	if host.Hostname != "nonexistent-host" {
+		t.Errorf("expected host.Hostname = 'nonexistent-host', got %q", host.Hostname)
+	}
+}
+
+func TestRemoveHostAgent_NoTokenBinding(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	hostID := "host-no-binding"
+	tokenID := "token-no-binding"
+	monitor.state.UpsertHost(models.Host{
+		ID:       hostID,
+		Hostname: "no-binding.local",
+		TokenID:  tokenID,
+	})
+	// Intentionally NOT adding to hostTokenBindings
+
+	host, err := monitor.RemoveHostAgent(hostID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if host.ID != hostID {
+		t.Errorf("expected host.ID = %q, got %q", hostID, host.ID)
+	}
+}
+
+func TestRemoveHostAgent_NilAlertManager(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      nil, // No alert manager
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+	}
+
+	hostID := "host-nil-am-remove"
+	monitor.state.UpsertHost(models.Host{
+		ID:       hostID,
+		Hostname: "nil-am-remove.local",
+	})
+
+	// Should not panic with nil alertManager
+	host, err := monitor.RemoveHostAgent(hostID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if host.ID != hostID {
+		t.Errorf("expected host.ID = %q, got %q", hostID, host.ID)
+	}
+}
