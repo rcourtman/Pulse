@@ -6,8 +6,8 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 
 ## 🚀 Getting Started
 
-- **[Installation Guide](INSTALL.md)**  
-  Step-by-step guides for Proxmox LXC, Docker, Kubernetes, and bare metal.
+- **[Installation Guide](INSTALL.md)**
+  Step-by-step guides for Docker, Kubernetes, and bare metal.
 - **[Configuration](CONFIGURATION.md)**  
   Learn how to configure authentication, notifications (Email, Discord, etc.), and system settings.
 - **[Migration Guide](MIGRATION.md)**  
