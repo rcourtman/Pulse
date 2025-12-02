@@ -22,7 +22,7 @@ type StorageSortKey = 'name' | 'node' | 'type' | 'status' | 'usage' | 'free' | '
 
 const Storage: Component = () => {
   const navigate = useNavigate();
-  const { state, connected, activeAlerts, initialDataReceived } = useWebSocket();
+  const { state, connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const [viewMode, setViewMode] = usePersistentSignal<'node' | 'storage'>(
@@ -656,6 +656,46 @@ const Storage: Component = () => {
             }
             title="Loading storage data..."
             description="Connecting to monitoring service"
+          />
+        </Card>
+      </Show>
+
+      {/* Disconnected State */}
+      <Show when={!connected()}>
+        <Card padding="lg" tone="danger">
+          <EmptyState
+            icon={
+              <svg
+                class="h-12 w-12 text-red-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            }
+            title="Connection lost"
+            description={
+              reconnecting()
+                ? 'Attempting to reconnect…'
+                : 'Unable to connect to the backend server'
+            }
+            tone="danger"
+            actions={
+              !reconnecting() ? (
+                <button
+                  onClick={() => reconnect()}
+                  class="mt-2 inline-flex items-center px-4 py-2 text-xs font-medium rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
+                >
+                  Reconnect now
+                </button>
+              ) : undefined
+            }
           />
         </Card>
       </Show>
