@@ -159,6 +159,62 @@
           "type": "string",
           "enum": ["DaemonSet", "Deployment"],
           "description": "Agent deployment type"
+        },
+        "healthPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Health/metrics server port"
+        },
+        "livenessProbe": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable liveness probe"
+            },
+            "path": {
+              "type": "string",
+              "description": "Liveness probe path"
+            },
+            "initialDelaySeconds": {
+              "type": "integer"
+            },
+            "periodSeconds": {
+              "type": "integer"
+            },
+            "timeoutSeconds": {
+              "type": "integer"
+            },
+            "failureThreshold": {
+              "type": "integer"
+            }
+          }
+        },
+        "readinessProbe": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable readiness probe"
+            },
+            "path": {
+              "type": "string",
+              "description": "Readiness probe path"
+            },
+            "initialDelaySeconds": {
+              "type": "integer"
+            },
+            "periodSeconds": {
+              "type": "integer"
+            },
+            "timeoutSeconds": {
+              "type": "integer"
+            },
+            "failureThreshold": {
+              "type": "integer"
+            }
+          }
         }
       }
     },

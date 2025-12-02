@@ -138,6 +138,21 @@ agent:
     hostPathType: Socket
   extraVolumes: []
   extraVolumeMounts: []
+  healthPort: 9191
+  livenessProbe:
+    enabled: true
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readinessProbe:
+    enabled: true
+    path: /readyz
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
 
 # Monitoring configuration
 monitoring:
