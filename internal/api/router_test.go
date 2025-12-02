@@ -804,3 +804,43 @@ func TestCapturePublicURLFromRequest_NilInputs(t *testing.T) {
 		r.capturePublicURLFromRequest(req)
 	})
 }
+
+func TestHostAgentSearchCandidates(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		platform string
+		arch     string
+		wantLen  int // expected number of search paths
+	}{
+		{
+			name:     "strict mode with both params",
+			platform: "linux",
+			arch:     "amd64",
+			wantLen:  3, // 3 paths with platform-arch suffix
+		},
+		{
+			name:     "platform only, no arch",
+			platform: "linux",
+			arch:     "",
+			wantLen:  3, // 3 paths with platform suffix only
+		},
+		{
+			name:     "no params returns generic paths",
+			platform: "",
+			arch:     "",
+			wantLen:  3, // 3 generic paths
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			paths := hostAgentSearchCandidates(tt.platform, tt.arch)
+			if len(paths) != tt.wantLen {
+				t.Errorf("hostAgentSearchCandidates(%q, %q) returned %d paths, want %d",
+					tt.platform, tt.arch, len(paths), tt.wantLen)
+			}
+		})
+	}
+}
