@@ -12,6 +12,13 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
+// Pre-compiled regexes for performance (avoid recompilation on each call)
+var (
+	mdDeviceRe = regexp.MustCompile(`^(md\d+)\s*:`)
+	slotRe     = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s+(/dev/.+)$`)
+	speedRe    = regexp.MustCompile(`speed=(\S+)`)
+)
+
 // CollectArrays discovers and collects status for all mdadm RAID arrays on the system.
 // Returns an empty slice if mdadm is not available or no arrays are found.
 func CollectArrays(ctx context.Context) ([]host.RAIDArray, error) {
@@ -66,10 +73,9 @@ func listArrayDevices(ctx context.Context) ([]string, error) {
 
 	// Parse /proc/mdstat to find device names
 	// Lines like: md0 : active raid1 sdb1[1] sda1[0]
-	re := regexp.MustCompile(`^(md\d+)\s*:`)
 	var devices []string
 	for _, line := range strings.Split(string(output), "\n") {
-		matches := re.FindStringSubmatch(line)
+		matches := mdDeviceRe.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			devices = append(devices, "/dev/"+matches[1])
 		}
@@ -101,9 +107,6 @@ func parseDetail(device, output string) (host.RAIDArray, error) {
 
 	lines := strings.Split(output, "\n")
 	inDeviceSection := false
-	// Regex to match device lines: Number Major Minor RaidDevice State Device
-	// Example: "       0       8        1        0      active sync   /dev/sda1"
-	slotRe := regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s+(/dev/.+)$`)
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -238,8 +241,7 @@ func getRebuildSpeed(device string) string {
 		// If we're in the right section, look for speed info
 		if inSection {
 			if strings.Contains(line, "speed=") {
-				// Extract speed value
-				speedRe := regexp.MustCompile(`speed=(\S+)`)
+				// Extract speed value using pre-compiled regex
 				matches := speedRe.FindStringSubmatch(line)
 				if len(matches) > 1 {
 					return matches[1]
