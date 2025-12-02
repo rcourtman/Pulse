@@ -1,9 +1,11 @@
 package alerts
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -11,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -14273,6 +14276,666 @@ func TestDispatchAlert(t *testing.T) {
 
 		if receivedAlert == alert {
 			t.Error("alert should be cloned, not passed directly")
+		}
+	})
+}
+
+func TestPreserveAlertState(t *testing.T) {
+	t.Run("nil updated alert is handled", func(t *testing.T) {
+		m := newTestManager(t)
+		// Should not panic
+		m.preserveAlertState("test-id", nil)
+	})
+
+	t.Run("preserves state from existing alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		ackTime := time.Now().Add(-30 * time.Minute)
+		existing := &Alert{
+			ID:              "test-alert",
+			Type:            "cpu",
+			StartTime:       time.Now().Add(-1 * time.Hour),
+			Acknowledged:    true,
+			AckUser:         "testuser",
+			AckTime:         &ackTime,
+			LastEscalation:  2,
+			EscalationTimes: []time.Time{time.Now().Add(-25 * time.Minute)},
+		}
+
+		m.mu.Lock()
+		m.activeAlerts["test-alert"] = existing
+		m.mu.Unlock()
+
+		updated := &Alert{
+			ID:        "test-alert",
+			Type:      "cpu",
+			StartTime: time.Now(), // Different start time
+		}
+
+		m.preserveAlertState("test-alert", updated)
+
+		if !updated.StartTime.Equal(existing.StartTime) {
+			t.Error("StartTime should be preserved from existing alert")
+		}
+		if !updated.Acknowledged {
+			t.Error("Acknowledged should be preserved")
+		}
+		if updated.AckUser != "testuser" {
+			t.Errorf("AckUser should be preserved, got %s", updated.AckUser)
+		}
+		if updated.AckTime == nil || !updated.AckTime.Equal(ackTime) {
+			t.Error("AckTime should be preserved")
+		}
+		if updated.LastEscalation != 2 {
+			t.Error("LastEscalation should be preserved")
+		}
+		if len(updated.EscalationTimes) != 1 {
+			t.Error("EscalationTimes should be preserved")
+		}
+	})
+
+	t.Run("falls back to ackState for new alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		ackTime := time.Now().Add(-15 * time.Minute)
+		m.mu.Lock()
+		m.ackState["test-alert"] = ackRecord{
+			acknowledged: true,
+			user:         "fallbackuser",
+			time:         ackTime,
+		}
+		m.mu.Unlock()
+
+		updated := &Alert{
+			ID:        "test-alert",
+			Type:      "cpu",
+			StartTime: time.Now(),
+		}
+
+		m.preserveAlertState("test-alert", updated)
+
+		if !updated.Acknowledged {
+			t.Error("Acknowledged should be set from ackState")
+		}
+		if updated.AckUser != "fallbackuser" {
+			t.Errorf("AckUser should be from ackState, got %s", updated.AckUser)
+		}
+		if updated.AckTime == nil || !updated.AckTime.Equal(ackTime) {
+			t.Error("AckTime should be from ackState")
+		}
+	})
+
+	t.Run("no state to preserve for new alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		startTime := time.Now()
+		updated := &Alert{
+			ID:        "new-alert",
+			Type:      "cpu",
+			StartTime: startTime,
+		}
+
+		m.preserveAlertState("new-alert", updated)
+
+		if !updated.StartTime.Equal(startTime) {
+			t.Error("StartTime should remain unchanged for new alert")
+		}
+		if updated.Acknowledged {
+			t.Error("Acknowledged should remain false for new alert")
+		}
+	})
+}
+
+func TestCheckPMGQuarantineBacklog(t *testing.T) {
+	t.Run("nil quarantine clears alerts", func(t *testing.T) {
+		m := newTestManager(t)
+
+		// Create an existing quarantine alert
+		m.mu.Lock()
+		m.activeAlerts["pmg1-quarantine-spam"] = &Alert{
+			ID:   "pmg1-quarantine-spam",
+			Type: "quarantine-spam",
+		}
+		m.activeAlerts["pmg1-quarantine-virus"] = &Alert{
+			ID:   "pmg1-quarantine-virus",
+			Type: "quarantine-virus",
+		}
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:         "pmg1",
+			Name:       "pmg-server",
+			Host:       "pmg.example.com",
+			Quarantine: nil,
+		}
+
+		m.checkPMGQuarantineBacklog(pmg, PMGThresholdConfig{})
+
+		m.mu.RLock()
+		_, spamExists := m.activeAlerts["pmg1-quarantine-spam"]
+		_, virusExists := m.activeAlerts["pmg1-quarantine-virus"]
+		m.mu.RUnlock()
+
+		if spamExists {
+			t.Error("spam alert should be cleared when quarantine is nil")
+		}
+		if virusExists {
+			t.Error("virus alert should be cleared when quarantine is nil")
+		}
+	})
+
+	t.Run("warning threshold triggers alert", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+		m.mu.Lock()
+		m.pmgQuarantineHistory = make(map[string][]pmgQuarantineSnapshot)
+		m.config.ActivationState = ActivationActive
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "pmg-server",
+			Host: "pmg.example.com",
+			Quarantine: &models.PMGQuarantineTotals{
+				Spam:  2500, // Above warning threshold
+				Virus: 100,
+			},
+		}
+
+		thresholds := PMGThresholdConfig{
+			QuarantineSpamWarn:     2000,
+			QuarantineSpamCritical: 5000,
+			QuarantineVirusWarn:    2000,
+			QuarantineVirusCritical: 5000,
+		}
+
+		m.checkPMGQuarantineBacklog(pmg, thresholds)
+
+		m.mu.RLock()
+		alert, exists := m.activeAlerts["pmg1-quarantine-spam"]
+		m.mu.RUnlock()
+
+		if !exists {
+			t.Fatal("spam quarantine warning alert should be created")
+		}
+		if alert.Level != AlertLevelWarning {
+			t.Errorf("alert level should be warning, got %s", alert.Level)
+		}
+	})
+
+	t.Run("critical threshold triggers alert", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+		m.mu.Lock()
+		m.pmgQuarantineHistory = make(map[string][]pmgQuarantineSnapshot)
+		m.config.ActivationState = ActivationActive
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "pmg-server",
+			Host: "pmg.example.com",
+			Quarantine: &models.PMGQuarantineTotals{
+				Spam:  6000, // Above critical threshold
+				Virus: 100,
+			},
+		}
+
+		thresholds := PMGThresholdConfig{
+			QuarantineSpamWarn:     2000,
+			QuarantineSpamCritical: 5000,
+			QuarantineVirusWarn:    2000,
+			QuarantineVirusCritical: 5000,
+		}
+
+		m.checkPMGQuarantineBacklog(pmg, thresholds)
+
+		m.mu.RLock()
+		alert, exists := m.activeAlerts["pmg1-quarantine-spam"]
+		m.mu.RUnlock()
+
+		if !exists {
+			t.Fatal("spam quarantine critical alert should be created")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("alert level should be critical, got %s", alert.Level)
+		}
+	})
+
+	t.Run("below threshold clears alert", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+		m.mu.Lock()
+		m.pmgQuarantineHistory = make(map[string][]pmgQuarantineSnapshot)
+		m.activeAlerts["pmg1-quarantine-spam"] = &Alert{
+			ID:    "pmg1-quarantine-spam",
+			Type:  "quarantine-spam",
+			Level: AlertLevelWarning,
+		}
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "pmg-server",
+			Host: "pmg.example.com",
+			Quarantine: &models.PMGQuarantineTotals{
+				Spam:  500, // Below warning threshold
+				Virus: 100,
+			},
+		}
+
+		thresholds := PMGThresholdConfig{
+			QuarantineSpamWarn:     2000,
+			QuarantineSpamCritical: 5000,
+		}
+
+		m.checkPMGQuarantineBacklog(pmg, thresholds)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["pmg1-quarantine-spam"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("spam quarantine alert should be cleared when below threshold")
+		}
+	})
+
+	t.Run("growth rate triggers warning alert", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
+		// Set up history from ~2 hours ago
+		m.pmgQuarantineHistory = map[string][]pmgQuarantineSnapshot{
+			"pmg1": {
+				{
+					Spam:      1000,
+					Virus:     100,
+					Timestamp: time.Now().Add(-2 * time.Hour),
+				},
+			},
+		}
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "pmg-server",
+			Host: "pmg.example.com",
+			Quarantine: &models.PMGQuarantineTotals{
+				Spam:  1500, // 50% growth (500 messages)
+				Virus: 100,
+			},
+		}
+
+		thresholds := PMGThresholdConfig{
+			QuarantineSpamWarn:      10000, // High absolute threshold (won't trigger)
+			QuarantineSpamCritical:  20000,
+			QuarantineGrowthWarnPct: 25,  // 25% growth warning
+			QuarantineGrowthWarnMin: 250, // Minimum 250 messages
+			QuarantineGrowthCritPct: 50,  // 50% growth critical
+			QuarantineGrowthCritMin: 500, // Minimum 500 messages
+		}
+
+		m.checkPMGQuarantineBacklog(pmg, thresholds)
+
+		m.mu.RLock()
+		alert, exists := m.activeAlerts["pmg1-quarantine-spam"]
+		m.mu.RUnlock()
+
+		if !exists {
+			t.Fatal("spam quarantine growth alert should be created")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Errorf("alert level should be critical due to 50%% growth + 500 messages, got %s", alert.Level)
+		}
+	})
+
+	t.Run("updates existing alert", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+		m.mu.Lock()
+		m.pmgQuarantineHistory = make(map[string][]pmgQuarantineSnapshot)
+		m.config.ActivationState = ActivationActive
+		m.activeAlerts["pmg1-quarantine-spam"] = &Alert{
+			ID:        "pmg1-quarantine-spam",
+			Type:      "quarantine-spam",
+			Level:     AlertLevelWarning,
+			Value:     2500,
+			Threshold: 2000,
+			LastSeen:  time.Now().Add(-5 * time.Minute),
+		}
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "pmg-server",
+			Host: "pmg.example.com",
+			Quarantine: &models.PMGQuarantineTotals{
+				Spam:  3000, // Higher spam count
+				Virus: 100,
+			},
+		}
+
+		thresholds := PMGThresholdConfig{
+			QuarantineSpamWarn:     2000,
+			QuarantineSpamCritical: 5000,
+		}
+
+		m.checkPMGQuarantineBacklog(pmg, thresholds)
+
+		m.mu.RLock()
+		alert, exists := m.activeAlerts["pmg1-quarantine-spam"]
+		m.mu.RUnlock()
+
+		if !exists {
+			t.Fatal("spam quarantine alert should still exist")
+		}
+		if alert.Value != 3000 {
+			t.Errorf("alert value should be updated to 3000, got %.0f", alert.Value)
+		}
+	})
+
+	t.Run("virus quarantine alert", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+		m.mu.Lock()
+		m.pmgQuarantineHistory = make(map[string][]pmgQuarantineSnapshot)
+		m.config.ActivationState = ActivationActive
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "pmg-server",
+			Host: "pmg.example.com",
+			Quarantine: &models.PMGQuarantineTotals{
+				Spam:  100,
+				Virus: 3000, // Above virus warning threshold
+			},
+		}
+
+		thresholds := PMGThresholdConfig{
+			QuarantineSpamWarn:      2000,
+			QuarantineSpamCritical:  5000,
+			QuarantineVirusWarn:     2000,
+			QuarantineVirusCritical: 5000,
+		}
+
+		m.checkPMGQuarantineBacklog(pmg, thresholds)
+
+		m.mu.RLock()
+		alert, exists := m.activeAlerts["pmg1-quarantine-virus"]
+		m.mu.RUnlock()
+
+		if !exists {
+			t.Fatal("virus quarantine warning alert should be created")
+		}
+		if alert.Level != AlertLevelWarning {
+			t.Errorf("alert level should be warning, got %s", alert.Level)
+		}
+	})
+}
+
+func TestLoadActiveAlerts(t *testing.T) {
+	t.Run("no file returns nil error", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+
+		err := m.LoadActiveAlerts()
+		if err != nil {
+			t.Errorf("expected no error when file doesn't exist, got %v", err)
+		}
+	})
+
+	t.Run("loads alerts from valid file", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+
+		// Create an alert and save it
+		startTime := time.Now().Add(-30 * time.Minute)
+		alert := &Alert{
+			ID:           "test-load-alert",
+			Type:         "cpu",
+			Level:        AlertLevelWarning,
+			ResourceID:   "test-resource",
+			ResourceName: "test-vm",
+			Node:         "node1",
+			Instance:     "pve1",
+			Message:      "Test alert",
+			Value:        85.0,
+			Threshold:    80.0,
+			StartTime:    startTime,
+			LastSeen:     time.Now(),
+		}
+
+		m.mu.Lock()
+		m.activeAlerts[alert.ID] = alert
+		m.mu.Unlock()
+
+		// Save to disk
+		_ = m.SaveActiveAlerts()
+
+		// Clear and reload
+		m.ClearActiveAlerts()
+
+		err := m.LoadActiveAlerts()
+		if err != nil {
+			t.Fatalf("failed to load alerts: %v", err)
+		}
+
+		m.mu.RLock()
+		loaded, exists := m.activeAlerts["test-load-alert"]
+		m.mu.RUnlock()
+
+		if !exists {
+			t.Fatal("alert should be loaded from file")
+		}
+		if loaded.Type != "cpu" {
+			t.Errorf("loaded alert type should be cpu, got %s", loaded.Type)
+		}
+		if loaded.Value != 85.0 {
+			t.Errorf("loaded alert value should be 85.0, got %.1f", loaded.Value)
+		}
+	})
+
+	t.Run("skips old alerts", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+
+		// Create an old alert (>24 hours)
+		startTime := time.Now().Add(-25 * time.Hour)
+		alert := &Alert{
+			ID:           "old-alert",
+			Type:         "cpu",
+			Level:        AlertLevelWarning,
+			ResourceID:   "test-resource",
+			ResourceName: "test-vm",
+			StartTime:    startTime,
+			LastSeen:     startTime,
+		}
+
+		m.mu.Lock()
+		m.activeAlerts[alert.ID] = alert
+		m.mu.Unlock()
+
+		// Save to disk
+		_ = m.SaveActiveAlerts()
+
+		// Clear and reload
+		m.ClearActiveAlerts()
+
+		err := m.LoadActiveAlerts()
+		if err != nil {
+			t.Fatalf("failed to load alerts: %v", err)
+		}
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["old-alert"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("old alert (>24h) should be skipped during load")
+		}
+	})
+
+	t.Run("skips old acknowledged alerts", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+
+		// Create an alert acknowledged >1 hour ago
+		startTime := time.Now().Add(-30 * time.Minute)
+		ackTime := time.Now().Add(-2 * time.Hour)
+		alert := &Alert{
+			ID:           "old-ack-alert",
+			Type:         "cpu",
+			Level:        AlertLevelWarning,
+			ResourceID:   "test-resource",
+			ResourceName: "test-vm",
+			StartTime:    startTime,
+			LastSeen:     time.Now(),
+			Acknowledged: true,
+			AckTime:      &ackTime,
+			AckUser:      "testuser",
+		}
+
+		m.mu.Lock()
+		m.activeAlerts[alert.ID] = alert
+		m.mu.Unlock()
+
+		// Save to disk
+		_ = m.SaveActiveAlerts()
+
+		// Clear and reload
+		m.ClearActiveAlerts()
+
+		err := m.LoadActiveAlerts()
+		if err != nil {
+			t.Fatalf("failed to load alerts: %v", err)
+		}
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts["old-ack-alert"]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Error("old acknowledged alert (>1h) should be skipped during load")
+		}
+	})
+
+	t.Run("restores acknowledgment state", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+
+		// Create an acknowledged alert
+		startTime := time.Now().Add(-10 * time.Minute)
+		ackTime := time.Now().Add(-5 * time.Minute)
+		alert := &Alert{
+			ID:           "ack-alert",
+			Type:         "cpu",
+			Level:        AlertLevelWarning,
+			ResourceID:   "test-resource",
+			ResourceName: "test-vm",
+			StartTime:    startTime,
+			LastSeen:     time.Now(),
+			Acknowledged: true,
+			AckTime:      &ackTime,
+			AckUser:      "testuser",
+		}
+
+		m.mu.Lock()
+		m.activeAlerts[alert.ID] = alert
+		m.mu.Unlock()
+
+		// Save to disk
+		_ = m.SaveActiveAlerts()
+
+		// Clear and reload
+		m.ClearActiveAlerts()
+
+		err := m.LoadActiveAlerts()
+		if err != nil {
+			t.Fatalf("failed to load alerts: %v", err)
+		}
+
+		m.mu.RLock()
+		loaded, exists := m.activeAlerts["ack-alert"]
+		ackRecord, hasAckRecord := m.ackState["ack-alert"]
+		m.mu.RUnlock()
+
+		if !exists {
+			t.Fatal("acknowledged alert should be loaded")
+		}
+		if !loaded.Acknowledged {
+			t.Error("loaded alert should be acknowledged")
+		}
+		if loaded.AckUser != "testuser" {
+			t.Errorf("loaded alert AckUser should be testuser, got %s", loaded.AckUser)
+		}
+		if !hasAckRecord {
+			t.Error("ackState should be restored for acknowledged alert")
+		}
+		if !ackRecord.acknowledged {
+			t.Error("ackState should show acknowledged=true")
+		}
+	})
+
+	t.Run("invalid JSON returns error", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+
+		// Write invalid JSON to the alerts file
+		alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
+		if err := os.MkdirAll(alertsDir, 0755); err != nil {
+			t.Fatalf("failed to create alerts dir: %v", err)
+		}
+
+		alertsFile := filepath.Join(alertsDir, "active-alerts.json")
+		if err := os.WriteFile(alertsFile, []byte("invalid json"), 0644); err != nil {
+			t.Fatalf("failed to write invalid json: %v", err)
+		}
+
+		err := m.LoadActiveAlerts()
+		if err == nil {
+			t.Error("expected error for invalid JSON")
+		}
+	})
+
+	t.Run("skips duplicate alerts", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+
+		// Write JSON with duplicate alert IDs
+		alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
+		if err := os.MkdirAll(alertsDir, 0755); err != nil {
+			t.Fatalf("failed to create alerts dir: %v", err)
+		}
+
+		startTime := time.Now().Add(-10 * time.Minute)
+		alerts := []Alert{
+			{ID: "dup-alert", Type: "cpu", StartTime: startTime, LastSeen: time.Now()},
+			{ID: "dup-alert", Type: "memory", StartTime: startTime, LastSeen: time.Now()},
+		}
+
+		data, _ := json.Marshal(alerts)
+		alertsFile := filepath.Join(alertsDir, "active-alerts.json")
+		if err := os.WriteFile(alertsFile, data, 0644); err != nil {
+			t.Fatalf("failed to write alerts json: %v", err)
+		}
+
+		err := m.LoadActiveAlerts()
+		if err != nil {
+			t.Fatalf("failed to load alerts: %v", err)
+		}
+
+		m.mu.RLock()
+		alert, exists := m.activeAlerts["dup-alert"]
+		m.mu.RUnlock()
+
+		if !exists {
+			t.Fatal("alert should exist after load")
+		}
+		// First one wins
+		if alert.Type != "cpu" {
+			t.Errorf("first alert should win, got type %s", alert.Type)
 		}
 	})
 }
