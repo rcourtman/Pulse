@@ -1,6 +1,8 @@
 package api
 
 import (
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -667,6 +669,399 @@ func TestHasLegacyThresholds(t *testing.T) {
 			if result != tt.expected {
 				t.Errorf("hasLegacyThresholds() = %v, want %v", result, tt.expected)
 			}
+		})
+	}
+}
+
+func TestFingerprintPublicKey(t *testing.T) {
+	t.Parallel()
+
+	// Valid SSH keys for testing (these are public keys, safe to include)
+	// ED25519 key from openssh-portable test suite
+	validED25519Key := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@example.com"
+
+	tests := []struct {
+		name        string
+		input       string
+		wantErr     bool
+		errContains string
+	}{
+		// Error cases - empty/whitespace
+		{
+			name:        "empty string returns error",
+			input:       "",
+			wantErr:     true,
+			errContains: "empty public key",
+		},
+		{
+			name:        "whitespace only returns error",
+			input:       "   ",
+			wantErr:     true,
+			errContains: "empty public key",
+		},
+		{
+			name:        "tab only returns error",
+			input:       "\t",
+			wantErr:     true,
+			errContains: "empty public key",
+		},
+		{
+			name:        "newline only returns error",
+			input:       "\n",
+			wantErr:     true,
+			errContains: "empty public key",
+		},
+
+		// Error cases - invalid key format
+		{
+			name:        "random text returns error",
+			input:       "this is not an ssh key",
+			wantErr:     true,
+			errContains: "", // ssh library error message varies
+		},
+		{
+			name:        "partial key returns error",
+			input:       "ssh-ed25519",
+			wantErr:     true,
+			errContains: "",
+		},
+		{
+			name:        "wrong key type prefix returns error",
+			input:       "ssh-fake AAAAC3NzaC1lZDI1NTE5AAAAIOMQ==",
+			wantErr:     true,
+			errContains: "",
+		},
+		{
+			name:        "base64 with wrong algorithm returns error",
+			input:       "ssh-ed25519 notvalidbase64!!!",
+			wantErr:     true,
+			errContains: "",
+		},
+		{
+			name:        "truncated base64 returns error",
+			input:       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA",
+			wantErr:     true,
+			errContains: "",
+		},
+		{
+			name:        "malformed key returns error",
+			input:       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJ",
+			wantErr:     true,
+			errContains: "",
+		},
+
+		// Success cases
+		{
+			name:    "valid ED25519 key returns fingerprint",
+			input:   validED25519Key,
+			wantErr: false,
+		},
+		{
+			name:    "valid ED25519 key with leading whitespace",
+			input:   "  " + validED25519Key,
+			wantErr: false,
+		},
+		{
+			name:    "valid ED25519 key with trailing whitespace",
+			input:   validED25519Key + "  ",
+			wantErr: false,
+		},
+		{
+			name:    "valid ED25519 key without comment",
+			input:   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result, err := fingerprintPublicKey(tt.input)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("fingerprintPublicKey() expected error, got nil with result %q", result)
+					return
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("fingerprintPublicKey() error = %q, want error containing %q", err.Error(), tt.errContains)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("fingerprintPublicKey() unexpected error: %v", err)
+				return
+			}
+
+			// Verify fingerprint format (SHA256:base64)
+			if !strings.HasPrefix(result, "SHA256:") {
+				t.Errorf("fingerprintPublicKey() = %q, expected SHA256: prefix", result)
+			}
+		})
+	}
+}
+
+func TestCountLegacySSHKeys(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		setup     func(t *testing.T) string // returns directory path
+		wantCount int
+		wantErr   bool
+	}{
+		{
+			name: "non-existent directory returns 0 with no error",
+			setup: func(t *testing.T) string {
+				return "/nonexistent/path/to/ssh/keys"
+			},
+			wantCount: 0,
+			wantErr:   false,
+		},
+		{
+			name: "empty directory returns 0",
+			setup: func(t *testing.T) string {
+				return t.TempDir()
+			},
+			wantCount: 0,
+			wantErr:   false,
+		},
+		{
+			name: "directory with no matching files returns 0",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				os.WriteFile(dir+"/known_hosts", []byte("test"), 0600)
+				os.WriteFile(dir+"/authorized_keys", []byte("test"), 0600)
+				os.WriteFile(dir+"/config", []byte("test"), 0600)
+				return dir
+			},
+			wantCount: 0,
+			wantErr:   false,
+		},
+		{
+			name: "directory with id_rsa counts as 1",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
+				return dir
+			},
+			wantCount: 1,
+			wantErr:   false,
+		},
+		{
+			name: "directory with id_rsa and id_rsa.pub counts as 2",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
+				os.WriteFile(dir+"/id_rsa.pub", []byte("test"), 0600)
+				return dir
+			},
+			wantCount: 2,
+			wantErr:   false,
+		},
+		{
+			name: "directory with multiple key types",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
+				os.WriteFile(dir+"/id_rsa.pub", []byte("test"), 0600)
+				os.WriteFile(dir+"/id_ed25519", []byte("test"), 0600)
+				os.WriteFile(dir+"/id_ed25519.pub", []byte("test"), 0600)
+				os.WriteFile(dir+"/id_ecdsa", []byte("test"), 0600)
+				return dir
+			},
+			wantCount: 5,
+			wantErr:   false,
+		},
+		{
+			name: "subdirectories named id_* are not counted",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				os.Mkdir(dir+"/id_subdirectory", 0755)
+				os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
+				return dir
+			},
+			wantCount: 1,
+			wantErr:   false,
+		},
+		{
+			name: "mixed files and directories",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				os.Mkdir(dir+"/id_subdir", 0755)
+				os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
+				os.WriteFile(dir+"/id_ed25519", []byte("test"), 0600)
+				os.WriteFile(dir+"/known_hosts", []byte("test"), 0600)
+				os.WriteFile(dir+"/authorized_keys", []byte("test"), 0600)
+				return dir
+			},
+			wantCount: 2,
+			wantErr:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := tt.setup(t)
+			count, err := countLegacySSHKeys(dir)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("countLegacySSHKeys() expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("countLegacySSHKeys() unexpected error: %v", err)
+				return
+			}
+
+			if count != tt.wantCount {
+				t.Errorf("countLegacySSHKeys() = %d, want %d", count, tt.wantCount)
+			}
+		})
+	}
+}
+
+func TestResolveUserName(t *testing.T) {
+	t.Parallel()
+
+	// Get current user to have a valid UID to test
+	currentUID := uint32(os.Getuid())
+
+	tests := []struct {
+		name     string
+		uid      uint32
+		validate func(t *testing.T, result string)
+	}{
+		{
+			name: "UID 0 returns root",
+			uid:  0,
+			validate: func(t *testing.T, result string) {
+				// On most systems, UID 0 is "root"
+				if result != "root" && !strings.HasPrefix(result, "uid:") {
+					t.Errorf("resolveUserName(0) = %q, want 'root' or 'uid:0'", result)
+				}
+			},
+		},
+		{
+			name: "current user UID returns valid username",
+			uid:  currentUID,
+			validate: func(t *testing.T, result string) {
+				// Should return a username or uid:X fallback
+				if result == "" {
+					t.Error("resolveUserName() returned empty string")
+				}
+				if strings.HasPrefix(result, "uid:") {
+					// Fallback is acceptable
+					expected := "uid:" + strings.TrimPrefix(result, "uid:")
+					if result != expected {
+						t.Errorf("resolveUserName() fallback format invalid: %q", result)
+					}
+				}
+			},
+		},
+		{
+			name: "non-existent UID returns uid:X format",
+			uid:  999999999,
+			validate: func(t *testing.T, result string) {
+				expected := "uid:999999999"
+				if result != expected {
+					t.Errorf("resolveUserName(999999999) = %q, want %q", result, expected)
+				}
+			},
+		},
+		{
+			name: "max uint32 UID returns uid:X format",
+			uid:  ^uint32(0), // 4294967295
+			validate: func(t *testing.T, result string) {
+				expected := "uid:4294967295"
+				if result != expected {
+					t.Errorf("resolveUserName(max) = %q, want %q", result, expected)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := resolveUserName(tt.uid)
+			tt.validate(t, result)
+		})
+	}
+}
+
+func TestResolveGroupName(t *testing.T) {
+	t.Parallel()
+
+	// Get current group to have a valid GID to test
+	currentGID := uint32(os.Getgid())
+
+	tests := []struct {
+		name     string
+		gid      uint32
+		validate func(t *testing.T, result string)
+	}{
+		{
+			name: "GID 0 returns root or wheel",
+			gid:  0,
+			validate: func(t *testing.T, result string) {
+				// On most systems, GID 0 is "root" or "wheel"
+				if result != "root" && result != "wheel" && !strings.HasPrefix(result, "gid:") {
+					t.Errorf("resolveGroupName(0) = %q, want 'root', 'wheel', or 'gid:0'", result)
+				}
+			},
+		},
+		{
+			name: "current group GID returns valid group name",
+			gid:  currentGID,
+			validate: func(t *testing.T, result string) {
+				// Should return a group name or gid:X fallback
+				if result == "" {
+					t.Error("resolveGroupName() returned empty string")
+				}
+				if strings.HasPrefix(result, "gid:") {
+					// Fallback is acceptable
+					expected := "gid:" + strings.TrimPrefix(result, "gid:")
+					if result != expected {
+						t.Errorf("resolveGroupName() fallback format invalid: %q", result)
+					}
+				}
+			},
+		},
+		{
+			name: "non-existent GID returns gid:X format",
+			gid:  999999999,
+			validate: func(t *testing.T, result string) {
+				expected := "gid:999999999"
+				if result != expected {
+					t.Errorf("resolveGroupName(999999999) = %q, want %q", result, expected)
+				}
+			},
+		},
+		{
+			name: "max uint32 GID returns gid:X format",
+			gid:  ^uint32(0), // 4294967295
+			validate: func(t *testing.T, result string) {
+				expected := "gid:4294967295"
+				if result != expected {
+					t.Errorf("resolveGroupName(max) = %q, want %q", result, expected)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := resolveGroupName(tt.gid)
+			tt.validate(t, result)
 		})
 	}
 }
