@@ -4483,6 +4483,76 @@ func TestClearActiveAlertsEmptyMaps(t *testing.T) {
 	}
 }
 
+func TestClearActiveAlertsWithExistingAlerts(t *testing.T) {
+	t.Parallel()
+	m := newTestManager(t)
+
+	// Populate various maps with test data
+	m.mu.Lock()
+	m.activeAlerts["test-alert-1"] = &Alert{ID: "test-alert-1", Type: "cpu-usage"}
+	m.activeAlerts["test-alert-2"] = &Alert{ID: "test-alert-2", Type: "memory-usage"}
+	m.pendingAlerts["pending-1"] = time.Now()
+	m.recentAlerts["recent-1"] = &Alert{ID: "recent-1", Type: "disk-usage"}
+	m.suppressedUntil["suppressed-1"] = time.Now().Add(time.Hour)
+	m.alertRateLimit["rate-1"] = []time.Time{time.Now()}
+	m.nodeOfflineCount["node-1"] = 3
+	m.offlineConfirmations["node-1"] = 2
+	m.dockerOfflineCount["docker-1"] = 1
+	m.dockerStateConfirm["docker-1"] = 1
+	m.ackState["test-alert-1"] = ackRecord{acknowledged: true, user: "testuser", time: time.Now()}
+	m.mu.Unlock()
+
+	m.resolvedMutex.Lock()
+	m.recentlyResolved["resolved-1"] = &ResolvedAlert{Alert: &Alert{ID: "resolved-1"}, ResolvedTime: time.Now()}
+	m.resolvedMutex.Unlock()
+
+	// Call ClearActiveAlerts
+	m.ClearActiveAlerts()
+
+	// Give goroutine time to run SaveActiveAlerts
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify all maps are cleared
+	m.mu.RLock()
+	if len(m.activeAlerts) != 0 {
+		t.Errorf("expected activeAlerts to be empty, got %d", len(m.activeAlerts))
+	}
+	if len(m.pendingAlerts) != 0 {
+		t.Errorf("expected pendingAlerts to be empty, got %d", len(m.pendingAlerts))
+	}
+	if len(m.recentAlerts) != 0 {
+		t.Errorf("expected recentAlerts to be empty, got %d", len(m.recentAlerts))
+	}
+	if len(m.suppressedUntil) != 0 {
+		t.Errorf("expected suppressedUntil to be empty, got %d", len(m.suppressedUntil))
+	}
+	if len(m.alertRateLimit) != 0 {
+		t.Errorf("expected alertRateLimit to be empty, got %d", len(m.alertRateLimit))
+	}
+	if len(m.nodeOfflineCount) != 0 {
+		t.Errorf("expected nodeOfflineCount to be empty, got %d", len(m.nodeOfflineCount))
+	}
+	if len(m.offlineConfirmations) != 0 {
+		t.Errorf("expected offlineConfirmations to be empty, got %d", len(m.offlineConfirmations))
+	}
+	if len(m.dockerOfflineCount) != 0 {
+		t.Errorf("expected dockerOfflineCount to be empty, got %d", len(m.dockerOfflineCount))
+	}
+	if len(m.dockerStateConfirm) != 0 {
+		t.Errorf("expected dockerStateConfirm to be empty, got %d", len(m.dockerStateConfirm))
+	}
+	if len(m.ackState) != 0 {
+		t.Errorf("expected ackState to be empty, got %d", len(m.ackState))
+	}
+	m.mu.RUnlock()
+
+	m.resolvedMutex.RLock()
+	if len(m.recentlyResolved) != 0 {
+		t.Errorf("expected recentlyResolved to be empty, got %d", len(m.recentlyResolved))
+	}
+	m.resolvedMutex.RUnlock()
+}
+
 func TestClearBackupAlertsLocked(t *testing.T) {
 	t.Parallel()
 
