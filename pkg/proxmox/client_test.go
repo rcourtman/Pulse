@@ -79,6 +79,107 @@ func TestDiskUnmarshalWearout(t *testing.T) {
 	}
 }
 
+func TestDiskUnmarshalRPM(t *testing.T) {
+	tests := []struct {
+		name     string
+		rpm      json.RawMessage
+		expected int
+	}{
+		{
+			name:     "numeric",
+			rpm:      json.RawMessage(`7200`),
+			expected: 7200,
+		},
+		{
+			name:     "numeric string",
+			rpm:      json.RawMessage(`"5400"`),
+			expected: 5400,
+		},
+		{
+			name:     "ssd string",
+			rpm:      json.RawMessage(`"SSD"`),
+			expected: 0,
+		},
+		{
+			name:     "ssd lowercase",
+			rpm:      json.RawMessage(`"ssd"`),
+			expected: 0,
+		},
+		{
+			name:     "na string",
+			rpm:      json.RawMessage(`"N/A"`),
+			expected: 0,
+		},
+		{
+			name:     "empty string",
+			rpm:      json.RawMessage(`""`),
+			expected: 0,
+		},
+		{
+			name:     "null value",
+			rpm:      json.RawMessage(`null`),
+			expected: 0,
+		},
+		{
+			name:     "invalid string",
+			rpm:      json.RawMessage(`"unknown-value"`),
+			expected: 0,
+		},
+		{
+			name:     "string with spaces",
+			rpm:      json.RawMessage(`"  7200  "`),
+			expected: 7200,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := fmt.Sprintf(`{"devpath":"/dev/sda","model":"Example","serial":"123","type":"hdd","health":"OK","wearout":50,"size":1000,"rpm":%s,"used":"LVM","vendor":"Example","wwn":"example"}`, tc.rpm)
+			var disk Disk
+			if err := json.Unmarshal([]byte(payload), &disk); err != nil {
+				t.Fatalf("unexpected error unmarshalling disk: %v", err)
+			}
+			if disk.RPM != tc.expected {
+				t.Fatalf("rpm: got %d, want %d", disk.RPM, tc.expected)
+			}
+		})
+	}
+}
+
+func TestDiskUnmarshalJSON_InvalidJSON(t *testing.T) {
+	var disk Disk
+	err := json.Unmarshal([]byte(`{invalid json`), &disk)
+	if err == nil {
+		t.Error("expected error for invalid JSON")
+	}
+}
+
+func TestDiskUnmarshalJSON_UnexpectedWearoutType(t *testing.T) {
+	// Test with boolean wearout value (unexpected type)
+	payload := `{"devpath":"/dev/sda","model":"Example","serial":"123","type":"hdd","health":"OK","wearout":true,"size":1000,"rpm":7200}`
+	var disk Disk
+	if err := json.Unmarshal([]byte(payload), &disk); err != nil {
+		t.Fatalf("unexpected error unmarshalling disk: %v", err)
+	}
+	// Unexpected type should normalize to unknown
+	if disk.Wearout != wearoutUnknown {
+		t.Fatalf("wearout: got %d, want %d (unknown)", disk.Wearout, wearoutUnknown)
+	}
+}
+
+func TestDiskUnmarshalJSON_UnexpectedRPMType(t *testing.T) {
+	// Test with boolean rpm value (unexpected type)
+	payload := `{"devpath":"/dev/sda","model":"Example","serial":"123","type":"hdd","health":"OK","wearout":50,"size":1000,"rpm":true}`
+	var disk Disk
+	if err := json.Unmarshal([]byte(payload), &disk); err != nil {
+		t.Fatalf("unexpected error unmarshalling disk: %v", err)
+	}
+	// Unexpected type should normalize to 0
+	if disk.RPM != 0 {
+		t.Fatalf("rpm: got %d, want 0", disk.RPM)
+	}
+}
+
 func TestVMFileSystemUnmarshalFlexibleNumbers(t *testing.T) {
 	t.Run("accepts numeric values", func(t *testing.T) {
 		payload := `{"name":"rootfs","type":"zfs","mountpoint":"/","total-bytes":8589934592,"used-bytes":3221225472,"disk":[{"dev":"/dev/vtbd0p2"}]}`
