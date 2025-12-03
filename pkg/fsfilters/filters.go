@@ -86,7 +86,19 @@ var specialMountPrefixes = []string{
 	"/sys",
 	"/run",
 	"/var/lib/docker",
+	"/var/lib/containers",
 	"/snap",
+}
+
+// containerOverlayPatterns detect container overlay filesystem paths from various
+// container runtimes (Docker, Podman, LXC, EnhanceCP, etc.) that may not be in
+// standard locations. These paths should be excluded from disk usage as they
+// represent container layers, not actual storage usage.
+var containerOverlayPatterns = []string{
+	"/overlay2/",
+	"/overlay/",
+	"/diff/",
+	"/merged",
 }
 
 // ShouldSkipFilesystem determines if a filesystem should be excluded from disk
@@ -130,6 +142,17 @@ func ShouldSkipFilesystem(fsType, mountpoint string, totalBytes, usedBytes uint6
 	// Windows System Reserved partition
 	if mountpoint == "System Reserved" || strings.Contains(mountpoint, "System Reserved") {
 		reasons = append(reasons, "special-mountpoint")
+	}
+
+	// Check for container overlay paths from various runtimes in non-standard locations
+	// (e.g., /var/local/enhance/containers/*/overlay/merged). Related to #790.
+	if strings.Contains(mountpoint, "/containers/") {
+		for _, pattern := range containerOverlayPatterns {
+			if strings.Contains(mountpoint, pattern) {
+				reasons = append(reasons, "container-overlay")
+				break
+			}
+		}
 	}
 
 	return len(reasons) > 0, reasons
