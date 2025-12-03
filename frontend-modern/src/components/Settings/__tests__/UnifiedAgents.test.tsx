@@ -386,7 +386,7 @@ describe('UnifiedAgents platform commands', () => {
     });
 
     // Docker monitoring is disabled by default
-    const checkbox = screen.getByRole('checkbox');
+    const checkbox = screen.getByRole('checkbox', { name: /Enable Docker monitoring/i });
     expect(checkbox).not.toBeChecked();
 
     // Enable it
