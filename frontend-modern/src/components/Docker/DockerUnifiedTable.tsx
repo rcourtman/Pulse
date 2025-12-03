@@ -1281,7 +1281,12 @@ const DockerContainerRow: Component<{
           {(column) => (
             <td
               class="py-0.5 align-middle whitespace-nowrap"
-              style={{ "min-width": column.id === 'cpu' || column.id === 'memory' ? '140px' : undefined }}
+              style={{
+                "min-width": column.id === 'cpu' || column.id === 'memory' ? '140px' : undefined,
+                // Force resource column to respect truncation for very long names (issue #789)
+                "max-width": column.id === 'resource' ? '0' : undefined,
+                "width": column.id === 'resource' ? '40%' : undefined,
+              }}
             >
               {renderCell(column)}
             </td>
@@ -1986,7 +1991,12 @@ const DockerServiceRow: Component<{
           {(column) => (
             <td
               class="py-0.5 align-middle whitespace-nowrap"
-              style={{ "min-width": column.id === 'cpu' || column.id === 'memory' ? '140px' : undefined }}
+              style={{
+                "min-width": column.id === 'cpu' || column.id === 'memory' ? '140px' : undefined,
+                // Force resource column to respect truncation for very long names (issue #789)
+                "max-width": column.id === 'resource' ? '0' : undefined,
+                "width": column.id === 'resource' ? '40%' : undefined,
+              }}
             >
               {renderCell(column)}
             </td>
