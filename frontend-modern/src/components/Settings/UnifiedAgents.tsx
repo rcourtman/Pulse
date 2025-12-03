@@ -108,6 +108,7 @@ export const UnifiedAgents: Component = () => {
     const [lookupError, setLookupError] = createSignal<string | null>(null);
     const [lookupLoading, setLookupLoading] = createSignal(false);
     const [enableDocker, setEnableDocker] = createSignal(false); // Default to false - user must opt-in for Docker monitoring
+    const [insecureMode, setInsecureMode] = createSignal(false); // For self-signed certificates (issue #806)
 
     createEffect(() => {
         if (requiresToken()) {
@@ -235,9 +236,11 @@ export const UnifiedAgents: Component = () => {
     };
 
     const getDockerFlag = () => enableDocker() ? ' --enable-docker' : '';
+    const getInsecureFlag = () => insecureMode() ? ' --insecure' : '';
+    const getCurlInsecureFlag = () => insecureMode() ? '-k' : '';
 
     const getUninstallCommand = () => {
-        return `curl -fsSL ${pulseUrl()}/install.sh | sudo bash -s -- --uninstall`;
+        return `curl ${getCurlInsecureFlag()}-fsSL ${pulseUrl()}/install.sh | sudo bash -s -- --uninstall`;
     };
 
     // Track previously seen host types to prevent flapping when one source temporarily has no data
@@ -341,7 +344,7 @@ export const UnifiedAgents: Component = () => {
 
     const getUpgradeCommand = (_hostname: string) => {
         const token = resolvedToken();
-        return `curl -fsSL ${pulseUrl()}/install.sh | sudo bash -s -- --url ${pulseUrl()} --token ${token}`;
+        return `curl ${getCurlInsecureFlag()}-fsSL ${pulseUrl()}/install.sh | sudo bash -s -- --url ${pulseUrl()} --token ${token}${getInsecureFlag()}`;
     };
 
     const handleRemoveAgent = async (id: string, type: 'host' | 'docker') => {
@@ -459,6 +462,15 @@ export const UnifiedAgents: Component = () => {
                                     />
                                     Enable Docker monitoring
                                 </label>
+                                <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
+                                    <input
+                                        type="checkbox"
+                                        checked={insecureMode()}
+                                        onChange={(e) => setInsecureMode(e.currentTarget.checked)}
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                    />
+                                    Skip certificate verification
+                                </label>
                             </div>
 
                             <div class="space-y-4">
@@ -474,6 +486,10 @@ export const UnifiedAgents: Component = () => {
                                                     {(snippet) => {
                                                         const copyCommand = () => {
                                                             let cmd = snippet.command.replace(TOKEN_PLACEHOLDER, resolvedToken());
+                                                            // Insert -k flag for curl if insecure mode enabled (issue #806)
+                                                            if (insecureMode() && cmd.includes('curl -fsSL')) {
+                                                                cmd = cmd.replace('curl -fsSL', 'curl -kfsSL');
+                                                            }
                                                             // Append docker flag if enabled
                                                             if (enableDocker()) {
                                                                 // For PowerShell, we need to handle the env var or args differently
@@ -490,6 +506,10 @@ export const UnifiedAgents: Component = () => {
                                                                 } else {
                                                                     cmd += getDockerFlag();
                                                                 }
+                                                            }
+                                                            // Append insecure flag for agent if enabled
+                                                            if (insecureMode() && !cmd.includes('$env:') && !cmd.includes('irm')) {
+                                                                cmd += getInsecureFlag();
                                                             }
                                                             return cmd;
                                                         };
