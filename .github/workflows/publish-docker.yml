@@ -51,26 +51,49 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           STAGING_TAG="staging-${TAG}"
 
+          # Retry function for transient Docker Hub failures
+          retry_push() {
+            local cmd="$1"
+            local max_attempts=3
+            local attempt=1
+            local delay=10
+
+            while [ $attempt -le $max_attempts ]; do
+              echo "Attempt $attempt of $max_attempts..."
+              if eval "$cmd"; then
+                return 0
+              fi
+              echo "Attempt $attempt failed"
+              if [ $attempt -lt $max_attempts ]; then
+                echo "Waiting ${delay}s before retry..."
+                sleep $delay
+                delay=$((delay * 2))
+              fi
+              attempt=$((attempt + 1))
+            done
+            echo "All $max_attempts attempts failed"
+            return 1
+          }
+
           echo "Copying pulse staging image to final tags..."
-          # Pull the staging multi-arch manifest
-          docker buildx imagetools create \
+          retry_push "docker buildx imagetools create \
             --tag rcourtman/pulse:${TAG} \
             --tag rcourtman/pulse:${VERSION} \
             --tag rcourtman/pulse:latest \
             --tag ghcr.io/${{ github.repository_owner }}/pulse:${TAG} \
             --tag ghcr.io/${{ github.repository_owner }}/pulse:${VERSION} \
             --tag ghcr.io/${{ github.repository_owner }}/pulse:latest \
-            ghcr.io/${{ github.repository_owner }}/pulse:${STAGING_TAG}
+            ghcr.io/${{ github.repository_owner }}/pulse:${STAGING_TAG}"
 
           echo "Copying pulse-docker-agent staging image to final tags..."
-          docker buildx imagetools create \
+          retry_push "docker buildx imagetools create \
             --tag rcourtman/pulse-docker-agent:${TAG} \
             --tag rcourtman/pulse-docker-agent:${VERSION} \
             --tag rcourtman/pulse-docker-agent:latest \
             --tag ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${TAG} \
             --tag ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${VERSION} \
             --tag ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:latest \
-            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${STAGING_TAG}
+            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${STAGING_TAG}"
 
       - name: Output image information
         run: |
