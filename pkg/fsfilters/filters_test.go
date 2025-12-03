@@ -173,6 +173,12 @@ func TestShouldSkipFilesystem(t *testing.T) {
 		{"/var/lib/docker", "ext4", "/var/lib/docker/overlay2", 1000000, 500000, true},
 		{"/snap prefix", "ext4", "/snap/core/12345", 1000000, 500000, true},
 		{"/boot/efi exact", "vfat", "/boot/efi", 512 * 1024 * 1024, 50 * 1024 * 1024, true},
+		{"/var/lib/containers podman", "ext4", "/var/lib/containers/storage/overlay/abc123/merged", 1000000, 500000, true},
+
+		// Container overlay paths in non-standard locations (issue #790)
+		{"enhance containers overlay", "ext4", "/var/local/enhance/containers/abc123/overlay/merged", 1000000, 500000, true},
+		{"custom containers diff", "ext4", "/opt/containers/myapp/diff/layer", 1000000, 500000, true},
+		{"custom containers overlay2", "ext4", "/data/containers/xyz/overlay2/layer1", 1000000, 500000, true},
 
 		// Windows paths
 		{"Windows System Reserved", "NTFS", "System Reserved", 500 * 1024 * 1024, 100 * 1024 * 1024, true},
