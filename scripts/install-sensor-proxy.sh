@@ -1927,7 +1927,8 @@ if [[ "$HTTP_MODE" == true ]]; then
     print_success "Pulse server is reachable"
 
     # Check if port is already in use
-    PORT_NUMBER="${HTTP_ADDR#:}"
+    # Extract port from HTTP_ADDR which can be ":8443" or "0.0.0.0:8443"
+    PORT_NUMBER="${HTTP_ADDR##*:}"
     if ss -ltn | grep -q ":${PORT_NUMBER} "; then
         # Port is in use - check if it's our own service (refresh scenario)
         if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
@@ -1978,7 +1979,7 @@ if [[ "$HTTP_MODE" == true ]]; then
         PRIMARY_IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
         if [[ -z "$PRIMARY_IP" ]]; then
             print_error "No IPv4 address found"
-            print_error "Use --proxy-url https://YOUR_IP${HTTP_ADDR} to specify manually"
+            print_error "Use --proxy-url https://YOUR_IP:${PORT_NUMBER} to specify manually"
             exit 1
         fi
         print_info "Using IPv4 address: $PRIMARY_IP"
@@ -1988,11 +1989,11 @@ if [[ "$HTTP_MODE" == true ]]; then
     if [[ "$PRIMARY_IP" == "127.0.0.1" ]]; then
         print_warn "Primary IP is loopback (127.0.0.1)"
         print_warn "Pulse will not be able to reach this proxy!"
-        print_error "Use --proxy-url https://YOUR_REAL_IP${HTTP_ADDR} to specify a reachable address"
+        print_error "Use --proxy-url https://YOUR_REAL_IP:${PORT_NUMBER} to specify a reachable address"
         exit 1
     fi
 
-    PROXY_URL="https://${PRIMARY_IP}${HTTP_ADDR}"
+    PROXY_URL="https://${PRIMARY_IP}:${PORT_NUMBER}"
     print_info "Proxy will be accessible at: $PROXY_URL"
 
     # Register with Pulse and get auth/control tokens
@@ -2151,9 +2152,11 @@ EOF
 
     print_success "HTTP mode configured successfully"
     echo ""
+    # Extract port number correctly from HTTP_ADDR (handles both ":8443" and "0.0.0.0:8443")
+    HTTP_PORT="${HTTP_ADDR##*:}"
     print_info "Firewall configuration required:"
-    print_info "  Allow inbound TCP connections on port ${HTTP_ADDR#:} from Pulse server"
-    print_info "  Command: ufw allow from <pulse-server-ip> to any port ${HTTP_ADDR#:}"
+    print_info "  Allow inbound TCP connections on port ${HTTP_PORT} from Pulse server"
+    print_info "  Command: ufw allow from <pulse-server-ip> to any port ${HTTP_PORT}"
     echo ""
 fi
 
@@ -2371,7 +2374,7 @@ if ! systemctl start pulse-sensor-proxy.service; then
     print_error "2. Permission errors: Check ownership of /var/lib/pulse-sensor-proxy"
     print_error "3. lm-sensors not installed: Run 'apt-get install lm-sensors && sensors-detect --auto'"
     print_error "4. Standalone node detection: If you see 'pvecm' errors, this is expected for non-clustered hosts"
-    print_error "5. Port already in use: Check 'ss -tlnp | grep ${HTTP_ADDR#:}'"
+    print_error "5. Port already in use: Check 'ss -tlnp | grep ${HTTP_ADDR##*:}'"
     print_error ""
     print_error "For more help: https://github.com/rcourtman/Pulse/blob/main/docs/TROUBLESHOOTING.md"
     exit 1
@@ -2453,7 +2456,7 @@ if [[ "$HTTP_MODE" == true ]]; then
         print_error "URL: $HTTP_CHECK_URL"
         print_error ""
         print_error "Troubleshooting:"
-        print_error "  1. Check if port ${HTTP_ADDR#:} is listening: ss -tlnp | grep ${HTTP_ADDR#:}"
+        print_error "  1. Check if port ${HTTP_ADDR##*:} is listening: ss -tlnp | grep ${HTTP_ADDR##*:}"
         print_error "  2. Check sensor-proxy logs: journalctl -u pulse-sensor-proxy -n 50"
         print_error "  3. Test manually: curl -k -H 'Authorization: Bearer \$TOKEN' $HTTP_CHECK_URL"
         print_error ""
