@@ -61,6 +61,12 @@ Access the dashboard at `http://<your-ip>:7655`.
 - **[Architecture](ARCHITECTURE.md)**: High-level system design and data flow.
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)**: Solutions to common issues.
 
+## 🌐 Community Integrations
+
+Community-maintained integrations and addons:
+
+- **[Home Assistant Addon](https://github.com/Kosztyk/pulse-docker-agent-addon)** - Run the Pulse Docker Agent as a Home Assistant addon.
+
 ## ❤️ Support Pulse Development
 
 Pulse is maintained by one person. Sponsorships help cover the costs of the demo server, development tools, and domains. If Pulse saves you time, please consider supporting the project!
