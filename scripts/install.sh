@@ -582,8 +582,8 @@ fi
 # 4. TrueNAS SCALE (immutable root, uses systemd but needs special persistence)
 # TrueNAS SCALE wipes /etc/systemd/system on upgrades, so we store the service
 # in /data and create an Init/Shutdown task to recreate the symlink on boot.
-# Note: /data may have exec=off on some TrueNAS systems, so we copy the binary
-# to /usr/local/bin (tmpfs, allows exec) at runtime while storing in /data for persistence.
+# Note: /data may have exec=off on some TrueNAS systems. On TrueNAS SCALE 24.04+,
+# /usr/local/bin is also read-only. We try multiple runtime locations.
 if [[ "$TRUENAS" == true ]]; then
     log_info "Configuring TrueNAS SCALE installation..."
 
@@ -591,10 +591,7 @@ if [[ "$TRUENAS" == true ]]; then
     mkdir -p "$TRUENAS_STATE_DIR"
     mkdir -p "$TRUENAS_LOG_DIR"
 
-    # TrueNAS stores binary in /data for persistence, but runs from /usr/local/bin
-    # because /data may have exec=off. The bootstrap script copies on each boot.
     TRUENAS_STORED_BINARY="$TRUENAS_STATE_DIR/${BINARY_NAME}"
-    TRUENAS_RUNTIME_BINARY="/usr/local/bin/${BINARY_NAME}"
 
     # Move binary to persistent storage location
     if [[ -f "${INSTALL_DIR}/${BINARY_NAME}" ]] && [[ "$INSTALL_DIR" == "$TRUENAS_STATE_DIR" ]]; then
@@ -605,9 +602,47 @@ if [[ "$TRUENAS" == true ]]; then
     fi
     chmod +x "$TRUENAS_STORED_BINARY"
 
-    # Copy to runtime location (tmpfs, allows exec)
-    cp "$TRUENAS_STORED_BINARY" "$TRUENAS_RUNTIME_BINARY"
-    chmod +x "$TRUENAS_RUNTIME_BINARY"
+    # Determine runtime binary location - try executing from /data first
+    # TrueNAS SCALE 24.04+ has read-only /usr/local/bin, so we need alternatives
+    TRUENAS_RUNTIME_BINARY=""
+
+    # Test if /data allows execution (no noexec mount option)
+    if "$TRUENAS_STORED_BINARY" --version >/dev/null 2>&1; then
+        log_info "Binary can execute from /data - using direct execution."
+        TRUENAS_RUNTIME_BINARY="$TRUENAS_STORED_BINARY"
+    else
+        # /data has noexec, need to copy to an executable location
+        # Try locations in order of preference
+        for RUNTIME_DIR in "/usr/local/bin" "/root/bin" "/var/tmp"; do
+            if [[ "$RUNTIME_DIR" == "/root/bin" ]]; then
+                mkdir -p "$RUNTIME_DIR" 2>/dev/null || continue
+            fi
+
+            # Test if we can write and execute from this location
+            TEST_FILE="${RUNTIME_DIR}/.pulse-exec-test-$$"
+            if cp "$TRUENAS_STORED_BINARY" "$TEST_FILE" 2>/dev/null && \
+               chmod +x "$TEST_FILE" 2>/dev/null && \
+               "$TEST_FILE" --version >/dev/null 2>&1; then
+                rm -f "$TEST_FILE"
+                TRUENAS_RUNTIME_BINARY="${RUNTIME_DIR}/${BINARY_NAME}"
+                log_info "Using ${RUNTIME_DIR} for binary execution."
+                break
+            fi
+            rm -f "$TEST_FILE" 2>/dev/null
+        done
+    fi
+
+    if [[ -z "$TRUENAS_RUNTIME_BINARY" ]]; then
+        log_error "Could not find a writable location that allows execution."
+        log_error "Tried: /data (noexec), /usr/local/bin (read-only), /root/bin, /var/tmp"
+        exit 1
+    fi
+
+    # Copy to runtime location if different from storage location
+    if [[ "$TRUENAS_RUNTIME_BINARY" != "$TRUENAS_STORED_BINARY" ]]; then
+        cp "$TRUENAS_STORED_BINARY" "$TRUENAS_RUNTIME_BINARY"
+        chmod +x "$TRUENAS_RUNTIME_BINARY"
+    fi
 
     # Build command line args
     build_exec_args
@@ -647,20 +682,20 @@ EOF
     chmod 600 "$TRUENAS_ENV_FILE"
 
     # Create bootstrap script that runs on boot
-    # This copies the binary from /data to /usr/local/bin and recreates the systemd symlink
+    # This script handles the runtime binary location and recreates the systemd symlink
     cat > "$TRUENAS_BOOTSTRAP_SCRIPT" <<'BOOTSTRAP'
 #!/bin/bash
 # Pulse Agent Bootstrap for TrueNAS SCALE
 # This script is called by TrueNAS Init/Shutdown task on boot.
-# It copies the binary from /data to /usr/local/bin (tmpfs, allows exec)
-# and recreates the systemd symlink (which is wiped on TrueNAS upgrades).
+# It ensures the binary is in an executable location and recreates the
+# systemd symlink (which is wiped on TrueNAS upgrades).
 
 set -e
 
 SERVICE_NAME="pulse-agent"
 STATE_DIR="STATE_DIR_PLACEHOLDER"
 STORED_BINARY="${STATE_DIR}/pulse-agent"
-RUNTIME_BINARY="/usr/local/bin/pulse-agent"
+RUNTIME_BINARY="RUNTIME_BINARY_PLACEHOLDER"
 SERVICE_STORAGE="${STATE_DIR}/pulse-agent.service"
 SYSTEMD_LINK="/etc/systemd/system/${SERVICE_NAME}.service"
 
@@ -674,9 +709,13 @@ if [[ ! -f "$SERVICE_STORAGE" ]]; then
     exit 1
 fi
 
-# Copy binary from persistent storage to runtime location (tmpfs allows exec)
-cp "$STORED_BINARY" "$RUNTIME_BINARY"
-chmod +x "$RUNTIME_BINARY"
+# If runtime binary is different from stored binary, copy it
+if [[ "$RUNTIME_BINARY" != "$STORED_BINARY" ]]; then
+    # Ensure parent directory exists (e.g., /root/bin)
+    mkdir -p "$(dirname "$RUNTIME_BINARY")" 2>/dev/null || true
+    cp "$STORED_BINARY" "$RUNTIME_BINARY"
+    chmod +x "$RUNTIME_BINARY"
+fi
 
 # Create symlink (or update if exists)
 ln -sf "$SERVICE_STORAGE" "$SYSTEMD_LINK"
@@ -689,8 +728,9 @@ systemctl restart "$SERVICE_NAME"
 echo "Pulse agent started successfully"
 BOOTSTRAP
 
-    # Replace placeholder
+    # Replace placeholders
     sed -i "s|STATE_DIR_PLACEHOLDER|${TRUENAS_STATE_DIR}|g" "$TRUENAS_BOOTSTRAP_SCRIPT"
+    sed -i "s|RUNTIME_BINARY_PLACEHOLDER|${TRUENAS_RUNTIME_BINARY}|g" "$TRUENAS_BOOTSTRAP_SCRIPT"
     chmod +x "$TRUENAS_BOOTSTRAP_SCRIPT"
 
     # Create systemd symlink now
