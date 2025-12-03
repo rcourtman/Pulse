@@ -582,6 +582,8 @@ fi
 # 4. TrueNAS SCALE (immutable root, uses systemd but needs special persistence)
 # TrueNAS SCALE wipes /etc/systemd/system on upgrades, so we store the service
 # in /data and create an Init/Shutdown task to recreate the symlink on boot.
+# Note: /data may have exec=off on some TrueNAS systems, so we copy the binary
+# to /usr/local/bin (tmpfs, allows exec) at runtime while storing in /data for persistence.
 if [[ "$TRUENAS" == true ]]; then
     log_info "Configuring TrueNAS SCALE installation..."
 
@@ -589,10 +591,29 @@ if [[ "$TRUENAS" == true ]]; then
     mkdir -p "$TRUENAS_STATE_DIR"
     mkdir -p "$TRUENAS_LOG_DIR"
 
+    # TrueNAS stores binary in /data for persistence, but runs from /usr/local/bin
+    # because /data may have exec=off. The bootstrap script copies on each boot.
+    TRUENAS_STORED_BINARY="$TRUENAS_STATE_DIR/${BINARY_NAME}"
+    TRUENAS_RUNTIME_BINARY="/usr/local/bin/${BINARY_NAME}"
+
+    # Move binary to persistent storage location
+    if [[ -f "${INSTALL_DIR}/${BINARY_NAME}" ]] && [[ "$INSTALL_DIR" == "$TRUENAS_STATE_DIR" ]]; then
+        # Binary already in the right place from earlier mv
+        :
+    else
+        mv "${INSTALL_DIR}/${BINARY_NAME}" "$TRUENAS_STORED_BINARY"
+    fi
+    chmod +x "$TRUENAS_STORED_BINARY"
+
+    # Copy to runtime location (tmpfs, allows exec)
+    cp "$TRUENAS_STORED_BINARY" "$TRUENAS_RUNTIME_BINARY"
+    chmod +x "$TRUENAS_RUNTIME_BINARY"
+
     # Build command line args
     build_exec_args
 
     # Store service file in /data (persists across upgrades)
+    # Service uses /usr/local/bin path (runtime location)
     TRUENAS_SERVICE_STORAGE="$TRUENAS_STATE_DIR/${AGENT_NAME}.service"
     cat > "$TRUENAS_SERVICE_STORAGE" <<EOF
 [Unit]
@@ -603,7 +624,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS}
+ExecStart=${TRUENAS_RUNTIME_BINARY} ${EXEC_ARGS}
 Restart=always
 RestartSec=5s
 User=root
@@ -626,22 +647,36 @@ EOF
     chmod 600 "$TRUENAS_ENV_FILE"
 
     # Create bootstrap script that runs on boot
+    # This copies the binary from /data to /usr/local/bin and recreates the systemd symlink
     cat > "$TRUENAS_BOOTSTRAP_SCRIPT" <<'BOOTSTRAP'
 #!/bin/bash
 # Pulse Agent Bootstrap for TrueNAS SCALE
 # This script is called by TrueNAS Init/Shutdown task on boot.
-# It recreates the systemd symlink (which is wiped on TrueNAS upgrades).
+# It copies the binary from /data to /usr/local/bin (tmpfs, allows exec)
+# and recreates the systemd symlink (which is wiped on TrueNAS upgrades).
 
 set -e
 
 SERVICE_NAME="pulse-agent"
-SERVICE_STORAGE="STATE_DIR_PLACEHOLDER/pulse-agent.service"
+STATE_DIR="STATE_DIR_PLACEHOLDER"
+STORED_BINARY="${STATE_DIR}/pulse-agent"
+RUNTIME_BINARY="/usr/local/bin/pulse-agent"
+SERVICE_STORAGE="${STATE_DIR}/pulse-agent.service"
 SYSTEMD_LINK="/etc/systemd/system/${SERVICE_NAME}.service"
+
+if [[ ! -f "$STORED_BINARY" ]]; then
+    echo "ERROR: Binary not found at $STORED_BINARY"
+    exit 1
+fi
 
 if [[ ! -f "$SERVICE_STORAGE" ]]; then
     echo "ERROR: Service file not found at $SERVICE_STORAGE"
     exit 1
 fi
+
+# Copy binary from persistent storage to runtime location (tmpfs allows exec)
+cp "$STORED_BINARY" "$RUNTIME_BINARY"
+chmod +x "$RUNTIME_BINARY"
 
 # Create symlink (or update if exists)
 ln -sf "$SERVICE_STORAGE" "$SYSTEMD_LINK"
@@ -688,7 +723,8 @@ BOOTSTRAP
     systemctl restart "${AGENT_NAME}"
 
     log_info "Installation complete!"
-    log_info "Binary: ${INSTALL_DIR}/${BINARY_NAME}"
+    log_info "Binary: $TRUENAS_STORED_BINARY (persistent)"
+    log_info "Runtime: $TRUENAS_RUNTIME_BINARY (for execution)"
     log_info "Service: $TRUENAS_SERVICE_STORAGE (symlinked to systemd)"
     log_info "Logs: tail -f ${LOG_FILE}"
     log_info ""
