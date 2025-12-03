@@ -3225,7 +3225,8 @@ if [[ "$STANDALONE" == false && "$CONTAINER_ON_THIS_NODE" == true ]]; then
     fi
 
     # Extract line number where snapshots start (first line starting with [)
-    SNAPSHOT_START=$(grep -n '^\[' "$TEMP_CONFIG" | head -1 | cut -d: -f1)
+    # Note: grep returns 1 if no match, which fails with pipefail - use || true to suppress
+    SNAPSHOT_START=$(grep -n '^\[' "$TEMP_CONFIG" | head -1 | cut -d: -f1 || true)
 
     if grep -Eq '^mp[0-9]+:.*pulse-sensor-proxy|^mp[0-9]+:.*mnt/pulse-proxy' "$TEMP_CONFIG" 2>/dev/null; then
         print_info "Removing mp mounts for pulse-sensor-proxy to keep snapshots and migrations working"
