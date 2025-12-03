@@ -354,7 +354,10 @@ func loadConfig(configPath string) (*Config, error) {
 	// Validate HTTP configuration if enabled
 	if cfg.HTTPEnabled {
 		if cfg.HTTPListenAddr == "" {
-			cfg.HTTPListenAddr = ":8443" // Default port
+			// Use 0.0.0.0:8443 explicitly for IPv4 binding.
+			// Using just ":8443" can result in IPv6-only binding on systems
+			// with net.ipv6.bindv6only=1 (e.g., some Proxmox 8 configurations).
+			cfg.HTTPListenAddr = "0.0.0.0:8443"
 			log.Info().Str("http_addr", cfg.HTTPListenAddr).Msg("Using default HTTP listen address")
 		}
 		if cfg.HTTPAuthToken == "" {

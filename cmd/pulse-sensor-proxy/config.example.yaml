@@ -42,7 +42,7 @@ rate_limit:
 
 # HTTPS mode (for remote nodes)
 http_enabled: false
-http_listen_addr: ":8443"
+http_listen_addr: "0.0.0.0:8443"  # Explicitly IPv4; use [::]:8443 for IPv6
 http_tls_cert: "/etc/pulse-sensor-proxy/tls/server.crt"
 http_tls_key: "/etc/pulse-sensor-proxy/tls/server.key"
 http_auth_token: ""           # Populated by installer; keep secret
