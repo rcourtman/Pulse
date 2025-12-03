@@ -41,6 +41,13 @@ BINARY_NAME="pulse-agent"
 INSTALL_DIR="/usr/local/bin"
 LOG_FILE="/var/log/${AGENT_NAME}.log"
 
+# TrueNAS SCALE configuration (immutable root filesystem)
+TRUENAS=false
+TRUENAS_STATE_DIR="/data/pulse-agent"
+TRUENAS_LOG_DIR="$TRUENAS_STATE_DIR/logs"
+TRUENAS_BOOTSTRAP_SCRIPT="$TRUENAS_STATE_DIR/bootstrap-pulse-agent.sh"
+TRUENAS_ENV_FILE="$TRUENAS_STATE_DIR/pulse-agent.env"
+
 # Defaults
 PULSE_URL=""
 PULSE_TOKEN=""
@@ -69,7 +76,12 @@ fail() {
 # Returns via EXEC_ARGS variable
 build_exec_args() {
     EXEC_ARGS="--url ${PULSE_URL} --token ${PULSE_TOKEN} --interval ${INTERVAL}"
-    if [[ "$ENABLE_HOST" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-host"; fi
+    # Always pass enable-host flag since agent defaults to true
+    if [[ "$ENABLE_HOST" == "true" ]]; then
+        EXEC_ARGS="$EXEC_ARGS --enable-host"
+    else
+        EXEC_ARGS="$EXEC_ARGS --enable-host=false"
+    fi
     if [[ "$ENABLE_DOCKER" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-docker"; fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
@@ -79,7 +91,12 @@ build_exec_args() {
 # Returns via EXEC_ARGS_ARRAY variable
 build_exec_args_array() {
     EXEC_ARGS_ARRAY=(--url "$PULSE_URL" --token "$PULSE_TOKEN" --interval "$INTERVAL")
-    if [[ "$ENABLE_HOST" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-host); fi
+    # Always pass enable-host flag since agent defaults to true
+    if [[ "$ENABLE_HOST" == "true" ]]; then
+        EXEC_ARGS_ARRAY+=(--enable-host)
+    else
+        EXEC_ARGS_ARRAY+=(--enable-host=false)
+    fi
     if [[ "$ENABLE_DOCKER" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-docker); fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS_ARRAY+=(--agent-id "$AGENT_ID"); fi
@@ -154,6 +171,26 @@ if [[ "$UNINSTALL" == "true" ]]; then
         rm -f "${INSTALL_DIR}/${BINARY_NAME}"
     fi
 
+    # TrueNAS SCALE
+    if [[ -d "$TRUENAS_STATE_DIR" ]] || [[ -f /etc/truenas-version ]]; then
+        log_info "Removing TrueNAS SCALE installation..."
+        # Stop and disable service
+        systemctl stop "${AGENT_NAME}" 2>/dev/null || true
+        systemctl disable "${AGENT_NAME}" 2>/dev/null || true
+        # Remove systemd symlink
+        rm -f "/etc/systemd/system/${AGENT_NAME}.service"
+        systemctl daemon-reload 2>/dev/null || true
+        # Remove Init/Shutdown task
+        if command -v midclt >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+            TASK_ID=$(midclt call initshutdownscript.query '[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]' 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")
+            if [[ -n "$TASK_ID" ]]; then
+                midclt call initshutdownscript.delete "$TASK_ID" >/dev/null 2>&1 || log_warn "Failed to remove Init/Shutdown task (id $TASK_ID)"
+            fi
+        fi
+        # Remove state directory
+        rm -rf "$TRUENAS_STATE_DIR"
+    fi
+
     # OpenRC (Alpine, Gentoo, Artix, etc.)
     if command -v rc-service >/dev/null 2>&1; then
         rc-service "${AGENT_NAME}" stop 2>/dev/null || true
@@ -184,6 +221,29 @@ fi
 # Validate interval format
 if [[ ! "$INTERVAL" =~ ^[0-9]+[smh]?$ ]]; then
     fail "Invalid interval format. Use format like '30s', '5m', or '1h'."
+fi
+
+# --- TrueNAS SCALE Detection ---
+# TrueNAS SCALE has an immutable root filesystem; /usr/local/bin is read-only.
+# We store everything in /data which persists across reboots and upgrades.
+is_truenas_scale() {
+    if [[ -f /etc/truenas-version ]]; then
+        return 0
+    fi
+    if [[ -f /etc/version ]] && grep -qi "truenas" /etc/version 2>/dev/null; then
+        return 0
+    fi
+    if [[ -d /data/ix-applications ]] || [[ -d /etc/ix-apps.d ]]; then
+        return 0
+    fi
+    return 1
+}
+
+if [[ "$(uname -s)" == "Linux" ]] && is_truenas_scale; then
+    TRUENAS=true
+    INSTALL_DIR="$TRUENAS_STATE_DIR"
+    LOG_FILE="$TRUENAS_LOG_DIR/${AGENT_NAME}.log"
+    log_info "TrueNAS SCALE detected (immutable root). Using $TRUENAS_STATE_DIR for installation."
 fi
 
 # --- Download ---
@@ -298,9 +358,13 @@ if [[ "$OS" == "darwin" ]]; then
         <string>--interval</string>
         <string>${INTERVAL}</string>"
 
+    # Always pass enable-host flag since agent defaults to true
     if [[ "$ENABLE_HOST" == "true" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
         <string>--enable-host</string>"
+    else
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--enable-host=false</string>"
     fi
     if [[ "$ENABLE_DOCKER" == "true" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
@@ -495,7 +559,124 @@ EOF
     exit 0
 fi
 
-# 4. OpenRC (Alpine, Gentoo, Artix, etc.)
+# 4. TrueNAS SCALE (immutable root, uses systemd but needs special persistence)
+# TrueNAS SCALE wipes /etc/systemd/system on upgrades, so we store the service
+# in /data and create an Init/Shutdown task to recreate the symlink on boot.
+if [[ "$TRUENAS" == true ]]; then
+    log_info "Configuring TrueNAS SCALE installation..."
+
+    # Create directories
+    mkdir -p "$TRUENAS_STATE_DIR"
+    mkdir -p "$TRUENAS_LOG_DIR"
+
+    # Build command line args
+    build_exec_args
+
+    # Store service file in /data (persists across upgrades)
+    TRUENAS_SERVICE_STORAGE="$TRUENAS_STATE_DIR/${AGENT_NAME}.service"
+    cat > "$TRUENAS_SERVICE_STORAGE" <<EOF
+[Unit]
+Description=Pulse Unified Agent
+After=network-online.target docker.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS}
+Restart=always
+RestartSec=5s
+User=root
+StandardOutput=append:${LOG_FILE}
+StandardError=append:${LOG_FILE}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Store environment/config for reference
+    cat > "$TRUENAS_ENV_FILE" <<EOF
+# Pulse Agent configuration (for reference)
+PULSE_URL=${PULSE_URL}
+PULSE_TOKEN=${PULSE_TOKEN}
+PULSE_INTERVAL=${INTERVAL}
+PULSE_ENABLE_HOST=${ENABLE_HOST}
+PULSE_ENABLE_DOCKER=${ENABLE_DOCKER}
+EOF
+    chmod 600 "$TRUENAS_ENV_FILE"
+
+    # Create bootstrap script that runs on boot
+    cat > "$TRUENAS_BOOTSTRAP_SCRIPT" <<'BOOTSTRAP'
+#!/bin/bash
+# Pulse Agent Bootstrap for TrueNAS SCALE
+# This script is called by TrueNAS Init/Shutdown task on boot.
+# It recreates the systemd symlink (which is wiped on TrueNAS upgrades).
+
+set -e
+
+SERVICE_NAME="pulse-agent"
+SERVICE_STORAGE="STATE_DIR_PLACEHOLDER/pulse-agent.service"
+SYSTEMD_LINK="/etc/systemd/system/${SERVICE_NAME}.service"
+
+if [[ ! -f "$SERVICE_STORAGE" ]]; then
+    echo "ERROR: Service file not found at $SERVICE_STORAGE"
+    exit 1
+fi
+
+# Create symlink (or update if exists)
+ln -sf "$SERVICE_STORAGE" "$SYSTEMD_LINK"
+
+# Reload and start
+systemctl daemon-reload
+systemctl enable "$SERVICE_NAME" 2>/dev/null || true
+systemctl restart "$SERVICE_NAME"
+
+echo "Pulse agent started successfully"
+BOOTSTRAP
+
+    # Replace placeholder
+    sed -i "s|STATE_DIR_PLACEHOLDER|${TRUENAS_STATE_DIR}|g" "$TRUENAS_BOOTSTRAP_SCRIPT"
+    chmod +x "$TRUENAS_BOOTSTRAP_SCRIPT"
+
+    # Create systemd symlink now
+    SYSTEMD_LINK="/etc/systemd/system/${AGENT_NAME}.service"
+    ln -sf "$TRUENAS_SERVICE_STORAGE" "$SYSTEMD_LINK"
+
+    # Register Init/Shutdown task using midclt
+    if command -v midclt >/dev/null 2>&1; then
+        log_info "Registering TrueNAS Init/Shutdown task..."
+
+        # Check if task already exists
+        EXISTING_TASK=$(midclt call initshutdownscript.query '[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]' 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")
+
+        if [[ -n "$EXISTING_TASK" ]]; then
+            log_info "Init/Shutdown task already exists (id $EXISTING_TASK), updating..."
+            midclt call initshutdownscript.update "$EXISTING_TASK" '{"type":"SCRIPT","script":"'"$TRUENAS_BOOTSTRAP_SCRIPT"'","when":"POSTINIT","enabled":true,"timeout":30,"comment":"Pulse Agent Bootstrap"}' >/dev/null 2>&1 || true
+        else
+            midclt call initshutdownscript.create '{"type":"SCRIPT","script":"'"$TRUENAS_BOOTSTRAP_SCRIPT"'","when":"POSTINIT","enabled":true,"timeout":30,"comment":"Pulse Agent Bootstrap"}' >/dev/null 2>&1 || log_warn "Failed to create Init/Shutdown task. Please add it manually in TrueNAS UI."
+        fi
+    else
+        log_warn "midclt not available. Please create an Init/Shutdown task manually in TrueNAS UI:"
+        log_warn "  Type: Script"
+        log_warn "  Script: $TRUENAS_BOOTSTRAP_SCRIPT"
+        log_warn "  When: Post Init"
+    fi
+
+    # Enable and start service
+    systemctl daemon-reload
+    systemctl enable "${AGENT_NAME}" 2>/dev/null || true
+    systemctl restart "${AGENT_NAME}"
+
+    log_info "Installation complete!"
+    log_info "Binary: ${INSTALL_DIR}/${BINARY_NAME}"
+    log_info "Service: $TRUENAS_SERVICE_STORAGE (symlinked to systemd)"
+    log_info "Logs: tail -f ${LOG_FILE}"
+    log_info ""
+    log_info "The Init/Shutdown task ensures the agent survives TrueNAS upgrades."
+    exit 0
+fi
+
+# 5. OpenRC (Alpine, Gentoo, Artix, etc.)
 # Check for rc-service but make sure we're not on a systemd system that happens to have it
 if command -v rc-service >/dev/null 2>&1 && [[ -d /etc/init.d ]] && ! command -v systemctl >/dev/null 2>&1; then
     INITSCRIPT="/etc/init.d/${AGENT_NAME}"
