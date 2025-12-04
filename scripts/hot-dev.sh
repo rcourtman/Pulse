@@ -78,7 +78,9 @@ if [[ -z ${PULSE_DEV_WS_URL:-} ]]; then
     fi
 fi
 
-ALLOWED_ORIGINS="*"
+# Set specific allowed origin for CORS with credentials
+# Use the frontend dev URL so cross-port SSE requests work with auth cookies
+ALLOWED_ORIGINS="http://${PULSE_DEV_API_HOST:-127.0.0.1}:${FRONTEND_DEV_PORT:-7655}"
 
 export FRONTEND_PORT PORT
 export FRONTEND_DEV_HOST FRONTEND_DEV_PORT

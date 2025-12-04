@@ -27,6 +27,7 @@ import { ChangePasswordModal } from './ChangePasswordModal';
 import { UnifiedAgents } from './UnifiedAgents';
 import APITokenManager from './APITokenManager';
 import { OIDCPanel } from './OIDCPanel';
+import { AISettings } from './AISettings';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
 import {
@@ -57,6 +58,7 @@ import Monitor from 'lucide-solid/icons/monitor';
 import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Clock from 'lucide-solid/icons/clock';
+import Sparkles from 'lucide-solid/icons/sparkles';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import type { NodeConfig } from '@/types/nodes';
@@ -324,6 +326,7 @@ type SettingsTab =
   | 'system-network'
   | 'system-updates'
   | 'system-backups'
+  | 'system-ai'
   | 'api'
   | 'security-overview'
   | 'security-auth'
@@ -368,6 +371,10 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
   'system-backups': {
     title: 'Backup Polling',
     description: 'Control how often Pulse queries Proxmox for backup tasks and snapshots.',
+  },
+  'system-ai': {
+    title: 'AI Assistant',
+    description: 'Configure AI-powered infrastructure analysis and remediation suggestions.',
   },
   api: {
     title: 'API access',
@@ -1279,6 +1286,12 @@ const Settings: Component<SettingsProps> = (props) => {
             id: 'system-backups',
             label: 'Backups',
             icon: Clock,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'system-ai',
+            label: 'AI Assistant',
+            icon: Sparkles,
             iconProps: { strokeWidth: 2 },
           },
         ],
@@ -4913,6 +4926,11 @@ const Settings: Component<SettingsProps> = (props) => {
                     </div>
                   </Card>
                 </div>
+              </Show>
+
+              {/* AI Assistant Tab */}
+              <Show when={activeTab() === 'system-ai'}>
+                <AISettings />
               </Show>
 
               {/* API Access */}

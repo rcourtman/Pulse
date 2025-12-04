@@ -6,6 +6,7 @@ export interface DockerMetadata {
   customUrl?: string;
   description?: string;
   tags?: string[];
+  notes?: string[]; // User annotations for AI context
 }
 
 export class DockerMetadataAPI {

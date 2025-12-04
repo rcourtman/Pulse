@@ -325,18 +325,26 @@ chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
 
 # --- Legacy Cleanup ---
 # Remove old agents if they exist to prevent conflicts
+# This is critical because legacy agents use the same system ID and will cause
+# connection conflicts (rapid connect/disconnect cycles) with the unified agent.
 log_info "Checking for legacy agents..."
 
-# Legacy Host Agent
+# Kill any running legacy agent processes first (even if started manually)
+# This prevents WebSocket connection conflicts during installation
+pkill -f "pulse-host-agent" 2>/dev/null || true
+pkill -f "pulse-docker-agent" 2>/dev/null || true
+sleep 1
+
+# Legacy Host Agent - systemd cleanup
 if command -v systemctl >/dev/null 2>&1; then
-    if systemctl is-active --quiet pulse-host-agent 2>/dev/null || systemctl is-enabled --quiet pulse-host-agent 2>/dev/null; then
+    if systemctl is-active --quiet pulse-host-agent 2>/dev/null || systemctl is-enabled --quiet pulse-host-agent 2>/dev/null || [[ -f /etc/systemd/system/pulse-host-agent.service ]]; then
         log_warn "Removing legacy pulse-host-agent..."
         systemctl stop pulse-host-agent 2>/dev/null || true
         systemctl disable pulse-host-agent 2>/dev/null || true
         rm -f /etc/systemd/system/pulse-host-agent.service
         rm -f /usr/local/bin/pulse-host-agent
     fi
-    if systemctl is-active --quiet pulse-docker-agent 2>/dev/null || systemctl is-enabled --quiet pulse-docker-agent 2>/dev/null; then
+    if systemctl is-active --quiet pulse-docker-agent 2>/dev/null || systemctl is-enabled --quiet pulse-docker-agent 2>/dev/null || [[ -f /etc/systemd/system/pulse-docker-agent.service ]]; then
         log_warn "Removing legacy pulse-docker-agent..."
         systemctl stop pulse-docker-agent 2>/dev/null || true
         systemctl disable pulse-docker-agent 2>/dev/null || true

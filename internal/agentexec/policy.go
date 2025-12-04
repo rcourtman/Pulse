@@ -1,0 +1,249 @@
+package agentexec
+
+import (
+	"regexp"
+	"strings"
+)
+
+// CommandPolicy defines what commands are allowed, blocked, or require approval
+type CommandPolicy struct {
+	// AutoApprove patterns - commands matching these are automatically allowed
+	AutoApprove []string
+
+	// RequireApproval patterns - commands matching these need user approval
+	RequireApproval []string
+
+	// Blocked patterns - commands matching these are never allowed
+	Blocked []string
+
+	// compiled regex patterns
+	autoApproveRe     []*regexp.Regexp
+	requireApprovalRe []*regexp.Regexp
+	blockedRe         []*regexp.Regexp
+}
+
+// DefaultPolicy returns a sensible default command policy
+func DefaultPolicy() *CommandPolicy {
+	p := &CommandPolicy{
+		AutoApprove: []string{
+			// System inspection
+			`^ps\s`,
+			`^top\s+-bn`,
+			`^df\s`,
+			`^free\s`,
+			`^uptime$`,
+			`^hostname$`,
+			`^uname\s`,
+			`^cat\s+/proc/`,
+			`^cat\s+/etc/os-release`,
+			`^lsof\s`,
+			`^netstat\s`,
+			`^ss\s`,
+			`^ip\s+(addr|route|link)`,
+			`^ifconfig`,
+			`^w$`,
+			`^who$`,
+			`^last\s`,
+
+			// Log reading (read-only)
+			`^cat\s+/var/log/`,
+			`^tail\s+.*(/var/log/|/log/)`,
+			`^head\s+.*(/var/log/|/log/)`,
+			`^grep\s+.*(/var/log/|/log/)`,
+			`^journalctl\s`,
+
+			// Service status (read-only)
+			`^systemctl\s+status\s`,
+			`^systemctl\s+is-active\s`,
+			`^systemctl\s+is-enabled\s`,
+			`^systemctl\s+list-units`,
+			`^service\s+\S+\s+status`,
+
+			// Docker inspection (read-only)
+			`^docker\s+ps`,
+			`^docker\s+logs\s`,
+			`^docker\s+inspect\s`,
+			`^docker\s+stats\s+--no-stream`,
+			`^docker\s+top\s`,
+			`^docker\s+images`,
+			`^docker\s+network\s+ls`,
+			`^docker\s+volume\s+ls`,
+
+			// Proxmox inspection (read-only)
+			`^pct\s+list`,
+			`^pct\s+config\s`,
+			`^pct\s+status\s`,
+			`^qm\s+list`,
+			`^qm\s+config\s`,
+			`^qm\s+status\s`,
+			`^pvesh\s+get\s`,
+
+			// Disk/storage info
+			`^lsblk`,
+			`^blkid`,
+			`^fdisk\s+-l`,
+			`^du\s`,
+			`^ls\s`,
+			`^stat\s`,
+			`^file\s`,
+			`^find\s+/.*-size`,  // Find large files
+			`^find\s+/.*-mtime`, // Find by modification time
+			`^find\s+/.*-type`,  // Find by type
+
+			// Memory inspection
+			`^vmstat`,
+			`^sar\s`,
+			`^iostat`,
+			`^mpstat`,
+
+			// Docker inspection (read-only)
+			`^docker\s+system\s+df`,
+
+			// APT inspection (read-only)
+			`^apt\s+list`,
+			`^apt-cache\s`,
+			`^dpkg\s+-l`,
+			`^dpkg\s+--list`,
+		},
+
+		RequireApproval: []string{
+			// Service control
+			`^systemctl\s+(restart|stop|start|reload)\s`,
+			`^service\s+\S+\s+(restart|stop|start|reload)`,
+
+			// Docker control
+			`^docker\s+(restart|stop|start|kill)\s`,
+			`^docker\s+exec\s`,
+			`^docker\s+rm\s`,
+
+			// Process control
+			`^kill\s`,
+			`^pkill\s`,
+			`^killall\s`,
+
+			// Package management
+			`^apt\s`,
+			`^apt-get\s`,
+			`^yum\s`,
+			`^dnf\s`,
+			`^pacman\s`,
+
+			// Proxmox control
+			`^pct\s+(start|stop|shutdown|reboot|resize|set)\s`,
+			`^qm\s+(start|stop|shutdown|reboot|reset|resize|set)\s`,
+		},
+
+		Blocked: []string{
+			// Destructive filesystem operations
+			`rm\s+-rf\s+/`,
+			`rm\s+--no-preserve-root`,
+			`mkfs`,
+			`dd\s+.*of=/dev/`,
+			`>\s*/dev/sd`,
+			`>\s*/dev/nvme`,
+
+			// System destruction
+			`shutdown`,
+			`reboot`,
+			`init\s+0`,
+			`poweroff`,
+			`halt`,
+
+			// Dangerous permissions
+			`chmod\s+777`,
+			`chmod\s+-R\s+777`,
+			`chown\s+-R\s+.*:.*\s+/`,
+
+			// Remote code execution
+			`curl.*\|\s*(ba)?sh`,
+			`wget.*\|\s*(ba)?sh`,
+			`bash\s+-c\s+.*curl`,
+			`bash\s+-c\s+.*wget`,
+
+			// Crypto mining indicators
+			`xmrig`,
+			`minerd`,
+			`cpuminer`,
+
+			// Fork bomb patterns
+			`:\(\)\s*{\s*:\s*\|\s*:`,
+
+			// Clear system logs
+			`>\s*/var/log/`,
+			`truncate.*--size.*0.*/var/log/`,
+		},
+	}
+
+	p.compile()
+	return p
+}
+
+func (p *CommandPolicy) compile() {
+	p.autoApproveRe = compilePatterns(p.AutoApprove)
+	p.requireApprovalRe = compilePatterns(p.RequireApproval)
+	p.blockedRe = compilePatterns(p.Blocked)
+}
+
+func compilePatterns(patterns []string) []*regexp.Regexp {
+	result := make([]*regexp.Regexp, 0, len(patterns))
+	for _, pattern := range patterns {
+		re, err := regexp.Compile(pattern)
+		if err == nil {
+			result = append(result, re)
+		}
+	}
+	return result
+}
+
+// PolicyDecision represents the policy decision for a command
+type PolicyDecision string
+
+const (
+	PolicyAllow           PolicyDecision = "allow"
+	PolicyRequireApproval PolicyDecision = "require_approval"
+	PolicyBlock           PolicyDecision = "block"
+)
+
+// Evaluate checks a command against the policy
+func (p *CommandPolicy) Evaluate(command string) PolicyDecision {
+	command = strings.TrimSpace(command)
+
+	// Check blocked first (highest priority)
+	for _, re := range p.blockedRe {
+		if re.MatchString(command) {
+			return PolicyBlock
+		}
+	}
+
+	// Check require approval
+	for _, re := range p.requireApprovalRe {
+		if re.MatchString(command) {
+			return PolicyRequireApproval
+		}
+	}
+
+	// Check auto-approve
+	for _, re := range p.autoApproveRe {
+		if re.MatchString(command) {
+			return PolicyAllow
+		}
+	}
+
+	// Default: require approval for unknown commands
+	return PolicyRequireApproval
+}
+
+// IsBlocked returns true if a command is blocked
+func (p *CommandPolicy) IsBlocked(command string) bool {
+	return p.Evaluate(command) == PolicyBlock
+}
+
+// NeedsApproval returns true if a command needs user approval
+func (p *CommandPolicy) NeedsApproval(command string) bool {
+	return p.Evaluate(command) == PolicyRequireApproval
+}
+
+// IsAutoApproved returns true if a command can run without approval
+func (p *CommandPolicy) IsAutoApproved(command string) bool {
+	return p.Evaluate(command) == PolicyAllow
+}

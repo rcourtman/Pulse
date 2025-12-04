@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -51,6 +52,8 @@ type Router struct {
 	hostAgentHandlers         *HostAgentHandlers
 	temperatureProxyHandlers  *TemperatureProxyHandlers
 	systemSettingsHandler     *SystemSettingsHandler
+	aiSettingsHandler         *AISettingsHandler
+	agentExecServer           *agentexec.Server
 	wsHub                     *websocket.Hub
 	reloadFunc                func() error
 	updateManager             *updates.Manager
@@ -994,6 +997,39 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/system/proxy-public-key", r.handleProxyPublicKey)
 	// Old API token endpoints removed - now using /api/security/regenerate-token
 
+	// Agent execution server for AI tool use
+	r.agentExecServer = agentexec.NewServer(func(token string) bool {
+		// Validate agent tokens using the API tokens system
+		if r.config == nil {
+			return false
+		}
+		// First check the new API tokens system
+		if _, ok := r.config.ValidateAPIToken(token); ok {
+			return true
+		}
+		// Fall back to legacy single token if set
+		if r.config.APIToken != "" {
+			return auth.CompareAPIToken(token, r.config.APIToken)
+		}
+		return false
+	})
+
+	// AI settings endpoints
+	r.aiSettingsHandler = NewAISettingsHandler(r.config, r.persistence, r.agentExecServer)
+	// Inject state provider so AI has access to full infrastructure context (VMs, containers, IPs)
+	if r.monitor != nil {
+		r.aiSettingsHandler.SetStateProvider(r.monitor)
+	}
+	r.mux.HandleFunc("/api/settings/ai", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetAISettings)))
+	r.mux.HandleFunc("/api/settings/ai/update", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleUpdateAISettings)))
+	r.mux.HandleFunc("/api/ai/test", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestAIConnection)))
+	r.mux.HandleFunc("/api/ai/execute", RequireAuth(r.config, r.aiSettingsHandler.HandleExecute))
+	r.mux.HandleFunc("/api/ai/execute/stream", RequireAuth(r.config, r.aiSettingsHandler.HandleExecuteStream))
+	r.mux.HandleFunc("/api/ai/run-command", RequireAuth(r.config, r.aiSettingsHandler.HandleRunCommand))
+
+	// Agent WebSocket for AI command execution
+	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
+
 	// Docker agent download endpoints
 	r.mux.HandleFunc("/install-docker-agent.sh", r.handleDownloadInstallScript) // Serves the Docker agent install script
 	r.mux.HandleFunc("/install-container-agent.sh", r.handleDownloadContainerAgentInstallScript)
@@ -1027,6 +1063,15 @@ func (r *Router) setupRoutes() {
 	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
 	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
 
+}
+
+// handleAgentWebSocket handles WebSocket connections from agents for AI command execution
+func (r *Router) handleAgentWebSocket(w http.ResponseWriter, req *http.Request) {
+	if r.agentExecServer == nil {
+		http.Error(w, "Agent execution not available", http.StatusServiceUnavailable)
+		return
+	}
+	r.agentExecServer.HandleWebSocket(w, req)
 }
 
 func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Request) {
@@ -1289,6 +1334,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Token, X-CSRF-Token, X-Setup-Token")
 			w.Header().Set("Access-Control-Expose-Headers", "X-CSRF-Token, X-Authenticated-User, X-Auth-Method")
+			// Allow credentials when origin is specific (not *)
+			if r.config.AllowedOrigins != "*" {
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
 		}
 
 		// Handle preflight requests
@@ -1351,6 +1400,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/install.ps1",                                       // Unified agent Windows installer
 				"/download/pulse-agent",                              // Unified agent binary
 				"/api/agent/version",                                 // Agent update checks need to work before auth
+				"/api/agent/ws",                                      // Agent WebSocket has its own auth via registration
 				"/api/server/info",                                   // Server info for installer script
 				"/api/install/install-sensor-proxy.sh",               // Temperature proxy installer fallback
 				"/api/install/pulse-sensor-proxy",                    // Temperature proxy binary fallback
