@@ -1280,12 +1280,9 @@ const DockerContainerRow: Component<{
         <For each={DOCKER_COLUMNS}>
           {(column) => (
             <td
-              class="py-0.5 align-middle whitespace-nowrap"
+              class={`py-0.5 align-middle whitespace-nowrap ${column.id === 'resource' ? 'max-w-[300px]' : ''}`}
               style={{
                 "min-width": column.id === 'cpu' || column.id === 'memory' ? '140px' : undefined,
-                // Force resource column to respect truncation for very long names (issue #789)
-                "max-width": column.id === 'resource' ? '0' : undefined,
-                "width": column.id === 'resource' ? '40%' : undefined,
               }}
             >
               {renderCell(column)}
@@ -1990,12 +1987,9 @@ const DockerServiceRow: Component<{
         <For each={DOCKER_COLUMNS}>
           {(column) => (
             <td
-              class="py-0.5 align-middle whitespace-nowrap"
+              class={`py-0.5 align-middle whitespace-nowrap ${column.id === 'resource' ? 'max-w-[300px]' : ''}`}
               style={{
                 "min-width": column.id === 'cpu' || column.id === 'memory' ? '140px' : undefined,
-                // Force resource column to respect truncation for very long names (issue #789)
-                "max-width": column.id === 'resource' ? '0' : undefined,
-                "width": column.id === 'resource' ? '40%' : undefined,
               }}
             >
               {renderCell(column)}
