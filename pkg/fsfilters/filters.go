@@ -101,6 +101,12 @@ var containerOverlayPatterns = []string{
 	"/merged",
 }
 
+// containerPathPrefixes detect container-related paths that should be excluded
+// from disk usage, even if they don't contain "/containers/".
+var containerPathPrefixes = []string{
+	"/mnt/.ix-apps/docker/", // TrueNAS SCALE Docker overlay mounts
+}
+
 // ShouldSkipFilesystem determines if a filesystem should be excluded from disk
 // usage aggregation. It checks for read-only filesystems, virtual/pseudo filesystems,
 // network mounts, and special system mountpoints. Returns skip=true if the filesystem
@@ -152,6 +158,15 @@ func ShouldSkipFilesystem(fsType, mountpoint string, totalBytes, usedBytes uint6
 				reasons = append(reasons, "container-overlay")
 				break
 			}
+		}
+	}
+
+	// Check for container paths that don't follow the /containers/ pattern
+	// (e.g., TrueNAS SCALE uses /mnt/.ix-apps/docker/overlay2/...). Related to #718.
+	for _, prefix := range containerPathPrefixes {
+		if strings.HasPrefix(mountpoint, prefix) {
+			reasons = append(reasons, "container-overlay")
+			break
 		}
 	}
 
