@@ -75,13 +75,34 @@ func (h *HTTPServer) Start() error {
 		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
 
+	// Determine network type based on address format
+	// Use tcp4 for IPv4 addresses to force IPv4-only binding on dual-stack systems
+	// Some systems (e.g., Proxmox 8 with net.ipv6.bindv6only=1) otherwise bind IPv6-only
+	network := "tcp"
+	addr := h.config.HTTPListenAddr
+	if strings.HasPrefix(addr, "0.0.0.0:") || (len(addr) > 0 && addr[0] >= '0' && addr[0] <= '9' && !strings.Contains(addr, "[")) {
+		// IPv4 address (starts with digit and no bracket)
+		network = "tcp4"
+	} else if strings.HasPrefix(addr, "[") {
+		// IPv6 address (starts with bracket)
+		network = "tcp6"
+	}
+
 	log.Info().
-		Str("addr", h.config.HTTPListenAddr).
+		Str("addr", addr).
+		Str("network", network).
 		Str("cert", h.config.HTTPTLSCertFile).
 		Msg("Starting HTTPS server")
 
+	// Create listener explicitly with the correct network type
+	// This ensures IPv4 addresses bind to IPv4-only sockets
+	ln, err := net.Listen(network, addr)
+	if err != nil {
+		return fmt.Errorf("failed to create listener: %w", err)
+	}
+
 	go func() {
-		if err := h.server.ListenAndServeTLS(h.config.HTTPTLSCertFile, h.config.HTTPTLSKeyFile); err != nil && err != http.ErrServerClosed {
+		if err := h.server.ServeTLS(ln, h.config.HTTPTLSCertFile, h.config.HTTPTLSKeyFile); err != nil && err != http.ErrServerClosed {
 			log.Error().Err(err).Msg("HTTPS server failed")
 		}
 	}()
