@@ -155,5 +155,16 @@ func ShouldSkipFilesystem(fsType, mountpoint string, totalBytes, usedBytes uint6
 		}
 	}
 
+	// EnhanceCP uses /var/container_tmp/{uuid}/merged for container overlays.
+	// Filter these as they're ephemeral container layers, not user storage. Related to #790.
+	if strings.Contains(mountpoint, "/container_tmp/") {
+		for _, pattern := range containerOverlayPatterns {
+			if strings.Contains(mountpoint, pattern) {
+				reasons = append(reasons, "container-overlay")
+				break
+			}
+		}
+	}
+
 	return len(reasons) > 0, reasons
 }

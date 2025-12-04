@@ -179,6 +179,9 @@ func TestShouldSkipFilesystem(t *testing.T) {
 		{"enhance containers overlay", "ext4", "/var/local/enhance/containers/abc123/overlay/merged", 1000000, 500000, true},
 		{"custom containers diff", "ext4", "/opt/containers/myapp/diff/layer", 1000000, 500000, true},
 		{"custom containers overlay2", "ext4", "/data/containers/xyz/overlay2/layer1", 1000000, 500000, true},
+		// EnhanceCP container_tmp paths (issue #790)
+		{"enhancecp container_tmp merged", "overlay", "/var/container_tmp/0d6eaae4-1aa0-4aad-a9d9-d430329c2e38/merged", 1000000, 500000, true},
+		{"enhancecp container_tmp overlay", "overlay", "/var/container_tmp/abc123/overlay/layer", 1000000, 500000, true},
 
 		// Windows paths
 		{"Windows System Reserved", "NTFS", "System Reserved", 500 * 1024 * 1024, 100 * 1024 * 1024, true},
