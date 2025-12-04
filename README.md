@@ -65,7 +65,7 @@ Access the dashboard at `http://<your-ip>:7655`.
 
 Community-maintained integrations and addons:
 
-- **[Home Assistant Addon](https://github.com/Kosztyk/pulse-docker-agent-addon)** - Run the Pulse Docker Agent as a Home Assistant addon.
+- **[Home Assistant Addons](https://github.com/Kosztyk/homeassistant-addons)** - Run Pulse Agent and Pulse Server as Home Assistant addons.
 
 ## ❤️ Support Pulse Development
 
