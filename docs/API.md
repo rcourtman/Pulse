@@ -112,23 +112,6 @@ Triggers a test alert to all configured channels.
 
 ---
 
----
-## 🖥️ Host Agent
-
-### Submit Report
-`POST /api/agents/host/report`
-Used by the Pulse Host Agent to push system metrics.
-
-### Lookup Agent
-`POST /api/agents/host/lookup`
-Check if a host agent is already registered.
-
-### Delete Host
-`DELETE /api/agents/host/<id>`
-Remove a host agent from monitoring.
-
----
-
 ## ⚙️ System Settings
 
 ### Get Settings
@@ -157,15 +140,23 @@ Initiate OIDC login flow.
 
 ---
 
-## 🐳 Docker Agent
+## 🤖 Agent Endpoints
 
-### Submit Report
-`POST /api/agents/docker/report`
-Used by the Pulse Docker Agent to push container metrics.
+### Unified Agent (Recommended)
+`GET /download/pulse-agent`
+Downloads the unified agent binary for the current platform.
 
-### Download Agent
-`GET /download/pulse-docker-agent`
-Downloads the binary for the current platform.
+The unified agent combines host and Docker monitoring. Use `--enable-docker` to enable Docker metrics.
+
+See [UNIFIED_AGENT.md](UNIFIED_AGENT.md) for installation instructions.
+
+### Legacy Agents (Deprecated)
+`GET /download/pulse-host-agent` - *Deprecated, use pulse-agent*
+`GET /download/pulse-docker-agent` - *Deprecated, use pulse-agent --enable-docker*
+
+### Submit Reports
+`POST /api/agents/host/report` - Host metrics
+`POST /api/agents/docker/report` - Docker container metrics
 
 ---
 

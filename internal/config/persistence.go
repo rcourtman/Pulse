@@ -31,6 +31,7 @@ type ConfigPersistence struct {
 	systemFile    string
 	oidcFile      string
 	apiTokensFile string
+	aiFile        string
 	crypto        *crypto.CryptoManager
 }
 
@@ -73,6 +74,7 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		systemFile:    filepath.Join(configDir, "system.json"),
 		oidcFile:      filepath.Join(configDir, "oidc.enc"),
 		apiTokensFile: filepath.Join(configDir, "api_tokens.json"),
+		aiFile:        filepath.Join(configDir, "ai.enc"),
 		crypto:        cryptoMgr,
 	}
 
@@ -1291,6 +1293,67 @@ func (c *ConfigPersistence) LoadOIDCConfig() (*OIDCConfig, error) {
 	return &settings, nil
 }
 
+// SaveAIConfig stores AI settings, encrypting them when a crypto manager is available.
+func (c *ConfigPersistence) SaveAIConfig(settings AIConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(settings)
+	if err != nil {
+		return err
+	}
+
+	if c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(data)
+		if err != nil {
+			return err
+		}
+		data = encrypted
+	}
+
+	if err := c.writeConfigFileLocked(c.aiFile, data, 0600); err != nil {
+		return err
+	}
+
+	log.Info().Str("file", c.aiFile).Bool("enabled", settings.Enabled).Msg("AI configuration saved")
+	return nil
+}
+
+// LoadAIConfig retrieves the persisted AI settings. It returns default config when no configuration exists yet.
+func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := os.ReadFile(c.aiFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Return default config if file doesn't exist
+			return NewDefaultAIConfig(), nil
+		}
+		return nil, err
+	}
+
+	if c.crypto != nil {
+		decrypted, err := c.crypto.Decrypt(data)
+		if err != nil {
+			return nil, err
+		}
+		data = decrypted
+	}
+
+	var settings AIConfig
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return nil, err
+	}
+
+	log.Info().Str("file", c.aiFile).Bool("enabled", settings.Enabled).Msg("AI configuration loaded")
+	return &settings, nil
+}
+
 // LoadSystemSettings loads system settings from file
 func (c *ConfigPersistence) LoadSystemSettings() (*SystemSettings, error) {
 	c.mu.RLock()
@@ -1439,4 +1502,61 @@ func (c *ConfigPersistence) cleanupOldBackups(pattern string) {
 			log.Debug().Str("file", files[i].path).Msg("Deleted old backup")
 		}
 	}
+}
+
+// LoadGuestMetadata loads all guest metadata from disk (for AI context)
+func (c *ConfigPersistence) LoadGuestMetadata() (map[string]*GuestMetadata, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	filePath := filepath.Join(c.configDir, "guest_metadata.json")
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return make(map[string]*GuestMetadata), nil
+		}
+		return nil, err
+	}
+
+	var metadata map[string]*GuestMetadata
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return nil, err
+	}
+
+	return metadata, nil
+}
+
+// LoadDockerMetadata loads all docker metadata from disk (for AI context)
+func (c *ConfigPersistence) LoadDockerMetadata() (map[string]*DockerMetadata, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	filePath := filepath.Join(c.configDir, "docker_metadata.json")
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return make(map[string]*DockerMetadata), nil
+		}
+		return nil, err
+	}
+
+	// Try versioned format first
+	var fileData struct {
+		Containers map[string]*DockerMetadata `json:"containers,omitempty"`
+	}
+	if err := json.Unmarshal(data, &fileData); err != nil {
+		return nil, err
+	}
+
+	if fileData.Containers != nil {
+		return fileData.Containers, nil
+	}
+
+	// Fall back to legacy format (direct map)
+	var metadata map[string]*DockerMetadata
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return nil, err
+	}
+
+	return metadata, nil
 }

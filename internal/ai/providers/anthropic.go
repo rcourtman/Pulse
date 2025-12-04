@@ -1,0 +1,267 @@
+package providers
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+)
+
+const (
+	anthropicAPIURL     = "https://api.anthropic.com/v1/messages"
+	anthropicAPIVersion = "2023-06-01"
+)
+
+// AnthropicClient implements the Provider interface for Anthropic's Claude API
+type AnthropicClient struct {
+	apiKey string
+	model  string
+	client *http.Client
+}
+
+// NewAnthropicClient creates a new Anthropic API client
+func NewAnthropicClient(apiKey, model string) *AnthropicClient {
+	return &AnthropicClient{
+		apiKey: apiKey,
+		model:  model,
+		client: &http.Client{
+			Timeout: 120 * time.Second, // LLM responses can take a while
+		},
+	}
+}
+
+// Name returns the provider name
+func (c *AnthropicClient) Name() string {
+	return "anthropic"
+}
+
+// anthropicRequest is the request body for the Anthropic API
+type anthropicRequest struct {
+	Model       string             `json:"model"`
+	Messages    []anthropicMessage `json:"messages"`
+	MaxTokens   int                `json:"max_tokens"`
+	System      string             `json:"system,omitempty"`
+	Temperature float64            `json:"temperature,omitempty"`
+	Tools       []anthropicTool    `json:"tools,omitempty"`
+}
+
+type anthropicMessage struct {
+	Role    string        `json:"role"`
+	Content interface{}   `json:"content"` // Can be string or []anthropicContent
+}
+
+type anthropicTool struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	InputSchema map[string]interface{} `json:"input_schema"`
+}
+
+// anthropicResponse is the response from the Anthropic API
+type anthropicResponse struct {
+	ID           string `json:"id"`
+	Type         string `json:"type"`
+	Role         string `json:"role"`
+	Content      []anthropicContent `json:"content"`
+	Model        string `json:"model"`
+	StopReason   string `json:"stop_reason"`
+	StopSequence string `json:"stop_sequence,omitempty"`
+	Usage        anthropicUsage `json:"usage"`
+}
+
+type anthropicContent struct {
+	Type  string                 `json:"type"`            // "text" or "tool_use" or "tool_result"
+	Text  string                 `json:"text,omitempty"`
+	ID    string                 `json:"id,omitempty"`    // For tool_use
+	Name  string                 `json:"name,omitempty"`  // For tool_use
+	Input map[string]interface{} `json:"input,omitempty"` // For tool_use
+	ToolUseID string             `json:"tool_use_id,omitempty"` // For tool_result
+	Content   string             `json:"content,omitempty"`     // For tool_result (when it's a string)
+	IsError   bool               `json:"is_error,omitempty"`    // For tool_result
+}
+
+type anthropicUsage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
+}
+
+type anthropicError struct {
+	Type    string `json:"type"`
+	Error   anthropicErrorDetail `json:"error"`
+}
+
+type anthropicErrorDetail struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+}
+
+// Chat sends a chat request to the Anthropic API
+func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	// Convert messages to Anthropic format
+	messages := make([]anthropicMessage, 0, len(req.Messages))
+	for _, m := range req.Messages {
+		// Anthropic doesn't use "system" role in messages array
+		if m.Role == "system" {
+			continue
+		}
+
+		// Handle tool results specially
+		if m.ToolResult != nil {
+			// Tool result message
+			messages = append(messages, anthropicMessage{
+				Role: "user",
+				Content: []anthropicContent{
+					{
+						Type:      "tool_result",
+						ToolUseID: m.ToolResult.ToolUseID,
+						Content:   m.ToolResult.Content,
+						IsError:   m.ToolResult.IsError,
+					},
+				},
+			})
+			continue
+		}
+
+		// Handle assistant messages with tool calls
+		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
+			contentBlocks := make([]anthropicContent, 0)
+			if m.Content != "" {
+				contentBlocks = append(contentBlocks, anthropicContent{
+					Type: "text",
+					Text: m.Content,
+				})
+			}
+			for _, tc := range m.ToolCalls {
+				contentBlocks = append(contentBlocks, anthropicContent{
+					Type:  "tool_use",
+					ID:    tc.ID,
+					Name:  tc.Name,
+					Input: tc.Input,
+				})
+			}
+			messages = append(messages, anthropicMessage{
+				Role:    "assistant",
+				Content: contentBlocks,
+			})
+			continue
+		}
+
+		// Simple text message
+		messages = append(messages, anthropicMessage{
+			Role:    m.Role,
+			Content: m.Content,
+		})
+	}
+
+	// Use provided model or fall back to client default
+	model := req.Model
+	if model == "" {
+		model = c.model
+	}
+
+	// Set max tokens (Anthropic requires this)
+	maxTokens := req.MaxTokens
+	if maxTokens == 0 {
+		maxTokens = 4096
+	}
+
+	anthropicReq := anthropicRequest{
+		Model:     model,
+		Messages:  messages,
+		MaxTokens: maxTokens,
+		System:    req.System,
+	}
+
+	if req.Temperature > 0 {
+		anthropicReq.Temperature = req.Temperature
+	}
+
+	// Add tools if provided
+	if len(req.Tools) > 0 {
+		anthropicReq.Tools = make([]anthropicTool, len(req.Tools))
+		for i, t := range req.Tools {
+			anthropicReq.Tools[i] = anthropicTool{
+				Name:        t.Name,
+				Description: t.Description,
+				InputSchema: t.InputSchema,
+			}
+		}
+	}
+
+	body, err := json.Marshal(anthropicReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", anthropicAPIURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("x-api-key", c.apiKey)
+	httpReq.Header.Set("anthropic-version", anthropicAPIVersion)
+
+	resp, err := c.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var errResp anthropicError
+		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
+			return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errResp.Error.Message)
+		}
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var anthropicResp anthropicResponse
+	if err := json.Unmarshal(respBody, &anthropicResp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	// Extract content and tool calls from response
+	var textContent string
+	var toolCalls []ToolCall
+	for _, c := range anthropicResp.Content {
+		switch c.Type {
+		case "text":
+			textContent += c.Text
+		case "tool_use":
+			toolCalls = append(toolCalls, ToolCall{
+				ID:    c.ID,
+				Name:  c.Name,
+				Input: c.Input,
+			})
+		}
+	}
+
+	return &ChatResponse{
+		Content:      textContent,
+		Model:        anthropicResp.Model,
+		StopReason:   anthropicResp.StopReason,
+		ToolCalls:    toolCalls,
+		InputTokens:  anthropicResp.Usage.InputTokens,
+		OutputTokens: anthropicResp.Usage.OutputTokens,
+	}, nil
+}
+
+// TestConnection validates the API key by making a minimal request
+func (c *AnthropicClient) TestConnection(ctx context.Context) error {
+	// Make a minimal request to validate the API key
+	_, err := c.Chat(ctx, ChatRequest{
+		Messages: []Message{
+			{Role: "user", Content: "Hi"},
+		},
+		MaxTokens: 10, // Minimal tokens to save cost
+	})
+	return err
+}

@@ -16,6 +16,7 @@ type DockerMetadata struct {
 	CustomURL   string   `json:"customUrl"`   // Custom URL for the resource
 	Description string   `json:"description"` // Optional description
 	Tags        []string `json:"tags"`        // Optional tags for categorization
+	Notes       []string `json:"notes"`       // User annotations for AI context
 }
 
 // DockerHostMetadata holds additional metadata for a Docker host

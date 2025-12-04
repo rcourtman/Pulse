@@ -28,10 +28,12 @@
   "dependencies": {
     "@solidjs/router": "^0.10.10",
     "lucide-solid": "^0.545.0",
+    "marked": "^17.0.1",
     "solid-js": "^1.8.0"
   },
   "devDependencies": {
     "@solidjs/testing-library": "^0.8.5",
+    "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.5.0",
     "@types/node": "^20.10.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",

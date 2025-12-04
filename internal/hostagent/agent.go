@@ -57,6 +57,7 @@ type Agent struct {
 	interval        time.Duration
 	trimmedPulseURL string
 	reportBuffer    *buffer.Queue[agentshost.Report]
+	commandClient   *CommandClient
 }
 
 const defaultInterval = 30 * time.Second
@@ -168,7 +169,7 @@ func New(cfg Config) (*Agent, error) {
 
 	const bufferCapacity = 60
 
-	return &Agent{
+	agent := &Agent{
 		cfg:             cfg,
 		logger:          logger,
 		httpClient:      client,
@@ -186,13 +187,27 @@ func New(cfg Config) (*Agent, error) {
 		interval:        cfg.Interval,
 		trimmedPulseURL: pulseURL,
 		reportBuffer:    buffer.New[agentshost.Report](bufferCapacity),
-	}, nil
+	}
+
+	// Create command client for AI command execution
+	agent.commandClient = NewCommandClient(cfg, agentID, hostname, platform, agentVersion)
+
+	return agent, nil
 }
 
 // Run executes the agent until the context is cancelled.
 func (a *Agent) Run(ctx context.Context) error {
 	if a.cfg.RunOnce {
 		return a.runOnce(ctx)
+	}
+
+	// Start command client in background for AI command execution
+	if a.commandClient != nil {
+		go func() {
+			if err := a.commandClient.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				a.logger.Error().Err(err).Msg("Command client stopped with error")
+			}
+		}()
 	}
 
 	ticker := time.NewTicker(a.interval)

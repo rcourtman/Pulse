@@ -43,6 +43,8 @@ import { TokenRevealDialog } from './components/TokenRevealDialog';
 import { useAlertsActivation } from './stores/alertsActivation';
 import { UpdateProgressModal } from './components/UpdateProgressModal';
 import type { UpdateStatus } from './api/updates';
+import { AIChat } from './components/AI/AIChat';
+import { aiChatStore } from './stores/aiChat';
 
 const Dashboard = lazy(() =>
   import('./components/Dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
@@ -723,6 +725,39 @@ function App() {
 
   // Root layout component for Router
   const RootLayout = (props: { children?: JSX.Element }) => {
+    // Check AI settings on mount and setup keyboard shortcut
+    onMount(() => {
+      // Check if AI is enabled
+      import('./api/ai').then(({ AIAPI }) => {
+        AIAPI.getSettings()
+          .then((settings) => {
+            aiChatStore.setEnabled(settings.enabled && settings.configured);
+          })
+          .catch(() => {
+            aiChatStore.setEnabled(false);
+          });
+      });
+
+      // Keyboard shortcut: Cmd/Ctrl+K to toggle AI
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+          e.preventDefault();
+          if (aiChatStore.enabled) {
+            aiChatStore.toggle();
+          }
+        }
+        // Escape to close
+        if (e.key === 'Escape' && aiChatStore.isOpen) {
+          aiChatStore.close();
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+      onCleanup(() => {
+        document.removeEventListener('keydown', handleKeyDown);
+      });
+    });
+
     return (
       <Show
         when={!isLoading()}
@@ -741,24 +776,62 @@ function App() {
                   <DemoBanner />
                   <UpdateBanner />
                   <GlobalUpdateProgressWatcher />
-                  <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans py-4 sm:py-6">
-                    <AppLayout
-                      connected={connected}
-                      reconnecting={reconnecting}
-                      dataUpdated={dataUpdated}
-                      lastUpdateText={lastUpdateText}
-                      versionInfo={versionInfo}
-                      hasAuth={hasAuth}
-                      needsAuth={needsAuth}
-                      proxyAuthInfo={proxyAuthInfo}
-                      handleLogout={handleLogout}
-                      state={state}
-                    >
-                      {props.children}
-                    </AppLayout>
+                  {/* Main layout container - flexbox to allow AI panel to push content */}
+                  <div class="flex h-screen overflow-hidden">
+                    {/* Main content area - shrinks when AI panel is open, scrolls independently */}
+                    <div class={`flex-1 min-w-0 overflow-y-auto bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans py-4 sm:py-6 transition-all duration-300`}>
+                      <AppLayout
+                        connected={connected}
+                        reconnecting={reconnecting}
+                        dataUpdated={dataUpdated}
+                        lastUpdateText={lastUpdateText}
+                        versionInfo={versionInfo}
+                        hasAuth={hasAuth}
+                        needsAuth={needsAuth}
+                        proxyAuthInfo={proxyAuthInfo}
+                        handleLogout={handleLogout}
+                        state={state}
+                      >
+                        {props.children}
+                      </AppLayout>
+                    </div>
+                    {/* AI Panel - slides in from right, pushes content */}
+                    <AIChat onClose={() => aiChatStore.close()} />
                   </div>
                   <ToastContainer />
                   <TokenRevealDialog />
+                  {/* Fixed AI Assistant Button - always visible on the side when AI is enabled */}
+                  <Show when={aiChatStore.enabled !== false && !aiChatStore.isOpen}>
+                    {/* This component only shows when chat is closed */}
+                    <button
+                      type="button"
+                      onClick={() => aiChatStore.toggle()}
+                      class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1.5 pl-2 pr-1.5 py-3 rounded-l-xl bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 group"
+                      title={aiChatStore.context.context?.name ? `AI Assistant - ${aiChatStore.context.context.name}` : 'AI Assistant (⌘K)'}
+                      aria-label="Expand AI Assistant"
+                    >
+                      {/* Double chevron left - expand */}
+                      <svg
+                        class="h-4 w-4 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        stroke-width="2"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M11 19l-7-7 7-7M18 19l-7-7 7-7"
+                        />
+                      </svg>
+                      {/* Context indicator - shows count when items are in context */}
+                      <Show when={aiChatStore.contextItems.length > 0}>
+                        <span class="min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold bg-green-500 text-white rounded-full">
+                          {aiChatStore.contextItems.length}
+                        </span>
+                      </Show>
+                    </button>
+                  </Show>
                   <TooltipRoot />
                 </DarkModeContext.Provider>
               </WebSocketContext.Provider>

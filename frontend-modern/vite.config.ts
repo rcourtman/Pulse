@@ -52,6 +52,41 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
+      '/api/ai/execute/stream': {
+        target: backendUrl,
+        changeOrigin: true,
+        // SSE requires special handling to prevent proxy timeouts
+        // Set timeout to 10 minutes (600000ms) for long-running AI requests
+        timeout: 600000,
+        proxyTimeout: 600000,
+        configure: (proxy, _options) => {
+          // Set proxy-level timeouts
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            // Disable socket timeouts for SSE
+            req.socket.setTimeout(0);
+            req.socket.setNoDelay(true);
+            req.socket.setKeepAlive(true);
+            // Also set on the proxy request
+            proxyReq.socket?.setTimeout(0);
+          });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            // Disable response socket timeout
+            res.socket?.setTimeout(0);
+            res.socket?.setNoDelay(true);
+            res.socket?.setKeepAlive(true);
+            // Also disable on proxy response socket
+            proxyRes.socket?.setTimeout(0);
+          });
+          proxy.on('error', (err, req, res) => {
+            console.error('[SSE Proxy Error]', err.message);
+          });
+        },
+      },
+      '/api/agent/ws': {
+        target: backendWsUrl,
+        ws: true,
+        changeOrigin: true,
+      },
       '/api': {
         target: backendUrl,
         changeOrigin: true,
