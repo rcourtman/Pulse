@@ -180,6 +180,10 @@ func TestShouldSkipFilesystem(t *testing.T) {
 		{"custom containers diff", "ext4", "/opt/containers/myapp/diff/layer", 1000000, 500000, true},
 		{"custom containers overlay2", "ext4", "/data/containers/xyz/overlay2/layer1", 1000000, 500000, true},
 
+		// TrueNAS SCALE Docker overlay paths (issue #718)
+		{"truenas ix-apps docker overlay2", "zfs", "/mnt/.ix-apps/docker/overlay2/6c9aad59ec9b0bc33d5e374/merged", 173 * 1024 * 1024 * 1024 * 1024, 399 * 1024 * 1024, true},
+		{"truenas ix-apps docker overlay2 diff", "zfs", "/mnt/.ix-apps/docker/overlay2/c5e317c7340f9273d394dc0/diff", 173 * 1024 * 1024 * 1024 * 1024, 399 * 1024 * 1024, true},
+
 		// Windows paths
 		{"Windows System Reserved", "NTFS", "System Reserved", 500 * 1024 * 1024, 100 * 1024 * 1024, true},
 		{"Windows C drive - should NOT skip", "NTFS", "C:\\", 500 * 1024 * 1024 * 1024, 200 * 1024 * 1024 * 1024, false},

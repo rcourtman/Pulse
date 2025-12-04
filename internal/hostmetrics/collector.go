@@ -148,10 +148,12 @@ func collectDisks(ctx context.Context) []agentshost.Disk {
 			continue
 		}
 
-		// Skip read-only filesystems like squashfs (snap mounts), erofs, iso9660, etc.
-		// These are immutable and always report near-full usage, which causes false alerts.
-		// See issues #505 (Home Assistant OS) and #690 (Ubuntu snap mounts).
-		if fsfilters.ShouldIgnoreReadOnlyFilesystem(part.Fstype, usage.Total, usage.Used) {
+		// Skip filesystems that shouldn't be counted toward disk usage:
+		// - Read-only filesystems (squashfs, erofs, iso9660) - always report near-full
+		// - Virtual/pseudo filesystems (tmpfs, devtmpfs, cgroup, etc.)
+		// - Container overlay paths (Docker/Podman layers on ZFS, including TrueNAS .ix-apps)
+		// See issues #505, #690, #718, #790.
+		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(part.Fstype, part.Mountpoint, usage.Total, usage.Used); shouldSkip {
 			continue
 		}
 
