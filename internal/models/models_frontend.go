@@ -94,6 +94,7 @@ type ContainerFrontend struct {
 	Tags              string                  `json:"tags,omitempty"`       // Joined string
 	Lock              string                  `json:"lock,omitempty"`
 	LastSeen          int64                   `json:"lastSeen"` // Unix timestamp
+	OSName            string                  `json:"osName,omitempty"`
 }
 
 // DockerHostFrontend represents a Docker host with frontend-friendly fields

@@ -191,6 +191,10 @@ func (c Container) ToFrontend() ContainerFrontend {
 		copy(ct.NetworkInterfaces, c.NetworkInterfaces)
 	}
 
+	if c.OSName != "" {
+		ct.OSName = c.OSName
+	}
+
 	return ct
 }
 

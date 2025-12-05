@@ -2329,6 +2329,10 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 			}
 			mergeContainerNetworkInterface(&networkIfaces, detail)
 		}
+		// Extract OS type from container config
+		if osName := extractContainerOSType(configData); osName != "" {
+			container.OSName = osName
+		}
 	}
 
 	if len(addressOrder) == 0 {

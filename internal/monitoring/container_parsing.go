@@ -445,3 +445,48 @@ func extractContainerRootDeviceFromConfig(config map[string]interface{}) string 
 	device := strings.TrimSpace(parts[0])
 	return device
 }
+
+// lxcOSTypeDisplayNames maps Proxmox LXC ostype values to human-readable OS names.
+// See: https://pve.proxmox.com/wiki/Manual:_pct.conf
+var lxcOSTypeDisplayNames = map[string]string{
+	"alpine":    "Alpine Linux",
+	"archlinux": "Arch Linux",
+	"centos":    "CentOS",
+	"debian":    "Debian",
+	"devuan":    "Devuan",
+	"fedora":    "Fedora",
+	"gentoo":    "Gentoo",
+	"nixos":     "NixOS",
+	"opensuse":  "openSUSE",
+	"ubuntu":    "Ubuntu",
+	"unmanaged": "Unmanaged",
+}
+
+// extractContainerOSType extracts and normalizes the ostype from container config.
+// Returns a human-readable OS name (e.g., "Ubuntu", "Debian", "Alpine Linux").
+func extractContainerOSType(config map[string]interface{}) string {
+	if len(config) == 0 {
+		return ""
+	}
+
+	raw, ok := config["ostype"]
+	if !ok {
+		return ""
+	}
+
+	ostype := strings.TrimSpace(strings.ToLower(fmt.Sprint(raw)))
+	if ostype == "" {
+		return ""
+	}
+
+	// Return display name if known, otherwise capitalize the ostype
+	if displayName, found := lxcOSTypeDisplayNames[ostype]; found {
+		return displayName
+	}
+
+	// Fallback: capitalize first letter
+	if len(ostype) > 0 {
+		return strings.ToUpper(ostype[:1]) + ostype[1:]
+	}
+	return ostype
+}
