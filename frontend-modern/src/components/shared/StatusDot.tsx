@@ -27,14 +27,15 @@ const SIZE_CLASSES: Record<StatusDotSize, string> = {
 };
 
 export function StatusDot(props: StatusDotProps): JSX.Element {
-  const variant = props.variant ?? 'muted';
-  const size = props.size ?? 'sm';
-  const ariaHidden = props.ariaHidden ?? !props.ariaLabel;
+  // Use getters to maintain reactivity - props can change over time
+  const variant = () => props.variant ?? 'muted';
+  const size = () => props.size ?? 'sm';
+  const ariaHidden = () => props.ariaHidden ?? !props.ariaLabel;
 
-  const className = [
+  const className = () => [
     'inline-block rounded-full flex-shrink-0',
-    SIZE_CLASSES[size],
-    VARIANT_CLASSES[variant],
+    SIZE_CLASSES[size()],
+    VARIANT_CLASSES[variant()],
     props.pulse ? 'animate-pulse' : '',
     props.class ?? '',
   ]
@@ -43,10 +44,10 @@ export function StatusDot(props: StatusDotProps): JSX.Element {
 
   return (
     <span
-      class={className}
+      class={className()}
       title={props.title}
       aria-label={props.ariaLabel}
-      aria-hidden={ariaHidden}
+      aria-hidden={ariaHidden()}
       role={props.ariaLabel ? 'img' : undefined}
     />
   );
