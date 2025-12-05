@@ -336,6 +336,10 @@ func (h Host) ToFrontend() HostFrontend {
 		host.Disks = append([]Disk(nil), h.Disks...)
 	}
 
+	if len(h.DiskIO) > 0 {
+		host.DiskIO = append([]DiskIO(nil), h.DiskIO...)
+	}
+
 	if len(h.NetworkInterfaces) > 0 {
 		host.NetworkInterfaces = make([]HostNetworkInterface, len(h.NetworkInterfaces))
 		copy(host.NetworkInterfaces, h.NetworkInterfaces)

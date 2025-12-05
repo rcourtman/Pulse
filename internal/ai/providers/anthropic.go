@@ -8,11 +8,15 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 const (
 	anthropicAPIURL     = "https://api.anthropic.com/v1/messages"
 	anthropicAPIVersion = "2023-06-01"
+	maxRetries          = 3
+	initialBackoff      = 2 * time.Second
 )
 
 // AnthropicClient implements the Provider interface for Anthropic's Claude API
@@ -195,32 +199,76 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", anthropicAPIURL, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
+	// Retry loop for transient errors (429, 529, 5xx)
+	var respBody []byte
+	var lastErr error
 
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-api-key", c.apiKey)
-	httpReq.Header.Set("anthropic-version", anthropicAPIVersion)
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff: 2s, 4s, 8s
+			backoff := initialBackoff * time.Duration(1<<(attempt-1))
+			log.Warn().
+				Int("attempt", attempt).
+				Dur("backoff", backoff).
+				Str("last_error", lastErr.Error()).
+				Msg("Retrying Anthropic API request after transient error")
 
-	resp, err := c.client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp anthropicError
-		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
-			return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errResp.Error.Message)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+			}
 		}
-		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", anthropicAPIURL, bytes.NewReader(body))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("x-api-key", c.apiKey)
+		httpReq.Header.Set("anthropic-version", anthropicAPIVersion)
+
+		resp, err := c.client.Do(httpReq)
+		if err != nil {
+			lastErr = fmt.Errorf("request failed: %w", err)
+			continue
+		}
+
+		respBody, err = io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = fmt.Errorf("failed to read response: %w", err)
+			continue
+		}
+
+		// Check if this is a retryable error
+		if resp.StatusCode == 429 || resp.StatusCode == 529 || resp.StatusCode >= 500 {
+			var errResp anthropicError
+			errMsg := string(respBody)
+			if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
+				errMsg = errResp.Error.Message
+			}
+			lastErr = fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
+			continue
+		}
+
+		// Non-retryable error
+		if resp.StatusCode != http.StatusOK {
+			var errResp anthropicError
+			if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
+				return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errResp.Error.Message)
+			}
+			return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+		}
+
+		// Success - break out of retry loop
+		lastErr = nil
+		break
+	}
+
+	if lastErr != nil {
+		return nil, fmt.Errorf("failed after %d retries: %w", maxRetries, lastErr)
 	}
 
 	var anthropicResp anthropicResponse

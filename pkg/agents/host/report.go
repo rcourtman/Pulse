@@ -8,6 +8,7 @@ type Report struct {
 	Host       HostInfo           `json:"host"`
 	Metrics    Metrics            `json:"metrics"`
 	Disks      []Disk             `json:"disks,omitempty"`
+	DiskIO     []DiskIO           `json:"diskIO,omitempty"`
 	Network    []NetworkInterface `json:"network,omitempty"`
 	Sensors    Sensors            `json:"sensors,omitempty"`
 	RAID       []RAIDArray        `json:"raid,omitempty"`
@@ -23,6 +24,7 @@ type AgentInfo struct {
 	Type            string `json:"type,omitempty"` // "unified", "host", or "docker" - empty means legacy
 	IntervalSeconds int    `json:"intervalSeconds,omitempty"`
 	Hostname        string `json:"hostname,omitempty"`
+	UpdatedFrom     string `json:"updatedFrom,omitempty"` // Previous version if recently auto-updated
 }
 
 // HostInfo contains platform and identification details about the monitored host.
@@ -68,6 +70,19 @@ type Disk struct {
 	UsedBytes  int64   `json:"usedBytes,omitempty"`
 	FreeBytes  int64   `json:"freeBytes,omitempty"`
 	Usage      float64 `json:"usage,omitempty"`
+}
+
+// DiskIO represents disk I/O statistics for a block device.
+// These are cumulative counters since boot - the backend calculates rates.
+type DiskIO struct {
+	Device     string `json:"device"`               // e.g., "nvme0n1", "sda"
+	ReadBytes  uint64 `json:"readBytes,omitempty"`  // Total bytes read
+	WriteBytes uint64 `json:"writeBytes,omitempty"` // Total bytes written
+	ReadOps    uint64 `json:"readOps,omitempty"`    // Total read operations
+	WriteOps   uint64 `json:"writeOps,omitempty"`   // Total write operations
+	ReadTime   uint64 `json:"readTimeMs,omitempty"` // Total time spent reading (ms)
+	WriteTime  uint64 `json:"writeTimeMs,omitempty"`// Total time spent writing (ms)
+	IOTime     uint64 `json:"ioTimeMs,omitempty"`   // Total time spent doing I/O (ms)
 }
 
 // NetworkInterface summarises network adapter statistics.

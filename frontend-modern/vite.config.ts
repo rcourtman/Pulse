@@ -51,6 +51,24 @@ export default defineConfig({
         target: backendWsUrl,
         ws: true,
         changeOrigin: true,
+        // Browser WebSocket connections are long-lived, disable timeouts
+        proxyTimeout: 0,
+        timeout: 0,
+        configure: (proxy, _options) => {
+          proxy.options.timeout = 0;
+          proxy.options.proxyTimeout = 0;
+
+          proxy.on('proxyReqWs', (proxyReq, req, socket) => {
+            socket.setTimeout(0);
+            socket.setNoDelay(true);
+            socket.setKeepAlive(true, 30000);
+          });
+          proxy.on('open', (proxySocket) => {
+            proxySocket.setTimeout(0);
+            proxySocket.setNoDelay(true);
+            proxySocket.setKeepAlive(true, 30000);
+          });
+        },
       },
       '/api/ai/execute/stream': {
         target: backendUrl,
@@ -86,6 +104,32 @@ export default defineConfig({
         target: backendWsUrl,
         ws: true,
         changeOrigin: true,
+        // Agent WebSocket connections are long-lived, disable timeouts
+        // proxyTimeout: 0 disables the proxy-to-target timeout
+        // timeout: 0 disables the client-to-proxy timeout
+        proxyTimeout: 0,
+        timeout: 0,
+        configure: (proxy, _options) => {
+          // Disable http-proxy's internal timeout (default is 2 minutes but seems to be 10s)
+          proxy.options.timeout = 0;
+          proxy.options.proxyTimeout = 0;
+
+          proxy.on('proxyReqWs', (proxyReq, req, socket) => {
+            // Disable socket timeouts for WebSocket connections
+            socket.setTimeout(0);
+            socket.setNoDelay(true);
+            socket.setKeepAlive(true, 30000);
+          });
+          proxy.on('open', (proxySocket) => {
+            // Also disable timeout on the proxy socket
+            proxySocket.setTimeout(0);
+            proxySocket.setNoDelay(true);
+            proxySocket.setKeepAlive(true, 30000);
+          });
+          proxy.on('error', (err, req, res) => {
+            console.error('[Agent WS Proxy Error]', err.message);
+          });
+        },
       },
       '/api': {
         target: backendUrl,

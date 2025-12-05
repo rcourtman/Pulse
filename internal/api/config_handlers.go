@@ -430,6 +430,7 @@ type NodeResponse struct {
 	IsCluster                    bool                     `json:"isCluster,omitempty"`
 	ClusterName                  string                   `json:"clusterName,omitempty"`
 	ClusterEndpoints             []config.ClusterEndpoint `json:"clusterEndpoints,omitempty"`
+	Source                       string                   `json:"source,omitempty"` // "agent" or "script" - how this node was registered
 }
 
 func determineTemperatureTransport(enabled bool, proxyURL, proxyToken string, socketAvailable bool, containerSSHBlocked bool) string {
@@ -834,6 +835,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 			IsCluster:                    pve.IsCluster,
 			ClusterName:                  pve.ClusterName,
 			ClusterEndpoints:             pve.ClusterEndpoints,
+			Source:                       pve.Source,
 		}
 		nodes = append(nodes, node)
 	}
@@ -859,6 +861,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 			MonitorPruneJobs:             pbs.MonitorPruneJobs,
 			MonitorGarbageJobs:           pbs.MonitorGarbageJobs,
 			Status:                       h.getNodeStatus("pbs", pbs.Name),
+			Source:                       pbs.Source,
 		}
 		nodes = append(nodes, node)
 	}
@@ -5539,7 +5542,7 @@ func (h *ConfigHandlers) HandleUpdateMockMode(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// AutoRegisterRequest represents a request from the setup script to auto-register a node
+// AutoRegisterRequest represents a request from the setup script or agent to auto-register a node
 type AutoRegisterRequest struct {
 	Type       string `json:"type"`                 // "pve" or "pbs"
 	Host       string `json:"host"`                 // The host URL
@@ -5548,6 +5551,7 @@ type AutoRegisterRequest struct {
 	ServerName string `json:"serverName"`           // Hostname or IP
 	SetupCode  string `json:"setupCode,omitempty"`  // One-time setup code for authentication (deprecated)
 	AuthToken  string `json:"authToken,omitempty"`  // Direct auth token from URL (new approach)
+	Source     string `json:"source,omitempty"`     // "agent" or "script" - indicates how the node was registered
 	// New secure fields
 	RequestToken bool   `json:"requestToken,omitempty"` // If true, Pulse will generate and return a token
 	Username     string `json:"username,omitempty"`     // Username for creating token (e.g., "root@pam")
@@ -5752,18 +5756,29 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		MonitorGarbageJobs: &boolFalse,
 	}
 
-	// Check if a node with this host already exists
+	// Check if a node with this host or name already exists
+	// Match by host URL or by node name (to handle hostname vs IP differences)
 	existingIndex := -1
 	if req.Type == "pve" {
 		for i, node := range h.config.PVEInstances {
-			if node.Host == host { // Use normalized host for comparison
+			if node.Host == host {
+				existingIndex = i
+				break
+			}
+			// Also match by name if ServerName matches existing node name
+			if req.ServerName != "" && strings.EqualFold(node.Name, req.ServerName) {
 				existingIndex = i
 				break
 			}
 		}
 	} else {
 		for i, node := range h.config.PBSInstances {
-			if node.Host == host { // Use normalized host for comparison
+			if node.Host == host {
+				existingIndex = i
+				break
+			}
+			// Also match by name if ServerName matches existing node name
+			if req.ServerName != "" && strings.EqualFold(node.Name, req.ServerName) {
 				existingIndex = i
 				break
 			}
@@ -5780,6 +5795,10 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			instance.Password = ""
 			instance.TokenName = nodeConfig.TokenName
 			instance.TokenValue = nodeConfig.TokenValue
+			// Update source if provided (allows upgrade from script to agent)
+			if req.Source != "" {
+				instance.Source = req.Source
+			}
 
 			// Check for cluster if not already detected
 			if !instance.IsCluster {
@@ -5809,6 +5828,10 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			instance.Password = ""
 			instance.TokenName = nodeConfig.TokenName
 			instance.TokenValue = nodeConfig.TokenValue
+			// Update source if provided (allows upgrade from script to agent)
+			if req.Source != "" {
+				instance.Source = req.Source
+			}
 			// Keep other settings as they were
 		}
 		log.Info().
@@ -5864,6 +5887,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				IsCluster:         isCluster,
 				ClusterName:       clusterName,
 				ClusterEndpoints:  clusterEndpoints,
+				Source:            req.Source, // Track how this node was registered
 			}
 			h.config.PVEInstances = append(h.config.PVEInstances, newInstance)
 
@@ -5911,6 +5935,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				MonitorVerifyJobs:  monitorVerifyJobs,
 				MonitorPruneJobs:   monitorPruneJobs,
 				MonitorGarbageJobs: monitorGarbageJobs,
+				Source:             req.Source, // Track how this node was registered
 			}
 			h.config.PBSInstances = append(h.config.PBSInstances, newInstance)
 		}
@@ -6271,4 +6296,112 @@ func (h *ConfigHandlers) generateOrLoadSSHKey(sshDir, privateKeyPath, publicKeyP
 		Msg("Successfully generated SSH keypair")
 
 	return publicKeyString
+}
+
+// AgentInstallCommandRequest represents a request for an agent install command
+type AgentInstallCommandRequest struct {
+	Type string `json:"type"` // "pve" or "pbs"
+}
+
+// AgentInstallCommandResponse contains the generated install command
+type AgentInstallCommandResponse struct {
+	Command string `json:"command"`
+	Token   string `json:"token"`
+}
+
+// HandleAgentInstallCommand generates an API token and install command for agent-based Proxmox setup
+func (h *ConfigHandlers) HandleAgentInstallCommand(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req AgentInstallCommandRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate type
+	if req.Type != "pve" && req.Type != "pbs" {
+		http.Error(w, "Type must be 'pve' or 'pbs'", http.StatusBadRequest)
+		return
+	}
+
+	// Generate a new API token with host report and host manage scopes
+	rawToken, err := internalauth.GenerateAPIToken()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to generate API token for agent install")
+		http.Error(w, "Failed to generate API token", http.StatusInternalServerError)
+		return
+	}
+
+	tokenName := fmt.Sprintf("proxmox-agent-%s-%d", req.Type, time.Now().Unix())
+	scopes := []string{
+		config.ScopeHostReport,
+		config.ScopeHostManage,
+	}
+
+	record, err := config.NewAPITokenRecord(rawToken, tokenName, scopes)
+	if err != nil {
+		log.Error().Err(err).Str("token_name", tokenName).Msg("Failed to construct API token record")
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+
+	// Persist the token
+	config.Mu.Lock()
+	h.config.APITokens = append(h.config.APITokens, *record)
+	h.config.SortAPITokens()
+	h.config.APITokenEnabled = true
+
+	if h.persistence != nil {
+		if err := h.persistence.SaveAPITokens(h.config.APITokens); err != nil {
+			// Rollback the in-memory addition
+			h.config.APITokens = h.config.APITokens[:len(h.config.APITokens)-1]
+			config.Mu.Unlock()
+			log.Error().Err(err).Msg("Failed to persist API tokens after creation")
+			http.Error(w, "Failed to save token to disk: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	config.Mu.Unlock()
+
+	// Derive Pulse URL from the request
+	host := r.Host
+	if parsedHost, parsedPort, err := net.SplitHostPort(host); err == nil {
+		if (parsedHost == "127.0.0.1" || parsedHost == "localhost") && parsedPort == strconv.Itoa(h.config.FrontendPort) {
+			// Prefer a user-configured public URL when we're running on loopback
+			if publicURL := strings.TrimSpace(h.config.PublicURL); publicURL != "" {
+				if parsedURL, err := url.Parse(publicURL); err == nil && parsedURL.Host != "" {
+					host = parsedURL.Host
+				}
+			}
+		}
+	}
+
+	// Detect protocol - check both TLS and proxy headers
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	pulseURL := fmt.Sprintf("%s://%s", scheme, host)
+
+	// Generate the install command
+	command := fmt.Sprintf(`curl -fsSL %s/install.sh | bash -s -- \
+  --url %s \
+  --token %s \
+  --enable-proxmox`,
+		pulseURL, pulseURL, rawToken)
+
+	log.Info().
+		Str("token_name", tokenName).
+		Str("type", req.Type).
+		Msg("Generated agent install command with API token")
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(AgentInstallCommandResponse{
+		Command: command,
+		Token:   rawToken,
+	})
 }

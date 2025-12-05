@@ -14688,7 +14688,6 @@ func TestLoadActiveAlerts(t *testing.T) {
 
 	t.Run("loads alerts from valid file", func(t *testing.T) {
 		m := newTestManager(t)
-		m.ClearActiveAlerts()
 
 		// Create an alert and save it
 		startTime := time.Now().Add(-30 * time.Minute)
@@ -14714,8 +14713,10 @@ func TestLoadActiveAlerts(t *testing.T) {
 		// Save to disk
 		_ = m.SaveActiveAlerts()
 
-		// Clear and reload
-		m.ClearActiveAlerts()
+		// Clear in-memory map only (don't use ClearActiveAlerts which triggers async save)
+		m.mu.Lock()
+		m.activeAlerts = make(map[string]*Alert)
+		m.mu.Unlock()
 
 		err := m.LoadActiveAlerts()
 		if err != nil {

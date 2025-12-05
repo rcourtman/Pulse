@@ -106,11 +106,11 @@ func (u *Updater) RunLoop(ctx context.Context) {
 		return
 	}
 
-	// Initial check after a short delay
+	// Initial check after a short delay (5s to quickly update outdated agents)
 	select {
 	case <-ctx.Done():
 		return
-	case <-time.After(30 * time.Second):
+	case <-time.After(5 * time.Second):
 		u.CheckAndUpdate(ctx)
 	}
 
@@ -156,11 +156,21 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 		return
 	}
 
-	// Normalize both versions by stripping "v" prefix for comparison.
-	// Server returns version without prefix (e.g., "4.33.1"), but agent's
-	// CurrentVersion may include it (e.g., "v4.33.1") depending on build.
-	if utils.NormalizeVersion(serverVersion) == utils.NormalizeVersion(u.cfg.CurrentVersion) {
+	// Compare versions using semver comparison to only update to newer versions.
+	// This prevents accidental downgrades if the server temporarily has an older version.
+	currentNorm := utils.NormalizeVersion(u.cfg.CurrentVersion)
+	serverNorm := utils.NormalizeVersion(serverVersion)
+
+	cmp := utils.CompareVersions(serverNorm, currentNorm)
+	if cmp == 0 {
 		u.logger.Debug().Str("version", u.cfg.CurrentVersion).Msg("Agent is up to date")
+		return
+	}
+	if cmp < 0 {
+		u.logger.Debug().
+			Str("currentVersion", currentNorm).
+			Str("serverVersion", serverNorm).
+			Msg("Server has older version, skipping downgrade")
 		return
 	}
 
@@ -402,6 +412,10 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 	// Remove backup on success
 	os.Remove(backupPath)
 
+	// Write previous version to a file so the agent can report "updated from X" on next start
+	updateInfoPath := filepath.Join(targetDir, ".pulse-update-info")
+	_ = os.WriteFile(updateInfoPath, []byte(u.cfg.CurrentVersion), 0644)
+
 	// On Unraid, also update the persistent copy on the flash drive
 	// This ensures the update survives reboots
 	if isUnraid() {
@@ -431,6 +445,32 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 
 	// Restart the process using platform-specific implementation
 	return restartProcess(execPath)
+}
+
+// GetUpdatedFromVersion checks if the agent was recently updated and returns the previous version.
+// Returns empty string if no update info exists. Clears the info file after reading.
+func GetUpdatedFromVersion() string {
+	execPath, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+
+	// Resolve symlinks to get the real path
+	realExecPath, err := filepath.EvalSymlinks(execPath)
+	if err != nil {
+		realExecPath = execPath
+	}
+
+	updateInfoPath := filepath.Join(filepath.Dir(realExecPath), ".pulse-update-info")
+	data, err := os.ReadFile(updateInfoPath)
+	if err != nil {
+		return ""
+	}
+
+	// Clear the file after reading (only report once)
+	os.Remove(updateInfoPath)
+
+	return strings.TrimSpace(string(data))
 }
 
 // determineArch returns the architecture string for download URLs (e.g., "linux-amd64", "darwin-arm64").

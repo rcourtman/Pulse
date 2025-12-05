@@ -424,6 +424,9 @@ type PVEInstance struct {
 	IsCluster        bool              // True if this is a cluster
 	ClusterName      string            // Cluster name if applicable
 	ClusterEndpoints []ClusterEndpoint // All discovered cluster nodes
+
+	// Agent tracking
+	Source string // "agent" or "script" - how this node was registered (empty = legacy/manual)
 }
 
 // ClusterEndpoint represents a single node in a cluster
@@ -461,6 +464,9 @@ type PBSInstance struct {
 	MonitorGarbageJobs           bool
 	TemperatureMonitoringEnabled *bool // Monitor temperature via SSH (nil = use global setting, true/false = override)
 	SSHPort                      int   // SSH port for temperature monitoring (0 = use global default)
+
+	// Agent tracking
+	Source string // "agent" or "script" - how this node was registered (empty = legacy/manual)
 }
 
 // PMGInstance represents a Proxmox Mail Gateway connection

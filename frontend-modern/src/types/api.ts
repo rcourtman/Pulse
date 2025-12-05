@@ -329,6 +329,7 @@ export interface Host {
   loadAverage?: number[];
   memory: Memory;
   disks?: Disk[];
+  diskIO?: HostDiskIO[];
   networkInterfaces?: HostNetworkInterface[];
   sensors?: HostSensorSummary;
   raid?: HostRAIDArray[];
@@ -382,6 +383,17 @@ export interface HostRAIDDevice {
   device: string;
   state: string;
   slot: number;
+}
+
+export interface HostDiskIO {
+  device: string;
+  readBytes?: number;
+  writeBytes?: number;
+  readOps?: number;
+  writeOps?: number;
+  readTimeMs?: number;
+  writeTimeMs?: number;
+  ioTimeMs?: number;
 }
 
 export interface HostLookupResponse {

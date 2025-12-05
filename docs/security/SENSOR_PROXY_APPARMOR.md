@@ -1,5 +1,9 @@
 # 🛡️ Sensor Proxy Hardening
 
+> **⚠️ Deprecated:** The sensor-proxy is deprecated in favor of the unified Pulse agent.
+> For new installations, use `install.sh --enable-proxmox` instead.
+> See [TEMPERATURE_MONITORING.md](/docs/security/TEMPERATURE_MONITORING.md).
+
 Secure `pulse-sensor-proxy` with AppArmor and Seccomp.
 
 ## 🛡️ AppArmor

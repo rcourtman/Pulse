@@ -20,9 +20,16 @@ type TemperatureSocketCooldownInfo = {
   lastError?: string;
 };
 
+// Host agent info passed from state
+interface HostAgentInfo {
+  hostname: string;
+  status: string;
+}
+
 interface PveNodesTableProps {
   nodes: NodeConfigWithStatus[];
   stateNodes: { instance: string; status?: string; connectionHealth?: string }[];
+  stateHosts?: HostAgentInfo[];
   globalTemperatureMonitoringEnabled?: boolean;
   temperatureTransports?: TemperatureTransportInfo | null;
   onTestConnection: (nodeId: string) => void;
@@ -104,6 +111,7 @@ const resolveTemperatureTransport = (
   node: NodeConfigWithStatus,
   info: TemperatureTransportInfo | null | undefined,
   globalEnabled: boolean,
+  hostAgent?: HostAgentInfo,
 ): TemperatureTransportBadge => {
   const monitoringEnabled = isTemperatureMonitoringEnabled(node, globalEnabled);
   const normalizedTransport = (node.temperatureTransport || '').toLowerCase();
@@ -122,6 +130,15 @@ const resolveTemperatureTransport = (
     return {
       label: 'Temp disabled',
       badgeClass: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300',
+    };
+  }
+
+  // If a host agent is connected and online, it provides temperatures directly
+  if (hostAgent?.status === 'online') {
+    return {
+      label: 'Via agent',
+      badgeClass: 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300',
+      description: 'Temperature data from Pulse agent',
     };
   }
 
@@ -185,9 +202,9 @@ const resolveTemperatureTransport = (
         return buildSocketBadge();
       case 'ssh-blocked':
         return {
-          label: 'Proxy required',
+          label: 'Agent required',
           badgeClass: 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300',
-          description: 'Containerized Pulse requires pulse-sensor-proxy',
+          description: 'Install agent on node for temperature monitoring',
         };
       case 'ssh':
         return {
@@ -271,6 +288,16 @@ const resolvePveStatusMeta = (
   }
 };
 
+// Helper to find matching host agent for a node by hostname matching
+const findMatchingHostAgent = (
+  nodeName: string,
+  hosts: HostAgentInfo[] | undefined,
+): HostAgentInfo | undefined => {
+  if (!hosts || hosts.length === 0) return undefined;
+  const nodeNameLower = nodeName.toLowerCase().trim();
+  return hosts.find((h) => h.hostname.toLowerCase().trim() === nodeNameLower);
+};
+
 export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
   return (
     <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
@@ -304,11 +331,13 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
               const clusterName = createMemo(() =>
                 'clusterName' in node && node.clusterName ? node.clusterName : 'Unknown',
               );
+              const hostAgent = createMemo(() => findMatchingHostAgent(node.name, props.stateHosts));
               const transportMeta = createMemo(() =>
                 resolveTemperatureTransport(
                   node,
                   props.temperatureTransports,
                   props.globalTemperatureMonitoringEnabled ?? true,
+                  hostAgent(),
                 ),
               );
               return (
@@ -410,9 +439,22 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                     </div>
                   </td>
                   <td class="align-top px-3 py-3">
-                    <span class="text-xs text-gray-600 dark:text-gray-400">
-                      {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
-                    </span>
+                    <div class="flex flex-col gap-1">
+                      <span class="text-xs text-gray-600 dark:text-gray-400">
+                        {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
+                      </span>
+                      <Show when={node.source === 'agent'}>
+                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded w-fit">
+                          <span class="h-1.5 w-1.5 rounded-full bg-purple-500"></span>
+                          Agent
+                        </span>
+                      </Show>
+                      <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
+                        <span class="text-[0.65rem] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded w-fit">
+                          API only
+                        </span>
+                      </Show>
+                    </div>
                   </td>
                   <td class="align-top px-3 py-3">
                     <div class="flex flex-wrap gap-1">
@@ -603,9 +645,22 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                     </div>
                   </td>
                   <td class="align-top px-3 py-3">
-                    <span class="text-xs text-gray-600 dark:text-gray-400">
-                      {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
-                    </span>
+                    <div class="flex flex-col gap-1">
+                      <span class="text-xs text-gray-600 dark:text-gray-400">
+                        {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
+                      </span>
+                      <Show when={node.source === 'agent'}>
+                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded w-fit">
+                          <span class="h-1.5 w-1.5 rounded-full bg-purple-500"></span>
+                          Agent
+                        </span>
+                      </Show>
+                      <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
+                        <span class="text-[0.65rem] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded w-fit">
+                          API only
+                        </span>
+                      </Show>
+                    </div>
                   </td>
                   <td class="align-top px-3 py-3">
                     <div class="flex flex-wrap gap-1">
@@ -786,9 +841,22 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                     </div>
                   </td>
                   <td class="align-top px-3 py-3">
-                    <span class="text-xs text-gray-600 dark:text-gray-400">
-                      {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
-                    </span>
+                    <div class="flex flex-col gap-1">
+                      <span class="text-xs text-gray-600 dark:text-gray-400">
+                        {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
+                      </span>
+                      <Show when={node.source === 'agent'}>
+                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded w-fit">
+                          <span class="h-1.5 w-1.5 rounded-full bg-purple-500"></span>
+                          Agent
+                        </span>
+                      </Show>
+                      <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
+                        <span class="text-[0.65rem] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded w-fit">
+                          API only
+                        </span>
+                      </Show>
+                    </div>
                   </td>
                   <td class="align-top px-3 py-3">
                     <div class="flex flex-wrap gap-1">

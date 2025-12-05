@@ -54,6 +54,8 @@ PULSE_TOKEN=""
 INTERVAL="30s"
 ENABLE_HOST="true"
 ENABLE_DOCKER="false"
+ENABLE_PROXMOX="false"
+PROXMOX_TYPE=""
 UNINSTALL="false"
 INSECURE="false"
 AGENT_ID=""
@@ -83,6 +85,8 @@ build_exec_args() {
         EXEC_ARGS="$EXEC_ARGS --enable-host=false"
     fi
     if [[ "$ENABLE_DOCKER" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-docker"; fi
+    if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-proxmox"; fi
+    if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS="$EXEC_ARGS --proxmox-type ${PROXMOX_TYPE}"; fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
 }
@@ -98,6 +102,8 @@ build_exec_args_array() {
         EXEC_ARGS_ARRAY+=(--enable-host=false)
     fi
     if [[ "$ENABLE_DOCKER" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-docker); fi
+    if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-proxmox); fi
+    if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS_ARRAY+=(--proxmox-type "$PROXMOX_TYPE"); fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS_ARRAY+=(--agent-id "$AGENT_ID"); fi
 }
@@ -112,6 +118,8 @@ while [[ $# -gt 0 ]]; do
         --disable-host) ENABLE_HOST="false"; shift ;;
         --enable-docker) ENABLE_DOCKER="true"; shift ;;
         --disable-docker) ENABLE_DOCKER="false"; shift ;;
+        --enable-proxmox) ENABLE_PROXMOX="true"; shift ;;
+        --proxmox-type) PROXMOX_TYPE="$2"; shift 2 ;;
         --insecure) INSECURE="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
         --agent-id) AGENT_ID="$2"; shift 2 ;;

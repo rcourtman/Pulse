@@ -18,14 +18,15 @@ import (
 
 // System call wrappers for testing
 var (
-	cpuCounts      = gocpu.CountsWithContext
-	cpuPercent     = gocpu.PercentWithContext
-	loadAvg        = goload.AvgWithContext
-	virtualMemory  = gomem.VirtualMemoryWithContext
-	diskPartitions = godisk.PartitionsWithContext
-	diskUsage      = godisk.UsageWithContext
-	netInterfaces  = gonet.InterfacesWithContext
-	netIOCounters  = gonet.IOCountersWithContext
+	cpuCounts       = gocpu.CountsWithContext
+	cpuPercent      = gocpu.PercentWithContext
+	loadAvg         = goload.AvgWithContext
+	virtualMemory   = gomem.VirtualMemoryWithContext
+	diskPartitions  = godisk.PartitionsWithContext
+	diskUsage       = godisk.UsageWithContext
+	diskIOCounters  = godisk.IOCountersWithContext
+	netInterfaces   = gonet.InterfacesWithContext
+	netIOCounters   = gonet.IOCountersWithContext
 )
 
 // Snapshot represents a host resource utilisation sample.
@@ -35,6 +36,7 @@ type Snapshot struct {
 	LoadAverage     []float64
 	Memory          agentshost.MemoryMetric
 	Disks           []agentshost.Disk
+	DiskIO          []agentshost.DiskIO
 	Network         []agentshost.NetworkInterface
 }
 
@@ -77,6 +79,7 @@ func Collect(ctx context.Context) (Snapshot, error) {
 	}
 
 	snapshot.Disks = collectDisks(collectCtx)
+	snapshot.DiskIO = collectDiskIO(collectCtx)
 	snapshot.Network = collectNetwork(collectCtx)
 
 	return snapshot, nil
@@ -231,6 +234,81 @@ func isLoopback(flags []string) bool {
 		if strings.EqualFold(flag, "loopback") {
 			return true
 		}
+	}
+	return false
+}
+
+// collectDiskIO gathers I/O statistics for physical block devices.
+// Only reports whole disks (nvme0n1, sda), not partitions (nvme0n1p1, sda1).
+func collectDiskIO(ctx context.Context) []agentshost.DiskIO {
+	counters, err := diskIOCounters(ctx)
+	if err != nil {
+		return nil
+	}
+
+	devices := make([]agentshost.DiskIO, 0, len(counters))
+	for name, stats := range counters {
+		// Skip partitions - only report whole devices
+		if isPartition(name) {
+			continue
+		}
+		// Skip loop devices and ram disks
+		if strings.HasPrefix(name, "loop") || strings.HasPrefix(name, "ram") {
+			continue
+		}
+		// Skip device-mapper and md devices (report at physical level)
+		if strings.HasPrefix(name, "dm-") {
+			continue
+		}
+
+		devices = append(devices, agentshost.DiskIO{
+			Device:     name,
+			ReadBytes:  stats.ReadBytes,
+			WriteBytes: stats.WriteBytes,
+			ReadOps:    stats.ReadCount,
+			WriteOps:   stats.WriteCount,
+			ReadTime:   stats.ReadTime,
+			WriteTime:  stats.WriteTime,
+			IOTime:     stats.IoTime,
+		})
+	}
+
+	sort.Slice(devices, func(i, j int) bool { return devices[i].Device < devices[j].Device })
+	return devices
+}
+
+// isPartition returns true if the device name looks like a partition
+// e.g., sda1, nvme0n1p1, vda2
+func isPartition(name string) bool {
+	// NVMe partitions: nvme0n1p1, nvme0n1p2
+	if strings.Contains(name, "n") && strings.Contains(name, "p") {
+		// Check if it ends with pN where N is a digit
+		idx := strings.LastIndex(name, "p")
+		if idx > 0 && idx < len(name)-1 {
+			rest := name[idx+1:]
+			if len(rest) > 0 && rest[0] >= '0' && rest[0] <= '9' {
+				return true
+			}
+		}
+	}
+	// Traditional partitions: sda1, vda2, hda1
+	if len(name) > 2 {
+		last := name[len(name)-1]
+		if last >= '0' && last <= '9' {
+			// Check if second-to-last is a letter (sda1) or also a digit (sda10)
+			secondLast := name[len(name)-2]
+			if (secondLast >= 'a' && secondLast <= 'z') || (secondLast >= '0' && secondLast <= '9') {
+				// Exclude things like "md0" (whole device) - check for common prefixes
+				if strings.HasPrefix(name, "sd") || strings.HasPrefix(name, "vd") ||
+					strings.HasPrefix(name, "hd") || strings.HasPrefix(name, "xvd") {
+					return true
+				}
+			}
+		}
+	}
+	// ZFS devices: zd0p1, zd16p1
+	if strings.HasPrefix(name, "zd") && strings.Contains(name, "p") {
+		return true
 	}
 	return false
 }

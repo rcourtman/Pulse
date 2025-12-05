@@ -78,6 +78,7 @@ func main() {
 		Str("pulse_url", cfg.PulseURL).
 		Bool("host_agent", cfg.EnableHost).
 		Bool("docker_agent", cfg.EnableDocker).
+		Bool("proxmox_mode", cfg.EnableProxmox).
 		Bool("auto_update", !cfg.DisableAutoUpdate).
 		Msg("Starting Pulse Unified Agent")
 
@@ -126,6 +127,8 @@ func main() {
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 			LogLevel:           cfg.LogLevel,
 			Logger:             &logger,
+			EnableProxmox:      cfg.EnableProxmox,
+			ProxmoxType:        cfg.ProxmoxType,
 		}
 
 		agent, err := hostagent.New(hostCfg)
@@ -259,8 +262,10 @@ type Config struct {
 	Logger             *zerolog.Logger
 
 	// Module flags
-	EnableHost   bool
-	EnableDocker bool
+	EnableHost    bool
+	EnableDocker  bool
+	EnableProxmox bool
+	ProxmoxType   string // "pve", "pbs", or "" for auto-detect
 
 	// Auto-update
 	DisableAutoUpdate bool
@@ -281,6 +286,8 @@ func loadConfig() Config {
 	envLogLevel := utils.GetenvTrim("LOG_LEVEL")
 	envEnableHost := utils.GetenvTrim("PULSE_ENABLE_HOST")
 	envEnableDocker := utils.GetenvTrim("PULSE_ENABLE_DOCKER")
+	envEnableProxmox := utils.GetenvTrim("PULSE_ENABLE_PROXMOX")
+	envProxmoxType := utils.GetenvTrim("PULSE_PROXMOX_TYPE")
 	envDisableAutoUpdate := utils.GetenvTrim("PULSE_DISABLE_AUTO_UPDATE")
 	envHealthAddr := utils.GetenvTrim("PULSE_HEALTH_ADDR")
 
@@ -302,6 +309,11 @@ func loadConfig() Config {
 		defaultEnableDocker = utils.ParseBool(envEnableDocker)
 	}
 
+	defaultEnableProxmox := false
+	if envEnableProxmox != "" {
+		defaultEnableProxmox = utils.ParseBool(envEnableProxmox)
+	}
+
 	defaultHealthAddr := envHealthAddr
 	if defaultHealthAddr == "" {
 		defaultHealthAddr = ":9191"
@@ -318,6 +330,8 @@ func loadConfig() Config {
 
 	enableHostFlag := flag.Bool("enable-host", defaultEnableHost, "Enable Host Agent module")
 	enableDockerFlag := flag.Bool("enable-docker", defaultEnableDocker, "Enable Docker Agent module")
+	enableProxmoxFlag := flag.Bool("enable-proxmox", defaultEnableProxmox, "Enable Proxmox mode (creates API token, registers node)")
+	proxmoxTypeFlag := flag.String("proxmox-type", envProxmoxType, "Proxmox type: pve or pbs (auto-detected if not specified)")
 	disableAutoUpdateFlag := flag.Bool("disable-auto-update", utils.ParseBool(envDisableAutoUpdate), "Disable automatic updates")
 	healthAddrFlag := flag.String("health-addr", defaultHealthAddr, "Health/metrics server address (empty to disable)")
 	showVersion := flag.Bool("version", false, "Print the agent version and exit")
@@ -362,6 +376,8 @@ func loadConfig() Config {
 		LogLevel:           logLevel,
 		EnableHost:         *enableHostFlag,
 		EnableDocker:       *enableDockerFlag,
+		EnableProxmox:      *enableProxmoxFlag,
+		ProxmoxType:        strings.TrimSpace(*proxmoxTypeFlag),
 		DisableAutoUpdate:  *disableAutoUpdateFlag,
 		HealthAddr:         strings.TrimSpace(*healthAddrFlag),
 	}

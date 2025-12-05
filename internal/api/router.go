@@ -923,6 +923,9 @@ func (r *Router) setupRoutes() {
 	// Generate setup script URL with temporary token (for authenticated users)
 	r.mux.HandleFunc("/api/setup-script-url", r.configHandlers.HandleSetupScriptURL)
 
+	// Generate agent install command with API token (for authenticated users)
+	r.mux.HandleFunc("/api/agent-install-command", RequireAuth(r.config, r.configHandlers.HandleAgentInstallCommand))
+
 	// Auto-register route for setup scripts
 	r.mux.HandleFunc("/api/auto-register", r.configHandlers.HandleAutoRegister)
 	// Discovery endpoint
