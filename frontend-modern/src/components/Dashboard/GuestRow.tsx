@@ -329,10 +329,10 @@ export const GUEST_COLUMNS: GuestColumnDef[] = [
 
   // Supplementary - visible on lg+ (1024px), user toggleable
   { id: 'backup', label: 'Backup', priority: 'supplementary', toggleable: true },
-  { id: 'os', label: 'OS', priority: 'supplementary', toggleable: true },
   { id: 'tags', label: 'Tags', priority: 'supplementary', toggleable: true },
 
   // Detailed - visible on xl+ (1280px), user toggleable
+  { id: 'os', label: 'OS', priority: 'detailed', toggleable: true },
   { id: 'diskRead', label: 'D Read', priority: 'detailed', toggleable: true, sortKey: 'diskRead' },
   { id: 'diskWrite', label: 'D Write', priority: 'detailed', toggleable: true, sortKey: 'diskWrite' },
   { id: 'netIn', label: 'Net In', priority: 'detailed', toggleable: true, sortKey: 'networkIn' },
