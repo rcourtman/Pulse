@@ -1379,8 +1379,8 @@ const DockerContainerRow: Component<{
         <tr>
           <td colspan={DOCKER_COLUMNS.length} class="p-0">
             <div class="w-0 min-w-full bg-gray-50 dark:bg-gray-900/50 px-4 py-3 overflow-hidden">
-              <div class="flex flex-wrap justify-start gap-3">
-                <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full">
+                <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                     Summary
                   </div>
@@ -1509,7 +1509,7 @@ const DockerContainerRow: Component<{
               </Show>
             </div>
             <Show when={container.ports && container.ports.length > 0}>
-              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                 <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                   Ports
                 </div>
@@ -1529,7 +1529,7 @@ const DockerContainerRow: Component<{
             </Show>
 
             <Show when={container.networks && container.networks.length > 0}>
-              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                 <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                   Networks
                 </div>
@@ -1556,7 +1556,7 @@ const DockerContainerRow: Component<{
             </Show>
 
             <Show when={hasPodmanMetadata()}>
-              <div class="min-w-[220px] flex-1 rounded border border-purple-200 bg-white/70 p-2 shadow-sm dark:border-purple-700/60 dark:bg-purple-950/20">
+              <div class="rounded border border-purple-200 bg-white/70 p-3 shadow-sm dark:border-purple-700/60 dark:bg-purple-950/20">
                 <div class="text-[11px] font-medium uppercase tracking-wide text-purple-700 dark:text-purple-200">
                   Podman Metadata
                 </div>
@@ -1590,7 +1590,7 @@ const DockerContainerRow: Component<{
             </Show>
 
             <Show when={hasBlockIo()}>
-              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                 <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                   Block I/O
                 </div>
@@ -1626,7 +1626,7 @@ const DockerContainerRow: Component<{
             </Show>
 
             <Show when={hasMounts()}>
-              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                 <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                   Mounts
                 </div>
@@ -1691,7 +1691,7 @@ const DockerContainerRow: Component<{
             </Show>
 
             <Show when={container.labels && Object.keys(container.labels).length > 0}>
-              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                 <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                   Labels
                 </div>
@@ -2155,8 +2155,8 @@ const DockerServiceRow: Component<{
         <tr>
           <td colspan={DOCKER_COLUMNS.length} class="p-0">
             <div class="w-0 min-w-full bg-gray-50 dark:bg-gray-900/60 px-4 py-3 overflow-hidden">
-              <div class="flex flex-wrap justify-start gap-3">
-                <div class="min-w-[320px] flex-1 rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <div class="space-y-3">
+                <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                   <div class="flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                     <span>Tasks</span>
                     <span class="text-[10px] font-normal text-gray-500 dark:text-gray-400">

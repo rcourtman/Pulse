@@ -1,6 +1,6 @@
-import { GuestDrawer } from './GuestDrawer';
-import { createMemo, createSignal, createEffect, Show } from 'solid-js';
-import type { VM, Container } from '@/types/api';
+import { createMemo, createSignal, createEffect, Show, For } from 'solid-js';
+import { Portal } from 'solid-js/web';
+import type { VM, Container, NetworkInterface } from '@/types/api';
 import { formatBytes, formatUptime, formatSpeed, getBackupInfo, type BackupStatus, formatPercent } from '@/utils/format';
 import { TagBadges } from './TagBadges';
 import { StackedDiskBar } from './StackedDiskBar';
@@ -30,8 +30,6 @@ function getIOColorClass(bytesPerSec: number): string {
   return 'text-red-600 dark:text-red-400';
 }
 
-// Global state for currently expanded drawer (only one drawer open at a time)
-const [currentlyExpandedGuestId, setCurrentlyExpandedGuestId] = createSignal<string | null>(null);
 // Global editing state - use a signal so all components react
 const [currentlyEditingGuestId, setCurrentlyEditingGuestId] = createSignal<string | null>(null);
 // Store the editing value globally so it survives re-renders
@@ -103,30 +101,148 @@ function BackupIndicator(props: { lastBackup: string | number | null | undefined
   );
 }
 
+// Network info cell with rich tooltip showing interfaces, IPs, and MACs
+function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: NetworkInterface[] }) {
+  const [showTooltip, setShowTooltip] = createSignal(false);
+  const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
+
+  const hasInterfaces = () => props.networkInterfaces.length > 0;
+  const primaryIp = () => props.ipAddresses[0] || props.networkInterfaces[0]?.addresses?.[0] || null;
+  const totalIps = () => {
+    if (props.ipAddresses.length > 0) return props.ipAddresses.length;
+    return props.networkInterfaces.reduce((sum, iface) => sum + (iface.addresses?.length || 0), 0);
+  };
+
+  const handleMouseEnter = (e: MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
+    setShowTooltip(true);
+  };
+
+  const handleMouseLeave = () => {
+    setShowTooltip(false);
+  };
+
+  return (
+    <>
+      <span
+        class="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 cursor-help"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <Show when={primaryIp()} fallback="-">
+          {/* Network icon */}
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+          </svg>
+          <span class="text-[10px] font-medium">{totalIps()}</span>
+        </Show>
+      </span>
+
+      <Show when={showTooltip() && (hasInterfaces() || props.ipAddresses.length > 0)}>
+        <Portal mount={document.body}>
+          <div
+            class="fixed z-[9999] pointer-events-none"
+            style={{
+              left: `${tooltipPos().x}px`,
+              top: `${tooltipPos().y - 8}px`,
+              transform: 'translate(-50%, -100%)',
+            }}
+          >
+            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[180px] max-w-[280px] border border-gray-700">
+              <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                Network Interfaces
+              </div>
+
+              {/* Show detailed interface info if available */}
+              <Show when={hasInterfaces()}>
+                <For each={props.networkInterfaces}>
+                  {(iface, idx) => (
+                    <div class="py-1" classList={{ 'border-t border-gray-700/50': idx() > 0 }}>
+                      <div class="flex items-center gap-2 text-blue-400 font-medium">
+                        <span>{iface.name || 'eth' + idx()}</span>
+                        <Show when={iface.mac}>
+                          <span class="text-[9px] text-gray-500 font-normal">{iface.mac}</span>
+                        </Show>
+                      </div>
+                      <Show when={iface.addresses && iface.addresses.length > 0}>
+                        <div class="mt-0.5 flex flex-wrap gap-1">
+                          <For each={iface.addresses}>
+                            {(ip) => (
+                              <span class="text-gray-300 font-mono">{ip}</span>
+                            )}
+                          </For>
+                        </div>
+                      </Show>
+                      <Show when={!iface.addresses || iface.addresses.length === 0}>
+                        <span class="text-gray-500 text-[9px]">No IP assigned</span>
+                      </Show>
+                      <Show when={(iface.rxBytes || 0) > 0 || (iface.txBytes || 0) > 0}>
+                        <div class="mt-0.5 text-[9px] text-gray-500">
+                          RX: {formatBytes(iface.rxBytes || 0)} / TX: {formatBytes(iface.txBytes || 0)}
+                        </div>
+                      </Show>
+                    </div>
+                  )}
+                </For>
+              </Show>
+
+              {/* Fallback: just show IP list if no interface details */}
+              <Show when={!hasInterfaces() && props.ipAddresses.length > 0}>
+                <div class="flex flex-wrap gap-1 py-0.5">
+                  <For each={props.ipAddresses}>
+                    {(ip) => (
+                      <span class="text-gray-300 font-mono">{ip}</span>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </div>
+          </div>
+        </Portal>
+      </Show>
+    </>
+  );
+}
+
 // Column configuration using the priority system
-interface ColumnDef {
+export interface GuestColumnDef {
   id: string;
   label: string;
   priority: ColumnPriority;
+  toggleable?: boolean;
   minWidth?: string;
   maxWidth?: string;
   flex?: number;
+  sortKey?: string;
 }
 
-export const GUEST_COLUMNS: ColumnDef[] = [
-  { id: 'name', label: 'Name', priority: 'essential', minWidth: 'auto', maxWidth: 'auto' },
-  { id: 'type', label: 'Type', priority: 'essential', minWidth: 'auto', maxWidth: 'auto' },
-  { id: 'vmid', label: 'VMID', priority: 'essential', minWidth: 'auto', maxWidth: 'auto' },
-  { id: 'uptime', label: 'Uptime', priority: 'essential', minWidth: 'auto', maxWidth: 'auto' },
-  // Metric columns - fixed min/max width to match progress bar
-  { id: 'cpu', label: 'CPU', priority: 'essential', minWidth: '55px', maxWidth: '156px' },
-  { id: 'memory', label: 'Memory', priority: 'essential', minWidth: '75px', maxWidth: '156px' },
-  { id: 'disk', label: 'Disk', priority: 'essential', minWidth: '75px', maxWidth: '156px' },
-  // I/O columns - auto sizing
-  { id: 'diskRead', label: 'Disk Read', priority: 'essential', minWidth: 'auto', maxWidth: 'auto' },
-  { id: 'diskWrite', label: 'Disk Write', priority: 'essential', minWidth: 'auto', maxWidth: 'auto' },
-  { id: 'netIn', label: 'Net In', priority: 'essential', minWidth: 'auto', maxWidth: 'auto' },
-  { id: 'netOut', label: 'Net Out', priority: 'essential', minWidth: 'auto', maxWidth: 'auto' },
+export const GUEST_COLUMNS: GuestColumnDef[] = [
+  // Essential - always visible
+  { id: 'name', label: 'Name', priority: 'essential', sortKey: 'name' },
+  { id: 'type', label: 'Type', priority: 'essential', sortKey: 'type' },
+  { id: 'vmid', label: 'VMID', priority: 'essential', sortKey: 'vmid' },
+
+  // Core metrics - always visible
+  { id: 'cpu', label: 'CPU', priority: 'essential', minWidth: '55px', maxWidth: '156px', sortKey: 'cpu' },
+  { id: 'memory', label: 'Memory', priority: 'essential', minWidth: '75px', maxWidth: '156px', sortKey: 'memory' },
+  { id: 'disk', label: 'Disk', priority: 'essential', minWidth: '75px', maxWidth: '156px', sortKey: 'disk' },
+
+  // Secondary - visible on md+ (768px), user toggleable
+  { id: 'ip', label: 'IP', priority: 'secondary', toggleable: true },
+  { id: 'uptime', label: 'Uptime', priority: 'secondary', toggleable: true, sortKey: 'uptime' },
+  { id: 'node', label: 'Node', priority: 'secondary', toggleable: true, sortKey: 'node' },
+
+  // Supplementary - visible on lg+ (1024px), user toggleable
+  { id: 'backup', label: 'Backup', priority: 'supplementary', toggleable: true },
+  { id: 'os', label: 'OS', priority: 'supplementary', toggleable: true },
+  { id: 'tags', label: 'Tags', priority: 'supplementary', toggleable: true },
+
+  // Detailed - visible on xl+ (1280px), user toggleable
+  { id: 'diskRead', label: 'D Read', priority: 'detailed', toggleable: true, sortKey: 'diskRead' },
+  { id: 'diskWrite', label: 'D Write', priority: 'detailed', toggleable: true, sortKey: 'diskWrite' },
+  { id: 'netIn', label: 'Net In', priority: 'detailed', toggleable: true, sortKey: 'networkIn' },
+  { id: 'netOut', label: 'Net Out', priority: 'detailed', toggleable: true, sortKey: 'networkOut' },
 ];
 
 interface GuestRowProps {
@@ -151,6 +267,8 @@ interface GuestRowProps {
   parentNodeOnline?: boolean;
   onCustomUrlUpdate?: (guestId: string, url: string) => void;
   isGroupedView?: boolean;
+  /** IDs of columns that should be visible */
+  visibleColumnIds?: string[];
 }
 
 export function GuestRow(props: GuestRowProps) {
@@ -160,7 +278,14 @@ export function GuestRow(props: GuestRowProps) {
   // Use breakpoint hook directly for responsive behavior
   const { isMobile } = useBreakpoint();
 
-  // Create namespaced metrics key
+  // Helper to check if a column is visible
+  // If visibleColumnIds is not provided, show all columns for backwards compatibility
+  const isColVisible = (colId: string) => {
+    if (!props.visibleColumnIds) return true;
+    return props.visibleColumnIds.includes(colId);
+  };
+
+  // Create namespaced metrics key for sparklines
   const metricsKey = createMemo(() => {
     const kind = props.guest.type === 'qemu' ? 'vm' : 'container';
     return buildMetricKey(kind, guestId());
@@ -168,7 +293,6 @@ export function GuestRow(props: GuestRowProps) {
 
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
-  const drawerOpen = createMemo(() => currentlyExpandedGuestId() === guestId());
   const editingUrlValue = createMemo(() => {
     editingValuesVersion(); // Subscribe to changes
     return editingValues.get(guestId()) || '';
@@ -239,34 +363,6 @@ export function GuestRow(props: GuestRowProps) {
     return lines.length > 0 ? lines : undefined;
   });
   const memoryTooltip = createMemo(() => memoryExtraLines()?.join('\n') ?? undefined);
-  const hasDrawerContent = createMemo(
-    () =>
-      hasOsInfo() ||
-      hasAgentInfo() ||
-      ipAddresses().length > 0 ||
-      (memoryExtraLines()?.length ?? 0) > 0 ||
-      hasFilesystemDetails() ||
-      hasNetworkInterfaces(),
-  );
-  const hasFallbackContent = createMemo(
-    () => !hasDrawerContent() && (props.guest.type === 'qemu' || props.guest.type === 'lxc'),
-  );
-  const canShowDrawer = createMemo(() => hasDrawerContent() || hasFallbackContent());
-
-  createEffect(() => {
-    if (!canShowDrawer() && drawerOpen()) {
-      setCurrentlyExpandedGuestId(null);
-    }
-  });
-
-  const toggleDrawer = (event: MouseEvent) => {
-    if (!canShowDrawer()) return;
-    const target = event.target as HTMLElement;
-    if (target.closest('a, button, input, [data-prevent-toggle]')) {
-      return;
-    }
-    setCurrentlyExpandedGuestId(prev => prev === guestId() ? null : guestId());
-  };
 
   const startEditingUrl = (event: MouseEvent) => {
     event.stopPropagation();
@@ -470,11 +566,7 @@ export function GuestRow(props: GuestRowProps) {
       ? ''
       : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
-    const clickable = canShowDrawer() ? 'cursor-pointer' : '';
-    const expanded = drawerOpen() && !hasUnacknowledgedAlert()
-      ? 'bg-gray-50 dark:bg-gray-800/40'
-      : '';
-    return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming} ${clickable} ${expanded}`;
+    return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming}`;
   });
 
   const rowStyle = createMemo(() => {
@@ -486,18 +578,12 @@ export function GuestRow(props: GuestRowProps) {
     };
   });
 
-  // Total columns for colspan calculation
-  const totalColumns = GUEST_COLUMNS.length;
-
   return (
-    <>
       <tr
         class={rowClass()}
         style={rowStyle()}
-        onClick={toggleDrawer}
-        aria-expanded={drawerOpen()}
       >
-        {/* Name */}
+        {/* Name - always visible */}
         <td class={`pr-2 py-1 align-middle whitespace-nowrap ${props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT}`}>
           <div class="flex items-center gap-2 min-w-0">
             <div class="flex items-center gap-1.5 min-w-0">
@@ -544,7 +630,10 @@ export function GuestRow(props: GuestRowProps) {
                         </svg>
                       </a>
                     </Show>
-                    <BackupIndicator lastBackup={props.guest.lastBackup} isTemplate={props.guest.template} />
+                    {/* Show backup indicator in name cell only if backup column is hidden */}
+                    <Show when={!isColVisible('backup')}>
+                      <BackupIndicator lastBackup={props.guest.lastBackup} isTemplate={props.guest.template} />
+                    </Show>
                   </div>
                 }
               >
@@ -599,7 +688,8 @@ export function GuestRow(props: GuestRowProps) {
               </Show>
             </div>
 
-            <Show when={!isEditingUrl()}>
+            {/* Show tags inline only if tags column is hidden */}
+            <Show when={!isEditingUrl() && !isColVisible('tags')}>
               <div class="hidden md:flex" data-prevent-toggle onClick={(event) => event.stopPropagation()}>
                 <TagBadges
                   tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
@@ -622,44 +712,51 @@ export function GuestRow(props: GuestRowProps) {
         </td>
 
         {/* Type */}
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center">
-            <span
-              class={`inline-block px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${props.guest.type === 'qemu'
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
-                }`}
-              title={isVM(props.guest) ? 'Virtual Machine' : 'LXC Container'}
-            >
-              {isVM(props.guest) ? 'VM' : 'LXC'}
-            </span>
-          </div>
-        </td>
+        <Show when={isColVisible('type')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <span
+                class={`inline-block px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${props.guest.type === 'qemu'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                  : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                  }`}
+                title={isVM(props.guest) ? 'Virtual Machine' : 'LXC Container'}
+              >
+                {isVM(props.guest) ? 'VM' : 'LXC'}
+              </span>
+            </div>
+          </td>
+        </Show>
 
         {/* VMID */}
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
-            {props.guest.vmid}
-          </div>
-        </td>
-
-        {/* Uptime */}
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center">
-            <span class={`text-xs whitespace-nowrap ${props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'}`}>
-              <Show when={isRunning()} fallback="-">
-                <Show when={isMobile()} fallback={formatUptime(props.guest.uptime)}>
-                  {formatUptime(props.guest.uptime, true)}
-                </Show>
-              </Show>
-            </span>
-          </div>
-        </td>
+        <Show when={isColVisible('vmid')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
+              {props.guest.vmid}
+            </div>
+          </td>
+        </Show>
 
         {/* CPU */}
-        <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-          <Show when={isMobile()}>
-            <div class="md:hidden flex justify-center">
+        <Show when={isColVisible('cpu')}>
+          <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+            <Show when={isMobile()}>
+              <div class="md:hidden flex justify-center">
+                <ResponsiveMetricCell
+                  value={cpuPercent()}
+                  type="cpu"
+                  resourceId={metricsKey()}
+                  sublabel={
+                    props.guest.cpus
+                      ? `${props.guest.cpus} ${props.guest.cpus === 1 ? 'core' : 'cores'}`
+                      : undefined
+                  }
+                  isRunning={isRunning()}
+                  showMobile={true}
+                />
+              </div>
+            </Show>
+            <div class="hidden md:block">
               <ResponsiveMetricCell
                 value={cpuPercent()}
                 type="cpu"
@@ -670,127 +767,210 @@ export function GuestRow(props: GuestRowProps) {
                     : undefined
                 }
                 isRunning={isRunning()}
-                showMobile={true}
+                showMobile={false}
               />
             </div>
-          </Show>
-          <div class="hidden md:block">
-            <ResponsiveMetricCell
-              value={cpuPercent()}
-              type="cpu"
-              resourceId={metricsKey()}
-              sublabel={
-                props.guest.cpus
-                  ? `${props.guest.cpus} ${props.guest.cpus === 1 ? 'core' : 'cores'}`
-                  : undefined
-              }
-              isRunning={isRunning()}
-              showMobile={false}
-            />
-          </div>
-        </td>
+          </td>
+        </Show>
 
         {/* Memory */}
-        <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-          <div title={memoryTooltip() ?? undefined}>
-            <Show when={isMobile()}>
-              <div class="md:hidden flex justify-center">
-                <ResponsiveMetricCell
-                  value={memPercent()}
-                  type="memory"
-                  resourceId={metricsKey()}
-                  sublabel={memoryUsageLabel()}
-                  isRunning={isRunning()}
-                  showMobile={true}
+        <Show when={isColVisible('memory')}>
+          <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+            <div title={memoryTooltip() ?? undefined}>
+              <Show when={isMobile()}>
+                <div class="md:hidden flex justify-center">
+                  <ResponsiveMetricCell
+                    value={memPercent()}
+                    type="memory"
+                    resourceId={metricsKey()}
+                    sublabel={memoryUsageLabel()}
+                    isRunning={isRunning()}
+                    showMobile={true}
+                  />
+                </div>
+              </Show>
+              <div class="hidden md:block">
+                <StackedMemoryBar
+                  used={props.guest.memory?.used || 0}
+                  total={props.guest.memory?.total || 0}
+                  balloon={props.guest.memory?.balloon || 0}
+                  swapUsed={props.guest.memory?.swapUsed || 0}
+                  swapTotal={props.guest.memory?.swapTotal || 0}
+                />
+              </div>
+            </div>
+          </td>
+        </Show>
+
+        {/* Disk */}
+        <Show when={isColVisible('disk')}>
+          <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+            <Show
+              when={hasDiskUsage()}
+              fallback={
+                <div class="flex justify-center">
+                  <span class="text-xs text-gray-400 cursor-help" title={getDiskStatusTooltip()}>
+                    -
+                  </span>
+                </div>
+              }
+            >
+              <Show when={isMobile()}>
+                <div class="md:hidden flex justify-center text-xs text-gray-600 dark:text-gray-400">
+                  {formatPercent(diskPercent())}
+                </div>
+              </Show>
+              <div class={isMobile() ? 'hidden md:block' : ''}>
+                <StackedDiskBar
+                  disks={props.guest.disks}
+                  aggregateDisk={props.guest.disk}
                 />
               </div>
             </Show>
-            <div class="hidden md:block">
-              <StackedMemoryBar
-                used={props.guest.memory?.used || 0}
-                total={props.guest.memory?.total || 0}
-                balloon={props.guest.memory?.balloon || 0}
-                swapUsed={props.guest.memory?.swapUsed || 0}
-                swapTotal={props.guest.memory?.swapTotal || 0}
-              />
-            </div>
-          </div>
-        </td>
+          </td>
+        </Show>
 
-        {/* Disk */}
-        <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-          <Show
-            when={hasDiskUsage()}
-            fallback={
-              <div class="flex justify-center">
-                <span class="text-xs text-gray-400 cursor-help" title={getDiskStatusTooltip()}>
-                  -
+        {/* IP Address with Network Tooltip */}
+        <Show when={isColVisible('ip')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <Show when={ipAddresses().length > 0 || hasNetworkInterfaces()} fallback={<span class="text-xs text-gray-400">-</span>}>
+                <NetworkInfoCell
+                  ipAddresses={ipAddresses()}
+                  networkInterfaces={networkInterfaces()}
+                />
+              </Show>
+            </div>
+          </td>
+        </Show>
+
+        {/* Uptime */}
+        <Show when={isColVisible('uptime')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <span class={`text-xs whitespace-nowrap ${props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'}`}>
+                <Show when={isRunning()} fallback="-">
+                  <Show when={isMobile()} fallback={formatUptime(props.guest.uptime)}>
+                    {formatUptime(props.guest.uptime, true)}
+                  </Show>
+                </Show>
+              </span>
+            </div>
+          </td>
+        </Show>
+
+        {/* Node - NEW */}
+        <Show when={isColVisible('node')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <span class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[80px]" title={props.guest.node}>
+                {props.guest.node}
+              </span>
+            </div>
+          </td>
+        </Show>
+
+        {/* Backup Status - NEW */}
+        <Show when={isColVisible('backup')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <Show when={!props.guest.template}>
+                {(() => {
+                  const info = getBackupInfo(props.guest.lastBackup);
+                  const config = BACKUP_STATUS_CONFIG[info.status];
+                  return (
+                    <span
+                      class={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${config.bgColor} ${config.color}`}
+                      title={info.status === 'never' ? 'No backup found' : `Last backup: ${info.ageFormatted}`}
+                    >
+                      {info.status === 'fresh' && 'OK'}
+                      {info.status === 'stale' && info.ageFormatted}
+                      {info.status === 'critical' && info.ageFormatted}
+                      {info.status === 'never' && 'Never'}
+                    </span>
+                  );
+                })()}
+              </Show>
+              <Show when={props.guest.template}>
+                <span class="text-xs text-gray-400">-</span>
+              </Show>
+            </div>
+          </td>
+        </Show>
+
+        {/* OS - NEW */}
+        <Show when={isColVisible('os')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <Show when={hasOsInfo()} fallback={<span class="text-xs text-gray-400">-</span>}>
+                <span
+                  class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[100px]"
+                  title={`${osName()} ${osVersion()}`}
+                >
+                  {osName() || osVersion()}
                 </span>
-              </div>
-            }
-          >
-            <Show when={isMobile()}>
-              <div class="md:hidden flex justify-center text-xs text-gray-600 dark:text-gray-400">
-                {formatPercent(diskPercent())}
-              </div>
-            </Show>
-            <div class={isMobile() ? 'hidden md:block' : ''}>
-              <StackedDiskBar
-                disks={props.guest.disks}
-                aggregateDisk={props.guest.disk}
+              </Show>
+            </div>
+          </td>
+        </Show>
+
+        {/* Tags */}
+        <Show when={isColVisible('tags')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center" onClick={(event) => event.stopPropagation()}>
+              <TagBadges
+                tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
+                maxVisible={2}
+                onTagClick={props.onTagClick}
+                activeSearch={props.activeSearch}
               />
             </div>
-          </Show>
-        </td>
+          </td>
+        </Show>
 
         {/* Disk Read */}
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center whitespace-nowrap">
-            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-              <span class={`text-xs ${getIOColorClass(diskRead())}`}>{formatSpeed(diskRead())}</span>
-            </Show>
-          </div>
-        </td>
+        <Show when={isColVisible('diskRead')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center whitespace-nowrap">
+              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+                <span class={`text-xs ${getIOColorClass(diskRead())}`}>{formatSpeed(diskRead())}</span>
+              </Show>
+            </div>
+          </td>
+        </Show>
 
         {/* Disk Write */}
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center whitespace-nowrap">
-            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-              <span class={`text-xs ${getIOColorClass(diskWrite())}`}>{formatSpeed(diskWrite())}</span>
-            </Show>
-          </div>
-        </td>
+        <Show when={isColVisible('diskWrite')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center whitespace-nowrap">
+              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+                <span class={`text-xs ${getIOColorClass(diskWrite())}`}>{formatSpeed(diskWrite())}</span>
+              </Show>
+            </div>
+          </td>
+        </Show>
 
         {/* Net In */}
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center whitespace-nowrap">
-            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-              <span class={`text-xs ${getIOColorClass(networkIn())}`}>{formatSpeed(networkIn())}</span>
-            </Show>
-          </div>
-        </td>
+        <Show when={isColVisible('netIn')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center whitespace-nowrap">
+              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+                <span class={`text-xs ${getIOColorClass(networkIn())}`}>{formatSpeed(networkIn())}</span>
+              </Show>
+            </div>
+          </td>
+        </Show>
 
         {/* Net Out */}
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center whitespace-nowrap">
-            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-              <span class={`text-xs ${getIOColorClass(networkOut())}`}>{formatSpeed(networkOut())}</span>
-            </Show>
-          </div>
-        </td>
-      </tr>
-
-      <Show when={drawerOpen() && canShowDrawer()}>
-        <tr class="bg-gray-50 dark:bg-gray-900/50">
-          <td colspan={totalColumns} class="p-4 border-b border-gray-200 dark:border-gray-700">
-            <GuestDrawer
-              guest={props.guest}
-              metricsKey={metricsKey()}
-              onClose={() => setCurrentlyExpandedGuestId(null)}
-            />
+        <Show when={isColVisible('netOut')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center whitespace-nowrap">
+              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+                <span class={`text-xs ${getIOColorClass(networkOut())}`}>{formatSpeed(networkOut())}</span>
+              </Show>
+            </div>
           </td>
-        </tr>
-      </Show>
-    </>
+        </Show>
+      </tr>
   );
 }
