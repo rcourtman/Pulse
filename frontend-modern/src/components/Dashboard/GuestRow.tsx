@@ -205,39 +205,27 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Netw
   );
 }
 
-// OS detection helper - returns icon type and color based on OS name
-type OSType = 'windows' | 'ubuntu' | 'debian' | 'alpine' | 'centos' | 'fedora' | 'arch' | 'nixos' | 'opensuse' | 'gentoo' | 'linux' | 'freebsd' | 'unknown';
+// OS detection helper - simplified to just Linux vs Windows
+type OSType = 'windows' | 'linux' | 'unknown';
 
 function detectOSType(osName: string): OSType {
   const lower = osName.toLowerCase();
   if (lower.includes('windows')) return 'windows';
-  if (lower.includes('ubuntu')) return 'ubuntu';
-  if (lower.includes('debian') || lower.includes('devuan')) return 'debian';
-  if (lower.includes('alpine')) return 'alpine';
-  if (lower.includes('centos') || lower.includes('rocky') || lower.includes('alma') || lower.includes('rhel') || lower.includes('red hat')) return 'centos';
-  if (lower.includes('fedora')) return 'fedora';
-  if (lower.includes('arch')) return 'arch';
-  if (lower.includes('nixos')) return 'nixos';
-  if (lower.includes('opensuse') || lower.includes('suse')) return 'opensuse';
-  if (lower.includes('gentoo')) return 'gentoo';
-  if (lower.includes('freebsd') || lower.includes('openbsd') || lower.includes('netbsd')) return 'freebsd';
-  if (lower.includes('linux') || lower.includes('gnu')) return 'linux';
+  // All Linux distros, BSDs, and Unix-likes -> linux
+  if (lower.includes('linux') || lower.includes('debian') || lower.includes('ubuntu') ||
+      lower.includes('alpine') || lower.includes('centos') || lower.includes('fedora') ||
+      lower.includes('arch') || lower.includes('nixos') || lower.includes('suse') ||
+      lower.includes('gentoo') || lower.includes('rhel') || lower.includes('rocky') ||
+      lower.includes('alma') || lower.includes('devuan') || lower.includes('gnu') ||
+      lower.includes('freebsd') || lower.includes('openbsd') || lower.includes('netbsd')) {
+    return 'linux';
+  }
   return 'unknown';
 }
 
 const OS_COLORS: Record<OSType, string> = {
   windows: 'text-blue-500',
-  ubuntu: 'text-orange-500',
-  debian: 'text-red-500',
-  alpine: 'text-blue-400',
-  centos: 'text-purple-500',
-  fedora: 'text-blue-600',
-  arch: 'text-cyan-500',
-  nixos: 'text-sky-400',
-  opensuse: 'text-green-500',
-  gentoo: 'text-violet-400',
-  linux: 'text-yellow-500',
-  freebsd: 'text-red-600',
+  linux: 'text-gray-600 dark:text-gray-400',
   unknown: 'text-gray-400',
 };
 
@@ -270,98 +258,16 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
     setShowTooltip(false);
   };
 
-  // SVG icons for different OS types
-  const OSIcon = () => {
+  // Simple text labels
+  const OSLabel = () => {
     const type = osType();
-    const iconClass = `w-3.5 h-3.5 ${colorClass()}`;
-
     switch (type) {
       case 'windows':
-        return (
-          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
-            <path d="M3 5.5l7.038-1v6.5H3v-5.5zm0 13l7.038 1V13H3v5.5zm8.038 1.118L21 21V13h-9.962v6.618zM11.038 4.382L21 3v8h-9.962V4.382z"/>
-          </svg>
-        );
-      case 'ubuntu':
-        return (
-          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
-            <circle cx="12" cy="5" r="2" fill="currentColor"/>
-            <circle cx="6" cy="15.5" r="2" fill="currentColor"/>
-            <circle cx="18" cy="15.5" r="2" fill="currentColor"/>
-          </svg>
-        );
-      case 'debian':
-        return (
-          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c.83 0 1.5.67 1.5 1.5S12.83 8 12 8s-1.5-.67-1.5-1.5S11.17 5 12 5zm-4 9.5c0-2.21 1.79-4 4-4s4 1.79 4 4h-2c0-1.1-.9-2-2-2s-2 .9-2 2H8z"/>
-          </svg>
-        );
-      case 'alpine':
-        return (
-          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2L2 19h20L12 2zm0 4l6 10H6l6-10z"/>
-          </svg>
-        );
-      case 'centos':
-      case 'fedora':
-        return (
-          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2v8H4c0-4.42 3.58-8 8-8zm0 16c-4.42 0-8-3.58-8-8h8v8zm2-8h8c0 4.42-3.58 8-8 8v-8zm0-8c4.42 0 8 3.58 8 8h-8V4z"/>
-          </svg>
-        );
-      case 'arch':
-        return (
-          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2l-9 18h4l5-10 5 10h4L12 2z"/>
-          </svg>
-        );
-      case 'nixos':
-        // Snowflake-like icon for NixOS
-        return (
-          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2v4m0 12v4M2 12h4m12 0h4M5.64 5.64l2.83 2.83m7.07 7.07l2.82 2.82M5.64 18.36l2.83-2.83m7.07-7.07l2.82-2.82" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <circle cx="12" cy="12" r="3" fill="currentColor"/>
-          </svg>
-        );
-      case 'opensuse':
-        // Chameleon-inspired icon for openSUSE
-        return (
-          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
-            <path d="M8 12c0-2.21 1.79-4 4-4s4 1.79 4 4-1.79 4-4 4-4-1.79-4-4z" fill="currentColor"/>
-            <circle cx="10" cy="11" r="1" fill="white"/>
-          </svg>
-        );
-      case 'gentoo':
-        // G-like icon for Gentoo
-        return (
-          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4 11h-4v3c0 .55-.45 1-1 1s-1-.45-1-1v-4c0-.55.45-1 1-1h5c.55 0 1 .45 1 1s-.45 1-1 1z"/>
-          </svg>
-        );
-      case 'freebsd':
-        return (
-          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
-            <path d="M8 10c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v4c0 1.1-.9 2-2 2h-4c-1.1 0-2-.9-2-2v-4z" fill="currentColor"/>
-          </svg>
-        );
+        return <span class="text-[10px] text-gray-600 dark:text-gray-400">Windows</span>;
       case 'linux':
-        return (
-          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7zm-2 15v-2h4v2h-4zm3-4h-2V9h2v4z"/>
-          </svg>
-        );
+        return <span class="text-[10px] text-gray-600 dark:text-gray-400">Linux</span>;
       default:
-        // Generic server/computer icon
-        return (
-          <svg class={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <rect x="2" y="3" width="20" height="14" rx="2" />
-            <line x1="8" y1="21" x2="16" y2="21" />
-            <line x1="12" y1="17" x2="12" y2="21" />
-          </svg>
-        );
+        return <span class="text-[10px] text-gray-400">-</span>;
     }
   };
 
@@ -372,7 +278,7 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <OSIcon />
+        <OSLabel />
       </span>
 
       <Show when={showTooltip()}>
