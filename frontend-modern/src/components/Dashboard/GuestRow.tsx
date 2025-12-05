@@ -978,7 +978,21 @@ export function GuestRow(props: GuestRowProps) {
           </td>
         </Show>
 
-        {/* OS - NEW */}
+        {/* Tags */}
+        <Show when={isColVisible('tags')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center" onClick={(event) => event.stopPropagation()}>
+              <TagBadges
+                tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
+                maxVisible={2}
+                onTagClick={props.onTagClick}
+                activeSearch={props.activeSearch}
+              />
+            </div>
+          </td>
+        </Show>
+
+        {/* OS */}
         <Show when={isColVisible('os')}>
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
@@ -990,20 +1004,6 @@ export function GuestRow(props: GuestRowProps) {
                   {osName() || osVersion()}
                 </span>
               </Show>
-            </div>
-          </td>
-        </Show>
-
-        {/* Tags */}
-        <Show when={isColVisible('tags')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center" onClick={(event) => event.stopPropagation()}>
-              <TagBadges
-                tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
-                maxVisible={2}
-                onTagClick={props.onTagClick}
-                activeSearch={props.activeSearch}
-              />
             </div>
           </td>
         </Show>
