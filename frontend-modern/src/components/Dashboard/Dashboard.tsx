@@ -1,7 +1,7 @@
 import { createSignal, createMemo, createEffect, For, Show, onMount } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
-import { GuestRow, GUEST_COLUMNS } from './GuestRow';
+import { GuestRow, GUEST_COLUMNS, type GuestColumnDef } from './GuestRow';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -19,8 +19,10 @@ import { isNodeOnline, OFFLINE_HEALTH_STATUSES, DEGRADED_HEALTH_STATUSES } from 
 import { getNodeDisplayName } from '@/utils/nodes';
 import { logger } from '@/utils/logger';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { getBackupInfo } from '@/utils/format';
+import { aiChatStore } from '@/stores/aiChat';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
 type IdleCallbackHandle = number;
@@ -265,8 +267,16 @@ export function Dashboard(props: DashboardProps) {
   const [sortKey, setSortKey] = createSignal<keyof (VM | Container) | null>('vmid');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
 
+  // Column visibility management
+  const columnVisibility = useColumnVisibility(
+    STORAGE_KEYS.DASHBOARD_HIDDEN_COLUMNS,
+    GUEST_COLUMNS as GuestColumnDef[]
+  );
+  const visibleColumns = columnVisibility.visibleColumns;
+  const visibleColumnIds = createMemo(() => visibleColumns().map(c => c.id));
+
   // Total columns for colspan calculations
-  const totalColumns = GUEST_COLUMNS.length;
+  const totalColumns = createMemo(() => visibleColumns().length);
 
   // Load all guest metadata on mount (single API call for all guests)
   onMount(async () => {
@@ -457,6 +467,12 @@ export function Dashboard(props: DashboardProps) {
         }
       } else if (!isInputField && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
         // If it's a printable character and user is not in an input field
+        // Check if AI chat is open - if so, focus that instead
+        if (aiChatStore.focusInput()) {
+          // AI chat input was focused, let the character be typed there
+          return;
+        }
+        // Otherwise, focus the search input
         // Expand filters section if collapsed
         if (!showFilters()) {
           setShowFilters(true);
@@ -827,6 +843,10 @@ export function Dashboard(props: DashboardProps) {
         setSortKey={setSortKey}
         setSortDirection={setSortDirection}
         searchInputRef={(el) => (searchInputRef = el)}
+        availableColumns={columnVisibility.availableToggles()}
+        isColumnHidden={columnVisibility.isHiddenByUser}
+        onColumnToggle={columnVisibility.toggle}
+        onColumnReset={columnVisibility.resetToDefaults}
       />
 
       {/* Loading State */}
@@ -954,93 +974,25 @@ export function Dashboard(props: DashboardProps) {
               <table class="w-full border-collapse whitespace-nowrap">
                 <thead>
                   <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
-                    {/* Name Header */}
-                    <th
-                      class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('name')}
-                    >
-                      Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
+                    <For each={visibleColumns()}>
+                      {(col) => {
+                        const isFirst = () => col.id === visibleColumns()[0]?.id;
+                        const sortKeyForCol = col.sortKey as keyof (VM | Container) | undefined;
+                        const isSortable = !!sortKeyForCol;
+                        const isSorted = () => sortKeyForCol && sortKey() === sortKeyForCol;
 
-                    {/* Type */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('type')}
-                    >
-                      Type {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* VMID */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('vmid')}
-                    >
-                      VMID {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* Uptime */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('uptime')}
-                    >
-                      Uptime {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* CPU */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('cpu')}
-                    >
-                      CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* Memory */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('memory')}
-                    >
-                      Memory {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* Disk */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('disk')}
-                    >
-                      Disk {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* Disk Read */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('diskRead')}
-                    >
-                      Disk Read {sortKey() === 'diskRead' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* Disk Write */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('diskWrite')}
-                    >
-                      Disk Write {sortKey() === 'diskWrite' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* Net In */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('networkIn')}
-                    >
-                      Net In {sortKey() === 'networkIn' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* Net Out */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('networkOut')}
-                    >
-                      Net Out {sortKey() === 'networkOut' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
+                        return (
+                          <th
+                            class={`py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
+                              ${isFirst() ? 'pl-4 pr-2 text-left' : 'px-2 text-center'}
+                              ${isSortable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
+                            onClick={() => isSortable && handleSort(sortKeyForCol!)}
+                          >
+                            {col.label} {isSorted() && (sortDirection() === 'asc' ? '▲' : '▼')}
+                          </th>
+                        );
+                      }}
+                    </For>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -1059,7 +1011,7 @@ export function Dashboard(props: DashboardProps) {
                       return (
                         <>
                           <Show when={node && groupingMode() === 'grouped'}>
-                            <NodeGroupHeader node={node!} renderAs="tr" colspan={totalColumns} />
+                            <NodeGroupHeader node={node!} renderAs="tr" colspan={totalColumns()} />
                           </Show>
                           <For each={guests} fallback={<></>}>
                             {(guest) => {
@@ -1080,6 +1032,7 @@ export function Dashboard(props: DashboardProps) {
                                     parentNodeOnline={parentNodeOnline}
                                     onCustomUrlUpdate={handleCustomUrlUpdate}
                                     isGroupedView={groupingMode() === 'grouped'}
+                                    visibleColumnIds={visibleColumnIds()}
                                   />
                                 </ComponentErrorBoundary>
                               );

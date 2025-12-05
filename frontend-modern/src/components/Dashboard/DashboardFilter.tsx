@@ -2,6 +2,8 @@ import { Component, Show, For, createSignal, onMount, createEffect, onCleanup } 
 import { Card } from '@/components/shared/Card';
 import { SearchTipsPopover } from '@/components/shared/SearchTipsPopover';
 import { MetricsViewToggle } from '@/components/shared/MetricsViewToggle';
+import { ColumnPicker } from '@/components/shared/ColumnPicker';
+import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { createSearchHistoryManager } from '@/utils/searchHistory';
 
@@ -20,6 +22,11 @@ interface DashboardFilterProps {
   setSortKey: (value: string) => void;
   setSortDirection: (value: string) => void;
   searchInputRef?: (el: HTMLInputElement) => void;
+  // Column visibility
+  availableColumns?: ColumnDef[];
+  isColumnHidden?: (id: string) => boolean;
+  onColumnToggle?: (id: string) => void;
+  onColumnReset?: () => void;
 }
 
 export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
@@ -422,6 +429,20 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
           <MetricsViewToggle />
 
           <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+
+          {/* Column Picker */}
+          <Show when={props.availableColumns && props.isColumnHidden && props.onColumnToggle}>
+            <ColumnPicker
+              columns={props.availableColumns!}
+              isHidden={props.isColumnHidden!}
+              onToggle={props.onColumnToggle!}
+              onReset={props.onColumnReset}
+            />
+          </Show>
+
+          <Show when={props.availableColumns}>
+            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+          </Show>
 
           {/* Reset Button */}
           <button

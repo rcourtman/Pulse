@@ -1,0 +1,138 @@
+import { createMemo, Accessor } from 'solid-js';
+import { usePersistentSignal } from './usePersistentSignal';
+import { useBreakpoint, type ColumnPriority, PRIORITY_BREAKPOINTS, type Breakpoint } from './useBreakpoint';
+
+export interface ColumnDef {
+  id: string;
+  label: string;
+  priority: ColumnPriority;
+  toggleable?: boolean;
+  minWidth?: string;
+  maxWidth?: string;
+  flex?: number;
+  sortKey?: string;
+}
+
+const BREAKPOINT_ORDER: Breakpoint[] = ['xs', 'sm', 'md', 'lg', 'xl', '2xl'];
+
+function breakpointIndex(bp: Breakpoint): number {
+  return BREAKPOINT_ORDER.indexOf(bp);
+}
+
+/**
+ * Hook for managing column visibility with persistence and responsive behavior.
+ *
+ * Columns are shown if:
+ * 1. The current breakpoint supports their priority level, AND
+ * 2. The user hasn't explicitly hidden them (for toggleable columns)
+ *
+ * @param storageKey - localStorage key for persisting user preferences
+ * @param columns - Array of column definitions
+ */
+export function useColumnVisibility(
+  storageKey: string,
+  columns: ColumnDef[]
+) {
+  const { breakpoint } = useBreakpoint();
+
+  // Get list of toggleable column IDs
+  const toggleableIds = columns.filter(c => c.toggleable).map(c => c.id);
+
+  // Persist hidden columns to localStorage
+  const [hiddenColumns, setHiddenColumns] = usePersistentSignal<string[]>(
+    storageKey,
+    [],
+    {
+      serialize: (arr) => JSON.stringify(arr),
+      deserialize: (str) => {
+        try {
+          const parsed = JSON.parse(str);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      },
+    }
+  );
+
+  // Check if a column is hidden by user preference
+  const isHiddenByUser = (id: string): boolean => {
+    return hiddenColumns().includes(id);
+  };
+
+  // Check if breakpoint supports showing this column
+  const hasSpaceForColumn = (col: ColumnDef): boolean => {
+    const minBreakpoint = PRIORITY_BREAKPOINTS[col.priority];
+    return breakpointIndex(breakpoint()) >= breakpointIndex(minBreakpoint);
+  };
+
+  // Toggle a column's visibility
+  const toggle = (id: string) => {
+    const current = hiddenColumns();
+    if (current.includes(id)) {
+      setHiddenColumns(current.filter(c => c !== id));
+    } else {
+      setHiddenColumns([...current, id]);
+    }
+  };
+
+  // Show a column (remove from hidden)
+  const show = (id: string) => {
+    setHiddenColumns(hiddenColumns().filter(c => c !== id));
+  };
+
+  // Hide a column (add to hidden)
+  const hide = (id: string) => {
+    if (!hiddenColumns().includes(id)) {
+      setHiddenColumns([...hiddenColumns(), id]);
+    }
+  };
+
+  // Reset to defaults (show all)
+  const resetToDefaults = () => {
+    setHiddenColumns([]);
+  };
+
+  // Compute visible columns based on breakpoint and user preferences
+  const visibleColumns: Accessor<ColumnDef[]> = createMemo(() => {
+    return columns.filter(col => {
+      // Always show essential columns regardless of breakpoint
+      if (col.priority === 'essential') return true;
+
+      // Check if screen has space for this priority level
+      if (!hasSpaceForColumn(col)) return false;
+
+      // If toggleable, check user preference
+      if (col.toggleable && isHiddenByUser(col.id)) return false;
+
+      return true;
+    });
+  });
+
+  // Get columns that could be toggled at the current breakpoint
+  // (i.e., screen is wide enough to show them)
+  const availableToggles: Accessor<ColumnDef[]> = createMemo(() => {
+    return columns.filter(col => {
+      if (!col.toggleable) return false;
+      return hasSpaceForColumn(col);
+    });
+  });
+
+  // Check if a specific column is currently visible
+  const isColumnVisible = (id: string): boolean => {
+    return visibleColumns().some(col => col.id === id);
+  };
+
+  return {
+    visibleColumns,
+    availableToggles,
+    toggleableIds,
+    hiddenColumns,
+    isColumnVisible,
+    isHiddenByUser,
+    toggle,
+    show,
+    hide,
+    resetToDefaults,
+  };
+}

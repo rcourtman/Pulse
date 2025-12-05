@@ -608,64 +608,56 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                   <tr>
                                     <td colspan={8} class="p-0">
                                       <div class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 border-t border-gray-100 dark:border-gray-800/50">
-                                        <div class="flex flex-wrap justify-start gap-3">
+                                        <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full">
                                           {/* System Info */}
-                                          <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                            <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">System</div>
-                                            <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                                          <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                            <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">System</div>
+                                            <div class="space-y-1.5 text-[11px]">
                                               <Show when={host.cpuCount}>
-                                                <div class="flex items-center justify-between gap-2">
-                                                  <span class="font-medium text-gray-700 dark:text-gray-200">CPUs</span>
-                                                  <span class="text-right text-gray-600 dark:text-gray-300">{host.cpuCount}</span>
+                                                <div class="flex items-center justify-between">
+                                                  <span class="text-gray-500 dark:text-gray-400">CPUs</span>
+                                                  <span class="font-medium text-gray-700 dark:text-gray-200">{host.cpuCount}</span>
                                                 </div>
                                               </Show>
                                               <Show when={host.loadAverage && host.loadAverage.length > 0}>
-                                                <div class="flex items-center justify-between gap-2">
-                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Load Avg</span>
-                                                  <span class="text-right text-gray-600 dark:text-gray-300">{host.loadAverage!.map(l => l.toFixed(2)).join(', ')}</span>
+                                                <div class="flex items-center justify-between">
+                                                  <span class="text-gray-500 dark:text-gray-400">Load Avg</span>
+                                                  <span class="font-medium text-gray-700 dark:text-gray-200">{host.loadAverage!.map(l => l.toFixed(2)).join(', ')}</span>
                                                 </div>
                                               </Show>
                                               <Show when={host.architecture}>
-                                                <div class="flex items-center justify-between gap-2">
-                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Arch</span>
-                                                  <span class="text-right text-gray-600 dark:text-gray-300">{host.architecture}</span>
+                                                <div class="flex items-center justify-between">
+                                                  <span class="text-gray-500 dark:text-gray-400">Arch</span>
+                                                  <span class="font-medium text-gray-700 dark:text-gray-200">{host.architecture}</span>
                                                 </div>
                                               </Show>
                                               <Show when={host.kernelVersion}>
-                                                <div class="flex items-center justify-between gap-2">
-                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Kernel</span>
-                                                  <span class="text-right text-gray-600 dark:text-gray-300 truncate">{host.kernelVersion}</span>
+                                                <div class="flex items-center justify-between">
+                                                  <span class="text-gray-500 dark:text-gray-400">Kernel</span>
+                                                  <span class="font-medium text-gray-700 dark:text-gray-200 truncate ml-2">{host.kernelVersion}</span>
                                                 </div>
                                               </Show>
                                               <Show when={host.agentVersion}>
-                                                <div class="flex items-center justify-between gap-2">
-                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Agent</span>
-                                                  <span class="text-right text-gray-600 dark:text-gray-300">{host.agentVersion}</span>
+                                                <div class="flex items-center justify-between">
+                                                  <span class="text-gray-500 dark:text-gray-400">Agent</span>
+                                                  <span class="font-medium text-gray-700 dark:text-gray-200">{host.agentVersion}</span>
                                                 </div>
                                               </Show>
                                             </div>
                                           </div>
 
-                                          {/* Network Interfaces */}
-                                          <Show when={host.networkInterfaces && host.networkInterfaces.length > 0}>
-                                            <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Network</div>
-                                              <div class="mt-2 space-y-2 text-[11px]">
-                                                <For each={host.networkInterfaces?.slice(0, 4)}>
-                                                  {(iface) => (
-                                                    <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700/70">
-                                                      <div class="font-medium text-gray-700 dark:text-gray-200">{iface.name}</div>
-                                                      <Show when={iface.addresses && iface.addresses.length > 0}>
-                                                        <div class="flex flex-wrap gap-1 mt-1 text-[10px]">
-                                                          <For each={iface.addresses}>
-                                                            {(addr) => (
-                                                              <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                                                                {addr}
-                                                              </span>
-                                                            )}
-                                                          </For>
-                                                        </div>
-                                                      </Show>
+                                          {/* Temperature Sensors */}
+                                          <Show when={host.sensors?.temperatureCelsius && Object.keys(host.sensors.temperatureCelsius).length > 0}>
+                                            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Temperatures</div>
+                                              <div class="space-y-1.5 text-[11px]">
+                                                <For each={Object.entries(host.sensors!.temperatureCelsius!).slice(0, 5)}>
+                                                  {([name, temp]) => (
+                                                    <div class="flex items-center justify-between">
+                                                      <span class="text-gray-500 dark:text-gray-400 truncate mr-2">{name}</span>
+                                                      <span class={`font-medium ${temp > 80 ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-200'}`}>
+                                                        {temp.toFixed(1)}°C
+                                                      </span>
                                                     </div>
                                                   )}
                                                 </For>
@@ -673,19 +665,64 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                             </div>
                                           </Show>
 
+                                          {/* RAID Arrays */}
+                                          <For each={host.raid || []}>
+                                            {(array) => {
+                                              const isDegraded = () => array.state.toLowerCase().includes('degraded') || array.failedDevices > 0;
+                                              const isRebuilding = () => array.state.toLowerCase().includes('recover') || array.state.toLowerCase().includes('resync') || array.rebuildPercent > 0;
+                                              const isHealthy = () => !isDegraded() && !isRebuilding() && array.state.toLowerCase().includes('clean');
+
+                                              const stateColor = () => {
+                                                if (isDegraded()) return 'text-red-600 dark:text-red-400 font-semibold';
+                                                if (isRebuilding()) return 'text-amber-600 dark:text-amber-400';
+                                                if (isHealthy()) return 'text-green-600 dark:text-green-400';
+                                                return 'text-gray-700 dark:text-gray-200';
+                                              };
+
+                                              return (
+                                                <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                                  <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">
+                                                    RAID {array.level.replace('raid', '')} - {array.device}
+                                                  </div>
+                                                  <div class="space-y-1.5 text-[11px]">
+                                                    <div class="flex items-center justify-between">
+                                                      <span class="text-gray-500 dark:text-gray-400">State</span>
+                                                      <span class={`font-medium ${stateColor()}`}>{array.state}</span>
+                                                    </div>
+                                                    <div class="flex items-center justify-between">
+                                                      <span class="text-gray-500 dark:text-gray-400">Devices</span>
+                                                      <span class="font-medium text-gray-700 dark:text-gray-200">
+                                                        {array.activeDevices}/{array.totalDevices}
+                                                        {array.failedDevices > 0 && <span class="text-red-600 dark:text-red-400"> ({array.failedDevices} failed)</span>}
+                                                      </span>
+                                                    </div>
+                                                    <Show when={isRebuilding() && array.rebuildPercent > 0}>
+                                                      <div class="flex items-center justify-between">
+                                                        <span class="text-gray-500 dark:text-gray-400">Rebuild</span>
+                                                        <span class="font-medium text-amber-600 dark:text-amber-400">
+                                                          {array.rebuildPercent.toFixed(1)}%
+                                                        </span>
+                                                      </div>
+                                                    </Show>
+                                                  </div>
+                                                </div>
+                                              );
+                                            }}
+                                          </For>
+
                                           {/* Disk Info */}
                                           <Show when={host.disks && host.disks.length > 0}>
-                                            <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Disks</div>
-                                              <div class="mt-2 space-y-2 text-[11px]">
+                                            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Disks</div>
+                                              <div class="space-y-2 text-[11px]">
                                                 <For each={host.disks?.slice(0, 3)}>
                                                   {(disk) => {
                                                     const diskPercent = () => disk.usage ?? 0;
                                                     return (
-                                                      <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700/70">
+                                                      <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700">
                                                         <div class="flex items-center justify-between">
                                                           <span class="font-medium text-gray-700 dark:text-gray-200 truncate">{disk.mountpoint || disk.device}</span>
-                                                          <span class="text-[10px] text-gray-500 dark:text-gray-400">
+                                                          <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-2">
                                                             {formatBytes(disk.used ?? 0, 0)} / {formatBytes(disk.total ?? 0, 0)}
                                                           </span>
                                                         </div>
@@ -709,14 +746,14 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
 
                                           {/* Disk I/O */}
                                           <Show when={host.diskIO && host.diskIO.length > 0}>
-                                            <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Disk I/O</div>
-                                              <div class="mt-2 space-y-2 text-[11px]">
-                                                <For each={host.diskIO?.slice(0, 4)}>
+                                            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Disk I/O</div>
+                                              <div class="space-y-2 text-[11px]">
+                                                <For each={host.diskIO?.slice(0, 3)}>
                                                   {(io) => (
-                                                    <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700/70">
-                                                      <div class="font-medium text-gray-700 dark:text-gray-200">{io.device}</div>
-                                                      <div class="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px]">
+                                                    <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700">
+                                                      <div class="font-medium text-gray-700 dark:text-gray-200 mb-1">{io.device}</div>
+                                                      <div class="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px]">
                                                         <div class="flex items-center justify-between">
                                                           <span class="text-gray-500 dark:text-gray-400">Read:</span>
                                                           <span class="text-gray-600 dark:text-gray-300">{formatBytes(io.readBytes ?? 0, 1)}</span>
@@ -725,14 +762,6 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                                           <span class="text-gray-500 dark:text-gray-400">Write:</span>
                                                           <span class="text-gray-600 dark:text-gray-300">{formatBytes(io.writeBytes ?? 0, 1)}</span>
                                                         </div>
-                                                        <div class="flex items-center justify-between">
-                                                          <span class="text-gray-500 dark:text-gray-400">Read Ops:</span>
-                                                          <span class="text-gray-600 dark:text-gray-300">{formatNumber(io.readOps ?? 0)}</span>
-                                                        </div>
-                                                        <div class="flex items-center justify-between">
-                                                          <span class="text-gray-500 dark:text-gray-400">Write Ops:</span>
-                                                          <span class="text-gray-600 dark:text-gray-300">{formatNumber(io.writeOps ?? 0)}</span>
-                                                        </div>
                                                       </div>
                                                     </div>
                                                   )}
@@ -741,76 +770,31 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                             </div>
                                           </Show>
 
-                                          {/* Temperature Sensors */}
-                                          <Show when={host.sensors?.temperatureCelsius && Object.keys(host.sensors.temperatureCelsius).length > 0}>
-                                            <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Temperatures</div>
-                                              <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                                                <For each={Object.entries(host.sensors!.temperatureCelsius!).slice(0, 5)}>
-                                                  {([name, temp]) => (
-                                                    <div class="flex items-center justify-between gap-2">
-                                                      <span class="font-medium text-gray-700 dark:text-gray-200 truncate">{name}</span>
-                                                      <span class={`text-right ${temp > 80 ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-600 dark:text-gray-300'}`}>
-                                                        {temp.toFixed(1)}°C
-                                                      </span>
-                                                    </div>
-                                                  )}
-                                                </For>
-                                              </div>
-                                            </div>
-                                          </Show>
-
-                                          {/* RAID Arrays */}
-                                          <Show when={host.raid && host.raid.length > 0}>
-                                            <For each={host.raid!}>
-                                              {(array) => {
-                                                const isDegraded = () => array.state.toLowerCase().includes('degraded') || array.failedDevices > 0;
-                                                const isRebuilding = () => array.state.toLowerCase().includes('recover') || array.state.toLowerCase().includes('resync') || array.rebuildPercent > 0;
-                                                const isHealthy = () => !isDegraded() && !isRebuilding() && array.state.toLowerCase().includes('clean');
-
-                                                const stateColor = () => {
-                                                  if (isDegraded()) return 'text-red-600 dark:text-red-400 font-semibold';
-                                                  if (isRebuilding()) return 'text-amber-600 dark:text-amber-400 font-semibold';
-                                                  if (isHealthy()) return 'text-green-600 dark:text-green-400';
-                                                  return 'text-gray-600 dark:text-gray-300';
-                                                };
-
-                                                return (
-                                                  <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                                    <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                                                      RAID {array.level.replace('raid', '')} - {array.device}
-                                                    </div>
-                                                    <div class="mt-2 space-y-1 text-[11px]">
-                                                      <div class="flex items-center justify-between gap-2">
-                                                        <span class="font-medium text-gray-700 dark:text-gray-200">State</span>
-                                                        <span class={stateColor()}>{array.state}</span>
-                                                      </div>
-                                                      <div class="flex items-center justify-between gap-2">
-                                                        <span class="font-medium text-gray-700 dark:text-gray-200">Devices</span>
-                                                        <span class="text-gray-600 dark:text-gray-300">
-                                                          {array.activeDevices}/{array.totalDevices}
-                                                          {array.failedDevices > 0 && <span class="text-red-600 dark:text-red-400"> ({array.failedDevices} failed)</span>}
-                                                        </span>
-                                                      </div>
-                                                      <Show when={isRebuilding() && array.rebuildPercent > 0}>
-                                                        <div class="flex items-center justify-between gap-2">
-                                                          <span class="font-medium text-gray-700 dark:text-gray-200">Rebuild</span>
-                                                          <span class="text-amber-600 dark:text-amber-400 font-medium">
-                                                            {array.rebuildPercent.toFixed(1)}%
-                                                          </span>
+                                          {/* Network Interfaces */}
+                                          <Show when={host.networkInterfaces && host.networkInterfaces.length > 0}>
+                                            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Network</div>
+                                              <div class="space-y-2 text-[11px]">
+                                                <For each={host.networkInterfaces?.slice(0, 4)}>
+                                                  {(iface) => (
+                                                    <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700">
+                                                      <div class="font-medium text-gray-700 dark:text-gray-200">{iface.name}</div>
+                                                      <Show when={iface.addresses && iface.addresses.length > 0}>
+                                                        <div class="flex flex-wrap gap-1 mt-1">
+                                                          <For each={iface.addresses}>
+                                                            {(addr) => (
+                                                              <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                                                {addr}
+                                                              </span>
+                                                            )}
+                                                          </For>
                                                         </div>
-                                                        <Show when={array.rebuildSpeed}>
-                                                          <div class="flex items-center justify-between gap-2">
-                                                            <span class="font-medium text-gray-700 dark:text-gray-200">Speed</span>
-                                                            <span class="text-gray-600 dark:text-gray-300">{array.rebuildSpeed}</span>
-                                                          </div>
-                                                        </Show>
                                                       </Show>
                                                     </div>
-                                                  </div>
-                                                );
-                                              }}
-                                            </For>
+                                                  )}
+                                                </For>
+                                              </div>
+                                            </div>
                                           </Show>
                                         </div>
 

@@ -108,4 +108,9 @@ export const STORAGE_KEYS = {
 
   // Metrics display
   METRICS_VIEW_MODE: 'metricsViewMode', // 'bars' | 'sparklines'
+
+  // Column visibility
+  DASHBOARD_HIDDEN_COLUMNS: 'dashboardHiddenColumns',
+  HOSTS_HIDDEN_COLUMNS: 'hostsHiddenColumns',
+  DOCKER_HIDDEN_COLUMNS: 'dockerHiddenColumns',
 } as const;
