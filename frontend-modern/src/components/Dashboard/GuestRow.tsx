@@ -205,6 +205,179 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Netw
   );
 }
 
+// OS detection helper - returns icon type and color based on OS name
+type OSType = 'windows' | 'ubuntu' | 'debian' | 'alpine' | 'centos' | 'fedora' | 'arch' | 'linux' | 'freebsd' | 'unknown';
+
+function detectOSType(osName: string): OSType {
+  const lower = osName.toLowerCase();
+  if (lower.includes('windows')) return 'windows';
+  if (lower.includes('ubuntu')) return 'ubuntu';
+  if (lower.includes('debian')) return 'debian';
+  if (lower.includes('alpine')) return 'alpine';
+  if (lower.includes('centos') || lower.includes('rocky') || lower.includes('alma') || lower.includes('rhel') || lower.includes('red hat')) return 'centos';
+  if (lower.includes('fedora')) return 'fedora';
+  if (lower.includes('arch')) return 'arch';
+  if (lower.includes('freebsd') || lower.includes('openbsd') || lower.includes('netbsd')) return 'freebsd';
+  if (lower.includes('linux') || lower.includes('gnu')) return 'linux';
+  return 'unknown';
+}
+
+const OS_COLORS: Record<OSType, string> = {
+  windows: 'text-blue-500',
+  ubuntu: 'text-orange-500',
+  debian: 'text-red-500',
+  alpine: 'text-blue-400',
+  centos: 'text-purple-500',
+  fedora: 'text-blue-600',
+  arch: 'text-cyan-500',
+  linux: 'text-yellow-500',
+  freebsd: 'text-red-600',
+  unknown: 'text-gray-400',
+};
+
+// OS info cell with icon and Portal tooltip
+function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: string }) {
+  const [showTooltip, setShowTooltip] = createSignal(false);
+  const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
+
+  const osType = createMemo(() => detectOSType(props.osName));
+  const colorClass = createMemo(() => OS_COLORS[osType()]);
+  const displayName = createMemo(() => {
+    const name = props.osName;
+    // Shorten common long names
+    if (name.toLowerCase().includes('microsoft windows')) {
+      return name.replace(/Microsoft Windows/i, 'Win').replace('Server ', 'Srv ');
+    }
+    if (name.toLowerCase().includes('gnu/linux')) {
+      return name.replace(/GNU\/Linux/i, '');
+    }
+    return name;
+  });
+
+  const handleMouseEnter = (e: MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
+    setShowTooltip(true);
+  };
+
+  const handleMouseLeave = () => {
+    setShowTooltip(false);
+  };
+
+  // SVG icons for different OS types
+  const OSIcon = () => {
+    const type = osType();
+    const iconClass = `w-3.5 h-3.5 ${colorClass()}`;
+
+    switch (type) {
+      case 'windows':
+        return (
+          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 5.5l7.038-1v6.5H3v-5.5zm0 13l7.038 1V13H3v5.5zm8.038 1.118L21 21V13h-9.962v6.618zM11.038 4.382L21 3v8h-9.962V4.382z"/>
+          </svg>
+        );
+      case 'ubuntu':
+        return (
+          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
+            <circle cx="12" cy="5" r="2" fill="currentColor"/>
+            <circle cx="6" cy="15.5" r="2" fill="currentColor"/>
+            <circle cx="18" cy="15.5" r="2" fill="currentColor"/>
+          </svg>
+        );
+      case 'debian':
+        return (
+          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c.83 0 1.5.67 1.5 1.5S12.83 8 12 8s-1.5-.67-1.5-1.5S11.17 5 12 5zm-4 9.5c0-2.21 1.79-4 4-4s4 1.79 4 4h-2c0-1.1-.9-2-2-2s-2 .9-2 2H8z"/>
+          </svg>
+        );
+      case 'alpine':
+        return (
+          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2L2 19h20L12 2zm0 4l6 10H6l6-10z"/>
+          </svg>
+        );
+      case 'centos':
+      case 'fedora':
+        return (
+          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2v8H4c0-4.42 3.58-8 8-8zm0 16c-4.42 0-8-3.58-8-8h8v8zm2-8h8c0 4.42-3.58 8-8 8v-8zm0-8c4.42 0 8 3.58 8 8h-8V4z"/>
+          </svg>
+        );
+      case 'arch':
+        return (
+          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l-9 18h4l5-10 5 10h4L12 2z"/>
+          </svg>
+        );
+      case 'freebsd':
+        return (
+          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
+            <path d="M8 10c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v4c0 1.1-.9 2-2 2h-4c-1.1 0-2-.9-2-2v-4z" fill="currentColor"/>
+          </svg>
+        );
+      case 'linux':
+        return (
+          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7zm-2 15v-2h4v2h-4zm3-4h-2V9h2v4z"/>
+          </svg>
+        );
+      default:
+        // Generic server/computer icon
+        return (
+          <svg class={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+        );
+    }
+  };
+
+  return (
+    <>
+      <span
+        class="inline-flex items-center gap-1 cursor-help"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <OSIcon />
+      </span>
+
+      <Show when={showTooltip()}>
+        <Portal mount={document.body}>
+          <div
+            class="fixed z-[9999] pointer-events-none"
+            style={{
+              left: `${tooltipPos().x}px`,
+              top: `${tooltipPos().y - 8}px`,
+              transform: 'translate(-50%, -100%)',
+            }}
+          >
+            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[120px] max-w-[220px] border border-gray-700">
+              <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                Operating System
+              </div>
+              <div class="py-0.5">
+                <div class="text-gray-200 font-medium">{props.osName}</div>
+                <Show when={props.osVersion}>
+                  <div class="text-gray-400">Version: {props.osVersion}</div>
+                </Show>
+                <Show when={props.agentVersion}>
+                  <div class="text-gray-500 text-[9px] mt-1 pt-1 border-t border-gray-700/50">
+                    Agent: {props.agentVersion}
+                  </div>
+                </Show>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      </Show>
+    </>
+  );
+}
+
 // Backup status cell with Portal tooltip
 function BackupStatusCell(props: { lastBackup: string | number | null | undefined }) {
   const [showTooltip, setShowTooltip] = createSignal(false);
@@ -997,12 +1170,11 @@ export function GuestRow(props: GuestRowProps) {
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
               <Show when={hasOsInfo()} fallback={<span class="text-xs text-gray-400">-</span>}>
-                <span
-                  class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[100px]"
-                  title={`${osName()} ${osVersion()}`}
-                >
-                  {osName() || osVersion()}
-                </span>
+                <OSInfoCell
+                  osName={osName()}
+                  osVersion={osVersion()}
+                  agentVersion={agentVersion()}
+                />
               </Show>
             </div>
           </td>
