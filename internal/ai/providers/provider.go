@@ -29,9 +29,11 @@ type ToolResult struct {
 
 // Tool represents an AI tool definition
 type Tool struct {
-	Name        string                `json:"name"`
-	Description string                `json:"description"`
-	InputSchema map[string]interface{} `json:"input_schema"`
+	Type        string                 `json:"type,omitempty"`        // "web_search_20250305" for web search, empty for regular tools
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	InputSchema map[string]interface{} `json:"input_schema,omitempty"`
+	MaxUses     int                    `json:"max_uses,omitempty"`    // For web search: limit searches per request
 }
 
 // ChatRequest represents a request to the AI provider

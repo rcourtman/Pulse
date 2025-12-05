@@ -229,10 +229,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   });
 
-  // Focus input when drawer opens
+  // Focus input when drawer opens and register with store for keyboard shortcuts
   createEffect(() => {
     if (isOpen() && inputRef) {
       setTimeout(() => inputRef?.focus(), 100);
+      aiChatStore.registerInput(inputRef);
+    } else {
+      aiChatStore.registerInput(null);
     }
   });
 
@@ -282,7 +285,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         // For assistant messages, prepend tool call outputs so AI has full context
         if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
           const toolSummary = m.toolCalls
-            .map((tc) => `[Executed: ${tc.input}]\n${tc.output}`)
+            .map((tc) => `Command: ${tc.input}\nOutput: ${tc.output}`)
             .join('\n\n');
           content = toolSummary + (content ? '\n\n' + content : '');
         }

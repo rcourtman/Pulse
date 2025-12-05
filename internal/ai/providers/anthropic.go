@@ -57,10 +57,13 @@ type anthropicMessage struct {
 	Content interface{}   `json:"content"` // Can be string or []anthropicContent
 }
 
+// anthropicTool represents a regular function tool
 type anthropicTool struct {
+	Type        string                 `json:"type,omitempty"`        // "web_search_20250305" for web search, omit for regular tools
 	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	InputSchema map[string]interface{} `json:"input_schema"`
+	Description string                 `json:"description,omitempty"` // Not used for web search
+	InputSchema map[string]interface{} `json:"input_schema,omitempty"` // Not used for web search
+	MaxUses     int                    `json:"max_uses,omitempty"`    // For web search: limit searches per request
 }
 
 // anthropicResponse is the response from the Anthropic API
@@ -76,14 +79,14 @@ type anthropicResponse struct {
 }
 
 type anthropicContent struct {
-	Type  string                 `json:"type"`            // "text" or "tool_use" or "tool_result"
-	Text  string                 `json:"text,omitempty"`
-	ID    string                 `json:"id,omitempty"`    // For tool_use
-	Name  string                 `json:"name,omitempty"`  // For tool_use
-	Input map[string]interface{} `json:"input,omitempty"` // For tool_use
-	ToolUseID string             `json:"tool_use_id,omitempty"` // For tool_result
-	Content   string             `json:"content,omitempty"`     // For tool_result (when it's a string)
-	IsError   bool               `json:"is_error,omitempty"`    // For tool_result
+	Type      string                 `json:"type"`                  // "text", "tool_use", "tool_result", "server_tool_use", "web_search_tool_result"
+	Text      string                 `json:"text,omitempty"`
+	ID        string                 `json:"id,omitempty"`          // For tool_use
+	Name      string                 `json:"name,omitempty"`        // For tool_use
+	Input     map[string]interface{} `json:"input,omitempty"`       // For tool_use
+	ToolUseID string                 `json:"tool_use_id,omitempty"` // For tool_result
+	Content   json.RawMessage        `json:"content,omitempty"`     // Can be string or array (for web_search_tool_result)
+	IsError   bool                   `json:"is_error,omitempty"`    // For tool_result
 }
 
 type anthropicUsage struct {
@@ -113,14 +116,15 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 
 		// Handle tool results specially
 		if m.ToolResult != nil {
-			// Tool result message
+			// Tool result message - Content needs to be JSON-encoded string
+			contentJSON, _ := json.Marshal(m.ToolResult.Content)
 			messages = append(messages, anthropicMessage{
 				Role: "user",
 				Content: []anthropicContent{
 					{
 						Type:      "tool_result",
 						ToolUseID: m.ToolResult.ToolUseID,
-						Content:   m.ToolResult.Content,
+						Content:   contentJSON,
 						IsError:   m.ToolResult.IsError,
 					},
 				},
@@ -186,10 +190,20 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 	if len(req.Tools) > 0 {
 		anthropicReq.Tools = make([]anthropicTool, len(req.Tools))
 		for i, t := range req.Tools {
-			anthropicReq.Tools[i] = anthropicTool{
-				Name:        t.Name,
-				Description: t.Description,
-				InputSchema: t.InputSchema,
+			if t.Type == "web_search_20250305" {
+				// Web search tool has a special format
+				anthropicReq.Tools[i] = anthropicTool{
+					Type:    t.Type,
+					Name:    t.Name,
+					MaxUses: t.MaxUses,
+				}
+			} else {
+				// Regular function tool
+				anthropicReq.Tools[i] = anthropicTool{
+					Name:        t.Name,
+					Description: t.Description,
+					InputSchema: t.InputSchema,
+				}
 			}
 		}
 	}
@@ -284,11 +298,21 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		case "text":
 			textContent += c.Text
 		case "tool_use":
+			// Regular tool use - we need to execute these
 			toolCalls = append(toolCalls, ToolCall{
 				ID:    c.ID,
 				Name:  c.Name,
 				Input: c.Input,
 			})
+		case "server_tool_use":
+			// Server-side tool (like web_search) - Anthropic handles these automatically
+			// We just log it for debugging, no action needed
+			log.Debug().
+				Str("tool_name", c.Name).
+				Msg("Server tool use detected (handled by Anthropic)")
+		case "web_search_tool_result":
+			// Results from web search - already incorporated into Claude's response
+			log.Debug().Msg("Web search results received")
 		}
 	}
 
