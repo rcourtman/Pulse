@@ -3,10 +3,13 @@ package ai
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
@@ -705,6 +708,9 @@ func (s *Service) getToolInputDisplay(tc providers.ToolCall) string {
 	case "read_file":
 		path, _ := tc.Input["path"].(string)
 		return path
+	case "fetch_url":
+		url, _ := tc.Input["url"].(string)
+		return url
 	default:
 		return fmt.Sprintf("%v", tc.Input)
 	}
@@ -724,7 +730,7 @@ func (s *Service) hasAgentForTarget(req ExecuteRequest) bool {
 
 // getTools returns the available tools for AI
 func (s *Service) getTools() []providers.Tool {
-	return []providers.Tool{
+	tools := []providers.Tool{
 		{
 			Name:        "run_command",
 			Description: "Execute a shell command. By default runs on the current target, but you can override to run on the Proxmox host for operations like resizing disks, managing containers, etc.",
@@ -757,7 +763,32 @@ func (s *Service) getTools() []providers.Tool {
 				"required": []string{"path"},
 			},
 		},
+		{
+			Name:        "fetch_url",
+			Description: "Fetch content from a URL. Use this to check if web services are responding, read API endpoints, or fetch documentation. Works with local network URLs and public sites.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"url": map[string]interface{}{
+						"type":        "string",
+						"description": "The URL to fetch (e.g., 'http://192.168.1.50:8080/api/health' or 'https://example.com/docs')",
+					},
+				},
+				"required": []string{"url"},
+			},
+		},
 	}
+
+	// Add web search tool for Anthropic provider
+	if s.provider != nil && s.provider.Name() == "anthropic" {
+		tools = append(tools, providers.Tool{
+			Type:    "web_search_20250305",
+			Name:    "web_search",
+			MaxUses: 3, // Limit searches per request to control costs
+		})
+	}
+
+	return tools
 }
 
 // executeTool executes a tool call and returns the result
@@ -835,10 +866,74 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		execution.Success = true
 		return result, execution
 
+	case "fetch_url":
+		urlStr, _ := tc.Input["url"].(string)
+		execution.Input = urlStr
+
+		if urlStr == "" {
+			execution.Output = "Error: url is required"
+			return execution.Output, execution
+		}
+
+		// Fetch the URL
+		result, err := s.fetchURL(ctx, urlStr)
+		if err != nil {
+			execution.Output = fmt.Sprintf("Error fetching URL: %s", err)
+			return execution.Output, execution
+		}
+
+		execution.Output = result
+		execution.Success = true
+		return result, execution
+
 	default:
 		execution.Output = fmt.Sprintf("Unknown tool: %s", tc.Name)
 		return execution.Output, execution
 	}
+}
+
+// fetchURL fetches content from a URL with size limits and timeout
+func (s *Service) fetchURL(ctx context.Context, urlStr string) (string, error) {
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// Create request with context
+	req, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL: %w", err)
+	}
+
+	// Set a reasonable user agent
+	req.Header.Set("User-Agent", "Pulse-AI/1.0")
+
+	// Make the request
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response with size limit (64KB)
+	const maxSize = 64 * 1024
+	limitedReader := io.LimitReader(resp.Body, maxSize)
+	body, err := io.ReadAll(limitedReader)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Build result with status info
+	result := fmt.Sprintf("HTTP %d %s\n", resp.StatusCode, resp.Status)
+	result += fmt.Sprintf("Content-Type: %s\n", resp.Header.Get("Content-Type"))
+	result += fmt.Sprintf("Content-Length: %d bytes\n\n", len(body))
+	result += string(body)
+
+	if len(body) == maxSize {
+		result += "\n\n[Response truncated at 64KB]"
+	}
+
+	return result, nil
 }
 
 // executeOnAgent executes a command via the agent WebSocket

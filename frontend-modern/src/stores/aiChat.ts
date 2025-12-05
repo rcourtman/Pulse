@@ -39,6 +39,9 @@ const [contextItems, setContextItems] = createSignal<ContextItem[]>([]);
 const [messages, setMessages] = createSignal<Message[]>([]);
 const [aiEnabled, setAiEnabled] = createSignal<boolean | null>(null); // null = not checked yet
 
+// Store reference to AI input for focusing from keyboard shortcuts
+let aiInputRef: HTMLTextAreaElement | null = null;
+
 export const aiChatStore = {
   // Check if chat is open
   get isOpen() {
@@ -188,5 +191,19 @@ export const aiChatStore = {
       initialPrompt: prompt,
     });
     setIsAIChatOpen(true);
+  },
+
+  // Register the AI input element (called by AIChat component)
+  registerInput(ref: HTMLTextAreaElement | null) {
+    aiInputRef = ref;
+  },
+
+  // Focus the AI input (called by keyboard handlers)
+  focusInput() {
+    if (aiInputRef && isAIChatOpen()) {
+      aiInputRef.focus();
+      return true;
+    }
+    return false;
   },
 };
