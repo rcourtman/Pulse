@@ -46,10 +46,29 @@ func NewServer(validateToken func(token string) bool) *Server {
 
 // HandleWebSocket handles incoming WebSocket connections from agents
 func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	// CRITICAL: Clear http.Server deadlines BEFORE WebSocket upgrade.
+	// The http.Server.ReadTimeout sets a deadline on the underlying connection when
+	// the request starts. We must clear it before the upgrade or the connection will
+	// be closed when that deadline fires (typically ~15 seconds after connection).
+	// Use http.ResponseController (Go 1.20+) to clear the deadline.
+	rc := http.NewResponseController(w)
+	if err := rc.SetReadDeadline(time.Time{}); err != nil {
+		log.Debug().Err(err).Msg("Failed to clear read deadline via ResponseController")
+	}
+	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+		log.Debug().Err(err).Msg("Failed to clear write deadline via ResponseController")
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to upgrade WebSocket connection")
 		return
+	}
+
+	// Also clear on the WebSocket's underlying connection as a safety net
+	if netConn := conn.NetConn(); netConn != nil {
+		netConn.SetReadDeadline(time.Time{})
+		netConn.SetWriteDeadline(time.Time{})
 	}
 
 	// Read first message (must be agent_register)
@@ -139,8 +158,27 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		Payload:   RegisteredPayload{Success: true, Message: "Registered"},
 	})
 
-	// Clear deadline for normal operation
+	// Clear deadline for normal operation - both on the WebSocket and underlying connection
+	// This is critical because Go's http.Server.ReadTimeout may have set a deadline
+	// on the underlying connection before the WebSocket upgrade occurred.
 	conn.SetReadDeadline(time.Time{})
+	conn.SetWriteDeadline(time.Time{})
+	if netConn := conn.NetConn(); netConn != nil {
+		netConn.SetReadDeadline(time.Time{})
+		netConn.SetWriteDeadline(time.Time{})
+	}
+
+	// Set up ping/pong handlers to keep connection alive
+	conn.SetPongHandler(func(appData string) error {
+		// Reset read deadline on pong received
+		conn.SetReadDeadline(time.Time{})
+		return nil
+	})
+
+	// Start server-side ping loop to keep connection alive
+	pingDone := make(chan struct{})
+	go s.pingLoop(ac, pingDone)
+	defer close(pingDone)
 
 	// Run read loop (blocking) - don't use goroutine, or HTTP handler will close connection
 	s.readLoop(ac)
@@ -209,6 +247,28 @@ func (s *Server) readLoop(ac *agentConn) {
 				}
 			} else {
 				log.Warn().Str("request_id", result.RequestID).Msg("No pending request for result")
+			}
+		}
+	}
+}
+
+func (s *Server) pingLoop(ac *agentConn, done chan struct{}) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-done:
+			return
+		case <-ac.done:
+			return
+		case <-ticker.C:
+			ac.writeMu.Lock()
+			err := ac.conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(5*time.Second))
+			ac.writeMu.Unlock()
+			if err != nil {
+				log.Debug().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to send ping to agent")
+				return
 			}
 		}
 	}

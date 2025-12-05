@@ -162,6 +162,7 @@ type Host struct {
 	Memory            Memory                 `json:"memory"`
 	LoadAverage       []float64              `json:"loadAverage,omitempty"`
 	Disks             []Disk                 `json:"disks,omitempty"`
+	DiskIO            []DiskIO               `json:"diskIO,omitempty"`
 	NetworkInterfaces []HostNetworkInterface `json:"networkInterfaces,omitempty"`
 	Sensors           HostSensorSummary      `json:"sensors,omitempty"`
 	RAID              []HostRAIDArray        `json:"raid,omitempty"`
@@ -217,6 +218,19 @@ type HostRAIDDevice struct {
 	Device string `json:"device"`
 	State  string `json:"state"`
 	Slot   int    `json:"slot"`
+}
+
+// DiskIO represents I/O statistics for a block device.
+// Counters are cumulative since boot.
+type DiskIO struct {
+	Device     string `json:"device"`
+	ReadBytes  uint64 `json:"readBytes,omitempty"`
+	WriteBytes uint64 `json:"writeBytes,omitempty"`
+	ReadOps    uint64 `json:"readOps,omitempty"`
+	WriteOps   uint64 `json:"writeOps,omitempty"`
+	ReadTime   uint64 `json:"readTimeMs,omitempty"`
+	WriteTime  uint64 `json:"writeTimeMs,omitempty"`
+	IOTime     uint64 `json:"ioTimeMs,omitempty"`
 }
 
 // DockerHost represents a Docker host reporting metrics via the external agent.

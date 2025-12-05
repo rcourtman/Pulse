@@ -1875,6 +1875,20 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		})
 	}
 
+	diskIO := make([]models.DiskIO, 0, len(report.DiskIO))
+	for _, io := range report.DiskIO {
+		diskIO = append(diskIO, models.DiskIO{
+			Device:     io.Device,
+			ReadBytes:  io.ReadBytes,
+			WriteBytes: io.WriteBytes,
+			ReadOps:    io.ReadOps,
+			WriteOps:   io.WriteOps,
+			ReadTime:   io.ReadTime,
+			WriteTime:  io.WriteTime,
+			IOTime:     io.IOTime,
+		})
+	}
+
 	network := make([]models.HostNetworkInterface, 0, len(report.Network))
 	for _, nic := range report.Network {
 		network = append(network, models.HostNetworkInterface{
@@ -1928,6 +1942,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		LoadAverage:       append([]float64(nil), report.Host.LoadAverage...),
 		Memory:            memory,
 		Disks:             disks,
+		DiskIO:            diskIO,
 		NetworkInterfaces: network,
 		Sensors: models.HostSensorSummary{
 			TemperatureCelsius: cloneStringFloatMap(report.Sensors.TemperatureCelsius),
@@ -1949,6 +1964,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 	if len(host.Disks) == 0 {
 		host.Disks = nil
+	}
+	if len(host.DiskIO) == 0 {
+		host.DiskIO = nil
 	}
 	if len(host.NetworkInterfaces) == 0 {
 		host.NetworkInterfaces = nil

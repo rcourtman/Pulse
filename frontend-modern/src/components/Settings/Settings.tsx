@@ -2709,6 +2709,40 @@ const Settings: Component<SettingsProps> = (props) => {
                   class="mb-6"
                 />
               </Show>
+
+              {/* Recommendation banner for Proxmox tab */}
+              <Show when={activeTab() === 'proxmox'}>
+                <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 mb-6 dark:border-blue-800 dark:bg-blue-900/20">
+                  <div class="flex items-start gap-3">
+                    <svg
+                      class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <div class="flex-1">
+                      <p class="text-sm text-blue-800 dark:text-blue-200">
+                        <strong>Recommended:</strong> Install the Pulse agent on your Proxmox nodes for automatic setup, temperature monitoring, and AI features.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/settings/agents')}
+                        class="mt-2 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200 underline"
+                      >
+                        Go to Agents tab →
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </Show>
+
               {/* PVE Nodes Tab */}
               <Show when={activeTab() === 'proxmox' && selectedAgent() === 'pve'}>
                 <div class="space-y-6 mt-6">
@@ -2824,6 +2858,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             <PveNodesTable
                               nodes={pveNodes()}
                               stateNodes={state.nodes ?? []}
+                              stateHosts={state.hosts ?? []}
                               globalTemperatureMonitoringEnabled={temperatureMonitoringEnabled()}
                               temperatureTransports={temperatureTransportInfo()}
                               onTestConnection={testNodeConnection}
@@ -5783,9 +5818,8 @@ const Settings: Component<SettingsProps> = (props) => {
                                     fallback={
                                       <div class="mt-3 text-xs text-gray-500 dark:text-gray-400">
                                         Check proxy nodes is only available when the proxy socket
-                                        grants admin access. Run this diagnostic on the Proxmox host
-                                        or reinstall pulse-sensor-proxy in HTTP mode to manage nodes
-                                        remotely.
+                                        grants admin access. For best results, install the Pulse agent
+                                        on each Proxmox node (Settings → Agents).
                                       </div>
                                     }
                                   >

@@ -318,3 +318,50 @@ func TestNormalizeVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestCompareVersions(t *testing.T) {
+	tests := []struct {
+		a        string
+		b        string
+		expected int
+	}{
+		// Equal versions
+		{"4.33.1", "4.33.1", 0},
+		{"v4.33.1", "4.33.1", 0},
+		{"4.33.1", "v4.33.1", 0},
+		{"1.0.0", "1.0.0", 0},
+
+		// a > b (a is newer)
+		{"4.33.2", "4.33.1", 1},
+		{"4.34.0", "4.33.1", 1},
+		{"5.0.0", "4.33.1", 1},
+		{"4.33.10", "4.33.9", 1},
+		{"4.33.1", "4.33", 1}, // Missing patch = 0
+
+		// a < b (b is newer)
+		{"4.33.1", "4.33.2", -1},
+		{"4.33.1", "4.34.0", -1},
+		{"4.33.1", "5.0.0", -1},
+		{"4.33.9", "4.33.10", -1},
+		{"4.33", "4.33.1", -1},
+
+		// With v prefix
+		{"v4.34.0", "v4.33.1", 1},
+		{"v4.33.1", "v4.34.0", -1},
+
+		// Edge cases
+		{"0.0.1", "0.0.0", 1},
+		{"0.0.0", "0.0.1", -1},
+		{"1.0", "0.9.9", 1},
+	}
+
+	for _, tc := range tests {
+		name := tc.a + "_vs_" + tc.b
+		t.Run(name, func(t *testing.T) {
+			result := CompareVersions(tc.a, tc.b)
+			if result != tc.expected {
+				t.Errorf("CompareVersions(%q, %q) = %d, want %d", tc.a, tc.b, result, tc.expected)
+			}
+		})
+	}
+}

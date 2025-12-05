@@ -343,8 +343,8 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 			return nil, fmt.Errorf("failed to create client for %s: %w", selectedEndpoint, err)
 		}
 
-		// Quick connectivity test
-		testCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		// Connectivity test - 5 seconds to allow for TLS handshake (~3s typical)
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		testNodes, testErr := testClient.GetNodes(testCtx)
 		cancel()
 
@@ -489,10 +489,12 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 			cc.lastHealthCheck[ep] = now
 			cc.mu.Unlock()
 
-			// Try to create a client and test connection with shorter timeout
+			// Try to create a client and test connection
+			// Note: 5-second timeout needed because TLS handshake to Proxmox API
+			// typically takes ~3 seconds on local networks
 			cfg := cc.config
 			cfg.Host = ep
-			cfg.Timeout = 2 * time.Second // Use shorter timeout for recovery attempts
+			cfg.Timeout = 5 * time.Second
 
 			testClient, err := NewClient(cfg)
 			if err != nil {
@@ -504,8 +506,8 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 				return
 			}
 
-			// Try a simple API call with short timeout
-			testCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			// Try a simple API call
+			testCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			_, err = testClient.GetNodes(testCtx)
 			cancel()
 

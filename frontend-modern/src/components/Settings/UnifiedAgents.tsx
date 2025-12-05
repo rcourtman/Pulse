@@ -108,6 +108,7 @@ export const UnifiedAgents: Component = () => {
     const [lookupError, setLookupError] = createSignal<string | null>(null);
     const [lookupLoading, setLookupLoading] = createSignal(false);
     const [enableDocker, setEnableDocker] = createSignal(false); // Default to false - user must opt-in for Docker monitoring
+    const [enableProxmox, setEnableProxmox] = createSignal(false); // For Proxmox VE/PBS nodes - creates API token and auto-registers
     const [insecureMode, setInsecureMode] = createSignal(false); // For self-signed certificates (issue #806)
 
     createEffect(() => {
@@ -236,6 +237,7 @@ export const UnifiedAgents: Component = () => {
     };
 
     const getDockerFlag = () => enableDocker() ? ' --enable-docker' : '';
+    const getProxmoxFlag = () => enableProxmox() ? ' --enable-proxmox' : '';
     const getInsecureFlag = () => insecureMode() ? ' --insecure' : '';
     const getCurlInsecureFlag = () => insecureMode() ? '-k' : '';
 
@@ -451,26 +453,48 @@ export const UnifiedAgents: Component = () => {
 
                     <Show when={commandsUnlocked()}>
                         <div class="space-y-3">
-                            <div class="flex items-center justify-between">
-                                <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Installation commands</h4>
-                                <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={enableDocker()}
-                                        onChange={(e) => setEnableDocker(e.currentTarget.checked)}
-                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                                    />
-                                    Enable Docker monitoring
-                                </label>
-                                <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
-                                    <input
-                                        type="checkbox"
-                                        checked={insecureMode()}
-                                        onChange={(e) => setInsecureMode(e.currentTarget.checked)}
-                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                                    />
-                                    Skip certificate verification
-                                </label>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Installation commands</h4>
+                                    <div class="flex items-center gap-4">
+                                        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={enableDocker()}
+                                                onChange={(e) => setEnableDocker(e.currentTarget.checked)}
+                                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                            />
+                                            Docker monitoring
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="For Proxmox VE/PBS nodes - auto-creates API token and registers the node">
+                                            <input
+                                                type="checkbox"
+                                                checked={enableProxmox()}
+                                                onChange={(e) => setEnableProxmox(e.currentTarget.checked)}
+                                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                            />
+                                            Proxmox setup
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
+                                            <input
+                                                type="checkbox"
+                                                checked={insecureMode()}
+                                                onChange={(e) => setInsecureMode(e.currentTarget.checked)}
+                                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                            />
+                                            Skip TLS verify
+                                        </label>
+                                    </div>
+                                </div>
+                                <Show when={enableProxmox()}>
+                                    <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+                                        <p class="font-medium">Proxmox auto-setup enabled</p>
+                                        <p class="text-xs mt-1 text-blue-700 dark:text-blue-300">
+                                            The agent will create a <code class="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">pulse-monitor</code> user and API token on the Proxmox node,
+                                            then register it with Pulse automatically. Includes temperature monitoring.
+                                        </p>
+                                    </div>
+                                </Show>
                             </div>
 
                             <div class="space-y-4">
@@ -490,25 +514,22 @@ export const UnifiedAgents: Component = () => {
                                                             if (insecureMode() && cmd.includes('curl -fsSL')) {
                                                                 cmd = cmd.replace('curl -fsSL', 'curl -kfsSL');
                                                             }
+                                                            // For bash scripts (not PowerShell), append flags directly
+                                                            const isBashScript = !cmd.includes('$env:') && !cmd.includes('irm');
                                                             // Append docker flag if enabled
                                                             if (enableDocker()) {
-                                                                // For PowerShell, we need to handle the env var or args differently
                                                                 if (cmd.includes('$env:PULSE_URL')) {
-                                                                    // Env var style: add $env:PULSE_ENABLE_DOCKER="true";
                                                                     cmd = `$env:PULSE_ENABLE_DOCKER="true"; ` + cmd;
-                                                                } else if (cmd.includes('irm')) {
-                                                                    // Simple irm style: no args passed to script directly in this snippet style
-                                                                    // Actually, the simple irm style relies on prompts, so flags don't apply directly unless we change the snippet
-                                                                    // But for the bash script, we append flags
-                                                                    if (!cmd.includes('irm')) {
-                                                                        cmd += getDockerFlag();
-                                                                    }
-                                                                } else {
+                                                                } else if (isBashScript) {
                                                                     cmd += getDockerFlag();
                                                                 }
                                                             }
+                                                            // Append proxmox flag if enabled (Linux only - Proxmox doesn't run on Windows/macOS)
+                                                            if (enableProxmox() && isBashScript) {
+                                                                cmd += getProxmoxFlag();
+                                                            }
                                                             // Append insecure flag for agent if enabled
-                                                            if (insecureMode() && !cmd.includes('$env:') && !cmd.includes('irm')) {
+                                                            if (insecureMode() && isBashScript) {
                                                                 cmd += getInsecureFlag();
                                                             }
                                                             return cmd;

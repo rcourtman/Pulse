@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mdadm"
@@ -35,6 +36,10 @@ type Config struct {
 	RunOnce            bool
 	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
+
+	// Proxmox integration
+	EnableProxmox bool   // If true, creates Proxmox API token and registers node on startup
+	ProxmoxType   string // "pve", "pbs", or "" for auto-detect
 }
 
 // Agent is responsible for collecting host metrics and shipping them to Pulse.
@@ -54,6 +59,7 @@ type Agent struct {
 	machineID       string
 	agentID         string
 	agentVersion    string
+	updatedFrom     string // Previous version if recently auto-updated (reported once)
 	interval        time.Duration
 	trimmedPulseURL string
 	reportBuffer    *buffer.Queue[agentshost.Report]
@@ -169,6 +175,15 @@ func New(cfg Config) (*Agent, error) {
 
 	const bufferCapacity = 60
 
+	// Check if agent was recently auto-updated (only reported once per restart)
+	updatedFrom := agentupdate.GetUpdatedFromVersion()
+	if updatedFrom != "" {
+		logger.Info().
+			Str("previousVersion", updatedFrom).
+			Str("currentVersion", agentVersion).
+			Msg("Agent was auto-updated")
+	}
+
 	agent := &Agent{
 		cfg:             cfg,
 		logger:          logger,
@@ -184,6 +199,7 @@ func New(cfg Config) (*Agent, error) {
 		machineID:       machineID,
 		agentID:         agentID,
 		agentVersion:    agentVersion,
+		updatedFrom:     updatedFrom,
 		interval:        cfg.Interval,
 		trimmedPulseURL: pulseURL,
 		reportBuffer:    buffer.New[agentshost.Report](bufferCapacity),
@@ -199,6 +215,11 @@ func New(cfg Config) (*Agent, error) {
 func (a *Agent) Run(ctx context.Context) error {
 	if a.cfg.RunOnce {
 		return a.runOnce(ctx)
+	}
+
+	// Proxmox setup (if enabled)
+	if a.cfg.EnableProxmox {
+		a.runProxmoxSetup(ctx)
 	}
 
 	// Start command client in background for AI command execution
@@ -304,6 +325,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			Type:            a.cfg.AgentType,
 			IntervalSeconds: int(a.interval / time.Second),
 			Hostname:        a.hostname,
+			UpdatedFrom:     a.updatedFrom,
 		},
 		Host: agentshost.HostInfo{
 			ID:            a.machineID,
@@ -325,6 +347,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			Memory:          snapshot.Memory,
 		},
 		Disks:     append([]agentshost.Disk(nil), snapshot.Disks...),
+		DiskIO:    append([]agentshost.DiskIO(nil), snapshot.DiskIO...),
 		Network:   append([]agentshost.NetworkInterface(nil), snapshot.Network...),
 		Sensors:   sensorData,
 		RAID:      raidData,
@@ -457,4 +480,43 @@ func (a *Agent) collectRAIDArrays(ctx context.Context) []agentshost.RAIDArray {
 	}
 
 	return arrays
+}
+
+// runProxmoxSetup performs one-time Proxmox API token setup and node registration.
+func (a *Agent) runProxmoxSetup(ctx context.Context) {
+	a.logger.Info().Msg("Proxmox mode enabled, checking setup...")
+
+	setup := NewProxmoxSetup(
+		a.logger,
+		a.httpClient,
+		a.trimmedPulseURL,
+		a.cfg.APIToken,
+		a.cfg.ProxmoxType,
+		a.hostname,
+		a.cfg.InsecureSkipVerify,
+	)
+
+	result, err := setup.Run(ctx)
+	if err != nil {
+		a.logger.Error().Err(err).Msg("Proxmox setup failed")
+		return
+	}
+
+	if result == nil {
+		// Already registered
+		return
+	}
+
+	if result.Registered {
+		a.logger.Info().
+			Str("type", result.ProxmoxType).
+			Str("host", result.NodeHost).
+			Str("token_id", result.TokenID).
+			Msg("Proxmox node registered successfully")
+	} else {
+		a.logger.Warn().
+			Str("type", result.ProxmoxType).
+			Str("host", result.NodeHost).
+			Msg("Proxmox token created but registration failed (node may need manual configuration)")
+	}
 }

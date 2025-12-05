@@ -2,7 +2,7 @@ import type { Component } from 'solid-js';
 import { For, Show, createMemo, createSignal, createEffect, on, onMount, onCleanup } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import type { Host } from '@/types/api';
-import { formatBytes, formatPercent, formatRelativeTime, formatUptime } from '@/utils/format';
+import { formatBytes, formatNumber, formatPercent, formatRelativeTime, formatUptime } from '@/utils/format';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
@@ -328,8 +328,11 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                           <th class={thClass} onClick={() => handleSort('disk')}>
                             Disk {renderSortIndicator('disk')}
                           </th>
-                          <th class={`${thClass} text-right pr-4`} onClick={() => handleSort('uptime')}>
+                          <th class={thClass} onClick={() => handleSort('uptime')}>
                             Uptime {renderSortIndicator('uptime')}
+                          </th>
+                          <th class={`${thClass} text-right pr-4`}>
+                            Agent
                           </th>
                         </tr>
                       </thead>
@@ -413,6 +416,7 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                             const hasDrawerContent = createMemo(() => {
                               return (
                                 (host.disks && host.disks.length > 0) ||
+                                (host.diskIO && host.diskIO.length > 0) ||
                                 (host.networkInterfaces && host.networkInterfaces.length > 0) ||
                                 (host.raid && host.raid.length > 0) ||
                                 host.loadAverage ||
@@ -571,8 +575,8 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                   </td>
 
                                   {/* Uptime */}
-                                  <td class="px-2 py-1 pr-4 align-middle">
-                                    <div class="flex justify-end">
+                                  <td class="px-2 py-1 align-middle">
+                                    <div class="flex justify-center">
                                       <Show
                                         when={host.uptimeSeconds}
                                         fallback={<span class="text-xs text-gray-400">—</span>}
@@ -583,12 +587,26 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                       </Show>
                                     </div>
                                   </td>
+
+                                  {/* Agent Version */}
+                                  <td class="px-2 py-1 pr-4 align-middle">
+                                    <div class="flex justify-end">
+                                      <Show
+                                        when={host.agentVersion}
+                                        fallback={<span class="text-xs text-gray-400">—</span>}
+                                      >
+                                        <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                                          {host.agentVersion}
+                                        </span>
+                                      </Show>
+                                    </div>
+                                  </td>
                                 </tr>
 
                                 {/* Drawer - Additional Info */}
                                 <Show when={drawerOpen() && hasDrawerContent()}>
                                   <tr>
-                                    <td colspan={7} class="p-0">
+                                    <td colspan={8} class="p-0">
                                       <div class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 border-t border-gray-100 dark:border-gray-800/50">
                                         <div class="flex flex-wrap justify-start gap-3">
                                           {/* System Info */}
@@ -684,6 +702,40 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                                       </div>
                                                     );
                                                   }}
+                                                </For>
+                                              </div>
+                                            </div>
+                                          </Show>
+
+                                          {/* Disk I/O */}
+                                          <Show when={host.diskIO && host.diskIO.length > 0}>
+                                            <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Disk I/O</div>
+                                              <div class="mt-2 space-y-2 text-[11px]">
+                                                <For each={host.diskIO?.slice(0, 4)}>
+                                                  {(io) => (
+                                                    <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700/70">
+                                                      <div class="font-medium text-gray-700 dark:text-gray-200">{io.device}</div>
+                                                      <div class="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px]">
+                                                        <div class="flex items-center justify-between">
+                                                          <span class="text-gray-500 dark:text-gray-400">Read:</span>
+                                                          <span class="text-gray-600 dark:text-gray-300">{formatBytes(io.readBytes ?? 0, 1)}</span>
+                                                        </div>
+                                                        <div class="flex items-center justify-between">
+                                                          <span class="text-gray-500 dark:text-gray-400">Write:</span>
+                                                          <span class="text-gray-600 dark:text-gray-300">{formatBytes(io.writeBytes ?? 0, 1)}</span>
+                                                        </div>
+                                                        <div class="flex items-center justify-between">
+                                                          <span class="text-gray-500 dark:text-gray-400">Read Ops:</span>
+                                                          <span class="text-gray-600 dark:text-gray-300">{formatNumber(io.readOps ?? 0)}</span>
+                                                        </div>
+                                                        <div class="flex items-center justify-between">
+                                                          <span class="text-gray-500 dark:text-gray-400">Write Ops:</span>
+                                                          <span class="text-gray-600 dark:text-gray-300">{formatNumber(io.writeOps ?? 0)}</span>
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  )}
                                                 </For>
                                               </div>
                                             </div>

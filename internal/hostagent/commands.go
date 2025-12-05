@@ -140,7 +140,7 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 			MinVersion:         tls.VersionTLS12,
 			InsecureSkipVerify: c.insecureSkipVerify,
 		},
-		HandshakeTimeout: 10 * time.Second,
+		HandshakeTimeout: 45 * time.Second,
 	}
 
 	// Connect
@@ -171,6 +171,15 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 	}
 
 	c.logger.Info().Msg("Connected and registered with Pulse command server")
+
+	// Clear any deadlines that may have been set during handshake
+	// The HandshakeTimeout in the Dialer may have set a deadline on the underlying connection
+	conn.SetReadDeadline(time.Time{})
+	conn.SetWriteDeadline(time.Time{})
+	if netConn := conn.NetConn(); netConn != nil {
+		netConn.SetReadDeadline(time.Time{})
+		netConn.SetWriteDeadline(time.Time{})
+	}
 
 	// Start ping loop
 	pingDone := make(chan struct{})

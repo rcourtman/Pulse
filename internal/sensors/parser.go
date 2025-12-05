@@ -109,6 +109,7 @@ func isCPUChip(chipLower string) bool {
 func parseCPUTemps(chipMap map[string]interface{}, data *TemperatureData) {
 	foundPackageTemp := false
 	var chipletTemps []float64
+	var genericTemp float64 // For chips that only report temp1
 
 	for sensorName, sensorData := range chipMap {
 		sensorMap, ok := sensorData.(map[string]interface{})
@@ -128,6 +129,14 @@ func parseCPUTemps(chipMap map[string]interface{}, data *TemperatureData) {
 				if tempVal > data.CPUMax {
 					data.CPUMax = tempVal
 				}
+			}
+		}
+
+		// Capture generic temp1 for chips like cpu_thermal (RPi, ARM SoCs)
+		// that don't have labeled sensors
+		if sensorNameLower == "temp1" {
+			if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) && tempVal > 0 {
+				genericTemp = tempVal
 			}
 		}
 
@@ -173,6 +182,14 @@ func parseCPUTemps(chipMap map[string]interface{}, data *TemperatureData) {
 			if temp > data.CPUPackage {
 				data.CPUPackage = temp
 			}
+		}
+	}
+
+	// Fallback: use generic temp1 for chips like cpu_thermal (RPi, ARM SoCs)
+	if !foundPackageTemp && data.CPUPackage == 0 && genericTemp > 0 {
+		data.CPUPackage = genericTemp
+		if genericTemp > data.CPUMax {
+			data.CPUMax = genericTemp
 		}
 	}
 }

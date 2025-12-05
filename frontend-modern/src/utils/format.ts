@@ -25,6 +25,11 @@ export function formatPercent(value: number): string {
   return `${Math.round(value)}%`;
 }
 
+export function formatNumber(value: number): string {
+  if (!Number.isFinite(value)) return '0';
+  return value.toLocaleString();
+}
+
 export function formatUptime(seconds: number, condensed = false): string {
   if (!seconds || seconds < 0) return '0s';
 

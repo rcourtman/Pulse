@@ -315,6 +315,7 @@ type HostFrontend struct {
 	LoadAverage       []float64                  `json:"loadAverage,omitempty"`
 	Memory            *Memory                    `json:"memory,omitempty"`
 	Disks             []Disk                     `json:"disks,omitempty"`
+	DiskIO            []DiskIO                   `json:"diskIO,omitempty"`
 	NetworkInterfaces []HostNetworkInterface     `json:"networkInterfaces,omitempty"`
 	Sensors           *HostSensorSummaryFrontend `json:"sensors,omitempty"`
 	Status            string                     `json:"status"`

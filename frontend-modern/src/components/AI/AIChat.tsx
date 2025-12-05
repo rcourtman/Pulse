@@ -272,12 +272,27 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const previousMessages = messages();
 
     // Build conversation history from previous messages (before we add new ones)
+    // Include tool call outputs so the AI remembers what commands were run
     const history = previousMessages
-      .filter((m) => m.content && !m.isStreaming) // Only include completed messages with content
-      .map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      .filter((m) => !m.isStreaming) // Only include completed messages
+      .filter((m) => m.content || (m.toolCalls && m.toolCalls.length > 0)) // Must have content or tool calls
+      .map((m) => {
+        let content = m.content || '';
+
+        // For assistant messages, prepend tool call outputs so AI has full context
+        if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+          const toolSummary = m.toolCalls
+            .map((tc) => `[Executed: ${tc.input}]\n${tc.output}`)
+            .join('\n\n');
+          content = toolSummary + (content ? '\n\n' + content : '');
+        }
+
+        return {
+          role: m.role,
+          content,
+        };
+      })
+      .filter((m) => m.content); // Filter out any empty messages
 
     // Add user message
     const userMessage: Message = {
@@ -333,11 +348,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 }
                 case 'tool_end': {
                   const data = event.data as AIStreamToolEndData;
-                  // Remove matching pending tool (by name since input won't match output)
-                  const updatedPending = (msg.pendingTools || []).slice(0, -1); // Remove last pending
+                  // Remove one pending tool with matching name
+                  const pendingTools = msg.pendingTools || [];
+                  const matchingIndex = pendingTools.findIndex((t) => t.name === data.name);
+                  const updatedPending = matchingIndex >= 0
+                    ? [...pendingTools.slice(0, matchingIndex), ...pendingTools.slice(matchingIndex + 1)]
+                    : pendingTools;
+                  // Use input directly from tool_end event (authoritative)
                   const newToolCall: AIToolExecution = {
                     name: data.name,
-                    input: (msg.pendingTools || []).find((t) => t.name === data.name)?.input || data.name,
+                    input: data.input,
                     output: data.output,
                     success: data.success,
                   };
@@ -656,7 +676,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
                   }`}
                 >
-                  {/* Show completed tool calls */}
+                  {/* Show completed tool calls FIRST - chronological order */}
                   <Show when={message.role === 'assistant' && message.toolCalls && message.toolCalls.length > 0}>
                     <div class="mb-3 space-y-2">
                       <For each={message.toolCalls}>
@@ -683,20 +703,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     </div>
                   </Show>
 
-                  {/* Show subtle analyzing indicator when running commands */}
-                  <Show when={message.role === 'assistant' && message.pendingTools && message.pendingTools.length > 0}>
-                    <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-2">
-                      <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      <span>Analyzing...</span>
-                    </div>
+                  {/* Show AI's response text AFTER tool calls */}
+                  <Show when={message.content}>
+                    <div
+                      class="text-sm prose prose-sm dark:prose-invert max-w-none prose-pre:bg-gray-800 prose-pre:text-gray-100 prose-code:text-purple-600 dark:prose-code:text-purple-400 prose-code:before:content-none prose-code:after:content-none"
+                      innerHTML={renderMarkdown(message.content)}
+                    />
                   </Show>
 
                   {/* Show commands awaiting approval */}
                   <Show when={message.role === 'assistant' && message.pendingApprovals && message.pendingApprovals.length > 0}>
-                    <div class="mb-3 space-y-2">
+                    <div class="mt-3 space-y-2">
                       <For each={message.pendingApprovals}>
                         {(approval) => (
                           <div class="rounded border border-amber-400 dark:border-amber-600 overflow-hidden">
@@ -756,24 +773,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       </For>
                     </div>
                   </Show>
-
-                  {/* Show streaming indicator if no content yet but streaming */}
-                  <Show when={message.role === 'assistant' && message.isStreaming && !message.content && (!message.pendingTools || message.pendingTools.length === 0)}>
-                    <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                      <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      <span>Analyzing...</span>
-                    </div>
-                  </Show>
-
-                  <Show when={message.content}>
-                    <div
-                      class="text-sm prose prose-sm dark:prose-invert max-w-none prose-pre:bg-gray-800 prose-pre:text-gray-100 prose-code:text-purple-600 dark:prose-code:text-purple-400 prose-code:before:content-none prose-code:after:content-none"
-                      innerHTML={renderMarkdown(message.content)}
-                    />
-                  </Show>
                   {/* Minimal footer - no model/token info shown */}
                 </div>
               </div>
@@ -782,6 +781,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Processing indicator - sticky above input */}
+        <Show when={isLoading()}>
+          <div class="px-4 py-2 bg-purple-50 dark:bg-purple-900/20 border-t border-purple-200 dark:border-purple-800 flex items-center gap-2 text-sm text-purple-700 dark:text-purple-300">
+            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <span>Analyzing...</span>
+          </div>
+        </Show>
 
         {/* Input Area */}
         <div class="border-t border-gray-200 dark:border-gray-700 p-4">

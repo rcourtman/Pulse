@@ -91,6 +91,7 @@ export interface AIStreamToolStartData {
 
 export interface AIStreamToolEndData {
   name: string;
+  input: string;
   output: string;
   success: boolean;
 }

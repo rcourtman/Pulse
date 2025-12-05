@@ -369,6 +369,7 @@ type ToolStartData struct {
 // ToolEndData is sent when a tool execution completes
 type ToolEndData struct {
 	Name    string `json:"name"`
+	Input   string `json:"input"`
 	Output  string `json:"output"`
 	Success bool   `json:"success"`
 }
@@ -663,7 +664,7 @@ Always execute the commands rather than telling the user how to do it.`
 				// Stream tool end event
 				callback(StreamEvent{
 					Type: "tool_end",
-					Data: ToolEndData{Name: tc.Name, Output: result, Success: execution.Success},
+					Data: ToolEndData{Name: tc.Name, Input: toolInput, Output: result, Success: execution.Success},
 				})
 			}
 
@@ -931,14 +932,26 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 
 	// Fall back to context-based routing if VMID lookup didn't find anything
 	if targetNode == "" {
-		// Extract node info from target ID (e.g., "delly-135" -> "delly")
+		// For host targets, use the hostname directly from context
+		if req.TargetType == "host" {
+			if hostname, ok := req.Context["hostname"].(string); ok && hostname != "" {
+				targetNode = strings.ToLower(hostname)
+				log.Debug().
+					Str("hostname", hostname).
+					Str("target_type", req.TargetType).
+					Msg("Using hostname from context for host target routing")
+			}
+		}
+		// For VMs/containers, extract node info from target ID (e.g., "delly-135" -> "delly")
 		// or from context (guest_node field)
-		if node, ok := req.Context["guest_node"].(string); ok && node != "" {
-			targetNode = strings.ToLower(node)
-		} else if req.TargetID != "" {
-			parts := strings.Split(req.TargetID, "-")
-			if len(parts) >= 2 {
-				targetNode = strings.ToLower(parts[0])
+		if targetNode == "" {
+			if node, ok := req.Context["guest_node"].(string); ok && node != "" {
+				targetNode = strings.ToLower(node)
+			} else if req.TargetID != "" {
+				parts := strings.Split(req.TargetID, "-")
+				if len(parts) >= 2 {
+					targetNode = strings.ToLower(parts[0])
+				}
 			}
 		}
 	}

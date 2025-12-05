@@ -1,5 +1,10 @@
 # pulse-sensor-proxy
 
+> **⚠️ Deprecated:** The sensor-proxy is deprecated in favor of the unified Pulse agent.
+> For new installations, use `install.sh --enable-proxmox` instead. The agent provides
+> temperature monitoring plus additional features (AI, automatic Proxmox API setup).
+> See [TEMPERATURE_MONITORING.md](/docs/security/TEMPERATURE_MONITORING.md) for details.
+
 The sensor proxy keeps SSH identities and temperature polling logic on the
 Proxmox host while presenting a small RPC surface (Unix socket or HTTPS) to the
 Pulse server. It protects SSH keys from container breakouts, enforces per-UID

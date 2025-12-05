@@ -91,6 +91,7 @@ export type NodeConfig = (PVENodeConfig | PBSNodeConfig | PMGNodeConfig) & {
   temperature?: Temperature;
   displayName?: string;
   temperatureTransport?: TemperatureTransport;
+  source?: 'agent' | 'script' | ''; // How this node was registered
 };
 
 export interface NodesResponse {
