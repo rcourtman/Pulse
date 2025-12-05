@@ -205,6 +205,100 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Netw
   );
 }
 
+// Backup status cell with Portal tooltip
+function BackupStatusCell(props: { lastBackup: string | number | null | undefined }) {
+  const [showTooltip, setShowTooltip] = createSignal(false);
+  const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
+
+  const info = createMemo(() => getBackupInfo(props.lastBackup));
+  const config = createMemo(() => BACKUP_STATUS_CONFIG[info().status]);
+
+  const handleMouseEnter = (e: MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
+    setShowTooltip(true);
+  };
+
+  const handleMouseLeave = () => {
+    setShowTooltip(false);
+  };
+
+  return (
+    <>
+      <span
+        class={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded cursor-help ${config().bgColor} ${config().color}`}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        {/* Status icon */}
+        <Show when={info().status === 'fresh'}>
+          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </Show>
+        <Show when={info().status === 'stale'}>
+          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </Show>
+        <Show when={info().status === 'critical' || info().status === 'never'}>
+          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </Show>
+        {/* Status text */}
+        {info().status === 'fresh' && 'OK'}
+        {info().status === 'stale' && info().ageFormatted}
+        {info().status === 'critical' && info().ageFormatted}
+        {info().status === 'never' && 'Never'}
+      </span>
+
+      <Show when={showTooltip()}>
+        <Portal mount={document.body}>
+          <div
+            class="fixed z-[9999] pointer-events-none"
+            style={{
+              left: `${tooltipPos().x}px`,
+              top: `${tooltipPos().y - 8}px`,
+              transform: 'translate(-50%, -100%)',
+            }}
+          >
+            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[140px] border border-gray-700">
+              <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                Backup Status
+              </div>
+              <Show when={info().status !== 'never'}>
+                <div class="py-0.5">
+                  <div class="text-gray-400">Last backup</div>
+                  <div class="text-gray-200 font-medium">
+                    {new Date(props.lastBackup!).toLocaleDateString(undefined, {
+                      weekday: 'short',
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </div>
+                  <div class="text-gray-300">
+                    {new Date(props.lastBackup!).toLocaleTimeString()}
+                  </div>
+                </div>
+                <div class="pt-1 mt-1 border-t border-gray-700/50">
+                  <span class={config().color}>{info().ageFormatted} ago</span>
+                </div>
+              </Show>
+              <Show when={info().status === 'never'}>
+                <div class="py-0.5 text-red-400">
+                  No backup has ever been recorded for this guest.
+                </div>
+              </Show>
+            </div>
+          </div>
+        </Portal>
+      </Show>
+    </>
+  );
+}
+
 // Column configuration using the priority system
 export interface GuestColumnDef {
   id: string;
@@ -870,26 +964,12 @@ export function GuestRow(props: GuestRowProps) {
           </td>
         </Show>
 
-        {/* Backup Status - NEW */}
+        {/* Backup Status */}
         <Show when={isColVisible('backup')}>
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
               <Show when={!props.guest.template}>
-                {(() => {
-                  const info = getBackupInfo(props.guest.lastBackup);
-                  const config = BACKUP_STATUS_CONFIG[info.status];
-                  return (
-                    <span
-                      class={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${config.bgColor} ${config.color}`}
-                      title={info.status === 'never' ? 'No backup found' : `Last backup: ${info.ageFormatted}`}
-                    >
-                      {info.status === 'fresh' && 'OK'}
-                      {info.status === 'stale' && info.ageFormatted}
-                      {info.status === 'critical' && info.ageFormatted}
-                      {info.status === 'never' && 'Never'}
-                    </span>
-                  );
-                })()}
+                <BackupStatusCell lastBackup={props.guest.lastBackup} />
               </Show>
               <Show when={props.guest.template}>
                 <span class="text-xs text-gray-400">-</span>
