@@ -145,6 +145,7 @@ type Container struct {
 	LastSeen          time.Time               `json:"lastSeen"`
 	IPAddresses       []string                `json:"ipAddresses,omitempty"`
 	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces,omitempty"`
+	OSName            string                  `json:"osName,omitempty"`
 }
 
 // Host represents a generic infrastructure host reporting via external agents.

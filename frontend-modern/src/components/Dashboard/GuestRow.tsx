@@ -206,17 +206,20 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Netw
 }
 
 // OS detection helper - returns icon type and color based on OS name
-type OSType = 'windows' | 'ubuntu' | 'debian' | 'alpine' | 'centos' | 'fedora' | 'arch' | 'linux' | 'freebsd' | 'unknown';
+type OSType = 'windows' | 'ubuntu' | 'debian' | 'alpine' | 'centos' | 'fedora' | 'arch' | 'nixos' | 'opensuse' | 'gentoo' | 'linux' | 'freebsd' | 'unknown';
 
 function detectOSType(osName: string): OSType {
   const lower = osName.toLowerCase();
   if (lower.includes('windows')) return 'windows';
   if (lower.includes('ubuntu')) return 'ubuntu';
-  if (lower.includes('debian')) return 'debian';
+  if (lower.includes('debian') || lower.includes('devuan')) return 'debian';
   if (lower.includes('alpine')) return 'alpine';
   if (lower.includes('centos') || lower.includes('rocky') || lower.includes('alma') || lower.includes('rhel') || lower.includes('red hat')) return 'centos';
   if (lower.includes('fedora')) return 'fedora';
   if (lower.includes('arch')) return 'arch';
+  if (lower.includes('nixos')) return 'nixos';
+  if (lower.includes('opensuse') || lower.includes('suse')) return 'opensuse';
+  if (lower.includes('gentoo')) return 'gentoo';
   if (lower.includes('freebsd') || lower.includes('openbsd') || lower.includes('netbsd')) return 'freebsd';
   if (lower.includes('linux') || lower.includes('gnu')) return 'linux';
   return 'unknown';
@@ -230,6 +233,9 @@ const OS_COLORS: Record<OSType, string> = {
   centos: 'text-purple-500',
   fedora: 'text-blue-600',
   arch: 'text-cyan-500',
+  nixos: 'text-sky-400',
+  opensuse: 'text-green-500',
+  gentoo: 'text-violet-400',
   linux: 'text-yellow-500',
   freebsd: 'text-red-600',
   unknown: 'text-gray-400',
@@ -308,6 +314,30 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
         return (
           <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2l-9 18h4l5-10 5 10h4L12 2z"/>
+          </svg>
+        );
+      case 'nixos':
+        // Snowflake-like icon for NixOS
+        return (
+          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2v4m0 12v4M2 12h4m12 0h4M5.64 5.64l2.83 2.83m7.07 7.07l2.82 2.82M5.64 18.36l2.83-2.83m7.07-7.07l2.82-2.82" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="12" cy="12" r="3" fill="currentColor"/>
+          </svg>
+        );
+      case 'opensuse':
+        // Chameleon-inspired icon for openSUSE
+        return (
+          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
+            <path d="M8 12c0-2.21 1.79-4 4-4s4 1.79 4 4-1.79 4-4 4-4-1.79-4-4z" fill="currentColor"/>
+            <circle cx="10" cy="11" r="1" fill="white"/>
+          </svg>
+        );
+      case 'gentoo':
+        // G-like icon for Gentoo
+        return (
+          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4 11h-4v3c0 .55-.45 1-1 1s-1-.45-1-1v-4c0-.55.45-1 1-1h5c.55 0 1 .45 1 1s-.45 1-1 1z"/>
           </svg>
         );
       case 'freebsd':
