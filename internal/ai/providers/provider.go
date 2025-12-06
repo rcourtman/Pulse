@@ -7,10 +7,11 @@ import (
 
 // Message represents a chat message
 type Message struct {
-	Role       string        `json:"role"`    // "user", "assistant", "system"
-	Content    string        `json:"content"` // Text content (simple case)
-	ToolCalls  []ToolCall    `json:"tool_calls,omitempty"` // For assistant messages with tool calls
-	ToolResult *ToolResult   `json:"tool_result,omitempty"` // For user messages with tool results
+	Role             string        `json:"role"`    // "user", "assistant", "system"
+	Content          string        `json:"content"` // Text content (simple case)
+	ReasoningContent string        `json:"reasoning_content,omitempty"` // DeepSeek thinking mode
+	ToolCalls        []ToolCall    `json:"tool_calls,omitempty"` // For assistant messages with tool calls
+	ToolResult       *ToolResult   `json:"tool_result,omitempty"` // For user messages with tool results
 }
 
 // ToolCall represents a tool invocation from the AI
@@ -48,12 +49,13 @@ type ChatRequest struct {
 
 // ChatResponse represents a response from the AI provider
 type ChatResponse struct {
-	Content      string      `json:"content"`
-	Model        string      `json:"model"`
-	StopReason   string      `json:"stop_reason,omitempty"` // "end_turn", "tool_use"
-	ToolCalls    []ToolCall  `json:"tool_calls,omitempty"` // Tool invocations
-	InputTokens  int         `json:"input_tokens,omitempty"`
-	OutputTokens int         `json:"output_tokens,omitempty"`
+	Content          string      `json:"content"`
+	ReasoningContent string      `json:"reasoning_content,omitempty"` // DeepSeek thinking mode
+	Model            string      `json:"model"`
+	StopReason       string      `json:"stop_reason,omitempty"` // "end_turn", "tool_use"
+	ToolCalls        []ToolCall  `json:"tool_calls,omitempty"` // Tool invocations
+	InputTokens      int         `json:"input_tokens,omitempty"`
+	OutputTokens     int         `json:"output_tokens,omitempty"`
 }
 
 // Provider defines the interface for AI providers

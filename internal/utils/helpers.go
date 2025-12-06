@@ -42,11 +42,22 @@ func GetenvTrim(key string) string {
 	return strings.TrimSpace(os.Getenv(key))
 }
 
-// NormalizeVersion strips the "v" prefix from version strings for comparison.
-// This normalizes versions like "v4.33.1" to "4.33.1" so that version strings
-// from different sources (agent vs server) can be compared consistently.
+// NormalizeVersion normalizes version strings for comparison by:
+// 1. Stripping whitespace
+// 2. Removing the "v" prefix (e.g., "v4.33.1" -> "4.33.1")
+// 3. Stripping build metadata after "+" (e.g., "4.36.2+git.14.dirty" -> "4.36.2")
+//
+// Per semver spec, build metadata MUST be ignored when determining version precedence.
+// This fixes issues where dirty builds like "4.36.2+git.14.g469307d6.dirty" would
+// incorrectly be treated as newer than "4.36.2", causing infinite update loops.
 func NormalizeVersion(version string) string {
-	return strings.TrimPrefix(strings.TrimSpace(version), "v")
+	v := strings.TrimPrefix(strings.TrimSpace(version), "v")
+	// Strip build metadata (everything after +)
+	// Per semver: build metadata MUST be ignored when determining version precedence
+	if idx := strings.Index(v, "+"); idx != -1 {
+		v = v[:idx]
+	}
+	return v
 }
 
 // CompareVersions compares two semver-like version strings.

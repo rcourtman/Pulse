@@ -2,9 +2,11 @@ package ai
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -26,21 +29,34 @@ type StateProvider interface {
 
 // Service orchestrates AI interactions
 type Service struct {
-	mu            sync.RWMutex
-	persistence   *config.ConfigPersistence
-	provider      providers.Provider
-	cfg           *config.AIConfig
-	agentServer   *agentexec.Server
-	policy        *agentexec.CommandPolicy
-	stateProvider StateProvider
+	mu             sync.RWMutex
+	persistence    *config.ConfigPersistence
+	provider       providers.Provider
+	cfg            *config.AIConfig
+	agentServer    *agentexec.Server
+	policy         *agentexec.CommandPolicy
+	stateProvider  StateProvider
+	alertProvider  AlertProvider
+	knowledgeStore *knowledge.Store
 }
 
 // NewService creates a new AI service
 func NewService(persistence *config.ConfigPersistence, agentServer *agentexec.Server) *Service {
+	// Initialize knowledge store
+	var knowledgeStore *knowledge.Store
+	if persistence != nil {
+		var err error
+		knowledgeStore, err = knowledge.NewStore(persistence.DataDir())
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize knowledge store")
+		}
+	}
+
 	return &Service{
-		persistence: persistence,
-		agentServer: agentServer,
-		policy:      agentexec.DefaultPolicy(),
+		persistence:    persistence,
+		agentServer:    agentServer,
+		policy:         agentexec.DefaultPolicy(),
+		knowledgeStore: knowledgeStore,
 	}
 }
 
@@ -221,11 +237,185 @@ func (s *Service) GetConfig() *config.AIConfig {
 	return &cfg
 }
 
+// GetDebugContext returns debug information about what context would be sent to the AI
+func (s *Service) GetDebugContext(req ExecuteRequest) map[string]interface{} {
+	s.mu.RLock()
+	stateProvider := s.stateProvider
+	agentServer := s.agentServer
+	cfg := s.cfg
+	s.mu.RUnlock()
+
+	result := make(map[string]interface{})
+
+	// State provider info
+	result["has_state_provider"] = stateProvider != nil
+	if stateProvider != nil {
+		state := stateProvider.GetState()
+		result["state_summary"] = map[string]interface{}{
+			"nodes":         len(state.Nodes),
+			"vms":           len(state.VMs),
+			"containers":    len(state.Containers),
+			"docker_hosts":  len(state.DockerHosts),
+			"hosts":         len(state.Hosts),
+			"pbs_instances": len(state.PBSInstances),
+		}
+		
+		// List some VMs/containers for verification
+		var vmNames []string
+		for _, vm := range state.VMs {
+			vmNames = append(vmNames, fmt.Sprintf("%s (VMID:%d, node:%s)", vm.Name, vm.VMID, vm.Node))
+		}
+		if len(vmNames) > 10 {
+			vmNames = vmNames[:10]
+		}
+		result["sample_vms"] = vmNames
+
+		var ctNames []string
+		for _, ct := range state.Containers {
+			ctNames = append(ctNames, fmt.Sprintf("%s (VMID:%d, node:%s)", ct.Name, ct.VMID, ct.Node))
+		}
+		if len(ctNames) > 10 {
+			ctNames = ctNames[:10]
+		}
+		result["sample_containers"] = ctNames
+
+		var hostNames []string
+		for _, h := range state.Hosts {
+			hostNames = append(hostNames, h.Hostname)
+		}
+		result["host_names"] = hostNames
+
+		var dockerHostNames []string
+		for _, dh := range state.DockerHosts {
+			dockerHostNames = append(dockerHostNames, fmt.Sprintf("%s (%d containers)", dh.DisplayName, len(dh.Containers)))
+		}
+		result["docker_host_names"] = dockerHostNames
+	}
+
+	// Agent info
+	result["has_agent_server"] = agentServer != nil
+	if agentServer != nil {
+		agents := agentServer.GetConnectedAgents()
+		var agentNames []string
+		for _, a := range agents {
+			agentNames = append(agentNames, a.Hostname)
+		}
+		result["connected_agents"] = agentNames
+	}
+
+	// Config info
+	result["has_config"] = cfg != nil
+	if cfg != nil {
+		result["custom_context_length"] = len(cfg.CustomContext)
+		if len(cfg.CustomContext) > 200 {
+			result["custom_context_preview"] = cfg.CustomContext[:200] + "..."
+		} else {
+			result["custom_context_preview"] = cfg.CustomContext
+		}
+	}
+
+	// Build and include the system prompt
+	systemPrompt := s.buildSystemPrompt(req)
+	result["system_prompt_length"] = len(systemPrompt)
+	result["system_prompt"] = systemPrompt
+
+	return result
+}
+
 // IsAutonomous returns true if autonomous mode is enabled
 func (s *Service) IsAutonomous() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cfg != nil && s.cfg.AutonomousMode
+}
+
+// isDangerousCommand checks if a command is too dangerous to auto-execute
+// These commands ALWAYS require approval, even in autonomous mode
+func isDangerousCommand(cmd string) bool {
+	cmd = strings.TrimSpace(strings.ToLower(cmd))
+	parts := strings.Fields(cmd)
+	if len(parts) == 0 {
+		return false
+	}
+	baseCmd := parts[0]
+	if baseCmd == "sudo" && len(parts) > 1 {
+		baseCmd = parts[1]
+	}
+
+	// Commands that are too dangerous to ever auto-execute
+	dangerousCommands := map[string]bool{
+		// Deletion commands
+		"rm":     true,
+		"rmdir":  true,
+		"unlink": true,
+		"shred":  true,
+		// Disk/filesystem destructive operations
+		"dd":          true,
+		"mkfs":        true,
+		"fdisk":       true,
+		"parted":      true,
+		"wipefs":      true,
+		"sgdisk":      true,
+		"gdisk":       true,
+		"zpool":       true, // Allow reads but not modifications
+		"zfs":         true, // Allow reads but not modifications
+		"lvremove":    true,
+		"vgremove":    true,
+		"pvremove":    true,
+		// System state changes
+		"reboot":      true,
+		"shutdown":    true,
+		"poweroff":    true,
+		"halt":        true,
+		"init":        true,
+		"systemctl":   true, // could stop critical services
+		"service":     true,
+		// User/permission changes
+		"chmod":       true,
+		"chown":       true,
+		"useradd":     true,
+		"userdel":     true,
+		"passwd":      true,
+		// Package management
+		"apt":         true,
+		"apt-get":     true,
+		"dpkg":        true,
+		"yum":         true,
+		"dnf":         true,
+		"pacman":      true,
+		"pip":         true,
+		"npm":         true,
+		// Proxmox destructive
+		"vzdump":      true,
+		"vzrestore":   true,
+		"pveam":       true,
+		// Network changes
+		"iptables":    true,
+		"nft":         true,
+		"firewall-cmd": true,
+	}
+
+	if dangerousCommands[baseCmd] {
+		return true
+	}
+
+	// Detect dangerous patterns in the full command
+	dangerousPatterns := []string{
+		"rm -rf", "rm -fr", "rm -r",
+		"> /dev/", "| tee /",
+		"mkfs.", "dd if=", "dd of=",
+		":(){ :|:& };:", // fork bomb
+		"chmod -R 777", "chmod 777",
+		"drop database", "drop table",
+		"truncate ",
+	}
+	for _, pattern := range dangerousPatterns {
+		if strings.Contains(cmd, pattern) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // isReadOnlyCommand checks if a command is read-only (doesn't modify state)
@@ -379,10 +569,11 @@ type ToolEndData struct {
 
 // ApprovalNeededData is sent when a command needs user approval
 type ApprovalNeededData struct {
-	Command   string `json:"command"`
-	ToolID    string `json:"tool_id"`    // ID to reference when approving
-	ToolName  string `json:"tool_name"`  // "run_command", "read_file", etc.
-	RunOnHost bool   `json:"run_on_host"`
+	Command    string `json:"command"`
+	ToolID     string `json:"tool_id"`     // ID to reference when approving
+	ToolName   string `json:"tool_name"`   // "run_command", "read_file", etc.
+	RunOnHost  bool   `json:"run_on_host"`
+	TargetHost string `json:"target_host,omitempty"` // Explicit host to route to
 }
 
 // Execute sends a prompt to the AI and returns the response
@@ -426,7 +617,29 @@ Examples of actions you can perform:
 - View processes: ps aux --sort=-%mem | head -20
 - Check logs: tail -100 /var/log/syslog
 
-Always execute the commands rather than telling the user how to do it.`
+Always execute the commands rather than telling the user how to do it.
+
+## Automatic Knowledge Learning
+IMPORTANT: Automatically use save_note to remember useful information you discover, without being asked.
+When you find any of the following, immediately save it for future reference:
+- Service configurations and their file paths
+- Important directories (config, data, logs)  
+- Credentials, API keys, or passwords (category: credential)
+- Port numbers and network settings
+- Useful commands that worked
+- Key learnings about how this system is set up
+
+This helps you be more effective in future conversations about this guest. Save notes silently without mentioning it to the user.`
+	}
+
+	// Inject previously learned knowledge about this guest
+	if s.knowledgeStore != nil {
+		guestID := s.getGuestID(req)
+		if guestID != "" {
+			if knowledgeContext := s.knowledgeStore.FormatForContext(guestID); knowledgeContext != "" {
+				systemPrompt += knowledgeContext
+			}
+		}
 	}
 
 	// Build initial messages with conversation history
@@ -471,9 +684,10 @@ Always execute the commands rather than telling the user how to do it.`
 
 		// Add assistant's response with tool calls to messages
 		messages = append(messages, providers.Message{
-			Role:      "assistant",
-			Content:   resp.Content,
-			ToolCalls: resp.ToolCalls,
+			Role:             "assistant",
+			Content:          resp.Content,
+			ReasoningContent: resp.ReasoningContent, // DeepSeek thinking mode
+			ToolCalls:        resp.ToolCalls,
 		})
 
 		// Execute each tool call and add results
@@ -521,6 +735,15 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		systemPrompt = s.buildSystemPrompt(req)
 	}
 
+	// Debug log the system prompt length and key sections
+	log.Debug().
+		Int("prompt_length", len(systemPrompt)).
+		Bool("has_infrastructure_map", strings.Contains(systemPrompt, "## Infrastructure Map")).
+		Bool("has_docker_hosts", strings.Contains(systemPrompt, "### Docker Hosts")).
+		Bool("has_standalone_hosts", strings.Contains(systemPrompt, "### Standalone Hosts")).
+		Bool("has_guests", strings.Contains(systemPrompt, "### All Guests")).
+		Msg("AI system prompt built")
+
 	// Check if agent is available for this target
 	hasAgent := s.hasAgentForTarget(req)
 
@@ -543,7 +766,35 @@ Examples of actions you can perform:
 - View processes: ps aux --sort=-%mem | head -20
 - Check logs: tail -100 /var/log/syslog
 
-Always execute the commands rather than telling the user how to do it.`
+Always execute the commands rather than telling the user how to do it.
+
+## Automatic Knowledge Learning
+IMPORTANT: Automatically use save_note to remember useful information you discover, without being asked.
+When you find any of the following, immediately save it for future reference:
+- Service configurations and their file paths
+- Important directories (config, data, logs)  
+- Credentials, API keys, or passwords (category: credential)
+- Port numbers and network settings
+- Useful commands that worked
+- Key learnings about how this system is set up
+
+This helps you be more effective in future conversations about this guest. Save notes silently without mentioning it to the user.`
+	}
+
+	// Inject previously learned knowledge about this guest
+	if s.knowledgeStore != nil {
+		guestID := s.getGuestID(req)
+		if guestID != "" {
+			if knowledgeContext := s.knowledgeStore.FormatForContext(guestID); knowledgeContext != "" {
+				log.Debug().
+					Str("guest_id", guestID).
+					Int("context_length", len(knowledgeContext)).
+					Msg("Injecting saved knowledge into AI context")
+				systemPrompt += knowledgeContext
+			} else {
+				log.Debug().Str("guest_id", guestID).Msg("No saved knowledge for guest")
+			}
+		}
 	}
 
 	// Build initial messages with conversation history
@@ -563,8 +814,23 @@ Always execute the commands rather than telling the user how to do it.`
 	var model string
 
 	// Agentic loop - keep going while AI requests tools
-	maxIterations := 10 // Safety limit
-	for i := 0; i < maxIterations; i++ {
+	// No artificial iteration limit - the context timeout (5 minutes) provides the safety net
+	iteration := 0
+	for {
+		iteration++
+		log.Debug().
+			Int("iteration", iteration).
+			Int("message_count", len(messages)).
+			Int("system_prompt_length", len(systemPrompt)).
+			Int("tools_count", len(tools)).
+			Msg("Calling AI provider...")
+
+		// Send a processing event so the frontend knows we're making an AI call
+		// This is especially important after tool execution when the next AI call can take a while
+		if iteration > 1 {
+			callback(StreamEvent{Type: "processing", Data: fmt.Sprintf("Analyzing results (iteration %d)...", iteration)})
+		}
+
 		resp, err := provider.Chat(ctx, providers.ChatRequest{
 			Messages:  messages,
 			Model:     cfg.GetModel(),
@@ -573,19 +839,27 @@ Always execute the commands rather than telling the user how to do it.`
 			Tools:     tools,
 		})
 		if err != nil {
+			log.Error().Err(err).Int("iteration", iteration).Msg("AI provider call failed")
 			callback(StreamEvent{Type: "error", Data: err.Error()})
 			return nil, fmt.Errorf("AI request failed: %w", err)
 		}
+
+		log.Debug().Int("iteration", iteration).Msg("AI provider returned successfully")
 
 		totalInputTokens += resp.InputTokens
 		totalOutputTokens += resp.OutputTokens
 		model = resp.Model
 		finalContent = resp.Content
 
+		// Stream thinking/reasoning content if present (DeepSeek reasoner)
+		if resp.ReasoningContent != "" {
+			callback(StreamEvent{Type: "thinking", Data: resp.ReasoningContent})
+		}
+
 		log.Debug().
 			Int("tool_calls", len(resp.ToolCalls)).
 			Str("stop_reason", resp.StopReason).
-			Int("iteration", i+1).
+			Int("iteration", iteration).
 			Int("total_input_tokens", totalInputTokens).
 			Int("total_output_tokens", totalOutputTokens).
 			Msg("AI streaming iteration complete")
@@ -595,51 +869,59 @@ Always execute the commands rather than telling the user how to do it.`
 			log.Info().
 				Int("tool_calls", len(resp.ToolCalls)).
 				Str("stop_reason", resp.StopReason).
-				Int("iteration", i+1).
+				Int("iteration", iteration).
 				Msg("AI streaming loop ending - no more tool calls or stop_reason != tool_use")
 			break
 		}
 
 		// Add assistant's response with tool calls to messages
 		messages = append(messages, providers.Message{
-			Role:      "assistant",
-			Content:   resp.Content,
-			ToolCalls: resp.ToolCalls,
+			Role:             "assistant",
+			Content:          resp.Content,
+			ReasoningContent: resp.ReasoningContent, // DeepSeek thinking mode
+			ToolCalls:        resp.ToolCalls,
 		})
 
 		// Execute each tool call and add results
 		for _, tc := range resp.ToolCalls {
 			toolInput := s.getToolInputDisplay(tc)
 
-			// Check if this command needs approval
+		// Check if this command needs approval
 			needsApproval := false
 			if tc.Name == "run_command" {
 				cmd, _ := tc.Input["command"].(string)
 				runOnHost, _ := tc.Input["run_on_host"].(bool)
+				targetHost, _ := tc.Input["target_host"].(string)
 
 				isAuto := s.IsAutonomous()
 				isReadOnly := isReadOnlyCommand(cmd)
+				isDangerous := isDangerousCommand(cmd)
 				log.Debug().
 					Bool("autonomous", isAuto).
 					Bool("read_only", isReadOnly).
+					Bool("dangerous", isDangerous).
 					Str("command", cmd).
+					Str("target_host", targetHost).
 					Msg("Checking command approval")
 
-				// In non-autonomous mode, non-read-only commands need approval
-				if !isAuto && !isReadOnly {
+				// Dangerous commands ALWAYS need approval, even in autonomous mode
+				// In non-autonomous mode, non-read-only commands also need approval
+				if isDangerous || (!isAuto && !isReadOnly) {
 					needsApproval = true
 					// Send approval needed event
 					callback(StreamEvent{
 						Type: "approval_needed",
 						Data: ApprovalNeededData{
-							Command:   cmd,
-							ToolID:    tc.ID,
-							ToolName:  tc.Name,
-							RunOnHost: runOnHost,
+							Command:    cmd,
+							ToolID:     tc.ID,
+							ToolName:   tc.Name,
+							RunOnHost:  runOnHost,
+							TargetHost: targetHost,
 						},
 					})
 				}
 			}
+
 
 			var result string
 			var execution ToolExecution
@@ -671,12 +953,27 @@ Always execute the commands rather than telling the user how to do it.`
 				})
 			}
 
+			// Truncate large results to prevent context bloat
+			// Keep first and last parts for context
+			resultForContext := result
+			const maxResultSize = 8000 // ~8KB per tool result
+			if len(result) > maxResultSize {
+				halfSize := maxResultSize / 2
+				resultForContext = result[:halfSize] + "\n\n[... output truncated (" +
+					fmt.Sprintf("%d", len(result)-maxResultSize) + " bytes omitted) ...]\n\n" +
+					result[len(result)-halfSize:]
+				log.Debug().
+					Int("original_size", len(result)).
+					Int("truncated_size", len(resultForContext)).
+					Msg("Truncated large tool result")
+			}
+
 			// Add tool result to messages
 			messages = append(messages, providers.Message{
 				Role: "user",
 				ToolResult: &providers.ToolResult{
 					ToolUseID: tc.ID,
-					Content:   result,
+					Content:   resultForContext,
 					IsError:   !execution.Success,
 				},
 			})
@@ -733,7 +1030,7 @@ func (s *Service) getTools() []providers.Tool {
 	tools := []providers.Tool{
 		{
 			Name:        "run_command",
-			Description: "Execute a shell command. By default runs on the current target, but you can override to run on the Proxmox host for operations like resizing disks, managing containers, etc.",
+			Description: "Execute a shell command. By default runs on the current target (container/VM), but set run_on_host=true for Proxmox host commands. IMPORTANT: For targets on different nodes, specify target_host to route to the correct PVE node.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -743,7 +1040,11 @@ func (s *Service) getTools() []providers.Tool {
 					},
 					"run_on_host": map[string]interface{}{
 						"type":        "boolean",
-						"description": "If true, run on the Proxmox host instead of inside the container/VM. Use this for pct/qm commands like 'pct resize 101 rootfs +10G'",
+						"description": "If true, run on the Proxmox/Docker host instead of inside the container/VM. Use for pct/qm commands like 'pct resize 101 rootfs +10G'. When true, you should also set target_host.",
+					},
+					"target_host": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional hostname of the specific host/node to run the command on. Use this to explicitly route pct/qm/docker commands to the correct Proxmox node or Docker host. Check the 'node' or 'PVE Node' field in the target's context.",
 					},
 				},
 				"required": []string{"command"},
@@ -764,6 +1065,32 @@ func (s *Service) getTools() []providers.Tool {
 			},
 		},
 		{
+			Name:        "write_file",
+			Description: "Write content to a file on the target. Use this to create or modify configuration files, scripts, or other text files. Creates parent directories if needed.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"path": map[string]interface{}{
+						"type":        "string",
+						"description": "Absolute path to the file (e.g., '/etc/myapp/config.yaml')",
+					},
+					"content": map[string]interface{}{
+						"type":        "string",
+						"description": "The content to write to the file",
+					},
+					"mode": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional file permissions in octal (e.g., '0644' for rw-r--r--, '0755' for executable). Defaults to '0644'.",
+					},
+					"append": map[string]interface{}{
+						"type":        "boolean",
+						"description": "If true, append to the file instead of overwriting. Defaults to false.",
+					},
+				},
+				"required": []string{"path", "content"},
+			},
+		},
+		{
 			Name:        "fetch_url",
 			Description: "Fetch content from a URL. Use this to check if web services are responding, read API endpoints, or fetch documentation. Works with local network URLs and public sites.",
 			InputSchema: map[string]interface{}{
@@ -775,6 +1102,44 @@ func (s *Service) getTools() []providers.Tool {
 					},
 				},
 				"required": []string{"url"},
+			},
+		},
+		{
+			Name:        "save_note",
+			Description: "Save a note about the current guest for future reference. Use this to remember important paths, configurations, services, credentials, or learnings. Notes are persisted and will be available in future sessions.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"category": map[string]interface{}{
+						"type":        "string",
+						"enum":        []string{"service", "path", "config", "credential", "learning"},
+						"description": "Category of note: 'service' for discovered services, 'path' for important file paths, 'config' for configuration details, 'credential' for passwords/API keys, 'learning' for general learnings",
+					},
+					"title": map[string]interface{}{
+						"type":        "string",
+						"description": "Short title for the note (e.g., 'MQTT Password', 'Config File Location', 'Web UI Port')",
+					},
+					"content": map[string]interface{}{
+						"type":        "string",
+						"description": "The information to save (e.g., '/opt/zigbee2mqtt/data/configuration.yaml', 'admin:secret123', 'Port 8080')",
+					},
+				},
+				"required": []string{"category", "title", "content"},
+			},
+		},
+		{
+			Name:        "get_notes",
+			Description: "Retrieve previously saved notes about the current guest. Use this to recall what was learned in previous sessions.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"category": map[string]interface{}{
+						"type":        "string",
+						"enum":        []string{"service", "path", "config", "credential", "learning", ""},
+						"description": "Optional category filter. Leave empty to get all notes.",
+					},
+				},
+				"required": []string{},
 			},
 		},
 	}
@@ -802,8 +1167,11 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 	case "run_command":
 		command, _ := tc.Input["command"].(string)
 		runOnHost, _ := tc.Input["run_on_host"].(bool)
+		targetHost, _ := tc.Input["target_host"].(string)
 		execution.Input = command
-		if runOnHost {
+		if runOnHost && targetHost != "" {
+			execution.Input = fmt.Sprintf("[%s] %s", targetHost, command)
+		} else if runOnHost {
 			execution.Input = fmt.Sprintf("[host] %s", command)
 		}
 
@@ -827,8 +1195,31 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			}
 		}
 
-		// If run_on_host is true, override the target type to run on host
+		// Build execution request with proper targeting
 		execReq := req
+		
+		// If target_host is explicitly specified by AI, use it for routing
+		if targetHost != "" {
+			// Ensure Context map exists
+			if execReq.Context == nil {
+				execReq.Context = make(map[string]interface{})
+			} else {
+				// Make a copy to avoid modifying the original
+				newContext := make(map[string]interface{})
+				for k, v := range req.Context {
+					newContext[k] = v
+				}
+				execReq.Context = newContext
+			}
+			// Set the node explicitly - this takes priority in routing
+			execReq.Context["node"] = targetHost
+			log.Debug().
+				Str("target_host", targetHost).
+				Str("command", command).
+				Msg("AI explicitly specified target_host for command routing")
+		}
+		
+		// If run_on_host is true, override the target type to run on host
 		if runOnHost {
 			execReq.TargetType = "host"
 			execReq.TargetID = ""
@@ -866,6 +1257,101 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		execution.Success = true
 		return result, execution
 
+	case "write_file":
+		path, _ := tc.Input["path"].(string)
+		content, _ := tc.Input["content"].(string)
+		mode, _ := tc.Input["mode"].(string)
+		appendMode, _ := tc.Input["append"].(bool)
+		execution.Input = path
+
+		if path == "" {
+			execution.Output = "Error: path is required"
+			return execution.Output, execution
+		}
+		if content == "" {
+			execution.Output = "Error: content is required"
+			return execution.Output, execution
+		}
+
+		// Size limit: 1MB max to prevent filling disk
+		const maxFileSize = 1024 * 1024 // 1MB
+		if len(content) > maxFileSize {
+			execution.Output = fmt.Sprintf("Error: content too large (%d bytes). Maximum allowed is %d bytes (1MB)", len(content), maxFileSize)
+			return execution.Output, execution
+		}
+
+		// Path blocklist: prevent writes to critical system files
+		blockedPaths := []string{
+			"/etc/passwd", "/etc/shadow", "/etc/group", "/etc/gshadow",
+			"/etc/sudoers", "/etc/ssh/sshd_config",
+			"/boot/", "/lib/", "/lib64/", "/usr/lib/",
+			"/bin/", "/sbin/", "/usr/bin/", "/usr/sbin/",
+			"/proc/", "/sys/", "/dev/",
+		}
+		cleanPath := filepath.Clean(path)
+		for _, blocked := range blockedPaths {
+			if cleanPath == blocked || strings.HasPrefix(cleanPath, blocked) {
+				execution.Output = fmt.Sprintf("Error: writing to %s is blocked for safety. This is a critical system path.", path)
+				return execution.Output, execution
+			}
+		}
+
+		// Default mode if not specified
+		if mode == "" {
+			mode = "0644"
+		}
+
+		// Build the write command using base64 to safely handle any content
+		// This avoids issues with special characters, quotes, newlines, etc.
+		encoded := base64.StdEncoding.EncodeToString([]byte(content))
+		
+		var command string
+		if appendMode {
+			// Append mode: decode and append to file (no backup needed for append)
+			command = fmt.Sprintf("echo %q | base64 -d >> %q && echo 'Content appended to %s (%d bytes)'", encoded, path, path, len(content))
+		} else {
+			// Overwrite mode with safety features:
+			// 1. Create parent directory if needed
+			// 2. Backup existing file if it exists (atomic - only if backup succeeds)
+			// 3. Write to temp file first
+			// 4. Atomic move temp file to target
+			// 5. Set permissions
+			dir := filepath.Dir(path)
+			tempFile := path + ".pulse-tmp"
+			backupFile := path + ".bak"
+			
+			// Build a safe multi-step command:
+			// - mkdir -p for parent dir
+			// - if file exists, copy to .bak
+			// - write content to temp file
+			// - mv temp file to target (atomic)
+			// - chmod to set permissions
+			command = fmt.Sprintf(
+				"mkdir -p %q && "+
+					"([ -f %q ] && cp %q %q 2>/dev/null || true) && "+
+					"echo %q | base64 -d > %q && "+
+					"mv %q %q && "+
+					"chmod %s %q && "+
+					"echo 'Written %d bytes to %s (backup: %s.bak if existed)'",
+				dir,
+				path, path, backupFile,
+				encoded, tempFile,
+				tempFile, path,
+				mode, path,
+				len(content), path, path,
+			)
+		}
+
+		result, err := s.executeOnAgent(ctx, req, command)
+		if err != nil {
+			execution.Output = fmt.Sprintf("Error writing file: %s", err)
+			return execution.Output, execution
+		}
+
+		execution.Output = result
+		execution.Success = true
+		return result, execution
+
 	case "fetch_url":
 		urlStr, _ := tc.Input["url"].(string)
 		execution.Input = urlStr
@@ -886,10 +1372,118 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		execution.Success = true
 		return result, execution
 
+	case "save_note":
+		category, _ := tc.Input["category"].(string)
+		title, _ := tc.Input["title"].(string)
+		content, _ := tc.Input["content"].(string)
+		execution.Input = fmt.Sprintf("%s: %s", category, title)
+
+		if category == "" || title == "" || content == "" {
+			execution.Output = "Error: category, title, and content are all required"
+			return execution.Output, execution
+		}
+
+		if s.knowledgeStore == nil {
+			execution.Output = "Error: knowledge store not available"
+			return execution.Output, execution
+		}
+
+		// Get guest info from request
+		guestID := s.getGuestID(req)
+		guestName := req.TargetID
+		guestType := req.TargetType
+
+		if guestID == "" {
+			execution.Output = "Error: no guest context - save_note requires a target guest"
+			return execution.Output, execution
+		}
+
+		if err := s.knowledgeStore.SaveNote(guestID, guestName, guestType, category, title, content); err != nil {
+			execution.Output = fmt.Sprintf("Error saving note: %s", err)
+			return execution.Output, execution
+		}
+
+		execution.Output = fmt.Sprintf("Saved note [%s] %s: %s", category, title, content)
+		execution.Success = true
+		return execution.Output, execution
+
+	case "get_notes":
+		category, _ := tc.Input["category"].(string)
+		execution.Input = fmt.Sprintf("category=%s", category)
+
+		if s.knowledgeStore == nil {
+			execution.Output = "Error: knowledge store not available"
+			return execution.Output, execution
+		}
+
+		guestID := s.getGuestID(req)
+		if guestID == "" {
+			execution.Output = "Error: no guest context - get_notes requires a target guest"
+			return execution.Output, execution
+		}
+
+		notes, err := s.knowledgeStore.GetNotesByCategory(guestID, category)
+		if err != nil {
+			execution.Output = fmt.Sprintf("Error getting notes: %s", err)
+			return execution.Output, execution
+		}
+
+		if len(notes) == 0 {
+			execution.Output = "No notes found for this guest"
+			execution.Success = true
+			return execution.Output, execution
+		}
+
+		var result strings.Builder
+		result.WriteString(fmt.Sprintf("Found %d notes:\n", len(notes)))
+		for _, note := range notes {
+			result.WriteString(fmt.Sprintf("- [%s] %s: %s\n", note.Category, note.Title, note.Content))
+		}
+
+		execution.Output = result.String()
+		execution.Success = true
+		return execution.Output, execution
+
 	default:
 		execution.Output = fmt.Sprintf("Unknown tool: %s", tc.Name)
 		return execution.Output, execution
 	}
+}
+
+// getGuestID returns a unique identifier for the guest based on the request
+func (s *Service) getGuestID(req ExecuteRequest) string {
+	// Build a consistent guest ID from the target information
+	if req.TargetType == "" || req.TargetID == "" {
+		return ""
+	}
+	
+	// For Proxmox targets, include the node info
+	// Format: instance-node-type-vmid or instance-targetid
+	return fmt.Sprintf("%s-%s", req.TargetType, req.TargetID)
+}
+
+// GetGuestKnowledge returns all knowledge for a guest
+func (s *Service) GetGuestKnowledge(guestID string) (*knowledge.GuestKnowledge, error) {
+	if s.knowledgeStore == nil {
+		return nil, fmt.Errorf("knowledge store not available")
+	}
+	return s.knowledgeStore.GetKnowledge(guestID)
+}
+
+// SaveGuestNote saves a note for a guest
+func (s *Service) SaveGuestNote(guestID, guestName, guestType, category, title, content string) error {
+	if s.knowledgeStore == nil {
+		return fmt.Errorf("knowledge store not available")
+	}
+	return s.knowledgeStore.SaveNote(guestID, guestName, guestType, category, title, content)
+}
+
+// DeleteGuestNote deletes a note from a guest
+func (s *Service) DeleteGuestNote(guestID, noteID string) error {
+	if s.knowledgeStore == nil {
+		return fmt.Errorf("knowledge store not available")
+	}
+	return s.knowledgeStore.DeleteNote(guestID, noteID)
 }
 
 // fetchURL fetches content from a URL with size limits and timeout
@@ -942,145 +1536,30 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 		return "", fmt.Errorf("agent server not available")
 	}
 
-	// Find the appropriate agent
+	// Find the appropriate agent using robust routing
 	agents := s.agentServer.GetConnectedAgents()
-	if len(agents) == 0 {
-		return "", fmt.Errorf("no agents connected")
+	
+	// Use the new robust routing logic
+	routeResult, err := s.routeToAgent(req, command, agents)
+	if err != nil {
+		// Return actionable error message
+		return "", err
 	}
 
-	// Route to the correct agent based on target
-	// For containers/VMs, we need to route to the PVE host that owns them
-	agentID := ""
-	targetNode := ""
-
-	// CRITICAL: For pct/qm commands, extract the VMID from the command itself
-	// and look up the authoritative node from our state. This prevents the AI
-	// from trying to run commands on the wrong node.
-	//
-	// Commands are classified as:
-	// - Node-specific (pct exec, qm start, etc): MUST run on the node that owns the guest
-	// - Cluster-aware (vzdump, etc): Can run from any cluster node
-	if vmid, requiresOwnerNode, found := extractVMIDFromCommand(command); found {
-		// Try to get instance from context for multi-cluster disambiguation
-		targetInstance := ""
-		if inst, ok := req.Context["instance"].(string); ok {
-			targetInstance = inst
-		}
-
-		// Look up guests with this VMID, optionally filtered by instance
-		guests := s.lookupGuestsByVMID(vmid, targetInstance)
-
-		if len(guests) == 1 && requiresOwnerNode {
-			// Single match - route to the owning node
-			log.Info().
-				Int("vmid", vmid).
-				Str("actual_node", guests[0].Node).
-				Str("guest_name", guests[0].Name).
-				Str("guest_type", guests[0].Type).
-				Str("instance", guests[0].Instance).
-				Bool("requires_owner_node", requiresOwnerNode).
-				Msg("Auto-routing command to correct node based on VMID lookup")
-			targetNode = strings.ToLower(guests[0].Node)
-		} else if len(guests) > 1 && requiresOwnerNode {
-			// Multiple matches - VMID collision across instances
-			// Try to disambiguate using context
-			if targetInstance != "" {
-				// Filter by instance
-				for _, g := range guests {
-					if g.Instance == targetInstance {
-						log.Info().
-							Int("vmid", vmid).
-							Str("actual_node", g.Node).
-							Str("guest_name", g.Name).
-							Str("instance", g.Instance).
-							Msg("Resolved VMID collision using instance context")
-						targetNode = strings.ToLower(g.Node)
-						break
-					}
-				}
-			}
-			if targetNode == "" {
-				// Can't disambiguate - log warning and use first match
-				log.Warn().
-					Int("vmid", vmid).
-					Int("matches", len(guests)).
-					Msg("VMID collision detected - using first match, may route to wrong cluster")
-				targetNode = strings.ToLower(guests[0].Node)
-			}
-		} else if len(guests) == 1 {
-			// Cluster-aware command with single match - log for debugging
-			log.Debug().
-				Int("vmid", vmid).
-				Str("actual_node", guests[0].Node).
-				Str("guest_name", guests[0].Name).
-				Bool("requires_owner_node", requiresOwnerNode).
-				Msg("Cluster-aware command, using default routing")
-		} else if requiresOwnerNode {
-			// VMID not found in our state - this could be a problem
-			// Log a warning but let it proceed (might be a newly created guest)
-			log.Warn().
-				Int("vmid", vmid).
-				Str("command", command).
-				Msg("VMID not found in state - command may fail if routed to wrong node")
-		}
+	// Log any warnings from routing
+	for _, warning := range routeResult.Warnings {
+		log.Warn().Str("warning", warning).Msg("Routing warning")
 	}
 
-	// Fall back to context-based routing if VMID lookup didn't find anything
-	if targetNode == "" {
-		// For host targets, use the hostname directly from context
-		if req.TargetType == "host" {
-			if hostname, ok := req.Context["hostname"].(string); ok && hostname != "" {
-				targetNode = strings.ToLower(hostname)
-				log.Debug().
-					Str("hostname", hostname).
-					Str("target_type", req.TargetType).
-					Msg("Using hostname from context for host target routing")
-			}
-		}
-		// For VMs/containers, extract node info from target ID (e.g., "delly-135" -> "delly")
-		// or from context (guest_node field)
-		if targetNode == "" {
-			if node, ok := req.Context["guest_node"].(string); ok && node != "" {
-				targetNode = strings.ToLower(node)
-			} else if req.TargetID != "" {
-				parts := strings.Split(req.TargetID, "-")
-				if len(parts) >= 2 {
-					targetNode = strings.ToLower(parts[0])
-				}
-			}
-		}
-	}
-
-	// Try to find an agent that matches the target node
-	if targetNode != "" {
-		for _, agent := range agents {
-			if strings.ToLower(agent.Hostname) == targetNode ||
-				strings.Contains(strings.ToLower(agent.Hostname), targetNode) ||
-				strings.Contains(targetNode, strings.ToLower(agent.Hostname)) {
-				agentID = agent.AgentID
-				log.Debug().
-					Str("target_node", targetNode).
-					Str("matched_agent", agent.Hostname).
-					Str("agent_id", agentID).
-					Msg("Routed command to matching agent")
-				break
-			}
-		}
-	}
-
-	// If no direct match, try to find an agent on a cluster peer
-	if agentID == "" && targetNode != "" {
-		agentID = s.findClusterPeerAgent(targetNode, agents)
-	}
-
-	// Fall back to first agent if no match found
-	if agentID == "" {
-		agentID = agents[0].AgentID
-		log.Debug().
-			Str("target_node", targetNode).
-			Str("fallback_agent", agents[0].Hostname).
-			Msg("No matching agent found, using first available")
-	}
+	agentID := routeResult.AgentID
+	
+	log.Debug().
+		Str("agent_id", agentID).
+		Str("agent_hostname", routeResult.AgentHostname).
+		Str("target_node", routeResult.TargetNode).
+		Str("routing_method", routeResult.RoutingMethod).
+		Bool("cluster_peer", routeResult.ClusterPeer).
+		Msg("Command routed to agent")
 
 	// Extract numeric VMID from target ID (e.g., "delly-135" -> "135")
 	targetID := req.TargetID
@@ -1109,6 +1588,15 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 	}
 
 	requestID := uuid.New().String()
+
+	// Automatically force non-interactive mode for package managers
+	// This prevents hanging when apt/dpkg asks for confirmation or configuration
+	if strings.Contains(command, "apt") || strings.Contains(command, "dpkg") {
+		if !strings.Contains(command, "DEBIAN_FRONTEND=") {
+			command = "export DEBIAN_FRONTEND=noninteractive; " + command
+		}
+	}
+
 	cmd := agentexec.ExecuteCommandPayload{
 		RequestID:  requestID,
 		Command:    command,
@@ -1146,8 +1634,9 @@ type RunCommandRequest struct {
 	Command    string `json:"command"`
 	TargetType string `json:"target_type"` // "host", "container", "vm"
 	TargetID   string `json:"target_id"`
-	RunOnHost  bool   `json:"run_on_host"` // If true, run on host instead of target
+	RunOnHost  bool   `json:"run_on_host"`  // If true, run on host instead of target
 	VMID       string `json:"vmid,omitempty"`
+	TargetHost string `json:"target_host,omitempty"` // Explicit host for routing
 }
 
 // RunCommandResponse represents the result of running a command
@@ -1180,6 +1669,16 @@ func (s *Service) RunCommand(ctx context.Context, req RunCommandRequest) (*RunCo
 	if req.VMID != "" {
 		execReq.Context["vmid"] = req.VMID
 	}
+
+	// If target_host is specified, set it in context for routing
+	if req.TargetHost != "" {
+		execReq.Context["node"] = req.TargetHost
+		log.Debug().
+			Str("target_host", req.TargetHost).
+			Str("command", req.Command).
+			Msg("RunCommand using explicit target_host for routing")
+	}
+
 
 	output, err := s.executeOnAgent(ctx, execReq, req.Command)
 	if err != nil {
@@ -1232,29 +1731,58 @@ GOOD: Plain prose, 2-4 sentences.
 Pulse provides real metrics in "Current Metrics and State". Use this data directly - don't ask users to check things you already know.
 
 ## Command Execution
-- run_on_host=true: Run on PVE host (pct, qm, vzdump commands)
+- run_on_host=true: Run on PVE/Docker host (pct, qm, vzdump, docker commands)
 - run_on_host=false: Run inside the container/VM
+- target_host: ALWAYS set this when using run_on_host=true! Use the node/hostname from target context
 - Execute commands to investigate, don't just explain what commands to run
 
-## CRITICAL: Proxmox Command Routing
-Commands like 'pct exec', 'pct enter', 'qm guest exec' MUST run on the specific PVE node where the guest lives.
-- Check the 'node' field in the target context to know which node hosts this guest
-- If the guest is on node X but you only have an agent on node Y (even in the same cluster), pct/qm commands will FAIL
-- Error "Configuration file does not exist" means the guest is on a different node than where you're running the command
-- In clusters, vzdump and pvesh commands can run from any node, but pct exec/qm guest exec cannot
+## CRITICAL: Command Routing with target_host
+When running commands that require a specific host (pct, qm, docker, vzdump), you MUST specify target_host to route correctly.
 
-Before running pct/qm commands:
-1. Check which node hosts the guest (from context 'node' field)
-2. Check if that specific node has an agent connected
-3. If no agent on that node, tell the user you cannot run commands inside this guest
+Example for LXC 106 on node 'minipc':
+- To run 'df -h' inside the container: run_command(command="df -h", run_on_host=false)
+- To run 'pct exec 106 -- df -h' on the host: run_command(command="pct exec 106 -- df -h", run_on_host=true, target_host="minipc")
 
-If no agent is connected to the host where the target lives, tell the user you cannot reach it.`
+Always check the target's context for the 'node' or 'PVE Node' field and pass it as target_host.
+If you don't specify target_host when run_on_host=true, the command may route to the wrong host!
+
+Rules:
+1. Look at the target context for 'node', 'guest_node', or 'PVE Node' field
+2. When running pct/qm commands: set run_on_host=true AND target_host=<node>
+3. When running commands inside the guest: just set run_on_host=false (no target_host needed)
+4. Error "Configuration file does not exist" means wrong host - check target_host
+
+## Infrastructure Architecture - LXC Management
+Pulse manages LXC containers agentlessly from the PVE host.
+- DO NOT check for a Pulse agent process or service inside an LXC. It does not exist.
+- Use run_command with run_on_host=false to execute commands inside the LXC. Pulse handles the routing.
+- For pct commands, always use run_on_host=true and set target_host to the container's node.`
+
+
+	// Add custom context from AI settings (user's infrastructure description)
+	s.mu.RLock()
+	cfg := s.cfg
+	s.mu.RUnlock()
+	if cfg != nil && cfg.CustomContext != "" {
+		prompt += "\n\n## User's Infrastructure Description\n"
+		prompt += "The user has provided this context about their infrastructure:\n\n"
+		prompt += cfg.CustomContext
+	}
 
 	// Add connected infrastructure info
 	prompt += s.buildInfrastructureContext()
 
 	// Add user annotations from all resources (global context)
 	prompt += s.buildUserAnnotationsContext()
+
+	// Add current alert status - this gives AI awareness of active issues
+	prompt += s.buildAlertContext()
+
+	// Add all saved knowledge when no specific target is selected
+	// This gives the AI context about everything learned from previous sessions
+	if req.TargetType == "" && s.knowledgeStore != nil {
+		prompt += s.knowledgeStore.FormatAllForContext()
+	}
 
 	// Add target context if provided
 	if req.TargetType != "" {
@@ -1266,11 +1794,24 @@ If no agent is connected to the host where the target lives, tell the user you c
 		}
 
 		if guestName != "" {
-			prompt += fmt.Sprintf("\n\n## Current Focus\nYou are analyzing **%s** (%s)", guestName, req.TargetType)
+			// Include the node in the focus header so AI can't miss it for routing
+			nodeName := ""
+			if node, ok := req.Context["node"].(string); ok && node != "" {
+				nodeName = node
+			} else if node, ok := req.Context["guest_node"].(string); ok && node != "" {
+				nodeName = node
+			}
+			if nodeName != "" {
+				prompt += fmt.Sprintf("\n\n## Current Focus\nYou are analyzing **%s** (%s on node **%s**)\n**ROUTING: When using run_on_host=true, set target_host=\"%s\"**",
+					guestName, req.TargetType, nodeName, nodeName)
+			} else {
+				prompt += fmt.Sprintf("\n\n## Current Focus\nYou are analyzing **%s** (%s)", guestName, req.TargetType)
+			}
 		} else if req.TargetID != "" {
 			prompt += fmt.Sprintf("\n\n## Current Focus\nYou are analyzing %s '%s'", req.TargetType, req.TargetID)
 		}
 	}
+
 
 	// Add any provided context in a structured way
 	if len(req.Context) > 0 {
@@ -1554,13 +2095,115 @@ func (s *Service) buildInfrastructureContext() string {
 				}
 			}
 		}
+
+		// Add standalone hosts (Linux/Windows servers with host agents)
+		if len(state.Hosts) > 0 {
+			sections = append(sections, "\n### Standalone Hosts")
+			sections = append(sections, "Linux/Windows servers monitored via Pulse host agent. Commands can be run directly on these.")
+			for _, host := range state.Hosts {
+				ips := ""
+				for _, iface := range host.NetworkInterfaces {
+					if len(iface.Addresses) > 0 {
+						ips = " - " + strings.Join(iface.Addresses, ", ")
+						break
+					}
+				}
+				osInfo := ""
+				if host.OSName != "" {
+					osInfo = fmt.Sprintf(" (%s)", host.OSName)
+				}
+				cpuMem := ""
+				if host.CPUCount > 0 {
+					cpuMem = fmt.Sprintf(", %d CPU, %.0f%% mem", host.CPUCount, host.Memory.Usage)
+				}
+				entry := fmt.Sprintf("  - **%s**%s%s%s [%s]", host.Hostname, osInfo, ips, cpuMem, host.Status)
+				sections = append(sections, entry)
+			}
+		}
+
+		// Add Docker hosts and their containers
+		if len(state.DockerHosts) > 0 {
+			sections = append(sections, "\n### Docker Hosts")
+			sections = append(sections, "Hosts running Docker/Podman. Use docker ps, docker exec, docker logs to manage containers.")
+			for _, dh := range state.DockerHosts {
+				if dh.Hidden || dh.PendingUninstall {
+					continue // Skip hidden or pending uninstall hosts
+				}
+				ips := ""
+				for _, iface := range dh.NetworkInterfaces {
+					if len(iface.Addresses) > 0 {
+						ips = " - " + strings.Join(iface.Addresses, ", ")
+						break
+					}
+				}
+				runtime := dh.Runtime
+				if runtime == "" {
+					runtime = "Docker"
+				}
+				containerCount := len(dh.Containers)
+				runningCount := 0
+				for _, c := range dh.Containers {
+					if c.State == "running" {
+						runningCount++
+					}
+				}
+				hostEntry := fmt.Sprintf("\n**%s** (%s, %d/%d containers running)%s [%s]",
+					dh.DisplayName, runtime, runningCount, containerCount, ips, dh.Status)
+				sections = append(sections, hostEntry)
+
+				// List containers on this host
+				for _, c := range dh.Containers {
+					// Build port info
+					portInfo := ""
+					if len(c.Ports) > 0 {
+						var ports []string
+						for _, p := range c.Ports {
+							if p.PublicPort > 0 {
+								ports = append(ports, fmt.Sprintf("%d->%d", p.PublicPort, p.PrivatePort))
+							}
+						}
+						if len(ports) > 0 {
+							portInfo = " ports:" + strings.Join(ports, ",")
+						}
+					}
+					// Truncate image name for brevity
+					image := c.Image
+					if idx := strings.LastIndex(image, "/"); idx > 0 {
+						image = image[idx+1:]
+					}
+					if len(image) > 30 {
+						image = image[:27] + "..."
+					}
+					healthInfo := ""
+					if c.Health != "" && c.Health != "none" {
+						healthInfo = fmt.Sprintf(" (%s)", c.Health)
+					}
+					entry := fmt.Sprintf("  - **%s** [%s]%s - %s%s", c.Name, c.State, healthInfo, image, portInfo)
+					sections = append(sections, entry)
+				}
+			}
+		}
 	}
 
 	if len(sections) == 0 {
 		return ""
 	}
 
-	return "\n\n## Infrastructure Map\n" + strings.Join(sections, "\n")
+	result := "\n\n## Infrastructure Map\n" + strings.Join(sections, "\n")
+
+	// Limit context size to prevent overwhelming the AI (max ~50KB of infrastructure context)
+	const maxContextSize = 50000
+	if len(result) > maxContextSize {
+		log.Warn().
+			Int("original_size", len(result)).
+			Int("max_size", maxContextSize).
+			Msg("Infrastructure context truncated - too many resources")
+		result = result[:maxContextSize] + "\n\n[... Infrastructure context truncated due to size ...]"
+	}
+
+	log.Debug().Int("infrastructure_context_size", len(result)).Msg("Built infrastructure context")
+
+	return result
 }
 
 // buildUserAnnotationsContext gathers all user annotations from guests and docker containers
@@ -1660,66 +2303,3 @@ func (s *Service) Reload() error {
 	return s.LoadConfig()
 }
 
-// findClusterPeerAgent looks for an agent on a node that's in the same Proxmox cluster
-// as the target node. This allows running pct/qm commands for guests on other cluster nodes.
-func (s *Service) findClusterPeerAgent(targetNode string, agents []agentexec.ConnectedAgent) string {
-	nodesConfig, err := s.persistence.LoadNodesConfig()
-	if err != nil || nodesConfig == nil {
-		return ""
-	}
-
-	// Find which cluster the target node belongs to
-	var targetCluster string
-	var clusterNodes []string
-
-	for _, pve := range nodesConfig.PVEInstances {
-		if !pve.IsCluster || pve.ClusterName == "" {
-			continue
-		}
-
-		// Check if target node matches this PVE instance or its cluster endpoints
-		isInCluster := strings.EqualFold(pve.Name, targetNode)
-		if !isInCluster {
-			for _, ep := range pve.ClusterEndpoints {
-				if strings.EqualFold(ep.NodeName, targetNode) {
-					isInCluster = true
-					break
-				}
-			}
-		}
-
-		if isInCluster {
-			targetCluster = pve.ClusterName
-			// Collect all nodes in this cluster
-			clusterNodes = append(clusterNodes, pve.Name)
-			for _, ep := range pve.ClusterEndpoints {
-				clusterNodes = append(clusterNodes, ep.NodeName)
-			}
-			break
-		}
-	}
-
-	if targetCluster == "" {
-		return ""
-	}
-
-	// Look for an agent on any node in the same cluster
-	for _, agent := range agents {
-		agentHostLower := strings.ToLower(agent.Hostname)
-		for _, clusterNode := range clusterNodes {
-			if strings.EqualFold(clusterNode, agent.Hostname) ||
-				strings.Contains(agentHostLower, strings.ToLower(clusterNode)) ||
-				strings.Contains(strings.ToLower(clusterNode), agentHostLower) {
-				log.Debug().
-					Str("target_node", targetNode).
-					Str("cluster", targetCluster).
-					Str("peer_agent", agent.Hostname).
-					Str("agent_id", agent.AgentID).
-					Msg("Found cluster peer agent for cross-node command execution")
-				return agent.AgentID
-			}
-		}
-	}
-
-	return ""
-}

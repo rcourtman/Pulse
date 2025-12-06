@@ -4,7 +4,7 @@ package config
 // This is stored in ai.enc (encrypted) in the config directory
 type AIConfig struct {
 	Enabled        bool   `json:"enabled"`
-	Provider       string `json:"provider"`        // "anthropic", "openai", "ollama"
+	Provider       string `json:"provider"`        // "anthropic", "openai", "ollama", "deepseek"
 	APIKey         string `json:"api_key"`         // encrypted at rest (not needed for ollama)
 	Model          string `json:"model"`           // e.g., "claude-opus-4-5-20250514", "gpt-4o", "llama3"
 	BaseURL        string `json:"base_url"`        // custom endpoint (required for ollama, optional for openai)
@@ -17,6 +17,7 @@ const (
 	AIProviderAnthropic = "anthropic"
 	AIProviderOpenAI    = "openai"
 	AIProviderOllama    = "ollama"
+	AIProviderDeepSeek  = "deepseek"
 )
 
 // Default models per provider
@@ -24,7 +25,9 @@ const (
 	DefaultAIModelAnthropic = "claude-opus-4-5-20251101"
 	DefaultAIModelOpenAI    = "gpt-4o"
 	DefaultAIModelOllama    = "llama3"
+	DefaultAIModelDeepSeek  = "deepseek-reasoner"
 	DefaultOllamaBaseURL    = "http://localhost:11434"
+	DefaultDeepSeekBaseURL  = "https://api.deepseek.com/chat/completions"
 )
 
 // NewDefaultAIConfig returns an AIConfig with sensible defaults
@@ -43,7 +46,7 @@ func (c *AIConfig) IsConfigured() bool {
 	}
 
 	switch c.Provider {
-	case AIProviderAnthropic, AIProviderOpenAI:
+	case AIProviderAnthropic, AIProviderOpenAI, AIProviderDeepSeek:
 		return c.APIKey != ""
 	case AIProviderOllama:
 		// Ollama doesn't need an API key
@@ -58,8 +61,11 @@ func (c *AIConfig) GetBaseURL() string {
 	if c.BaseURL != "" {
 		return c.BaseURL
 	}
-	if c.Provider == AIProviderOllama {
+	switch c.Provider {
+	case AIProviderOllama:
 		return DefaultOllamaBaseURL
+	case AIProviderDeepSeek:
+		return DefaultDeepSeekBaseURL
 	}
 	return ""
 }
@@ -76,6 +82,8 @@ func (c *AIConfig) GetModel() string {
 		return DefaultAIModelOpenAI
 	case AIProviderOllama:
 		return DefaultAIModelOllama
+	case AIProviderDeepSeek:
+		return DefaultAIModelDeepSeek
 	default:
 		return ""
 	}

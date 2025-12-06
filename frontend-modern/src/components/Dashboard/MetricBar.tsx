@@ -102,9 +102,9 @@ export function MetricBar(props: MetricBarProps) {
     <Show
       when={viewMode() === 'sparklines' && props.resourceId}
       fallback={
-        // Original progress bar mode - capped width for better appearance on wide screens
+        // Progress bar mode - scales to fill column width
         <div ref={containerRef} class="metric-text w-full h-4 flex items-center justify-center">
-          <div class={`relative w-full max-w-[140px] h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded ${props.class || ''}`}>
+          <div class={`relative w-full h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded ${props.class || ''}`}>
             <div class={`absolute top-0 left-0 h-full ${progressColorClass()}`} style={{ width: `${width()}%` }} />
             <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100 leading-none">
               <span class="flex items-center gap-1 whitespace-nowrap px-0.5">
@@ -120,19 +120,21 @@ export function MetricBar(props: MetricBarProps) {
         </div>
       }
     >
-      {/* Sparkline mode */}
-      <div class="metric-text w-full h-6 flex items-center gap-1.5">
-        <div class="flex-1 min-w-0">
-          <Sparkline
-            data={metricHistory()}
-            metric={sparklineMetric()}
-            width={0}
-            height={24}
-          />
+      {/* Sparkline mode - scales to fill column width, matching bar mode sizing */}
+      <div class="metric-text w-full h-6 flex items-center justify-center">
+        <div class="flex items-center gap-1.5 w-full">
+          <div class="flex-1 min-w-0 h-6">
+            <Sparkline
+              data={metricHistory()}
+              metric={sparklineMetric()}
+              width={0}
+              height={24}
+            />
+          </div>
+          <span class="text-[10px] font-medium text-gray-800 dark:text-gray-100 whitespace-nowrap flex-shrink-0 w-[35px] text-right">
+            {props.label}
+          </span>
         </div>
-        <span class="text-[10px] font-medium text-gray-800 dark:text-gray-100 whitespace-nowrap flex-shrink-0 min-w-[35px]">
-          {props.label}
-        </span>
       </div>
     </Show>
   );

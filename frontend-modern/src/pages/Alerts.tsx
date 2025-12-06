@@ -4,6 +4,7 @@ import type { JSX } from 'solid-js';
 import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
 import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
+import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButton';
 import type { RawOverrideConfig, PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -492,11 +493,11 @@ export function Alerts() {
   >({}); // Store raw config
 
   // Email configuration state moved to parent to persist across tab changes
-const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
-  enabled: false,
-  provider: '',
-  server: '', // Fixed: use 'server' not 'smtpHost'
-  port: 587, // Fixed: use 'port' not 'smtpPort'
+  const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
+    enabled: false,
+    provider: '',
+    server: '', // Fixed: use 'server' not 'smtpHost'
+    port: 587, // Fixed: use 'port' not 'smtpPort'
     username: '',
     password: '',
     from: '',
@@ -506,12 +507,12 @@ const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
     replyTo: '',
     maxRetries: 3,
     retryDelay: 5,
-  rateLimit: 60,
-});
+    rateLimit: 60,
+  });
 
-const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
-  createDefaultAppriseConfig(),
-);
+  const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
+    createDefaultAppriseConfig(),
+  );
 
   // Schedule configuration state moved to parent to persist across tab changes
   const [scheduleQuietHours, setScheduleQuietHours] =
@@ -782,7 +783,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
           const severityChanged =
             (newOverride.type === 'guest' || newOverride.type === 'dockerContainer') &&
             (newOverride.poweredOffSeverity ?? null) !==
-              (existing.poweredOffSeverity ?? null);
+            (existing.poweredOffSeverity ?? null);
           return (
             thresholdsChanged ||
             connectivityChanged ||
@@ -1432,24 +1433,24 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
     label: string;
     items: { id: AlertTab; label: string; icon: JSX.Element }[];
   }[] = [
-    {
-      id: 'status',
-      label: 'Status',
-      items: [
-        { id: 'overview', label: 'Overview', icon: <LayoutDashboard class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'history', label: 'History', icon: <History class="w-4 h-4" strokeWidth={2} /> },
-      ],
-    },
-    {
-      id: 'configuration',
-      label: 'Configuration',
-      items: [
-        { id: 'thresholds', label: 'Thresholds', icon: <Gauge class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'destinations', label: 'Notifications', icon: <Send class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'schedule', label: 'Schedule', icon: <Calendar class="w-4 h-4" strokeWidth={2} /> },
-      ],
-    },
-  ];
+      {
+        id: 'status',
+        label: 'Status',
+        items: [
+          { id: 'overview', label: 'Overview', icon: <LayoutDashboard class="w-4 h-4" strokeWidth={2} /> },
+          { id: 'history', label: 'History', icon: <History class="w-4 h-4" strokeWidth={2} /> },
+        ],
+      },
+      {
+        id: 'configuration',
+        label: 'Configuration',
+        items: [
+          { id: 'thresholds', label: 'Thresholds', icon: <Gauge class="w-4 h-4" strokeWidth={2} /> },
+          { id: 'destinations', label: 'Notifications', icon: <Send class="w-4 h-4" strokeWidth={2} /> },
+          { id: 'schedule', label: 'Schedule', icon: <Calendar class="w-4 h-4" strokeWidth={2} /> },
+        ],
+      },
+    ];
 
   const flatTabs = tabGroups.flatMap((group) => group.items);
   const [sidebarCollapsed, setSidebarCollapsed] = createSignal(true);
@@ -1467,9 +1468,8 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
           <Show when={activeTab() === 'overview'}>
             <div class="flex items-center gap-3">
               <span
-                class={`text-sm font-medium ${
-                  isAlertsActive() ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'
-                }`}
+                class={`text-sm font-medium ${isAlertsActive() ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'
+                  }`}
               >
                 {isAlertsActive() ? 'Alerts enabled' : 'Alerts disabled'}
               </span>
@@ -1489,14 +1489,12 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                   }}
                 />
                 <div
-                  class={`relative w-11 h-6 rounded-full transition ${
-                    isAlertsActive() ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
-                  } ${alertsActivation.isLoading() || isSwitchingActivation() ? 'opacity-50' : ''}`}
+                  class={`relative w-11 h-6 rounded-full transition ${isAlertsActive() ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                    } ${alertsActivation.isLoading() || isSwitchingActivation() ? 'opacity-50' : ''}`}
                 >
                   <span
-                    class={`absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white transition-all shadow ${
-                      isAlertsActive() ? 'translate-x-5' : 'translate-x-0'
-                    }`}
+                    class={`absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white transition-all shadow ${isAlertsActive() ? 'translate-x-5' : 'translate-x-0'
+                      }`}
                   />
                 </div>
               </label>
@@ -1745,247 +1743,244 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
         </Card>
       </Show>
 
-      <div class={`transition-opacity ${
-        isAlertsActive() ? 'opacity-100' : 'opacity-50 pointer-events-none'
-      }`}>
+      <div class={`transition-opacity ${isAlertsActive() ? 'opacity-100' : 'opacity-50 pointer-events-none'
+        }`}>
 
-      <Card padding="none" class="relative lg:flex">
-        <div
-          class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-300`}
-          onMouseEnter={() => setSidebarCollapsed(false)}
-          onMouseLeave={() => setSidebarCollapsed(true)}
-          aria-label="Alerts navigation"
-          aria-expanded={!sidebarCollapsed()}
-        >
-          <div class={`sticky top-24 ${sidebarCollapsed() ? 'px-2' : 'px-5'} py-6 space-y-6 transition-all duration-300`}>
-            <div id="alerts-sidebar-menu" class="space-y-6">
-              <For each={tabGroups}>
-                {(group) => (
-                  <div class="space-y-2">
-                    <Show when={!sidebarCollapsed()}>
-                      <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                        {group.label}
-                      </p>
-                    </Show>
-                    <div class="space-y-1.5">
-                      <For each={group.items}>
-                        {(item) => {
-                          const disabled = () => item.id !== 'overview' && !isAlertsActive();
-                          return (
-                            <button
-                              type="button"
-                              aria-current={activeTab() === item.id ? 'page' : undefined}
-                              class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${
-                                activeTab() === item.id
+        <Card padding="none" class="relative lg:flex">
+          <div
+            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-300`}
+            onMouseEnter={() => setSidebarCollapsed(false)}
+            onMouseLeave={() => setSidebarCollapsed(true)}
+            aria-label="Alerts navigation"
+            aria-expanded={!sidebarCollapsed()}
+          >
+            <div class={`sticky top-24 ${sidebarCollapsed() ? 'px-2' : 'px-5'} py-6 space-y-6 transition-all duration-300`}>
+              <div id="alerts-sidebar-menu" class="space-y-6">
+                <For each={tabGroups}>
+                  {(group) => (
+                    <div class="space-y-2">
+                      <Show when={!sidebarCollapsed()}>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                          {group.label}
+                        </p>
+                      </Show>
+                      <div class="space-y-1.5">
+                        <For each={group.items}>
+                          {(item) => {
+                            const disabled = () => item.id !== 'overview' && !isAlertsActive();
+                            return (
+                              <button
+                                type="button"
+                                aria-current={activeTab() === item.id ? 'page' : undefined}
+                                class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${activeTab() === item.id
                                   ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
                                   : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
-                              } ${disabled() ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
-                              disabled={disabled()}
-                              onClick={() => {
-                                if (disabled()) return;
-                                handleTabChange(item.id);
-                              }}
-                              title={
-                                sidebarCollapsed()
-                                  ? disabled()
-                                    ? 'Activate alerts to configure'
-                                    : item.label
-                                  : disabled()
-                                    ? 'Activate alerts to configure'
-                                    : undefined
-                              }
-                            >
-                              {item.icon}
-                              <Show when={!sidebarCollapsed()}>
-                                <span class="truncate">{item.label}</span>
-                              </Show>
-                            </button>
-                          );
-                        }}
-                      </For>
-                    </div>
-                  </div>
-                )}
-              </For>
-            </div>
-          </div>
-        </div>
-
-        <div class="flex-1 min-w-0">
-          <Show when={flatTabs.length > 0}>
-            <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
-              <div class="p-1">
-                <div
-                  class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto"
-                  style="-webkit-overflow-scrolling: touch;"
-                >
-                  <For each={flatTabs}>
-                    {(tab) => {
-                      const disabled = () => tab.id !== 'overview' && !isAlertsActive();
-                      return (
-                        <button
-                          type="button"
-                          class={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
-                            activeTab() === tab.id
-                              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                          } ${disabled() ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
-                          disabled={disabled()}
-                          onClick={() => {
-                            if (disabled()) return;
-                            handleTabChange(tab.id);
+                                  } ${disabled() ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+                                disabled={disabled()}
+                                onClick={() => {
+                                  if (disabled()) return;
+                                  handleTabChange(item.id);
+                                }}
+                                title={
+                                  sidebarCollapsed()
+                                    ? disabled()
+                                      ? 'Activate alerts to configure'
+                                      : item.label
+                                    : disabled()
+                                      ? 'Activate alerts to configure'
+                                      : undefined
+                                }
+                              >
+                                {item.icon}
+                                <Show when={!sidebarCollapsed()}>
+                                  <span class="truncate">{item.label}</span>
+                                </Show>
+                              </button>
+                            );
                           }}
-                          title={disabled() ? 'Activate alerts to configure' : undefined}
-                        >
-                          {tab.label}
-                        </button>
-                      );
-                    }}
-                  </For>
-                </div>
+                        </For>
+                      </div>
+                    </div>
+                  )}
+                </For>
               </div>
             </div>
-          </Show>
-
-          {/* Tab Content */}
-          <div class="p-3 sm:p-6">
-            <Show when={activeTab() === 'overview'}>
-              <OverviewTab
-                overrides={overrides()}
-                activeAlerts={activeAlerts}
-                updateAlert={updateAlert}
-              showQuickTip={showQuickTip}
-              dismissQuickTip={dismissQuickTip}
-              showAcknowledged={showAcknowledged}
-              setShowAcknowledged={setShowAcknowledged}
-            />
-          </Show>
-
-          <Show when={activeTab() === 'thresholds'}>
-            <ThresholdsTab
-              overrides={overrides}
-              setOverrides={setOverrides}
-              rawOverridesConfig={rawOverridesConfig}
-              setRawOverridesConfig={setRawOverridesConfig}
-              allGuests={allGuests}
-              state={state}
-              hosts={state.hosts || []}
-              guestDefaults={guestDefaults}
-              guestDisableConnectivity={guestDisableConnectivity}
-              setGuestDefaults={setGuestDefaults}
-              setGuestDisableConnectivity={setGuestDisableConnectivity}
-              guestPoweredOffSeverity={guestPoweredOffSeverity}
-              setGuestPoweredOffSeverity={setGuestPoweredOffSeverity}
-              nodeDefaults={nodeDefaults}
-              setNodeDefaults={setNodeDefaults}
-              hostDefaults={hostDefaults}
-              setHostDefaults={setHostDefaults}
-              dockerDefaults={dockerDefaults}
-              dockerDisableConnectivity={dockerDisableConnectivity}
-              setDockerDisableConnectivity={setDockerDisableConnectivity}
-              dockerPoweredOffSeverity={dockerPoweredOffSeverity}
-              setDockerPoweredOffSeverity={setDockerPoweredOffSeverity}
-              setDockerDefaults={setDockerDefaults}
-              dockerIgnoredPrefixes={dockerIgnoredPrefixes}
-              setDockerIgnoredPrefixes={setDockerIgnoredPrefixes}
-              storageDefault={storageDefault}
-              setStorageDefault={setStorageDefault}
-              resetGuestDefaults={resetGuestDefaults}
-              resetNodeDefaults={resetNodeDefaults}
-              resetHostDefaults={resetHostDefaults}
-              resetDockerDefaults={resetDockerDefaults}
-              resetDockerIgnoredPrefixes={resetDockerIgnoredPrefixes}
-              resetStorageDefault={resetStorageDefault}
-              resetSnapshotDefaults={resetSnapshotDefaults}
-              resetBackupDefaults={resetBackupDefaults}
-              factoryGuestDefaults={FACTORY_GUEST_DEFAULTS}
-              factoryNodeDefaults={FACTORY_NODE_DEFAULTS}
-              factoryHostDefaults={FACTORY_HOST_DEFAULTS}
-              factoryDockerDefaults={FACTORY_DOCKER_DEFAULTS}
-              factoryStorageDefault={FACTORY_STORAGE_DEFAULT}
-              snapshotFactoryDefaults={FACTORY_SNAPSHOT_DEFAULTS}
-              backupFactoryDefaults={FACTORY_BACKUP_DEFAULTS}
-              timeThresholds={timeThresholds}
-              metricTimeThresholds={metricTimeThresholds}
-              setMetricTimeThresholds={setMetricTimeThresholds}
-              backupDefaults={backupDefaults}
-              setBackupDefaults={setBackupDefaults}
-              snapshotDefaults={snapshotDefaults}
-              setSnapshotDefaults={setSnapshotDefaults}
-              pmgThresholds={pmgThresholds}
-              setPMGThresholds={setPMGThresholds}
-              activeAlerts={activeAlerts}
-              setHasUnsavedChanges={setHasUnsavedChanges}
-              hasUnsavedChanges={hasUnsavedChanges}
-              removeAlerts={removeAlerts}
-              disableAllNodes={disableAllNodes}
-              setDisableAllNodes={setDisableAllNodes}
-              disableAllGuests={disableAllGuests}
-              setDisableAllGuests={setDisableAllGuests}
-              disableAllHosts={disableAllHosts}
-              setDisableAllHosts={setDisableAllHosts}
-              disableAllStorage={disableAllStorage}
-              setDisableAllStorage={setDisableAllStorage}
-              disableAllPBS={disableAllPBS}
-              setDisableAllPBS={setDisableAllPBS}
-              disableAllPMG={disableAllPMG}
-              setDisableAllPMG={setDisableAllPMG}
-  disableAllDockerHosts={disableAllDockerHosts}
-  setDisableAllDockerHosts={setDisableAllDockerHosts}
-  disableAllDockerServices={disableAllDockerServices}
-  setDisableAllDockerServices={setDisableAllDockerServices}
-  disableAllDockerContainers={disableAllDockerContainers}
-  setDisableAllDockerContainers={setDisableAllDockerContainers}
-              disableAllNodesOffline={disableAllNodesOffline}
-              setDisableAllNodesOffline={setDisableAllNodesOffline}
-              disableAllGuestsOffline={disableAllGuestsOffline}
-              setDisableAllGuestsOffline={setDisableAllGuestsOffline}
-              disableAllHostsOffline={disableAllHostsOffline}
-              setDisableAllHostsOffline={setDisableAllHostsOffline}
-              disableAllPBSOffline={disableAllPBSOffline}
-              setDisableAllPBSOffline={setDisableAllPBSOffline}
-              disableAllPMGOffline={disableAllPMGOffline}
-              setDisableAllPMGOffline={setDisableAllPMGOffline}
-              disableAllDockerHostsOffline={disableAllDockerHostsOffline}
-              setDisableAllDockerHostsOffline={setDisableAllDockerHostsOffline}
-            />
-          </Show>
-
-          <Show when={activeTab() === 'destinations'}>
-            <DestinationsTab
-              ref={destinationsRef}
-              hasUnsavedChanges={hasUnsavedChanges}
-              setHasUnsavedChanges={setHasUnsavedChanges}
-              emailConfig={emailConfig}
-              setEmailConfig={setEmailConfig}
-              appriseConfig={appriseConfig}
-              setAppriseConfig={setAppriseConfig}
-            />
-          </Show>
-
-          <Show when={activeTab() === 'schedule'}>
-            <ScheduleTab
-              hasUnsavedChanges={hasUnsavedChanges}
-              setHasUnsavedChanges={setHasUnsavedChanges}
-              quietHours={scheduleQuietHours}
-              setQuietHours={setScheduleQuietHours}
-              cooldown={scheduleCooldown}
-              setCooldown={setScheduleCooldown}
-              grouping={scheduleGrouping}
-              setGrouping={setScheduleGrouping}
-              notifyOnResolve={notifyOnResolve}
-              setNotifyOnResolve={setNotifyOnResolve}
-              escalation={scheduleEscalation}
-              setEscalation={setScheduleEscalation}
-            />
-          </Show>
-
-          <Show when={activeTab() === 'history'}>
-            <HistoryTab />
-          </Show>
           </div>
-        </div>
-      </Card>
+
+          <div class="flex-1 min-w-0">
+            <Show when={flatTabs.length > 0}>
+              <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
+                <div class="p-1">
+                  <div
+                    class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto"
+                    style="-webkit-overflow-scrolling: touch;"
+                  >
+                    <For each={flatTabs}>
+                      {(tab) => {
+                        const disabled = () => tab.id !== 'overview' && !isAlertsActive();
+                        return (
+                          <button
+                            type="button"
+                            class={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all whitespace-nowrap ${activeTab() === tab.id
+                              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                              } ${disabled() ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+                            disabled={disabled()}
+                            onClick={() => {
+                              if (disabled()) return;
+                              handleTabChange(tab.id);
+                            }}
+                            title={disabled() ? 'Activate alerts to configure' : undefined}
+                          >
+                            {tab.label}
+                          </button>
+                        );
+                      }}
+                    </For>
+                  </div>
+                </div>
+              </div>
+            </Show>
+
+            {/* Tab Content */}
+            <div class="p-3 sm:p-6">
+              <Show when={activeTab() === 'overview'}>
+                <OverviewTab
+                  overrides={overrides()}
+                  activeAlerts={activeAlerts}
+                  updateAlert={updateAlert}
+                  showQuickTip={showQuickTip}
+                  dismissQuickTip={dismissQuickTip}
+                  showAcknowledged={showAcknowledged}
+                  setShowAcknowledged={setShowAcknowledged}
+                />
+              </Show>
+
+              <Show when={activeTab() === 'thresholds'}>
+                <ThresholdsTab
+                  overrides={overrides}
+                  setOverrides={setOverrides}
+                  rawOverridesConfig={rawOverridesConfig}
+                  setRawOverridesConfig={setRawOverridesConfig}
+                  allGuests={allGuests}
+                  state={state}
+                  hosts={state.hosts || []}
+                  guestDefaults={guestDefaults}
+                  guestDisableConnectivity={guestDisableConnectivity}
+                  setGuestDefaults={setGuestDefaults}
+                  setGuestDisableConnectivity={setGuestDisableConnectivity}
+                  guestPoweredOffSeverity={guestPoweredOffSeverity}
+                  setGuestPoweredOffSeverity={setGuestPoweredOffSeverity}
+                  nodeDefaults={nodeDefaults}
+                  setNodeDefaults={setNodeDefaults}
+                  hostDefaults={hostDefaults}
+                  setHostDefaults={setHostDefaults}
+                  dockerDefaults={dockerDefaults}
+                  dockerDisableConnectivity={dockerDisableConnectivity}
+                  setDockerDisableConnectivity={setDockerDisableConnectivity}
+                  dockerPoweredOffSeverity={dockerPoweredOffSeverity}
+                  setDockerPoweredOffSeverity={setDockerPoweredOffSeverity}
+                  setDockerDefaults={setDockerDefaults}
+                  dockerIgnoredPrefixes={dockerIgnoredPrefixes}
+                  setDockerIgnoredPrefixes={setDockerIgnoredPrefixes}
+                  storageDefault={storageDefault}
+                  setStorageDefault={setStorageDefault}
+                  resetGuestDefaults={resetGuestDefaults}
+                  resetNodeDefaults={resetNodeDefaults}
+                  resetHostDefaults={resetHostDefaults}
+                  resetDockerDefaults={resetDockerDefaults}
+                  resetDockerIgnoredPrefixes={resetDockerIgnoredPrefixes}
+                  resetStorageDefault={resetStorageDefault}
+                  resetSnapshotDefaults={resetSnapshotDefaults}
+                  resetBackupDefaults={resetBackupDefaults}
+                  factoryGuestDefaults={FACTORY_GUEST_DEFAULTS}
+                  factoryNodeDefaults={FACTORY_NODE_DEFAULTS}
+                  factoryHostDefaults={FACTORY_HOST_DEFAULTS}
+                  factoryDockerDefaults={FACTORY_DOCKER_DEFAULTS}
+                  factoryStorageDefault={FACTORY_STORAGE_DEFAULT}
+                  snapshotFactoryDefaults={FACTORY_SNAPSHOT_DEFAULTS}
+                  backupFactoryDefaults={FACTORY_BACKUP_DEFAULTS}
+                  timeThresholds={timeThresholds}
+                  metricTimeThresholds={metricTimeThresholds}
+                  setMetricTimeThresholds={setMetricTimeThresholds}
+                  backupDefaults={backupDefaults}
+                  setBackupDefaults={setBackupDefaults}
+                  snapshotDefaults={snapshotDefaults}
+                  setSnapshotDefaults={setSnapshotDefaults}
+                  pmgThresholds={pmgThresholds}
+                  setPMGThresholds={setPMGThresholds}
+                  activeAlerts={activeAlerts}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                  hasUnsavedChanges={hasUnsavedChanges}
+                  removeAlerts={removeAlerts}
+                  disableAllNodes={disableAllNodes}
+                  setDisableAllNodes={setDisableAllNodes}
+                  disableAllGuests={disableAllGuests}
+                  setDisableAllGuests={setDisableAllGuests}
+                  disableAllHosts={disableAllHosts}
+                  setDisableAllHosts={setDisableAllHosts}
+                  disableAllStorage={disableAllStorage}
+                  setDisableAllStorage={setDisableAllStorage}
+                  disableAllPBS={disableAllPBS}
+                  setDisableAllPBS={setDisableAllPBS}
+                  disableAllPMG={disableAllPMG}
+                  setDisableAllPMG={setDisableAllPMG}
+                  disableAllDockerHosts={disableAllDockerHosts}
+                  setDisableAllDockerHosts={setDisableAllDockerHosts}
+                  disableAllDockerServices={disableAllDockerServices}
+                  setDisableAllDockerServices={setDisableAllDockerServices}
+                  disableAllDockerContainers={disableAllDockerContainers}
+                  setDisableAllDockerContainers={setDisableAllDockerContainers}
+                  disableAllNodesOffline={disableAllNodesOffline}
+                  setDisableAllNodesOffline={setDisableAllNodesOffline}
+                  disableAllGuestsOffline={disableAllGuestsOffline}
+                  setDisableAllGuestsOffline={setDisableAllGuestsOffline}
+                  disableAllHostsOffline={disableAllHostsOffline}
+                  setDisableAllHostsOffline={setDisableAllHostsOffline}
+                  disableAllPBSOffline={disableAllPBSOffline}
+                  setDisableAllPBSOffline={setDisableAllPBSOffline}
+                  disableAllPMGOffline={disableAllPMGOffline}
+                  setDisableAllPMGOffline={setDisableAllPMGOffline}
+                  disableAllDockerHostsOffline={disableAllDockerHostsOffline}
+                  setDisableAllDockerHostsOffline={setDisableAllDockerHostsOffline}
+                />
+              </Show>
+
+              <Show when={activeTab() === 'destinations'}>
+                <DestinationsTab
+                  ref={destinationsRef}
+                  hasUnsavedChanges={hasUnsavedChanges}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                  emailConfig={emailConfig}
+                  setEmailConfig={setEmailConfig}
+                  appriseConfig={appriseConfig}
+                  setAppriseConfig={setAppriseConfig}
+                />
+              </Show>
+
+              <Show when={activeTab() === 'schedule'}>
+                <ScheduleTab
+                  hasUnsavedChanges={hasUnsavedChanges}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                  quietHours={scheduleQuietHours}
+                  setQuietHours={setScheduleQuietHours}
+                  cooldown={scheduleCooldown}
+                  setCooldown={setScheduleCooldown}
+                  grouping={scheduleGrouping}
+                  setGrouping={setScheduleGrouping}
+                  notifyOnResolve={notifyOnResolve}
+                  setNotifyOnResolve={setNotifyOnResolve}
+                  escalation={scheduleEscalation}
+                  setEscalation={setScheduleEscalation}
+                />
+              </Show>
+
+              <Show when={activeTab() === 'history'}>
+                <HistoryTab />
+              </Show>
+            </div>
+          </div>
+        </Card>
       </div>
     </div>
   );
@@ -2230,27 +2225,24 @@ function OverviewTab(props: {
             <For each={filteredAlerts()}>
               {(alert) => (
                 <div
-                  class={`border rounded-lg p-4 transition-all ${
-                    processingAlerts().has(alert.id) ? 'opacity-50' : ''
-                  } ${
-                    alert.acknowledged
+                  class={`border rounded-lg p-4 transition-all ${processingAlerts().has(alert.id) ? 'opacity-50' : ''
+                    } ${alert.acknowledged
                       ? 'opacity-60 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20'
                       : alert.level === 'critical'
                         ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
                         : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
-                  }`}
+                    }`}
                 >
                   <div class="flex flex-col sm:flex-row sm:items-start">
                     <div class="flex items-start flex-1">
                       {/* Status icon */}
                       <div
-                        class={`mr-3 mt-0.5 transition-all ${
-                          alert.acknowledged
-                            ? 'text-green-600 dark:text-green-400'
-                            : alert.level === 'critical'
-                              ? 'text-red-600 dark:text-red-400'
-                              : 'text-yellow-600 dark:text-yellow-400'
-                        }`}
+                        class={`mr-3 mt-0.5 transition-all ${alert.acknowledged
+                          ? 'text-green-600 dark:text-green-400'
+                          : alert.level === 'critical'
+                            ? 'text-red-600 dark:text-red-400'
+                            : 'text-yellow-600 dark:text-yellow-400'
+                          }`}
                       >
                         {alert.acknowledged ? (
                           // Checkmark for acknowledged
@@ -2287,11 +2279,10 @@ function OverviewTab(props: {
                       <div class="flex-1 min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
                           <span
-                            class={`text-sm font-medium truncate ${
-                              alert.level === 'critical'
-                                ? 'text-red-700 dark:text-red-400'
-                                : 'text-yellow-700 dark:text-yellow-400'
-                            }`}
+                            class={`text-sm font-medium truncate ${alert.level === 'critical'
+                              ? 'text-red-700 dark:text-red-400'
+                              : 'text-yellow-700 dark:text-yellow-400'
+                              }`}
                           >
                             {alert.resourceName}
                           </span>
@@ -2319,11 +2310,10 @@ function OverviewTab(props: {
                     </div>
                     <div class="flex gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start">
                       <button
-                        class={`px-3 py-1.5 text-xs font-medium border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                          alert.acknowledged
-                            ? 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                            : 'bg-white dark:bg-gray-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
-                        }`}
+                        class={`px-3 py-1.5 text-xs font-medium border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${alert.acknowledged
+                          ? 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                          : 'bg-white dark:bg-gray-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
+                          }`}
                         disabled={processingAlerts().has(alert.id)}
                         onClick={async (e) => {
                           e.preventDefault();
@@ -2385,6 +2375,11 @@ function OverviewTab(props: {
                             ? 'Unacknowledge'
                             : 'Acknowledge'}
                       </button>
+                      <InvestigateAlertButton
+                        alert={alert}
+                        variant="text"
+                        size="sm"
+                      />
                     </div>
                   </div>
                 </div>
@@ -2452,37 +2447,37 @@ interface ThresholdsTabProps {
   setDockerDefaults: (
     value:
       | {
-          cpu: number;
-          memory: number;
-          disk: number;
-          restartCount: number;
-          restartWindow: number;
-          memoryWarnPct: number;
-          memoryCriticalPct: number;
-          serviceWarnGapPercent: number;
-          serviceCriticalGapPercent: number;
-        }
+        cpu: number;
+        memory: number;
+        disk: number;
+        restartCount: number;
+        restartWindow: number;
+        memoryWarnPct: number;
+        memoryCriticalPct: number;
+        serviceWarnGapPercent: number;
+        serviceCriticalGapPercent: number;
+      }
       | ((prev: {
-          cpu: number;
-          memory: number;
-          disk: number;
-          restartCount: number;
-          restartWindow: number;
-          memoryWarnPct: number;
-          memoryCriticalPct: number;
-          serviceWarnGapPercent: number;
-          serviceCriticalGapPercent: number;
-        }) => {
-          cpu: number;
-          memory: number;
-          disk: number;
-          restartCount: number;
-          restartWindow: number;
-          memoryWarnPct: number;
-          memoryCriticalPct: number;
-          serviceWarnGapPercent: number;
-          serviceCriticalGapPercent: number;
-        }),
+        cpu: number;
+        memory: number;
+        disk: number;
+        restartCount: number;
+        restartWindow: number;
+        memoryWarnPct: number;
+        memoryCriticalPct: number;
+        serviceWarnGapPercent: number;
+        serviceCriticalGapPercent: number;
+      }) => {
+        cpu: number;
+        memory: number;
+        disk: number;
+        restartCount: number;
+        restartWindow: number;
+        memoryWarnPct: number;
+        memoryCriticalPct: number;
+        serviceWarnGapPercent: number;
+        serviceCriticalGapPercent: number;
+      }),
   ) => void;
   setDockerDisableConnectivity: (value: boolean) => void;
   setDockerPoweredOffSeverity: (value: 'warning' | 'critical') => void;
@@ -3177,22 +3172,22 @@ function ScheduleTab(props: ScheduleTabProps) {
     label: string;
     description: string;
   }> = [
-    {
-      key: 'performance',
-      label: 'Performance alerts',
-      description: 'CPU, memory, disk, and network thresholds stay quiet.',
-    },
-    {
-      key: 'storage',
-      label: 'Storage alerts',
-      description: 'Silence storage usage, disk health, and ZFS events.',
-    },
-    {
-      key: 'offline',
-      label: 'Offline & power state',
-      description: 'Skip connectivity and powered-off alerts during backups.',
-    },
-  ];
+      {
+        key: 'performance',
+        label: 'Performance alerts',
+        description: 'CPU, memory, disk, and network thresholds stay quiet.',
+      },
+      {
+        key: 'storage',
+        label: 'Storage alerts',
+        description: 'Silence storage usage, disk health, and ZFS events.',
+      },
+      {
+        key: 'offline',
+        label: 'Offline & power state',
+        description: 'Skip connectivity and powered-off alerts during backups.',
+      },
+    ];
 
   const days = [
     { id: 'monday', label: 'M', fullLabel: 'Monday' },
@@ -3322,11 +3317,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                           props.setHasUnsavedChanges(true);
                         }}
                         title={day.fullLabel}
-                        class={`px-2 py-2 text-xs font-medium transition-all duration-200 ${
-                          quietHours().days[day.id]
-                            ? 'rounded-md bg-blue-500 text-white shadow-sm'
-                            : 'rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600'
-                        }`}
+                        class={`px-2 py-2 text-xs font-medium transition-all duration-200 ${quietHours().days[day.id]
+                          ? 'rounded-md bg-blue-500 text-white shadow-sm'
+                          : 'rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600'
+                          }`}
                       >
                         {day.label}
                       </button>
@@ -3374,11 +3368,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                   <For each={quietHourSuppressOptions}>
                     {(option) => (
                       <label
-                        class={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-colors ${
-                          quietHours().suppress[option.key]
-                            ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500/10'
-                            : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
-                        }`}
+                        class={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-colors ${quietHours().suppress[option.key]
+                          ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500/10'
+                          : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
+                          }`}
                       >
                         <input
                           type="checkbox"
@@ -3396,11 +3389,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                           class="sr-only"
                         />
                         <div
-                          class={`mt-1 flex h-4 w-4 items-center justify-center rounded border-2 ${
-                            quietHours().suppress[option.key]
-                              ? 'border-blue-500 bg-blue-500'
-                              : 'border-gray-300 dark:border-gray-600'
-                          }`}
+                          class={`mt-1 flex h-4 w-4 items-center justify-center rounded border-2 ${quietHours().suppress[option.key]
+                            ? 'border-blue-500 bg-blue-500'
+                            : 'border-gray-300 dark:border-gray-600'
+                            }`}
                         >
                           <Show when={quietHours().suppress[option.key]}>
                             <svg
@@ -3579,11 +3571,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                 </span>
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label
-                    class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${
-                      grouping().byNode
-                        ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
-                        : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
-                    }`}
+                    class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${grouping().byNode
+                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
+                      : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
+                      }`}
                   >
                     <input
                       type="checkbox"
@@ -3595,11 +3586,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                       class="sr-only"
                     />
                     <div
-                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${
-                        grouping().byNode
-                          ? 'border-blue-500 bg-blue-500'
-                          : 'border-gray-300 dark:border-gray-600'
-                      }`}
+                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${grouping().byNode
+                        ? 'border-blue-500 bg-blue-500'
+                        : 'border-gray-300 dark:border-gray-600'
+                        }`}
                     >
                       <Show when={grouping().byNode}>
                         <svg
@@ -3619,11 +3609,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                   </label>
 
                   <label
-                    class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${
-                      grouping().byGuest
-                        ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
-                        : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
-                    }`}
+                    class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${grouping().byGuest
+                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
+                      : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
+                      }`}
                   >
                     <input
                       type="checkbox"
@@ -3635,11 +3624,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                       class="sr-only"
                     />
                     <div
-                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${
-                        grouping().byGuest
-                          ? 'border-blue-500 bg-blue-500'
-                          : 'border-gray-300 dark:border-gray-600'
-                      }`}
+                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${grouping().byGuest
+                        ? 'border-blue-500 bg-blue-500'
+                        : 'border-gray-300 dark:border-gray-600'
+                        }`}
                     >
                       <Show when={grouping().byGuest}>
                         <svg
@@ -4834,6 +4822,9 @@ function HistoryTab() {
                       <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Node
                       </th>
+                      <th class="p-1 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -4843,7 +4834,7 @@ function HistoryTab() {
                           {/* Date divider */}
                           <tr class="bg-gray-50 dark:bg-gray-900/40">
                             <td
-                              colspan="8"
+                              colspan="9"
                               class="py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
                             >
                               <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
@@ -4862,9 +4853,8 @@ function HistoryTab() {
                           <For each={group.alerts}>
                             {(alert) => (
                               <tr
-                                class={`border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                                  alert.status === 'active' ? 'bg-red-50 dark:bg-red-900/10' : ''
-                                }`}
+                                class={`border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 ${alert.status === 'active' ? 'bg-red-50 dark:bg-red-900/10' : ''
+                                  }`}
                               >
                                 {/* Timestamp */}
                                 <td class="p-1 px-2 text-gray-600 dark:text-gray-400 font-mono">
@@ -4882,17 +4872,16 @@ function HistoryTab() {
                                 {/* Type */}
                                 <td class="p-1 px-2">
                                   <span
-                                    class={`text-xs px-1 py-0.5 rounded ${
-                                      alert.resourceType === 'VM'
-                                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                                        : alert.resourceType === 'CT'
-                                          ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
-                                          : alert.resourceType === 'Node'
-                                            ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
-                                            : alert.resourceType === 'Storage'
-                                              ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
-                                              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                    }`}
+                                    class={`text-xs px-1 py-0.5 rounded ${alert.resourceType === 'VM'
+                                      ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                                      : alert.resourceType === 'CT'
+                                        ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+                                        : alert.resourceType === 'Node'
+                                          ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
+                                          : alert.resourceType === 'Storage'
+                                            ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                      }`}
                                   >
                                     {alert.type}
                                   </span>
@@ -4901,11 +4890,10 @@ function HistoryTab() {
                                 {/* Severity */}
                                 <td class="p-1 px-2 text-center">
                                   <span
-                                    class={`text-xs px-2 py-0.5 rounded font-medium ${
-                                      alert.level === 'critical'
-                                        ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
-                                        : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
-                                    }`}
+                                    class={`text-xs px-2 py-0.5 rounded font-medium ${alert.level === 'critical'
+                                      ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                      : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                                      }`}
                                   >
                                     {alert.level}
                                   </span>
@@ -4927,13 +4915,12 @@ function HistoryTab() {
                                 {/* Status */}
                                 <td class="p-1 px-2 text-center">
                                   <span
-                                    class={`text-xs px-2 py-0.5 rounded ${
-                                      alert.status === 'active'
-                                        ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 font-medium'
-                                        : alert.status === 'acknowledged'
-                                          ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
-                                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                    }`}
+                                    class={`text-xs px-2 py-0.5 rounded ${alert.status === 'active'
+                                      ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 font-medium'
+                                      : alert.status === 'acknowledged'
+                                        ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                      }`}
                                   >
                                     {alert.status}
                                   </span>
@@ -4942,6 +4929,31 @@ function HistoryTab() {
                                 {/* Node */}
                                 <td class="p-1 px-2 text-gray-600 dark:text-gray-400 truncate">
                                   {alert.node || '—'}
+                                </td>
+
+                                {/* Actions */}
+                                <td class="p-1 px-2 text-center">
+                                  <Show when={alert.status === 'active' || alert.status === 'acknowledged'}>
+                                    <InvestigateAlertButton
+                                      alert={{
+                                        id: alert.id,
+                                        type: alert.type,
+                                        level: alert.level as 'warning' | 'critical',
+                                        resourceId: alert.resourceId,
+                                        resourceName: alert.resourceName,
+                                        node: alert.node,
+                                        instance: '',
+                                        message: alert.message,
+                                        value: 0,
+                                        threshold: 0,
+                                        startTime: alert.startTime,
+                                        lastSeen: alert.startTime,
+                                        acknowledged: alert.status === 'acknowledged',
+                                      }}
+                                      variant="icon"
+                                      size="sm"
+                                    />
+                                  </Show>
                                 </td>
                               </tr>
                             )}

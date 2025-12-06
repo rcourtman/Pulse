@@ -70,20 +70,25 @@ export default defineConfig({
           });
         },
       },
+      // SSE endpoint for AI chat streaming
       '/api/ai/execute/stream': {
         target: backendUrl,
         changeOrigin: true,
         // SSE requires special handling to prevent proxy timeouts
-        // Set timeout to 10 minutes (600000ms) for long-running AI requests
-        timeout: 600000,
-        proxyTimeout: 600000,
+        // Set timeout to 0 to completely disable
+        timeout: 0,
+        proxyTimeout: 0,
         configure: (proxy, _options) => {
+          // Completely disable http-proxy internal timeouts
+          proxy.options.timeout = 0;
+          proxy.options.proxyTimeout = 0;
+
           // Set proxy-level timeouts
           proxy.on('proxyReq', (proxyReq, req, res) => {
             // Disable socket timeouts for SSE
             req.socket.setTimeout(0);
             req.socket.setNoDelay(true);
-            req.socket.setKeepAlive(true);
+            req.socket.setKeepAlive(true, 30000);
             // Also set on the proxy request
             proxyReq.socket?.setTimeout(0);
           });
@@ -91,12 +96,40 @@ export default defineConfig({
             // Disable response socket timeout
             res.socket?.setTimeout(0);
             res.socket?.setNoDelay(true);
-            res.socket?.setKeepAlive(true);
+            res.socket?.setKeepAlive(true, 30000);
             // Also disable on proxy response socket
             proxyRes.socket?.setTimeout(0);
           });
           proxy.on('error', (err, req, res) => {
             console.error('[SSE Proxy Error]', err.message);
+          });
+        },
+      },
+      // SSE endpoint for AI alert investigation (one-click investigate from alerts page)
+      '/api/ai/investigate-alert': {
+        target: backendUrl,
+        changeOrigin: true,
+        // SSE requires special handling to prevent proxy timeouts
+        timeout: 0,
+        proxyTimeout: 0,
+        configure: (proxy, _options) => {
+          proxy.options.timeout = 0;
+          proxy.options.proxyTimeout = 0;
+
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            req.socket.setTimeout(0);
+            req.socket.setNoDelay(true);
+            req.socket.setKeepAlive(true, 30000);
+            proxyReq.socket?.setTimeout(0);
+          });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            res.socket?.setTimeout(0);
+            res.socket?.setNoDelay(true);
+            res.socket?.setKeepAlive(true, 30000);
+            proxyRes.socket?.setTimeout(0);
+          });
+          proxy.on('error', (err, req, res) => {
+            console.error('[SSE Proxy Error - Investigate Alert]', err.message);
           });
         },
       },

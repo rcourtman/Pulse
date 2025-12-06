@@ -183,8 +183,8 @@ func runServer() {
 		Addr:              fmt.Sprintf("%s:%d", cfg.BackendHost, cfg.FrontendPort),
 		Handler:           router.Handler(),
 		ReadHeaderTimeout: 15 * time.Second,
-		WriteTimeout:      60 * time.Second, // Increased from 15s to 60s to support large JSON responses (e.g., mock data)
-		IdleTimeout:       60 * time.Second,
+		WriteTimeout:      0, // Disabled to support SSE/streaming - each handler manages its own deadline
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Start config watcher for .env file changes

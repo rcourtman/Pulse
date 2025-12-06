@@ -46,11 +46,125 @@ export class AIAPI {
     target_id: string;
     run_on_host: boolean;
     vmid?: string;
+    target_host?: string; // Explicit host for command routing
   }): Promise<{ output: string; success: boolean; error?: string }> {
+    // Ensure run_on_host is explicitly a boolean (not undefined)
+    const sanitizedRequest = {
+      command: request.command,
+      target_type: request.target_type,
+      target_id: request.target_id,
+      run_on_host: Boolean(request.run_on_host),
+      ...(request.vmid ? { vmid: String(request.vmid) } : {}),
+      ...(request.target_host ? { target_host: request.target_host } : {}),
+    };
+    const body = JSON.stringify(sanitizedRequest);
+    console.log('[AI] runCommand request:', request);
+    console.log('[AI] runCommand sanitized:', sanitizedRequest);
+    console.log('[AI] runCommand body:', body);
+    console.log('[AI] runCommand body length:', body.length);
     return apiFetchJSON(`${this.baseUrl}/ai/run-command`, {
       method: 'POST',
-      body: JSON.stringify(request),
+      body,
     }) as Promise<{ output: string; success: boolean; error?: string }>;
+  }
+
+
+  // Investigate an alert with AI (one-click investigation)
+  static async investigateAlert(
+    request: {
+      alert_id: string;
+      resource_id: string;
+      resource_name: string;
+      resource_type: string;
+      alert_type: string;
+      level: string;
+      value: number;
+      threshold: number;
+      message: string;
+      duration: string;
+      node?: string;
+      vmid?: number;
+    },
+    onEvent: (event: AIStreamEvent) => void,
+    signal?: AbortSignal
+  ): Promise<void> {
+    console.log('[AI] Starting alert investigation:', request);
+
+    const response = await apiFetch(`${this.baseUrl}/ai/investigate-alert`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      },
+      signal,
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Request failed with status ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No response body');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    // 5 minutes timeout - Opus models can take a long time
+    const STREAM_TIMEOUT_MS = 300000;
+    let lastEventTime = Date.now();
+
+    try {
+      while (true) {
+        if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
+          console.warn('[AI] Alert investigation stream timeout');
+          break;
+        }
+
+        const readPromise = reader.read();
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Read timeout')), STREAM_TIMEOUT_MS);
+        });
+
+        let result: ReadableStreamReadResult<Uint8Array>;
+        try {
+          result = await Promise.race([readPromise, timeoutPromise]);
+        } catch (e) {
+          if ((e as Error).message === 'Read timeout') break;
+          throw e;
+        }
+
+        const { done, value } = result;
+        if (done) break;
+
+        lastEventTime = Date.now();
+        buffer += decoder.decode(value, { stream: true });
+
+        const normalizedBuffer = buffer.replace(/\r\n/g, '\n');
+        const messages = normalizedBuffer.split('\n\n');
+        buffer = messages.pop() || '';
+
+        for (const message of messages) {
+          if (!message.trim() || message.trim().startsWith(':')) continue;
+
+          const dataLines = message.split('\n').filter((line) => line.startsWith('data: '));
+          for (const line of dataLines) {
+            try {
+              const jsonStr = line.slice(6);
+              if (!jsonStr.trim()) continue;
+              const data = JSON.parse(jsonStr);
+              onEvent(data as AIStreamEvent);
+            } catch (e) {
+              console.error('[AI] Failed to parse investigation event:', e);
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
   }
 
   // Execute an AI prompt with streaming
@@ -88,30 +202,89 @@ export class AIAPI {
 
     const decoder = new TextDecoder();
     let buffer = '';
+    let lastEventTime = Date.now();
+    let receivedComplete = false;
+    let receivedDone = false;
+
+    // Timeout to detect stalled streams (5 minutes - Opus models can take a long time)
+    const STREAM_TIMEOUT_MS = 300000;
 
     console.log('[AI SSE] Starting to read stream...');
 
     try {
       while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          console.log('[AI SSE] Stream ended');
+        // Check for stream timeout
+        if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
+          console.warn('[AI SSE] Stream timeout - no data for', STREAM_TIMEOUT_MS / 1000, 'seconds');
           break;
         }
 
+        // Create a promise with timeout for the read operation
+        const readPromise = reader.read();
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Read timeout')), STREAM_TIMEOUT_MS);
+        });
+
+        let result: ReadableStreamReadResult<Uint8Array>;
+        try {
+          result = await Promise.race([readPromise, timeoutPromise]);
+        } catch (e) {
+          if ((e as Error).message === 'Read timeout') {
+            console.warn('[AI SSE] Read timeout, ending stream');
+            break;
+          }
+          throw e;
+        }
+
+        const { done, value } = result;
+        if (done) {
+          console.log('[AI SSE] Stream ended normally');
+          break;
+        }
+
+        lastEventTime = Date.now();
         const chunk = decoder.decode(value, { stream: true });
-        console.log('[AI SSE] Received chunk:', chunk.length, 'bytes');
+
+        // Log chunk info only if it's not just a heartbeat
+        if (!chunk.includes(': heartbeat')) {
+          console.log('[AI SSE] Received chunk:', chunk.length, 'bytes');
+        }
+
         buffer += chunk;
 
-        // Process complete SSE messages
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || ''; // Keep incomplete message in buffer
+        // Process complete SSE messages (separated by double newlines)
+        // Handle both \n\n and \r\n\r\n for cross-platform compatibility
+        const normalizedBuffer = buffer.replace(/\r\n/g, '\n');
+        const messages = normalizedBuffer.split('\n\n');
+        buffer = messages.pop() || ''; // Keep incomplete message in buffer
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
+        for (const message of messages) {
+          // Skip empty messages and heartbeat comments
+          if (!message.trim() || message.trim().startsWith(':')) {
+            if (message.includes('heartbeat')) {
+              console.debug('[AI SSE] Received heartbeat');
+            }
+            continue;
+          }
+
+          // Parse SSE message (can have multiple lines, look for data: prefix)
+          const dataLines = message.split('\n').filter(line => line.startsWith('data: '));
+          for (const line of dataLines) {
             try {
-              const data = JSON.parse(line.slice(6));
+              const jsonStr = line.slice(6); // Remove 'data: ' prefix
+              if (!jsonStr.trim()) continue;
+
+              const data = JSON.parse(jsonStr);
               console.log('[AI SSE] Parsed event:', data.type, data);
+
+              // Track completion events
+              if (data.type === 'complete') {
+                receivedComplete = true;
+              }
+              if (data.type === 'done') {
+                receivedDone = true;
+              }
+
               onEvent(data as AIStreamEvent);
             } catch (e) {
               console.error('[AI SSE] Failed to parse event:', e, line);
@@ -119,9 +292,33 @@ export class AIAPI {
           }
         }
       }
+
+      // Process any remaining buffer content
+      if (buffer.trim() && buffer.trim().startsWith('data: ')) {
+        try {
+          const jsonStr = buffer.slice(6);
+          if (jsonStr.trim()) {
+            const data = JSON.parse(jsonStr);
+            console.log('[AI SSE] Parsed final buffered event:', data.type);
+            onEvent(data as AIStreamEvent);
+            if (data.type === 'complete') receivedComplete = true;
+            if (data.type === 'done') receivedDone = true;
+          }
+        } catch (e) {
+          console.warn('[AI SSE] Could not parse remaining buffer:', buffer.substring(0, 100));
+        }
+      }
+
+      // If we ended without receiving a done event, send a synthetic one
+      // This ensures the UI properly clears the streaming state
+      if (!receivedDone) {
+        console.warn('[AI SSE] Stream ended without done event, sending synthetic done');
+        onEvent({ type: 'done', data: undefined });
+      }
+
     } finally {
       reader.releaseLock();
-      console.log('[AI SSE] Reader released');
+      console.log('[AI SSE] Reader released, receivedComplete:', receivedComplete, 'receivedDone:', receivedDone);
     }
   }
 }

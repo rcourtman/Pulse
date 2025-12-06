@@ -842,6 +842,26 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 	// Update state with all VMs
 	m.state.UpdateVMsForInstance(instanceName, allVMs)
 
+	// Record guest metrics history for running VMs (enables sparkline/trends view)
+	now := time.Now()
+	for _, vm := range allVMs {
+		if vm.Status == "running" {
+			m.metricsHistory.AddGuestMetric(vm.ID, "cpu", vm.CPU*100, now)
+			m.metricsHistory.AddGuestMetric(vm.ID, "memory", vm.Memory.Usage, now)
+			if vm.Disk.Usage >= 0 {
+				m.metricsHistory.AddGuestMetric(vm.ID, "disk", vm.Disk.Usage, now)
+			}
+			// Also write to persistent store
+			if m.metricsStore != nil {
+				m.metricsStore.Write("vm", vm.ID, "cpu", vm.CPU*100, now)
+				m.metricsStore.Write("vm", vm.ID, "memory", vm.Memory.Usage, now)
+				if vm.Disk.Usage >= 0 {
+					m.metricsStore.Write("vm", vm.ID, "disk", vm.Disk.Usage, now)
+				}
+			}
+		}
+	}
+
 	duration := time.Since(startTime)
 	log.Info().
 		Str("instance", instanceName).
@@ -1108,6 +1128,26 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 
 	// Update state with all containers
 	m.state.UpdateContainersForInstance(instanceName, allContainers)
+
+	// Record guest metrics history for running containers (enables sparkline/trends view)
+	now := time.Now()
+	for _, ct := range allContainers {
+		if ct.Status == "running" {
+			m.metricsHistory.AddGuestMetric(ct.ID, "cpu", ct.CPU*100, now)
+			m.metricsHistory.AddGuestMetric(ct.ID, "memory", ct.Memory.Usage, now)
+			if ct.Disk.Usage >= 0 {
+				m.metricsHistory.AddGuestMetric(ct.ID, "disk", ct.Disk.Usage, now)
+			}
+			// Also write to persistent store
+			if m.metricsStore != nil {
+				m.metricsStore.Write("container", ct.ID, "cpu", ct.CPU*100, now)
+				m.metricsStore.Write("container", ct.ID, "memory", ct.Memory.Usage, now)
+				if ct.Disk.Usage >= 0 {
+					m.metricsStore.Write("container", ct.ID, "disk", ct.Disk.Usage, now)
+				}
+			}
+		}
+	}
 
 	duration := time.Since(startTime)
 	log.Info().

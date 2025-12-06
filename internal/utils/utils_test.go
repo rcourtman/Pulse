@@ -307,6 +307,12 @@ func TestNormalizeVersion(t *testing.T) {
 		{"v", ""},
 		{" ", ""},
 		{"vv4.33.1", "v4.33.1"}, // Only removes one v
+
+		// Build metadata (semver +suffix should be stripped)
+		{"4.36.2+git.14.g469307d6.dirty", "4.36.2"},
+		{"v4.36.2+build123", "4.36.2"},
+		{"1.0.0+20231215", "1.0.0"},
+		{"v1.0.0-rc1+build.456", "1.0.0-rc1"},
 	}
 
 	for _, tc := range tests {
@@ -353,6 +359,14 @@ func TestCompareVersions(t *testing.T) {
 		{"0.0.1", "0.0.0", 1},
 		{"0.0.0", "0.0.1", -1},
 		{"1.0", "0.9.9", 1},
+
+		// Build metadata should be ignored (semver +suffix)
+		// This is the critical fix for the infinite agent update loop bug
+		{"4.36.2+git.14.g469307d6.dirty", "4.36.2", 0},   // Dirty == clean
+		{"4.36.2", "4.36.2+git.14.g469307d6.dirty", 0},   // Clean == dirty
+		{"v4.36.2+build123", "v4.36.2", 0},               // With v prefix
+		{"4.36.3", "4.36.2+git.14.g469307d6.dirty", 1},   // Newer beats dirty
+		{"4.36.2+git.14.g469307d6.dirty", "4.36.3", -1},  // Dirty older than newer
 	}
 
 	for _, tc := range tests {

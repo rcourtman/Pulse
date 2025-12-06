@@ -201,6 +201,7 @@ type ViewMode = 'all' | 'vm' | 'lxc';
 type StatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 type BackupMode = 'all' | 'needs-backup';
 type GroupingMode = 'grouped' | 'flat';
+type ProblemsMode = 'all' | 'problems';
 
 export function Dashboard(props: DashboardProps) {
   const navigate = useNavigate();
@@ -251,6 +252,15 @@ export function Dashboard(props: DashboardProps) {
     'grouped',
     {
       deserialize: (raw) => (raw === 'grouped' || raw === 'flat' ? raw : 'grouped'),
+    },
+  );
+
+  // Problems mode - show only guests with issues
+  const [problemsMode, setProblemsMode] = usePersistentSignal<ProblemsMode>(
+    'dashboardProblemsMode',
+    'all',
+    {
+      deserialize: (raw) => (raw === 'all' || raw === 'problems' ? raw : 'all'),
     },
   );
 
@@ -444,7 +454,8 @@ export function Dashboard(props: DashboardProps) {
           selectedNode() !== null ||
           viewMode() !== 'all' ||
           statusMode() !== 'all' ||
-          backupMode() !== 'all';
+          backupMode() !== 'all' ||
+          problemsMode() !== 'all';
 
         if (hasActiveFilters) {
           // Clear ALL filters including search text, tag filters, node selection, and view modes
@@ -456,6 +467,7 @@ export function Dashboard(props: DashboardProps) {
           setViewMode('all');
           setStatusMode('all');
           setBackupMode('all');
+          setProblemsMode('all');
 
           // Blur the search input if it's focused
           if (searchInputRef && document.activeElement === searchInputRef) {
@@ -487,6 +499,32 @@ export function Dashboard(props: DashboardProps) {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
+  });
+
+  // Compute guests with problems - used for AI investigation regardless of filter state
+  const problemGuests = createMemo(() => {
+    return allGuests().filter((g) => {
+      // Skip templates
+      if (g.template) return false;
+
+      // Check for degraded status
+      const status = (g.status || '').toLowerCase();
+      const isDegraded = DEGRADED_HEALTH_STATUSES.has(status) ||
+        (status !== 'running' && !OFFLINE_HEALTH_STATUSES.has(status) && status !== 'stopped');
+      if (isDegraded) return true;
+
+      // Check for backup issues
+      const backupInfo = getBackupInfo(g.lastBackup);
+      if (backupInfo.status === 'stale' || backupInfo.status === 'critical' || backupInfo.status === 'never') {
+        return true;
+      }
+
+      // Check for high resource usage (>90%)
+      if (g.cpu > 0.9) return true;
+      if (g.memory && g.memory.usage && g.memory.usage > 90) return true;
+
+      return false;
+    });
   });
 
   // Filter guests based on current settings
@@ -535,6 +573,32 @@ export function Dashboard(props: DashboardProps) {
         const backupInfo = getBackupInfo(g.lastBackup);
         // Show guests that need backup: stale, critical, or never backed up
         return backupInfo.status === 'stale' || backupInfo.status === 'critical' || backupInfo.status === 'never';
+      });
+    }
+
+    // Filter by problems mode - show guests that need attention
+    if (problemsMode() === 'problems') {
+      guests = guests.filter((g) => {
+        // Skip templates
+        if (g.template) return false;
+
+        // Check for degraded status
+        const status = (g.status || '').toLowerCase();
+        const isDegraded = DEGRADED_HEALTH_STATUSES.has(status) ||
+          (status !== 'running' && !OFFLINE_HEALTH_STATUSES.has(status) && status !== 'stopped');
+        if (isDegraded) return true;
+
+        // Check for backup issues
+        const backupInfo = getBackupInfo(g.lastBackup);
+        if (backupInfo.status === 'stale' || backupInfo.status === 'critical' || backupInfo.status === 'never') {
+          return true;
+        }
+
+        // Check for high resource usage (>90%)
+        if (g.cpu > 0.9) return true;
+        if (g.memory && g.memory.usage && g.memory.usage > 90) return true;
+
+        return false;
       });
     }
 
@@ -753,6 +817,27 @@ export function Dashboard(props: DashboardProps) {
 
   const handleNodeSelect = (nodeId: string | null, nodeType: 'pve' | 'pbs' | 'pmg' | null) => {
     logger.debug('handleNodeSelect called', { nodeId, nodeType });
+
+    // If AI sidebar is open, add node to AI context instead of filtering
+    if (aiChatStore.isOpen && nodeId && nodeType === 'pve') {
+      const node = props.nodes.find((n) => n.id === nodeId);
+      if (node) {
+        // Toggle: remove if already in context, add if not
+        if (aiChatStore.hasContextItem(nodeId)) {
+          aiChatStore.removeContextItem(nodeId);
+        } else {
+          aiChatStore.addContextItem('node', nodeId, node.name, {
+            nodeName: node.name,
+            name: node.name,
+            type: 'Proxmox Node',
+            status: node.status,
+            instance: node.instance,
+          });
+        }
+      }
+      return;
+    }
+
     // Track selected node for filtering (independent of search)
     if (nodeType === 'pve' || nodeType === null) {
       setSelectedNode(nodeId);
@@ -812,6 +897,29 @@ export function Dashboard(props: DashboardProps) {
     }
   };
 
+  // Handle row click - add guest to AI context when sidebar is open
+  const handleGuestRowClick = (guest: VM | Container) => {
+    // Only add to context if AI is enabled and sidebar is open
+    if (!aiChatStore.enabled || !aiChatStore.isOpen) return;
+
+    const guestId = guest.id || `${guest.instance}-${guest.vmid}`;
+    const guestType = guest.type === 'qemu' ? 'vm' : 'container';
+
+    // Toggle: remove if already in context, add if not
+    if (aiChatStore.hasContextItem(guestId)) {
+      aiChatStore.removeContextItem(guestId);
+    } else {
+      aiChatStore.addContextItem(guestType, guestId, guest.name, {
+        guestName: guest.name,
+        name: guest.name,
+        type: guest.type === 'qemu' ? 'Virtual Machine' : 'LXC Container',
+        vmid: guest.vmid,
+        node: guest.node,
+        status: guest.status,
+      });
+    }
+  };
+
   return (
     <div class="space-y-3">
       <ProxmoxSectionNav current="overview" />
@@ -838,6 +946,9 @@ export function Dashboard(props: DashboardProps) {
         setStatusMode={setStatusMode}
         backupMode={backupMode}
         setBackupMode={setBackupMode}
+        problemsMode={problemsMode}
+        setProblemsMode={setProblemsMode}
+        filteredProblemGuests={problemGuests}
         groupingMode={groupingMode}
         setGroupingMode={setGroupingMode}
         setSortKey={setSortKey}
@@ -971,7 +1082,7 @@ export function Dashboard(props: DashboardProps) {
         <ComponentErrorBoundary name="Guest Table">
           <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
             <div class="overflow-x-auto">
-              <table class="w-full border-collapse whitespace-nowrap">
+              <table class="w-full border-collapse whitespace-nowrap table-fixed">
                 <thead>
                   <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                     <For each={visibleColumns()}>
@@ -986,6 +1097,7 @@ export function Dashboard(props: DashboardProps) {
                             class={`py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
                               ${isFirst() ? 'pl-4 pr-2 text-left' : 'px-2 text-center'}
                               ${isSortable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
+                            style={col.width ? { width: col.width } : undefined}
                             onClick={() => isSortable && handleSort(sortKeyForCol!)}
                           >
                             {col.label} {isSorted() && (sortDirection() === 'asc' ? '▲' : '▼')}
@@ -1014,13 +1126,20 @@ export function Dashboard(props: DashboardProps) {
                             <NodeGroupHeader node={node!} renderAs="tr" colspan={totalColumns()} />
                           </Show>
                           <For each={guests} fallback={<></>}>
-                            {(guest) => {
+                            {(guest, index) => {
                               const guestId = guest.id || `${guest.instance}-${guest.vmid}`;
                               const metadata =
                                 guestMetadata()[guestId] ||
                                 guestMetadata()[`${guest.node}-${guest.vmid}`];
                               const parentNode = node ?? resolveParentNode(guest);
                               const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
+
+                              // Get adjacent guest IDs for merged AI context borders
+                              const prevGuest = guests[index() - 1];
+                              const nextGuest = guests[index() + 1];
+                              const prevGuestId = prevGuest ? (prevGuest.id || `${prevGuest.instance}-${prevGuest.vmid}`) : null;
+                              const nextGuestId = nextGuest ? (nextGuest.id || `${nextGuest.instance}-${nextGuest.vmid}`) : null;
+
                               return (
                                 <ComponentErrorBoundary name="GuestRow">
                                   <GuestRow
@@ -1033,6 +1152,9 @@ export function Dashboard(props: DashboardProps) {
                                     onCustomUrlUpdate={handleCustomUrlUpdate}
                                     isGroupedView={groupingMode() === 'grouped'}
                                     visibleColumnIds={visibleColumnIds()}
+                                    aboveGuestId={prevGuestId}
+                                    belowGuestId={nextGuestId}
+                                    onRowClick={aiChatStore.isOpen ? handleGuestRowClick : undefined}
                                   />
                                 </ComponentErrorBoundary>
                               );
