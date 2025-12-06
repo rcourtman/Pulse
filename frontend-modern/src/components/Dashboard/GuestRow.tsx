@@ -1,6 +1,6 @@
 import { createMemo, createSignal, createEffect, Show, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import type { VM, Container, NetworkInterface } from '@/types/api';
+import type { VM, Container, GuestNetworkInterface } from '@/types/api';
 import { formatBytes, formatUptime, formatSpeed, getBackupInfo, type BackupStatus, formatPercent } from '@/utils/format';
 import { TagBadges } from './TagBadges';
 import { StackedDiskBar } from './StackedDiskBar';
@@ -15,6 +15,8 @@ import { buildMetricKey } from '@/utils/metricsKeys';
 import { type ColumnPriority } from '@/hooks/useBreakpoint';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useMetricsViewMode } from '@/stores/metricsViewMode';
+import { aiChatStore } from '@/stores/aiChat';
 
 type Guest = VM | Container;
 
@@ -102,7 +104,7 @@ function BackupIndicator(props: { lastBackup: string | number | null | undefined
 }
 
 // Network info cell with rich tooltip showing interfaces, IPs, and MACs
-function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: NetworkInterface[] }) {
+function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: GuestNetworkInterface[] }) {
   const [showTooltip, setShowTooltip] = createSignal(false);
   const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
 
@@ -213,21 +215,16 @@ function detectOSType(osName: string): OSType {
   if (lower.includes('windows')) return 'windows';
   // All Linux distros, BSDs, and Unix-likes -> linux
   if (lower.includes('linux') || lower.includes('debian') || lower.includes('ubuntu') ||
-      lower.includes('alpine') || lower.includes('centos') || lower.includes('fedora') ||
-      lower.includes('arch') || lower.includes('nixos') || lower.includes('suse') ||
-      lower.includes('gentoo') || lower.includes('rhel') || lower.includes('rocky') ||
-      lower.includes('alma') || lower.includes('devuan') || lower.includes('gnu') ||
-      lower.includes('freebsd') || lower.includes('openbsd') || lower.includes('netbsd')) {
+    lower.includes('alpine') || lower.includes('centos') || lower.includes('fedora') ||
+    lower.includes('arch') || lower.includes('nixos') || lower.includes('suse') ||
+    lower.includes('gentoo') || lower.includes('rhel') || lower.includes('rocky') ||
+    lower.includes('alma') || lower.includes('devuan') || lower.includes('gnu') ||
+    lower.includes('freebsd') || lower.includes('openbsd') || lower.includes('netbsd')) {
     return 'linux';
   }
   return 'unknown';
 }
 
-const OS_COLORS: Record<OSType, string> = {
-  windows: 'text-blue-500',
-  linux: 'text-gray-600 dark:text-gray-400',
-  unknown: 'text-gray-400',
-};
 
 // OS info cell with icon and Portal tooltip
 function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: string }) {
@@ -235,18 +232,6 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
   const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
 
   const osType = createMemo(() => detectOSType(props.osName));
-  const colorClass = createMemo(() => OS_COLORS[osType()]);
-  const displayName = createMemo(() => {
-    const name = props.osName;
-    // Shorten common long names
-    if (name.toLowerCase().includes('microsoft windows')) {
-      return name.replace(/Microsoft Windows/i, 'Win').replace('Server ', 'Srv ');
-    }
-    if (name.toLowerCase().includes('gnu/linux')) {
-      return name.replace(/GNU\/Linux/i, '');
-    }
-    return name;
-  });
 
   const handleMouseEnter = (e: MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -258,16 +243,29 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
     setShowTooltip(false);
   };
 
-  // Simple text labels
-  const OSLabel = () => {
+  // OS icons - Windows logo and terminal prompt for Linux
+  const OSIcon = () => {
     const type = osType();
+    const iconClass = 'w-3.5 h-3.5 text-gray-500 dark:text-gray-400';
+
     switch (type) {
       case 'windows':
-        return <span class="text-[10px] text-gray-600 dark:text-gray-400">Windows</span>;
+        // Windows logo - four tilted panes
+        return (
+          <svg class={iconClass} viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 5.5l7.038-1v6.5H3v-5.5zm0 13l7.038 1V13H3v5.5zm8.038 1.118L21 21V13h-9.962v6.618zM11.038 4.382L21 3v8h-9.962V4.382z" />
+          </svg>
+        );
       case 'linux':
-        return <span class="text-[10px] text-gray-600 dark:text-gray-400">Linux</span>;
+        // Terminal prompt icon
+        return (
+          <svg class={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 17 10 11 4 5" />
+            <line x1="12" y1="19" x2="20" y2="19" />
+          </svg>
+        );
       default:
-        return <span class="text-[10px] text-gray-400">-</span>;
+        return <span class="text-gray-400">-</span>;
     }
   };
 
@@ -278,7 +276,7 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <OSLabel />
+        <OSIcon />
       </span>
 
       <Show when={showTooltip()}>
@@ -414,6 +412,7 @@ export interface GuestColumnDef {
   label: string;
   priority: ColumnPriority;
   toggleable?: boolean;
+  width?: string;  // Fixed width for consistent column sizing
   minWidth?: string;
   maxWidth?: string;
   flex?: number;
@@ -423,29 +422,29 @@ export interface GuestColumnDef {
 export const GUEST_COLUMNS: GuestColumnDef[] = [
   // Essential - always visible
   { id: 'name', label: 'Name', priority: 'essential', sortKey: 'name' },
-  { id: 'type', label: 'Type', priority: 'essential', sortKey: 'type' },
-  { id: 'vmid', label: 'VMID', priority: 'essential', sortKey: 'vmid' },
+  { id: 'type', label: 'Type', priority: 'essential', width: '40px', sortKey: 'type' },
+  { id: 'vmid', label: 'VMID', priority: 'essential', width: '45px', sortKey: 'vmid' },
 
-  // Core metrics - always visible
-  { id: 'cpu', label: 'CPU', priority: 'essential', minWidth: '55px', maxWidth: '156px', sortKey: 'cpu' },
-  { id: 'memory', label: 'Memory', priority: 'essential', minWidth: '75px', maxWidth: '156px', sortKey: 'memory' },
-  { id: 'disk', label: 'Disk', priority: 'essential', minWidth: '75px', maxWidth: '156px', sortKey: 'disk' },
+  // Core metrics - percentage width for proportional sizing
+  { id: 'cpu', label: 'CPU', priority: 'essential', width: '15%', sortKey: 'cpu' },
+  { id: 'memory', label: 'Memory', priority: 'essential', width: '15%', sortKey: 'memory' },
+  { id: 'disk', label: 'Disk', priority: 'essential', width: '15%', sortKey: 'disk' },
 
   // Secondary - visible on md+ (768px), user toggleable
-  { id: 'ip', label: 'IP', priority: 'secondary', toggleable: true },
-  { id: 'uptime', label: 'Uptime', priority: 'secondary', toggleable: true, sortKey: 'uptime' },
-  { id: 'node', label: 'Node', priority: 'secondary', toggleable: true, sortKey: 'node' },
+  { id: 'ip', label: 'IP', priority: 'secondary', width: '90px', toggleable: true },
+  { id: 'uptime', label: 'Uptime', priority: 'secondary', width: '65px', toggleable: true, sortKey: 'uptime' },
+  { id: 'node', label: 'Node', priority: 'secondary', width: '60px', toggleable: true, sortKey: 'node' },
 
   // Supplementary - visible on lg+ (1024px), user toggleable
-  { id: 'backup', label: 'Backup', priority: 'supplementary', toggleable: true },
-  { id: 'tags', label: 'Tags', priority: 'supplementary', toggleable: true },
+  { id: 'backup', label: 'Backup', priority: 'supplementary', width: '55px', toggleable: true },
+  { id: 'tags', label: 'Tags', priority: 'supplementary', width: '80px', toggleable: true },
 
   // Detailed - visible on xl+ (1280px), user toggleable
-  { id: 'os', label: 'OS', priority: 'detailed', toggleable: true },
-  { id: 'diskRead', label: 'D Read', priority: 'detailed', toggleable: true, sortKey: 'diskRead' },
-  { id: 'diskWrite', label: 'D Write', priority: 'detailed', toggleable: true, sortKey: 'diskWrite' },
-  { id: 'netIn', label: 'Net In', priority: 'detailed', toggleable: true, sortKey: 'networkIn' },
-  { id: 'netOut', label: 'Net Out', priority: 'detailed', toggleable: true, sortKey: 'networkOut' },
+  { id: 'os', label: 'OS', priority: 'detailed', width: '45px', toggleable: true },
+  { id: 'diskRead', label: 'D Read', priority: 'detailed', width: '55px', toggleable: true, sortKey: 'diskRead' },
+  { id: 'diskWrite', label: 'D Write', priority: 'detailed', width: '55px', toggleable: true, sortKey: 'diskWrite' },
+  { id: 'netIn', label: 'Net In', priority: 'detailed', width: '55px', toggleable: true, sortKey: 'networkIn' },
+  { id: 'netOut', label: 'Net Out', priority: 'detailed', width: '55px', toggleable: true, sortKey: 'networkOut' },
 ];
 
 interface GuestRowProps {
@@ -472,6 +471,12 @@ interface GuestRowProps {
   isGroupedView?: boolean;
   /** IDs of columns that should be visible */
   visibleColumnIds?: string[];
+  /** Guest ID of the row above (for checking AI context adjacency) */
+  aboveGuestId?: string | null;
+  /** Guest ID of the row below (for checking AI context adjacency) */
+  belowGuestId?: string | null;
+  /** Called when user clicks the row (for AI context selection) */
+  onRowClick?: (guest: Guest) => void;
 }
 
 export function GuestRow(props: GuestRowProps) {
@@ -480,6 +485,9 @@ export function GuestRow(props: GuestRowProps) {
 
   // Use breakpoint hook directly for responsive behavior
   const { isMobile } = useBreakpoint();
+
+  // Get current metrics view mode (bars vs sparklines)
+  const { viewMode } = useMetricsViewMode();
 
   // Helper to check if a column is visible
   // If visibleColumnIds is not provided, show all columns for backwards compatibility
@@ -502,7 +510,6 @@ export function GuestRow(props: GuestRowProps) {
   });
   let urlInputRef: HTMLInputElement | undefined;
 
-  const hasFilesystemDetails = createMemo(() => (props.guest.disks?.length ?? 0) > 0);
   const ipAddresses = createMemo(() => props.guest.ipAddresses ?? []);
   const networkInterfaces = createMemo(() => props.guest.networkInterfaces ?? []);
   const hasNetworkInterfaces = createMemo(() => networkInterfaces().length > 0);
@@ -510,7 +517,6 @@ export function GuestRow(props: GuestRowProps) {
   const osVersion = createMemo(() => props.guest.osVersion?.trim() ?? '');
   const agentVersion = createMemo(() => props.guest.agentVersion?.trim() ?? '');
   const hasOsInfo = createMemo(() => osName().length > 0 || osVersion().length > 0);
-  const hasAgentInfo = createMemo(() => agentVersion().length > 0);
 
   // Update custom URL when prop changes, but only if we're not currently editing
   createEffect(() => {
@@ -757,6 +763,17 @@ export function GuestRow(props: GuestRowProps) {
     return '#9ca3af';
   });
 
+  // Check AI context state reactively from the store
+  const isInAIContext = createMemo(() => aiChatStore.isOpen && aiChatStore.hasContextItem(guestId()));
+  const isAboveInAIContext = createMemo(() => {
+    if (!props.aboveGuestId) return false;
+    return aiChatStore.hasContextItem(props.aboveGuestId);
+  });
+  const isBelowInAIContext = createMemo(() => {
+    if (!props.belowGuestId) return false;
+    return aiChatStore.hasContextItem(props.belowGuestId);
+  });
+
   const rowClass = createMemo(() => {
     const base = 'transition-all duration-200 relative';
     const hover = 'hover:shadow-sm';
@@ -769,197 +786,211 @@ export function GuestRow(props: GuestRowProps) {
       ? ''
       : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
-    return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming}`;
+    // Make row clickable if click handler provided
+    const clickable = props.onRowClick ? 'cursor-pointer' : '';
+    // AI context highlight with merged borders for adjacent rows
+    let aiContext = '';
+    if (isInAIContext()) {
+      aiContext = 'ai-context-row';
+      if (isAboveInAIContext()) aiContext += ' ai-context-no-top';
+      if (isBelowInAIContext()) aiContext += ' ai-context-no-bottom';
+    }
+    return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming} ${clickable} ${aiContext}`;
   });
 
   const rowStyle = createMemo(() => {
-    if (!showAlertHighlight()) return {};
-    const color = alertAccentColor();
-    if (!color) return {};
-    return {
-      'box-shadow': `inset 4px 0 0 0 ${color}`,
-    };
+    const styles: Record<string, string> = {};
+
+    // Alert styling (only if not in AI context - AI context uses CSS class)
+    if (!isInAIContext() && showAlertHighlight()) {
+      const color = alertAccentColor();
+      if (color) {
+        styles['box-shadow'] = `inset 4px 0 0 0 ${color}`;
+      }
+    }
+
+    return styles;
   });
 
+  const handleRowClick = (e: MouseEvent) => {
+    // Don't trigger if clicking on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-url-editor]') ||
+      target.closest('[data-prevent-toggle]') ||
+      target.closest('a') ||
+      target.closest('button') ||
+      target.closest('input')) {
+      return;
+    }
+    props.onRowClick?.(props.guest);
+  };
+
   return (
-      <tr
-        class={rowClass()}
-        style={rowStyle()}
-      >
-        {/* Name - always visible */}
-        <td class={`pr-2 py-1 align-middle whitespace-nowrap ${props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT}`}>
-          <div class="flex items-center gap-2 min-w-0">
-            <div class="flex items-center gap-1.5 min-w-0">
-              <StatusDot
-                variant={guestStatus().variant}
-                title={guestStatus().label}
-                ariaLabel={guestStatus().label}
-                size="xs"
-              />
-              <Show
-                when={isEditingUrl()}
-                fallback={
-                  <div class="flex items-center gap-1.5 min-w-0">
-                    <span
-                      class="text-xs font-medium text-gray-900 dark:text-gray-100 cursor-text select-none whitespace-nowrap"
-                      style="cursor: text;"
-                      title={`${props.guest.name}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
-                      onClick={startEditingUrl}
-                      data-guest-name-editable
+    <tr
+      class={rowClass()}
+      style={rowStyle()}
+      onClick={handleRowClick}
+      data-guest-id={guestId()}
+    >
+      {/* Name - always visible */}
+      <td class={`pr-2 py-1 align-middle whitespace-nowrap ${props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT}`}>
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <StatusDot
+              variant={guestStatus().variant}
+              title={guestStatus().label}
+              ariaLabel={guestStatus().label}
+              size="xs"
+            />
+            <Show
+              when={isEditingUrl()}
+              fallback={
+                <div class="flex items-center gap-1.5 min-w-0">
+                  <span
+                    class="text-xs font-medium text-gray-900 dark:text-gray-100 cursor-text select-none whitespace-nowrap"
+                    style="cursor: text;"
+                    title={`${props.guest.name}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
+                    onClick={startEditingUrl}
+                    data-guest-name-editable
+                  >
+                    {props.guest.name}
+                  </span>
+                  <Show when={customUrl()}>
+                    <a
+                      href={customUrl()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
+                      title="Open in new tab"
+                      onClick={(event) => event.stopPropagation()}
                     >
-                      {props.guest.name}
-                    </span>
-                    <Show when={customUrl()}>
-                      <a
-                        href={customUrl()}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
-                        title="Open in new tab"
-                        onClick={(event) => event.stopPropagation()}
+                      <svg
+                        class="w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
                       >
-                        <svg
-                          class="w-3.5 h-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                          />
-                        </svg>
-                      </a>
-                    </Show>
-                    {/* Show backup indicator in name cell only if backup column is hidden */}
-                    <Show when={!isColVisible('backup')}>
-                      <BackupIndicator lastBackup={props.guest.lastBackup} isTemplate={props.guest.template} />
-                    </Show>
-                  </div>
-                }
-              >
-                <div class="flex items-center gap-1 min-w-0" data-url-editor>
-                  <input
-                    ref={urlInputRef}
-                    type="text"
-                    value={editingUrlValue()}
-                    data-guest-id={guestId()}
-                    onInput={(e) => {
-                      editingValues.set(guestId(), e.currentTarget.value);
-                      setEditingValuesVersion(v => v + 1);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        saveUrl();
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        cancelEditingUrl();
-                      }
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    placeholder="https://192.168.1.100:8006"
-                    class="min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    type="button"
-                    data-url-editor-button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      saveUrl();
-                    }}
-                    class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                    title="Save (or press Enter)"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    type="button"
-                    data-url-editor-button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteUrl();
-                    }}
-                    class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                    title="Delete URL"
-                  >
-                    ✕
-                  </button>
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                        />
+                      </svg>
+                    </a>
+                  </Show>
+                  {/* Show backup indicator in name cell only if backup column is hidden */}
+                  <Show when={!isColVisible('backup')}>
+                    <BackupIndicator lastBackup={props.guest.lastBackup} isTemplate={props.guest.template} />
+                  </Show>
                 </div>
-              </Show>
-            </div>
-
-            {/* Show tags inline only if tags column is hidden */}
-            <Show when={!isEditingUrl() && !isColVisible('tags')}>
-              <div class="hidden md:flex" data-prevent-toggle onClick={(event) => event.stopPropagation()}>
-                <TagBadges
-                  tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
-                  maxVisible={3}
-                  onTagClick={props.onTagClick}
-                  activeSearch={props.activeSearch}
+              }
+            >
+              <div class="flex items-center gap-1 min-w-0" data-url-editor>
+                <input
+                  ref={urlInputRef}
+                  type="text"
+                  value={editingUrlValue()}
+                  data-guest-id={guestId()}
+                  onInput={(e) => {
+                    editingValues.set(guestId(), e.currentTarget.value);
+                    setEditingValuesVersion(v => v + 1);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      saveUrl();
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      cancelEditingUrl();
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  placeholder="https://192.168.1.100:8006"
+                  class="min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                <button
+                  type="button"
+                  data-url-editor-button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    saveUrl();
+                  }}
+                  class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  title="Save (or press Enter)"
+                >
+                  ✓
+                </button>
+                <button
+                  type="button"
+                  data-url-editor-button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteUrl();
+                  }}
+                  class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                  title="Delete URL"
+                >
+                  ✕
+                </button>
               </div>
-            </Show>
-
-            <Show when={lockLabel()}>
-              <span
-                class="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
-                title={`Guest is locked (${lockLabel()})`}
-              >
-                Lock: {lockLabel()}
-              </span>
             </Show>
           </div>
+
+          {/* Show tags inline only if tags column is hidden */}
+          <Show when={!isEditingUrl() && !isColVisible('tags')}>
+            <div class="hidden md:flex" data-prevent-toggle onClick={(event) => event.stopPropagation()}>
+              <TagBadges
+                tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
+                maxVisible={3}
+                onTagClick={props.onTagClick}
+                activeSearch={props.activeSearch}
+              />
+            </div>
+          </Show>
+
+          <Show when={lockLabel()}>
+            <span
+              class="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
+              title={`Guest is locked (${lockLabel()})`}
+            >
+              Lock: {lockLabel()}
+            </span>
+          </Show>
+        </div>
+      </td>
+
+      {/* Type */}
+      <Show when={isColVisible('type')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center">
+            <span
+              class={`inline-block px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${props.guest.type === 'qemu'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                }`}
+              title={isVM(props.guest) ? 'Virtual Machine' : 'LXC Container'}
+            >
+              {isVM(props.guest) ? 'VM' : 'LXC'}
+            </span>
+          </div>
         </td>
+      </Show>
 
-        {/* Type */}
-        <Show when={isColVisible('type')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center">
-              <span
-                class={`inline-block px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${props.guest.type === 'qemu'
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                  : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
-                  }`}
-                title={isVM(props.guest) ? 'Virtual Machine' : 'LXC Container'}
-              >
-                {isVM(props.guest) ? 'VM' : 'LXC'}
-              </span>
-            </div>
-          </td>
-        </Show>
+      {/* VMID */}
+      <Show when={isColVisible('vmid')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
+            {props.guest.vmid}
+          </div>
+        </td>
+      </Show>
 
-        {/* VMID */}
-        <Show when={isColVisible('vmid')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
-              {props.guest.vmid}
-            </div>
-          </td>
-        </Show>
-
-        {/* CPU */}
-        <Show when={isColVisible('cpu')}>
-          <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-            <Show when={isMobile()}>
-              <div class="md:hidden flex justify-center">
-                <ResponsiveMetricCell
-                  value={cpuPercent()}
-                  type="cpu"
-                  resourceId={metricsKey()}
-                  sublabel={
-                    props.guest.cpus
-                      ? `${props.guest.cpus} ${props.guest.cpus === 1 ? 'core' : 'cores'}`
-                      : undefined
-                  }
-                  isRunning={isRunning()}
-                  showMobile={true}
-                />
-              </div>
-            </Show>
-            <div class="hidden md:block">
+      {/* CPU */}
+      <Show when={isColVisible('cpu')}>
+        <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+          <Show when={isMobile()}>
+            <div class="md:hidden flex justify-center">
               <ResponsiveMetricCell
                 value={cpuPercent()}
                 type="cpu"
@@ -970,195 +1001,237 @@ export function GuestRow(props: GuestRowProps) {
                     : undefined
                 }
                 isRunning={isRunning()}
-                showMobile={false}
+                showMobile={true}
               />
             </div>
-          </td>
-        </Show>
-
-        {/* Memory */}
-        <Show when={isColVisible('memory')}>
-          <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-            <div title={memoryTooltip() ?? undefined}>
-              <Show when={isMobile()}>
-                <div class="md:hidden flex justify-center">
-                  <ResponsiveMetricCell
-                    value={memPercent()}
-                    type="memory"
-                    resourceId={metricsKey()}
-                    sublabel={memoryUsageLabel()}
-                    isRunning={isRunning()}
-                    showMobile={true}
-                  />
-                </div>
-              </Show>
-              <div class="hidden md:block">
-                <StackedMemoryBar
-                  used={props.guest.memory?.used || 0}
-                  total={props.guest.memory?.total || 0}
-                  balloon={props.guest.memory?.balloon || 0}
-                  swapUsed={props.guest.memory?.swapUsed || 0}
-                  swapTotal={props.guest.memory?.swapTotal || 0}
-                />
-              </div>
-            </div>
-          </td>
-        </Show>
-
-        {/* Disk */}
-        <Show when={isColVisible('disk')}>
-          <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-            <Show
-              when={hasDiskUsage()}
-              fallback={
-                <div class="flex justify-center">
-                  <span class="text-xs text-gray-400 cursor-help" title={getDiskStatusTooltip()}>
-                    -
-                  </span>
-                </div>
+          </Show>
+          <div class="hidden md:block">
+            <ResponsiveMetricCell
+              value={cpuPercent()}
+              type="cpu"
+              resourceId={metricsKey()}
+              sublabel={
+                props.guest.cpus
+                  ? `${props.guest.cpus} ${props.guest.cpus === 1 ? 'core' : 'cores'}`
+                  : undefined
               }
-            >
-              <Show when={isMobile()}>
-                <div class="md:hidden flex justify-center text-xs text-gray-600 dark:text-gray-400">
-                  {formatPercent(diskPercent())}
-                </div>
-              </Show>
-              <div class={isMobile() ? 'hidden md:block' : ''}>
-                <StackedDiskBar
-                  disks={props.guest.disks}
-                  aggregateDisk={props.guest.disk}
+              isRunning={isRunning()}
+              showMobile={false}
+            />
+          </div>
+        </td>
+      </Show>
+
+      {/* Memory */}
+      <Show when={isColVisible('memory')}>
+        <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+          <div title={memoryTooltip() ?? undefined}>
+            <Show when={isMobile()}>
+              <div class="md:hidden flex justify-center">
+                <ResponsiveMetricCell
+                  value={memPercent()}
+                  type="memory"
+                  resourceId={metricsKey()}
+                  sublabel={memoryUsageLabel()}
+                  isRunning={isRunning()}
+                  showMobile={true}
                 />
               </div>
             </Show>
-          </td>
-        </Show>
-
-        {/* IP Address with Network Tooltip */}
-        <Show when={isColVisible('ip')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center">
-              <Show when={ipAddresses().length > 0 || hasNetworkInterfaces()} fallback={<span class="text-xs text-gray-400">-</span>}>
-                <NetworkInfoCell
-                  ipAddresses={ipAddresses()}
-                  networkInterfaces={networkInterfaces()}
+            <div class="hidden md:block">
+              <Show
+                when={viewMode() === 'sparklines'}
+                fallback={
+                  <StackedMemoryBar
+                    used={props.guest.memory?.used || 0}
+                    total={props.guest.memory?.total || 0}
+                    balloon={props.guest.memory?.balloon || 0}
+                    swapUsed={props.guest.memory?.swapUsed || 0}
+                    swapTotal={props.guest.memory?.swapTotal || 0}
+                  />
+                }
+              >
+                <ResponsiveMetricCell
+                  value={memPercent()}
+                  type="memory"
+                  resourceId={metricsKey()}
+                  sublabel={memoryUsageLabel()}
+                  isRunning={isRunning()}
+                  showMobile={false}
                 />
               </Show>
             </div>
-          </td>
-        </Show>
+          </div>
+        </td>
+      </Show>
 
-        {/* Uptime */}
-        <Show when={isColVisible('uptime')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center">
-              <span class={`text-xs whitespace-nowrap ${props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'}`}>
-                <Show when={isRunning()} fallback="-">
-                  <Show when={isMobile()} fallback={formatUptime(props.guest.uptime)}>
-                    {formatUptime(props.guest.uptime, true)}
-                  </Show>
-                </Show>
-              </span>
-            </div>
-          </td>
-        </Show>
-
-        {/* Node - NEW */}
-        <Show when={isColVisible('node')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center">
-              <span class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[80px]" title={props.guest.node}>
-                {props.guest.node}
-              </span>
-            </div>
-          </td>
-        </Show>
-
-        {/* Backup Status */}
-        <Show when={isColVisible('backup')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center">
-              <Show when={!props.guest.template}>
-                <BackupStatusCell lastBackup={props.guest.lastBackup} />
+      {/* Disk */}
+      <Show when={isColVisible('disk')}>
+        <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+          <Show
+            when={hasDiskUsage()}
+            fallback={
+              <div class="flex justify-center">
+                <span class="text-xs text-gray-400 cursor-help" title={getDiskStatusTooltip()}>
+                  -
+                </span>
+              </div>
+            }
+          >
+            <Show when={isMobile()}>
+              <div class="md:hidden flex justify-center text-xs text-gray-600 dark:text-gray-400">
+                {formatPercent(diskPercent())}
+              </div>
+            </Show>
+            <div class={isMobile() ? 'hidden md:block' : ''}>
+              <Show
+                when={viewMode() === 'sparklines'}
+                fallback={
+                  <StackedDiskBar
+                    disks={props.guest.disks}
+                    aggregateDisk={props.guest.disk}
+                  />
+                }
+              >
+                <ResponsiveMetricCell
+                  value={diskPercent()}
+                  type="disk"
+                  resourceId={metricsKey()}
+                  isRunning={isRunning()}
+                  showMobile={false}
+                />
               </Show>
-              <Show when={props.guest.template}>
-                <span class="text-xs text-gray-400">-</span>
-              </Show>
             </div>
-          </td>
-        </Show>
+          </Show>
+        </td>
+      </Show>
 
-        {/* Tags */}
-        <Show when={isColVisible('tags')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center" onClick={(event) => event.stopPropagation()}>
-              <TagBadges
-                tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
-                maxVisible={2}
-                onTagClick={props.onTagClick}
-                activeSearch={props.activeSearch}
+      {/* IP Address with Network Tooltip */}
+      <Show when={isColVisible('ip')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center">
+            <Show when={ipAddresses().length > 0 || hasNetworkInterfaces()} fallback={<span class="text-xs text-gray-400">-</span>}>
+              <NetworkInfoCell
+                ipAddresses={ipAddresses()}
+                networkInterfaces={networkInterfaces()}
               />
-            </div>
-          </td>
-        </Show>
+            </Show>
+          </div>
+        </td>
+      </Show>
 
-        {/* OS */}
-        <Show when={isColVisible('os')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center">
-              <Show when={hasOsInfo()} fallback={<span class="text-xs text-gray-400">-</span>}>
-                <OSInfoCell
-                  osName={osName()}
-                  osVersion={osVersion()}
-                  agentVersion={agentVersion()}
-                />
+      {/* Uptime */}
+      <Show when={isColVisible('uptime')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center">
+            <span class={`text-xs whitespace-nowrap ${props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'}`}>
+              <Show when={isRunning()} fallback="-">
+                <Show when={isMobile()} fallback={formatUptime(props.guest.uptime)}>
+                  {formatUptime(props.guest.uptime, true)}
+                </Show>
               </Show>
-            </div>
-          </td>
-        </Show>
+            </span>
+          </div>
+        </td>
+      </Show>
 
-        {/* Disk Read */}
-        <Show when={isColVisible('diskRead')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center whitespace-nowrap">
-              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-                <span class={`text-xs ${getIOColorClass(diskRead())}`}>{formatSpeed(diskRead())}</span>
-              </Show>
-            </div>
-          </td>
-        </Show>
+      {/* Node - NEW */}
+      <Show when={isColVisible('node')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center">
+            <span class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[80px]" title={props.guest.node}>
+              {props.guest.node}
+            </span>
+          </div>
+        </td>
+      </Show>
 
-        {/* Disk Write */}
-        <Show when={isColVisible('diskWrite')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center whitespace-nowrap">
-              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-                <span class={`text-xs ${getIOColorClass(diskWrite())}`}>{formatSpeed(diskWrite())}</span>
-              </Show>
-            </div>
-          </td>
-        </Show>
+      {/* Backup Status */}
+      <Show when={isColVisible('backup')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center">
+            <Show when={!props.guest.template}>
+              <BackupStatusCell lastBackup={props.guest.lastBackup} />
+            </Show>
+            <Show when={props.guest.template}>
+              <span class="text-xs text-gray-400">-</span>
+            </Show>
+          </div>
+        </td>
+      </Show>
 
-        {/* Net In */}
-        <Show when={isColVisible('netIn')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center whitespace-nowrap">
-              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-                <span class={`text-xs ${getIOColorClass(networkIn())}`}>{formatSpeed(networkIn())}</span>
-              </Show>
-            </div>
-          </td>
-        </Show>
+      {/* Tags */}
+      <Show when={isColVisible('tags')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center" onClick={(event) => event.stopPropagation()}>
+            <TagBadges
+              tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
+              maxVisible={2}
+              onTagClick={props.onTagClick}
+              activeSearch={props.activeSearch}
+            />
+          </div>
+        </td>
+      </Show>
 
-        {/* Net Out */}
-        <Show when={isColVisible('netOut')}>
-          <td class="px-2 py-1 align-middle">
-            <div class="flex justify-center whitespace-nowrap">
-              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-                <span class={`text-xs ${getIOColorClass(networkOut())}`}>{formatSpeed(networkOut())}</span>
-              </Show>
-            </div>
-          </td>
-        </Show>
-      </tr>
+      {/* OS */}
+      <Show when={isColVisible('os')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center">
+            <Show when={hasOsInfo()} fallback={<span class="text-xs text-gray-400">-</span>}>
+              <OSInfoCell
+                osName={osName()}
+                osVersion={osVersion()}
+                agentVersion={agentVersion()}
+              />
+            </Show>
+          </div>
+        </td>
+      </Show>
+
+      {/* Disk Read */}
+      <Show when={isColVisible('diskRead')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center whitespace-nowrap">
+            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+              <span class={`text-xs ${getIOColorClass(diskRead())}`}>{formatSpeed(diskRead())}</span>
+            </Show>
+          </div>
+        </td>
+      </Show>
+
+      {/* Disk Write */}
+      <Show when={isColVisible('diskWrite')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center whitespace-nowrap">
+            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+              <span class={`text-xs ${getIOColorClass(diskWrite())}`}>{formatSpeed(diskWrite())}</span>
+            </Show>
+          </div>
+        </td>
+      </Show>
+
+      {/* Net In */}
+      <Show when={isColVisible('netIn')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center whitespace-nowrap">
+            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+              <span class={`text-xs ${getIOColorClass(networkIn())}`}>{formatSpeed(networkIn())}</span>
+            </Show>
+          </div>
+        </td>
+      </Show>
+
+      {/* Net Out */}
+      <Show when={isColVisible('netOut')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center whitespace-nowrap">
+            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+              <span class={`text-xs ${getIOColorClass(networkOut())}`}>{formatSpeed(networkOut())}</span>
+            </Show>
+          </div>
+        </td>
+      </Show>
+    </tr>
   );
 }

@@ -1,6 +1,6 @@
 // AI feature types
 
-export type AIProvider = 'anthropic' | 'openai' | 'ollama';
+export type AIProvider = 'anthropic' | 'openai' | 'ollama' | 'deepseek';
 
 export interface AISettings {
   enabled: boolean;
@@ -34,6 +34,7 @@ export const DEFAULT_MODELS: Record<AIProvider, string> = {
   anthropic: 'claude-opus-4-5-20251101',
   openai: 'gpt-4o',
   ollama: 'llama3',
+  deepseek: 'deepseek-reasoner',
 };
 
 // Provider display names
@@ -41,6 +42,7 @@ export const PROVIDER_NAMES: Record<AIProvider, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
   ollama: 'Ollama',
+  deepseek: 'DeepSeek',
 };
 
 // Provider descriptions
@@ -48,6 +50,7 @@ export const PROVIDER_DESCRIPTIONS: Record<AIProvider, string> = {
   anthropic: 'Claude models from Anthropic',
   openai: 'GPT models from OpenAI',
   ollama: 'Local models via Ollama',
+  deepseek: 'DeepSeek reasoning models',
 };
 
 // Conversation history for multi-turn chats
@@ -82,7 +85,7 @@ export interface AIExecuteResponse {
 }
 
 // Streaming event types
-export type AIStreamEventType = 'tool_start' | 'tool_end' | 'content' | 'done' | 'error' | 'complete' | 'approval_needed';
+export type AIStreamEventType = 'tool_start' | 'tool_end' | 'content' | 'thinking' | 'done' | 'error' | 'complete' | 'approval_needed' | 'processing';
 
 export interface AIStreamToolStartData {
   name: string;
@@ -101,7 +104,9 @@ export interface AIStreamApprovalNeededData {
   tool_id: string;
   tool_name: string;
   run_on_host: boolean;
+  target_host?: string; // Explicit host to route the command to
 }
+
 
 export interface AIStreamEvent {
   type: AIStreamEventType;

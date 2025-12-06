@@ -27,6 +27,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -201,6 +202,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/storage/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorage)))
 	r.mux.HandleFunc("/api/storage-charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorageCharts)))
 	r.mux.HandleFunc("/api/charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleCharts)))
+	r.mux.HandleFunc("/api/metrics-store/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsStoreStats)))
 	r.mux.HandleFunc("/api/diagnostics", RequireAuth(r.config, r.handleDiagnostics))
 	r.mux.HandleFunc("/api/diagnostics/temperature-proxy/register-nodes", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsRegisterProxyNodes)))
 	r.mux.HandleFunc("/api/diagnostics/docker/prepare-token", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsDockerPrepareToken)))
@@ -1022,13 +1024,26 @@ func (r *Router) setupRoutes() {
 	// Inject state provider so AI has access to full infrastructure context (VMs, containers, IPs)
 	if r.monitor != nil {
 		r.aiSettingsHandler.SetStateProvider(r.monitor)
+		// Inject alert provider so AI has awareness of current alerts
+		if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+			r.aiSettingsHandler.SetAlertProvider(ai.NewAlertManagerAdapter(alertManager))
+		}
 	}
 	r.mux.HandleFunc("/api/settings/ai", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetAISettings)))
 	r.mux.HandleFunc("/api/settings/ai/update", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleUpdateAISettings)))
 	r.mux.HandleFunc("/api/ai/test", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestAIConnection)))
 	r.mux.HandleFunc("/api/ai/execute", RequireAuth(r.config, r.aiSettingsHandler.HandleExecute))
 	r.mux.HandleFunc("/api/ai/execute/stream", RequireAuth(r.config, r.aiSettingsHandler.HandleExecuteStream))
+	r.mux.HandleFunc("/api/ai/investigate-alert", RequireAuth(r.config, r.aiSettingsHandler.HandleInvestigateAlert))
 	r.mux.HandleFunc("/api/ai/run-command", RequireAuth(r.config, r.aiSettingsHandler.HandleRunCommand))
+	r.mux.HandleFunc("/api/ai/knowledge", RequireAuth(r.config, r.aiSettingsHandler.HandleGetGuestKnowledge))
+	r.mux.HandleFunc("/api/ai/knowledge/save", RequireAuth(r.config, r.aiSettingsHandler.HandleSaveGuestNote))
+	r.mux.HandleFunc("/api/ai/knowledge/delete", RequireAuth(r.config, r.aiSettingsHandler.HandleDeleteGuestNote))
+	r.mux.HandleFunc("/api/ai/knowledge/export", RequireAuth(r.config, r.aiSettingsHandler.HandleExportGuestKnowledge))
+	r.mux.HandleFunc("/api/ai/knowledge/import", RequireAuth(r.config, r.aiSettingsHandler.HandleImportGuestKnowledge))
+	r.mux.HandleFunc("/api/ai/knowledge/clear", RequireAuth(r.config, r.aiSettingsHandler.HandleClearGuestKnowledge))
+	r.mux.HandleFunc("/api/ai/debug/context", RequireAdmin(r.config, r.aiSettingsHandler.HandleDebugContext))
+	r.mux.HandleFunc("/api/ai/agents", RequireAuth(r.config, r.aiSettingsHandler.HandleGetConnectedAgents))
 
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
@@ -2905,6 +2920,44 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(storageData); err != nil {
 		log.Error().Err(err).Msg("Failed to encode storage chart data")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+// handleMetricsStoreStats returns statistics about the persistent metrics store
+func (r *Router) handleMetricsStoreStats(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	store := r.monitor.GetMetricsStore()
+	if store == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"enabled": false,
+			"error":   "Persistent metrics store not initialized",
+		})
+		return
+	}
+
+	stats := store.GetStats()
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"enabled":       true,
+		"dbPath":        stats.DBPath,
+		"dbSize":        stats.DBSize,
+		"rawCount":      stats.RawCount,
+		"minuteCount":   stats.MinuteCount,
+		"hourlyCount":   stats.HourlyCount,
+		"dailyCount":    stats.DailyCount,
+		"totalWrites":   stats.TotalWrites,
+		"bufferSize":    stats.BufferSize,
+		"lastFlush":     stats.LastFlush,
+		"lastRollup":    stats.LastRollup,
+		"lastRetention": stats.LastRetention,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to encode metrics store stats")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }

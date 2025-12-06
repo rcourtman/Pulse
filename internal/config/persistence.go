@@ -88,6 +88,11 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 	return cp, nil
 }
 
+// DataDir returns the configuration directory path
+func (c *ConfigPersistence) DataDir() string {
+	return c.configDir
+}
+
 // EnsureConfigDir ensures the configuration directory exists
 func (c *ConfigPersistence) EnsureConfigDir() error {
 	return os.MkdirAll(c.configDir, 0700)

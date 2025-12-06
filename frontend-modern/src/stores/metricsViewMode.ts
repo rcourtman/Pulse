@@ -7,6 +7,7 @@
 
 import { createSignal } from 'solid-js';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { seedFromBackend } from './metricsHistory';
 
 export type MetricsViewMode = 'bars' | 'sparklines';
 
@@ -51,6 +52,14 @@ export function setMetricsViewModePreference(mode: MetricsViewMode): void {
       // Ignore localStorage errors
       console.warn('Failed to save metrics view mode preference', err);
     }
+  }
+
+  // When switching to sparklines, seed historical data from backend
+  if (mode === 'sparklines') {
+    // Fire and forget - don't block the UI
+    seedFromBackend('1h').catch(() => {
+      // Errors are already logged in seedFromBackend
+    });
   }
 }
 

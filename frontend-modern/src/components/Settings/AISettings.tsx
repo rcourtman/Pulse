@@ -10,7 +10,7 @@ import { AIAPI } from '@/api/ai';
 import type { AISettings as AISettingsType, AIProvider } from '@/types/ai';
 import { PROVIDER_NAMES, PROVIDER_DESCRIPTIONS, DEFAULT_MODELS } from '@/types/ai';
 
-const PROVIDERS: AIProvider[] = ['anthropic', 'openai', 'ollama'];
+const PROVIDERS: AIProvider[] = ['anthropic', 'openai', 'ollama', 'deepseek'];
 
 export const AISettings: Component = () => {
   const [settings, setSettings] = createSignal<AISettingsType | null>(null);
@@ -146,7 +146,7 @@ export const AISettings: Component = () => {
   };
 
   const needsApiKey = () => form.provider !== 'ollama';
-  const showBaseUrl = () => form.provider === 'ollama' || form.provider === 'openai';
+  const showBaseUrl = () => form.provider === 'ollama' || form.provider === 'openai' || form.provider === 'deepseek';
 
   return (
     <Card
@@ -220,11 +220,10 @@ export const AISettings: Component = () => {
                   {(provider) => (
                     <button
                       type="button"
-                      class={`p-3 rounded-lg border-2 text-left transition-all ${
-                        form.provider === provider
-                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                      }`}
+                      class={`p-3 rounded-lg border-2 text-left transition-all ${form.provider === provider
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        }`}
                       onClick={() => handleProviderChange(provider)}
                       disabled={saving()}
                     >
@@ -282,7 +281,9 @@ export const AISettings: Component = () => {
                 <p class={formHelpText}>
                   {form.provider === 'anthropic'
                     ? 'Get your API key from console.anthropic.com'
-                    : 'Get your API key from platform.openai.com'}
+                    : form.provider === 'deepseek'
+                      ? 'Get your API key from platform.deepseek.com'
+                      : 'Get your API key from platform.openai.com'}
                 </p>
               </div>
             </Show>
@@ -303,7 +304,9 @@ export const AISettings: Component = () => {
                   ? 'e.g., claude-opus-4-5-20251101, claude-sonnet-4-20250514'
                   : form.provider === 'openai'
                     ? 'e.g., gpt-4o, gpt-4-turbo'
-                    : 'e.g., llama3, mixtral, codellama'}
+                    : form.provider === 'deepseek'
+                      ? 'e.g., deepseek-chat, deepseek-coder'
+                      : 'e.g., llama3, mixtral, codellama'}
               </p>
             </div>
 
@@ -320,7 +323,9 @@ export const AISettings: Component = () => {
                   placeholder={
                     form.provider === 'ollama'
                       ? 'http://localhost:11434'
-                      : 'https://api.openai.com/v1'
+                      : form.provider === 'deepseek'
+                        ? 'https://api.deepseek.com/chat/completions'
+                        : 'https://api.openai.com/v1'
                   }
                   class={controlClass()}
                   disabled={saving()}
@@ -328,7 +333,9 @@ export const AISettings: Component = () => {
                 <p class={formHelpText}>
                   {form.provider === 'ollama'
                     ? 'URL where your Ollama server is running'
-                    : 'Custom endpoint for Azure OpenAI or compatible APIs'}
+                    : form.provider === 'deepseek'
+                      ? 'Custom endpoint (leave blank for default DeepSeek API)'
+                      : 'Custom endpoint for Azure OpenAI or compatible APIs'}
                 </p>
               </div>
             </Show>
@@ -364,16 +371,14 @@ export const AISettings: Component = () => {
           {/* Status indicator */}
           <Show when={settings()}>
             <div
-              class={`flex items-center gap-2 p-3 rounded-lg ${
-                settings()?.configured
-                  ? 'bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200'
-                  : 'bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200'
-              }`}
+              class={`flex items-center gap-2 p-3 rounded-lg ${settings()?.configured
+                ? 'bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+                : 'bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200'
+                }`}
             >
               <div
-                class={`w-2 h-2 rounded-full ${
-                  settings()?.configured ? 'bg-green-500' : 'bg-amber-500'
-                }`}
+                class={`w-2 h-2 rounded-full ${settings()?.configured ? 'bg-green-500' : 'bg-amber-500'
+                  }`}
               />
               <span class="text-xs font-medium">
                 {settings()?.configured

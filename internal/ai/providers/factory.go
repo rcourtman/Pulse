@@ -32,6 +32,13 @@ func NewFromConfig(cfg *config.AIConfig) (Provider, error) {
 	case config.AIProviderOllama:
 		return NewOllamaClient(cfg.GetModel(), cfg.GetBaseURL()), nil
 
+	case config.AIProviderDeepSeek:
+		if cfg.APIKey == "" {
+			return nil, fmt.Errorf("DeepSeek API key is required")
+		}
+		// DeepSeek uses OpenAI-compatible API
+		return NewOpenAIClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL()), nil
+
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", cfg.Provider)
 	}

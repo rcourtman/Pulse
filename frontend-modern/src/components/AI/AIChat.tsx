@@ -5,6 +5,7 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { aiChatStore } from '@/stores/aiChat';
 import { useWebSocket } from '@/App';
+import { GuestNotes } from './GuestNotes';
 import type {
   AIToolExecution,
   AIStreamEvent,
@@ -41,13 +42,16 @@ interface PendingApproval {
   toolId: string;
   toolName: string;
   runOnHost: boolean;
+  targetHost?: string; // Explicit host for command routing
   isExecuting?: boolean;
 }
+
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  thinking?: string; // DeepSeek reasoning/thinking content
   timestamp: Date;
   model?: string;
   tokens?: { input: number; output: number };
@@ -325,6 +329,31 @@ export const AIChat: Component<AIChatProps> = (props) => {
     };
     setMessages((prev) => [...prev, streamingMessage]);
 
+    // Safety timeout - clear streaming state if we don't get any completion event
+    // This prevents the UI from getting stuck in a streaming state
+    let lastEventTime = Date.now();
+    const SAFETY_TIMEOUT_MS = 120000; // 2 minutes
+
+    const safetyCheckInterval = setInterval(() => {
+      const timeSinceLastEvent = Date.now() - lastEventTime;
+      if (timeSinceLastEvent > SAFETY_TIMEOUT_MS) {
+        console.warn('[AIChat] Safety timeout - forcing stream completion after', SAFETY_TIMEOUT_MS / 1000, 'seconds of inactivity');
+        clearInterval(safetyCheckInterval);
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantId && msg.isStreaming
+              ? { ...msg, isStreaming: false, content: msg.content || '(Request timed out - no response received)' }
+              : msg
+          )
+        );
+        setIsLoading(false);
+        if (abortControllerRef) {
+          abortControllerRef.abort();
+          abortControllerRef = null;
+        }
+      }
+    }, 10000); // Check every 10 seconds
+
     try {
       await AIAPI.executeStream(
         {
@@ -335,6 +364,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           history: history.length > 0 ? history : undefined,
         },
         (event: AIStreamEvent) => {
+          lastEventTime = Date.now(); // Update last event time
           console.log('[AIChat] Received event:', event.type, event);
           // Update the streaming message based on event type
           setMessages((prev) =>
@@ -368,6 +398,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     ...msg,
                     pendingTools: updatedPending,
                     toolCalls: [...(msg.toolCalls || []), newToolCall],
+                  };
+                }
+                case 'thinking': {
+                  const thinking = event.data as string;
+                  return {
+                    ...msg,
+                    thinking: (msg.thinking || '') + thinking,
                   };
                 }
                 case 'content': {
@@ -409,6 +446,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     content: `Error: ${errorMsg}`,
                   };
                 }
+                case 'processing': {
+                  // Show processing status for multi-iteration calls
+                  const status = event.data as string;
+                  console.log('[AIChat] Processing:', status);
+                  // Add as a pending tool for visual feedback
+                  return {
+                    ...msg,
+                    pendingTools: [{ name: 'processing', input: status }],
+                  };
+                }
                 case 'approval_needed': {
                   const data = event.data as AIStreamApprovalNeededData;
                   return {
@@ -417,10 +464,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       command: data.command,
                       toolId: data.tool_id,
                       toolName: data.tool_name,
-                      runOnHost: data.run_on_host,
+                      runOnHost: data.run_on_host ?? false, // Default to false if undefined
+                      targetHost: data.target_host, // Pass through the explicit routing target
                     }],
                   };
                 }
+
                 default:
                   return msg;
               }
@@ -448,6 +497,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         )
       );
     } finally {
+      clearInterval(safetyCheckInterval);
       abortControllerRef = null;
       setIsLoading(false);
     }
@@ -472,11 +522,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
       prev.map((m) =>
         m.id === messageId
           ? {
-              ...m,
-              pendingApprovals: m.pendingApprovals?.map((a) =>
-                a.toolId === approval.toolId ? { ...a, isExecuting: true } : a
-              ),
-            }
+            ...m,
+            pendingApprovals: m.pendingApprovals?.map((a) =>
+              a.toolId === approval.toolId ? { ...a, isExecuting: true } : a
+            ),
+          }
           : m
       )
     );
@@ -491,7 +541,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
         target_id: targetId() || '',
         run_on_host: approval.runOnHost,
         vmid,
+        target_host: approval.targetHost, // Pass through the explicit routing target
       });
+
 
       // Move from pending approvals to completed tool calls
       setMessages((prev) =>
@@ -528,11 +580,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
         prev.map((m) =>
           m.id === messageId
             ? {
-                ...m,
-                pendingApprovals: m.pendingApprovals?.map((a) =>
-                  a.toolId === approval.toolId ? { ...a, isExecuting: false } : a
-                ),
-              }
+              ...m,
+              pendingApprovals: m.pendingApprovals?.map((a) =>
+                a.toolId === approval.toolId ? { ...a, isExecuting: false } : a
+              ),
+            }
             : m
         )
       );
@@ -542,9 +594,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   // Panel renders as flex child, width controlled by isOpen state
   return (
     <div
-      class={`flex-shrink-0 h-full bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 overflow-hidden ${
-        isOpen() ? 'w-[420px]' : 'w-0 border-l-0'
-      }`}
+      class={`flex-shrink-0 h-full bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 overflow-hidden ${isOpen() ? 'w-[420px]' : 'w-0 border-l-0'
+        }`}
     >
       <Show when={isOpen()}>
         {/* Header */}
@@ -673,23 +724,40 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 class={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  class={`max-w-[85%] rounded-lg px-4 py-2 ${
-                    message.role === 'user'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-                  }`}
+                  class={`max-w-[85%] rounded-lg px-4 py-2 ${message.role === 'user'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                    }`}
                 >
+                  {/* Show thinking/reasoning content (DeepSeek) */}
+                  <Show when={message.role === 'assistant' && message.thinking}>
+                    <details class="mb-3 rounded border border-blue-300 dark:border-blue-700 overflow-hidden group">
+                      <summary class="px-2 py-1.5 text-xs font-medium flex items-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors">
+                        <svg class="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        <span>Thinking...</span>
+                        <span class="text-blue-600 dark:text-blue-400 text-[10px]">({message.thinking!.length} chars)</span>
+                      </summary>
+                      <div class="px-2 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-gray-700 dark:text-gray-300 max-h-48 overflow-y-auto whitespace-pre-wrap break-words font-mono">
+                        {message.thinking!.length > 2000 ? message.thinking!.substring(0, 2000) + '...' : message.thinking}
+                      </div>
+                    </details>
+                  </Show>
+
                   {/* Show completed tool calls FIRST - chronological order */}
                   <Show when={message.role === 'assistant' && message.toolCalls && message.toolCalls.length > 0}>
                     <div class="mb-3 space-y-2">
                       <For each={message.toolCalls}>
                         {(tool) => (
                           <div class="rounded border border-gray-300 dark:border-gray-600 overflow-hidden">
-                            <div class={`px-2 py-1 text-xs font-medium flex items-center gap-2 ${
-                              tool.success
-                                ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
-                                : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200'
-                            }`}>
+                            <div class={`px-2 py-1 text-xs font-medium flex items-center gap-2 ${tool.success
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+                              : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200'
+                              }`}>
                               <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                               </svg>
@@ -734,11 +802,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
                               <div class="flex gap-2">
                                 <button
                                   type="button"
-                                  class={`flex-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
-                                    approval.isExecuting
-                                      ? 'bg-green-400 text-white cursor-wait'
-                                      : 'bg-green-600 hover:bg-green-700 text-white'
-                                  }`}
+                                  class={`flex-1 px-2 py-1 text-xs font-medium rounded transition-colors ${approval.isExecuting
+                                    ? 'bg-green-400 text-white cursor-wait'
+                                    : 'bg-green-600 hover:bg-green-700 text-white'
+                                    }`}
                                   onClick={() => executeApprovedCommand(message.id, approval)}
                                   disabled={approval.isExecuting}
                                 >
@@ -887,24 +954,22 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                 type="button"
                                 onClick={() => !isAlreadyAdded() && addResourceToContext(resource)}
                                 disabled={isAlreadyAdded()}
-                                class={`w-full px-3 py-2 text-left flex items-center gap-2 text-xs transition-colors ${
-                                  isAlreadyAdded()
-                                    ? 'bg-purple-50 dark:bg-purple-900/20 text-gray-400 dark:text-gray-500 cursor-default'
-                                    : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300'
-                                }`}
+                                class={`w-full px-3 py-2 text-left flex items-center gap-2 text-xs transition-colors ${isAlreadyAdded()
+                                  ? 'bg-purple-50 dark:bg-purple-900/20 text-gray-400 dark:text-gray-500 cursor-default'
+                                  : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300'
+                                  }`}
                               >
                                 {/* Type icon */}
-                                <span class={`flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-[9px] font-bold uppercase ${
-                                  resource.type === 'vm' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400' :
+                                <span class={`flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-[9px] font-bold uppercase ${resource.type === 'vm' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400' :
                                   resource.type === 'container' ? 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400' :
-                                  resource.type === 'node' ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400' :
-                                  resource.type === 'host' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400' :
-                                  'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                                }`}>
+                                    resource.type === 'node' ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400' :
+                                      resource.type === 'host' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400' :
+                                        'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                  }`}>
                                   {resource.type === 'vm' ? 'VM' :
-                                   resource.type === 'container' ? 'CT' :
-                                   resource.type === 'node' ? 'N' :
-                                   resource.type === 'host' ? 'H' : '?'}
+                                    resource.type === 'container' ? 'CT' :
+                                      resource.type === 'node' ? 'N' :
+                                        resource.type === 'host' ? 'H' : '?'}
                                 </span>
 
                                 {/* Name and details */}
@@ -916,11 +981,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                 </div>
 
                                 {/* Status indicator */}
-                                <span class={`flex-shrink-0 w-2 h-2 rounded-full ${
-                                  resource.status === 'running' || resource.status === 'online' ? 'bg-green-500' :
+                                <span class={`flex-shrink-0 w-2 h-2 rounded-full ${resource.status === 'running' || resource.status === 'online' ? 'bg-green-500' :
                                   resource.status === 'stopped' || resource.status === 'offline' ? 'bg-gray-400' :
-                                  'bg-yellow-500'
-                                }`} />
+                                    'bg-yellow-500'
+                                  }`} />
 
                                 {/* Check if already added */}
                                 <Show when={isAlreadyAdded()}>
@@ -955,6 +1019,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <p class="mt-2 text-[10px] text-gray-400 dark:text-gray-500">
                 Add VMs, containers, or hosts to provide context for your questions
               </p>
+            </Show>
+
+            {/* Guest Notes - show for first context item */}
+            <Show when={aiChatStore.contextItems.length > 0}>
+              <GuestNotes
+                guestId={`${aiChatStore.contextItems[0].type}-${aiChatStore.contextItems[0].id}`}
+                guestName={aiChatStore.contextItems[0].name}
+                guestType={aiChatStore.contextItems[0].type}
+              />
             </Show>
           </div>
           <form onSubmit={handleSubmit} class="flex gap-2">

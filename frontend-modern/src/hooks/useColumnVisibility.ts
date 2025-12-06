@@ -7,6 +7,7 @@ export interface ColumnDef {
   label: string;
   priority: ColumnPriority;
   toggleable?: boolean;
+  width?: string;      // Fixed width for consistent column sizing
   minWidth?: string;
   maxWidth?: string;
   flex?: number;

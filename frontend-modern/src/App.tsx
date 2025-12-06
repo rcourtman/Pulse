@@ -35,6 +35,8 @@ import { createTooltipSystem } from './components/shared/Tooltip';
 import type { State } from '@/types/api';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { startMetricsSampler } from './stores/metricsSampler';
+import { seedFromBackend } from './stores/metricsHistory';
+import { getMetricsViewMode } from './stores/metricsViewMode';
 import BoxesIcon from 'lucide-solid/icons/boxes';
 import MonitorIcon from 'lucide-solid/icons/monitor';
 import BellIcon from 'lucide-solid/icons/bell';
@@ -213,6 +215,13 @@ function App() {
   // Start metrics sampler for sparklines
   onMount(() => {
     startMetricsSampler();
+
+    // If user already has sparklines mode enabled, seed historical data immediately
+    if (getMetricsViewMode() === 'sparklines') {
+      seedFromBackend('1h').catch(() => {
+        // Errors are already logged in seedFromBackend
+      });
+    }
   });
 
   let hasPreloadedRoutes = false;
@@ -253,23 +262,23 @@ function App() {
     pmg: [],
     replicationJobs: [],
     metrics: [],
-  pveBackups: {
-    backupTasks: [],
-    storageBackups: [],
-    guestSnapshots: [],
-  },
-  pbsBackups: [],
-  pmgBackups: [],
-  backups: {
-    pve: {
+    pveBackups: {
       backupTasks: [],
       storageBackups: [],
       guestSnapshots: [],
     },
-    pbs: [],
-    pmg: [],
-  },
-  performance: {
+    pbsBackups: [],
+    pmgBackups: [],
+    backups: {
+      pve: {
+        backupTasks: [],
+        storageBackups: [],
+        guestSnapshots: [],
+      },
+      pbs: [],
+      pmg: [],
+    },
+    performance: {
       apiCallDuration: {},
       lastPollDuration: 0,
       pollingStartTime: '',
@@ -500,9 +509,9 @@ function App() {
 
       // Detect legacy DISABLE_AUTH flag (now ignored) so we can surface a warning
       if (securityData.deprecatedDisableAuth === true) {
-          logger.warn(
-            '[App] Legacy DISABLE_AUTH flag detected; authentication remains enabled. Remove the flag and restart Pulse to silence this warning.',
-          );
+        logger.warn(
+          '[App] Legacy DISABLE_AUTH flag detected; authentication remains enabled. Remove the flag and restart Pulse to silence this warning.',
+        );
       }
 
       const authConfigured = securityData.hasAuthentication || false;
@@ -727,16 +736,19 @@ function App() {
   const RootLayout = (props: { children?: JSX.Element }) => {
     // Check AI settings on mount and setup keyboard shortcut
     onMount(() => {
-      // Check if AI is enabled
-      import('./api/ai').then(({ AIAPI }) => {
-        AIAPI.getSettings()
-          .then((settings) => {
-            aiChatStore.setEnabled(settings.enabled && settings.configured);
-          })
-          .catch(() => {
-            aiChatStore.setEnabled(false);
-          });
-      });
+      // Only check AI settings if already authenticated (not on login screen)
+      // Otherwise, the 401 response triggers a redirect loop
+      if (!needsAuth()) {
+        import('./api/ai').then(({ AIAPI }) => {
+          AIAPI.getSettings()
+            .then((settings) => {
+              aiChatStore.setEnabled(settings.enabled && settings.configured);
+            })
+            .catch(() => {
+              aiChatStore.setEnabled(false);
+            });
+        });
+      }
 
       // Keyboard shortcut: Cmd/Ctrl+K to toggle AI
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -762,14 +774,18 @@ function App() {
       <Show
         when={!isLoading()}
         fallback={
-          <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+          <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
             <div class="text-gray-600 dark:text-gray-400">Loading...</div>
           </div>
         }
       >
-        <Show when={!needsAuth()} fallback={<Login onLogin={handleLogin} />}>
+        <Show when={!needsAuth()} fallback={<Login onLogin={handleLogin} hasAuth={hasAuth()} />}>
           <ErrorBoundary>
-            <Show when={enhancedStore()} fallback={<div>Initializing...</div>}>
+            <Show when={enhancedStore()} fallback={
+              <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+                <div class="text-gray-600 dark:text-gray-400">Initializing...</div>
+              </div>
+            }>
               <WebSocketContext.Provider value={enhancedStore()!}>
                 <DarkModeContext.Provider value={darkMode}>
                   <SecurityWarning />
@@ -870,13 +886,12 @@ function ConnectionStatusBadge(props: {
 }) {
   return (
     <div
-      class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out px-1.5 ${
-        props.connected()
-          ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3'
-          : props.reconnecting()
-            ? 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1'
-            : 'disconnected bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 min-w-6 h-6 group-hover:px-3'
-      } ${props.class ?? ''}`}
+      class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out px-1.5 ${props.connected()
+        ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3'
+        : props.reconnecting()
+          ? 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1'
+          : 'disconnected bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 min-w-6 h-6 group-hover:px-3'
+        } ${props.class ?? ''}`}
     >
       <Show when={props.reconnecting()}>
         <svg class="animate-spin h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24">
@@ -902,11 +917,10 @@ function ConnectionStatusBadge(props: {
         <span class="h-2.5 w-2.5 rounded-full bg-gray-600 dark:bg-gray-400 flex-shrink-0"></span>
       </Show>
       <span
-        class={`whitespace-nowrap overflow-hidden transition-all duration-500 ${
-          props.connected() || (!props.connected() && !props.reconnecting())
-            ? 'max-w-0 group-hover:max-w-[100px] group-hover:ml-2 group-hover:mr-1 opacity-0 group-hover:opacity-100'
-            : 'max-w-[100px] ml-1 opacity-100'
-        }`}
+        class={`whitespace-nowrap overflow-hidden transition-all duration-500 ${props.connected() || (!props.connected() && !props.reconnecting())
+          ? 'max-w-0 group-hover:max-w-[100px] group-hover:ml-2 group-hover:mr-1 opacity-0 group-hover:opacity-100'
+          : 'max-w-[100px] ml-1 opacity-100'
+          }`}
       >
         {props.connected()
           ? 'Connected'
@@ -1241,12 +1255,12 @@ function AppLayout(props: {
                 const baseClasses =
                   'tab relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
 
-              const className = () => {
-                if (isActive()) {
-                  return `${baseClasses} bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
-                }
-                return `${baseClasses} text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
-              };
+                const className = () => {
+                  if (isActive()) {
+                    return `${baseClasses} bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
+                  }
+                  return `${baseClasses} text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
+                };
 
                 return (
                   <div

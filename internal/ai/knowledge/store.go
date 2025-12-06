@@ -1,0 +1,421 @@
+// Package knowledge provides persistent storage for AI-learned information about guests
+package knowledge
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
+	"github.com/rs/zerolog/log"
+)
+
+// Note represents a single piece of learned information
+type Note struct {
+	ID        string    `json:"id"`
+	Category  string    `json:"category"` // "service", "path", "credential", "config", "learning", "history"
+	Title     string    `json:"title"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// GuestKnowledge represents all knowledge about a specific guest
+type GuestKnowledge struct {
+	GuestID   string    `json:"guest_id"`
+	GuestName string    `json:"guest_name"`
+	GuestType string    `json:"guest_type"` // "vm", "container", "node", "host"
+	Notes     []Note    `json:"notes"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Store manages persistent knowledge storage with encryption
+type Store struct {
+	dataDir string
+	mu      sync.RWMutex
+	cache   map[string]*GuestKnowledge
+	crypto  *crypto.CryptoManager
+}
+
+// NewStore creates a new knowledge store with encryption
+func NewStore(dataDir string) (*Store, error) {
+	knowledgeDir := filepath.Join(dataDir, "knowledge")
+	if err := os.MkdirAll(knowledgeDir, 0700); err != nil {
+		return nil, fmt.Errorf("failed to create knowledge directory: %w", err)
+	}
+
+	// Initialize crypto manager for encryption (uses same key as other Pulse secrets)
+	cryptoMgr, err := crypto.NewCryptoManagerAt(dataDir)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to initialize crypto for knowledge store, data will be unencrypted")
+	}
+
+	return &Store{
+		dataDir: knowledgeDir,
+		cache:   make(map[string]*GuestKnowledge),
+		crypto:  cryptoMgr,
+	}, nil
+}
+
+// guestFilePath returns the file path for a guest's knowledge
+func (s *Store) guestFilePath(guestID string) string {
+	// Sanitize guest ID for filesystem
+	safeID := filepath.Base(guestID) // Prevent path traversal
+	// Use .enc extension for encrypted files
+	if s.crypto != nil {
+		return filepath.Join(s.dataDir, safeID+".enc")
+	}
+	return filepath.Join(s.dataDir, safeID+".json")
+}
+
+// GetKnowledge retrieves knowledge for a guest
+func (s *Store) GetKnowledge(guestID string) (*GuestKnowledge, error) {
+	s.mu.RLock()
+	if cached, ok := s.cache[guestID]; ok {
+		s.mu.RUnlock()
+		return cached, nil
+	}
+	s.mu.RUnlock()
+
+	// Load from disk
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Double-check after acquiring write lock
+	if cached, ok := s.cache[guestID]; ok {
+		return cached, nil
+	}
+
+	filePath := s.guestFilePath(guestID)
+	data, err := os.ReadFile(filePath)
+	if os.IsNotExist(err) {
+		// Try legacy unencrypted file
+		legacyPath := filepath.Join(s.dataDir, filepath.Base(guestID)+".json")
+		data, err = os.ReadFile(legacyPath)
+		if os.IsNotExist(err) {
+			// No knowledge yet, return empty
+			knowledge := &GuestKnowledge{
+				GuestID: guestID,
+				Notes:   []Note{},
+			}
+			s.cache[guestID] = knowledge
+			return knowledge, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to read knowledge file: %w", err)
+		}
+		// Legacy file found - will be encrypted on next save
+		log.Info().Str("guest_id", guestID).Msg("Found unencrypted knowledge file, will encrypt on next save")
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to read knowledge file: %w", err)
+	}
+
+	// Decrypt if crypto is available and file is encrypted
+	if s.crypto != nil && filepath.Ext(filePath) == ".enc" {
+		decrypted, err := s.crypto.Decrypt(data)
+		if err != nil {
+			// Try as plain JSON (migration case)
+			var knowledge GuestKnowledge
+			if jsonErr := json.Unmarshal(data, &knowledge); jsonErr == nil {
+				log.Info().Str("guest_id", guestID).Msg("Loaded unencrypted knowledge (will encrypt on next save)")
+				s.cache[guestID] = &knowledge
+				return &knowledge, nil
+			}
+			return nil, fmt.Errorf("failed to decrypt knowledge: %w", err)
+		}
+		data = decrypted
+	}
+
+	var knowledge GuestKnowledge
+	if err := json.Unmarshal(data, &knowledge); err != nil {
+		return nil, fmt.Errorf("failed to parse knowledge file: %w", err)
+	}
+
+	s.cache[guestID] = &knowledge
+	return &knowledge, nil
+}
+
+// SaveNote adds or updates a note for a guest
+func (s *Store) SaveNote(guestID, guestName, guestType, category, title, content string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Get or create knowledge
+	knowledge, ok := s.cache[guestID]
+	if !ok {
+		// Try to load from disk first
+		knowledge = &GuestKnowledge{
+			GuestID:   guestID,
+			GuestName: guestName,
+			GuestType: guestType,
+			Notes:     []Note{},
+		}
+		
+		// Check for existing file
+		filePath := s.guestFilePath(guestID)
+		if data, err := os.ReadFile(filePath); err == nil {
+			// Decrypt if needed
+			if s.crypto != nil && filepath.Ext(filePath) == ".enc" {
+				if decrypted, err := s.crypto.Decrypt(data); err == nil {
+					data = decrypted
+				}
+			}
+			if err := json.Unmarshal(data, &knowledge); err != nil {
+				log.Warn().Err(err).Str("guest_id", guestID).Msg("Failed to parse existing knowledge, starting fresh")
+			}
+		}
+		s.cache[guestID] = knowledge
+	}
+
+	// Update guest info if provided
+	if guestName != "" {
+		knowledge.GuestName = guestName
+	}
+	if guestType != "" {
+		knowledge.GuestType = guestType
+	}
+
+	now := time.Now()
+
+	// Check if note with same title exists in category
+	found := false
+	for i, note := range knowledge.Notes {
+		if note.Category == category && note.Title == title {
+			// Update existing note
+			knowledge.Notes[i].Content = content
+			knowledge.Notes[i].UpdatedAt = now
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		// Add new note
+		note := Note{
+			ID:        fmt.Sprintf("%s-%d", category, len(knowledge.Notes)+1),
+			Category:  category,
+			Title:     title,
+			Content:   content,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		knowledge.Notes = append(knowledge.Notes, note)
+	}
+
+	knowledge.UpdatedAt = now
+
+	// Save to disk (encrypted)
+	return s.saveToFile(guestID, knowledge)
+}
+
+// DeleteNote removes a note
+func (s *Store) DeleteNote(guestID, noteID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	knowledge, ok := s.cache[guestID]
+	if !ok {
+		return fmt.Errorf("guest not found: %s", guestID)
+	}
+
+	// Find and remove note
+	for i, note := range knowledge.Notes {
+		if note.ID == noteID {
+			knowledge.Notes = append(knowledge.Notes[:i], knowledge.Notes[i+1:]...)
+			knowledge.UpdatedAt = time.Now()
+			return s.saveToFile(guestID, knowledge)
+		}
+	}
+
+	return fmt.Errorf("note not found: %s", noteID)
+}
+
+// GetNotesByCategory returns notes filtered by category
+func (s *Store) GetNotesByCategory(guestID, category string) ([]Note, error) {
+	knowledge, err := s.GetKnowledge(guestID)
+	if err != nil {
+		return nil, err
+	}
+
+	var notes []Note
+	for _, note := range knowledge.Notes {
+		if category == "" || note.Category == category {
+			notes = append(notes, note)
+		}
+	}
+	return notes, nil
+}
+
+// FormatForContext formats knowledge for injection into AI context
+func (s *Store) FormatForContext(guestID string) string {
+	knowledge, err := s.GetKnowledge(guestID)
+	if err != nil {
+		log.Warn().Err(err).Str("guest_id", guestID).Msg("Failed to load guest knowledge")
+		return ""
+	}
+
+	if len(knowledge.Notes) == 0 {
+		return ""
+	}
+
+	// Group notes by category
+	byCategory := make(map[string][]Note)
+	for _, note := range knowledge.Notes {
+		byCategory[note.Category] = append(byCategory[note.Category], note)
+	}
+
+	// Build formatted output with guidance on using this knowledge
+	var result string
+	result = fmt.Sprintf("\n## Previously Learned Information about %s\n", knowledge.GuestName)
+	result += "**If relevant to the current task, use this saved information directly instead of rediscovering it.**\n"
+
+	categoryOrder := []string{"credential", "service", "path", "config", "learning", "history"}
+	categoryNames := map[string]string{
+		"credential": "Credentials",
+		"service":    "Services",
+		"path":       "Important Paths",
+		"config":     "Configuration",
+		"learning":   "Learnings",
+		"history":    "Session History",
+	}
+
+	for _, cat := range categoryOrder {
+		notes, ok := byCategory[cat]
+		if !ok || len(notes) == 0 {
+			continue
+		}
+
+		result += fmt.Sprintf("\n### %s\n", categoryNames[cat])
+		for _, note := range notes {
+			result += fmt.Sprintf("- **%s**: %s\n", note.Title, note.Content)
+		}
+	}
+
+	return result
+}
+
+// saveToFile persists knowledge to disk with encryption
+func (s *Store) saveToFile(guestID string, knowledge *GuestKnowledge) error {
+	data, err := json.MarshalIndent(knowledge, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal knowledge: %w", err)
+	}
+
+	// Encrypt if crypto manager is available
+	if s.crypto != nil {
+		encrypted, err := s.crypto.Encrypt(data)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt knowledge: %w", err)
+		}
+		data = encrypted
+	}
+
+	filePath := s.guestFilePath(guestID)
+	if err := os.WriteFile(filePath, data, 0600); err != nil {
+		return fmt.Errorf("failed to write knowledge file: %w", err)
+	}
+
+	// Remove legacy unencrypted file if it exists
+	if s.crypto != nil {
+		legacyPath := filepath.Join(s.dataDir, filepath.Base(guestID)+".json")
+		if _, err := os.Stat(legacyPath); err == nil {
+			os.Remove(legacyPath)
+			log.Info().Str("guest_id", guestID).Msg("Removed legacy unencrypted knowledge file")
+		}
+	}
+
+	log.Debug().
+		Str("guest_id", guestID).
+		Int("notes", len(knowledge.Notes)).
+		Bool("encrypted", s.crypto != nil).
+		Msg("Saved guest knowledge")
+
+	return nil
+}
+
+// ListGuests returns all guests that have knowledge stored
+func (s *Store) ListGuests() ([]string, error) {
+	files, err := os.ReadDir(s.dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read knowledge directory: %w", err)
+	}
+
+	var guests []string
+	for _, file := range files {
+		ext := filepath.Ext(file.Name())
+		if ext == ".json" || ext == ".enc" {
+			guestID := file.Name()[:len(file.Name())-len(ext)]
+			guests = append(guests, guestID)
+		}
+	}
+	return guests, nil
+}
+
+// FormatAllForContext returns a summary of all saved knowledge across all guests
+// This is used when no specific target is selected to give the AI full context
+func (s *Store) FormatAllForContext() string {
+	guests, err := s.ListGuests()
+	if err != nil || len(guests) == 0 {
+		return ""
+	}
+
+	var sections []string
+	totalNotes := 0
+
+	for _, guestID := range guests {
+		knowledge, err := s.GetKnowledge(guestID)
+		if err != nil || len(knowledge.Notes) == 0 {
+			continue
+		}
+
+		totalNotes += len(knowledge.Notes)
+
+		// Build a summary for this guest
+		guestName := knowledge.GuestName
+		if guestName == "" {
+			guestName = guestID
+		}
+
+		// Group notes by category
+		byCategory := make(map[string][]Note)
+		for _, note := range knowledge.Notes {
+			byCategory[note.Category] = append(byCategory[note.Category], note)
+		}
+
+		var guestSection string
+		guestSection = fmt.Sprintf("\n### %s (%s)", guestName, knowledge.GuestType)
+
+		categoryOrder := []string{"credential", "service", "path", "config", "learning"}
+		for _, cat := range categoryOrder {
+			notes, ok := byCategory[cat]
+			if !ok || len(notes) == 0 {
+				continue
+			}
+			for _, note := range notes {
+				// Mask credentials in the summary
+				content := note.Content
+				if cat == "credential" && len(content) > 6 {
+					content = content[:2] + "****" + content[len(content)-2:]
+				}
+				guestSection += fmt.Sprintf("\n- **%s**: %s", note.Title, content)
+			}
+		}
+
+		sections = append(sections, guestSection)
+	}
+
+	if len(sections) == 0 {
+		return ""
+	}
+
+	result := fmt.Sprintf("\n\n## Saved Knowledge (%d notes across %d guests)\n", totalNotes, len(sections))
+	result += "This is information learned from previous sessions. Use it to avoid rediscovery.\n"
+	result += strings.Join(sections, "\n")
+
+	return result
+}
+

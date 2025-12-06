@@ -7,14 +7,20 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 const (
-	openaiAPIURL = "https://api.openai.com/v1/chat/completions"
+	openaiAPIURL        = "https://api.openai.com/v1/chat/completions"
+	openaiMaxRetries    = 3
+	openaiInitialBackoff = 2 * time.Second
 )
 
 // OpenAIClient implements the Provider interface for OpenAI's API
+// Also works with OpenAI-compatible APIs like DeepSeek
 type OpenAIClient struct {
 	apiKey  string
 	model   string
@@ -32,7 +38,8 @@ func NewOpenAIClient(apiKey, model, baseURL string) *OpenAIClient {
 		model:   model,
 		baseURL: baseURL,
 		client: &http.Client{
-			Timeout: 120 * time.Second,
+			// 5 minutes timeout - DeepSeek reasoning models can take a long time
+			Timeout: 300 * time.Second,
 		},
 	}
 }
@@ -44,15 +51,52 @@ func (c *OpenAIClient) Name() string {
 
 // openaiRequest is the request body for the OpenAI API
 type openaiRequest struct {
-	Model       string          `json:"model"`
-	Messages    []openaiMessage `json:"messages"`
-	MaxTokens   int             `json:"max_tokens,omitempty"`
-	Temperature float64         `json:"temperature,omitempty"`
+	Model       string              `json:"model"`
+	Messages    []openaiMessage     `json:"messages"`
+	MaxTokens   int                 `json:"max_tokens,omitempty"`
+	Temperature float64             `json:"temperature,omitempty"`
+	Tools       []openaiTool        `json:"tools,omitempty"`
+	ToolChoice  interface{}         `json:"tool_choice,omitempty"` // "auto", "none", or specific tool
+}
+
+// deepseekRequest extends openaiRequest with DeepSeek-specific fields
+type deepseekRequest struct {
+	Model       string              `json:"model"`
+	Messages    []openaiMessage     `json:"messages"`
+	MaxTokens   int                 `json:"max_tokens,omitempty"`
+	Tools       []openaiTool        `json:"tools,omitempty"`
+	ToolChoice  interface{}         `json:"tool_choice,omitempty"`
+}
+
+// openaiTool represents a function tool in OpenAI format
+type openaiTool struct {
+	Type     string         `json:"type"` // always "function"
+	Function openaiFunction `json:"function"`
+}
+
+type openaiFunction struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	Parameters  map[string]interface{} `json:"parameters,omitempty"`
 }
 
 type openaiMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role             string           `json:"role"`
+	Content          interface{}      `json:"content,omitempty"`            // string or null for tool calls
+	ReasoningContent string           `json:"reasoning_content,omitempty"`  // DeepSeek thinking mode
+	ToolCalls        []openaiToolCall `json:"tool_calls,omitempty"`         // For assistant messages with tool calls
+	ToolCallID       string           `json:"tool_call_id,omitempty"`       // For tool response messages
+}
+
+type openaiToolCall struct {
+	ID       string             `json:"id"`
+	Type     string             `json:"type"` // always "function"
+	Function openaiToolFunction `json:"function"`
+}
+
+type openaiToolFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"` // JSON string of arguments
 }
 
 // openaiResponse is the response from the OpenAI API
@@ -67,8 +111,15 @@ type openaiResponse struct {
 
 type openaiChoice struct {
 	Index        int           `json:"index"`
-	Message      openaiMessage `json:"message"`
-	FinishReason string        `json:"finish_reason"`
+	Message      openaiRespMsg `json:"message"`
+	FinishReason string        `json:"finish_reason"` // "stop", "tool_calls", etc.
+}
+
+type openaiRespMsg struct {
+	Role             string           `json:"role"`
+	Content          string           `json:"content,omitempty"`
+	ReasoningContent string           `json:"reasoning_content,omitempty"` // DeepSeek thinking mode
+	ToolCalls        []openaiToolCall `json:"tool_calls,omitempty"`
 }
 
 type openaiUsage struct {
@@ -87,6 +138,16 @@ type openaiErrorDetail struct {
 	Code    string `json:"code"`
 }
 
+// isDeepSeek returns true if this client is configured for DeepSeek
+func (c *OpenAIClient) isDeepSeek() bool {
+	return strings.Contains(c.baseURL, "deepseek.com")
+}
+
+// isDeepSeekReasoner returns true if using DeepSeek's reasoning model
+func (c *OpenAIClient) isDeepSeekReasoner() bool {
+	return c.isDeepSeek() && strings.Contains(c.model, "reasoner")
+}
+
 // Chat sends a chat request to the OpenAI API
 func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
 	// Convert messages to OpenAI format
@@ -101,10 +162,45 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	for _, m := range req.Messages {
-		messages = append(messages, openaiMessage{
-			Role:    m.Role,
-			Content: m.Content,
-		})
+		msg := openaiMessage{
+			Role: m.Role,
+		}
+
+		// Handle tool calls in assistant messages
+		if len(m.ToolCalls) > 0 {
+			msg.Content = nil // Content is null when there are tool calls
+			if m.Content != "" {
+				msg.Content = m.Content
+			}
+			// For DeepSeek reasoner, include reasoning_content if present
+			if c.isDeepSeekReasoner() && m.ReasoningContent != "" {
+				msg.ReasoningContent = m.ReasoningContent
+			}
+			for _, tc := range m.ToolCalls {
+				argsJSON, _ := json.Marshal(tc.Input)
+				msg.ToolCalls = append(msg.ToolCalls, openaiToolCall{
+					ID:   tc.ID,
+					Type: "function",
+					Function: openaiToolFunction{
+						Name:      tc.Name,
+						Arguments: string(argsJSON),
+					},
+				})
+			}
+		} else if m.ToolResult != nil {
+			// This is a tool result message
+			msg.Role = "tool"
+			msg.Content = m.ToolResult.Content
+			msg.ToolCallID = m.ToolResult.ToolUseID
+		} else {
+			msg.Content = m.Content
+			// For assistant messages with reasoning content (DeepSeek)
+			if c.isDeepSeekReasoner() && m.ReasoningContent != "" {
+				msg.ReasoningContent = m.ReasoningContent
+			}
+		}
+
+		messages = append(messages, msg)
 	}
 
 	// Use provided model or fall back to client default
@@ -113,6 +209,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		model = c.model
 	}
 
+	// Build request
 	openaiReq := openaiRequest{
 		Model:    model,
 		Messages: messages,
@@ -122,8 +219,30 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		openaiReq.MaxTokens = req.MaxTokens
 	}
 
-	if req.Temperature > 0 {
+	// DeepSeek reasoner doesn't support temperature
+	if req.Temperature > 0 && !c.isDeepSeekReasoner() {
 		openaiReq.Temperature = req.Temperature
+	}
+
+	// Convert tools to OpenAI format
+	if len(req.Tools) > 0 {
+		for _, t := range req.Tools {
+			// Skip non-function tools (like web_search)
+			if t.Type != "" && t.Type != "function" {
+				continue
+			}
+			openaiReq.Tools = append(openaiReq.Tools, openaiTool{
+				Type: "function",
+				Function: openaiFunction{
+					Name:        t.Name,
+					Description: t.Description,
+					Parameters:  t.InputSchema,
+				},
+			})
+		}
+		if len(openaiReq.Tools) > 0 {
+			openaiReq.ToolChoice = "auto"
+		}
 	}
 
 	body, err := json.Marshal(openaiReq)
@@ -131,31 +250,83 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
+	// Retry loop for transient errors (connection resets, 429, 5xx)
+	var respBody []byte
+	var lastErr error
 
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	for attempt := 0; attempt <= openaiMaxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff: 2s, 4s, 8s
+			backoff := openaiInitialBackoff * time.Duration(1<<(attempt-1))
+			log.Warn().
+				Int("attempt", attempt).
+				Dur("backoff", backoff).
+				Str("last_error", lastErr.Error()).
+				Msg("Retrying OpenAI/DeepSeek API request after transient error")
 
-	resp, err := c.client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp openaiError
-		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
-			return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errResp.Error.Message)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+			}
 		}
-		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(body))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+		resp, err := c.client.Do(httpReq)
+		if err != nil {
+			// Check if this is a retryable connection error
+			errStr := err.Error()
+			if strings.Contains(errStr, "connection reset") ||
+				strings.Contains(errStr, "connection refused") ||
+				strings.Contains(errStr, "EOF") ||
+				strings.Contains(errStr, "timeout") {
+				lastErr = fmt.Errorf("connection error: %w", err)
+				continue
+			}
+			return nil, fmt.Errorf("request failed: %w", err)
+		}
+
+		respBody, err = io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = fmt.Errorf("failed to read response: %w", err)
+			continue
+		}
+
+		// Check for retryable HTTP errors
+		if resp.StatusCode == 429 || resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504 {
+			var errResp openaiError
+			errMsg := string(respBody)
+			if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
+				errMsg = errResp.Error.Message
+			}
+			lastErr = fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
+			continue
+		}
+
+		// Non-retryable error
+		if resp.StatusCode != http.StatusOK {
+			var errResp openaiError
+			if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
+				return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errResp.Error.Message)
+			}
+			return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+		}
+
+		// Success - break out of retry loop
+		lastErr = nil
+		break
+	}
+
+	if lastErr != nil {
+		return nil, fmt.Errorf("request failed after %d retries: %w", openaiMaxRetries, lastErr)
 	}
 
 	var openaiResp openaiResponse
@@ -167,13 +338,33 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		return nil, fmt.Errorf("no response choices returned")
 	}
 
-	return &ChatResponse{
-		Content:      openaiResp.Choices[0].Message.Content,
-		Model:        openaiResp.Model,
-		StopReason:   openaiResp.Choices[0].FinishReason,
-		InputTokens:  openaiResp.Usage.PromptTokens,
-		OutputTokens: openaiResp.Usage.CompletionTokens,
-	}, nil
+	choice := openaiResp.Choices[0]
+	result := &ChatResponse{
+		Content:          choice.Message.Content,
+		ReasoningContent: choice.Message.ReasoningContent, // DeepSeek thinking mode
+		Model:            openaiResp.Model,
+		StopReason:       choice.FinishReason,
+		InputTokens:      openaiResp.Usage.PromptTokens,
+		OutputTokens:     openaiResp.Usage.CompletionTokens,
+	}
+
+	// Convert tool calls from OpenAI format to our format
+	if len(choice.Message.ToolCalls) > 0 {
+		result.StopReason = "tool_use" // Normalize to match Anthropic's format
+		for _, tc := range choice.Message.ToolCalls {
+			var input map[string]interface{}
+			if err := json.Unmarshal([]byte(tc.Function.Arguments), &input); err != nil {
+				input = map[string]interface{}{"raw": tc.Function.Arguments}
+			}
+			result.ToolCalls = append(result.ToolCalls, ToolCall{
+				ID:    tc.ID,
+				Name:  tc.Function.Name,
+				Input: input,
+			})
+		}
+	}
+
+	return result, nil
 }
 
 // TestConnection validates the API key by making a minimal request

@@ -32,7 +32,8 @@ func NewAnthropicClient(apiKey, model string) *AnthropicClient {
 		apiKey: apiKey,
 		model:  model,
 		client: &http.Client{
-			Timeout: 120 * time.Second, // LLM responses can take a while
+			// 5 minutes - Opus and other large models can take a very long time
+			Timeout: 300 * time.Second,
 		},
 	}
 }

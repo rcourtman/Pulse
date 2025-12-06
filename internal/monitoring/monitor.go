@@ -24,6 +24,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
+	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
@@ -553,6 +554,7 @@ type Monitor struct {
 	startTime                  time.Time
 	rateTracker                *RateTracker
 	metricsHistory             *MetricsHistory
+	metricsStore               *metrics.Store            // Persistent SQLite metrics storage
 	alertManager               *alerts.Manager
 	notificationMgr            *notifications.NotificationManager
 	configPersist              *config.ConfigPersistence
@@ -2554,7 +2556,7 @@ func checkContainerizedTempMonitoring() {
 
 	// Log warning
 	log.Warn().
-		Msg("🔐 SECURITY NOTICE: Pulse is running in a container with SSH-based temperature monitoring enabled. " +
+		Msg("SECURITY NOTICE: Pulse is running in a container with SSH-based temperature monitoring enabled. " +
 			"SSH private keys are stored inside the container, which could be a security risk if the container is compromised. " +
 			"Future versions will use agent-based architecture for better security. " +
 			"See documentation for hardening recommendations.")
@@ -2638,6 +2640,17 @@ func New(cfg *config.Config) (*Monitor, error) {
 	guestAgentVersionTimeout := parseDurationEnv("GUEST_AGENT_VERSION_TIMEOUT", defaultGuestAgentVersionTimeout)
 	guestAgentRetries := parseIntEnv("GUEST_AGENT_RETRIES", defaultGuestAgentRetries)
 
+	// Initialize persistent metrics store (SQLite)
+	var metricsStore *metrics.Store
+	metricsStoreConfig := metrics.DefaultConfig(cfg.DataPath)
+	ms, err := metrics.NewStore(metricsStoreConfig)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to initialize persistent metrics store - continuing with in-memory only")
+	} else {
+		metricsStore = ms
+		log.Info().Str("path", metricsStoreConfig.DBPath).Msg("Persistent metrics store initialized")
+	}
+
 	m := &Monitor{
 		config:                     cfg,
 		state:                      models.NewState(),
@@ -2662,6 +2675,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		startTime:                  time.Now(),
 		rateTracker:                NewRateTracker(),
 		metricsHistory:             NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours
+		metricsStore:               metricsStore,                          // Persistent SQLite storage
 		alertManager:               alerts.NewManager(),
 		notificationMgr:            notifications.NewNotificationManager(cfg.PublicURL),
 		configPersist:              config.NewConfigPersistence(cfg.DataPath),
@@ -4880,6 +4894,12 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "cpu", modelNodes[i].CPU*100, now)
 			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "memory", modelNodes[i].Memory.Usage, now)
 			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "disk", modelNodes[i].Disk.Usage, now)
+			// Also write to persistent store
+			if m.metricsStore != nil {
+				m.metricsStore.Write("node", modelNodes[i].ID, "cpu", modelNodes[i].CPU*100, now)
+				m.metricsStore.Write("node", modelNodes[i].ID, "memory", modelNodes[i].Memory.Usage, now)
+				m.metricsStore.Write("node", modelNodes[i].ID, "disk", modelNodes[i].Disk.Usage, now)
+			}
 		}
 
 		// Check thresholds for alerts
@@ -5933,6 +5953,43 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	m.state.UpdateVMsForInstance(instanceName, allVMs)
 	m.state.UpdateContainersForInstance(instanceName, allContainers)
 
+	// Record guest metrics history for running guests (enables sparkline/trends view)
+	now := time.Now()
+	for _, vm := range allVMs {
+		if vm.Status == "running" {
+			m.metricsHistory.AddGuestMetric(vm.ID, "cpu", vm.CPU*100, now)
+			m.metricsHistory.AddGuestMetric(vm.ID, "memory", vm.Memory.Usage, now)
+			if vm.Disk.Usage >= 0 {
+				m.metricsHistory.AddGuestMetric(vm.ID, "disk", vm.Disk.Usage, now)
+			}
+			// Also write to persistent store
+			if m.metricsStore != nil {
+				m.metricsStore.Write("vm", vm.ID, "cpu", vm.CPU*100, now)
+				m.metricsStore.Write("vm", vm.ID, "memory", vm.Memory.Usage, now)
+				if vm.Disk.Usage >= 0 {
+					m.metricsStore.Write("vm", vm.ID, "disk", vm.Disk.Usage, now)
+				}
+			}
+		}
+	}
+	for _, ct := range allContainers {
+		if ct.Status == "running" {
+			m.metricsHistory.AddGuestMetric(ct.ID, "cpu", ct.CPU*100, now)
+			m.metricsHistory.AddGuestMetric(ct.ID, "memory", ct.Memory.Usage, now)
+			if ct.Disk.Usage >= 0 {
+				m.metricsHistory.AddGuestMetric(ct.ID, "disk", ct.Disk.Usage, now)
+			}
+			// Also write to persistent store
+			if m.metricsStore != nil {
+				m.metricsStore.Write("container", ct.ID, "cpu", ct.CPU*100, now)
+				m.metricsStore.Write("container", ct.ID, "memory", ct.Memory.Usage, now)
+				if ct.Disk.Usage >= 0 {
+					m.metricsStore.Write("container", ct.ID, "disk", ct.Disk.Usage, now)
+				}
+			}
+		}
+	}
+
 	m.pollReplicationStatus(ctx, instanceName, client, allVMs)
 
 	log.Info().
@@ -6943,6 +7000,11 @@ func (m *Monitor) GetConfigPersistence() *config.ConfigPersistence {
 	return m.configPersist
 }
 
+// GetMetricsStore returns the persistent metrics store
+func (m *Monitor) GetMetricsStore() *metrics.Store {
+	return m.metricsStore
+}
+
 // pollStorageBackupsWithNodes polls backups using a provided nodes list to avoid duplicate GetNodes calls
 func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
 
@@ -7779,6 +7841,15 @@ func (m *Monitor) Stop() {
 	// Stop notification manager
 	if m.notificationMgr != nil {
 		m.notificationMgr.Stop()
+	}
+
+	// Close persistent metrics store (flushes buffered data)
+	if m.metricsStore != nil {
+		if err := m.metricsStore.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close metrics store")
+		} else {
+			log.Info().Msg("Metrics store closed successfully")
+		}
 	}
 
 	log.Info().Msg("Monitor stopped")

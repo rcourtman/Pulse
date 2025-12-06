@@ -11,6 +11,7 @@ const (
 	ProviderAnthropic = config.AIProviderAnthropic
 	ProviderOpenAI    = config.AIProviderOpenAI
 	ProviderOllama    = config.AIProviderOllama
+	ProviderDeepSeek  = config.AIProviderDeepSeek
 )
 
 // NewDefaultConfig returns a new AI config with sensible defaults
