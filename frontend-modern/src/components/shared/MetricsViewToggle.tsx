@@ -15,25 +15,6 @@ export const MetricsViewToggle: Component = () => {
 
   return (
     <div class="inline-flex items-center gap-2">
-      {/* Time Range Selector - only shown in sparklines mode */}
-      <Show when={viewMode() === 'sparklines'}>
-        <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-          {TIME_RANGE_OPTIONS.map((option) => (
-            <button
-              type="button"
-              onClick={() => setTimeRange(option.value as TimeRange)}
-              class={`px-2 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${timeRange() === option.value
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600/50'
-                }`}
-              title={`Show last ${option.label} of data`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </Show>
-
       {/* View Mode Toggle */}
       <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
         <button
@@ -68,6 +49,25 @@ export const MetricsViewToggle: Component = () => {
           Trends
         </button>
       </div>
+
+      {/* Time Range Selector - only shown in sparklines mode, appears to the right */}
+      <Show when={viewMode() === 'sparklines'}>
+        <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+          {TIME_RANGE_OPTIONS.map((option) => (
+            <button
+              type="button"
+              onClick={() => setTimeRange(option.value as TimeRange)}
+              class={`px-2 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${timeRange() === option.value
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600/50'
+                }`}
+              title={`Show last ${option.label} of data`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </Show>
     </div>
   );
 };

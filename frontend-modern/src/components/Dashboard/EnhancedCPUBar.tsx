@@ -2,7 +2,7 @@ import { Show, createMemo, createSignal } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { formatPercent } from '@/utils/format';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
-import { getMetricHistoryForRange } from '@/stores/metricsHistory';
+import { getMetricHistoryForRange, getMetricsVersion } from '@/stores/metricsHistory';
 import { Sparkline } from '@/components/shared/Sparkline';
 
 interface EnhancedCPUBarProps {
@@ -38,7 +38,10 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
     const { viewMode, timeRange } = useMetricsViewMode();
 
     // Get metric history for sparkline
+    // Depends on metricsVersion to re-fetch when data is seeded (e.g., on time range change)
     const metricHistory = createMemo(() => {
+        // Subscribe to version changes so we re-read when new data is seeded
+        getMetricsVersion();
         if (viewMode() !== 'sparklines' || !props.resourceId) return [];
         return getMetricHistoryForRange(props.resourceId, timeRange());
     });

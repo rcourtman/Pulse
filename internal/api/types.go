@@ -65,6 +65,7 @@ type ChartResponse struct {
 	ChartData   map[string]VMChartData      `json:"data"`
 	NodeData    map[string]NodeChartData    `json:"nodeData"`
 	StorageData map[string]StorageChartData `json:"storageData"`
+	GuestTypes  map[string]string           `json:"guestTypes"` // Maps guest ID to type ("vm" or "container")
 	Timestamp   int64                       `json:"timestamp"`
 	Stats       ChartStats                  `json:"stats"`
 }

@@ -337,7 +337,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     return sortDirection() === 'asc' ? '▲' : '▼';
   };
 
-  const thClass = "px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap";
+  const thClassBase = "px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap";
+  const thClass = `${thClassBase} text-center`;
 
   return (
     <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
@@ -346,7 +347,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
               <th
-                class={`${thClass} text-left pl-3`}
+                class={`${thClassBase} text-left pl-3`}
                 onClick={() => handleSort('name')}
               >
                 {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'} {renderSortIndicator('name')}
@@ -481,7 +482,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     onClick={() => props.onNodeClick(nodeId, isPVEItem ? 'pve' : 'pbs')}
                   >
                     {/* Name */}
-                    <td class={`pr-2 py-1 align-middle ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}>
+                    <td class={`pr-2 py-0.5 align-middle ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}>
                       <div class="flex items-center gap-1.5">
                         <StatusDot
                           variant={statusIndicator().variant}
@@ -543,7 +544,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* Uptime */}
-                    <td class="px-2 py-1 align-middle">
+                    <td class="px-2 py-0.5 align-middle">
                       <div class="flex justify-center">
                         <span
                           class={`text-xs whitespace-nowrap ${isPVEItem && (node?.uptime ?? 0) < 3600
@@ -561,7 +562,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* CPU */}
-                    <td class="px-2 py-1 align-middle" style={{ width: "200px", "min-width": "200px", "max-width": "200px" }}>
+                    <td class="px-2 py-0.5 align-middle" style={{ width: "200px", "min-width": "200px", "max-width": "200px" }}>
                       <Show when={isMobile()}>
                         <div class="md:hidden flex justify-center">
                           <MetricText value={cpuPercentValue} type="cpu" />
@@ -589,7 +590,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* Memory */}
-                    <td class="px-2 py-1 align-middle" style={{ width: "200px", "min-width": "200px", "max-width": "200px" }}>
+                    <td class="px-2 py-0.5 align-middle" style={{ width: "200px", "min-width": "200px", "max-width": "200px" }}>
                       <Show when={isMobile()}>
                         <div class="md:hidden flex justify-center">
                           <MetricText value={memoryPercentValue} type="memory" />
@@ -631,7 +632,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* Disk */}
-                    <td class="px-2 py-1 align-middle" style={{ width: "200px", "min-width": "200px", "max-width": "200px" }}>
+                    <td class="px-2 py-0.5 align-middle" style={{ width: "200px", "min-width": "200px", "max-width": "200px" }}>
                       <ResponsiveMetricCell
                         value={diskPercentValue}
                         type="disk"
@@ -644,7 +645,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
                     {/* Temperature */}
                     <Show when={hasAnyTemperatureData()}>
-                      <td class="px-2 py-1 align-middle">
+                      <td class="px-2 py-0.5 align-middle">
                         <div class="flex justify-center">
                           <Show
                             when={
@@ -696,14 +697,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
                     {/* Dashboard tab: VMs and CTs */}
                     <Show when={props.currentTab === 'dashboard'}>
-                      <td class="px-2 py-1 align-middle">
+                      <td class="px-2 py-0.5 align-middle">
                         <div class="flex justify-center">
                           <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
                             {online ? getCountValue(item, 'vmCount') ?? '-' : '-'}
                           </span>
                         </div>
                       </td>
-                      <td class="px-2 py-1 align-middle">
+                      <td class="px-2 py-0.5 align-middle">
                         <div class="flex justify-center">
                           <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
                             {online ? getCountValue(item, 'containerCount') ?? '-' : '-'}
@@ -714,14 +715,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
                     {/* Storage tab: Storage and Disks */}
                     <Show when={props.currentTab === 'storage'}>
-                      <td class="px-2 py-1 align-middle">
+                      <td class="px-2 py-0.5 align-middle">
                         <div class="flex justify-center">
                           <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
                             {online ? getCountValue(item, 'storageCount') ?? '-' : '-'}
                           </span>
                         </div>
                       </td>
-                      <td class="px-2 py-1 align-middle">
+                      <td class="px-2 py-0.5 align-middle">
                         <div class="flex justify-center">
                           <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
                             {online ? getCountValue(item, 'diskCount') ?? '-' : '-'}
@@ -732,7 +733,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
                     {/* Backups tab: Backups */}
                     <Show when={props.currentTab === 'backups'}>
-                      <td class="px-2 py-1 align-middle">
+                      <td class="px-2 py-0.5 align-middle">
                         <div class="flex justify-center">
                           <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
                             {online ? getCountValue(item, 'backupCount') ?? '-' : '-'}

@@ -106,6 +106,22 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     // Clear canvas
     ctx.clearRect(0, 0, w, h);
 
+    // Detect dark mode for reference line color
+    const isDark = document.documentElement.classList.contains('dark');
+
+    // Draw subtle reference lines at 25%, 50%, 75% to help understand scale
+    // These provide visual anchors so users can distinguish 17% from 70%
+    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    [0.25, 0.5, 0.75].forEach(pct => {
+      const y = h - (pct * h);
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    });
+
     if (!data || data.length === 0) {
       // No data - show empty state
       ctx.strokeStyle = '#d1d5db'; // gray-300
@@ -173,6 +189,17 @@ export const Sparkline: Component<SparklineProps> = (props) => {
 
   // Redraw when data or dimensions change
   createEffect(() => {
+    // Read reactive values to track dependencies
+    // This ensures the effect re-runs when data, metric, or dimensions change
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _data = props.data;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _metric = props.metric;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _w = width();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _h = height();
+
     // Unregister previous draw callback if it exists
     if (unregister) {
       unregister();

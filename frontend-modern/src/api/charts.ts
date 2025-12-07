@@ -31,6 +31,7 @@ export interface ChartsResponse {
     data: Record<string, ChartData>;       // VM/Container data keyed by ID
     nodeData: Record<string, ChartData>;   // Node data keyed by ID
     storageData: Record<string, ChartData>; // Storage data keyed by ID
+    guestTypes?: Record<string, 'vm' | 'container'>; // Maps guest ID to type
     timestamp: number;
     stats: ChartStats;
 }

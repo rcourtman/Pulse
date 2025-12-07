@@ -2859,10 +2859,20 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	// Build guest types map for frontend to correctly identify VM vs Container
+	guestTypes := make(map[string]string)
+	for _, vm := range state.VMs {
+		guestTypes[vm.ID] = "vm"
+	}
+	for _, ct := range state.Containers {
+		guestTypes[ct.ID] = "container"
+	}
+
 	response := ChartResponse{
 		ChartData:   chartData,
 		NodeData:    nodeData,
 		StorageData: storageData,
+		GuestTypes:  guestTypes,
 		Timestamp:   currentTime,
 		Stats: ChartStats{
 			OldestDataTimestamp: oldestTimestamp,
