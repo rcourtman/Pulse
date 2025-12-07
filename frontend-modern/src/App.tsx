@@ -109,8 +109,64 @@ function HostsRoute() {
     return <div>Loading...</div>;
   }
   const { state } = wsContext;
+
+  // Use unified resources if available, fall back to legacy state.hosts
+  // During migration: resources may be empty initially, so we need the fallback
+  const hosts = createMemo(() => {
+    const unifiedHosts = state.resources?.filter(r => r.type === 'host') ?? [];
+
+    // If we have unified resources, convert them to legacy Host format
+    // (This will be simplified once HostsOverview is migrated to use resources directly)
+    if (unifiedHosts.length > 0) {
+      return unifiedHosts.map(r => {
+        const platformData = r.platformData as Record<string, unknown> | undefined;
+        return {
+          id: r.id,
+          hostname: r.identity?.hostname ?? r.name,
+          displayName: r.displayName || r.name,
+          platform: platformData?.platform as string | undefined,
+          osName: platformData?.osName as string | undefined,
+          osVersion: platformData?.osVersion as string | undefined,
+          kernelVersion: platformData?.kernelVersion as string | undefined,
+          architecture: platformData?.architecture as string | undefined,
+          cpuCount: platformData?.cpuCount as number | undefined,
+          cpuUsage: r.cpu?.current,
+          loadAverage: platformData?.loadAverage as number[] | undefined,
+          memory: r.memory ? {
+            total: r.memory.total ?? 0,
+            used: r.memory.used ?? 0,
+            free: r.memory.free ?? 0,
+            usage: r.memory.current,
+          } : { total: 0, used: 0, free: 0, usage: 0 },
+          disks: platformData?.disks as Array<{
+            total: number;
+            used: number;
+            free: number;
+            usage: number;
+            mountpoint?: string;
+          }> | undefined,
+          diskIO: platformData?.diskIO,
+          networkInterfaces: platformData?.networkInterfaces,
+          sensors: platformData?.sensors,
+          raid: platformData?.raid,
+          status: r.status === 'online' || r.status === 'running' ? 'online' : r.status,
+          uptimeSeconds: r.uptime,
+          lastSeen: r.lastSeen,
+          intervalSeconds: platformData?.intervalSeconds as number | undefined,
+          agentVersion: platformData?.agentVersion as string | undefined,
+          tokenId: platformData?.tokenId as string | undefined,
+          tokenName: platformData?.tokenName as string | undefined,
+          tags: r.tags,
+        };
+      });
+    }
+
+    // Fall back to legacy data
+    return state.hosts ?? [];
+  });
+
   return (
-    <HostsOverview hosts={state.hosts ?? []} connectionHealth={state.connectionHealth ?? {}} />
+    <HostsOverview hosts={hosts() as any} connectionHealth={state.connectionHealth ?? {}} />
   );
 }
 
