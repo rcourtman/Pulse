@@ -405,16 +405,32 @@ func (m *Monitor) pollPVENode(...) (models.Node, string, error) {
 
 **Goal:** Add a consolidated "All Resources" view for power users.
 
-**Tasks:**
-1. Create new React/Solid component for unified resource table
-2. Implement filtering by platform, type, status, tags
-3. Support hierarchical grouping (cluster > node > workloads)
-4. Add as new optional view, don't replace existing pages
+**Status:** ✅ Basic implementation complete
 
-**User Experience:**
-- New "All Resources" option in navigation
-- Existing pages unchanged
-- Users choose their preferred view
+**Completed Tasks:**
+1. ✅ Created `src/types/resource.ts` - TypeScript types matching Go backend
+2. ✅ Created `src/components/Resources/ResourcesOverview.tsx` - Unified view component
+3. ✅ Route added: `/resources`
+4. ✅ Filtering by type, platform, status
+5. ✅ Grouping by type, platform, or parent
+
+**Remaining Tasks:**
+- [ ] Add navigation link to UI (currently hidden power-user route)
+- [ ] Add resource detail drawer/modal
+- [ ] Add AI context integration (click to add to AI chat)
+- [ ] Add tag-based filtering
+- [ ] Add export functionality
+
+**Features:**
+- Fetches from `/api/resources` endpoint
+- Auto-refreshes every 10 seconds
+- Filtering by search, type, platform, status
+- Grouping by type/platform/parent
+- Status indicators with alert badges
+- CPU/Memory/Disk progress bars
+
+**Access:**
+Navigate to `/resources` directly (not yet in main navigation)
 
 ### Phase 5: New Platform Support (Ongoing)
 
@@ -501,9 +517,10 @@ If we eventually want to migrate existing components:
 - [ ] Polling optimization actually used in live polling loops (optional enhancement)
 
 ### Phase 4 Complete When:
-- [ ] Unified view accessible from UI
-- [ ] Filtering and grouping works
-- [ ] Existing pages still work
+- [x] Unified view accessible from UI (route: `/resources`)
+- [x] Filtering and grouping works
+- [x] Existing pages still work
+- [ ] Navigation link added to main UI (optional)
 
 ---
 
