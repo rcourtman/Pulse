@@ -1,6 +1,7 @@
 import { Show, createSignal } from 'solid-js';
 import { aiChatStore } from '@/stores/aiChat';
 import type { Alert } from '@/types/api';
+import { formatAlertValue } from '@/utils/alertFormatters';
 
 interface InvestigateAlertButtonProps {
     alert: Alert;
@@ -37,8 +38,8 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
 
 **Resource:** ${props.alert.resourceName}
 **Alert Type:** ${props.alert.type}
-**Current Value:** ${props.alert.value.toFixed(1)}%
-**Threshold:** ${props.alert.threshold.toFixed(1)}%
+**Current Value:** ${formatAlertValue(props.alert.value, props.alert.type)}
+**Threshold:** ${formatAlertValue(props.alert.threshold, props.alert.type)}
 **Duration:** ${durationStr}
 ${props.alert.node ? `**Node:** ${props.alert.node}` : ''}
 

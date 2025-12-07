@@ -108,6 +108,7 @@ export const STORAGE_KEYS = {
 
   // Metrics display
   METRICS_VIEW_MODE: 'metricsViewMode', // 'bars' | 'sparklines'
+  METRICS_TIME_RANGE: 'metricsTimeRange', // '15m' | '1h' | '4h' | '24h'
 
   // Column visibility
   DASHBOARD_HIDDEN_COLUMNS: 'dashboardHiddenColumns',
