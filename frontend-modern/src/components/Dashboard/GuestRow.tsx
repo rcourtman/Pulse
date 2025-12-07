@@ -32,12 +32,7 @@ function getIOColorClass(bytesPerSec: number): string {
   return 'text-red-600 dark:text-red-400';
 }
 
-// Global editing state - use a signal so all components react
-const [currentlyEditingGuestId, setCurrentlyEditingGuestId] = createSignal<string | null>(null);
-// Store the editing value globally so it survives re-renders
-const editingValues = new Map<string, string>();
-// Signal to trigger reactivity when editing values change
-const [editingValuesVersion, setEditingValuesVersion] = createSignal(0);
+
 
 const GROUPED_FIRST_CELL_INDENT = 'pl-5 sm:pl-6 lg:pl-8';
 const DEFAULT_FIRST_CELL_INDENT = 'pl-4';
@@ -482,7 +477,6 @@ interface GuestRowProps {
 
 export function GuestRow(props: GuestRowProps) {
   const guestId = createMemo(() => buildGuestId(props.guest));
-  const isEditingUrl = createMemo(() => currentlyEditingGuestId() === guestId());
 
   // Use breakpoint hook directly for responsive behavior
   const { isMobile } = useBreakpoint();
@@ -505,11 +499,63 @@ export function GuestRow(props: GuestRowProps) {
 
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
-  const editingUrlValue = createMemo(() => {
-    editingValuesVersion(); // Subscribe to changes
-    return editingValues.get(guestId()) || '';
-  });
+  const [isEditingUrl, setIsEditingUrl] = createSignal(false);
+  const [editingUrlValue, setEditingUrlValue] = createSignal('');
+  const [isSavingUrl, setIsSavingUrl] = createSignal(false);
   let urlInputRef: HTMLInputElement | undefined;
+
+  // Focus input when editing starts
+  createEffect(() => {
+    if (isEditingUrl() && urlInputRef) {
+      urlInputRef.focus();
+      urlInputRef.select();
+    }
+  });
+
+  const startEditingUrl = (event: MouseEvent) => {
+    event.stopPropagation();
+    setEditingUrlValue(customUrl() || '');
+    setIsEditingUrl(true);
+  };
+
+  const saveUrl = async () => {
+    const newUrl = editingUrlValue().trim();
+    setIsSavingUrl(true);
+
+    try {
+      await GuestMetadataAPI.updateMetadata(guestId(), { customUrl: newUrl });
+
+      const hadUrl = !!customUrl();
+      if (!hadUrl && newUrl) {
+        setShouldAnimateIcon(true);
+        setTimeout(() => setShouldAnimateIcon(false), 200);
+      }
+
+      setCustomUrl(newUrl || undefined);
+      setIsEditingUrl(false);
+
+      if (props.onCustomUrlUpdate) {
+        props.onCustomUrlUpdate(guestId(), newUrl);
+      }
+
+      if (newUrl) {
+        showSuccess('Guest URL saved');
+      } else {
+        showSuccess('Guest URL cleared');
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save guest URL';
+      logger.error('Failed to save guest URL:', err);
+      showError(message);
+    } finally {
+      setIsSavingUrl(false);
+    }
+  };
+
+  const cancelEditingUrl = () => {
+    setIsEditingUrl(false);
+    setEditingUrlValue('');
+  };
 
   const ipAddresses = createMemo(() => props.guest.ipAddresses ?? []);
   const networkInterfaces = createMemo(() => props.guest.networkInterfaces ?? []);
@@ -519,22 +565,19 @@ export function GuestRow(props: GuestRowProps) {
   const agentVersion = createMemo(() => props.guest.agentVersion?.trim() ?? '');
   const hasOsInfo = createMemo(() => osName().length > 0 || osVersion().length > 0);
 
-  // Update custom URL when prop changes, but only if we're not currently editing
+  // Update custom URL when prop changes
   createEffect(() => {
-    // Don't update customUrl from props if this guest is currently being edited
-    if (currentlyEditingGuestId() !== guestId()) {
-      const prevUrl = customUrl();
-      const newUrl = props.customUrl;
+    const prevUrl = customUrl();
+    const newUrl = props.customUrl;
 
-      // Only animate when URL transitions from empty to having a value
-      if (!prevUrl && newUrl) {
-        setShouldAnimateIcon(true);
-        // Remove animation class after it completes
-        setTimeout(() => setShouldAnimateIcon(false), 200);
-      }
-
-      setCustomUrl(newUrl);
+    // Only animate when URL transitions from empty to having a value
+    if (!prevUrl && newUrl) {
+      setShouldAnimateIcon(true);
+      // Remove animation class after it completes
+      setTimeout(() => setShouldAnimateIcon(false), 200);
     }
+
+    setCustomUrl(newUrl);
   });
 
   const cpuPercent = createMemo(() => (props.guest.cpu || 0) * 100);
@@ -574,137 +617,7 @@ export function GuestRow(props: GuestRowProps) {
   });
   const memoryTooltip = createMemo(() => memoryExtraLines()?.join('\n') ?? undefined);
 
-  const startEditingUrl = (event: MouseEvent) => {
-    event.stopPropagation();
 
-    const currentEditing = currentlyEditingGuestId();
-    if (currentEditing !== null && currentEditing !== guestId()) {
-      const currentInput = document.querySelector(`input[data-guest-id="${currentEditing}"]`) as HTMLInputElement;
-      if (currentInput) {
-        currentInput.blur();
-      }
-    }
-
-    editingValues.set(guestId(), customUrl() || '');
-    setEditingValuesVersion(v => v + 1);
-    setCurrentlyEditingGuestId(guestId());
-  };
-
-  createEffect(() => {
-    if (isEditingUrl() && urlInputRef) {
-      urlInputRef.focus();
-      urlInputRef.select();
-    }
-  });
-
-  let isCurrentlyMounted = true;
-
-  createEffect(() => {
-    if (isEditingUrl() && isCurrentlyMounted) {
-      const handleGlobalClick = (e: MouseEvent) => {
-        if (currentlyEditingGuestId() !== guestId()) return;
-
-        const target = e.target as HTMLElement;
-        const isClickingGuestName = target.closest('[data-guest-name-editable]');
-
-        if (!target.closest('[data-url-editor]') && !isClickingGuestName) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          cancelEditingUrl();
-        }
-      };
-
-      const handleGlobalMouseDown = (e: MouseEvent) => {
-        if (currentlyEditingGuestId() !== guestId()) return;
-
-        const target = e.target as HTMLElement;
-        const isClickingGuestName = target.closest('[data-guest-name-editable]');
-
-        if (!target.closest('[data-url-editor]') && !isClickingGuestName) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-        }
-      };
-
-      document.addEventListener('mousedown', handleGlobalMouseDown, true);
-      document.addEventListener('click', handleGlobalClick, true);
-      return () => {
-        document.removeEventListener('mousedown', handleGlobalMouseDown, true);
-        document.removeEventListener('click', handleGlobalClick, true);
-      };
-    }
-  });
-
-  const saveUrl = async () => {
-    if (currentlyEditingGuestId() !== guestId()) return;
-
-    const newUrl = (editingValues.get(guestId()) || '').trim();
-
-    editingValues.delete(guestId());
-    setEditingValuesVersion(v => v + 1);
-    setCurrentlyEditingGuestId(null);
-
-    if (newUrl === (customUrl() || '')) return;
-
-    try {
-      await GuestMetadataAPI.updateMetadata(guestId(), { customUrl: newUrl });
-
-      const hadUrl = !!customUrl();
-      if (!hadUrl && newUrl) {
-        setShouldAnimateIcon(true);
-        setTimeout(() => setShouldAnimateIcon(false), 200);
-      }
-
-      setCustomUrl(newUrl || undefined);
-
-      if (props.onCustomUrlUpdate) {
-        props.onCustomUrlUpdate(guestId(), newUrl);
-      }
-
-      if (newUrl) {
-        showSuccess('Guest URL saved');
-      } else {
-        showSuccess('Guest URL cleared');
-      }
-    } catch (err: any) {
-      logger.error('Failed to save guest URL:', err);
-      showError(err.message || 'Failed to save guest URL');
-    }
-  };
-
-  const deleteUrl = async () => {
-    if (currentlyEditingGuestId() !== guestId()) return;
-
-    editingValues.delete(guestId());
-    setEditingValuesVersion(v => v + 1);
-    setCurrentlyEditingGuestId(null);
-
-    if (customUrl()) {
-      try {
-        await GuestMetadataAPI.updateMetadata(guestId(), { customUrl: '' });
-        setCustomUrl(undefined);
-
-        if (props.onCustomUrlUpdate) {
-          props.onCustomUrlUpdate(guestId(), '');
-        }
-
-        showSuccess('Guest URL removed');
-      } catch (err: any) {
-        logger.error('Failed to remove guest URL:', err);
-        showError(err.message || 'Failed to remove guest URL');
-      }
-    }
-  };
-
-  const cancelEditingUrl = () => {
-    if (currentlyEditingGuestId() !== guestId()) return;
-
-    editingValues.delete(guestId());
-    setEditingValuesVersion(v => v + 1);
-    setCurrentlyEditingGuestId(null);
-  };
 
   const diskPercent = createMemo(() => {
     if (!props.guest.disk || props.guest.disk.total === 0) return 0;
@@ -765,7 +678,8 @@ export function GuestRow(props: GuestRowProps) {
   });
 
   // Check AI context state reactively from the store
-  const isInAIContext = createMemo(() => aiChatStore.isOpen && aiChatStore.hasContextItem(guestId()));
+  // Show selection even when sidebar is closed - makes selection persistent
+  const isInAIContext = createMemo(() => aiChatStore.enabled && aiChatStore.hasContextItem(guestId()));
   const isAboveInAIContext = createMemo(() => {
     if (!props.aboveGuestId) return false;
     return aiChatStore.hasContextItem(props.aboveGuestId);
@@ -816,8 +730,7 @@ export function GuestRow(props: GuestRowProps) {
   const handleRowClick = (e: MouseEvent) => {
     // Don't trigger if clicking on interactive elements
     const target = e.target as HTMLElement;
-    if (target.closest('[data-url-editor]') ||
-      target.closest('[data-prevent-toggle]') ||
+    if (target.closest('[data-prevent-toggle]') ||
       target.closest('a') ||
       target.closest('button') ||
       target.closest('input')) {
@@ -846,13 +759,10 @@ export function GuestRow(props: GuestRowProps) {
             <Show
               when={isEditingUrl()}
               fallback={
-                <div class="flex items-center gap-1.5 min-w-0">
+                <div class="flex items-center gap-1.5 min-w-0 group/name">
                   <span
-                    class="text-xs font-medium text-gray-900 dark:text-gray-100 cursor-text select-none whitespace-nowrap"
-                    style="cursor: text;"
-                    title={`${props.guest.name}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
-                    onClick={startEditingUrl}
-                    data-guest-name-editable
+                    class="text-xs font-medium text-gray-900 dark:text-gray-100 select-none whitespace-nowrap"
+                    title={props.guest.name}
                   >
                     {props.guest.name}
                   </span>
@@ -862,7 +772,7 @@ export function GuestRow(props: GuestRowProps) {
                       target="_blank"
                       rel="noopener noreferrer"
                       class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
-                      title="Open in new tab"
+                      title={`Open ${customUrl()}`}
                       onClick={(event) => event.stopPropagation()}
                     >
                       <svg
@@ -880,23 +790,39 @@ export function GuestRow(props: GuestRowProps) {
                       </svg>
                     </a>
                   </Show>
+                  {/* Edit URL button - shows on hover */}
+                  <button
+                    type="button"
+                    onClick={startEditingUrl}
+                    class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
+                    title={customUrl() ? 'Edit URL' : 'Add URL'}
+                  >
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
                   {/* Show backup indicator in name cell only if backup column is hidden */}
                   <Show when={!isColVisible('backup')}>
                     <BackupIndicator lastBackup={props.guest.lastBackup} isTemplate={props.guest.template} />
                   </Show>
+                  {/* AI context indicator - shows when row is selected for AI */}
+                  <Show when={isInAIContext()}>
+                    <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                      </svg>
+                    </span>
+                  </Show>
                 </div>
               }
             >
+              {/* URL editing mode */}
               <div class="flex items-center gap-1 min-w-0" data-url-editor>
                 <input
                   ref={urlInputRef}
                   type="text"
                   value={editingUrlValue()}
-                  data-guest-id={guestId()}
-                  onInput={(e) => {
-                    editingValues.set(guestId(), e.currentTarget.value);
-                    setEditingValuesVersion(v => v + 1);
-                  }}
+                  onInput={(e) => setEditingUrlValue(e.currentTarget.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -907,30 +833,31 @@ export function GuestRow(props: GuestRowProps) {
                     }
                   }}
                   onClick={(e) => e.stopPropagation()}
-                  placeholder="https://192.168.1.100:8006"
-                  class="min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="https://192.168.1.100:8080"
+                  class="w-40 px-2 py-0.5 text-xs border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  disabled={isSavingUrl()}
                 />
                 <button
                   type="button"
-                  data-url-editor-button
                   onClick={(e) => {
                     e.stopPropagation();
                     saveUrl();
                   }}
-                  class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                  title="Save (or press Enter)"
+                  disabled={isSavingUrl()}
+                  class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  title="Save (Enter)"
                 >
                   ✓
                 </button>
                 <button
                   type="button"
-                  data-url-editor-button
                   onClick={(e) => {
                     e.stopPropagation();
-                    deleteUrl();
+                    cancelEditingUrl();
                   }}
-                  class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                  title="Delete URL"
+                  disabled={isSavingUrl()}
+                  class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors disabled:opacity-50"
+                  title="Cancel (Esc)"
                 >
                   ✕
                 </button>
@@ -1039,6 +966,7 @@ export function GuestRow(props: GuestRowProps) {
                     balloon={props.guest.memory?.balloon || 0}
                     swapUsed={props.guest.memory?.swapUsed || 0}
                     swapTotal={props.guest.memory?.swapTotal || 0}
+                    resourceId={metricsKey()}
                   />
                 }
               >

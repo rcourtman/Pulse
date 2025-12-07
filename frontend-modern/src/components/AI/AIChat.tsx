@@ -557,10 +557,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
             success: result.success,
           };
 
+          const remainingApprovals = m.pendingApprovals?.filter((a) => a.toolId !== approval.toolId) || [];
+
           return {
             ...m,
-            pendingApprovals: m.pendingApprovals?.filter((a) => a.toolId !== approval.toolId),
+            pendingApprovals: remainingApprovals,
             toolCalls: [...(m.toolCalls || []), newToolCall],
+            // Clear the stale "I need approval" content after the last approval is processed
+            // The tool output will show the result instead
+            content: remainingApprovals.length === 0 ? '' : m.content,
           };
         })
       );

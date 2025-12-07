@@ -616,6 +616,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                                 balloon={node!.memory?.balloon || 0}
                                 swapUsed={node!.memory?.swapUsed || 0}
                                 swapTotal={node!.memory?.swapTotal || 0}
+                                resourceId={metricsKey}
                               />
                             }
                           >

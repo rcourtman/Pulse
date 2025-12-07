@@ -211,178 +211,52 @@
   animation: nodeClick 0.15s ease-out;
 }
 
-/* AI Context row highlight with mergeable borders */
-/* Using purple-600 (147, 51, 234) for a true purple */
-
-/* Full border - single row or first/last of group */
-@keyframes ai-context-pulse-full {
-  0%, 100% {
-    background-color: rgba(147, 51, 234, 0.08);
-    box-shadow:
-      inset 2px 0 0 0 rgba(147, 51, 234, 0.4),
-      inset -2px 0 0 0 rgba(147, 51, 234, 0.4),
-      inset 0 2px 0 0 rgba(147, 51, 234, 0.4),
-      inset 0 -2px 0 0 rgba(147, 51, 234, 0.4);
-  }
-  50% {
-    background-color: rgba(147, 51, 234, 0.16);
-    box-shadow:
-      inset 2px 0 0 0 rgba(147, 51, 234, 0.8),
-      inset -2px 0 0 0 rgba(147, 51, 234, 0.8),
-      inset 0 2px 0 0 rgba(147, 51, 234, 0.8),
-      inset 0 -2px 0 0 rgba(147, 51, 234, 0.8);
-  }
-}
-
-/* No top border - middle or bottom of group */
-@keyframes ai-context-pulse-no-top {
-  0%, 100% {
-    background-color: rgba(147, 51, 234, 0.08);
-    box-shadow:
-      inset 2px 0 0 0 rgba(147, 51, 234, 0.4),
-      inset -2px 0 0 0 rgba(147, 51, 234, 0.4),
-      inset 0 -2px 0 0 rgba(147, 51, 234, 0.4);
-  }
-  50% {
-    background-color: rgba(147, 51, 234, 0.16);
-    box-shadow:
-      inset 2px 0 0 0 rgba(147, 51, 234, 0.8),
-      inset -2px 0 0 0 rgba(147, 51, 234, 0.8),
-      inset 0 -2px 0 0 rgba(147, 51, 234, 0.8);
-  }
-}
-
-/* No bottom border - top of group */
-@keyframes ai-context-pulse-no-bottom {
-  0%, 100% {
-    background-color: rgba(147, 51, 234, 0.08);
-    box-shadow:
-      inset 2px 0 0 0 rgba(147, 51, 234, 0.4),
-      inset -2px 0 0 0 rgba(147, 51, 234, 0.4),
-      inset 0 2px 0 0 rgba(147, 51, 234, 0.4);
-  }
-  50% {
-    background-color: rgba(147, 51, 234, 0.16);
-    box-shadow:
-      inset 2px 0 0 0 rgba(147, 51, 234, 0.8),
-      inset -2px 0 0 0 rgba(147, 51, 234, 0.8),
-      inset 0 2px 0 0 rgba(147, 51, 234, 0.8);
-  }
-}
-
-/* Side borders only - middle of group */
-@keyframes ai-context-pulse-sides {
-  0%, 100% {
-    background-color: rgba(147, 51, 234, 0.08);
-    box-shadow:
-      inset 2px 0 0 0 rgba(147, 51, 234, 0.4),
-      inset -2px 0 0 0 rgba(147, 51, 234, 0.4);
-  }
-  50% {
-    background-color: rgba(147, 51, 234, 0.16);
-    box-shadow:
-      inset 2px 0 0 0 rgba(147, 51, 234, 0.8),
-      inset -2px 0 0 0 rgba(147, 51, 234, 0.8);
-  }
-}
+/* AI Context row highlight - subtle left accent bar */
+/* Using purple-500 for a clean, modern look */
 
 .ai-context-row {
-  animation: ai-context-pulse-full 2s ease-in-out infinite;
+  background-color: rgba(147, 51, 234, 0.04);
+  box-shadow: inset 3px 0 0 0 rgba(147, 51, 234, 0.6);
 }
 
-.ai-context-row.ai-context-no-top {
-  animation: ai-context-pulse-no-top 2s ease-in-out infinite;
+.ai-context-row:hover {
+  background-color: rgba(147, 51, 234, 0.08);
 }
 
-.ai-context-row.ai-context-no-bottom {
-  animation: ai-context-pulse-no-bottom 2s ease-in-out infinite;
-}
-
+/* Adjacent rows - keep the left border consistent */
+.ai-context-row.ai-context-no-top,
+.ai-context-row.ai-context-no-bottom,
 .ai-context-row.ai-context-no-top.ai-context-no-bottom {
-  animation: ai-context-pulse-sides 2s ease-in-out infinite;
+  background-color: rgba(147, 51, 234, 0.04);
+  box-shadow: inset 3px 0 0 0 rgba(147, 51, 234, 0.6);
 }
 
-/* Dark mode - using purple-400 (167, 139, 250) */
-@keyframes ai-context-pulse-full-dark {
-  0%, 100% {
-    background-color: rgba(147, 51, 234, 0.12);
-    box-shadow:
-      inset 2px 0 0 0 rgba(167, 139, 250, 0.5),
-      inset -2px 0 0 0 rgba(167, 139, 250, 0.5),
-      inset 0 2px 0 0 rgba(167, 139, 250, 0.5),
-      inset 0 -2px 0 0 rgba(167, 139, 250, 0.5);
-  }
-  50% {
-    background-color: rgba(147, 51, 234, 0.24);
-    box-shadow:
-      inset 2px 0 0 0 rgba(167, 139, 250, 0.9),
-      inset -2px 0 0 0 rgba(167, 139, 250, 0.9),
-      inset 0 2px 0 0 rgba(167, 139, 250, 0.9),
-      inset 0 -2px 0 0 rgba(167, 139, 250, 0.9);
-  }
+.ai-context-row.ai-context-no-top:hover,
+.ai-context-row.ai-context-no-bottom:hover,
+.ai-context-row.ai-context-no-top.ai-context-no-bottom:hover {
+  background-color: rgba(147, 51, 234, 0.08);
 }
 
-@keyframes ai-context-pulse-no-top-dark {
-  0%, 100% {
-    background-color: rgba(147, 51, 234, 0.12);
-    box-shadow:
-      inset 2px 0 0 0 rgba(167, 139, 250, 0.5),
-      inset -2px 0 0 0 rgba(167, 139, 250, 0.5),
-      inset 0 -2px 0 0 rgba(167, 139, 250, 0.5);
-  }
-  50% {
-    background-color: rgba(147, 51, 234, 0.24);
-    box-shadow:
-      inset 2px 0 0 0 rgba(167, 139, 250, 0.9),
-      inset -2px 0 0 0 rgba(167, 139, 250, 0.9),
-      inset 0 -2px 0 0 rgba(167, 139, 250, 0.9);
-  }
-}
-
-@keyframes ai-context-pulse-no-bottom-dark {
-  0%, 100% {
-    background-color: rgba(147, 51, 234, 0.12);
-    box-shadow:
-      inset 2px 0 0 0 rgba(167, 139, 250, 0.5),
-      inset -2px 0 0 0 rgba(167, 139, 250, 0.5),
-      inset 0 2px 0 0 rgba(167, 139, 250, 0.5);
-  }
-  50% {
-    background-color: rgba(147, 51, 234, 0.24);
-    box-shadow:
-      inset 2px 0 0 0 rgba(167, 139, 250, 0.9),
-      inset -2px 0 0 0 rgba(167, 139, 250, 0.9),
-      inset 0 2px 0 0 rgba(167, 139, 250, 0.9);
-  }
-}
-
-@keyframes ai-context-pulse-sides-dark {
-  0%, 100% {
-    background-color: rgba(147, 51, 234, 0.12);
-    box-shadow:
-      inset 2px 0 0 0 rgba(167, 139, 250, 0.5),
-      inset -2px 0 0 0 rgba(167, 139, 250, 0.5);
-  }
-  50% {
-    background-color: rgba(147, 51, 234, 0.24);
-    box-shadow:
-      inset 2px 0 0 0 rgba(167, 139, 250, 0.9),
-      inset -2px 0 0 0 rgba(167, 139, 250, 0.9);
-  }
-}
-
+/* Dark mode - using purple-400 for better visibility */
 .dark .ai-context-row {
-  animation: ai-context-pulse-full-dark 2s ease-in-out infinite;
+  background-color: rgba(167, 139, 250, 0.06);
+  box-shadow: inset 3px 0 0 0 rgba(167, 139, 250, 0.5);
 }
 
-.dark .ai-context-row.ai-context-no-top {
-  animation: ai-context-pulse-no-top-dark 2s ease-in-out infinite;
+.dark .ai-context-row:hover {
+  background-color: rgba(167, 139, 250, 0.12);
 }
 
-.dark .ai-context-row.ai-context-no-bottom {
-  animation: ai-context-pulse-no-bottom-dark 2s ease-in-out infinite;
-}
-
+.dark .ai-context-row.ai-context-no-top,
+.dark .ai-context-row.ai-context-no-bottom,
 .dark .ai-context-row.ai-context-no-top.ai-context-no-bottom {
-  animation: ai-context-pulse-sides-dark 2s ease-in-out infinite;
+  background-color: rgba(167, 139, 250, 0.06);
+  box-shadow: inset 3px 0 0 0 rgba(167, 139, 250, 0.5);
 }
+
+.dark .ai-context-row.ai-context-no-top:hover,
+.dark .ai-context-row.ai-context-no-bottom:hover,
+.dark .ai-context-row.ai-context-no-top.ai-context-no-bottom:hover {
+  background-color: rgba(167, 139, 250, 0.12);
+}
+

@@ -1,6 +1,8 @@
 import { Component, Show, For, createSignal, createMemo, onMount, createEffect, onCleanup } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { SearchTipsPopover } from '@/components/shared/SearchTipsPopover';
+import { ColumnPicker } from '@/components/shared/ColumnPicker';
+import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { createSearchHistoryManager } from '@/utils/searchHistory';
 
@@ -13,6 +15,11 @@ interface HostsFilterProps {
   onReset?: () => void;
   activeHostName?: string;
   onClearHost?: () => void;
+  // Column visibility
+  availableColumns?: ColumnDef[];
+  isColumnHidden?: (id: string) => boolean;
+  onColumnToggle?: (id: string) => void;
+  onColumnReset?: () => void;
 }
 
 export const HostsFilter: Component<HostsFilterProps> = (props) => {
@@ -301,11 +308,10 @@ export const HostsFilter: Component<HostsFilterProps> = (props) => {
               type="button"
               aria-pressed={props.statusFilter() === 'all'}
               onClick={() => props.setStatusFilter('all')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.statusFilter() === 'all'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter() === 'all'
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
               title="Show all hosts"
             >
               All
@@ -316,11 +322,10 @@ export const HostsFilter: Component<HostsFilterProps> = (props) => {
               onClick={() =>
                 props.setStatusFilter(props.statusFilter() === 'online' ? 'all' : 'online')
               }
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.statusFilter() === 'online'
-                  ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter() === 'online'
+                ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
               title="Show online hosts only"
             >
               Online
@@ -331,11 +336,10 @@ export const HostsFilter: Component<HostsFilterProps> = (props) => {
               onClick={() =>
                 props.setStatusFilter(props.statusFilter() === 'degraded' ? 'all' : 'degraded')
               }
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.statusFilter() === 'degraded'
-                  ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter() === 'degraded'
+                ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
               title="Show degraded hosts only"
             >
               Degraded
@@ -346,11 +350,10 @@ export const HostsFilter: Component<HostsFilterProps> = (props) => {
               onClick={() =>
                 props.setStatusFilter(props.statusFilter() === 'offline' ? 'all' : 'offline')
               }
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.statusFilter() === 'offline'
-                  ? 'bg-white dark:bg-gray-800 text-red-600 dark:text-red-400 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter() === 'offline'
+                ? 'bg-white dark:bg-gray-800 text-red-600 dark:text-red-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
               title="Show offline hosts only"
             >
               Offline
@@ -371,6 +374,17 @@ export const HostsFilter: Component<HostsFilterProps> = (props) => {
                 ×
               </button>
             </div>
+          </Show>
+
+          {/* Column Picker */}
+          <Show when={props.availableColumns && props.isColumnHidden && props.onColumnToggle}>
+            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" aria-hidden="true"></div>
+            <ColumnPicker
+              columns={props.availableColumns!}
+              isHidden={props.isColumnHidden!}
+              onToggle={props.onColumnToggle!}
+              onReset={props.onColumnReset}
+            />
           </Show>
 
           <Show when={hasActiveFilters()}>

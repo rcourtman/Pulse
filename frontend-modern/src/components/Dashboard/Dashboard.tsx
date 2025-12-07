@@ -897,10 +897,10 @@ export function Dashboard(props: DashboardProps) {
     }
   };
 
-  // Handle row click - add guest to AI context when sidebar is open
+  // Handle row click - add guest to AI context (works even when sidebar is closed)
   const handleGuestRowClick = (guest: VM | Container) => {
-    // Only add to context if AI is enabled and sidebar is open
-    if (!aiChatStore.enabled || !aiChatStore.isOpen) return;
+    // Only enable if AI is configured
+    if (!aiChatStore.enabled) return;
 
     const guestId = guest.id || `${guest.instance}-${guest.vmid}`;
     const guestType = guest.type === 'qemu' ? 'vm' : 'container';
@@ -908,6 +908,7 @@ export function Dashboard(props: DashboardProps) {
     // Toggle: remove if already in context, add if not
     if (aiChatStore.hasContextItem(guestId)) {
       aiChatStore.removeContextItem(guestId);
+      // If no items left in context and sidebar is open, keep it open for now
     } else {
       aiChatStore.addContextItem(guestType, guestId, guest.name, {
         guestName: guest.name,
@@ -917,6 +918,10 @@ export function Dashboard(props: DashboardProps) {
         node: guest.node,
         status: guest.status,
       });
+      // Auto-open the sidebar when first item is selected
+      if (!aiChatStore.isOpen) {
+        aiChatStore.open();
+      }
     }
   };
 
