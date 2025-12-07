@@ -80,6 +80,17 @@ type PVEClientInterface interface {
 	GetCephDF(ctx context.Context) (*proxmox.CephDF, error)
 }
 
+// ResourceStoreInterface provides methods for polling optimization.
+// When an agent is monitoring a node, we can reduce API polling for that node.
+type ResourceStoreInterface interface {
+	// ShouldSkipAPIPolling returns true if API polling should be skipped for the hostname
+	// because an agent is providing richer data.
+	ShouldSkipAPIPolling(hostname string) bool
+	// GetPollingRecommendations returns a map of hostname -> polling multiplier.
+	// 0 = skip entirely, 0.5 = half frequency, 1 = normal
+	GetPollingRecommendations() map[string]float64
+}
+
 func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {
 	baseName := strings.TrimSpace(nodeName)
 	if baseName == "" {
@@ -604,6 +615,7 @@ type Monitor struct {
 	pollStatusMap            map[string]*pollStatus
 	dlqInsightMap            map[string]*dlqInsight
 	nodeLastOnline           map[string]time.Time // Track last time each node was seen online (for grace period)
+	resourceStore            ResourceStoreInterface // Optional unified resource store for polling optimization
 }
 
 type rrdMemCacheEntry struct {
@@ -6990,6 +7002,16 @@ func (m *Monitor) GetAlertManager() *alerts.Manager {
 	return m.alertManager
 }
 
+// SetResourceStore sets the resource store for polling optimization.
+// When set, the monitor will check if it should reduce polling frequency
+// for nodes that have host agents providing data.
+func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.resourceStore = store
+	log.Info().Msg("Resource store set for polling optimization")
+}
+
 // GetNotificationManager returns the notification manager
 func (m *Monitor) GetNotificationManager() *notifications.NotificationManager {
 	return m.notificationMgr
@@ -7003,6 +7025,27 @@ func (m *Monitor) GetConfigPersistence() *config.ConfigPersistence {
 // GetMetricsStore returns the persistent metrics store
 func (m *Monitor) GetMetricsStore() *metrics.Store {
 	return m.metricsStore
+}
+
+// shouldSkipNodeMetrics returns true if we should skip detailed metric polling
+// for the given node because a host agent is providing richer data.
+// This helps reduce API load when agents are active.
+func (m *Monitor) shouldSkipNodeMetrics(nodeName string) bool {
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	
+	if store == nil {
+		return false
+	}
+	
+	should := store.ShouldSkipAPIPolling(nodeName)
+	if should {
+		log.Debug().
+			Str("node", nodeName).
+			Msg("Skipping detailed node metrics - host agent provides data")
+	}
+	return should
 }
 
 // pollStorageBackupsWithNodes polls backups using a provided nodes list to avoid duplicate GetNodes calls

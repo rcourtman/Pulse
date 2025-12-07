@@ -29,15 +29,16 @@ type StateProvider interface {
 
 // Service orchestrates AI interactions
 type Service struct {
-	mu             sync.RWMutex
-	persistence    *config.ConfigPersistence
-	provider       providers.Provider
-	cfg            *config.AIConfig
-	agentServer    *agentexec.Server
-	policy         *agentexec.CommandPolicy
-	stateProvider  StateProvider
-	alertProvider  AlertProvider
-	knowledgeStore *knowledge.Store
+	mu               sync.RWMutex
+	persistence      *config.ConfigPersistence
+	provider         providers.Provider
+	cfg              *config.AIConfig
+	agentServer      *agentexec.Server
+	policy           *agentexec.CommandPolicy
+	stateProvider    StateProvider
+	alertProvider    AlertProvider
+	knowledgeStore   *knowledge.Store
+	resourceProvider ResourceProvider // Unified resource model provider (Phase 2)
 }
 
 // NewService creates a new AI service
@@ -1760,7 +1761,18 @@ Pulse manages LXC containers agentlessly from the PVE host.
 	}
 
 	// Add connected infrastructure info
-	prompt += s.buildInfrastructureContext()
+	// Try unified resource context first (Phase 2), fall back to legacy
+	s.mu.RLock()
+	hasResourceProvider := s.resourceProvider != nil
+	s.mu.RUnlock()
+	
+	if hasResourceProvider {
+		// Use the new unified resource model for cleaner, deduplicated context
+		prompt += s.buildUnifiedResourceContext()
+	} else {
+		// Fall back to legacy state-based context
+		prompt += s.buildInfrastructureContext()
+	}
 
 	// Add user annotations from all resources (global context)
 	prompt += s.buildUserAnnotationsContext()

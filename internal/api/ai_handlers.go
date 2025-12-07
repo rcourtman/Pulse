@@ -51,6 +51,11 @@ func (h *AISettingsHandler) SetStateProvider(sp ai.StateProvider) {
 	h.aiService.SetStateProvider(sp)
 }
 
+// SetResourceProvider sets the resource provider for unified infrastructure context (Phase 2)
+func (h *AISettingsHandler) SetResourceProvider(rp ai.ResourceProvider) {
+	h.aiService.SetResourceProvider(rp)
+}
+
 // AISettingsResponse is returned by GET /api/settings/ai
 // API key is masked for security
 type AISettingsResponse struct {
