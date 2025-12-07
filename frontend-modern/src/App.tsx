@@ -184,8 +184,8 @@ function DockerRoute() {
       });
     }
 
-    // Fall back to legacy data
-    return state.dockerHosts ?? [];
+    // Return empty array if no unified resources available
+    return [];
   });
 
   return <DockerHosts hosts={hosts() as any} activeAlerts={activeAlerts} />;
@@ -249,8 +249,8 @@ function HostsRoute() {
       });
     }
 
-    // Fall back to legacy data
-    return state.hosts ?? [];
+    // Return empty array if no unified resources available
+    return [];
   });
 
   return (
@@ -913,7 +913,8 @@ function App() {
           };
         });
       }
-      return state().vms ?? [];
+      // Return empty array if no unified resources available
+      return [];
     });
 
     const containers = createMemo(() => {
@@ -956,7 +957,8 @@ function App() {
           };
         });
       }
-      return state().containers ?? [];
+      // Return empty array if no unified resources available
+      return [];
     });
 
     const nodes = createMemo(() => {
@@ -998,7 +1000,8 @@ function App() {
           };
         });
       }
-      return state().nodes ?? [];
+      // Return empty array if no unified resources available
+      return [];
     });
 
     return (
