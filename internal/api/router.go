@@ -1279,6 +1279,8 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 		// Inject resource store for polling optimization
 		if r.resourceHandlers != nil {
 			m.SetResourceStore(r.resourceHandlers.Store())
+			// Also set state provider for on-demand resource population
+			r.resourceHandlers.SetStateProvider(m)
 		}
 	}
 }

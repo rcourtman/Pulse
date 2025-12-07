@@ -9,9 +9,15 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
 )
 
+// StateProvider allows ResourceHandlers to fetch current state on demand.
+type StateProvider interface {
+	GetState() models.StateSnapshot
+}
+
 // ResourceHandlers provides HTTP handlers for the unified resource API.
 type ResourceHandlers struct {
-	store *resources.Store
+	store         *resources.Store
+	stateProvider StateProvider
 }
 
 // NewResourceHandlers creates resource handlers with a new store.
@@ -19,6 +25,11 @@ func NewResourceHandlers() *ResourceHandlers {
 	return &ResourceHandlers{
 		store: resources.NewStore(),
 	}
+}
+
+// SetStateProvider sets the state provider for on-demand resource population.
+func (h *ResourceHandlers) SetStateProvider(provider StateProvider) {
+	h.stateProvider = provider
 }
 
 // Store returns the underlying resource store for populating from the monitor.
@@ -39,6 +50,12 @@ func (h *ResourceHandlers) HandleGetResources(w http.ResponseWriter, r *http.Req
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
+	}
+
+	// Populate from current state if we have a state provider
+	// This ensures fresh data even if the store hasn't been populated yet
+	if h.stateProvider != nil {
+		h.PopulateFromSnapshot(h.stateProvider.GetState())
 	}
 
 	query := h.store.Query()
