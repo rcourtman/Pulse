@@ -93,6 +93,8 @@ type ResourceStoreInterface interface {
 	GetPollingRecommendations() map[string]float64
 	// GetAll returns all resources in the store (for WebSocket broadcasts)
 	GetAll() []resources.Resource
+	// PopulateFromSnapshot updates the store with data from a StateSnapshot
+	PopulateFromSnapshot(snapshot models.StateSnapshot)
 }
 
 func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {
@@ -3290,7 +3292,8 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				Msg("Broadcasting state update (ticker)")
 			// Convert to frontend format before broadcasting (converts time.Time to int64, etc.)
 			frontendState := state.ToFrontend()
-			// Inject unified resources if resource store is available
+			// Update and inject unified resources if resource store is available
+			m.updateResourceStore(state)
 			frontendState.Resources = m.getResourcesForBroadcast()
 			wsHub.BroadcastState(frontendState)
 
@@ -6901,7 +6904,9 @@ func (m *Monitor) SetMockMode(enable bool) {
 	m.mu.RUnlock()
 
 	if hub != nil {
-		frontendState := m.GetState().ToFrontend()
+		state := m.GetState()
+		frontendState := state.ToFrontend()
+		m.updateResourceStore(state)
 		frontendState.Resources = m.getResourcesForBroadcast()
 		hub.BroadcastState(frontendState)
 	}
@@ -7055,6 +7060,20 @@ func (m *Monitor) shouldSkipNodeMetrics(nodeName string) bool {
 			Msg("Skipping detailed node metrics - host agent provides data")
 	}
 	return should
+}
+
+// updateResourceStore populates the resource store with data from the current state.
+// This should be called before broadcasting to ensure fresh data.
+func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	
+	if store == nil {
+		return
+	}
+	
+	store.PopulateFromSnapshot(state)
 }
 
 // getResourcesForBroadcast retrieves all resources from the store and converts them to frontend format.
