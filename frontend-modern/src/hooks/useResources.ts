@@ -303,10 +303,85 @@ export function useResourcesAsLegacy() {
         }));
     });
 
+    // Convert resources to legacy Host format
+    const asHosts = createMemo(() => {
+        return byType('host').map(r => {
+            // Extract platform-specific data if available
+            const platformData = r.platformData as Record<string, unknown> | undefined;
+
+            return {
+                id: r.id,
+                hostname: r.identity?.hostname ?? r.name,
+                displayName: r.displayName || r.name,
+                platform: platformData?.platform as string | undefined,
+                osName: platformData?.osName as string | undefined,
+                osVersion: platformData?.osVersion as string | undefined,
+                kernelVersion: platformData?.kernelVersion as string | undefined,
+                architecture: platformData?.architecture as string | undefined,
+                cpuCount: platformData?.cpuCount as number | undefined,
+                cpuUsage: r.cpu?.current,
+                loadAverage: platformData?.loadAverage as number[] | undefined,
+                memory: r.memory ? {
+                    total: r.memory.total ?? 0,
+                    used: r.memory.used ?? 0,
+                    free: r.memory.free ?? 0,
+                    usage: r.memory.current,
+                } : { total: 0, used: 0, free: 0, usage: 0 },
+                disks: platformData?.disks as Array<{
+                    total: number;
+                    used: number;
+                    free: number;
+                    usage: number;
+                    mountpoint?: string;
+                    type?: string;
+                    device?: string;
+                }> | undefined,
+                diskIO: platformData?.diskIO as Array<{
+                    device: string;
+                    readBytes?: number;
+                    writeBytes?: number;
+                }> | undefined,
+                networkInterfaces: platformData?.networkInterfaces as Array<{
+                    name: string;
+                    mac?: string;
+                    addresses?: string[];
+                    rxBytes?: number;
+                    txBytes?: number;
+                }> | undefined,
+                sensors: platformData?.sensors as {
+                    temperatureCelsius?: Record<string, number>;
+                    fanRpm?: Record<string, number>;
+                } | undefined,
+                raid: platformData?.raid as Array<{
+                    device: string;
+                    name?: string;
+                    level: string;
+                    state: string;
+                    totalDevices: number;
+                    activeDevices: number;
+                    workingDevices: number;
+                    failedDevices: number;
+                    spareDevices: number;
+                    devices: Array<{ device: string; state: string; slot: number }>;
+                    rebuildPercent: number;
+                }> | undefined,
+                status: r.status === 'online' || r.status === 'running' ? 'online' : r.status,
+                uptimeSeconds: r.uptime,
+                lastSeen: r.lastSeen,
+                intervalSeconds: platformData?.intervalSeconds as number | undefined,
+                agentVersion: platformData?.agentVersion as string | undefined,
+                tokenId: platformData?.tokenId as string | undefined,
+                tokenName: platformData?.tokenName as string | undefined,
+                tags: r.tags,
+            };
+        });
+    });
+
     return {
         resources,
         asVMs,
         asContainers,
+        asHosts,
     };
 }
 
