@@ -516,6 +516,10 @@ type Manager struct {
 	flappingActive  map[string]bool        // Track which alerts are currently in flapping state
 	// Cleanup control
 	cleanupStop chan struct{} // Signal to stop cleanup goroutine
+	// Host agent deduplication: track hostnames of active host agents
+	// When a host agent is running on a Proxmox node, we prefer the host agent
+	// alerts and suppress the node alerts to avoid duplicate monitoring.
+	hostAgentHostnames map[string]struct{} // Normalized hostnames (lowercase)
 }
 
 type ackRecord struct {
@@ -555,6 +559,7 @@ func NewManager() *Manager {
 		flappingHistory:       make(map[string][]time.Time),
 		flappingActive:        make(map[string]bool),
 		cleanupStop:           make(chan struct{}),
+		hostAgentHostnames:    make(map[string]struct{}),
 		config: AlertConfig{
 			Enabled:                true,
 			ActivationState:        ActivationPending,
@@ -2345,21 +2350,76 @@ func (m *Manager) CheckNode(node models.Node) {
 
 	// Check each metric (only if node is online) - checkMetric will skip if threshold is nil or <= 0
 	if node.Status != "offline" {
-		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "cpu", node.CPU*100, thresholds.CPU, nil)
-		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "memory", node.Memory.Usage, thresholds.Memory, nil)
-		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "disk", node.Disk.Usage, thresholds.Disk, nil)
+		// Check for host agent deduplication: if a host agent is running on this node,
+		// prefer the host agent alerts and skip node metric alerts to avoid duplicates.
+		if m.hasHostAgentForNode(node.Name) {
+			log.Debug().
+				Str("node", node.Name).
+				Msg("Skipping node metric alerts - host agent is monitoring this machine")
+		} else {
+			m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "cpu", node.CPU*100, thresholds.CPU, nil)
+			m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "memory", node.Memory.Usage, thresholds.Memory, nil)
+			m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "disk", node.Disk.Usage, thresholds.Disk, nil)
 
-		// Check temperature if available
-		if node.Temperature != nil && node.Temperature.Available && thresholds.Temperature != nil {
-			// Use CPU package temp if available, otherwise use max core temp
-			temp := node.Temperature.CPUPackage
-			if temp == 0 {
-				temp = node.Temperature.CPUMax
+			// Check temperature if available
+			if node.Temperature != nil && node.Temperature.Available && thresholds.Temperature != nil {
+				// Use CPU package temp if available, otherwise use max core temp
+				temp := node.Temperature.CPUPackage
+				if temp == 0 {
+					temp = node.Temperature.CPUMax
+				}
+				m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "temperature", temp, thresholds.Temperature, nil)
 			}
-			m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "temperature", temp, thresholds.Temperature, nil)
 		}
 	}
 }
+
+// RegisterHostAgentHostname registers a host agent hostname for deduplication.
+// When a host agent is actively monitoring a machine, we prefer its alerts
+// over Proxmox node alerts to avoid duplicate monitoring of the same machine.
+func (m *Manager) RegisterHostAgentHostname(hostname string) {
+	normalized := strings.ToLower(strings.TrimSpace(hostname))
+	if normalized == "" {
+		return
+	}
+	m.mu.Lock()
+	m.hostAgentHostnames[normalized] = struct{}{}
+	m.mu.Unlock()
+
+	log.Debug().
+		Str("hostname", hostname).
+		Msg("Registered host agent hostname for deduplication")
+}
+
+// UnregisterHostAgentHostname removes a host agent hostname from deduplication tracking.
+func (m *Manager) UnregisterHostAgentHostname(hostname string) {
+	normalized := strings.ToLower(strings.TrimSpace(hostname))
+	if normalized == "" {
+		return
+	}
+	m.mu.Lock()
+	delete(m.hostAgentHostnames, normalized)
+	m.mu.Unlock()
+
+	log.Debug().
+		Str("hostname", hostname).
+		Msg("Unregistered host agent hostname from deduplication")
+}
+
+// hasHostAgentForNode checks if a host agent is monitoring a machine with the same
+// hostname as the given Proxmox node. If so, we should suppress node alerts to
+// avoid duplicate alerting.
+func (m *Manager) hasHostAgentForNode(nodeName string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(nodeName))
+	if normalized == "" {
+		return false
+	}
+	m.mu.RLock()
+	_, exists := m.hostAgentHostnames[normalized]
+	m.mu.RUnlock()
+	return exists
+}
+
 
 func hostResourceID(hostID string) string {
 	trimmed := strings.TrimSpace(hostID)
@@ -2447,6 +2507,12 @@ func hostDiskResourceID(host models.Host, disk models.Disk) (string, string) {
 func (m *Manager) CheckHost(host models.Host) {
 	if host.ID == "" {
 		return
+	}
+
+	// Register this host agent hostname for deduplication with Proxmox nodes.
+	// This prevents duplicate alerts when both a Node and Host agent monitor the same machine.
+	if host.Hostname != "" {
+		m.RegisterHostAgentHostname(host.Hostname)
 	}
 
 	// Fresh telemetry marks the host as online and clears offline tracking.
@@ -2697,6 +2763,11 @@ func (m *Manager) HandleHostRemoved(host models.Host) {
 		return
 	}
 
+	// Unregister the host agent hostname since it's being removed.
+	if host.Hostname != "" {
+		m.UnregisterHostAgentHostname(host.Hostname)
+	}
+
 	m.HandleHostOnline(host)
 	m.clearHostMetricAlerts(host.ID)
 	m.clearHostDiskAlerts(host.ID)
@@ -2706,6 +2777,12 @@ func (m *Manager) HandleHostRemoved(host models.Host) {
 func (m *Manager) HandleHostOffline(host models.Host) {
 	if host.ID == "" {
 		return
+	}
+
+	// Unregister the host agent hostname since it's no longer actively monitoring.
+	// This allows node alerts to resume if a Proxmox node with the same hostname exists.
+	if host.Hostname != "" {
+		m.UnregisterHostAgentHostname(host.Hostname)
 	}
 
 	m.mu.RLock()
