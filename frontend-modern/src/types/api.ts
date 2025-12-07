@@ -1,5 +1,7 @@
 // Properly typed TypeScript interfaces for Pulse API
 
+import type { Resource } from './resource';
+
 export interface State {
   nodes: Node[];
   vms: VM[];
@@ -25,6 +27,8 @@ export interface State {
   recentlyResolved: ResolvedAlert[];
   lastUpdate: string;
   temperatureMonitoringEnabled?: boolean;
+  // Unified resources (new data model - eventually replaces legacy arrays above)
+  resources?: Resource[];
 }
 
 export interface RemovedDockerHost {
