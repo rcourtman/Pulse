@@ -545,9 +545,10 @@ The dedicated `/resources` unified view was abandoned in favor of migrating exis
    - All pages can consume from unified model with legacy fallback
 
 4. **Future Cleanup (Phase 6):**
-   - [ ] Remove legacy arrays from State once migration is verified
+   - [x] Remove debug console.log statements from frontend routes
+   - [ ] Remove legacy arrays from State once migration is verified stable (keep fallback for safety)
    - [ ] Remove legacy AI context fallback
-   - [ ] Simplify route components once adapters are proven stable
+   - [ ] Simplify route components to use resources directly (remove adapter layer)
 
 ---
 
