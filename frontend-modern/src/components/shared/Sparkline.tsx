@@ -41,7 +41,7 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     }
     return props.width || 120;
   };
-  const height = () => props.height || 24;
+  const height = () => props.height || 16;
 
   // Default thresholds based on metric type
   const getDefaultThresholds = () => {

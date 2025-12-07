@@ -979,7 +979,7 @@ export function GuestRow(props: GuestRowProps) {
 
       {/* CPU */}
       <Show when={isColVisible('cpu')}>
-        <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+        <td class="px-2 py-1 align-middle" style={{ width: "140px", "min-width": "140px", "max-width": "140px" }}>
           <Show when={isMobile()}>
             <div class="md:hidden flex justify-center">
               <ResponsiveMetricCell
@@ -1015,7 +1015,7 @@ export function GuestRow(props: GuestRowProps) {
 
       {/* Memory */}
       <Show when={isColVisible('memory')}>
-        <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+        <td class="px-2 py-1 align-middle" style={{ width: "140px", "min-width": "140px", "max-width": "140px" }}>
           <div title={memoryTooltip() ?? undefined}>
             <Show when={isMobile()}>
               <div class="md:hidden flex justify-center">
@@ -1058,7 +1058,7 @@ export function GuestRow(props: GuestRowProps) {
 
       {/* Disk */}
       <Show when={isColVisible('disk')}>
-        <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+        <td class="px-2 py-1 align-middle" style={{ width: "140px", "min-width": "140px", "max-width": "140px" }}>
           <Show
             when={hasDiskUsage()}
             fallback={
