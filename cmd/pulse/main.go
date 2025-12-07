@@ -172,6 +172,10 @@ func runServer() {
 		return nil
 	}
 	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), wsHub, reloadFunc, Version)
+	
+	// Inject resource store into monitor for WebSocket broadcasts
+	// This must be done after router creation since resourceHandlers is created in NewRouter
+	router.SetMonitor(reloadableMonitor.GetMonitor())
 
 	// Create HTTP server with unified configuration
 	// In production, serve everything (frontend + API) on the frontend port

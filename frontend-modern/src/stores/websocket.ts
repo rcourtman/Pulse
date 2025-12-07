@@ -74,6 +74,8 @@ export function createWebSocketStore(url: string) {
     activeAlerts: [],
     recentlyResolved: [],
     lastUpdate: '',
+    // Unified resources for cross-platform monitoring
+    resources: [],
   });
   const [activeAlerts, setActiveAlerts] = createStore<Record<string, Alert>>({});
   const [recentlyResolved, setRecentlyResolved] = createStore<Record<string, ResolvedAlert>>({});
@@ -580,6 +582,10 @@ export function createWebSocketStore(url: string) {
             if (message.data.stats !== undefined) setState('stats', message.data.stats);
             if (message.data.physicalDisks !== undefined)
               setState('physicalDisks', reconcile(message.data.physicalDisks, { key: 'id' }));
+            // Handle unified resources
+            if (message.data.resources !== undefined) {
+              setState('resources', reconcile(message.data.resources, { key: 'id' }));
+            }
             // Sync active alerts from state
             if (message.data.activeAlerts !== undefined) {
               const newAlerts: Record<string, Alert> = {};
