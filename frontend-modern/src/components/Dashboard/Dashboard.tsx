@@ -1094,21 +1094,24 @@ export function Dashboard(props: DashboardProps) {
 
                         return (
                           <th
-                            class={`py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
+                            class={`py-2 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
                               ${isFirst() ? 'pl-4 pr-2 text-left' : 'px-2 text-center'}
                               ${isSortable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
-                            style={col.width ? { "min-width": col.width } : undefined}
+                            style={{
+                              ...(col.width ? { "min-width": col.width } : {}),
+                              "vertical-align": 'middle'
+                            }}
                             onClick={() => isSortable && handleSort(sortKeyForCol!)}
                             title={col.icon ? col.label : undefined}
                           >
-                            <span class="inline-flex items-center justify-center gap-0.5">
+                            <div class={`flex items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`} style={{ "min-height": "14px" }}>
                               {col.icon ? (
-                                <span innerHTML={col.icon} />
+                                <span class="flex items-center" innerHTML={col.icon} />
                               ) : (
                                 col.label
                               )}
                               {isSorted() && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
-                            </span>
+                            </div>
                           </th>
                         );
                       }}

@@ -23,11 +23,28 @@ interface RingBuffer {
 }
 
 // Configuration
-const MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
+const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours (to support all time ranges)
 const SAMPLE_INTERVAL_MS = 30 * 1000;   // 30 seconds
-const MAX_POINTS = Math.ceil(MAX_AGE_MS / SAMPLE_INTERVAL_MS); // ~240 points
+const MAX_POINTS = Math.ceil(MAX_AGE_MS / SAMPLE_INTERVAL_MS); // ~2880 points
 const STORAGE_KEY = 'pulse_metrics_history';
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2; // Bumped version due to increased buffer size
+
+/**
+ * Convert TimeRange string to milliseconds
+ */
+function timeRangeToMs(range: TimeRange): number {
+  switch (range) {
+    case '5m': return 5 * 60 * 1000;
+    case '15m': return 15 * 60 * 1000;
+    case '30m': return 30 * 60 * 1000;
+    case '1h': return 60 * 60 * 1000;
+    case '4h': return 4 * 60 * 60 * 1000;
+    case '12h': return 12 * 60 * 60 * 1000;
+    case '24h': return 24 * 60 * 60 * 1000;
+    case '7d': return 7 * 24 * 60 * 60 * 1000;
+    default: return 60 * 60 * 1000; // Default 1h
+  }
+}
 
 // Store - map of resourceId to ring buffer
 const metricsHistoryMap = new Map<string, RingBuffer>();
@@ -399,13 +416,25 @@ export function hasSeedData(): boolean {
 
 
 /**
- * Get metric history for a resource
+ * Get metric history for a resource (full history)
  */
 export function getMetricHistory(resourceId: string): MetricSnapshot[] {
   const ring = metricsHistoryMap.get(resourceId);
   if (!ring) return [];
 
   const cutoffTime = Date.now() - MAX_AGE_MS;
+  return getRingBufferData(ring, cutoffTime);
+}
+
+/**
+ * Get metric history for a resource filtered by time range
+ */
+export function getMetricHistoryForRange(resourceId: string, range: TimeRange): MetricSnapshot[] {
+  const ring = metricsHistoryMap.get(resourceId);
+  if (!ring) return [];
+
+  const rangeMs = timeRangeToMs(range);
+  const cutoffTime = Date.now() - rangeMs;
   return getRingBufferData(ring, cutoffTime);
 }
 

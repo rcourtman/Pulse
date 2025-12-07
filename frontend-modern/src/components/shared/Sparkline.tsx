@@ -142,34 +142,10 @@ export const Sparkline: Component<SparklineProps> = (props) => {
       points.push({ x, y });
     });
 
-    // Draw threshold reference lines
-    const t = thresholds();
-    ctx.strokeStyle = '#94a3b8'; // gray-400
-    ctx.lineWidth = 0.5;
-    ctx.globalAlpha = 0.3;
-    ctx.setLineDash([2, 2]);
-
-    // Warning threshold line
-    const warningY = h - ((t.warning - minValue) / (maxValue - minValue)) * h;
-    ctx.beginPath();
-    ctx.moveTo(0, warningY);
-    ctx.lineTo(w, warningY);
-    ctx.stroke();
-
-    // Critical threshold line
-    const criticalY = h - ((t.critical - minValue) / (maxValue - minValue)) * h;
-    ctx.beginPath();
-    ctx.moveTo(0, criticalY);
-    ctx.lineTo(w, criticalY);
-    ctx.stroke();
-
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
-
     // Draw gradient fill
     const gradient = ctx.createLinearGradient(0, 0, 0, h);
-    gradient.addColorStop(0, `${color}40`); // 25% opacity at top
-    gradient.addColorStop(1, `${color}10`); // 6% opacity at bottom
+    gradient.addColorStop(0, `${color}5A`); // 35% opacity at top
+    gradient.addColorStop(1, `${color}1F`); // 12% opacity at bottom
 
     ctx.fillStyle = gradient;
     ctx.beginPath();
@@ -193,15 +169,6 @@ export const Sparkline: Component<SparklineProps> = (props) => {
       }
     });
     ctx.stroke();
-
-    // Draw current value dot with opacity
-    if (points.length > 0) {
-      const lastPoint = points[points.length - 1];
-      ctx.fillStyle = colorWithOpacity;
-      ctx.beginPath();
-      ctx.arc(lastPoint.x, lastPoint.y, 2, 0, Math.PI * 2);
-      ctx.fill();
-    }
   };
 
   // Redraw when data or dimensions change

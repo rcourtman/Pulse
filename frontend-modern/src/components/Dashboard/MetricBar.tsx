@@ -1,7 +1,7 @@
 import { Show, createMemo, createSignal, onMount, onCleanup } from 'solid-js';
 import { Sparkline } from '@/components/shared/Sparkline';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
-import { getMetricHistory } from '@/stores/metricsHistory';
+import { getMetricHistoryForRange } from '@/stores/metricsHistory';
 
 interface MetricBarProps {
   value: number;
@@ -19,7 +19,7 @@ const estimateTextWidth = (text: string): number => {
 };
 
 export function MetricBar(props: MetricBarProps) {
-  const { viewMode } = useMetricsViewMode();
+  const { viewMode, timeRange } = useMetricsViewMode();
   const width = createMemo(() => Math.min(props.value, 100));
 
   // Track container width
@@ -88,7 +88,7 @@ export function MetricBar(props: MetricBarProps) {
   // Get metric history for sparkline
   const metricHistory = createMemo(() => {
     if (viewMode() !== 'sparklines' || !props.resourceId) return [];
-    return getMetricHistory(props.resourceId);
+    return getMetricHistoryForRange(props.resourceId, timeRange());
   });
 
   // Determine which metric type to use for sparkline

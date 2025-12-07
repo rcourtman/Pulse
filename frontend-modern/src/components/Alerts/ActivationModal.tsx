@@ -5,6 +5,7 @@ import type { JSX } from 'solid-js';
 import type { Alert } from '@/types/api';
 import type { AlertConfig, AlertThresholds, HysteresisThreshold } from '@/types/alerts';
 import { showError, showSuccess } from '@/utils/toast';
+import { formatAlertValue, formatAlertThreshold } from '@/utils/alertFormatters';
 
 interface ActivationModalProps {
   isOpen: boolean;
@@ -85,7 +86,7 @@ const summarizeThresholds = (config: AlertConfig | null): ThresholdSummary[] => 
       ...nodeItems,
       {
         label: 'Temperature',
-        value: formatThreshold(extractTrigger(config.nodeDefaults?.temperature)),
+        value: formatAlertThreshold(extractTrigger(config.nodeDefaults?.temperature), 'temperature'),
       },
     ];
     summaries.push({ heading: 'Node thresholds', items: nodeWithTemperature });
@@ -263,20 +264,18 @@ export function ActivationModal(props: ActivationModalProps): JSX.Element {
                     <For each={violations()}>
                       {(alert) => (
                         <div
-                          class={`border rounded-md p-3 text-sm transition-colors ${
-                            alert.level === 'critical'
-                              ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20'
-                              : 'border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20'
-                          }`}
+                          class={`border rounded-md p-3 text-sm transition-colors ${alert.level === 'critical'
+                            ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20'
+                            : 'border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20'
+                            }`}
                         >
                           <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2">
                               <span
-                                class={`px-2 py-0.5 rounded-full text-xs font-semibold uppercase ${
-                                  alert.level === 'critical'
-                                    ? 'bg-red-600 text-white'
-                                    : 'bg-yellow-500 text-gray-900'
-                                }`}
+                                class={`px-2 py-0.5 rounded-full text-xs font-semibold uppercase ${alert.level === 'critical'
+                                  ? 'bg-red-600 text-white'
+                                  : 'bg-yellow-500 text-gray-900'
+                                  }`}
                               >
                                 {alert.level}
                               </span>
@@ -288,7 +287,7 @@ export function ActivationModal(props: ActivationModalProps): JSX.Element {
                           </div>
                           <p class="mt-2 text-xs text-gray-600 dark:text-gray-300">{alert.message}</p>
                           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            Threshold {alert.threshold}% • Current {alert.value}% • Since{' '}
+                            Threshold {formatAlertValue(alert.threshold, alert.type)} • Current {formatAlertValue(alert.value, alert.type)} • Since{' '}
                             {new Date(alert.startTime).toLocaleString()}
                           </p>
                         </div>
@@ -303,11 +302,10 @@ export function ActivationModal(props: ActivationModalProps): JSX.Element {
                   Notification channels
                 </h3>
                 <div
-                  class={`mt-3 rounded-md border p-4 ${
-                    channelSummary().status === 'configured'
-                      ? 'border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900/20'
-                      : 'border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
-                  }`}
+                  class={`mt-3 rounded-md border p-4 ${channelSummary().status === 'configured'
+                    ? 'border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900/20'
+                    : 'border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
+                    }`}
                 >
                   <p class="text-sm text-gray-800 dark:text-gray-100">{channelSummary().message}</p>
                   <button
