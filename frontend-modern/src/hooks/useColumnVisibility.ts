@@ -5,6 +5,7 @@ import { useBreakpoint, type ColumnPriority, PRIORITY_BREAKPOINTS, type Breakpoi
 export interface ColumnDef {
   id: string;
   label: string;
+  icon?: string;     // SVG icon markup for compact column headers
   priority: ColumnPriority;
   toggleable?: boolean;
   width?: string;      // Fixed width for consistent column sizing

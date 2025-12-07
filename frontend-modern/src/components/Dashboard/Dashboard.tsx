@@ -1082,7 +1082,7 @@ export function Dashboard(props: DashboardProps) {
         <ComponentErrorBoundary name="Guest Table">
           <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
             <div class="overflow-x-auto">
-              <table class="w-full border-collapse whitespace-nowrap table-fixed">
+              <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "900px" }}>
                 <thead>
                   <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                     <For each={visibleColumns()}>
@@ -1097,10 +1097,18 @@ export function Dashboard(props: DashboardProps) {
                             class={`py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
                               ${isFirst() ? 'pl-4 pr-2 text-left' : 'px-2 text-center'}
                               ${isSortable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
-                            style={col.width ? { width: col.width } : undefined}
+                            style={col.width ? { "min-width": col.width } : undefined}
                             onClick={() => isSortable && handleSort(sortKeyForCol!)}
+                            title={col.icon ? col.label : undefined}
                           >
-                            {col.label} {isSorted() && (sortDirection() === 'asc' ? '▲' : '▼')}
+                            <span class="inline-flex items-center justify-center gap-0.5">
+                              {col.icon ? (
+                                <span innerHTML={col.icon} />
+                              ) : (
+                                col.label
+                              )}
+                              {isSorted() && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+                            </span>
                           </th>
                         );
                       }}

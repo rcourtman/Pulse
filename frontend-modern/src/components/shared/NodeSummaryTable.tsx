@@ -342,7 +342,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   return (
     <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
       <div class="overflow-x-auto">
-        <table class="w-full border-collapse whitespace-nowrap table-fixed">
+        <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "800px" }}>
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
               <th
@@ -351,41 +351,41 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               >
                 {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'} {renderSortIndicator('name')}
               </th>
-              <th class={thClass} style={{ width: '80px' }} onClick={() => handleSort('uptime')}>
+              <th class={thClass} style={{ "min-width": '80px' }} onClick={() => handleSort('uptime')}>
                 Uptime {renderSortIndicator('uptime')}
               </th>
-              <th class={thClass} style={{ width: '18%' }} onClick={() => handleSort('cpu')}>
+              <th class={thClass} style={{ "min-width": '140px' }} onClick={() => handleSort('cpu')}>
                 CPU {renderSortIndicator('cpu')}
               </th>
-              <th class={thClass} style={{ width: '18%' }} onClick={() => handleSort('memory')}>
+              <th class={thClass} style={{ "min-width": '140px' }} onClick={() => handleSort('memory')}>
                 Memory {renderSortIndicator('memory')}
               </th>
-              <th class={thClass} style={{ width: '18%' }} onClick={() => handleSort('disk')}>
+              <th class={thClass} style={{ "min-width": '140px' }} onClick={() => handleSort('disk')}>
                 Disk {renderSortIndicator('disk')}
               </th>
               <Show when={hasAnyTemperatureData()}>
-                <th class={thClass} style={{ width: '60px' }} onClick={() => handleSort('temperature')}>
+                <th class={thClass} style={{ "min-width": '60px' }} onClick={() => handleSort('temperature')}>
                   Temp {renderSortIndicator('temperature')}
                 </th>
               </Show>
               <Show when={props.currentTab === 'dashboard'}>
-                <th class={thClass} style={{ width: '50px' }} onClick={() => handleSort('vmCount')}>
+                <th class={thClass} style={{ "min-width": '50px' }} onClick={() => handleSort('vmCount')}>
                   VMs {renderSortIndicator('vmCount')}
                 </th>
-                <th class={thClass} style={{ width: '50px' }} onClick={() => handleSort('containerCount')}>
+                <th class={thClass} style={{ "min-width": '50px' }} onClick={() => handleSort('containerCount')}>
                   CTs {renderSortIndicator('containerCount')}
                 </th>
               </Show>
               <Show when={props.currentTab === 'storage'}>
-                <th class={thClass} style={{ width: '70px' }} onClick={() => handleSort('storageCount')}>
+                <th class={thClass} style={{ "min-width": '70px' }} onClick={() => handleSort('storageCount')}>
                   Storage {renderSortIndicator('storageCount')}
                 </th>
-                <th class={thClass} style={{ width: '60px' }} onClick={() => handleSort('diskCount')}>
+                <th class={thClass} style={{ "min-width": '60px' }} onClick={() => handleSort('diskCount')}>
                   Disks {renderSortIndicator('diskCount')}
                 </th>
               </Show>
               <Show when={props.currentTab === 'backups'}>
-                <th class={thClass} style={{ width: '70px' }} onClick={() => handleSort('backupCount')}>
+                <th class={thClass} style={{ "min-width": '70px' }} onClick={() => handleSort('backupCount')}>
                   Backups {renderSortIndicator('backupCount')}
                 </th>
               </Show>
