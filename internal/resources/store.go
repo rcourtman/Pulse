@@ -4,6 +4,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 // Store maintains a unified collection of all resources with deduplication.
@@ -1024,3 +1026,54 @@ type PlatformSummary struct {
 	Count int
 }
 
+// PopulateFromSnapshot converts all resources from a StateSnapshot to the unified store.
+// This should be called whenever the state is updated (e.g., before WebSocket broadcasts).
+func (s *Store) PopulateFromSnapshot(snapshot models.StateSnapshot) {
+	// Convert nodes
+	for _, node := range snapshot.Nodes {
+		r := FromNode(node)
+		s.Upsert(r)
+	}
+
+	// Convert VMs
+	for _, vm := range snapshot.VMs {
+		r := FromVM(vm)
+		s.Upsert(r)
+	}
+
+	// Convert containers
+	for _, ct := range snapshot.Containers {
+		r := FromContainer(ct)
+		s.Upsert(r)
+	}
+
+	// Convert hosts
+	for _, host := range snapshot.Hosts {
+		r := FromHost(host)
+		s.Upsert(r)
+	}
+
+	// Convert docker hosts and their containers
+	for _, dh := range snapshot.DockerHosts {
+		r := FromDockerHost(dh)
+		s.Upsert(r)
+
+		// Convert containers within the docker host
+		for _, dc := range dh.Containers {
+			r := FromDockerContainer(dc, dh.ID, dh.Hostname)
+			s.Upsert(r)
+		}
+	}
+
+	// Convert PBS instances
+	for _, pbs := range snapshot.PBSInstances {
+		r := FromPBSInstance(pbs)
+		s.Upsert(r)
+	}
+
+	// Convert storage
+	for _, storage := range snapshot.Storage {
+		r := FromStorage(storage)
+		s.Upsert(r)
+	}
+}
