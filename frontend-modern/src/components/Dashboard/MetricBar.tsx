@@ -102,7 +102,7 @@ export function MetricBar(props: MetricBarProps) {
     <Show
       when={viewMode() === 'sparklines' && props.resourceId}
       fallback={
-        // Progress bar mode - scales to fill column width
+        // Progress bar mode - full width, flex centered like stacked bars
         <div ref={containerRef} class="metric-text w-full h-4 flex items-center justify-center">
           <div class={`relative w-full h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded ${props.class || ''}`}>
             <div class={`absolute top-0 left-0 h-full ${progressColorClass()}`} style={{ width: `${width()}%` }} />
@@ -120,21 +120,14 @@ export function MetricBar(props: MetricBarProps) {
         </div>
       }
     >
-      {/* Sparkline mode - scales to fill column width, matching bar mode sizing */}
-      <div class="metric-text w-full h-6 flex items-center justify-center">
-        <div class="flex items-center gap-1.5 w-full">
-          <div class="flex-1 min-w-0 h-6">
-            <Sparkline
-              data={metricHistory()}
-              metric={sparklineMetric()}
-              width={0}
-              height={24}
-            />
-          </div>
-          <span class="text-[10px] font-medium text-gray-800 dark:text-gray-100 whitespace-nowrap flex-shrink-0 w-[35px] text-right">
-            {props.label}
-          </span>
-        </div>
+      {/* Sparkline mode - full width, flex centered like stacked bars */}
+      <div class="metric-text w-full h-4 flex items-center justify-center">
+        <Sparkline
+          data={metricHistory()}
+          metric={sparklineMetric()}
+          width={0}
+          height={16}
+        />
       </div>
     </Show>
   );

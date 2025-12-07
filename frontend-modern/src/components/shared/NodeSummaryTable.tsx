@@ -354,13 +354,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               <th class={thClass} style={{ "min-width": '80px' }} onClick={() => handleSort('uptime')}>
                 Uptime {renderSortIndicator('uptime')}
               </th>
-              <th class={thClass} style={{ "min-width": '140px' }} onClick={() => handleSort('cpu')}>
+              <th class={thClass} style={{ width: "200px", "min-width": "200px", "max-width": "200px" }} onClick={() => handleSort('cpu')}>
                 CPU {renderSortIndicator('cpu')}
               </th>
-              <th class={thClass} style={{ "min-width": '140px' }} onClick={() => handleSort('memory')}>
+              <th class={thClass} style={{ width: "200px", "min-width": "200px", "max-width": "200px" }} onClick={() => handleSort('memory')}>
                 Memory {renderSortIndicator('memory')}
               </th>
-              <th class={thClass} style={{ "min-width": '140px' }} onClick={() => handleSort('disk')}>
+              <th class={thClass} style={{ width: "200px", "min-width": "200px", "max-width": "200px" }} onClick={() => handleSort('disk')}>
                 Disk {renderSortIndicator('disk')}
               </th>
               <Show when={hasAnyTemperatureData()}>
@@ -561,7 +561,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* CPU */}
-                    <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+                    <td class="px-2 py-1 align-middle" style={{ width: "200px", "min-width": "200px", "max-width": "200px" }}>
                       <Show when={isMobile()}>
                         <div class="md:hidden flex justify-center">
                           <MetricText value={cpuPercentValue} type="cpu" />
@@ -589,7 +589,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* Memory */}
-                    <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+                    <td class="px-2 py-1 align-middle" style={{ width: "200px", "min-width": "200px", "max-width": "200px" }}>
                       <Show when={isMobile()}>
                         <div class="md:hidden flex justify-center">
                           <MetricText value={memoryPercentValue} type="memory" />
@@ -631,7 +631,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* Disk */}
-                    <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+                    <td class="px-2 py-1 align-middle" style={{ width: "200px", "min-width": "200px", "max-width": "200px" }}>
                       <ResponsiveMetricCell
                         value={diskPercentValue}
                         type="disk"
