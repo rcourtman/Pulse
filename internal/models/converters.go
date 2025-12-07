@@ -732,3 +732,141 @@ func zeroIfNegative(val int64) int64 {
 	}
 	return val
 }
+
+// ResourceToFrontend converts a resources.Resource to ResourceFrontend.
+// This function is in models package to avoid circular imports.
+// It takes individual fields rather than the whole Resource to avoid importing resources package.
+type ResourceConvertInput struct {
+	ID           string
+	Type         string
+	Name         string
+	DisplayName  string
+	PlatformID   string
+	PlatformType string
+	SourceType   string
+	ParentID     string
+	ClusterID    string
+	Status       string
+	CPU          *ResourceMetricInput
+	Memory       *ResourceMetricInput
+	Disk         *ResourceMetricInput
+	NetworkRX    int64
+	NetworkTX    int64
+	HasNetwork   bool
+	Temperature  *float64
+	Uptime       *int64
+	Tags         []string
+	Labels       map[string]string
+	LastSeenUnix int64
+	Alerts       []ResourceAlertInput
+	Identity     *ResourceIdentityInput
+	PlatformData map[string]any
+}
+
+// ResourceMetricInput represents a metric value for resource conversion.
+type ResourceMetricInput struct {
+	Current float64
+	Total   *int64
+	Used    *int64
+	Free    *int64
+}
+
+type ResourceAlertInput struct {
+	ID            string
+	Type          string
+	Level         string
+	Message       string
+	Value         float64
+	Threshold     float64
+	StartTimeUnix int64
+}
+
+type ResourceIdentityInput struct {
+	Hostname  string
+	MachineID string
+	IPs       []string
+}
+
+// ConvertResourceToFrontend converts input to ResourceFrontend.
+func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
+	rf := ResourceFrontend{
+		ID:           input.ID,
+		Type:         input.Type,
+		Name:         input.Name,
+		DisplayName:  input.DisplayName,
+		PlatformID:   input.PlatformID,
+		PlatformType: input.PlatformType,
+		SourceType:   input.SourceType,
+		ParentID:     input.ParentID,
+		ClusterID:    input.ClusterID,
+		Status:       input.Status,
+		Temperature:  input.Temperature,
+		Uptime:       input.Uptime,
+		Tags:         input.Tags,
+		Labels:       input.Labels,
+		LastSeen:     input.LastSeenUnix,
+		PlatformData: input.PlatformData,
+	}
+
+	// Convert metrics
+	if input.CPU != nil {
+		rf.CPU = &ResourceMetricFrontend{
+			Current: input.CPU.Current,
+			Total:   input.CPU.Total,
+			Used:    input.CPU.Used,
+			Free:    input.CPU.Free,
+		}
+	}
+
+	if input.Memory != nil {
+		rf.Memory = &ResourceMetricFrontend{
+			Current: input.Memory.Current,
+			Total:   input.Memory.Total,
+			Used:    input.Memory.Used,
+			Free:    input.Memory.Free,
+		}
+	}
+
+	if input.Disk != nil {
+		rf.Disk = &ResourceMetricFrontend{
+			Current: input.Disk.Current,
+			Total:   input.Disk.Total,
+			Used:    input.Disk.Used,
+			Free:    input.Disk.Free,
+		}
+	}
+
+	if input.HasNetwork {
+		rf.Network = &ResourceNetworkFrontend{
+			RXBytes: input.NetworkRX,
+			TXBytes: input.NetworkTX,
+		}
+	}
+
+	// Convert alerts
+	if len(input.Alerts) > 0 {
+		rf.Alerts = make([]ResourceAlertFrontend, len(input.Alerts))
+		for i, a := range input.Alerts {
+			rf.Alerts[i] = ResourceAlertFrontend{
+				ID:        a.ID,
+				Type:      a.Type,
+				Level:     a.Level,
+				Message:   a.Message,
+				Value:     a.Value,
+				Threshold: a.Threshold,
+				StartTime: a.StartTimeUnix,
+			}
+		}
+	}
+
+	// Convert identity
+	if input.Identity != nil {
+		rf.Identity = &ResourceIdentityFrontend{
+			Hostname:  input.Identity.Hostname,
+			MachineID: input.Identity.MachineID,
+			IPs:       input.Identity.IPs,
+		}
+	}
+
+	return rf
+}

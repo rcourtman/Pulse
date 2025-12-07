@@ -446,4 +446,78 @@ type StateFrontend struct {
 	Stats                        map[string]any              `json:"stats"`                        // Empty object for now
 	LastUpdate                   int64                       `json:"lastUpdate"`                   // Unix timestamp
 	TemperatureMonitoringEnabled bool                        `json:"temperatureMonitoringEnabled"` // Global temperature monitoring setting
+	// Unified resources - the new way to access all monitored entities
+	Resources []ResourceFrontend `json:"resources,omitempty"`
+}
+
+// ResourceFrontend is the frontend representation of a unified Resource.
+// This mirrors resources.Resource but with time.Time converted to Unix milliseconds.
+type ResourceFrontend struct {
+	// Identity
+	ID          string `json:"id"`
+	Type        string `json:"type"`
+	Name        string `json:"name"`
+	DisplayName string `json:"displayName"`
+
+	// Platform/Source
+	PlatformID   string `json:"platformId"`
+	PlatformType string `json:"platformType"`
+	SourceType   string `json:"sourceType"`
+
+	// Hierarchy
+	ParentID  string `json:"parentId,omitempty"`
+	ClusterID string `json:"clusterId,omitempty"`
+
+	// Universal Metrics
+	Status      string                   `json:"status"`
+	CPU         *ResourceMetricFrontend  `json:"cpu,omitempty"`
+	Memory      *ResourceMetricFrontend  `json:"memory,omitempty"`
+	Disk        *ResourceMetricFrontend  `json:"disk,omitempty"`
+	Network     *ResourceNetworkFrontend `json:"network,omitempty"`
+	Temperature *float64                 `json:"temperature,omitempty"`
+	Uptime      *int64                   `json:"uptime,omitempty"`
+
+	// Metadata
+	Tags     []string          `json:"tags,omitempty"`
+	Labels   map[string]string `json:"labels,omitempty"`
+	LastSeen int64             `json:"lastSeen"` // Unix milliseconds
+	Alerts   []ResourceAlertFrontend `json:"alerts,omitempty"`
+
+	// Identity for deduplication
+	Identity *ResourceIdentityFrontend `json:"identity,omitempty"`
+
+	// Platform-specific data (JSON blob)
+	PlatformData map[string]any `json:"platformData,omitempty"`
+}
+
+// ResourceMetricFrontend represents a metric value for the frontend.
+type ResourceMetricFrontend struct {
+	Current float64 `json:"current"`
+	Total   *int64  `json:"total,omitempty"`
+	Used    *int64  `json:"used,omitempty"`
+	Free    *int64  `json:"free,omitempty"`
+}
+
+// ResourceNetworkFrontend represents network metrics for the frontend.
+type ResourceNetworkFrontend struct {
+	RXBytes int64 `json:"rxBytes"`
+	TXBytes int64 `json:"txBytes"`
+}
+
+// ResourceAlertFrontend represents an alert on a resource.
+type ResourceAlertFrontend struct {
+	ID        string  `json:"id"`
+	Type      string  `json:"type"`
+	Level     string  `json:"level"`
+	Message   string  `json:"message"`
+	Value     float64 `json:"value"`
+	Threshold float64 `json:"threshold"`
+	StartTime int64   `json:"startTime"` // Unix milliseconds
+}
+
+// ResourceIdentityFrontend contains identity info for deduplication.
+type ResourceIdentityFrontend struct {
+	Hostname  string   `json:"hostname,omitempty"`
+	MachineID string   `json:"machineId,omitempty"`
+	IPs       []string `json:"ips,omitempty"`
 }
