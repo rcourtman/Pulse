@@ -1094,7 +1094,7 @@ export function Dashboard(props: DashboardProps) {
 
                         return (
                           <th
-                            class={`py-2 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
+                            class={`py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
                               ${isFirst() ? 'pl-4 pr-2 text-left' : 'px-2 text-center'}
                               ${isSortable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
                             style={{

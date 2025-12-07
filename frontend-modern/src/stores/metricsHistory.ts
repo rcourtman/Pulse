@@ -52,6 +52,17 @@ const metricsHistoryMap = new Map<string, RingBuffer>();
 // Track last sample time per resource to enforce sampling interval
 const lastSampleTimes = new Map<string, number>();
 
+// Reactive version counter - increments when data is seeded, used to trigger component re-renders
+import { createSignal } from 'solid-js';
+const [metricsVersion, setMetricsVersion] = createSignal(0);
+
+/**
+ * Get the current metrics version (for reactivity)
+ */
+export function getMetricsVersion(): number {
+  return metricsVersion();
+}
+
 /**
  * Create a new ring buffer
  */
@@ -262,22 +273,6 @@ export async function seedFromBackend(range: TimeRange = '1h'): Promise<void> {
       logger.info('[MetricsHistory] Seeding from backend', { range });
       const response = await ChartsAPI.getCharts(range);
 
-      // Get current state to determine guest types
-      // Import dynamically to avoid circular dependency
-      const { getGlobalWebSocketStore } = await import('./websocket-global');
-      const wsStore = getGlobalWebSocketStore();
-
-      // Wait a bit for WebSocket state to populate if it's empty
-      let state = wsStore?.state;
-      if (!state?.vms?.length && !state?.containers?.length) {
-        // Wait up to 2 seconds for state to populate
-        for (let i = 0; i < 4; i++) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          state = wsStore?.state;
-          if (state?.vms?.length || state?.containers?.length) break;
-        }
-      }
-
       const now = Date.now();
       const cutoff = now - MAX_AGE_MS;
       let seededCount = 0;
@@ -342,33 +337,43 @@ export async function seedFromBackend(range: TimeRange = '1h'): Promise<void> {
         }
       };
 
-      // Process VMs and containers
+      // Process VMs and containers using backend-provided guest types
+      // This avoids race conditions with WebSocket state
       if (response.data) {
-        // Build a map from ID -> type using WebSocket state  
-        const guestTypeMap = new Map<string, 'vm' | 'container'>();
-        if (state?.vms) {
-          for (const vm of state.vms) {
-            if (vm.id) guestTypeMap.set(vm.id, 'vm');
+        // Use guestTypes from backend response (available since backend update)
+        // Falls back to WebSocket state for backwards compatibility
+        let guestTypeMap: Map<string, 'vm' | 'container'>;
+
+        if (response.guestTypes) {
+          // Preferred: Use backend-provided types (no race condition)
+          guestTypeMap = new Map(Object.entries(response.guestTypes) as [string, 'vm' | 'container'][]);
+          logger.debug('[MetricsHistory] Using backend-provided guestTypes', { count: guestTypeMap.size });
+        } else {
+          // Fallback: Try WebSocket state (legacy backends without guestTypes)
+          guestTypeMap = new Map<string, 'vm' | 'container'>();
+          try {
+            const { getGlobalWebSocketStore } = await import('./websocket-global');
+            const wsStore = getGlobalWebSocketStore();
+            const state = wsStore?.state;
+
+            if (state?.vms) {
+              for (const vm of state.vms) {
+                if (vm.id) guestTypeMap.set(vm.id, 'vm');
+              }
+            }
+            if (state?.containers) {
+              for (const ct of state.containers) {
+                if (ct.id) guestTypeMap.set(ct.id, 'container');
+              }
+            }
+          } catch {
+            logger.warn('[MetricsHistory] Failed to load WebSocket state for guest types');
           }
+          logger.debug('[MetricsHistory] Using WebSocket state for guestTypes', { count: guestTypeMap.size });
         }
-        if (state?.containers) {
-          for (const ct of state.containers) {
-            if (ct.id) guestTypeMap.set(ct.id, 'container');
-          }
-        }
-
-        const backendIds = Object.keys(response.data);
-        const stateIds = Array.from(guestTypeMap.keys());
-
-        // Debug: Find IDs in backend but not in state
-        const missingInState = backendIds.filter(id => !guestTypeMap.has(id));
-
-        console.log('[SPARKLINE DEBUG] Backend chart IDs:', backendIds);
-        console.log('[SPARKLINE DEBUG] State guest IDs:', stateIds);
-        console.log('[SPARKLINE DEBUG] Missing in state (will be wrong type):', missingInState);
 
         for (const [id, chartData] of Object.entries(response.data)) {
-          // Look up the guest type from state, default to 'vm' if unknown
+          // Look up the guest type, default to 'vm' if unknown
           const guestType = guestTypeMap.get(id) ?? 'vm';
           const resourceKey = buildMetricKey(guestType, id);
           processChartData(resourceKey, chartData as ChartData);
@@ -386,6 +391,9 @@ export async function seedFromBackend(range: TimeRange = '1h'): Promise<void> {
 
       hasSeededFromBackend = true;
       logger.info('[MetricsHistory] Seeded from backend', { seededCount, totalResources: metricsHistoryMap.size });
+
+      // Increment version to trigger reactive component updates
+      setMetricsVersion(v => v + 1);
 
       // Save to localStorage
       saveToLocalStorage();

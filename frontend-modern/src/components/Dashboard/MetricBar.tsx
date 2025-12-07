@@ -1,7 +1,7 @@
 import { Show, createMemo, createSignal, onMount, onCleanup } from 'solid-js';
 import { Sparkline } from '@/components/shared/Sparkline';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
-import { getMetricHistoryForRange } from '@/stores/metricsHistory';
+import { getMetricHistoryForRange, getMetricsVersion } from '@/stores/metricsHistory';
 
 interface MetricBarProps {
   value: number;
@@ -86,7 +86,10 @@ export function MetricBar(props: MetricBarProps) {
   });
 
   // Get metric history for sparkline
+  // Depends on metricsVersion to re-fetch when data is seeded (e.g., on time range change)
   const metricHistory = createMemo(() => {
+    // Subscribe to version changes so we re-read when new data is seeded
+    getMetricsVersion();
     if (viewMode() !== 'sparklines' || !props.resourceId) return [];
     return getMetricHistoryForRange(props.resourceId, timeRange());
   });
