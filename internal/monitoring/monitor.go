@@ -7070,8 +7070,17 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	m.mu.RUnlock()
 	
 	if store == nil {
+		log.Debug().Msg("[Resources] No resource store configured, skipping population")
 		return
 	}
+	
+	log.Debug().
+		Int("nodes", len(state.Nodes)).
+		Int("vms", len(state.VMs)).
+		Int("containers", len(state.Containers)).
+		Int("hosts", len(state.Hosts)).
+		Int("dockerHosts", len(state.DockerHosts)).
+		Msg("[Resources] Populating resource store from state snapshot")
 	
 	store.PopulateFromSnapshot(state)
 }
@@ -7084,10 +7093,12 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 	m.mu.RUnlock()
 	
 	if store == nil {
+		log.Debug().Msg("[Resources] No store for broadcast")
 		return nil
 	}
 	
 	allResources := store.GetAll()
+	log.Debug().Int("count", len(allResources)).Msg("[Resources] Got resources for broadcast")
 	if len(allResources) == 0 {
 		return nil
 	}
