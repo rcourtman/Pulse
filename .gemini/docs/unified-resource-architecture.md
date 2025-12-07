@@ -518,10 +518,36 @@ If we eventually want to migrate existing components:
 - [ ] Polling optimization actually used in live polling loops (optional enhancement)
 
 ### Phase 4 Complete When:
-- [x] Unified view accessible from UI (route: `/resources`)
+- [x] Unified view accessible from UI (route: `/resources`) - **ABANDONED** (see below)
 - [x] Filtering and grouping works
 - [x] Existing pages still work
 - [ ] Navigation link added to main UI (optional)
+
+**Note: Phase 4 Direction Changed (2025-12-07)**
+
+The dedicated `/resources` unified view was abandoned in favor of migrating existing pages:
+
+1. **WebSocket State Migration** - COMPLETED
+   - [x] Backend broadcasts unified resources via `state.resources[]`
+   - [x] Frontend types defined (`resource.ts`)
+   - [x] `useResources()` hook available for components
+   - [x] Hosts page uses unified resources (with fallback)
+   - [x] Docker page uses unified resources (with fallback)  
+   - [x] Dashboard page uses unified resources (with fallback)
+
+2. **What Was Removed:**
+   - `/resources` route and ResourcesOverview component
+   - Frontend-only resource types (replaced by types matching backend)
+
+3. **What Remains:**
+   - Backend unified resource model (for AI context)
+   - WebSocket state now includes resources array
+   - All pages can consume from unified model with legacy fallback
+
+4. **Future Cleanup (Phase 6):**
+   - [ ] Remove legacy arrays from State once migration is verified
+   - [ ] Remove legacy AI context fallback
+   - [ ] Simplify route components once adapters are proven stable
 
 ---
 
