@@ -544,10 +544,11 @@ The dedicated `/resources` unified view was abandoned in favor of migrating exis
    - WebSocket state now includes resources array
    - All pages can consume from unified model with legacy fallback
 
-4. **Future Cleanup (Phase 6):**
+4. **Cleanup (Phase 6) - COMPLETED:**
    - [x] Remove debug console.log statements from frontend routes
-   - [ ] Remove legacy arrays from State once migration is verified stable (keep fallback for safety)
-   - [ ] Remove legacy AI context fallback
+   - [x] Remove legacy fallback code from route components (Docker, Hosts, Dashboard)
+   - [ ] Remove unused legacy arrays from backend StateFrontend (optional - still broadcast for API compatibility)
+   - [ ] Remove legacy AI context fallback (optional - verify AI uses unified model first)
    - [ ] Simplify route components to use resources directly (remove adapter layer)
 
 ---
