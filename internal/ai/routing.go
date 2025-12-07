@@ -25,11 +25,12 @@ type RoutingResult struct {
 
 // RoutingError represents a routing failure with actionable information
 type RoutingError struct {
-	TargetNode      string
-	TargetVMID      int
-	AvailableAgents []string
-	Reason          string
-	Suggestion      string
+	TargetNode          string
+	TargetVMID          int
+	AvailableAgents     []string
+	Reason              string
+	Suggestion          string
+	AskForClarification bool // If true, AI should ask the user which host to use
 }
 
 func (e *RoutingError) Error() string {
@@ -37,6 +38,21 @@ func (e *RoutingError) Error() string {
 		return fmt.Sprintf("%s. %s", e.Reason, e.Suggestion)
 	}
 	return e.Reason
+}
+
+// ForAI returns a message suitable for returning to the AI as a tool result
+// This encourages the AI to ask the user for clarification rather than just failing
+func (e *RoutingError) ForAI() string {
+	if e.AskForClarification && len(e.AvailableAgents) > 0 {
+		return fmt.Sprintf(
+			"ROUTING_CLARIFICATION_NEEDED: %s\n\n"+
+				"Available hosts: %s\n\n"+
+				"Please ask the user which host they want to run this command on. "+
+				"Do NOT try the command again until the user specifies which host. "+
+				"Present the available hosts in a friendly way and ask them to clarify.",
+			e.Reason, strings.Join(e.AvailableAgents, ", "))
+	}
+	return e.Error()
 }
 
 // routeToAgent determines which agent should execute a command.
@@ -141,13 +157,20 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 				Str("command", command).
 				Msg("Routing via 'guest_node' in context")
 		} else if req.TargetType == "host" {
-			if hostname, ok := req.Context["hostname"].(string); ok && hostname != "" {
+			// Check multiple possible keys for hostname - frontend uses host_name
+			hostname := ""
+			if h, ok := req.Context["hostname"].(string); ok && h != "" {
+				hostname = h
+			} else if h, ok := req.Context["host_name"].(string); ok && h != "" {
+				hostname = h
+			}
+			if hostname != "" {
 				result.TargetNode = strings.ToLower(hostname)
 				result.RoutingMethod = "context_hostname"
 				log.Debug().
 					Str("hostname", hostname).
 					Str("command", command).
-					Msg("Routing via 'hostname' in context")
+					Msg("Routing via hostname in context")
 			} else {
 				// For host target type with no node info, log a warning
 				// This is a common source of routing issues
@@ -252,10 +275,10 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 		Msg("Routing failed - cannot determine target agent")
 
 	return nil, &RoutingError{
-		AvailableAgents: agentHostnames,
-		Reason:          "Cannot determine which agent should execute this command",
-		Suggestion: fmt.Sprintf("Use target_host parameter with one of: %s. Or specify VMID in the command for pct/qm commands.",
-			strings.Join(agentHostnames, ", ")),
+		AvailableAgents:     agentHostnames,
+		Reason:              "Cannot determine which host should execute this command",
+		Suggestion:          fmt.Sprintf("Please specify which host: %s", strings.Join(agentHostnames, ", ")),
+		AskForClarification: true,
 	}
 
 }

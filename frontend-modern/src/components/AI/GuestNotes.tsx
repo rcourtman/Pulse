@@ -23,6 +23,8 @@ interface GuestNotesProps {
     guestId: string;
     guestName?: string;
     guestType?: string;
+    customUrl?: string;
+    onCustomUrlUpdate?: (guestId: string, url: string) => void;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -101,6 +103,16 @@ export const GuestNotes: Component<GuestNotesProps> = (props) => {
     const [title, setTitle] = createSignal('');
     const [content, setContent] = createSignal('');
 
+    // Guest URL state
+    const [guestUrl, setGuestUrl] = createSignal(props.customUrl || '');
+    const [isEditingUrl, setIsEditingUrl] = createSignal(false);
+    const [isSavingUrl, setIsSavingUrl] = createSignal(false);
+
+    // Sync URL from props
+    createEffect(() => {
+        setGuestUrl(props.customUrl || '');
+    });
+
     // File input ref for import
     let fileInputRef: HTMLInputElement | undefined;
 
@@ -115,15 +127,52 @@ export const GuestNotes: Component<GuestNotesProps> = (props) => {
     const loadKnowledge = async (guestId: string) => {
         setIsLoading(true);
         try {
-            const response = await apiFetch(`/api/ai/knowledge?guest_id=${encodeURIComponent(guestId)}`);
-            if (response.ok) {
-                const data = await response.json();
+            // Fetch knowledge and metadata in parallel
+            const [knowledgeResponse, metadataResponse] = await Promise.all([
+                apiFetch(`/api/ai/knowledge?guest_id=${encodeURIComponent(guestId)}`),
+                apiFetch(`/api/guests/metadata/${encodeURIComponent(guestId)}`),
+            ]);
+
+            if (knowledgeResponse.ok) {
+                const data = await knowledgeResponse.json();
                 setKnowledge(data);
+            }
+
+            // Load customUrl from metadata if not provided via props
+            if (metadataResponse.ok) {
+                const metadata = await metadataResponse.json();
+                if (metadata.customUrl && !props.customUrl) {
+                    setGuestUrl(metadata.customUrl);
+                }
             }
         } catch (error) {
             console.error('Failed to load guest knowledge:', error);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const saveGuestUrl = async () => {
+        const url = guestUrl().trim();
+        setIsSavingUrl(true);
+        try {
+            const response = await apiFetch(`/api/guests/metadata/${encodeURIComponent(props.guestId)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ customUrl: url }),
+            });
+            if (response.ok) {
+                notificationStore.success(url ? 'Guest URL saved' : 'Guest URL cleared');
+                setIsEditingUrl(false);
+                props.onCustomUrlUpdate?.(props.guestId, url);
+            } else {
+                notificationStore.error('Failed to save guest URL');
+            }
+        } catch (error) {
+            console.error('Failed to save guest URL:', error);
+            notificationStore.error('Failed to save guest URL');
+        } finally {
+            setIsSavingUrl(false);
         }
     };
 
@@ -408,6 +457,85 @@ export const GuestNotes: Component<GuestNotesProps> = (props) => {
             {/* Expandable content */}
             <Show when={isExpanded()}>
                 <div class="mt-2 space-y-2 px-2">
+                    {/* Guest URL field */}
+                    <div class="bg-gray-800/50 rounded p-2 border border-gray-700">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs font-medium text-gray-400 flex items-center gap-1">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                                Guest URL
+                            </span>
+                            <Show when={guestUrl() && !isEditingUrl()}>
+                                <a
+                                    href={guestUrl()}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                                >
+                                    Open
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                </a>
+                            </Show>
+                        </div>
+                        <Show when={isEditingUrl()} fallback={
+                            <div class="flex items-center gap-2">
+                                <Show when={guestUrl()} fallback={
+                                    <span class="text-xs text-gray-500 italic">No URL set</span>
+                                }>
+                                    <span class="text-xs text-gray-300 break-all font-mono">{guestUrl()}</span>
+                                </Show>
+                                <button
+                                    onClick={() => setIsEditingUrl(true)}
+                                    class="text-xs text-blue-400 hover:text-blue-300 ml-auto"
+                                >
+                                    {guestUrl() ? 'Edit' : 'Add'}
+                                </button>
+                            </div>
+                        }>
+                            <div class="space-y-2">
+                                <input
+                                    type="text"
+                                    value={guestUrl()}
+                                    onInput={(e) => setGuestUrl(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            saveGuestUrl();
+                                        } else if (e.key === 'Escape') {
+                                            e.preventDefault();
+                                            setGuestUrl(props.customUrl || '');
+                                            setIsEditingUrl(false);
+                                        }
+                                    }}
+                                    placeholder="https://192.168.1.100:8080"
+                                    class="w-full bg-gray-700 text-xs text-gray-200 rounded px-2 py-1.5 border border-gray-600 placeholder-gray-500 font-mono"
+                                    autofocus
+                                />
+                                <div class="flex gap-2 justify-end">
+                                    <button
+                                        onClick={() => {
+                                            setGuestUrl(props.customUrl || '');
+                                            setIsEditingUrl(false);
+                                        }}
+                                        class="text-xs px-2 py-1 text-gray-400 hover:text-gray-200"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={saveGuestUrl}
+                                        disabled={isSavingUrl()}
+                                        class="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50"
+                                    >
+                                        {isSavingUrl() ? 'Saving...' : 'Save'}
+                                    </button>
+                                </div>
+                            </div>
+                        </Show>
+                    </div>
+
                     {/* Search and filter bar - only show if there are notes */}
                     <Show when={hasNotes()}>
                         <div class="flex gap-2 mb-2">
@@ -437,7 +565,7 @@ export const GuestNotes: Component<GuestNotesProps> = (props) => {
 
                     {/* Notes list */}
                     <Show when={hasNotes()} fallback={
-                        <p class="text-xs text-gray-500 italic">No saved notes yet. The AI will automatically save useful discoveries.</p>
+                        <p class="text-xs text-gray-500 italic">No saved notes yet. Add notes to remember passwords, paths, and configs.</p>
                     }>
                         <Show when={filteredNotes().length > 0} fallback={
                             <p class="text-xs text-gray-500 italic">No notes match your search.</p>

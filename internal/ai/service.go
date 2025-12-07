@@ -617,19 +617,7 @@ Examples of actions you can perform:
 - View processes: ps aux --sort=-%mem | head -20
 - Check logs: tail -100 /var/log/syslog
 
-Always execute the commands rather than telling the user how to do it.
-
-## Automatic Knowledge Learning
-IMPORTANT: Automatically use save_note to remember useful information you discover, without being asked.
-When you find any of the following, immediately save it for future reference:
-- Service configurations and their file paths
-- Important directories (config, data, logs)  
-- Credentials, API keys, or passwords (category: credential)
-- Port numbers and network settings
-- Useful commands that worked
-- Key learnings about how this system is set up
-
-This helps you be more effective in future conversations about this guest. Save notes silently without mentioning it to the user.`
+Always execute the commands rather than telling the user how to do it.`
 	}
 
 	// Inject previously learned knowledge about this guest
@@ -766,19 +754,7 @@ Examples of actions you can perform:
 - View processes: ps aux --sort=-%mem | head -20
 - Check logs: tail -100 /var/log/syslog
 
-Always execute the commands rather than telling the user how to do it.
-
-## Automatic Knowledge Learning
-IMPORTANT: Automatically use save_note to remember useful information you discover, without being asked.
-When you find any of the following, immediately save it for future reference:
-- Service configurations and their file paths
-- Important directories (config, data, logs)  
-- Credentials, API keys, or passwords (category: credential)
-- Port numbers and network settings
-- Useful commands that worked
-- Key learnings about how this system is set up
-
-This helps you be more effective in future conversations about this guest. Save notes silently without mentioning it to the user.`
+Always execute the commands rather than telling the user how to do it.`
 	}
 
 	// Inject previously learned knowledge about this guest
@@ -928,7 +904,12 @@ This helps you be more effective in future conversations about this guest. Save 
 
 			if needsApproval {
 				// Don't execute - tell the AI the command needs user approval
-				result = "This command requires user approval. The command was not executed. Please suggest the command to the user and let them decide whether to run it."
+				// The approval button has been sent to the frontend - tell AI to direct user to it
+				result = fmt.Sprintf("COMMAND_BLOCKED: This command (%s) requires user approval and was NOT executed. "+
+					"An approval button has been displayed to the user in the chat. "+
+					"DO NOT attempt to run this command again. "+
+					"Tell the user to click the 'Run' button that appeared above to execute the command, "+
+					"or explain what the command does if they need help deciding.", toolInput)
 				execution = ToolExecution{
 					Name:    tc.Name,
 					Input:   toolInput,
@@ -1188,8 +1169,11 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 				return execution.Output, execution
 			}
 			if decision == agentexec.PolicyRequireApproval {
-				// For now, just inform the AI. Future: implement approval workflow
-				execution.Output = fmt.Sprintf("This command requires user approval: %s\nThe command was not executed. Please suggest the command to the user and let them decide whether to run it.", command)
+				// Direct the AI to tell the user about the approval button
+				execution.Output = fmt.Sprintf("COMMAND_BLOCKED: This command (%s) requires user approval and was NOT executed. "+
+					"An approval button has been displayed to the user. "+
+					"DO NOT attempt to run this command again. "+
+					"Tell the user to click the 'Run' button to execute it.", command)
 				execution.Success = true // Not an error, just needs approval
 				return execution.Output, execution
 			}
@@ -1542,7 +1526,13 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 	// Use the new robust routing logic
 	routeResult, err := s.routeToAgent(req, command, agents)
 	if err != nil {
-		// Return actionable error message
+		// Check if this is a routing error that should ask for clarification
+		if routingErr, ok := err.(*RoutingError); ok && routingErr.AskForClarification {
+			// Return a message that encourages the AI to ask the user for clarification
+			// instead of just failing with an error
+			return routingErr.ForAI(), nil
+		}
+		// Return actionable error message for other errors
 		return "", err
 	}
 
