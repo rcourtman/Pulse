@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	stderrors "errors"
 	"fmt"
 	"math"
@@ -28,6 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/types"
@@ -80,7 +82,7 @@ type PVEClientInterface interface {
 	GetCephDF(ctx context.Context) (*proxmox.CephDF, error)
 }
 
-// ResourceStoreInterface provides methods for polling optimization.
+// ResourceStoreInterface provides methods for polling optimization and resource access.
 // When an agent is monitoring a node, we can reduce API polling for that node.
 type ResourceStoreInterface interface {
 	// ShouldSkipAPIPolling returns true if API polling should be skipped for the hostname
@@ -89,6 +91,8 @@ type ResourceStoreInterface interface {
 	// GetPollingRecommendations returns a map of hostname -> polling multiplier.
 	// 0 = skip entirely, 0.5 = half frequency, 1 = normal
 	GetPollingRecommendations() map[string]float64
+	// GetAll returns all resources in the store (for WebSocket broadcasts)
+	GetAll() []resources.Resource
 }
 
 func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {
@@ -3285,7 +3289,10 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				Int("physicalDisks", len(state.PhysicalDisks)).
 				Msg("Broadcasting state update (ticker)")
 			// Convert to frontend format before broadcasting (converts time.Time to int64, etc.)
-			wsHub.BroadcastState(state.ToFrontend())
+			frontendState := state.ToFrontend()
+			// Inject unified resources if resource store is available
+			frontendState.Resources = m.getResourcesForBroadcast()
+			wsHub.BroadcastState(frontendState)
 
 		case <-ctx.Done():
 			log.Info().Msg("Monitoring loop stopped")
@@ -6894,7 +6901,9 @@ func (m *Monitor) SetMockMode(enable bool) {
 	m.mu.RUnlock()
 
 	if hub != nil {
-		hub.BroadcastState(m.GetState().ToFrontend())
+		frontendState := m.GetState().ToFrontend()
+		frontendState.Resources = m.getResourcesForBroadcast()
+		hub.BroadcastState(frontendState)
 	}
 
 	if !enable && ctx != nil && hub != nil {
@@ -7046,6 +7055,112 @@ func (m *Monitor) shouldSkipNodeMetrics(nodeName string) bool {
 			Msg("Skipping detailed node metrics - host agent provides data")
 	}
 	return should
+}
+
+// getResourcesForBroadcast retrieves all resources from the store and converts them to frontend format.
+// Returns nil if no resource store is configured.
+func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	
+	if store == nil {
+		return nil
+	}
+	
+	allResources := store.GetAll()
+	if len(allResources) == 0 {
+		return nil
+	}
+	
+	result := make([]models.ResourceFrontend, len(allResources))
+	for i, r := range allResources {
+		input := models.ResourceConvertInput{
+			ID:           r.ID,
+			Type:         string(r.Type),
+			Name:         r.Name,
+			DisplayName:  r.DisplayName,
+			PlatformID:   r.PlatformID,
+			PlatformType: string(r.PlatformType),
+			SourceType:   string(r.SourceType),
+			ParentID:     r.ParentID,
+			ClusterID:    r.ClusterID,
+			Status:       string(r.Status),
+			Temperature:  r.Temperature,
+			Uptime:       r.Uptime,
+			Tags:         r.Tags,
+			Labels:       r.Labels,
+			LastSeenUnix: r.LastSeen.UnixMilli(),
+		}
+		
+		// Convert metrics
+		if r.CPU != nil {
+			input.CPU = &models.ResourceMetricInput{
+				Current: r.CPU.Current,
+				Total:   r.CPU.Total,
+				Used:    r.CPU.Used,
+				Free:    r.CPU.Free,
+			}
+		}
+		if r.Memory != nil {
+			input.Memory = &models.ResourceMetricInput{
+				Current: r.Memory.Current,
+				Total:   r.Memory.Total,
+				Used:    r.Memory.Used,
+				Free:    r.Memory.Free,
+			}
+		}
+		if r.Disk != nil {
+			input.Disk = &models.ResourceMetricInput{
+				Current: r.Disk.Current,
+				Total:   r.Disk.Total,
+				Used:    r.Disk.Used,
+				Free:    r.Disk.Free,
+			}
+		}
+		if r.Network != nil {
+			input.HasNetwork = true
+			input.NetworkRX = r.Network.RXBytes
+			input.NetworkTX = r.Network.TXBytes
+		}
+		
+		// Convert alerts
+		if len(r.Alerts) > 0 {
+			input.Alerts = make([]models.ResourceAlertInput, len(r.Alerts))
+			for j, a := range r.Alerts {
+				input.Alerts[j] = models.ResourceAlertInput{
+					ID:            a.ID,
+					Type:          a.Type,
+					Level:         a.Level,
+					Message:       a.Message,
+					Value:         a.Value,
+					Threshold:     a.Threshold,
+					StartTimeUnix: a.StartTime.UnixMilli(),
+				}
+			}
+		}
+		
+		// Convert identity
+		if r.Identity != nil {
+			input.Identity = &models.ResourceIdentityInput{
+				Hostname:  r.Identity.Hostname,
+				MachineID: r.Identity.MachineID,
+				IPs:       r.Identity.IPs,
+			}
+		}
+		
+		// Convert platform data from json.RawMessage to map
+		if len(r.PlatformData) > 0 {
+			var platformMap map[string]any
+			if err := json.Unmarshal(r.PlatformData, &platformMap); err == nil {
+				input.PlatformData = platformMap
+			}
+		}
+		
+		result[i] = models.ConvertResourceToFrontend(input)
+	}
+	
+	return result
 }
 
 // pollStorageBackupsWithNodes polls backups using a provided nodes list to avoid duplicate GetNodes calls
