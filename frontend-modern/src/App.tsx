@@ -107,7 +107,6 @@ function DockerRoute() {
 
     // If we have unified resources, convert and reconstruct hierarchy
     if (dockerHostResources.length > 0) {
-      console.log('[DockerRoute] Using unified resources:', dockerHostResources.length, 'hosts,', dockerContainerResources.length, 'containers');
       return dockerHostResources.map(h => {
         const platformData = h.platformData as Record<string, unknown> | undefined;
 
@@ -207,7 +206,6 @@ function HostsRoute() {
     // If we have unified resources, convert them to legacy Host format
     // (This will be simplified once HostsOverview is migrated to use resources directly)
     if (unifiedHosts.length > 0) {
-      console.log('[HostsRoute] Using unified resources:', unifiedHosts.length, 'hosts');
       return unifiedHosts.map(r => {
         const platformData = r.platformData as Record<string, unknown> | undefined;
         return {
@@ -878,7 +876,6 @@ function App() {
     const vms = createMemo(() => {
       const vmResources = state().resources?.filter(r => r.type === 'vm') ?? [];
       if (vmResources.length > 0) {
-        console.log('[DashboardView] Using unified resources: VMs:', vmResources.length);
         return vmResources.map(r => {
           const platformData = r.platformData as Record<string, unknown> | undefined;
           return {
