@@ -99,8 +99,96 @@ function DockerRoute() {
     return <div>Loading...</div>;
   }
   const { state, activeAlerts } = wsContext;
-  const hosts = createMemo(() => state.dockerHosts ?? []);
-  return <DockerHosts hosts={hosts()} activeAlerts={activeAlerts} />;
+
+  // Use unified resources if available, fall back to legacy state.dockerHosts
+  const hosts = createMemo(() => {
+    const dockerHostResources = state.resources?.filter(r => r.type === 'docker-host') ?? [];
+    const dockerContainerResources = state.resources?.filter(r => r.type === 'docker-container') ?? [];
+
+    // If we have unified resources, convert and reconstruct hierarchy
+    if (dockerHostResources.length > 0) {
+      return dockerHostResources.map(h => {
+        const platformData = h.platformData as Record<string, unknown> | undefined;
+
+        // Find containers belonging to this host
+        const hostContainers = dockerContainerResources
+          .filter(c => c.parentId === h.id)
+          .map(c => {
+            const cPlatform = c.platformData as Record<string, unknown> | undefined;
+            return {
+              id: c.id,
+              name: c.name,
+              image: cPlatform?.image as string ?? '',
+              state: c.status === 'running' ? 'running' : 'exited',
+              status: c.status,
+              health: cPlatform?.health as string | undefined,
+              cpuPercent: c.cpu?.current ?? 0,
+              memoryUsageBytes: c.memory?.used ?? 0,
+              memoryLimitBytes: c.memory?.total ?? 0,
+              memoryPercent: c.memory?.current ?? 0,
+              uptimeSeconds: c.uptime ?? 0,
+              restartCount: cPlatform?.restartCount as number ?? 0,
+              exitCode: cPlatform?.exitCode as number ?? 0,
+              createdAt: cPlatform?.createdAt as number ?? 0,
+              startedAt: cPlatform?.startedAt as number | undefined,
+              finishedAt: cPlatform?.finishedAt as number | undefined,
+              ports: cPlatform?.ports,
+              labels: cPlatform?.labels as Record<string, string> | undefined,
+              networks: cPlatform?.networks,
+            };
+          });
+
+        return {
+          id: h.id,
+          agentId: platformData?.agentId as string ?? h.id,
+          hostname: h.identity?.hostname ?? h.name,
+          displayName: h.displayName || h.name,
+          customDisplayName: platformData?.customDisplayName as string | undefined,
+          machineId: h.identity?.machineId,
+          os: platformData?.os as string | undefined,
+          kernelVersion: platformData?.kernelVersion as string | undefined,
+          architecture: platformData?.architecture as string | undefined,
+          runtime: platformData?.runtime as string ?? 'docker',
+          runtimeVersion: platformData?.runtimeVersion as string | undefined,
+          dockerVersion: platformData?.dockerVersion as string | undefined,
+          cpus: platformData?.cpus as number ?? 0,
+          totalMemoryBytes: h.memory?.total ?? 0,
+          uptimeSeconds: h.uptime ?? 0,
+          cpuUsagePercent: h.cpu?.current,
+          loadAverage: platformData?.loadAverage as number[] | undefined,
+          memory: h.memory ? {
+            total: h.memory.total ?? 0,
+            used: h.memory.used ?? 0,
+            free: h.memory.free ?? 0,
+            usage: h.memory.current,
+          } : undefined,
+          disks: platformData?.disks,
+          networkInterfaces: platformData?.networkInterfaces,
+          status: h.status === 'online' || h.status === 'running' ? 'online' : h.status,
+          lastSeen: h.lastSeen,
+          intervalSeconds: platformData?.intervalSeconds as number ?? 30,
+          agentVersion: platformData?.agentVersion as string | undefined,
+          containers: hostContainers,
+          services: platformData?.services,
+          tasks: platformData?.tasks,
+          swarm: platformData?.swarm,
+          tokenId: platformData?.tokenId as string | undefined,
+          tokenName: platformData?.tokenName as string | undefined,
+          tokenHint: platformData?.tokenHint as string | undefined,
+          tokenLastUsedAt: platformData?.tokenLastUsedAt as number | undefined,
+          hidden: platformData?.hidden as boolean | undefined,
+          pendingUninstall: platformData?.pendingUninstall as boolean | undefined,
+          command: platformData?.command,
+          isLegacy: platformData?.isLegacy as boolean | undefined,
+        };
+      });
+    }
+
+    // Fall back to legacy data
+    return state.dockerHosts ?? [];
+  });
+
+  return <DockerHosts hosts={hosts() as any} activeAlerts={activeAlerts} />;
 }
 
 function HostsRoute() {
@@ -782,9 +870,141 @@ function App() {
   // Pass through the store directly (only when initialized)
   const enhancedStore = () => wsStore();
 
-  const DashboardView = () => (
-    <Dashboard vms={state().vms} containers={state().containers} nodes={state().nodes} />
-  );
+  // Dashboard view using unified resources with fallback
+  const DashboardView = () => {
+    // Use unified resources if available, fall back to legacy data
+    const vms = createMemo(() => {
+      const vmResources = state().resources?.filter(r => r.type === 'vm') ?? [];
+      if (vmResources.length > 0) {
+        return vmResources.map(r => {
+          const platformData = r.platformData as Record<string, unknown> | undefined;
+          return {
+            id: r.id,
+            vmid: platformData?.vmid as number ?? 0,
+            name: r.name,
+            node: r.parentId ?? '',
+            instance: r.platformId,
+            status: r.status === 'running' ? 'running' : 'stopped',
+            type: 'qemu',
+            cpu: r.cpu?.current ?? 0,
+            cpus: platformData?.cpus as number ?? 1,
+            memory: r.memory ? {
+              total: r.memory.total ?? 0,
+              used: r.memory.used ?? 0,
+              free: r.memory.free ?? 0,
+              usage: r.memory.current,
+            } : { total: 0, used: 0, free: 0, usage: 0 },
+            disk: r.disk ? {
+              total: r.disk.total ?? 0,
+              used: r.disk.used ?? 0,
+              free: r.disk.free ?? 0,
+              usage: r.disk.current,
+            } : { total: 0, used: 0, free: 0, usage: 0 },
+            networkIn: r.network?.rxBytes ?? 0,
+            networkOut: r.network?.txBytes ?? 0,
+            diskRead: 0,
+            diskWrite: 0,
+            uptime: r.uptime ?? 0,
+            template: platformData?.template as boolean ?? false,
+            lastBackup: platformData?.lastBackup as number ?? 0,
+            tags: r.tags ?? [],
+            lock: platformData?.lock as string ?? '',
+            lastSeen: new Date(r.lastSeen).toISOString(),
+          };
+        });
+      }
+      return state().vms ?? [];
+    });
+
+    const containers = createMemo(() => {
+      const containerResources = state().resources?.filter(r => r.type === 'container') ?? [];
+      if (containerResources.length > 0) {
+        return containerResources.map(r => {
+          const platformData = r.platformData as Record<string, unknown> | undefined;
+          return {
+            id: r.id,
+            vmid: platformData?.vmid as number ?? 0,
+            name: r.name,
+            node: r.parentId ?? '',
+            instance: r.platformId,
+            status: r.status === 'running' ? 'running' : 'stopped',
+            type: 'lxc',
+            cpu: r.cpu?.current ?? 0,
+            cpus: platformData?.cpus as number ?? 1,
+            memory: r.memory ? {
+              total: r.memory.total ?? 0,
+              used: r.memory.used ?? 0,
+              free: r.memory.free ?? 0,
+              usage: r.memory.current,
+            } : { total: 0, used: 0, free: 0, usage: 0 },
+            disk: r.disk ? {
+              total: r.disk.total ?? 0,
+              used: r.disk.used ?? 0,
+              free: r.disk.free ?? 0,
+              usage: r.disk.current,
+            } : { total: 0, used: 0, free: 0, usage: 0 },
+            networkIn: r.network?.rxBytes ?? 0,
+            networkOut: r.network?.txBytes ?? 0,
+            diskRead: 0,
+            diskWrite: 0,
+            uptime: r.uptime ?? 0,
+            template: platformData?.template as boolean ?? false,
+            lastBackup: platformData?.lastBackup as number ?? 0,
+            tags: r.tags ?? [],
+            lock: platformData?.lock as string ?? '',
+            lastSeen: new Date(r.lastSeen).toISOString(),
+          };
+        });
+      }
+      return state().containers ?? [];
+    });
+
+    const nodes = createMemo(() => {
+      const nodeResources = state().resources?.filter(r => r.type === 'node') ?? [];
+      if (nodeResources.length > 0) {
+        return nodeResources.map(r => {
+          const platformData = r.platformData as Record<string, unknown> | undefined;
+          return {
+            id: r.id,
+            name: r.name,
+            displayName: r.displayName,
+            instance: r.platformId,
+            host: platformData?.host as string ?? '',
+            status: r.status,
+            type: 'node',
+            cpu: r.cpu?.current ?? 0,
+            memory: r.memory ? {
+              total: r.memory.total ?? 0,
+              used: r.memory.used ?? 0,
+              free: r.memory.free ?? 0,
+              usage: r.memory.current,
+            } : { total: 0, used: 0, free: 0, usage: 0 },
+            disk: r.disk ? {
+              total: r.disk.total ?? 0,
+              used: r.disk.used ?? 0,
+              free: r.disk.free ?? 0,
+              usage: r.disk.current,
+            } : { total: 0, used: 0, free: 0, usage: 0 },
+            uptime: r.uptime ?? 0,
+            loadAverage: platformData?.loadAverage as number[] ?? [],
+            kernelVersion: platformData?.kernelVersion as string ?? '',
+            pveVersion: platformData?.pveVersion as string ?? '',
+            cpuInfo: platformData?.cpuInfo ?? { model: '', cores: 0, sockets: 0, mhz: '' },
+            temperature: platformData?.temperature,
+            lastSeen: new Date(r.lastSeen).toISOString(),
+            connectionHealth: platformData?.connectionHealth as string ?? 'unknown',
+            isClusterMember: platformData?.isClusterMember as boolean | undefined,
+            clusterName: platformData?.clusterName as string | undefined,
+          };
+        });
+      }
+      return state().nodes ?? [];
+    });
+
+    return (
+      <Dashboard vms={vms() as any} containers={containers() as any} nodes={nodes() as any} />
+    );
+  };
 
   const SettingsRoute = () => (
     <SettingsPage darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
