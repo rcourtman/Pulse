@@ -54,6 +54,7 @@ type Router struct {
 	temperatureProxyHandlers  *TemperatureProxyHandlers
 	systemSettingsHandler     *SystemSettingsHandler
 	aiSettingsHandler         *AISettingsHandler
+	resourceHandlers          *ResourceHandlers
 	agentExecServer           *agentexec.Server
 	wsHub                     *websocket.Hub
 	reloadFunc                func() error
@@ -182,6 +183,7 @@ func (r *Router) setupRoutes() {
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.monitor, r.wsHub)
 	r.hostAgentHandlers = NewHostAgentHandlers(r.monitor, r.wsHub)
 	r.temperatureProxyHandlers = NewTemperatureProxyHandlers(r.config, r.persistence, r.reloadFunc)
+	r.resourceHandlers = NewResourceHandlers()
 
 	// API routes
 	r.mux.HandleFunc("/api/health", r.handleHealth)
@@ -220,6 +222,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/backups/pve", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleBackupsPVE)))
 	r.mux.HandleFunc("/api/backups/pbs", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleBackupsPBS)))
 	r.mux.HandleFunc("/api/snapshots", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleSnapshots)))
+
+	// Unified resources API (Phase 1 of unified resource architecture)
+	r.mux.HandleFunc("/api/resources", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResources)))
+	r.mux.HandleFunc("/api/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResourceStats)))
+	r.mux.HandleFunc("/api/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResource)))
 
 	// Guest metadata routes
 	r.mux.HandleFunc("/api/guests/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, guestMetadataHandler.HandleGetMetadata)))
@@ -1029,6 +1036,10 @@ func (r *Router) setupRoutes() {
 			r.aiSettingsHandler.SetAlertProvider(ai.NewAlertManagerAdapter(alertManager))
 		}
 	}
+	// Inject unified resource provider for Phase 2 AI context (cleaner, deduplicated view)
+	if r.resourceHandlers != nil {
+		r.aiSettingsHandler.SetResourceProvider(r.resourceHandlers.Store())
+	}
 	r.mux.HandleFunc("/api/settings/ai", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetAISettings)))
 	r.mux.HandleFunc("/api/settings/ai/update", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleUpdateAISettings)))
 	r.mux.HandleFunc("/api/ai/test", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestAIConnection)))
@@ -1264,6 +1275,10 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 			if mgr := m.GetNotificationManager(); mgr != nil {
 				mgr.SetPublicURL(url)
 			}
+		}
+		// Inject resource store for polling optimization
+		if r.resourceHandlers != nil {
+			m.SetResourceStore(r.resourceHandlers.Store())
 		}
 	}
 }
@@ -2469,6 +2484,13 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 	}
 
 	state := r.monitor.GetState()
+	
+	// Also populate the unified resource store (Phase 1 of unified architecture)
+	// This runs on every state request to keep resources up-to-date
+	if r.resourceHandlers != nil {
+		r.resourceHandlers.PopulateFromSnapshot(state)
+	}
+	
 	frontendState := state.ToFrontend()
 
 	if err := utils.WriteJSONResponse(w, frontendState); err != nil {
