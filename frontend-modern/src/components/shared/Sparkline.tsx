@@ -253,10 +253,10 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     setHoveredPoint(null);
   };
 
-  // Format timestamp for tooltip
+  // Format timestamp for tooltip (24-hour clock)
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   };
 
   return (
