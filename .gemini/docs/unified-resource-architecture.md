@@ -401,36 +401,37 @@ func (m *Monitor) pollPVENode(...) (models.Node, string, error) {
 - Reduced API load (skip redundant polling)
 - More AI capabilities (command execution via agents)
 
-### Phase 4: Optional Unified View (Future)
+### Phase 4: Unified Monitoring Page (ABANDONED)
 
-**Goal:** Add a consolidated "All Resources" view for power users.
+**Goal:** Replace separate platform pages with ONE unified monitoring experience.
 
-**Status:** ✅ Basic implementation complete
+**Status:** ❌ **ABANDONED** - Prototyped but reverted in favor of existing pages
 
-**Completed Tasks:**
-1. ✅ Created `src/types/resource.ts` - TypeScript types matching Go backend
-2. ✅ Created `src/components/Resources/ResourcesOverview.tsx` - Unified view component
-3. ✅ Route added: `/resources`
-4. ✅ Filtering by type, platform, status
-5. ✅ Grouping by type, platform, or parent
+**Decision (2025-12-07):**
+After building and testing the unified resources view, we determined that the **existing platform-specific pages are superior** in terms of:
+- User experience and layout
+- Feature richness
+- Familiarity for existing users
 
-**Remaining Tasks:**
-- [ ] Add navigation link to UI (currently hidden power-user route)
-- [ ] Add resource detail drawer/modal
-- [ ] Add AI context integration (click to add to AI chat)
-- [ ] Add tag-based filtering
-- [ ] Add export functionality
+The backend unified resource model (Phases 1-3) remains valuable for:
+- AI context enhancement (cross-platform intelligence)
+- Deduplication logic (avoiding duplicate alerts)
+- Future API consumers
 
-**Features:**
-- Fetches from `/api/resources` endpoint
-- Auto-refreshes every 10 seconds
-- Filtering by search, type, platform, status
-- Grouping by type/platform/parent
-- Status indicators with alert badges
-- CPU/Memory/Disk progress bars
+**What was removed:**
+- `src/components/Resources/ResourcesOverview.tsx`
+- `src/components/Resources/UnifiedResourceRow.tsx`  
+- `src/components/Resources/columns.ts`
+- `src/types/resource.ts`
+- `/resources` route
 
-**Access:**
-Navigate to `/resources` directly (not yet in main navigation)
+**What remains:**
+- Backend `/api/resources` endpoint (for AI and API consumers)
+- Backend unified resource store (`internal/resources/`)
+- Platform-specific frontend pages (Dashboard, Docker, Hosts)
+
+**Lesson Learned:**
+Sometimes the best architecture is to keep what works. The existing pages have years of refinement and user-driven features. A "unified" view lost much of that polish.
 
 ### Phase 5: New Platform Support (Ongoing)
 

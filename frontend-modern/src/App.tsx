@@ -67,11 +67,7 @@ const HostsOverview = lazy(() =>
     default: module.HostsOverview,
   })),
 );
-const ResourcesOverview = lazy(() =>
-  import('./components/Resources/ResourcesOverview').then((module) => ({
-    default: module.ResourcesOverview,
-  })),
-);
+
 
 // Enhanced store type with proper typing
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
@@ -242,7 +238,7 @@ function App() {
       () => import('./components/Replication/Replication'),
       () => import('./components/PMG/MailGateway'),
       () => import('./components/Hosts/HostsOverview'),
-      () => import('./components/Resources/ResourcesOverview'),
+
       () => import('./pages/Alerts'),
       () => import('./components/Settings/Settings'),
       () => import('./components/Docker/DockerHosts'),
@@ -878,7 +874,7 @@ function App() {
       <Route path="/backups" component={() => <Navigate href="/proxmox/backups" />} />
       <Route path="/docker" component={DockerRoute} />
       <Route path="/hosts" component={HostsRoute} />
-      <Route path="/resources" component={ResourcesOverview} />
+
       <Route path="/servers" component={() => <Navigate href="/hosts" />} />
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path="/settings/*" component={SettingsRoute} />

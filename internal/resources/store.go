@@ -210,11 +210,18 @@ func (s *Store) GetStats() StoreStats {
 		SuppressedResources: len(s.mergedFrom),
 		ByType:              make(map[ResourceType]int),
 		ByPlatform:          make(map[PlatformType]int),
+		ByStatus:            make(map[ResourceStatus]int),
+		WithAlerts:          0,
+		LastUpdated:         time.Now().UTC().Format(time.RFC3339),
 	}
 	
 	for _, r := range s.resources {
 		stats.ByType[r.Type]++
 		stats.ByPlatform[r.PlatformType]++
+		stats.ByStatus[r.Status]++
+		if len(r.Alerts) > 0 {
+			stats.WithAlerts++
+		}
 	}
 	
 	return stats
@@ -222,10 +229,13 @@ func (s *Store) GetStats() StoreStats {
 
 // StoreStats contains statistics about the resource store.
 type StoreStats struct {
-	TotalResources      int
-	SuppressedResources int
-	ByType              map[ResourceType]int
-	ByPlatform          map[PlatformType]int
+	TotalResources      int                      `json:"totalResources"`
+	SuppressedResources int                      `json:"suppressedResources"`
+	ByType              map[ResourceType]int     `json:"byType"`
+	ByPlatform          map[PlatformType]int     `json:"byPlatform"`
+	ByStatus            map[ResourceStatus]int   `json:"byStatus"`
+	WithAlerts          int                      `json:"withAlerts"`
+	LastUpdated         string                   `json:"lastUpdated"`
 }
 
 // GetPreferredResourceFor returns the preferred resource for a given ID.
