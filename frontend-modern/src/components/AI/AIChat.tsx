@@ -117,10 +117,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
           guest_node: vm.node,
           guest_status: vm.status,
           cpu: vm.cpu,
-          mem: vm.mem,
-          maxmem: vm.maxmem,
-          disk: vm.disk,
-          maxdisk: vm.maxdisk,
+          mem: vm.memory?.used,
+          maxmem: vm.memory?.total,
+          disk: vm.disk?.used,
+          maxdisk: vm.disk?.total,
         },
       });
     }
@@ -141,10 +141,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
           guest_node: ct.node,
           guest_status: ct.status,
           cpu: ct.cpu,
-          mem: ct.mem,
-          maxmem: ct.maxmem,
-          disk: ct.disk,
-          maxdisk: ct.maxdisk,
+          mem: ct.memory?.used,
+          maxmem: ct.memory?.total,
+          disk: ct.disk?.used,
+          maxdisk: ct.disk?.total,
         },
       });
     }
@@ -152,18 +152,18 @@ export const AIChat: Component<AIChatProps> = (props) => {
     // Add Proxmox nodes
     for (const node of wsContext.state.nodes || []) {
       resources.push({
-        id: `node-${node.node}`,
+        id: `node-${node.name}`,
         type: 'node',
-        name: node.node,
+        name: node.name,
         status: node.status,
         data: {
-          node_name: node.node,
+          node_name: node.name,
           node_status: node.status,
           cpu: node.cpu,
-          mem: node.mem,
-          maxmem: node.maxmem,
-          disk: node.disk,
-          maxdisk: node.maxdisk,
+          mem: node.memory?.used,
+          maxmem: node.memory?.total,
+          disk: node.disk?.used,
+          maxdisk: node.disk?.total,
         },
       });
     }
@@ -174,12 +174,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
         id: `host-${host.hostname}`,
         type: 'host',
         name: host.hostname,
-        status: host.connected ? 'online' : 'offline',
+        status: host.status === 'online' ? 'online' : 'offline',
         data: {
           host_name: host.hostname,
           host_platform: host.platform,
-          host_version: host.version,
-          connected: host.connected,
+          host_version: host.agentVersion,
+          connected: host.status === 'online',
         },
       });
     }
