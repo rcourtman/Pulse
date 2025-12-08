@@ -231,76 +231,82 @@ export function useResourcesAsLegacy() {
 
     // Convert resources to legacy VM format
     const asVMs = createMemo(() => {
-        return byType('vm').map(r => ({
-            id: r.id,
-            vmid: parseInt(r.id.split('-').pop() ?? '0', 10),
-            name: r.name,
-            node: r.parentId ?? '',
-            instance: r.platformId,
-            status: r.status === 'running' ? 'running' : 'stopped',
-            type: 'qemu',
-            cpu: r.cpu?.current ?? 0,
-            cpus: 1, // Not available in unified model
-            memory: r.memory ? {
-                total: r.memory.total ?? 0,
-                used: r.memory.used ?? 0,
-                free: r.memory.free ?? 0,
-                usage: r.memory.current,
-            } : { total: 0, used: 0, free: 0, usage: 0 },
-            disk: r.disk ? {
-                total: r.disk.total ?? 0,
-                used: r.disk.used ?? 0,
-                free: r.disk.free ?? 0,
-                usage: r.disk.current,
-            } : { total: 0, used: 0, free: 0, usage: 0 },
-            networkIn: r.network?.rxBytes ?? 0,
-            networkOut: r.network?.txBytes ?? 0,
-            diskRead: 0,
-            diskWrite: 0,
-            uptime: r.uptime ?? 0,
-            template: false,
-            lastBackup: 0,
-            tags: r.tags ?? [],
-            lock: '',
-            lastSeen: new Date(r.lastSeen).toISOString(),
-        }));
+        return byType('vm').map(r => {
+            const platformData = r.platformData as Record<string, unknown> | undefined;
+            return {
+                id: r.id,
+                vmid: platformData?.vmid as number ?? parseInt(r.id.split('-').pop() ?? '0', 10),
+                name: r.name,
+                node: platformData?.node as string ?? '',
+                instance: platformData?.instance as string ?? r.platformId,
+                status: r.status === 'running' ? 'running' : 'stopped',
+                type: 'qemu',
+                cpu: (r.cpu?.current ?? 0) / 100, // Convert from percentage to ratio for Dashboard
+                cpus: platformData?.cpus as number ?? 1,
+                memory: r.memory ? {
+                    total: r.memory.total ?? 0,
+                    used: r.memory.used ?? 0,
+                    free: r.memory.free ?? 0,
+                    usage: r.memory.current,
+                } : { total: 0, used: 0, free: 0, usage: 0 },
+                disk: r.disk ? {
+                    total: r.disk.total ?? 0,
+                    used: r.disk.used ?? 0,
+                    free: r.disk.free ?? 0,
+                    usage: r.disk.current,
+                } : { total: 0, used: 0, free: 0, usage: 0 },
+                networkIn: r.network?.rxBytes ?? 0,
+                networkOut: r.network?.txBytes ?? 0,
+                diskRead: platformData?.diskRead as number ?? 0,
+                diskWrite: platformData?.diskWrite as number ?? 0,
+                uptime: r.uptime ?? 0,
+                template: platformData?.template as boolean ?? false,
+                lastBackup: platformData?.lastBackup as number ?? 0,
+                tags: r.tags ?? [],
+                lock: platformData?.lock as string ?? '',
+                lastSeen: new Date(r.lastSeen).toISOString(),
+            };
+        });
     });
 
     // Convert resources to legacy Container format
     const asContainers = createMemo(() => {
-        return byType('container').map(r => ({
-            id: r.id,
-            vmid: parseInt(r.id.split('-').pop() ?? '0', 10),
-            name: r.name,
-            node: r.parentId ?? '',
-            instance: r.platformId,
-            status: r.status === 'running' ? 'running' : 'stopped',
-            type: 'lxc',
-            cpu: r.cpu?.current ?? 0,
-            cpus: 1,
-            memory: r.memory ? {
-                total: r.memory.total ?? 0,
-                used: r.memory.used ?? 0,
-                free: r.memory.free ?? 0,
-                usage: r.memory.current,
-            } : { total: 0, used: 0, free: 0, usage: 0 },
-            disk: r.disk ? {
-                total: r.disk.total ?? 0,
-                used: r.disk.used ?? 0,
-                free: r.disk.free ?? 0,
-                usage: r.disk.current,
-            } : { total: 0, used: 0, free: 0, usage: 0 },
-            networkIn: r.network?.rxBytes ?? 0,
-            networkOut: r.network?.txBytes ?? 0,
-            diskRead: 0,
-            diskWrite: 0,
-            uptime: r.uptime ?? 0,
-            template: false,
-            lastBackup: 0,
-            tags: r.tags ?? [],
-            lock: '',
-            lastSeen: new Date(r.lastSeen).toISOString(),
-        }));
+        return byType('container').map(r => {
+            const platformData = r.platformData as Record<string, unknown> | undefined;
+            return {
+                id: r.id,
+                vmid: platformData?.vmid as number ?? parseInt(r.id.split('-').pop() ?? '0', 10),
+                name: r.name,
+                node: platformData?.node as string ?? '',
+                instance: platformData?.instance as string ?? r.platformId,
+                status: r.status === 'running' ? 'running' : 'stopped',
+                type: 'lxc',
+                cpu: (r.cpu?.current ?? 0) / 100, // Convert from percentage to ratio for Dashboard
+                cpus: platformData?.cpus as number ?? 1,
+                memory: r.memory ? {
+                    total: r.memory.total ?? 0,
+                    used: r.memory.used ?? 0,
+                    free: r.memory.free ?? 0,
+                    usage: r.memory.current,
+                } : { total: 0, used: 0, free: 0, usage: 0 },
+                disk: r.disk ? {
+                    total: r.disk.total ?? 0,
+                    used: r.disk.used ?? 0,
+                    free: r.disk.free ?? 0,
+                    usage: r.disk.current,
+                } : { total: 0, used: 0, free: 0, usage: 0 },
+                networkIn: r.network?.rxBytes ?? 0,
+                networkOut: r.network?.txBytes ?? 0,
+                diskRead: platformData?.diskRead as number ?? 0,
+                diskWrite: platformData?.diskWrite as number ?? 0,
+                uptime: r.uptime ?? 0,
+                template: platformData?.template as boolean ?? false,
+                lastBackup: platformData?.lastBackup as number ?? 0,
+                tags: r.tags ?? [],
+                lock: platformData?.lock as string ?? '',
+                lastSeen: new Date(r.lastSeen).toISOString(),
+            };
+        });
     });
 
     // Convert resources to legacy Host format
@@ -377,11 +383,134 @@ export function useResourcesAsLegacy() {
         });
     });
 
+    // Convert resources to legacy Node format
+    const asNodes = createMemo(() => {
+        return byType('node').map(r => {
+            const platformData = r.platformData as Record<string, unknown> | undefined;
+            return {
+                id: r.id,
+                name: r.name,
+                displayName: r.displayName,
+                instance: r.platformId,
+                host: platformData?.host as string ?? '',
+                status: r.status,
+                type: 'node',
+                cpu: r.cpu?.current ?? 0,
+                memory: r.memory ? {
+                    total: r.memory.total ?? 0,
+                    used: r.memory.used ?? 0,
+                    free: r.memory.free ?? 0,
+                    usage: r.memory.current,
+                } : { total: 0, used: 0, free: 0, usage: 0 },
+                disk: r.disk ? {
+                    total: r.disk.total ?? 0,
+                    used: r.disk.used ?? 0,
+                    free: r.disk.free ?? 0,
+                    usage: r.disk.current,
+                } : { total: 0, used: 0, free: 0, usage: 0 },
+                uptime: r.uptime ?? 0,
+                loadAverage: platformData?.loadAverage as number[] ?? [],
+                kernelVersion: platformData?.kernelVersion as string ?? '',
+                pveVersion: platformData?.pveVersion as string ?? '',
+                cpuInfo: platformData?.cpuInfo ?? { model: '', cores: 0, sockets: 0, mhz: '' },
+                temperature: platformData?.temperature,
+                lastSeen: new Date(r.lastSeen).toISOString(),
+                connectionHealth: platformData?.connectionHealth as string ?? 'unknown',
+                isClusterMember: platformData?.isClusterMember as boolean | undefined,
+                clusterName: platformData?.clusterName as string | undefined,
+            };
+        });
+    });
+
+    // Convert resources to legacy DockerHost format (including nested containers)
+    const asDockerHosts = createMemo(() => {
+        const dockerHostResources = byType('docker-host');
+        const dockerContainerResources = byType('docker-container');
+
+        return dockerHostResources.map(h => {
+            const platformData = h.platformData as Record<string, unknown> | undefined;
+
+            // Find containers belonging to this host
+            const hostContainers = dockerContainerResources
+                .filter(c => c.parentId === h.id)
+                .map(c => {
+                    const cPlatform = c.platformData as Record<string, unknown> | undefined;
+                    return {
+                        id: c.id,
+                        name: c.name,
+                        image: cPlatform?.image as string ?? '',
+                        state: c.status === 'running' ? 'running' : 'exited',
+                        status: c.status,
+                        health: cPlatform?.health as string | undefined,
+                        cpuPercent: c.cpu?.current ?? 0,
+                        memoryUsageBytes: c.memory?.used ?? 0,
+                        memoryLimitBytes: c.memory?.total ?? 0,
+                        memoryPercent: c.memory?.current ?? 0,
+                        uptimeSeconds: c.uptime ?? 0,
+                        restartCount: cPlatform?.restartCount as number ?? 0,
+                        exitCode: cPlatform?.exitCode as number ?? 0,
+                        createdAt: cPlatform?.createdAt as number ?? 0,
+                        startedAt: cPlatform?.startedAt as number | undefined,
+                        finishedAt: cPlatform?.finishedAt as number | undefined,
+                        ports: cPlatform?.ports,
+                        labels: cPlatform?.labels as Record<string, string> | undefined,
+                        networks: cPlatform?.networks,
+                    };
+                });
+
+            return {
+                id: h.id,
+                agentId: platformData?.agentId as string ?? h.id,
+                hostname: h.identity?.hostname ?? h.name,
+                displayName: h.displayName || h.name,
+                customDisplayName: platformData?.customDisplayName as string | undefined,
+                machineId: h.identity?.machineId,
+                os: platformData?.os as string | undefined,
+                kernelVersion: platformData?.kernelVersion as string | undefined,
+                architecture: platformData?.architecture as string | undefined,
+                runtime: platformData?.runtime as string ?? 'docker',
+                runtimeVersion: platformData?.runtimeVersion as string | undefined,
+                dockerVersion: platformData?.dockerVersion as string | undefined,
+                cpus: platformData?.cpus as number ?? 0,
+                totalMemoryBytes: h.memory?.total ?? 0,
+                uptimeSeconds: h.uptime ?? 0,
+                cpuUsagePercent: h.cpu?.current,
+                loadAverage: platformData?.loadAverage as number[] | undefined,
+                memory: h.memory ? {
+                    total: h.memory.total ?? 0,
+                    used: h.memory.used ?? 0,
+                    free: h.memory.free ?? 0,
+                    usage: h.memory.current,
+                } : undefined,
+                disks: platformData?.disks,
+                networkInterfaces: platformData?.networkInterfaces,
+                status: h.status === 'online' || h.status === 'running' ? 'online' : h.status,
+                lastSeen: h.lastSeen,
+                intervalSeconds: platformData?.intervalSeconds as number ?? 30,
+                agentVersion: platformData?.agentVersion as string | undefined,
+                containers: hostContainers,
+                services: platformData?.services,
+                tasks: platformData?.tasks,
+                swarm: platformData?.swarm,
+                tokenId: platformData?.tokenId as string | undefined,
+                tokenName: platformData?.tokenName as string | undefined,
+                tokenHint: platformData?.tokenHint as string | undefined,
+                tokenLastUsedAt: platformData?.tokenLastUsedAt as number | undefined,
+                hidden: platformData?.hidden as boolean | undefined,
+                pendingUninstall: platformData?.pendingUninstall as boolean | undefined,
+                command: platformData?.command,
+                isLegacy: platformData?.isLegacy as boolean | undefined,
+            };
+        });
+    });
+
     return {
         resources,
         asVMs,
         asContainers,
         asHosts,
+        asNodes,
+        asDockerHosts,
     };
 }
 

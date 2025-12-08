@@ -154,8 +154,8 @@ func FromVM(vm models.VM) Resource {
 	}
 	platformDataJSON, _ := json.Marshal(platformData)
 
-	// Parent is the node
-	parentID := fmt.Sprintf("%s/node/%s", vm.Instance, vm.Node)
+	// Parent is the node - format matches Node.ID: instance-nodename
+	parentID := fmt.Sprintf("%s-%s", vm.Instance, vm.Node)
 
 	return Resource{
 		ID:           vm.ID,
@@ -232,8 +232,8 @@ func FromContainer(ct models.Container) Resource {
 	}
 	platformDataJSON, _ := json.Marshal(platformData)
 
-	// Parent is the node
-	parentID := fmt.Sprintf("%s/node/%s", ct.Instance, ct.Node)
+	// Parent is the node - format matches Node.ID: instance-nodename
+	parentID := fmt.Sprintf("%s-%s", ct.Instance, ct.Node)
 
 	return Resource{
 		ID:           ct.ID,
@@ -758,7 +758,7 @@ func FromStorage(s models.Storage) Resource {
 		PlatformID:    s.Instance,
 		PlatformType:  PlatformProxmoxPVE,
 		SourceType:    SourceAPI,
-		ParentID:      fmt.Sprintf("%s/node/%s", s.Instance, s.Node),
+		ParentID:      fmt.Sprintf("%s-%s", s.Instance, s.Node), // Format matches Node.ID: instance-nodename
 		Status:        status,
 		Disk:          disk,
 		LastSeen:      time.Now(), // Storage doesn't have LastSeen

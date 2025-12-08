@@ -723,6 +723,7 @@ export function Dashboard(props: DashboardProps) {
     guests.forEach((guest) => {
       // Node.ID is formatted as "instance-nodename", so we need to match that
       const nodeId = `${guest.instance}-${guest.node}`;
+
       if (!groups[nodeId]) {
         groups[nodeId] = [];
       }
