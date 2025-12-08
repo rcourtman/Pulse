@@ -584,6 +584,10 @@ export function createWebSocketStore(url: string) {
               setState('physicalDisks', reconcile(message.data.physicalDisks, { key: 'id' }));
             // Handle unified resources
             if (message.data.resources !== undefined) {
+              logger.debug('[WebSocket] Updating resources', {
+                count: message.data.resources?.length || 0,
+                types: [...new Set(message.data.resources?.map((r: any) => r.type) || [])],
+              });
               setState('resources', reconcile(message.data.resources, { key: 'id' }));
             }
             // Sync active alerts from state

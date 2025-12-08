@@ -160,8 +160,8 @@ func TestFromVM(t *testing.T) {
 	if r.Status != StatusRunning {
 		t.Errorf("Expected status %s, got %s", StatusRunning, r.Status)
 	}
-	if r.ParentID != "pve1/node/node1" {
-		t.Errorf("Expected parent pve1/node/node1, got %s", r.ParentID)
+	if r.ParentID != "pve1-node1" {
+		t.Errorf("Expected parent pve1-node1, got %s", r.ParentID)
 	}
 
 	// Check CPU is converted to percentage
@@ -229,8 +229,8 @@ func TestFromContainer(t *testing.T) {
 	if r.Status != StatusStopped {
 		t.Errorf("Expected status %s, got %s", StatusStopped, r.Status)
 	}
-	if r.ParentID != "pve1/node/node1" {
-		t.Errorf("Expected parent pve1/node/node1, got %s", r.ParentID)
+	if r.ParentID != "pve1-node1" {
+		t.Errorf("Expected parent pve1-node1, got %s", r.ParentID)
 	}
 
 	var pd ContainerPlatformData
