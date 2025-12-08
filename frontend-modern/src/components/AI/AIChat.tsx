@@ -337,7 +337,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const safetyCheckInterval = setInterval(() => {
       const timeSinceLastEvent = Date.now() - lastEventTime;
       if (timeSinceLastEvent > SAFETY_TIMEOUT_MS) {
-        console.warn('[AIChat] Safety timeout - forcing stream completion after', SAFETY_TIMEOUT_MS / 1000, 'seconds of inactivity');
+        logger.warn('[AIChat] Safety timeout - forcing stream completion', { seconds: SAFETY_TIMEOUT_MS / 1000 });
         clearInterval(safetyCheckInterval);
         setMessages((prev) =>
           prev.map((msg) =>
@@ -365,7 +365,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         },
         (event: AIStreamEvent) => {
           lastEventTime = Date.now(); // Update last event time
-          console.log('[AIChat] Received event:', event.type, event);
+          logger.debug('[AIChat] Received event', { type: event.type, event });
           // Update the streaming message based on event type
           setMessages((prev) =>
             prev.map((msg) => {
@@ -449,7 +449,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 case 'processing': {
                   // Show processing status for multi-iteration calls
                   const status = event.data as string;
-                  console.log('[AIChat] Processing:', status);
+                  logger.debug('[AIChat] Processing', status);
                   // Add as a pending tool for visual feedback
                   return {
                     ...msg,
@@ -481,7 +481,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     } catch (error) {
       // Don't show error for user-initiated abort
       if (error instanceof Error && error.name === 'AbortError') {
-        console.log('[AIChat] Request aborted by user');
+        logger.debug('[AIChat] Request aborted by user');
         return;
       }
       logger.error('[AIChat] Execute failed:', error);
