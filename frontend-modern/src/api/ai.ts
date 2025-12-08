@@ -1,4 +1,5 @@
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
+import { logger } from '@/utils/logger';
 import type {
   AISettings,
   AISettingsUpdateRequest,
@@ -58,10 +59,7 @@ export class AIAPI {
       ...(request.target_host ? { target_host: request.target_host } : {}),
     };
     const body = JSON.stringify(sanitizedRequest);
-    console.log('[AI] runCommand request:', request);
-    console.log('[AI] runCommand sanitized:', sanitizedRequest);
-    console.log('[AI] runCommand body:', body);
-    console.log('[AI] runCommand body length:', body.length);
+    logger.debug('[AI] runCommand', { request: sanitizedRequest, bodyLength: body.length });
     return apiFetchJSON(`${this.baseUrl}/ai/run-command`, {
       method: 'POST',
       body,
@@ -88,7 +86,7 @@ export class AIAPI {
     onEvent: (event: AIStreamEvent) => void,
     signal?: AbortSignal
   ): Promise<void> {
-    console.log('[AI] Starting alert investigation:', request);
+    logger.debug('[AI] Starting alert investigation', request);
 
     const response = await apiFetch(`${this.baseUrl}/ai/investigate-alert`, {
       method: 'POST',
@@ -174,7 +172,7 @@ export class AIAPI {
     onEvent: (event: AIStreamEvent) => void,
     signal?: AbortSignal
   ): Promise<void> {
-    console.log('[AI SSE] Starting streaming request:', request);
+    logger.debug('[AI SSE] Starting streaming request', request);
 
     const response = await apiFetch(`${this.baseUrl}/ai/execute/stream`, {
       method: 'POST',
@@ -186,17 +184,17 @@ export class AIAPI {
       signal,
     });
 
-    console.log('[AI SSE] Response status:', response.status, response.headers.get('content-type'));
+    logger.debug('[AI SSE] Response status', { status: response.status, contentType: response.headers.get('content-type') });
 
     if (!response.ok) {
       const text = await response.text();
-      console.error('[AI SSE] Request failed:', text);
+      logger.error('[AI SSE] Request failed', text);
       throw new Error(text || `Request failed with status ${response.status}`);
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
-      console.error('[AI SSE] No response body');
+      logger.error('[AI SSE] No response body');
       throw new Error('No response body');
     }
 
@@ -209,13 +207,13 @@ export class AIAPI {
     // Timeout to detect stalled streams (5 minutes - Opus models can take a long time)
     const STREAM_TIMEOUT_MS = 300000;
 
-    console.log('[AI SSE] Starting to read stream...');
+    logger.debug('[AI SSE] Starting to read stream');
 
     try {
       while (true) {
         // Check for stream timeout
         if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
-          console.warn('[AI SSE] Stream timeout - no data for', STREAM_TIMEOUT_MS / 1000, 'seconds');
+          logger.warn('[AI SSE] Stream timeout', { seconds: STREAM_TIMEOUT_MS / 1000 });
           break;
         }
 
@@ -230,7 +228,7 @@ export class AIAPI {
           result = await Promise.race([readPromise, timeoutPromise]);
         } catch (e) {
           if ((e as Error).message === 'Read timeout') {
-            console.warn('[AI SSE] Read timeout, ending stream');
+            logger.warn('[AI SSE] Read timeout, ending stream');
             break;
           }
           throw e;
@@ -238,7 +236,7 @@ export class AIAPI {
 
         const { done, value } = result;
         if (done) {
-          console.log('[AI SSE] Stream ended normally');
+          logger.debug('[AI SSE] Stream ended normally');
           break;
         }
 
@@ -247,7 +245,7 @@ export class AIAPI {
 
         // Log chunk info only if it's not just a heartbeat
         if (!chunk.includes(': heartbeat')) {
-          console.log('[AI SSE] Received chunk:', chunk.length, 'bytes');
+          logger.debug('[AI SSE] Received chunk', { bytes: chunk.length });
         }
 
         buffer += chunk;
@@ -262,7 +260,7 @@ export class AIAPI {
           // Skip empty messages and heartbeat comments
           if (!message.trim() || message.trim().startsWith(':')) {
             if (message.includes('heartbeat')) {
-              console.debug('[AI SSE] Received heartbeat');
+              logger.debug('[AI SSE] Received heartbeat');
             }
             continue;
           }
@@ -275,7 +273,7 @@ export class AIAPI {
               if (!jsonStr.trim()) continue;
 
               const data = JSON.parse(jsonStr);
-              console.log('[AI SSE] Parsed event:', data.type, data);
+              logger.debug('[AI SSE] Parsed event', { type: data.type, data });
 
               // Track completion events
               if (data.type === 'complete') {
@@ -287,7 +285,7 @@ export class AIAPI {
 
               onEvent(data as AIStreamEvent);
             } catch (e) {
-              console.error('[AI SSE] Failed to parse event:', e, line);
+              logger.error('[AI SSE] Failed to parse event', { error: e, line });
             }
           }
         }
@@ -299,26 +297,26 @@ export class AIAPI {
           const jsonStr = buffer.slice(6);
           if (jsonStr.trim()) {
             const data = JSON.parse(jsonStr);
-            console.log('[AI SSE] Parsed final buffered event:', data.type);
+            logger.debug('[AI SSE] Parsed final buffered event', { type: data.type });
             onEvent(data as AIStreamEvent);
             if (data.type === 'complete') receivedComplete = true;
             if (data.type === 'done') receivedDone = true;
           }
         } catch (e) {
-          console.warn('[AI SSE] Could not parse remaining buffer:', buffer.substring(0, 100));
+          logger.warn('[AI SSE] Could not parse remaining buffer', { preview: buffer.substring(0, 100) });
         }
       }
 
       // If we ended without receiving a done event, send a synthetic one
       // This ensures the UI properly clears the streaming state
       if (!receivedDone) {
-        console.warn('[AI SSE] Stream ended without done event, sending synthetic done');
+        logger.warn('[AI SSE] Stream ended without done event, sending synthetic done');
         onEvent({ type: 'done', data: undefined });
       }
 
     } finally {
       reader.releaseLock();
-      console.log('[AI SSE] Reader released, receivedComplete:', receivedComplete, 'receivedDone:', receivedDone);
+      logger.debug('[AI SSE] Reader released', { receivedComplete, receivedDone });
     }
   }
 }
