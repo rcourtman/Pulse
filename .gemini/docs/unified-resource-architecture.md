@@ -548,8 +548,8 @@ The dedicated `/resources` unified view was abandoned in favor of migrating exis
    - [x] Remove debug console.log statements from frontend routes
    - [x] Remove legacy fallback code from route components (Docker, Hosts, Dashboard)
    - [x] Simplify route components to use centralized `useResourcesAsLegacy()` hook
+   - [x] Remove legacy AI context fallback (`buildInfrastructureContext` removed, 288 lines)
    - [ ] Remove unused legacy arrays from backend StateFrontend (optional - still broadcast for API compatibility)
-   - [ ] Remove legacy AI context fallback (optional - verify AI uses unified model first)
 
 ---
 
