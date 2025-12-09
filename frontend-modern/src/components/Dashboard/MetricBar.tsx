@@ -124,7 +124,7 @@ export function MetricBar(props: MetricBarProps) {
       }
     >
       {/* Sparkline mode - full width, flex centered like stacked bars */}
-      <div class="metric-text w-full h-4 flex items-center justify-center">
+      <div class="metric-text w-full h-4 flex items-center justify-center min-w-0 overflow-hidden">
         <Sparkline
           data={metricHistory()}
           metric={sparklineMetric()}

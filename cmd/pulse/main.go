@@ -141,8 +141,15 @@ func runServer() {
 	}
 
 	// Set state getter for WebSocket hub
+	// IMPORTANT: Return StateFrontend (not StateSnapshot) to match broadcast format.
+	// StateSnapshot uses time.Time fields while StateFrontend uses Unix timestamps,
+	// and includes frontend-specific field transformations. Without this conversion,
+	// nodes/hosts would be missing on initial page load but appear after broadcasts.
 	wsHub.SetStateGetter(func() interface{} {
-		return reloadableMonitor.GetState()
+		// GetMonitor().GetState() returns models.StateSnapshot
+		state := reloadableMonitor.GetMonitor().GetState()
+		// Convert to frontend format, matching what BroadcastState does
+		return state.ToFrontend()
 	})
 
 	// Wire up Prometheus metrics for alert lifecycle

@@ -12,6 +12,7 @@ type Report struct {
 	Network    []NetworkInterface `json:"network,omitempty"`
 	Sensors    Sensors            `json:"sensors,omitempty"`
 	RAID       []RAIDArray        `json:"raid,omitempty"`
+	Ceph       *CephCluster       `json:"ceph,omitempty"`
 	Tags       []string           `json:"tags,omitempty"`
 	Timestamp  time.Time          `json:"timestamp"`
 	SequenceID string             `json:"sequenceId,omitempty"`
@@ -124,4 +125,104 @@ type RAIDDevice struct {
 	Device string `json:"device"` // e.g., /dev/sda1
 	State  string `json:"state"`  // active, spare, faulty, removed
 	Slot   int    `json:"slot"`   // Position in array (-1 if not applicable)
+}
+
+// CephCluster represents Ceph cluster status collected by the host agent.
+type CephCluster struct {
+	FSID        string           `json:"fsid"`
+	Health      CephHealth       `json:"health"`
+	MonMap      CephMonitorMap   `json:"monMap,omitempty"`
+	MgrMap      CephManagerMap   `json:"mgrMap,omitempty"`
+	OSDMap      CephOSDMap       `json:"osdMap"`
+	PGMap       CephPGMap        `json:"pgMap"`
+	Pools       []CephPool       `json:"pools,omitempty"`
+	Services    []CephService    `json:"services,omitempty"`
+	CollectedAt string           `json:"collectedAt"`
+}
+
+// CephHealth represents Ceph cluster health status.
+type CephHealth struct {
+	Status  string                 `json:"status"` // HEALTH_OK, HEALTH_WARN, HEALTH_ERR
+	Checks  map[string]CephCheck   `json:"checks,omitempty"`
+	Summary []CephHealthSummary    `json:"summary,omitempty"`
+}
+
+// CephCheck represents a health check detail.
+type CephCheck struct {
+	Severity string   `json:"severity"`
+	Message  string   `json:"message,omitempty"`
+	Detail   []string `json:"detail,omitempty"`
+}
+
+// CephHealthSummary represents a health summary message.
+type CephHealthSummary struct {
+	Severity string `json:"severity"`
+	Message  string `json:"message"`
+}
+
+// CephMonitorMap represents Ceph monitor information.
+type CephMonitorMap struct {
+	Epoch    int           `json:"epoch"`
+	NumMons  int           `json:"numMons"`
+	Monitors []CephMonitor `json:"monitors,omitempty"`
+}
+
+// CephMonitor represents a single Ceph monitor.
+type CephMonitor struct {
+	Name   string `json:"name"`
+	Rank   int    `json:"rank"`
+	Addr   string `json:"addr,omitempty"`
+	Status string `json:"status,omitempty"`
+}
+
+// CephManagerMap represents Ceph manager information.
+type CephManagerMap struct {
+	Available bool   `json:"available"`
+	NumMgrs   int    `json:"numMgrs"`
+	ActiveMgr string `json:"activeMgr,omitempty"`
+	Standbys  int    `json:"standbys"`
+}
+
+// CephOSDMap represents OSD status summary.
+type CephOSDMap struct {
+	Epoch   int `json:"epoch"`
+	NumOSDs int `json:"numOsds"`
+	NumUp   int `json:"numUp"`
+	NumIn   int `json:"numIn"`
+	NumDown int `json:"numDown,omitempty"`
+	NumOut  int `json:"numOut,omitempty"`
+}
+
+// CephPGMap represents placement group statistics.
+type CephPGMap struct {
+	NumPGs           int     `json:"numPgs"`
+	BytesTotal       uint64  `json:"bytesTotal"`
+	BytesUsed        uint64  `json:"bytesUsed"`
+	BytesAvailable   uint64  `json:"bytesAvailable"`
+	DataBytes        uint64  `json:"dataBytes,omitempty"`
+	UsagePercent     float64 `json:"usagePercent"`
+	DegradedRatio    float64 `json:"degradedRatio,omitempty"`
+	MisplacedRatio   float64 `json:"misplacedRatio,omitempty"`
+	ReadBytesPerSec  uint64  `json:"readBytesPerSec,omitempty"`
+	WriteBytesPerSec uint64  `json:"writeBytesPerSec,omitempty"`
+	ReadOpsPerSec    uint64  `json:"readOpsPerSec,omitempty"`
+	WriteOpsPerSec   uint64  `json:"writeOpsPerSec,omitempty"`
+}
+
+// CephPool represents a Ceph pool.
+type CephPool struct {
+	ID             int     `json:"id"`
+	Name           string  `json:"name"`
+	BytesUsed      uint64  `json:"bytesUsed"`
+	BytesAvailable uint64  `json:"bytesAvailable"`
+	Objects        uint64  `json:"objects"`
+	PercentUsed    float64 `json:"percentUsed"`
+}
+
+// CephService represents a Ceph service summary.
+type CephService struct {
+	Type    string   `json:"type"` // mon, mgr, osd, mds, rgw
+	Running int      `json:"running"`
+	Total   int      `json:"total"`
+	Daemons []string `json:"daemons,omitempty"`
 }

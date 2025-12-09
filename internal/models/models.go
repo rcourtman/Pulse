@@ -167,6 +167,7 @@ type Host struct {
 	NetworkInterfaces []HostNetworkInterface `json:"networkInterfaces,omitempty"`
 	Sensors           HostSensorSummary      `json:"sensors,omitempty"`
 	RAID              []HostRAIDArray        `json:"raid,omitempty"`
+	Ceph              *HostCephCluster       `json:"ceph,omitempty"`
 	Status            string                 `json:"status"`
 	UptimeSeconds     int64                  `json:"uptimeSeconds,omitempty"`
 	IntervalSeconds   int                    `json:"intervalSeconds,omitempty"`
@@ -219,6 +220,107 @@ type HostRAIDDevice struct {
 	Device string `json:"device"`
 	State  string `json:"state"`
 	Slot   int    `json:"slot"`
+}
+
+// HostCephCluster represents Ceph cluster status collected directly by the host agent.
+// This is separate from CephCluster which comes from the Proxmox API.
+type HostCephCluster struct {
+	FSID             string               `json:"fsid"`
+	Health           HostCephHealth       `json:"health"`
+	MonMap           HostCephMonitorMap   `json:"monMap,omitempty"`
+	MgrMap           HostCephManagerMap   `json:"mgrMap,omitempty"`
+	OSDMap           HostCephOSDMap       `json:"osdMap"`
+	PGMap            HostCephPGMap        `json:"pgMap"`
+	Pools            []HostCephPool       `json:"pools,omitempty"`
+	Services         []HostCephService    `json:"services,omitempty"`
+	CollectedAt      time.Time            `json:"collectedAt"`
+}
+
+// HostCephHealth represents Ceph cluster health status.
+type HostCephHealth struct {
+	Status  string                    `json:"status"` // HEALTH_OK, HEALTH_WARN, HEALTH_ERR
+	Checks  map[string]HostCephCheck  `json:"checks,omitempty"`
+	Summary []HostCephHealthSummary   `json:"summary,omitempty"`
+}
+
+// HostCephCheck represents a health check detail.
+type HostCephCheck struct {
+	Severity string   `json:"severity"`
+	Message  string   `json:"message,omitempty"`
+	Detail   []string `json:"detail,omitempty"`
+}
+
+// HostCephHealthSummary represents a health summary message.
+type HostCephHealthSummary struct {
+	Severity string `json:"severity"`
+	Message  string `json:"message"`
+}
+
+// HostCephMonitorMap represents Ceph monitor information.
+type HostCephMonitorMap struct {
+	Epoch    int               `json:"epoch"`
+	NumMons  int               `json:"numMons"`
+	Monitors []HostCephMonitor `json:"monitors,omitempty"`
+}
+
+// HostCephMonitor represents a single Ceph monitor.
+type HostCephMonitor struct {
+	Name   string `json:"name"`
+	Rank   int    `json:"rank"`
+	Addr   string `json:"addr,omitempty"`
+	Status string `json:"status,omitempty"`
+}
+
+// HostCephManagerMap represents Ceph manager information.
+type HostCephManagerMap struct {
+	Available bool   `json:"available"`
+	NumMgrs   int    `json:"numMgrs"`
+	ActiveMgr string `json:"activeMgr,omitempty"`
+	Standbys  int    `json:"standbys"`
+}
+
+// HostCephOSDMap represents OSD status summary.
+type HostCephOSDMap struct {
+	Epoch   int `json:"epoch"`
+	NumOSDs int `json:"numOsds"`
+	NumUp   int `json:"numUp"`
+	NumIn   int `json:"numIn"`
+	NumDown int `json:"numDown,omitempty"`
+	NumOut  int `json:"numOut,omitempty"`
+}
+
+// HostCephPGMap represents placement group statistics.
+type HostCephPGMap struct {
+	NumPGs           int     `json:"numPgs"`
+	BytesTotal       uint64  `json:"bytesTotal"`
+	BytesUsed        uint64  `json:"bytesUsed"`
+	BytesAvailable   uint64  `json:"bytesAvailable"`
+	DataBytes        uint64  `json:"dataBytes,omitempty"`
+	UsagePercent     float64 `json:"usagePercent"`
+	DegradedRatio    float64 `json:"degradedRatio,omitempty"`
+	MisplacedRatio   float64 `json:"misplacedRatio,omitempty"`
+	ReadBytesPerSec  uint64  `json:"readBytesPerSec,omitempty"`
+	WriteBytesPerSec uint64  `json:"writeBytesPerSec,omitempty"`
+	ReadOpsPerSec    uint64  `json:"readOpsPerSec,omitempty"`
+	WriteOpsPerSec   uint64  `json:"writeOpsPerSec,omitempty"`
+}
+
+// HostCephPool represents a Ceph pool.
+type HostCephPool struct {
+	ID             int     `json:"id"`
+	Name           string  `json:"name"`
+	BytesUsed      uint64  `json:"bytesUsed"`
+	BytesAvailable uint64  `json:"bytesAvailable"`
+	Objects        uint64  `json:"objects"`
+	PercentUsed    float64 `json:"percentUsed"`
+}
+
+// HostCephService represents a Ceph service summary.
+type HostCephService struct {
+	Type    string   `json:"type"` // mon, mgr, osd, mds, rgw
+	Running int      `json:"running"`
+	Total   int      `json:"total"`
+	Daemons []string `json:"daemons,omitempty"`
 }
 
 // DiskIO represents I/O statistics for a block device.
@@ -1522,6 +1624,33 @@ func (s *State) RemoveHost(hostID string) (Host, bool) {
 
 	return Host{}, false
 }
+
+// UpsertCephCluster inserts or updates a Ceph cluster in the state.
+// Uses ID (typically the FSID) for matching.
+func (s *State) UpsertCephCluster(cluster CephCluster) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	updated := false
+	for i, existing := range s.CephClusters {
+		if existing.ID == cluster.ID {
+			s.CephClusters[i] = cluster
+			updated = true
+			break
+		}
+	}
+
+	if !updated {
+		s.CephClusters = append(s.CephClusters, cluster)
+	}
+
+	sort.Slice(s.CephClusters, func(i, j int) bool {
+		return s.CephClusters[i].Name < s.CephClusters[j].Name
+	})
+
+	s.LastUpdate = time.Now()
+}
+
 
 // SetHostStatus updates the status of a host if present.
 func (s *State) SetHostStatus(hostID, status string) bool {

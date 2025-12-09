@@ -3,17 +3,21 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
+
 
 // AISettingsHandler handles AI settings endpoints
 type AISettingsHandler struct {
@@ -67,6 +71,9 @@ type AISettingsResponse struct {
 	Configured     bool   `json:"configured"`      // true if AI is ready to use
 	AutonomousMode bool   `json:"autonomous_mode"` // true if AI can execute without approval
 	CustomContext  string `json:"custom_context"`  // user-provided infrastructure context
+	// OAuth fields for Claude Pro/Max subscription authentication
+	AuthMethod     string `json:"auth_method"`       // "api_key" or "oauth"
+	OAuthConnected bool   `json:"oauth_connected"`   // true if OAuth tokens are configured
 }
 
 // AISettingsUpdateRequest is the request body for PUT /api/settings/ai
@@ -78,6 +85,7 @@ type AISettingsUpdateRequest struct {
 	BaseURL        *string `json:"base_url,omitempty"`
 	AutonomousMode *bool   `json:"autonomous_mode,omitempty"`
 	CustomContext  *string `json:"custom_context,omitempty"` // user-provided infrastructure context
+	AuthMethod     *string `json:"auth_method,omitempty"`    // "api_key" or "oauth"
 }
 
 // HandleGetAISettings returns the current AI settings (GET /api/settings/ai)
@@ -98,6 +106,12 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		settings = config.NewDefaultAIConfig()
 	}
 
+	// Determine auth method string
+	authMethod := string(settings.AuthMethod)
+	if authMethod == "" {
+		authMethod = string(config.AuthMethodAPIKey)
+	}
+
 	response := AISettingsResponse{
 		Enabled:        settings.Enabled,
 		Provider:       settings.Provider,
@@ -107,6 +121,8 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		Configured:     settings.IsConfigured(),
 		AutonomousMode: settings.AutonomousMode,
 		CustomContext:  settings.CustomContext,
+		AuthMethod:     authMethod,
+		OAuthConnected: settings.OAuthAccessToken != "",
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -1179,3 +1195,333 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 func (h *AISettingsHandler) SetAlertProvider(ap ai.AlertProvider) {
 	h.aiService.SetAlertProvider(ap)
 }
+
+// oauthSessions stores active OAuth sessions (state -> session)
+// In production, consider using a more robust session store with expiry
+var oauthSessions = make(map[string]*providers.OAuthSession)
+var oauthSessionsMu sync.Mutex
+
+// HandleOAuthStart initiates the OAuth flow for Claude Pro/Max subscription (POST /api/ai/oauth/start)
+// Returns an authorization URL for the user to visit manually
+func (h *AISettingsHandler) HandleOAuthStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Generate OAuth session (redirect URI is not used since we use Anthropic's callback)
+	session, err := providers.GenerateOAuthSession("")
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to generate OAuth session")
+		http.Error(w, "Failed to start OAuth flow", http.StatusInternalServerError)
+		return
+	}
+
+	// Store session (with cleanup of old sessions)
+	oauthSessionsMu.Lock()
+	// Clean up sessions older than 15 minutes
+	for state, s := range oauthSessions {
+		if time.Since(s.CreatedAt) > 15*time.Minute {
+			delete(oauthSessions, state)
+		}
+	}
+	oauthSessions[session.State] = session
+	oauthSessionsMu.Unlock()
+
+	// Get authorization URL
+	authURL := providers.GetAuthorizationURL(session)
+
+	log.Info().
+		Str("state", session.State[:8]+"...").
+		Str("verifier_len", fmt.Sprintf("%d", len(session.CodeVerifier))).
+		Str("auth_url", authURL).
+		Msg("Starting Claude OAuth flow - user must visit URL and paste code back")
+
+	// Return the URL for the user to visit
+	response := map[string]string{
+		"auth_url": authURL,
+		"state":    session.State,
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write OAuth start response")
+	}
+}
+
+// HandleOAuthExchange exchanges a manually-pasted authorization code for tokens (POST /api/ai/oauth/exchange)
+func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse request body
+	var req struct {
+		Code  string `json:"code"`
+		State string `json:"state"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Code == "" || req.State == "" {
+		http.Error(w, "Missing code or state", http.StatusBadRequest)
+		return
+	}
+
+	// Trim any whitespace from the code (user might have copied extra spaces)
+	code := strings.TrimSpace(req.Code)
+
+	// Anthropic's callback page displays the code as "code#state"
+	// We need to extract just the code part before the #
+	if idx := strings.Index(code, "#"); idx > 0 {
+		code = code[:idx]
+	}
+
+	log.Debug().
+		Str("code_len", fmt.Sprintf("%d", len(code))).
+		Str("code_prefix", code[:min(20, len(code))]).
+		Str("state_prefix", req.State[:min(8, len(req.State))]).
+		Msg("Processing OAuth code exchange")
+
+	// Look up session
+	oauthSessionsMu.Lock()
+	session, ok := oauthSessions[req.State]
+	if ok {
+		delete(oauthSessions, req.State) // One-time use
+	}
+	oauthSessionsMu.Unlock()
+
+	if !ok {
+		log.Error().Str("state", req.State[:min(8, len(req.State))]+"...").Msg("OAuth exchange with unknown state")
+		http.Error(w, "Invalid or expired session. Please start the OAuth flow again.", http.StatusBadRequest)
+		return
+	}
+
+	// Exchange code for tokens
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	tokens, err := providers.ExchangeCodeForTokens(ctx, code, session)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to exchange OAuth code for tokens")
+		http.Error(w, "Failed to exchange authorization code: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Try to create an API key from the OAuth access token
+	// Team/Enterprise users get org:create_api_key scope and can create API keys
+	// Pro/Max users don't have this scope and will use OAuth tokens directly
+	apiKey, err := providers.CreateAPIKeyFromOAuth(ctx, tokens.AccessToken)
+	if err != nil {
+		// Check if it's a permission error (Pro/Max users)
+		if strings.Contains(err.Error(), "org:create_api_key") || strings.Contains(err.Error(), "403") {
+			log.Info().Msg("User doesn't have org:create_api_key permission - will use OAuth tokens directly")
+			// This is fine for Pro/Max users - they'll use OAuth tokens
+		} else {
+			log.Error().Err(err).Msg("Failed to create API key from OAuth token")
+			http.Error(w, "Failed to create API key: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	if apiKey != "" {
+		log.Info().Msg("Successfully created API key from OAuth - using subscription-based billing")
+	}
+
+	// Load existing settings
+	settings, err := h.persistence.LoadAIConfig()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to load AI settings for OAuth")
+		settings = config.NewDefaultAIConfig()
+	}
+	if settings == nil {
+		settings = config.NewDefaultAIConfig()
+	}
+
+	// Update settings
+	settings.Provider = config.AIProviderAnthropic
+	settings.AuthMethod = config.AuthMethodOAuth
+	settings.OAuthAccessToken = tokens.AccessToken
+	settings.OAuthRefreshToken = tokens.RefreshToken
+	settings.OAuthExpiresAt = tokens.ExpiresAt
+	settings.Enabled = true
+
+	// If we got an API key, use it; otherwise use OAuth tokens directly
+	if apiKey != "" {
+		settings.APIKey = apiKey
+	} else {
+		// Pro/Max users: clear any old API key, will use OAuth client
+		settings.ClearAPIKey()
+	}
+
+	// Save settings
+	if err := h.persistence.SaveAIConfig(*settings); err != nil {
+		log.Error().Err(err).Msg("Failed to save OAuth tokens")
+		http.Error(w, "Failed to save OAuth credentials", http.StatusInternalServerError)
+		return
+	}
+
+	// Reload the AI service with new settings
+	if err := h.aiService.Reload(); err != nil {
+		log.Warn().Err(err).Msg("Failed to reload AI service after OAuth setup")
+	}
+
+	log.Info().Msg("Claude OAuth authentication successful")
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": "Successfully connected to Claude with your subscription",
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write OAuth exchange response")
+	}
+}
+
+// HandleOAuthCallback handles the OAuth callback (GET /api/ai/oauth/callback)
+// This is kept for backwards compatibility but mainly serves as a fallback
+func (h *AISettingsHandler) HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get code and state from query params
+	code := r.URL.Query().Get("code")
+	state := r.URL.Query().Get("state")
+	errParam := r.URL.Query().Get("error")
+	errDesc := r.URL.Query().Get("error_description")
+
+	// Check for OAuth error
+	if errParam != "" {
+		log.Error().
+			Str("error", errParam).
+			Str("description", errDesc).
+			Msg("OAuth authorization failed")
+		// Redirect to settings page with error
+		http.Redirect(w, r, "/settings?ai_oauth_error="+errParam, http.StatusTemporaryRedirect)
+		return
+	}
+
+	if code == "" || state == "" {
+		log.Error().Msg("OAuth callback missing code or state")
+		http.Redirect(w, r, "/settings?ai_oauth_error=missing_params", http.StatusTemporaryRedirect)
+		return
+	}
+
+	// Look up session
+	oauthSessionsMu.Lock()
+	session, ok := oauthSessions[state]
+	if ok {
+		delete(oauthSessions, state) // One-time use
+	}
+	oauthSessionsMu.Unlock()
+
+	if !ok {
+		log.Error().Str("state", state).Msg("OAuth callback with unknown state")
+		http.Redirect(w, r, "/settings?ai_oauth_error=invalid_state", http.StatusTemporaryRedirect)
+		return
+	}
+
+	// Exchange code for tokens
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	tokens, err := providers.ExchangeCodeForTokens(ctx, code, session)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to exchange OAuth code for tokens")
+		http.Redirect(w, r, "/settings?ai_oauth_error=token_exchange_failed", http.StatusTemporaryRedirect)
+		return
+	}
+
+	// Load existing settings
+	settings, err := h.persistence.LoadAIConfig()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to load AI settings for OAuth")
+		settings = config.NewDefaultAIConfig()
+	}
+	if settings == nil {
+		settings = config.NewDefaultAIConfig()
+	}
+
+	// Update settings with OAuth tokens
+	settings.Provider = config.AIProviderAnthropic
+	settings.AuthMethod = config.AuthMethodOAuth
+	settings.OAuthAccessToken = tokens.AccessToken
+	settings.OAuthRefreshToken = tokens.RefreshToken
+	settings.OAuthExpiresAt = tokens.ExpiresAt
+	settings.Enabled = true
+	// Clear API key since we're using OAuth
+	settings.ClearAPIKey()
+
+	// Save settings
+	if err := h.persistence.SaveAIConfig(*settings); err != nil {
+		log.Error().Err(err).Msg("Failed to save OAuth tokens")
+		http.Redirect(w, r, "/settings?ai_oauth_error=save_failed", http.StatusTemporaryRedirect)
+		return
+	}
+
+	// Reload the AI service with new settings
+	if err := h.aiService.Reload(); err != nil {
+		log.Warn().Err(err).Msg("Failed to reload AI service after OAuth setup")
+	}
+
+	log.Info().Msg("Claude OAuth authentication successful")
+
+	// Redirect to settings page with success
+	http.Redirect(w, r, "/settings?ai_oauth_success=true", http.StatusTemporaryRedirect)
+}
+
+// HandleOAuthDisconnect disconnects OAuth and clears tokens (POST /api/ai/oauth/disconnect)
+func (h *AISettingsHandler) HandleOAuthDisconnect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require admin authentication
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	// Load existing settings
+	settings, err := h.persistence.LoadAIConfig()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to load AI settings for OAuth disconnect")
+		http.Error(w, "Failed to load settings", http.StatusInternalServerError)
+		return
+	}
+	if settings == nil {
+		settings = config.NewDefaultAIConfig()
+	}
+
+	// Clear OAuth tokens
+	settings.ClearOAuthTokens()
+	settings.AuthMethod = config.AuthMethodAPIKey
+
+	// Save settings
+	if err := h.persistence.SaveAIConfig(*settings); err != nil {
+		log.Error().Err(err).Msg("Failed to save settings after OAuth disconnect")
+		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
+		return
+	}
+
+	// Reload the AI service
+	if err := h.aiService.Reload(); err != nil {
+		log.Warn().Err(err).Msg("Failed to reload AI service after OAuth disconnect")
+	}
+
+	log.Info().Msg("Claude OAuth disconnected")
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": "OAuth disconnected successfully",
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write OAuth disconnect response")
+	}
+}
+

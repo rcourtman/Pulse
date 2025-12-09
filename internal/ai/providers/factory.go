@@ -18,10 +18,21 @@ func NewFromConfig(cfg *config.AIConfig) (Provider, error) {
 
 	switch cfg.Provider {
 	case config.AIProviderAnthropic:
-		if cfg.APIKey == "" {
-			return nil, fmt.Errorf("Anthropic API key is required")
+		// If we have an API key (from direct entry or OAuth-created), use regular client
+		if cfg.APIKey != "" {
+			return NewAnthropicClient(cfg.APIKey, cfg.GetModel()), nil
 		}
-		return NewAnthropicClient(cfg.APIKey, cfg.GetModel()), nil
+		// Pro/Max users without org:create_api_key will use OAuth tokens directly
+		if cfg.IsUsingOAuth() && cfg.OAuthAccessToken != "" {
+			client := NewAnthropicOAuthClient(
+				cfg.OAuthAccessToken,
+				cfg.OAuthRefreshToken,
+				cfg.OAuthExpiresAt,
+				cfg.GetModel(),
+			)
+			return client, nil
+		}
+		return nil, fmt.Errorf("Anthropic API key is required (or use OAuth login for Pro/Max subscription)")
 
 	case config.AIProviderOpenAI:
 		if cfg.APIKey == "" {
@@ -43,3 +54,4 @@ func NewFromConfig(cfg *config.AIConfig) (Provider, error) {
 		return nil, fmt.Errorf("unknown provider: %s", cfg.Provider)
 	}
 }
+

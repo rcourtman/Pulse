@@ -252,6 +252,12 @@ func mergeTemperatureData(hostAgentTemp, proxyTemp *models.Temperature) *models.
 		result.HasGPU = true
 	}
 
+	// Merge NVMe data - prefer host agent if available, fall back to proxy
+	if !hostAgentTemp.HasNVMe && proxyTemp.HasNVMe {
+		result.NVMe = proxyTemp.NVMe
+		result.HasNVMe = true
+	}
+
 	// Update historical max if current is higher
 	currentTemp := result.CPUPackage
 	if currentTemp == 0 && result.CPUMax > 0 {

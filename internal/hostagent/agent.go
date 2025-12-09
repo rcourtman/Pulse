@@ -14,6 +14,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ceph"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mdadm"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
@@ -318,6 +319,9 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	// Collect RAID array data (best effort - don't fail if unavailable)
 	raidData := a.collectRAIDArrays(collectCtx)
 
+	// Collect Ceph cluster data (best effort - only on Ceph nodes)
+	cephData := a.collectCephStatus(collectCtx)
+
 	report := agentshost.Report{
 		Agent: agentshost.AgentInfo{
 			ID:              a.agentID,
@@ -351,6 +355,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		Network:   append([]agentshost.NetworkInterface(nil), snapshot.Network...),
 		Sensors:   sensorData,
 		RAID:      raidData,
+		Ceph:      cephData,
 		Tags:      append([]string(nil), a.cfg.Tags...),
 		Timestamp: time.Now().UTC(),
 	}
@@ -480,6 +485,124 @@ func (a *Agent) collectRAIDArrays(ctx context.Context) []agentshost.RAIDArray {
 	}
 
 	return arrays
+}
+
+// collectCephStatus attempts to collect Ceph cluster status.
+// Returns nil if Ceph is not available or not configured on this host.
+func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
+	// Only collect on Linux
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+
+	status, err := ceph.Collect(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to collect Ceph status")
+		return nil
+	}
+	if status == nil {
+		return nil
+	}
+
+	// Convert internal ceph types to agent report types
+	result := &agentshost.CephCluster{
+		FSID: status.FSID,
+		Health: agentshost.CephHealth{
+			Status: status.Health.Status,
+			Checks: make(map[string]agentshost.CephCheck),
+		},
+		MonMap: agentshost.CephMonitorMap{
+			Epoch:   status.MonMap.Epoch,
+			NumMons: status.MonMap.NumMons,
+		},
+		MgrMap: agentshost.CephManagerMap{
+			Available: status.MgrMap.Available,
+			NumMgrs:   status.MgrMap.NumMgrs,
+			ActiveMgr: status.MgrMap.ActiveMgr,
+			Standbys:  status.MgrMap.Standbys,
+		},
+		OSDMap: agentshost.CephOSDMap{
+			Epoch:   status.OSDMap.Epoch,
+			NumOSDs: status.OSDMap.NumOSDs,
+			NumUp:   status.OSDMap.NumUp,
+			NumIn:   status.OSDMap.NumIn,
+			NumDown: status.OSDMap.NumDown,
+			NumOut:  status.OSDMap.NumOut,
+		},
+		PGMap: agentshost.CephPGMap{
+			NumPGs:           status.PGMap.NumPGs,
+			BytesTotal:       status.PGMap.BytesTotal,
+			BytesUsed:        status.PGMap.BytesUsed,
+			BytesAvailable:   status.PGMap.BytesAvailable,
+			DataBytes:        status.PGMap.DataBytes,
+			UsagePercent:     status.PGMap.UsagePercent,
+			DegradedRatio:    status.PGMap.DegradedRatio,
+			MisplacedRatio:   status.PGMap.MisplacedRatio,
+			ReadBytesPerSec:  status.PGMap.ReadBytesPerSec,
+			WriteBytesPerSec: status.PGMap.WriteBytesPerSec,
+			ReadOpsPerSec:    status.PGMap.ReadOpsPerSec,
+			WriteOpsPerSec:   status.PGMap.WriteOpsPerSec,
+		},
+		CollectedAt: status.CollectedAt.Format(time.RFC3339),
+	}
+
+	// Convert monitors
+	for _, mon := range status.MonMap.Monitors {
+		result.MonMap.Monitors = append(result.MonMap.Monitors, agentshost.CephMonitor{
+			Name:   mon.Name,
+			Rank:   mon.Rank,
+			Addr:   mon.Addr,
+			Status: mon.Status,
+		})
+	}
+
+	// Convert health checks
+	for name, check := range status.Health.Checks {
+		result.Health.Checks[name] = agentshost.CephCheck{
+			Severity: check.Severity,
+			Message:  check.Message,
+			Detail:   check.Detail,
+		}
+	}
+
+	// Convert health summary
+	for _, s := range status.Health.Summary {
+		result.Health.Summary = append(result.Health.Summary, agentshost.CephHealthSummary{
+			Severity: s.Severity,
+			Message:  s.Message,
+		})
+	}
+
+	// Convert pools
+	for _, pool := range status.Pools {
+		result.Pools = append(result.Pools, agentshost.CephPool{
+			ID:             pool.ID,
+			Name:           pool.Name,
+			BytesUsed:      pool.BytesUsed,
+			BytesAvailable: pool.BytesAvailable,
+			Objects:        pool.Objects,
+			PercentUsed:    pool.PercentUsed,
+		})
+	}
+
+	// Convert services
+	for _, svc := range status.Services {
+		result.Services = append(result.Services, agentshost.CephService{
+			Type:    svc.Type,
+			Running: svc.Running,
+			Total:   svc.Total,
+			Daemons: svc.Daemons,
+		})
+	}
+
+	a.logger.Debug().
+		Str("fsid", result.FSID).
+		Str("health", result.Health.Status).
+		Int("osds", result.OSDMap.NumOSDs).
+		Int("pools", len(result.Pools)).
+		Msg("Collected Ceph cluster status")
+
+	return result
 }
 
 // runProxmoxSetup performs one-time Proxmox API token setup and node registration.

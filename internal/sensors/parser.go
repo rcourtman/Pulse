@@ -204,9 +204,14 @@ func parseNVMeTemps(chipName string, chipMap map[string]interface{}, data *Tempe
 		// Look for Composite temperature (main NVMe temp)
 		if strings.Contains(sensorName, "Composite") {
 			if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) {
-				data.NVMe[chipName] = tempVal
+				// Normalize chip name to nvme0, nvme1 format
+				// Input format is like "nvme-pci-0200" or "nvme-pci-0300"
+				// We extract the device index based on how many NVMe devices we've seen
+				normalizedName := fmt.Sprintf("nvme%d", len(data.NVMe))
+				data.NVMe[normalizedName] = tempVal
 				log.Debug().
 					Str("chip", chipName).
+					Str("normalizedName", normalizedName).
 					Float64("temp", tempVal).
 					Msg("Found NVMe temperature")
 			}

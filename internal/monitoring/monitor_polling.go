@@ -1734,7 +1734,7 @@ func (m *Monitor) pollPVENode(
 		GuestURL:    guestURL,
 		Status:      effectiveStatus,
 		Type:        "node",
-		CPU:         safeFloat(node.CPU), // Already in percentage
+		CPU:         safeFloat(node.CPU), // Proxmox returns 0-1 ratio (e.g., 0.15 = 15%)
 		Memory: models.Memory{
 			Total: int64(node.MaxMem),
 			Used:  int64(node.Mem),
@@ -2198,6 +2198,22 @@ func (m *Monitor) pollPVENode(
 						Msg("Temperature collection failed - check SSH access")
 				}
 			}
+
+			// Debug: log proxy temp details before merge
+			if proxyTemp != nil {
+				log.Debug().
+					Str("node", node.Node).
+					Bool("proxyTempAvailable", proxyTemp.Available).
+					Bool("proxyHasSMART", proxyTemp.HasSMART).
+					Int("proxySMARTCount", len(proxyTemp.SMART)).
+					Bool("proxyHasNVMe", proxyTemp.HasNVMe).
+					Int("proxyNVMeCount", len(proxyTemp.NVMe)).
+					Msg("Proxy temperature data before merge")
+			} else {
+				log.Debug().
+					Str("node", node.Node).
+					Msg("Proxy temperature data is nil")
+			}
 		}
 
 		// Merge host agent and proxy temperatures
@@ -2265,11 +2281,35 @@ func (m *Monitor) pollPVENode(
 				Float64("cpuMaxRecord", temp.CPUMaxRecord).
 				Int("nvmeCount", len(temp.NVMe)).
 				Msg("Collected temperature data")
-		} else if hostAgentTemp == nil && proxyTemp == nil {
-			log.Debug().
-				Str("node", node.Node).
-				Bool("isCluster", modelNode.IsClusterMember).
-				Msg("No temperature data available (no host agent or proxy/SSH)")
+		} else {
+			// Temperature data returned but not available (temp != nil && !temp.Available)
+			// OR no temperature data from any source - preserve previous temperature if available
+			// This prevents the temperature column from flickering when collection temporarily fails
+			var prevTemp *models.Temperature
+			for _, prevNode := range prevInstanceNodes {
+				if prevNode.ID == modelNode.ID && prevNode.Temperature != nil && prevNode.Temperature.Available {
+					prevTemp = prevNode.Temperature
+					break
+				}
+			}
+
+			if prevTemp != nil {
+				// Clone the previous temperature to avoid modifying historical data
+				preserved := *prevTemp
+				preserved.LastUpdate = prevTemp.LastUpdate // Keep original update time to indicate staleness
+				modelNode.Temperature = &preserved
+				log.Debug().
+					Str("node", node.Node).
+					Bool("isCluster", modelNode.IsClusterMember).
+					Float64("cpuPackage", preserved.CPUPackage).
+					Time("lastUpdate", preserved.LastUpdate).
+					Msg("Preserved previous temperature data (current collection failed or unavailable)")
+			} else {
+				log.Debug().
+					Str("node", node.Node).
+					Bool("isCluster", modelNode.IsClusterMember).
+					Msg("No temperature data available (collection failed, no previous data to preserve)")
+			}
 		}
 	}
 

@@ -394,22 +394,29 @@ func (s *Store) findDuplicate(r *Resource) string {
 		return ""
 	}
 	
-	// 1. Machine ID match (most reliable)
-	if r.Identity.MachineID != "" {
+	// 1. Machine ID match (most reliable) - but only for same type
+	// A node and host agent on the same machine should coexist as different data sources
+	if r.Identity.MachineID != "" && r.IsInfrastructure() {
 		if existingID, ok := s.byMachineID[r.Identity.MachineID]; ok && existingID != r.ID {
-			return existingID
+			existing := s.resources[existingID]
+			// Only match if same type
+			if existing != nil && existing.Type == r.Type {
+				return existingID
+			}
 		}
 	}
 	
-	// 2. Hostname match (case-insensitive)
-	if r.Identity.Hostname != "" {
+	// 2. Hostname match (case-insensitive) - only for same infrastructure type
+	// Workloads (VMs, containers) can have duplicate names across clusters
+	if r.Identity.Hostname != "" && r.IsInfrastructure() {
 		hostnameLower := strings.ToLower(r.Identity.Hostname)
 		if existingIDs, ok := s.byHostname[hostnameLower]; ok {
 			for _, existingID := range existingIDs {
 				if existingID != r.ID {
 					existing := s.resources[existingID]
-					// Only match infrastructure resources with each other
-					if existing.IsInfrastructure() && r.IsInfrastructure() {
+					// Only match same infrastructure type (e.g., host with host, node with node)
+					// Different types represent different data sources and should coexist
+					if existing.Type == r.Type {
 						return existingID
 					}
 				}
@@ -417,18 +424,20 @@ func (s *Store) findDuplicate(r *Resource) string {
 		}
 	}
 	
-	// 3. IP overlap (if same non-localhost IP, likely same machine)
-	for _, ip := range r.Identity.IPs {
-		if isLocalhost(ip) {
-			continue
-		}
-		if existingIDs, ok := s.byIP[ip]; ok {
-			for _, existingID := range existingIDs {
-				if existingID != r.ID {
-					existing := s.resources[existingID]
-					// Only match infrastructure resources with each other
-					if existing.IsInfrastructure() && r.IsInfrastructure() {
-						return existingID
+	// 3. IP overlap (if same non-localhost IP, likely same machine) - only for same infrastructure type
+	if r.IsInfrastructure() {
+		for _, ip := range r.Identity.IPs {
+			if isNonUniqueIP(ip) {
+				continue
+			}
+			if existingIDs, ok := s.byIP[ip]; ok {
+				for _, existingID := range existingIDs {
+					if existingID != r.ID {
+						existing := s.resources[existingID]
+						// Only match same infrastructure type
+						if existing.Type == r.Type {
+							return existingID
+						}
 					}
 				}
 			}
@@ -487,7 +496,7 @@ func (s *Store) addToIndexes(r *Resource) {
 	}
 	
 	for _, ip := range r.Identity.IPs {
-		if !isLocalhost(ip) {
+		if !isNonUniqueIP(ip) {
 			s.byIP[ip] = append(s.byIP[ip], r.ID)
 		}
 	}
@@ -530,8 +539,28 @@ func removeFromSlice(slice []string, item string) []string {
 	return result
 }
 
-func isLocalhost(ip string) bool {
-	return ip == "127.0.0.1" || ip == "::1" || strings.HasPrefix(ip, "127.")
+// isNonUniqueIP returns true if the IP address is not useful for machine identification.
+// This includes localhost addresses and Docker bridge IPs that exist on every Docker host.
+func isNonUniqueIP(ip string) bool {
+	// Localhost addresses
+	if ip == "127.0.0.1" || ip == "::1" || strings.HasPrefix(ip, "127.") {
+		return true
+	}
+	
+	// Docker bridge network - 172.17.0.1/16 exists on every Docker host
+	// Also filter other Docker-assigned bridge networks (172.17-31.x.x)
+	if strings.HasPrefix(ip, "172.17.") || strings.HasPrefix(ip, "172.18.") || 
+	   strings.HasPrefix(ip, "172.19.") || strings.HasPrefix(ip, "172.20.") ||
+	   strings.HasPrefix(ip, "172.21.") || strings.HasPrefix(ip, "172.22.") {
+		return true
+	}
+	
+	// Link-local addresses (fe80::)
+	if strings.HasPrefix(strings.ToLower(ip), "fe80:") {
+		return true
+	}
+	
+	return false
 }
 
 // MarkStale marks resources that haven't been updated recently.
