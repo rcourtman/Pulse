@@ -22,6 +22,9 @@ type ResourceProvider interface {
 	GetTopByDisk(limit int, types []resources.ResourceType) []resources.Resource
 	GetRelated(resourceID string) map[string][]resources.Resource
 	GetResourceSummary() resources.ResourceSummary
+	
+	// AI Routing support
+	FindContainerHost(containerNameOrID string) string
 }
 
 // SetResourceProvider sets the resource provider for unified infrastructure context.

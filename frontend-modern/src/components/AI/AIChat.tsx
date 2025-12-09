@@ -546,6 +546,19 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
 
       // Move from pending approvals to completed tool calls
+      const currentMessages = messages();
+      const targetMessage = currentMessages.find((m) => m.id === messageId);
+      const pendingCount = targetMessage?.pendingApprovals?.length || 0;
+      const remainingAfterThis = (targetMessage?.pendingApprovals?.filter((a) => a.toolId !== approval.toolId) || []).length;
+
+      logger.info('[AIChat] Approval processed', {
+        messageId,
+        toolId: approval.toolId,
+        pendingCount,
+        remainingAfterThis,
+        pendingApprovals: targetMessage?.pendingApprovals?.map(a => a.toolId)
+      });
+
       setMessages((prev) =>
         prev.map((m) => {
           if (m.id !== messageId) return m;
@@ -570,10 +583,152 @@ export const AIChat: Component<AIChatProps> = (props) => {
         })
       );
 
-      if (result.success) {
-        notificationStore.success('Command executed successfully');
+      // No toast for success - the tool output shows the result inline
+      // Only show error toast for failures since they might need attention
+      if (!result.success && result.error) {
+        notificationStore.error(result.error);
+      }
+
+      // After the last approval is processed, automatically continue the conversation
+      // This lets the AI analyze the command output and provide a summary
+      if (remainingAfterThis === 0) {
+        logger.info('[AIChat] Last approval processed, triggering auto-continuation');
+        // Small delay to let the UI update first
+        setTimeout(async () => {
+          logger.info('[AIChat] Starting auto-continuation');
+          setIsLoading(true);
+
+          // Build history including the just-executed command
+          const currentMsgs = messages();
+          logger.debug('[AIChat] Building history for continuation', { messageCount: currentMsgs.length });
+
+          const historyForContinuation = currentMsgs
+            .filter((m) => !m.isStreaming)
+            .filter((m) => m.content || (m.toolCalls && m.toolCalls.length > 0))
+            .map((m) => {
+              let content = m.content || '';
+              if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+                const toolSummary = m.toolCalls
+                  .map((tc) => `Command: ${tc.input}\nOutput: ${tc.output}`)
+                  .join('\n\n');
+                content = toolSummary + (content ? '\n\n' + content : '');
+              }
+              return { role: m.role, content };
+            })
+            .filter((m) => m.content);
+
+          logger.debug('[AIChat] History for continuation built', { historyLength: historyForContinuation.length });
+
+          // Add a hidden continuation prompt - the AI will see it but user won't
+          const continuationPrompt = 'Continue analyzing the command output above and provide a summary.';
+
+          // Create the streaming assistant response message (no visible user message)
+          // Show "Analyzing..." as initial content so user sees inline feedback
+          const assistantId = generateId();
+          const streamingMessage: Message = {
+            id: assistantId,
+            role: 'assistant',
+            content: '*Analyzing results...*',
+            timestamp: new Date(),
+            isStreaming: true,
+            pendingTools: [],
+            pendingApprovals: [],
+            toolCalls: [],
+          };
+          setMessages((prev) => [...prev, streamingMessage]);
+
+          try {
+            logger.info('[AIChat] Calling executeStream for continuation');
+            await AIAPI.executeStream(
+              {
+                prompt: continuationPrompt,
+                target_type: targetType(),
+                target_id: targetId(),
+                context: contextData(),
+                history: historyForContinuation,
+              },
+              (event: AIStreamEvent) => {
+                logger.debug('[AIChat] Continuation event received', { type: event.type });
+                setMessages((prev) =>
+                  prev.map((msg) => {
+                    if (msg.id !== assistantId) return msg;
+                    switch (event.type) {
+                      case 'content':
+                        return { ...msg, content: event.data as string, isStreaming: false };
+                      case 'done':
+                        return { ...msg, isStreaming: false };
+                      case 'error':
+                        return { ...msg, content: `Error: ${event.data}`, isStreaming: false };
+                      case 'thinking':
+                        // Ignore thinking events for now
+                        return msg;
+                      case 'processing':
+                        // Ignore processing events
+                        return msg;
+                      case 'tool_start': {
+                        const data = event.data as { name: string; input: string };
+                        return {
+                          ...msg,
+                          pendingTools: [...(msg.pendingTools || []), { name: data.name, input: data.input }],
+                        };
+                      }
+                      case 'tool_end': {
+                        const data = event.data as { name: string; input: string; output: string; success: boolean };
+                        const pendingTools = msg.pendingTools || [];
+                        const matchingIndex = pendingTools.findIndex((t) => t.name === data.name);
+                        const updatedPending = matchingIndex >= 0
+                          ? [...pendingTools.slice(0, matchingIndex), ...pendingTools.slice(matchingIndex + 1)]
+                          : pendingTools;
+                        return {
+                          ...msg,
+                          pendingTools: updatedPending,
+                          toolCalls: [...(msg.toolCalls || []), {
+                            name: data.name,
+                            input: data.input,
+                            output: data.output,
+                            success: data.success,
+                          }],
+                        };
+                      }
+                      case 'approval_needed': {
+                        const data = event.data as AIStreamApprovalNeededData;
+                        logger.info('[AIChat] Approval needed in continuation', { command: data.command });
+                        return {
+                          ...msg,
+                          pendingApprovals: [...(msg.pendingApprovals || []), {
+                            command: data.command,
+                            toolId: data.tool_id,
+                            toolName: data.tool_name,
+                            runOnHost: data.run_on_host,
+                            targetHost: data.target_host,
+                          }],
+                          isStreaming: false, // Stop streaming when approval is needed
+                        };
+                      }
+                      default:
+                        logger.debug('[AIChat] Unhandled continuation event', { type: event.type, event });
+                        return msg;
+                    }
+                  })
+                );
+              }
+            );
+            logger.info('[AIChat] Continuation executeStream completed');
+          } catch (err) {
+            logger.error('[AIChat] Failed to continue after approval:', err);
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId
+                  ? { ...msg, content: 'Failed to analyze results.', isStreaming: false }
+                  : msg
+              )
+            );
+          } finally {
+            setIsLoading(false);
+          }
+        }, 200);
       } else {
-        notificationStore.error(result.error || 'Command failed');
+        logger.debug('[AIChat] Approvals remaining, not triggering continuation', { remainingAfterThis });
       }
     } catch (error) {
       logger.error('[AIChat] Failed to execute approved command:', error);

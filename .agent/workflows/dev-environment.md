@@ -44,3 +44,20 @@ journalctl -u pulse-hot-dev -f
 - **Hot-dev script**: `/opt/pulse/scripts/hot-dev.sh`
 - **Systemd service**: `/etc/systemd/system/pulse-hot-dev.service`
 - **Makefile targets**: `make dev` or `make dev-hot`
+
+## Encryption Key Monitoring
+
+A watcher service monitors the encryption key file for any changes or deletions:
+
+```bash
+# Check if the watcher is running
+systemctl status encryption-key-watcher
+
+# View recent encryption key events
+sudo journalctl -u encryption-key-watcher -n 50
+
+# View events around a specific time
+sudo journalctl -u encryption-key-watcher --since "2025-12-09 14:00" --until "2025-12-09 15:00"
+```
+
+If the key ever goes missing, the logs will show what event happened and which processes had files open in `/etc/pulse` at that time.

@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { For, Show, createMemo, createSignal, onMount, onCleanup } from 'solid-js';
+import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { useNavigate } from '@solidjs/router';
 import type { Host, HostRAIDArray } from '@/types/api';
@@ -19,6 +19,8 @@ import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { aiChatStore } from '@/stores/aiChat';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useResourcesAsLegacy } from '@/hooks/useResources';
+import { HostMetadataAPI, type HostMetadata } from '@/api/hostMetadata';
+import { logger } from '@/utils/logger';
 
 // Column definition for hosts table
 export interface HostColumnDef {
@@ -492,6 +494,64 @@ export const HostsOverview: Component<HostsOverviewProps> = () => {
   const visibleColumnIds = createMemo(() => visibleColumns().map(c => c.id));
   const isColVisible = (colId: string) => visibleColumnIds().includes(colId);
 
+  // Host metadata management (for custom URLs)
+  const [hostMetadata, setHostMetadata] = createSignal<Record<string, HostMetadata>>({});
+  const [hostMetadataVersion, setHostMetadataVersion] = createSignal(0);
+
+  // Load host metadata on mount
+  createEffect(() => {
+    HostMetadataAPI.getAllMetadata()
+      .then(data => {
+        setHostMetadata(data || {});
+        logger.debug('Loaded host metadata', { count: Object.keys(data || {}).length });
+      })
+      .catch(err => {
+        logger.warn('Failed to load host metadata', { error: err });
+      });
+  });
+
+  // Get custom URL for a host
+  const getHostCustomUrl = (hostId: string): string | undefined => {
+    // Access version to trigger reactivity when metadata changes
+    hostMetadataVersion();
+    return hostMetadata()[hostId]?.customUrl;
+  };
+
+  // Update custom URL for a host
+  const updateHostCustomUrl = async (hostId: string, url: string): Promise<boolean> => {
+    try {
+      await HostMetadataAPI.updateMetadata(hostId, { customUrl: url });
+      setHostMetadata(prev => ({
+        ...prev,
+        [hostId]: { ...prev[hostId], id: hostId, customUrl: url }
+      }));
+      setHostMetadataVersion(v => v + 1);
+      logger.info('Updated host custom URL', { hostId, url });
+      return true;
+    } catch (err) {
+      logger.error('Failed to update host custom URL', { hostId, url, error: err });
+      return false;
+    }
+  };
+
+  // Delete custom URL for a host
+  const deleteHostCustomUrl = async (hostId: string): Promise<boolean> => {
+    try {
+      await HostMetadataAPI.deleteMetadata(hostId);
+      setHostMetadata(prev => {
+        const next = { ...prev };
+        delete next[hostId];
+        return next;
+      });
+      setHostMetadataVersion(v => v + 1);
+      logger.info('Deleted host custom URL', { hostId });
+      return true;
+    } catch (err) {
+      logger.error('Failed to delete host custom URL', { hostId, error: err });
+      return false;
+    }
+  };
+
   const handleSort = (key: SortKey) => {
     if (sortKey() === key) {
       setSortDirection(sortDirection() === 'asc' ? 'desc' : 'asc');
@@ -797,7 +857,7 @@ export const HostsOverview: Component<HostsOverviewProps> = () => {
                       </thead>
                       <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         <For each={filteredHosts()}>
-                          {(host) => <HostRow host={host} isColVisible={isColVisible} isMobile={isMobile} getDiskStats={getDiskStats} />}
+                          {(host) => <HostRow host={host} isColVisible={isColVisible} isMobile={isMobile} getDiskStats={getDiskStats} customUrl={getHostCustomUrl(host.id)} onUpdateCustomUrl={updateHostCustomUrl} onDeleteCustomUrl={deleteHostCustomUrl} />}
                         </For>
                       </tbody>
                     </table>
@@ -846,8 +906,10 @@ interface HostRowProps {
   host: Host;
   isColVisible: (colId: string) => boolean;
   isMobile: () => boolean;
-
   getDiskStats: (host: Host) => { percent: number; used: number; total: number };
+  customUrl?: string;
+  onUpdateCustomUrl: (hostId: string, url: string) => Promise<boolean>;
+  onDeleteCustomUrl: (hostId: string) => Promise<boolean>;
 }
 
 const HostRow: Component<HostRowProps> = (props) => {
@@ -855,6 +917,43 @@ const HostRow: Component<HostRowProps> = (props) => {
 
   // Check if this host is in AI context
   const isInAIContext = createMemo(() => aiChatStore.enabled && aiChatStore.hasContextItem(host.id));
+
+  // URL editing state
+  const [isEditingUrl, setIsEditingUrl] = createSignal(false);
+  const [editingUrlValue, setEditingUrlValue] = createSignal('');
+  const [isSavingUrl, setIsSavingUrl] = createSignal(false);
+  let urlInputRef: HTMLInputElement | undefined;
+
+  // Start editing URL
+  const startEditingUrl = (e: MouseEvent) => {
+    e.stopPropagation();
+    setEditingUrlValue(props.customUrl || '');
+    setIsEditingUrl(true);
+    // Focus input after render
+    setTimeout(() => urlInputRef?.focus(), 0);
+  };
+
+  // Save URL
+  const saveUrl = async () => {
+    const url = editingUrlValue().trim();
+    setIsSavingUrl(true);
+    try {
+      if (url) {
+        await props.onUpdateCustomUrl(host.id, url);
+      } else {
+        await props.onDeleteCustomUrl(host.id);
+      }
+      setIsEditingUrl(false);
+    } finally {
+      setIsSavingUrl(false);
+    }
+  };
+
+  // Cancel editing
+  const cancelEditingUrl = () => {
+    setIsEditingUrl(false);
+    setEditingUrlValue('');
+  };
 
   // Build context for AI - includes routing fields
   const buildHostContext = (): Record<string, unknown> => ({
@@ -873,7 +972,7 @@ const HostRow: Component<HostRowProps> = (props) => {
   // Handle row click - toggle AI context selection
   const handleRowClick = (event: MouseEvent) => {
     const target = event.target as HTMLElement;
-    if (target.closest('a, button, [data-prevent-toggle]')) {
+    if (target.closest('a, button, [data-prevent-toggle], [data-url-editor]')) {
       return;
     }
 
@@ -914,31 +1013,119 @@ const HostRow: Component<HostRowProps> = (props) => {
             ariaLabel={hostStatus().label}
             size="xs"
           />
-          <div class="min-w-0 flex items-center gap-1.5">
-            <div>
-              <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                {host.displayName || host.hostname || host.id}
-              </p>
-              <Show when={host.displayName && host.displayName !== host.hostname}>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
-                  {host.hostname}
-                </p>
-              </Show>
-              <Show when={host.lastSeen}>
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
-                  Updated {formatRelativeTime(host.lastSeen!)}
-                </p>
-              </Show>
+          <Show
+            when={isEditingUrl()}
+            fallback={
+              <div class="min-w-0 flex items-center gap-1.5 group/name">
+                <div>
+                  <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                    {host.displayName || host.hostname || host.id}
+                  </p>
+                  <Show when={host.displayName && host.displayName !== host.hostname}>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
+                      {host.hostname}
+                    </p>
+                  </Show>
+                  <Show when={host.lastSeen}>
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
+                      Updated {formatRelativeTime(host.lastSeen!)}
+                    </p>
+                  </Show>
+                </div>
+                {/* Custom URL link */}
+                <Show when={props.customUrl}>
+                  <a
+                    href={props.customUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                    title={`Open ${props.customUrl}`}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <svg
+                      class="w-3.5 h-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                      />
+                    </svg>
+                  </a>
+                </Show>
+                {/* Edit URL button - shows on hover */}
+                <button
+                  type="button"
+                  onClick={startEditingUrl}
+                  class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
+                  title={props.customUrl ? 'Edit URL' : 'Add URL'}
+                >
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+                {/* AI context indicator */}
+                <Show when={isInAIContext()}>
+                  <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                    </svg>
+                  </span>
+                </Show>
+              </div>
+            }
+          >
+            {/* URL editing mode */}
+            <div class="flex items-center gap-1 min-w-0" data-url-editor>
+              <input
+                ref={urlInputRef}
+                type="text"
+                value={editingUrlValue()}
+                onInput={(e) => setEditingUrlValue(e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveUrl();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelEditingUrl();
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="https://192.168.1.100:8080"
+                class="w-40 px-2 py-0.5 text-xs border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                disabled={isSavingUrl()}
+              />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  saveUrl();
+                }}
+                disabled={isSavingUrl()}
+                class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+                title="Save (Enter)"
+              >
+                ✓
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  cancelEditingUrl();
+                }}
+                disabled={isSavingUrl()}
+                class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors disabled:opacity-50"
+                title="Cancel (Esc)"
+              >
+                ✕
+              </button>
             </div>
-            {/* AI context indicator */}
-            <Show when={isInAIContext()}>
-              <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-                </svg>
-              </span>
-            </Show>
-          </div>
+          </Show>
         </div>
       </td>
 

@@ -469,9 +469,10 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	// Flush headers immediately
 	flusher.Flush()
 
-	// Create context with timeout (5 minutes for complex analysis with multiple tool calls)
+	// Create context with timeout (15 minutes for complex analysis with multiple tool calls)
 	// Use background context to avoid browser disconnect canceling the request
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	// DeepSeek reasoning models + multiple tool executions can easily take 5+ minutes
+	ctx, cancel := context.WithTimeout(context.Background(), 900*time.Second)
 	defer cancel()
 
 	// Set up heartbeat to keep connection alive during long tool executions
@@ -660,8 +661,8 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		Str("target_host", req.TargetHost).
 		Msg("Executing approved command")
 
-	// Execute with timeout
-	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
+	// Execute with timeout (5 minutes for long-running commands)
+	ctx, cancel := context.WithTimeout(r.Context(), 300*time.Second)
 	defer cancel()
 
 	resp, err := h.aiService.RunCommand(ctx, ai.RunCommandRequest{

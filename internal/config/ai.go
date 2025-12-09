@@ -43,7 +43,7 @@ const (
 	DefaultAIModelAnthropic = "claude-opus-4-5-20251101"
 	DefaultAIModelOpenAI    = "gpt-4o"
 	DefaultAIModelOllama    = "llama3"
-	DefaultAIModelDeepSeek  = "deepseek-reasoner"
+	DefaultAIModelDeepSeek  = "deepseek-chat" // V3.2 with tool-use support
 	DefaultOllamaBaseURL    = "http://localhost:11434"
 	DefaultDeepSeekBaseURL  = "https://api.deepseek.com/chat/completions"
 )

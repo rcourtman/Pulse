@@ -163,6 +163,54 @@ func (s *Store) GetChildren(parentID string) []Resource {
 	return result
 }
 
+// FindContainerHost looks up a Docker container by name or ID and returns the
+// hostname of its parent DockerHost. This is used by AI routing to automatically
+// determine which host should execute commands for a container.
+// Returns empty string if not found.
+func (s *Store) FindContainerHost(containerNameOrID string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	if containerNameOrID == "" {
+		return ""
+	}
+	
+	containerNameLower := strings.ToLower(containerNameOrID)
+	
+	// Find the container
+	var container *Resource
+	for _, r := range s.resources {
+		if r.Type != ResourceTypeDockerContainer {
+			continue
+		}
+		// Match by name or ID (case-insensitive)
+		if strings.EqualFold(r.Name, containerNameOrID) ||
+		   strings.EqualFold(r.ID, containerNameOrID) ||
+		   strings.Contains(strings.ToLower(r.Name), containerNameLower) ||
+		   strings.Contains(strings.ToLower(r.ID), containerNameLower) {
+			container = r
+			break
+		}
+	}
+	
+	if container == nil || container.ParentID == "" {
+		return ""
+	}
+	
+	// Find the parent DockerHost
+	parent := s.resources[container.ParentID]
+	if parent == nil {
+		return ""
+	}
+	
+	// Return the hostname from identity, or the name
+	if parent.Identity != nil && parent.Identity.Hostname != "" {
+		return parent.Identity.Hostname
+	}
+	return parent.Name
+}
+
+
 // Remove removes a resource from the store.
 func (s *Store) Remove(id string) {
 	s.mu.Lock()
