@@ -178,6 +178,7 @@ func (r *Router) setupRoutes() {
 	r.notificationQueueHandlers = NewNotificationQueueHandlers(r.monitor)
 	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
 	dockerMetadataHandler := NewDockerMetadataHandler(r.config.DataPath)
+	hostMetadataHandler := NewHostMetadataHandler(r.config.DataPath)
 	r.configHandlers = NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings)
 	updateHandlers := NewUpdateHandlers(r.updateManager, r.updateHistory)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.monitor, r.wsHub)
@@ -271,6 +272,30 @@ func (r *Router) setupRoutes() {
 				return
 			}
 			dockerMetadataHandler.HandleDeleteMetadata(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	// Host metadata routes
+	r.mux.HandleFunc("/api/hosts/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, hostMetadataHandler.HandleGetMetadata)))
+	r.mux.HandleFunc("/api/hosts/metadata/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			if !ensureScope(w, req, config.ScopeMonitoringRead) {
+				return
+			}
+			hostMetadataHandler.HandleGetMetadata(w, req)
+		case http.MethodPut, http.MethodPost:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
+			hostMetadataHandler.HandleUpdateMetadata(w, req)
+		case http.MethodDelete:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
+			hostMetadataHandler.HandleDeleteMetadata(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}

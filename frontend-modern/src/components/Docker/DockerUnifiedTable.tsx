@@ -1195,13 +1195,10 @@ const DockerContainerRow: Component<{
                 <Show
                   when={isEditingUrl()}
                   fallback={
-                    <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5 flex-1 min-w-0 group/name">
                       <span
-                        class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none truncate"
-                        style="cursor: text;"
-                        title={`${containerTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
-                        onClick={startEditingUrl}
-                        data-resource-name-editable
+                        class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none truncate"
+                        title={containerTitle()}
                       >
                         {container.name || container.id}
                       </span>
@@ -1231,6 +1228,17 @@ const DockerContainerRow: Component<{
                           </svg>
                         </a>
                       </Show>
+                      {/* Edit URL button - shows on hover */}
+                      <button
+                        type="button"
+                        onClick={startEditingUrl}
+                        class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
+                        title={customUrl() ? 'Edit URL' : 'Add URL'}
+                      >
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
                       <Show when={props.showHostContext}>
                         <span
                           class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300 flex-shrink-0 max-w-[120px]"
@@ -2078,13 +2086,10 @@ const DockerServiceRow: Component<{
                 <Show
                   when={isEditingUrl()}
                   fallback={
-                    <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5 flex-1 min-w-0 group/name">
                       <span
-                        class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none"
-                        style="cursor: text;"
-                        title={`${serviceTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
-                        onClick={startEditingUrl}
-                        data-resource-name-editable
+                        class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none"
+                        title={serviceTitle()}
                       >
                         {service.name || service.id || 'Service'}
                       </span>
@@ -2102,6 +2107,17 @@ const DockerServiceRow: Component<{
                           </svg>
                         </a>
                       </Show>
+                      {/* Edit URL button - shows on hover */}
+                      <button
+                        type="button"
+                        onClick={startEditingUrl}
+                        class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
+                        title={customUrl() ? 'Edit URL' : 'Add URL'}
+                      >
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
                       <Show when={service.stack && !isEditingUrl()}>
                         <span class="text-[10px] text-gray-500 dark:text-gray-400 truncate" title={`Stack: ${service.stack}`}>
                           Stack: {service.stack}

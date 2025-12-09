@@ -215,6 +215,7 @@ func (s *Service) LoadConfig() error {
 	log.Info().
 		Str("provider", cfg.Provider).
 		Str("model", cfg.GetModel()).
+		Bool("autonomous_mode", cfg.AutonomousMode).
 		Msg("AI service initialized")
 
 	return nil
@@ -397,6 +398,50 @@ func isDangerousCommand(cmd string) bool {
 	}
 
 	if dangerousCommands[baseCmd] {
+		// Special case: allow read-only apt/apt-get operations
+		if baseCmd == "apt" || baseCmd == "apt-get" {
+			// First, check if it's a dry-run/simulate command (safe even for upgrade/install)
+			for _, part := range parts {
+				if part == "--dry-run" || part == "-s" || part == "--simulate" || part == "--just-print" {
+					return false // Dry-run is always safe
+				}
+			}
+			// Check for inherently read-only operations
+			safeAptOps := []string{"update", "list", "show", "search", "policy", "madison", "depends", "rdepends", "changelog"}
+			for _, safeOp := range safeAptOps {
+				if len(parts) > 1 && parts[1] == safeOp {
+					return false // Safe read-only operation
+				}
+				// Also handle sudo apt <op>
+				if len(parts) > 2 && parts[0] == "sudo" && parts[2] == safeOp {
+					return false
+				}
+			}
+		}
+		// Special case: allow read-only systemctl operations
+		if baseCmd == "systemctl" {
+			safeSystemctlOps := []string{"status", "show", "list-units", "list-unit-files", "is-active", "is-enabled", "is-failed", "cat"}
+			for _, safeOp := range safeSystemctlOps {
+				if len(parts) > 1 && parts[1] == safeOp {
+					return false
+				}
+				if len(parts) > 2 && parts[0] == "sudo" && parts[2] == safeOp {
+					return false
+				}
+			}
+		}
+		// Special case: allow read-only dpkg operations  
+		if baseCmd == "dpkg" {
+			safeDpkgOps := []string{"-l", "--list", "-L", "--listfiles", "-s", "--status", "-S", "--search", "-p", "--print-avail", "--get-selections"}
+			for _, safeOp := range safeDpkgOps {
+				if len(parts) > 1 && parts[1] == safeOp {
+					return false
+				}
+				if len(parts) > 2 && parts[0] == "sudo" && parts[2] == safeOp {
+					return false
+				}
+			}
+		}
 		return true
 	}
 
@@ -860,15 +905,29 @@ Always execute the commands rather than telling the user how to do it.`
 		})
 
 		// Execute each tool call and add results
+		// Track if any command needs approval - if so, we'll stop the loop after processing
+		anyNeedsApproval := false
 		for _, tc := range resp.ToolCalls {
 			toolInput := s.getToolInputDisplay(tc)
 
-		// Check if this command needs approval
+			// Check if this command needs approval
 			needsApproval := false
 			if tc.Name == "run_command" {
 				cmd, _ := tc.Input["command"].(string)
 				runOnHost, _ := tc.Input["run_on_host"].(bool)
 				targetHost, _ := tc.Input["target_host"].(string)
+
+				// If AI didn't specify target_host, try to get it from request context
+				// This is crucial for proper routing when the command is approved
+				if targetHost == "" {
+					if node, ok := req.Context["node"].(string); ok && node != "" {
+						targetHost = node
+					} else if node, ok := req.Context["hostname"].(string); ok && node != "" {
+						targetHost = node
+					} else if node, ok := req.Context["host_name"].(string); ok && node != "" {
+						targetHost = node
+					}
+				}
 
 				isAuto := s.IsAutonomous()
 				isReadOnly := isReadOnlyCommand(cmd)
@@ -881,10 +940,13 @@ Always execute the commands rather than telling the user how to do it.`
 					Str("target_host", targetHost).
 					Msg("Checking command approval")
 
-				// Dangerous commands ALWAYS need approval, even in autonomous mode
-				// In non-autonomous mode, non-read-only commands also need approval
-				if isDangerous || (!isAuto && !isReadOnly) {
+				// In autonomous mode, NO commands need approval - full trust
+				// In non-autonomous mode:
+				//   - Dangerous commands always need approval
+				//   - Non-read-only commands need approval
+				if !isAuto && (isDangerous || !isReadOnly) {
 					needsApproval = true
+					anyNeedsApproval = true
 					// Send approval needed event
 					callback(StreamEvent{
 						Type: "approval_needed",
@@ -904,20 +966,11 @@ Always execute the commands rather than telling the user how to do it.`
 			var execution ToolExecution
 
 			if needsApproval {
-				// Don't execute - tell the AI the command needs user approval
-				// The approval button has been sent to the frontend - tell AI to direct user to it
-				result = fmt.Sprintf("COMMAND_BLOCKED: This command (%s) requires user approval and was NOT executed. "+
-					"An approval button has been displayed to the user in the chat. "+
-					"DO NOT attempt to run this command again. "+
-					"Tell the user to click the 'Run' button that appeared above to execute the command, "+
-					"or explain what the command does if they need help deciding.", toolInput)
-				execution = ToolExecution{
-					Name:    tc.Name,
-					Input:   toolInput,
-					Output:  result,
-					Success: false,
-				}
-				toolExecutions = append(toolExecutions, execution)
+				// Don't execute - command needs user approval
+				// We'll break out of the loop after processing all tool calls
+				// Note: We don't add to toolExecutions here because the approval_needed event
+				// already tells the frontend to show the approval UI
+				result = fmt.Sprintf("Awaiting user approval: %s", toolInput)
 			} else {
 				// Stream tool start event
 				callback(StreamEvent{
@@ -959,6 +1012,20 @@ Always execute the commands rather than telling the user how to do it.`
 					IsError:   !execution.Success,
 				},
 			})
+		}
+
+		// If any command needed approval, stop the agentic loop here.
+		// Don't call the AI again with "COMMAND_BLOCKED" results - this causes duplicate
+		// approval requests and confusing "click the button" messages.
+		// The frontend will show approval buttons, and user action will continue the conversation.
+		if anyNeedsApproval {
+			log.Info().
+				Int("pending_approvals", len(resp.ToolCalls)).
+				Int("iteration", iteration).
+				Msg("Stopping AI loop - commands need user approval")
+			// Use the AI's current response as final content (if any)
+			// This preserves any explanation the AI provided before requesting the command
+			break
 		}
 	}
 

@@ -241,6 +241,26 @@ else
         log_info "Production mode: Using dev config directory: ${PULSE_DATA_DIR}"
     fi
 
+    # Auto-restore encryption key from backup if missing
+    if [[ ! -f "${PULSE_DATA_DIR}/.encryption.key" ]]; then
+        BACKUP_KEY=$(find "${PULSE_DATA_DIR}" -maxdepth 1 -name '.encryption.key.bak*' -type f 2>/dev/null | head -1)
+        if [[ -n "${BACKUP_KEY}" ]] && [[ -f "${BACKUP_KEY}" ]]; then
+            echo ""
+            log_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+            log_error "!! ENCRYPTION KEY WAS MISSING - AUTO-RESTORING FROM BACKUP !!"
+            log_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+            log_error "!! Backup used: ${BACKUP_KEY}"
+            log_error "!! "
+            log_error "!! To find out what deleted the key, run:"
+            log_error "!!   sudo journalctl -u encryption-key-watcher -n 100"
+            log_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+            echo ""
+            cp -f "${BACKUP_KEY}" "${PULSE_DATA_DIR}/.encryption.key"
+            chmod 600 "${PULSE_DATA_DIR}/.encryption.key"
+            log_info "Restored encryption key from backup"
+        fi
+    fi
+
     if [[ -z ${PULSE_ENCRYPTION_KEY:-} ]]; then
         if [[ -f "${PULSE_DATA_DIR}/.encryption.key" ]]; then
             export PULSE_ENCRYPTION_KEY="$(<"${PULSE_DATA_DIR}/.encryption.key")"

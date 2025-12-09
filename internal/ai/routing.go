@@ -59,11 +59,10 @@ func (e *RoutingError) ForAI() string {
 // This is the authoritative routing function that should be used for all command execution.
 //
 // Routing priority:
-// 1. VMID lookup from state (most reliable for pct/qm commands)
-// 2. Explicit "node" field in context
-// 3. Explicit "guest_node" field in context  
-// 4. "hostname" field for host targets
-// 5. VMID extracted from target ID (last resort)
+// 1. VMID lookup from command (for pct/qm commands)
+// 2. Unified ResourceProvider lookup (PRIMARY - uses the new infrastructure model)
+// 3. Explicit context fields (FALLBACK - for backwards compatibility)
+// 4. VMID extracted from target ID
 //
 // Agent matching is EXACT only - no substring matching to prevent false positives.
 // If no direct match, cluster peer routing is attempted.
@@ -140,51 +139,58 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 		}
 	}
 
-	// Step 2: Try context-based routing (explicit node information)
+	// Step 2: Try unified ResourceProvider lookup (PRIMARY method for workloads)
+	// This uses the new redesigned infrastructure model which knows the relationships
+	// between all resources (containers → hosts, VMs → nodes, etc.)
 	if result.TargetNode == "" {
-		if node, ok := req.Context["node"].(string); ok && node != "" {
-			result.TargetNode = strings.ToLower(node)
-			result.RoutingMethod = "context_node"
-			log.Debug().
-				Str("node", node).
-				Str("command", command).
-				Msg("Routing via explicit 'node' in context")
-		} else if node, ok := req.Context["guest_node"].(string); ok && node != "" {
-			result.TargetNode = strings.ToLower(node)
-			result.RoutingMethod = "context_guest_node"
-			log.Debug().
-				Str("guest_node", node).
-				Str("command", command).
-				Msg("Routing via 'guest_node' in context")
-		} else if req.TargetType == "host" {
-			// Check multiple possible keys for hostname - frontend uses host_name
-			hostname := ""
-			if h, ok := req.Context["hostname"].(string); ok && h != "" {
-				hostname = h
-			} else if h, ok := req.Context["host_name"].(string); ok && h != "" {
-				hostname = h
+		s.mu.RLock()
+		rp := s.resourceProvider
+		s.mu.RUnlock()
+		
+		if rp != nil {
+			// Try to find the host for this workload
+			resourceName := ""
+			if name, ok := req.Context["containerName"].(string); ok && name != "" {
+				resourceName = name
+			} else if name, ok := req.Context["name"].(string); ok && name != "" {
+				resourceName = name
+			} else if name, ok := req.Context["guestName"].(string); ok && name != "" {
+				resourceName = name
 			}
-			if hostname != "" {
-				result.TargetNode = strings.ToLower(hostname)
-				result.RoutingMethod = "context_hostname"
-				log.Debug().
-					Str("hostname", hostname).
-					Str("command", command).
-					Msg("Routing via hostname in context")
-			} else {
-				// For host target type with no node info, log a warning
-				// This is a common source of routing issues
-				log.Warn().
-					Str("target_type", req.TargetType).
-					Str("target_id", req.TargetID).
-					Str("command", command).
-					Msg("Host command with no node/hostname in context - may route to wrong agent")
-				result.Warnings = append(result.Warnings,
-					"No target host specified in context. Use target_host parameter for reliable routing.")
+			
+			if resourceName != "" {
+				if host := rp.FindContainerHost(resourceName); host != "" {
+					result.TargetNode = strings.ToLower(host)
+					result.RoutingMethod = "resource_provider_lookup"
+					log.Info().
+						Str("resource_name", resourceName).
+						Str("host", host).
+						Str("target_type", req.TargetType).
+						Str("command", command).
+						Msg("Routing via unified ResourceProvider")
+				}
 			}
 		}
 	}
 
+	// Step 3: Fallback to explicit context fields (backwards compatibility)
+	// These are checked in order of specificity
+	if result.TargetNode == "" {
+		// Try the most specific fields first
+		hostFields := []string{"node", "host", "guest_node", "hostname", "host_name", "target_host"}
+		for _, field := range hostFields {
+			if value, ok := req.Context[field].(string); ok && value != "" {
+				result.TargetNode = strings.ToLower(value)
+				result.RoutingMethod = "context_" + field
+				log.Debug().
+					Str("field", field).
+					Str("value", value).
+					Str("command", command).
+					Msg("Routing via context field (fallback)")
+				break
+			}
+		}
+	}
 
 	// Step 3: Extract VMID from target ID and look up in state
 	if result.TargetNode == "" && req.TargetID != "" {
