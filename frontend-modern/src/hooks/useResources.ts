@@ -225,12 +225,29 @@ export function useResources(): UseResourcesReturn {
 /**
  * Helper hook for resource-to-legacy-type conversion.
  * This helps during migration when components still expect legacy types.
+ * 
+ * IMPORTANT: This hook includes fallback logic for initial page loads.
+ * The unified resources array is populated by monitor broadcasts, but the
+ * initial WebSocket state may not include it. In that case, we fall back
+ * to the legacy arrays (nodes, vms, containers, etc.) from the WebSocket state.
  */
 export function useResourcesAsLegacy() {
     const { resources, byType } = useResources();
 
+    // Get the WebSocket store for legacy array fallback
+    const wsStore = getGlobalWebSocketStore();
+
+    // Check if we have unified resources (populated after first broadcast)
+    const hasUnifiedResources = createMemo(() => resources().length > 0);
+
     // Convert resources to legacy VM format
+    // Falls back to legacy state.vms array when unified resources aren't yet populated
     const asVMs = createMemo(() => {
+        // If we don't have unified resources yet, use legacy arrays directly
+        if (!hasUnifiedResources()) {
+            return wsStore.state.vms ?? [];
+        }
+
         return byType('vm').map(r => {
             const platformData = r.platformData as Record<string, unknown> | undefined;
             return {
@@ -255,6 +272,16 @@ export function useResourcesAsLegacy() {
                     free: r.disk.free ?? 0,
                     usage: r.disk.current,
                 } : { total: 0, used: 0, free: 0, usage: 0 },
+                // IP and OS fields - crucial for the Dashboard columns
+                ipAddresses: (platformData?.ipAddresses as string[] | undefined) ?? (r.identity?.ips as string[] | undefined),
+                osName: platformData?.osName as string | undefined,
+                osVersion: platformData?.osVersion as string | undefined,
+                agentVersion: platformData?.agentVersion as string | undefined,
+                networkInterfaces: platformData?.networkInterfaces as Array<{
+                    name: string;
+                    mac?: string;
+                    addresses?: string[];
+                }> | undefined,
                 networkIn: r.network?.rxBytes ?? 0,
                 networkOut: r.network?.txBytes ?? 0,
                 diskRead: platformData?.diskRead as number ?? 0,
@@ -270,7 +297,13 @@ export function useResourcesAsLegacy() {
     });
 
     // Convert resources to legacy Container format
+    // Falls back to legacy state.containers array when unified resources aren't yet populated
     const asContainers = createMemo(() => {
+        // If we don't have unified resources yet, use legacy arrays directly
+        if (!hasUnifiedResources()) {
+            return wsStore.state.containers ?? [];
+        }
+
         return byType('container').map(r => {
             const platformData = r.platformData as Record<string, unknown> | undefined;
             return {
@@ -295,6 +328,15 @@ export function useResourcesAsLegacy() {
                     free: r.disk.free ?? 0,
                     usage: r.disk.current,
                 } : { total: 0, used: 0, free: 0, usage: 0 },
+                // IP and OS fields - crucial for the Dashboard columns
+                ipAddresses: (platformData?.ipAddresses as string[] | undefined) ?? (r.identity?.ips as string[] | undefined),
+                osName: platformData?.osName as string | undefined,
+                osVersion: platformData?.osVersion as string | undefined,
+                networkInterfaces: platformData?.networkInterfaces as Array<{
+                    name: string;
+                    mac?: string;
+                    addresses?: string[];
+                }> | undefined,
                 networkIn: r.network?.rxBytes ?? 0,
                 networkOut: r.network?.txBytes ?? 0,
                 diskRead: platformData?.diskRead as number ?? 0,
@@ -310,10 +352,25 @@ export function useResourcesAsLegacy() {
     });
 
     // Convert resources to legacy Host format
+    // Falls back to legacy state.hosts array when unified resources aren't yet populated
     const asHosts = createMemo(() => {
-        return byType('host').map(r => {
-            // Extract platform-specific data if available
-            const platformData = r.platformData as Record<string, unknown> | undefined;
+        // If we don't have unified resources yet, use legacy arrays directly
+        if (!hasUnifiedResources()) {
+            return wsStore.state.hosts ?? [];
+        }
+
+        return byType('host').map((r) => {
+            // Extract platform-specific data - unwrap SolidJS Proxy objects into plain JS objects
+            const platformData = r.platformData ? JSON.parse(JSON.stringify(r.platformData)) as Record<string, unknown> : undefined;
+
+            // Interfaces from platformData
+            const interfaces = platformData?.interfaces as Array<{
+                name: string;
+                mac?: string;
+                addresses?: string[];
+                rxBytes?: number;
+                txBytes?: number;
+            }> | undefined;
 
             return {
                 id: r.id,
@@ -347,13 +404,8 @@ export function useResourcesAsLegacy() {
                     readBytes?: number;
                     writeBytes?: number;
                 }> | undefined,
-                networkInterfaces: platformData?.networkInterfaces as Array<{
-                    name: string;
-                    mac?: string;
-                    addresses?: string[];
-                    rxBytes?: number;
-                    txBytes?: number;
-                }> | undefined,
+                // Map backend 'interfaces' to frontend 'networkInterfaces'
+                networkInterfaces: interfaces,
                 sensors: platformData?.sensors as {
                     temperatureCelsius?: Record<string, number>;
                     fanRpm?: Record<string, number>;
@@ -378,15 +430,40 @@ export function useResourcesAsLegacy() {
                 agentVersion: platformData?.agentVersion as string | undefined,
                 tokenId: platformData?.tokenId as string | undefined,
                 tokenName: platformData?.tokenName as string | undefined,
-                tags: r.tags,
+                tags: r.tags ? [...r.tags] : undefined,
             };
         });
     });
 
     // Convert resources to legacy Node format
+    // Falls back to legacy state.nodes array when unified resources aren't yet populated
     const asNodes = createMemo(() => {
+        // If we don't have unified resources yet, use legacy arrays directly
+        if (!hasUnifiedResources()) {
+            // Return legacy nodes array as-is (it's already in the right format)
+            return wsStore.state.nodes ?? [];
+        }
+
         return byType('node').map(r => {
-            const platformData = r.platformData as Record<string, unknown> | undefined;
+            // Unwrap SolidJS Proxy objects into plain JS objects
+            const platformData = r.platformData ? JSON.parse(JSON.stringify(r.platformData)) as Record<string, unknown> : undefined;
+
+            // Build temperature object from unified resource
+            // The unified resource has temperature as a simple number,
+            // but legacy components expect the full Temperature struct
+            let temperature = undefined;
+            if (r.temperature !== undefined && r.temperature !== null && r.temperature > 0) {
+                temperature = {
+                    cpuPackage: r.temperature,
+                    cpuMax: r.temperature,
+                    available: true,
+                    hasCPU: true,
+                    hasGPU: false,
+                    hasNVMe: false,
+                    lastUpdate: new Date(r.lastSeen).toISOString(),
+                };
+            }
+
             return {
                 id: r.id,
                 name: r.name,
@@ -395,7 +472,7 @@ export function useResourcesAsLegacy() {
                 host: platformData?.host as string ?? '',
                 status: r.status,
                 type: 'node',
-                cpu: r.cpu?.current ?? 0,
+                cpu: (r.cpu?.current ?? 0) / 100, // Convert from percentage to ratio for legacy components
                 memory: r.memory ? {
                     total: r.memory.total ?? 0,
                     used: r.memory.used ?? 0,
@@ -413,7 +490,7 @@ export function useResourcesAsLegacy() {
                 kernelVersion: platformData?.kernelVersion as string ?? '',
                 pveVersion: platformData?.pveVersion as string ?? '',
                 cpuInfo: platformData?.cpuInfo ?? { model: '', cores: 0, sockets: 0, mhz: '' },
-                temperature: platformData?.temperature,
+                temperature,
                 lastSeen: new Date(r.lastSeen).toISOString(),
                 connectionHealth: platformData?.connectionHealth as string ?? 'unknown',
                 isClusterMember: platformData?.isClusterMember as boolean | undefined,
@@ -423,20 +500,30 @@ export function useResourcesAsLegacy() {
     });
 
     // Convert resources to legacy DockerHost format (including nested containers)
+    // Falls back to legacy state.dockerHosts array when unified resources aren't yet populated
     const asDockerHosts = createMemo(() => {
+        // If we don't have unified resources yet, use legacy arrays directly
+        if (!hasUnifiedResources()) {
+            return wsStore.state.dockerHosts ?? [];
+        }
+
         const dockerHostResources = byType('docker-host');
         const dockerContainerResources = byType('docker-container');
 
         return dockerHostResources.map(h => {
-            const platformData = h.platformData as Record<string, unknown> | undefined;
+            // Unwrap SolidJS Proxy objects into plain JS objects
+            const platformData = h.platformData ? JSON.parse(JSON.stringify(h.platformData)) as Record<string, unknown> : undefined;
 
             // Find containers belonging to this host
             const hostContainers = dockerContainerResources
                 .filter(c => c.parentId === h.id)
                 .map(c => {
-                    const cPlatform = c.platformData as Record<string, unknown> | undefined;
+                    const cPlatform = c.platformData ? JSON.parse(JSON.stringify(c.platformData)) as Record<string, unknown> : undefined;
+                    // Extract original container ID from compound resource ID (hostID/containerID)
+                    // This is needed for sparkline metrics to match the sampler which uses original IDs
+                    const originalContainerId = c.id.includes('/') ? c.id.split('/').pop()! : c.id;
                     return {
-                        id: c.id,
+                        id: originalContainerId,
                         name: c.name,
                         image: cPlatform?.image as string ?? '',
                         state: c.status === 'running' ? 'running' : 'exited',
@@ -455,6 +542,10 @@ export function useResourcesAsLegacy() {
                         ports: cPlatform?.ports,
                         labels: cPlatform?.labels as Record<string, string> | undefined,
                         networks: cPlatform?.networks,
+                        mounts: cPlatform?.mounts,
+                        blockIo: cPlatform?.blockIo,
+                        writableLayerBytes: cPlatform?.writableLayerBytes as number | undefined,
+                        rootFilesystemBytes: cPlatform?.rootFilesystemBytes as number | undefined,
                     };
                 });
 
@@ -483,7 +574,8 @@ export function useResourcesAsLegacy() {
                     usage: h.memory.current,
                 } : undefined,
                 disks: platformData?.disks,
-                networkInterfaces: platformData?.networkInterfaces,
+                // Map backend 'interfaces' to frontend 'networkInterfaces'
+                networkInterfaces: platformData?.interfaces,
                 status: h.status === 'online' || h.status === 'running' ? 'online' : h.status,
                 lastSeen: h.lastSeen,
                 intervalSeconds: platformData?.intervalSeconds as number ?? 30,

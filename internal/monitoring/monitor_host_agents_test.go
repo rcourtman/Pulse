@@ -227,8 +227,8 @@ func TestEvaluateHostAgentsZeroIntervalUsesDefault(t *testing.T) {
 	t.Cleanup(func() { monitor.alertManager.Stop() })
 
 	hostID := "host-zero-interval"
-	// IntervalSeconds = 0, LastSeen = now, should use default interval (30s)
-	// Default window = 30s * 4 = 120s, but minimum is 30s, so window = 30s
+	// IntervalSeconds = 0, LastSeen = now, should use default interval (60s)
+	// Default window = 60s * 6 = 360s, but minimum is 60s, so window = 60s
 	// With LastSeen = now, the host should be healthy
 	monitor.state.UpsertHost(models.Host{
 		ID:              hostID,
@@ -288,15 +288,15 @@ func TestEvaluateHostAgentsWindowClampedToMinimum(t *testing.T) {
 	t.Cleanup(func() { monitor.alertManager.Stop() })
 
 	hostID := "host-min-window"
-	// IntervalSeconds = 1, so window = 1s * 4 = 4s, but minimum is 30s
-	// Host last seen 25s ago should still be healthy (within 30s minimum window)
+	// IntervalSeconds = 1, so window = 1s * 6 = 6s, but minimum is 60s
+	// Host last seen 55s ago should still be healthy (within 60s minimum window)
 	now := time.Now()
 	monitor.state.UpsertHost(models.Host{
 		ID:              hostID,
 		Hostname:        "min-window.local",
 		Status:          "unknown",
 		IntervalSeconds: 1, // Very small interval
-		LastSeen:        now.Add(-25 * time.Second),
+		LastSeen:        now.Add(-55 * time.Second),
 	})
 
 	monitor.evaluateHostAgents(now)
@@ -304,7 +304,7 @@ func TestEvaluateHostAgentsWindowClampedToMinimum(t *testing.T) {
 	snapshot := monitor.state.GetSnapshot()
 	connKey := hostConnectionPrefix + hostID
 	if healthy, ok := snapshot.ConnectionHealth[connKey]; !ok || !healthy {
-		t.Fatalf("expected connection health true (window clamped to minimum 30s), got %v (exists=%v)", healthy, ok)
+		t.Fatalf("expected connection health true (window clamped to minimum 60s), got %v (exists=%v)", healthy, ok)
 	}
 
 	for _, host := range snapshot.Hosts {
@@ -323,7 +323,7 @@ func TestEvaluateHostAgentsWindowClampedToMaximum(t *testing.T) {
 	t.Cleanup(func() { monitor.alertManager.Stop() })
 
 	hostID := "host-max-window"
-	// IntervalSeconds = 300 (5 min), so window = 300s * 4 = 1200s (20 min)
+	// IntervalSeconds = 300 (5 min), so window = 300s * 6 = 1800s (30 min)
 	// But maximum is 10 min = 600s
 	// Host last seen 11 minutes ago should be unhealthy (outside 10 min max window)
 	now := time.Now()
@@ -360,7 +360,7 @@ func TestEvaluateHostAgentsRecentLastSeenIsHealthy(t *testing.T) {
 
 	hostID := "host-recent"
 	now := time.Now()
-	// IntervalSeconds = 30, window = 30s * 4 = 120s (clamped to min 30s is not needed)
+	// IntervalSeconds = 30, window = 30s * 6 = 180s (clamped to min 60s is not needed)
 	// LastSeen = 10s ago, should be healthy
 	monitor.state.UpsertHost(models.Host{
 		ID:              hostID,
@@ -427,7 +427,7 @@ func TestEvaluateHostAgentsOldLastSeenIsUnhealthy(t *testing.T) {
 
 	hostID := "host-old-lastseen"
 	now := time.Now()
-	// IntervalSeconds = 30, window = 30s * 4 = 120s
+	// IntervalSeconds = 30, window = 30s * 6 = 180s
 	// LastSeen = 5 minutes ago, should be unhealthy
 	monitor.state.UpsertHost(models.Host{
 		ID:              hostID,

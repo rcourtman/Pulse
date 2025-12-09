@@ -2,7 +2,7 @@ import type { Component } from 'solid-js';
 import { For, Show, createMemo, createSignal, onMount, onCleanup } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { useNavigate } from '@solidjs/router';
-import type { Host } from '@/types/api';
+import type { Host, HostRAIDArray } from '@/types/api';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -18,6 +18,7 @@ import { useBreakpoint, type ColumnPriority } from '@/hooks/useBreakpoint';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { aiChatStore } from '@/stores/aiChat';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { useResourcesAsLegacy } from '@/hooks/useResources';
 
 // Column definition for hosts table
 export interface HostColumnDef {
@@ -262,14 +263,214 @@ function HostTemperatureCell(props: { sensors: Record<string, number> | null | u
   );
 }
 
-type SortKey = 'name' | 'platform' | 'cpu' | 'memory' | 'disk' | 'uptime';
-
-interface HostsOverviewProps {
-  hosts: Host[];
-  connectionHealth: Record<string, boolean>;
+// RAID status cell with rich tooltip showing array details
+interface HostRAIDStatusCellProps {
+  raid: HostRAIDArray[] | undefined;
 }
 
-export const HostsOverview: Component<HostsOverviewProps> = (props) => {
+function HostRAIDStatusCell(props: HostRAIDStatusCellProps) {
+  const [showTooltip, setShowTooltip] = createSignal(false);
+  const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
+
+  const hasArrays = () => props.raid && props.raid.length > 0;
+
+  // Analyze overall status
+  const status = createMemo(() => {
+    if (!props.raid || props.raid.length === 0) {
+      return { type: 'none' as const, label: '-', color: 'text-gray-400' };
+    }
+
+    let hasDegraded = false;
+    let hasRebuilding = false;
+    let maxRebuildPercent = 0;
+
+    for (const array of props.raid) {
+      const state = array.state.toLowerCase();
+      if (state.includes('degraded') || array.failedDevices > 0) {
+        hasDegraded = true;
+      }
+      if (state.includes('recover') || state.includes('resync') || array.rebuildPercent > 0) {
+        hasRebuilding = true;
+        maxRebuildPercent = Math.max(maxRebuildPercent, array.rebuildPercent);
+      }
+    }
+
+    if (hasDegraded) {
+      return { type: 'degraded' as const, label: 'Degraded', color: 'text-red-600 dark:text-red-400' };
+    }
+    if (hasRebuilding) {
+      return {
+        type: 'rebuilding' as const,
+        label: `${Math.round(maxRebuildPercent)}%`,
+        color: 'text-amber-600 dark:text-amber-400'
+      };
+    }
+    return { type: 'ok' as const, label: 'OK', color: 'text-green-600 dark:text-green-400' };
+  });
+
+  const handleMouseEnter = (e: MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
+    setShowTooltip(true);
+  };
+
+  const handleMouseLeave = () => {
+    setShowTooltip(false);
+  };
+
+  // Get state color for individual devices
+  const getDeviceStateColor = (state: string) => {
+    const s = state.toLowerCase();
+    if (s.includes('active') || s.includes('sync')) return 'text-green-400';
+    if (s.includes('spare')) return 'text-blue-400';
+    if (s.includes('faulty') || s.includes('removed')) return 'text-red-400';
+    if (s.includes('rebuilding')) return 'text-amber-400';
+    return 'text-gray-400';
+  };
+
+  // Get array state color
+  const getArrayStateColor = (array: HostRAIDArray) => {
+    const state = array.state.toLowerCase();
+    if (state.includes('degraded') || array.failedDevices > 0) return 'text-red-400';
+    if (state.includes('recover') || state.includes('resync') || array.rebuildPercent > 0) return 'text-amber-400';
+    if (state.includes('clean') || state.includes('active')) return 'text-green-400';
+    return 'text-gray-400';
+  };
+
+  return (
+    <>
+      <span
+        class={`inline-flex items-center gap-1 text-xs whitespace-nowrap ${status().color} ${hasArrays() ? 'cursor-help' : ''}`}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <Show when={hasArrays()} fallback={<span class="text-gray-400">—</span>}>
+          {/* Status icon */}
+          <Show when={status().type === 'ok'}>
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </Show>
+          <Show when={status().type === 'degraded'}>
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+          </Show>
+          <Show when={status().type === 'rebuilding'}>
+            <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+            </svg>
+          </Show>
+          <span class="text-[10px] font-medium">
+            {props.raid!.length > 1 ? `${props.raid!.length} ` : ''}{status().label}
+          </span>
+        </Show>
+      </span>
+
+      <Show when={showTooltip() && hasArrays()}>
+        <Portal mount={document.body}>
+          <div
+            class="fixed z-[9999] pointer-events-none"
+            style={{
+              left: `${tooltipPos().x}px`,
+              top: `${tooltipPos().y - 8}px`,
+              transform: 'translate(-50%, -100%)',
+            }}
+          >
+            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2.5 py-2 min-w-[200px] max-w-[320px] border border-gray-700">
+              <div class="font-medium mb-1.5 text-gray-300 border-b border-gray-700 pb-1 flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
+                </svg>
+                RAID Arrays ({props.raid!.length})
+              </div>
+
+              <div class="space-y-2">
+                <For each={props.raid}>
+                  {(array) => (
+                    <div class="border-b border-gray-700/50 pb-1.5 last:border-0 last:pb-0">
+                      {/* Array header */}
+                      <div class="flex items-center justify-between gap-2 mb-1">
+                        <div class="flex items-center gap-1.5">
+                          <span class="font-mono text-blue-400">{array.device}</span>
+                          <span class="text-gray-500 uppercase text-[9px]">{array.level}</span>
+                        </div>
+                        <span class={`font-medium capitalize ${getArrayStateColor(array)}`}>
+                          {array.state}
+                        </span>
+                      </div>
+
+                      {/* Array name if present */}
+                      <Show when={array.name}>
+                        <div class="text-[9px] text-gray-500 mb-1">{array.name}</div>
+                      </Show>
+
+                      {/* Device counts */}
+                      <div class="flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] text-gray-400 mb-1">
+                        <span>Active: <span class="text-green-400">{array.activeDevices}</span></span>
+                        <span>Working: <span class="text-gray-200">{array.workingDevices}</span></span>
+                        <Show when={array.spareDevices > 0}>
+                          <span>Spare: <span class="text-blue-400">{array.spareDevices}</span></span>
+                        </Show>
+                        <Show when={array.failedDevices > 0}>
+                          <span>Failed: <span class="text-red-400">{array.failedDevices}</span></span>
+                        </Show>
+                      </div>
+
+                      {/* Rebuild progress */}
+                      <Show when={array.rebuildPercent > 0}>
+                        <div class="mb-1">
+                          <div class="flex items-center justify-between text-[9px] mb-0.5">
+                            <span class="text-amber-400">Rebuilding</span>
+                            <span class="text-gray-300">{array.rebuildPercent.toFixed(1)}%</span>
+                          </div>
+                          <div class="h-1 bg-gray-700 rounded-full overflow-hidden">
+                            <div
+                              class="h-full bg-amber-500 transition-all duration-300"
+                              style={{ width: `${array.rebuildPercent}%` }}
+                            />
+                          </div>
+                          <Show when={array.rebuildSpeed}>
+                            <div class="text-[9px] text-gray-500 mt-0.5">
+                              Speed: {array.rebuildSpeed}
+                            </div>
+                          </Show>
+                        </div>
+                      </Show>
+
+                      {/* Individual devices */}
+                      <Show when={array.devices && array.devices.length > 0}>
+                        <div class="flex flex-wrap gap-1 mt-1">
+                          <For each={array.devices}>
+                            {(dev) => (
+                              <span
+                                class={`font-mono text-[9px] px-1 py-0.5 rounded bg-gray-800 ${getDeviceStateColor(dev.state)}`}
+                                title={`${dev.device} - ${dev.state}`}
+                              >
+                                {dev.device.replace('/dev/', '')}
+                              </span>
+                            )}
+                          </For>
+                        </div>
+                      </Show>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      </Show>
+    </>
+  );
+}
+
+type SortKey = 'name' | 'platform' | 'cpu' | 'memory' | 'disk' | 'uptime';
+
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+interface HostsOverviewProps { }
+
+export const HostsOverview: Component<HostsOverviewProps> = () => {
   const navigate = useNavigate();
   const wsContext = useWebSocket();
   const [search, setSearch] = createSignal('');
@@ -277,6 +478,10 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
   const [sortKey, setSortKey] = createSignal<SortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
   const { isMobile } = useBreakpoint();
+
+  // Use the hook directly to ensure reactivity is maintained
+  // This fixes the issue where props.hosts would not update when the underlying data changes
+  const { asHosts } = useResourcesAsLegacy();
 
   // Column visibility management
   const columnVisibility = useColumnVisibility(
@@ -331,16 +536,19 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
   const reconnecting = () => wsContext.reconnecting();
   const reconnect = () => wsContext.reconnect();
 
+  // Access asHosts() directly inside the memo to maintain reactivity
+  const hosts = () => asHosts() as Host[];
+
   const isInitialLoading = createMemo(() => {
-    return !connected() && !reconnecting() && props.hosts.length === 0;
+    return !connected() && !reconnecting() && hosts().length === 0;
   });
 
   const sortedHosts = createMemo(() => {
-    const hosts = [...props.hosts];
+    const hostList = [...hosts()];
     const key = sortKey();
     const direction = sortDirection();
 
-    return hosts.sort((a, b) => {
+    return hostList.sort((a: Host, b: Host) => {
       let comparison = 0;
       switch (key) {
         case 'name':
@@ -356,8 +564,8 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
           comparison = (a.memory?.usage ?? 0) - (b.memory?.usage ?? 0);
           break;
         case 'disk': {
-          const aDisk = a.disks?.reduce((sum, d) => sum + (d.usage ?? 0), 0) ?? 0;
-          const bDisk = b.disks?.reduce((sum, d) => sum + (d.usage ?? 0), 0) ?? 0;
+          const aDisk = a.disks?.reduce((sum: number, d: { usage?: number }) => sum + (d.usage ?? 0), 0) ?? 0;
+          const bDisk = b.disks?.reduce((sum: number, d: { usage?: number }) => sum + (d.usage ?? 0), 0) ?? 0;
           comparison = aDisk - bDisk;
           break;
         }
@@ -409,27 +617,6 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
   };
 
 
-
-  const getRaidStatus = (host: Host): { status: string; color: string } => {
-    if (!host.raid || host.raid.length === 0) return { status: '-', color: 'text-gray-400' };
-
-    let hasDegraded = false;
-    let hasRebuilding = false;
-
-    for (const array of host.raid) {
-      const state = array.state.toLowerCase();
-      if (state.includes('degraded') || array.failedDevices > 0) {
-        hasDegraded = true;
-      }
-      if (state.includes('recover') || state.includes('resync') || array.rebuildPercent > 0) {
-        hasRebuilding = true;
-      }
-    }
-
-    if (hasDegraded) return { status: 'Degraded', color: 'text-red-600 dark:text-red-400' };
-    if (hasRebuilding) return { status: 'Rebuild', color: 'text-amber-600 dark:text-amber-400' };
-    return { status: 'OK', color: 'text-green-600 dark:text-green-400' };
-  };
 
   const thClass = "px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap";
 
@@ -604,13 +791,13 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                             <th class={thClass}>Kernel</th>
                           </Show>
                           <Show when={isColVisible('raid')}>
-                            <th class={thClass}>RAID</th>
+                            <th class={thClass} title="Linux Software RAID (mdadm) Status">RAID</th>
                           </Show>
                         </tr>
                       </thead>
                       <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         <For each={filteredHosts()}>
-                          {(host) => <HostRow host={host} isColVisible={isColVisible} isMobile={isMobile} getDiskStats={getDiskStats} getRaidStatus={getRaidStatus} />}
+                          {(host) => <HostRow host={host} isColVisible={isColVisible} isMobile={isMobile} getDiskStats={getDiskStats} />}
                         </For>
                       </tbody>
                     </table>
@@ -661,8 +848,6 @@ interface HostRowProps {
   isMobile: () => boolean;
 
   getDiskStats: (host: Host) => { percent: number; used: number; total: number };
-
-  getRaidStatus: (host: Host) => { status: string; color: string };
 }
 
 const HostRow: Component<HostRowProps> = (props) => {
@@ -709,7 +894,6 @@ const HostRow: Component<HostRowProps> = (props) => {
   const cpuPercent = host.cpuUsage ?? 0;
   const memPercent = host.memory?.usage ?? 0;
   const diskStats = props.getDiskStats(host);
-  const raidStatus = props.getRaidStatus(host);
 
   const rowClass = () => {
     const base = 'transition-all duration-200';
@@ -909,9 +1093,7 @@ const HostRow: Component<HostRowProps> = (props) => {
       <Show when={props.isColVisible('raid')}>
         <td class="px-2 py-1 align-middle">
           <div class="flex justify-center">
-            <span class={`text-[10px] font-medium ${raidStatus.color}`}>
-              {raidStatus.status}
-            </span>
+            <HostRAIDStatusCell raid={host.raid} />
           </div>
         </td>
       </Show>

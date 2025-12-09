@@ -56,6 +56,7 @@ const StorageComponent = lazy(() => import('./components/Storage/Storage'));
 const Backups = lazy(() => import('./components/Backups/Backups'));
 const Replication = lazy(() => import('./components/Replication/Replication'));
 const MailGateway = lazy(() => import('./components/PMG/MailGateway'));
+const CephPage = lazy(() => import('./pages/Ceph'));
 const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
 );
@@ -105,18 +106,9 @@ function DockerRoute() {
   return <DockerHosts hosts={asDockerHosts() as any} activeAlerts={activeAlerts} />;
 }
 
-// Hosts route component - uses unified resources via useResourcesAsLegacy hook
+// Hosts route component - HostsOverview uses useResourcesAsLegacy directly for proper reactivity
 function HostsRoute() {
-  const wsContext = useContext(WebSocketContext);
-  if (!wsContext) {
-    return <div>Loading...</div>;
-  }
-  const { state } = wsContext;
-  const { asHosts } = useResourcesAsLegacy();
-
-  return (
-    <HostsOverview hosts={asHosts() as any} connectionHealth={state.connectionHealth ?? {}} />
-  );
+  return <HostsOverview />;
 }
 
 // Helper to detect if an update is actively in progress (not just checking for updates)
@@ -877,6 +869,7 @@ function App() {
       <Route path="/proxmox" component={() => <Navigate href="/proxmox/overview" />} />
       <Route path="/proxmox/overview" component={DashboardView} />
       <Route path="/proxmox/storage" component={StorageComponent} />
+      <Route path="/proxmox/ceph" component={CephPage} />
       <Route path="/proxmox/replication" component={Replication} />
       <Route path="/proxmox/mail" component={MailGateway} />
       <Route path="/proxmox/backups" component={Backups} />

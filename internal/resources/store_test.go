@@ -158,7 +158,8 @@ func TestDeduplicationByHostname(t *testing.T) {
 	}
 	store.Upsert(nodeResource)
 
-	// Add a host agent for the same server (agent source - should be preferred)
+	// Add a host agent for the same server (agent source)
+	// Different types should coexist, not merge
 	hostResource := Resource{
 		ID:           "host-agent/server1",
 		Type:         ResourceTypeHost,
@@ -166,7 +167,7 @@ func TestDeduplicationByHostname(t *testing.T) {
 		PlatformType: PlatformHostAgent,
 		SourceType:   SourceAgent,
 		Status:       StatusOnline,
-		CPU:          &MetricValue{Current: 55.0}, // Slightly different value
+		CPU:          &MetricValue{Current: 55.0},
 		LastSeen:     now,
 		Identity: &ResourceIdentity{
 			Hostname: "server1",
@@ -174,40 +175,51 @@ func TestDeduplicationByHostname(t *testing.T) {
 	}
 	store.Upsert(hostResource)
 
-	// We should only have 1 resource (the agent one, as it's preferred)
+	// Different types should coexist (node + host = 2 resources)
 	all := store.GetAll()
-	if len(all) != 1 {
-		t.Errorf("Expected 1 resource after dedup, got %d", len(all))
+	if len(all) != 2 {
+		t.Errorf("Expected 2 resources (node + host coexist), got %d", len(all))
 	}
 
-	// The agent resource should be the one stored
-	r, ok := store.Get("host-agent/server1")
+	// Both should be retrievable
+	_, ok := store.Get("pve1/node/server1")
 	if !ok {
-		t.Fatal("Failed to get agent resource")
+		t.Error("Node resource should be retrievable")
 	}
-	if r.SourceType != SourceAgent {
-		t.Errorf("Expected agent source, got %s", r.SourceType)
-	}
-	if r.CPU.Current != 55.0 {
-		t.Errorf("Expected CPU 55.0 from agent, got %f", r.CPU.Current)
-	}
-
-	// The node resource should redirect to the agent resource
-	if !store.IsSuppressed("pve1/node/server1") {
-		t.Error("Node resource should be suppressed")
-	}
-	preferred := store.GetPreferredID("pve1/node/server1")
-	if preferred != "host-agent/server1" {
-		t.Errorf("Expected preferred ID to be host-agent/server1, got %s", preferred)
-	}
-
-	// Accessing by suppressed ID should return the preferred resource
-	r, ok = store.Get("pve1/node/server1")
+	_, ok = store.Get("host-agent/server1")
 	if !ok {
-		t.Fatal("Should be able to get by suppressed ID")
+		t.Error("Host resource should be retrievable")
 	}
-	if r.ID != "host-agent/server1" {
-		t.Errorf("Expected to get agent resource when accessing by node ID, got %s", r.ID)
+
+	// Now test same-type deduplication: add another node with same hostname
+	nodeResource2 := Resource{
+		ID:           "pve2/node/server1",
+		Type:         ResourceTypeNode,
+		Name:         "server1",
+		PlatformType: PlatformProxmoxPVE,
+		SourceType:   SourceAPI,
+		Status:       StatusOnline,
+		CPU:          &MetricValue{Current: 60.0},
+		LastSeen:     now.Add(time.Second), // Newer
+		Identity: &ResourceIdentity{
+			Hostname: "server1",
+		},
+	}
+	store.Upsert(nodeResource2)
+
+	// Should still have 2 (newer node replaces old node, host remains)
+	all = store.GetAll()
+	if len(all) != 2 {
+		t.Errorf("Expected 2 resources after same-type dedup, got %d", len(all))
+	}
+
+	// The newer node should have replaced the old one
+	r, ok := store.Get("pve2/node/server1")
+	if !ok {
+		t.Error("Newer node should be present")
+	}
+	if r.CPU.Current != 60.0 {
+		t.Errorf("Expected CPU 60.0 from newer node, got %f", r.CPU.Current)
 	}
 }
 
@@ -233,7 +245,8 @@ func TestDeduplicationByMachineID(t *testing.T) {
 	}
 	store.Upsert(dockerHost)
 
-	// Add a host agent with the same machine ID but different hostname
+	// Add a host agent with the same machine ID but different type
+	// Different types should coexist
 	hostAgent := Resource{
 		ID:           "host-agent-1",
 		Type:         ResourceTypeHost,
@@ -241,7 +254,7 @@ func TestDeduplicationByMachineID(t *testing.T) {
 		PlatformType: PlatformHostAgent,
 		SourceType:   SourceAgent,
 		Status:       StatusOnline,
-		LastSeen:     now.Add(time.Second), // Slightly newer
+		LastSeen:     now.Add(time.Second),
 		Identity: &ResourceIdentity{
 			Hostname:  "server-production",
 			MachineID: machineID,
@@ -249,10 +262,32 @@ func TestDeduplicationByMachineID(t *testing.T) {
 	}
 	store.Upsert(hostAgent)
 
-	// Should only have 1 resource (the newer one, since both are agent sources)
+	// Different types should coexist (docker-host + host = 2 resources)
 	all := store.GetAll()
-	if len(all) != 1 {
-		t.Errorf("Expected 1 resource after dedup by machineID, got %d", len(all))
+	if len(all) != 2 {
+		t.Errorf("Expected 2 resources (different types coexist with same machineID), got %d", len(all))
+	}
+
+	// Now test same-type deduplication: add another host with same machine ID
+	hostAgent2 := Resource{
+		ID:           "host-agent-2",
+		Type:         ResourceTypeHost, // Same type as first host
+		Name:         "server-newer",
+		PlatformType: PlatformHostAgent,
+		SourceType:   SourceAgent,
+		Status:       StatusOnline,
+		LastSeen:     now.Add(2 * time.Second), // Newer
+		Identity: &ResourceIdentity{
+			Hostname:  "server-newer",
+			MachineID: machineID,
+		},
+	}
+	store.Upsert(hostAgent2)
+
+	// Should still have 2 (newer host replaces old host, docker-host remains)
+	all = store.GetAll()
+	if len(all) != 2 {
+		t.Errorf("Expected 2 resources after same-type dedup, got %d", len(all))
 	}
 }
 
@@ -278,13 +313,14 @@ func TestDeduplicationByIP(t *testing.T) {
 	}
 	store.Upsert(node)
 
-	// Add a host agent with the same IP
+	// Add a host agent with the same IP but different type
+	// Different types should coexist
 	host := Resource{
 		ID:           "host-1",
 		Type:         ResourceTypeHost,
 		Name:         "different-hostname",
 		PlatformType: PlatformHostAgent,
-		SourceType:   SourceAgent, // Agent preferred
+		SourceType:   SourceAgent,
 		Status:       StatusOnline,
 		LastSeen:     now,
 		Identity: &ResourceIdentity{
@@ -294,16 +330,20 @@ func TestDeduplicationByIP(t *testing.T) {
 	}
 	store.Upsert(host)
 
-	// Should only have 1 resource
+	// Different types should coexist (node + host = 2 resources)
 	all := store.GetAll()
-	if len(all) != 1 {
-		t.Errorf("Expected 1 resource after dedup by IP, got %d", len(all))
+	if len(all) != 2 {
+		t.Errorf("Expected 2 resources (different types coexist), got %d", len(all))
 	}
 
-	// Agent should be preferred
-	r, _ := store.Get("host-1")
-	if r == nil || r.SourceType != SourceAgent {
-		t.Error("Agent resource should be preferred")
+	// Both should be retrievable
+	_, ok := store.Get("node-1")
+	if !ok {
+		t.Error("Node should be retrievable")
+	}
+	_, ok = store.Get("host-1")
+	if !ok {
+		t.Error("Host should be retrievable")
 	}
 }
 
@@ -549,10 +589,10 @@ func TestAPIToAgentPreference(t *testing.T) {
 
 	now := time.Now()
 
-	// First, add an API resource
+	// First, add an API-sourced host
 	apiResource := Resource{
-		ID:           "api-node",
-		Type:         ResourceTypeNode,
+		ID:           "api-host",
+		Type:         ResourceTypeHost, // Same type as agent
 		Name:         "server",
 		PlatformType: PlatformProxmoxPVE,
 		SourceType:   SourceAPI,
@@ -564,10 +604,10 @@ func TestAPIToAgentPreference(t *testing.T) {
 	}
 	store.Upsert(apiResource)
 
-	// Then, add an agent resource for the same machine
+	// Then, add an agent resource for the same machine (same type, different source)
 	agentResource := Resource{
 		ID:           "agent-host",
-		Type:         ResourceTypeHost,
+		Type:         ResourceTypeHost, // Same type
 		Name:         "server",
 		PlatformType: PlatformHostAgent,
 		SourceType:   SourceAgent,
@@ -579,14 +619,14 @@ func TestAPIToAgentPreference(t *testing.T) {
 	}
 	store.Upsert(agentResource)
 
-	// Only agent resource should exist
+	// Only agent resource should exist (same type = dedup, agent preferred)
 	all := store.GetAll()
 	if len(all) != 1 {
-		t.Fatalf("Expected 1 resource, got %d", len(all))
+		t.Fatalf("Expected 1 resource (same type dedup), got %d", len(all))
 	}
 
 	if all[0].SourceType != SourceAgent {
-		t.Errorf("Expected agent source type, got %s", all[0].SourceType)
+		t.Errorf("Expected agent source type (preferred), got %s", all[0].SourceType)
 	}
 }
 

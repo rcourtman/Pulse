@@ -18,7 +18,7 @@ func TestStorePopulateFromSnapshot(t *testing.T) {
 				Name:     "pve-node-1",
 				Instance: "https://pve1.local:8006",
 				Status:   "online",
-				CPU:      45.5,
+				CPU:      0.455, // Proxmox API returns 0-1 ratio
 				Memory: models.Memory{
 					Total: 16000000000,
 					Used:  8000000000,
@@ -37,7 +37,7 @@ func TestStorePopulateFromSnapshot(t *testing.T) {
 				Node:     "pve-node-1",
 				Instance: "https://pve1.local:8006",
 				Status:   "running",
-				CPU:      25.0,
+				CPU:      0.25, // Proxmox API returns 0-1 ratio
 				Memory: models.Memory{
 					Total: 4000000000,
 					Used:  2000000000,

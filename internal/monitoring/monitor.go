@@ -162,6 +162,18 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 	nvmeTempsByNode := make(map[string][]models.NVMeTemp)
 
 	for _, node := range nodes {
+		log.Debug().
+			Str("nodeName", node.Name).
+			Bool("hasTemp", node.Temperature != nil).
+			Bool("tempAvailable", node.Temperature != nil && node.Temperature.Available).
+			Int("smartCount", func() int {
+				if node.Temperature != nil {
+					return len(node.Temperature.SMART)
+				}
+				return 0
+			}()).
+			Msg("mergeNVMeTempsIntoDisks: checking node temperature")
+
 		if node.Temperature == nil || !node.Temperature.Available {
 			continue
 		}
@@ -171,6 +183,10 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 			temps := make([]models.DiskTemp, len(node.Temperature.SMART))
 			copy(temps, node.Temperature.SMART)
 			smartTempsByNode[node.Name] = temps
+			log.Debug().
+				Str("nodeName", node.Name).
+				Int("smartTempCount", len(temps)).
+				Msg("mergeNVMeTempsIntoDisks: collected SMART temps for node")
 		}
 
 		// Collect legacy NVMe temps as fallback
@@ -185,8 +201,17 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 	}
 
 	if len(smartTempsByNode) == 0 && len(nvmeTempsByNode) == 0 {
+		log.Debug().
+			Int("diskCount", len(disks)).
+			Msg("mergeNVMeTempsIntoDisks: no SMART or NVMe temperature data available")
 		return disks
 	}
+
+	log.Debug().
+		Int("smartNodeCount", len(smartTempsByNode)).
+		Int("nvmeNodeCount", len(nvmeTempsByNode)).
+		Int("diskCount", len(disks)).
+		Msg("mergeNVMeTempsIntoDisks: starting disk temperature merge")
 
 	updated := make([]models.PhysicalDisk, len(disks))
 	copy(updated, disks)
@@ -194,6 +219,12 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 	// Process SMART temperatures first (preferred method)
 	for i := range updated {
 		smartTemps, ok := smartTempsByNode[updated[i].Node]
+		log.Debug().
+			Str("diskDevPath", updated[i].DevPath).
+			Str("diskNode", updated[i].Node).
+			Bool("hasSMARTData", ok).
+			Int("smartTempCount", len(smartTemps)).
+			Msg("mergeNVMeTempsIntoDisks: checking disk for SMART temp match")
 		if !ok || len(smartTemps) == 0 {
 			continue
 		}
@@ -891,8 +922,8 @@ const (
 	dockerOfflineGraceMultiplier = 4
 	dockerMinimumHealthWindow    = 30 * time.Second
 	dockerMaximumHealthWindow    = 10 * time.Minute
-	hostOfflineGraceMultiplier   = 4
-	hostMinimumHealthWindow      = 30 * time.Second
+	hostOfflineGraceMultiplier   = 6
+	hostMinimumHealthWindow      = 60 * time.Second
 	hostMaximumHealthWindow      = 10 * time.Minute
 	nodeOfflineGracePeriod       = 60 * time.Second // Grace period before marking Proxmox nodes offline
 	nodeRRDCacheTTL              = 30 * time.Second
@@ -1732,6 +1763,63 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		m.alertManager.CheckDockerHost(host)
 	}
 
+	// Record Docker HOST metrics for sparkline charts
+	now := time.Now()
+	hostMetricKey := fmt.Sprintf("dockerHost:%s", host.ID)
+	
+	// Record host CPU usage
+	m.metricsHistory.AddGuestMetric(hostMetricKey, "cpu", host.CPUUsage, now)
+	
+	// Record host Memory usage
+	m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
+	
+	// Record host Disk usage (use first disk or calculate total)
+	var hostDiskPercent float64
+	if len(host.Disks) > 0 {
+		hostDiskPercent = host.Disks[0].Usage
+	}
+	m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
+	
+	// Also write to persistent SQLite store
+	if m.metricsStore != nil {
+		m.metricsStore.Write("dockerHost", host.ID, "cpu", host.CPUUsage, now)
+		m.metricsStore.Write("dockerHost", host.ID, "memory", host.Memory.Usage, now)
+		m.metricsStore.Write("dockerHost", host.ID, "disk", hostDiskPercent, now)
+	}
+
+	// Record Docker CONTAINER metrics for sparkline charts
+	// Use a prefixed key (docker:containerID) to distinguish from Proxmox containers
+	for _, container := range containers {
+		if container.ID == "" {
+			continue
+		}
+		// Build a unique metric key for Docker containers
+		metricKey := fmt.Sprintf("docker:%s", container.ID)
+		
+		// Record CPU (already a percentage 0-100)
+		m.metricsHistory.AddGuestMetric(metricKey, "cpu", container.CPUPercent, now)
+		
+		// Record Memory (already a percentage 0-100)
+		m.metricsHistory.AddGuestMetric(metricKey, "memory", container.MemoryPercent, now)
+		
+		// Record Disk usage as percentage of writable layer vs root filesystem
+		var diskPercent float64
+		if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
+			diskPercent = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
+			if diskPercent > 100 {
+				diskPercent = 100
+			}
+		}
+		m.metricsHistory.AddGuestMetric(metricKey, "disk", diskPercent, now)
+
+		// Also write to persistent SQLite store for long-term storage
+		if m.metricsStore != nil {
+			m.metricsStore.Write("dockerContainer", container.ID, "cpu", container.CPUPercent, now)
+			m.metricsStore.Write("dockerContainer", container.ID, "memory", container.MemoryPercent, now)
+			m.metricsStore.Write("dockerContainer", container.ID, "disk", diskPercent, now)
+		}
+	}
+
 	log.Debug().
 		Str("dockerHost", host.Hostname).
 		Int("containers", len(containers)).
@@ -1948,6 +2036,12 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		})
 	}
 
+	// Convert Ceph data from agent report
+	var cephData *models.HostCephCluster
+	if report.Ceph != nil {
+		cephData = convertAgentCephToModels(report.Ceph)
+	}
+
 	host := models.Host{
 		ID:                identifier,
 		Hostname:          hostname,
@@ -1970,6 +2064,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			Additional:         cloneStringFloatMap(report.Sensors.Additional),
 		},
 		RAID:            raid,
+		Ceph:            cephData,
 		Status:          "online",
 		UptimeSeconds:   report.Host.UptimeSeconds,
 		IntervalSeconds: report.Agent.IntervalSeconds,
@@ -2015,6 +2110,19 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	m.state.UpsertHost(host)
 	m.state.SetConnectionHealth(hostConnectionPrefix+host.ID, true)
+
+	// If host reports Ceph data, also update the global CephClusters state
+	if report.Ceph != nil {
+		cephCluster := convertAgentCephToGlobalCluster(report.Ceph, hostname, identifier, timestamp)
+		m.state.UpsertCephCluster(cephCluster)
+		log.Debug().
+			Str("hostId", identifier).
+			Str("hostname", hostname).
+			Str("fsid", cephCluster.FSID).
+			Str("health", cephCluster.Health).
+			Int("osds", cephCluster.NumOSDs).
+			Msg("Updated Ceph cluster from host agent")
+	}
 
 	if m.alertManager != nil {
 		m.alertManager.CheckHost(host)
@@ -2190,19 +2298,41 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 			window = hostMaximumHealthWindow
 		}
 
-		healthy := !host.LastSeen.IsZero() && now.Sub(host.LastSeen) <= window
+		age := now.Sub(host.LastSeen)
+		healthy := !host.LastSeen.IsZero() && age <= window
 		key := hostConnectionPrefix + host.ID
 		m.state.SetConnectionHealth(key, healthy)
 
 		hostCopy := host
 		if healthy {
 			hostCopy.Status = "online"
+			// Log status transition from offline to online
+			if host.Status == "offline" {
+				log.Debug().
+					Str("hostID", host.ID).
+					Str("hostname", host.Hostname).
+					Dur("age", age).
+					Dur("window", window).
+					Msg("Host agent back online")
+			}
 			m.state.SetHostStatus(host.ID, "online")
 			if m.alertManager != nil {
 				m.alertManager.HandleHostOnline(hostCopy)
 			}
 		} else {
 			hostCopy.Status = "offline"
+			// Log status transition from online to offline with diagnostic info
+			if host.Status == "online" || host.Status == "" {
+				log.Debug().
+					Str("hostID", host.ID).
+					Str("hostname", host.Hostname).
+					Time("lastSeen", host.LastSeen).
+					Dur("age", age).
+					Dur("window", window).
+					Int("intervalSeconds", host.IntervalSeconds).
+					Bool("lastSeenZero", host.LastSeen.IsZero()).
+					Msg("Host agent appears offline")
+			}
 			m.state.SetHostStatus(host.ID, "offline")
 			if m.alertManager != nil {
 				m.alertManager.HandleHostOffline(hostCopy)
@@ -3286,6 +3416,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				Int("nodes", len(state.Nodes)).
 				Int("vms", len(state.VMs)).
 				Int("containers", len(state.Containers)).
+				Int("hosts", len(state.Hosts)).
 				Int("pbs", len(state.PBSInstances)).
 				Int("pbsBackups", len(state.Backups.PBS)).
 				Int("physicalDisks", len(state.PhysicalDisks)).
@@ -8665,4 +8796,168 @@ func isLegacyDockerAgent(agentType string) bool {
 	// Unified agent reports type="unified"
 	// Legacy standalone agents have empty type
 	return agentType != "unified"
+}
+
+// convertAgentCephToModels converts agent report Ceph data to the models.HostCephCluster format.
+func convertAgentCephToModels(ceph *agentshost.CephCluster) *models.HostCephCluster {
+	if ceph == nil {
+		return nil
+	}
+
+	collectedAt, _ := time.Parse(time.RFC3339, ceph.CollectedAt)
+
+	result := &models.HostCephCluster{
+		FSID: ceph.FSID,
+		Health: models.HostCephHealth{
+			Status: ceph.Health.Status,
+			Checks: make(map[string]models.HostCephCheck),
+		},
+		MonMap: models.HostCephMonitorMap{
+			Epoch:   ceph.MonMap.Epoch,
+			NumMons: ceph.MonMap.NumMons,
+		},
+		MgrMap: models.HostCephManagerMap{
+			Available: ceph.MgrMap.Available,
+			NumMgrs:   ceph.MgrMap.NumMgrs,
+			ActiveMgr: ceph.MgrMap.ActiveMgr,
+			Standbys:  ceph.MgrMap.Standbys,
+		},
+		OSDMap: models.HostCephOSDMap{
+			Epoch:   ceph.OSDMap.Epoch,
+			NumOSDs: ceph.OSDMap.NumOSDs,
+			NumUp:   ceph.OSDMap.NumUp,
+			NumIn:   ceph.OSDMap.NumIn,
+			NumDown: ceph.OSDMap.NumDown,
+			NumOut:  ceph.OSDMap.NumOut,
+		},
+		PGMap: models.HostCephPGMap{
+			NumPGs:           ceph.PGMap.NumPGs,
+			BytesTotal:       ceph.PGMap.BytesTotal,
+			BytesUsed:        ceph.PGMap.BytesUsed,
+			BytesAvailable:   ceph.PGMap.BytesAvailable,
+			DataBytes:        ceph.PGMap.DataBytes,
+			UsagePercent:     ceph.PGMap.UsagePercent,
+			DegradedRatio:    ceph.PGMap.DegradedRatio,
+			MisplacedRatio:   ceph.PGMap.MisplacedRatio,
+			ReadBytesPerSec:  ceph.PGMap.ReadBytesPerSec,
+			WriteBytesPerSec: ceph.PGMap.WriteBytesPerSec,
+			ReadOpsPerSec:    ceph.PGMap.ReadOpsPerSec,
+			WriteOpsPerSec:   ceph.PGMap.WriteOpsPerSec,
+		},
+		CollectedAt: collectedAt,
+	}
+
+	// Convert monitors
+	for _, mon := range ceph.MonMap.Monitors {
+		result.MonMap.Monitors = append(result.MonMap.Monitors, models.HostCephMonitor{
+			Name:   mon.Name,
+			Rank:   mon.Rank,
+			Addr:   mon.Addr,
+			Status: mon.Status,
+		})
+	}
+
+	// Convert health checks
+	for name, check := range ceph.Health.Checks {
+		result.Health.Checks[name] = models.HostCephCheck{
+			Severity: check.Severity,
+			Message:  check.Message,
+			Detail:   check.Detail,
+		}
+	}
+
+	// Convert health summary
+	for _, s := range ceph.Health.Summary {
+		result.Health.Summary = append(result.Health.Summary, models.HostCephHealthSummary{
+			Severity: s.Severity,
+			Message:  s.Message,
+		})
+	}
+
+	// Convert pools
+	for _, pool := range ceph.Pools {
+		result.Pools = append(result.Pools, models.HostCephPool{
+			ID:             pool.ID,
+			Name:           pool.Name,
+			BytesUsed:      pool.BytesUsed,
+			BytesAvailable: pool.BytesAvailable,
+			Objects:        pool.Objects,
+			PercentUsed:    pool.PercentUsed,
+		})
+	}
+
+	// Convert services
+	for _, svc := range ceph.Services {
+		result.Services = append(result.Services, models.HostCephService{
+			Type:    svc.Type,
+			Running: svc.Running,
+			Total:   svc.Total,
+			Daemons: svc.Daemons,
+		})
+	}
+
+	return result
+}
+
+// convertAgentCephToGlobalCluster converts agent Ceph data to the global CephCluster format
+// used by the State.CephClusters list.
+func convertAgentCephToGlobalCluster(ceph *agentshost.CephCluster, hostname, hostID string, timestamp time.Time) models.CephCluster {
+	// Use FSID as the primary ID since it's unique per Ceph cluster
+	id := ceph.FSID
+	if id == "" {
+		id = "agent-ceph-" + hostID
+	}
+
+	cluster := models.CephCluster{
+		ID:             id,
+		Instance:       "agent:" + hostname,
+		Name:           hostname + " Ceph",
+		FSID:           ceph.FSID,
+		Health:         strings.TrimPrefix(ceph.Health.Status, "HEALTH_"),
+		TotalBytes:     int64(ceph.PGMap.BytesTotal),
+		UsedBytes:      int64(ceph.PGMap.BytesUsed),
+		AvailableBytes: int64(ceph.PGMap.BytesAvailable),
+		UsagePercent:   ceph.PGMap.UsagePercent,
+		NumMons:        ceph.MonMap.NumMons,
+		NumMgrs:        ceph.MgrMap.NumMgrs,
+		NumOSDs:        ceph.OSDMap.NumOSDs,
+		NumOSDsUp:      ceph.OSDMap.NumUp,
+		NumOSDsIn:      ceph.OSDMap.NumIn,
+		NumPGs:         ceph.PGMap.NumPGs,
+		LastUpdated:    timestamp,
+	}
+
+	// Build health message from checks
+	var healthMessages []string
+	for _, check := range ceph.Health.Checks {
+		if check.Message != "" {
+			healthMessages = append(healthMessages, check.Message)
+		}
+	}
+	if len(healthMessages) > 0 {
+		cluster.HealthMessage = strings.Join(healthMessages, "; ")
+	}
+
+	// Convert pools
+	for _, pool := range ceph.Pools {
+		cluster.Pools = append(cluster.Pools, models.CephPool{
+			ID:             pool.ID,
+			Name:           pool.Name,
+			StoredBytes:    int64(pool.BytesUsed),
+			AvailableBytes: int64(pool.BytesAvailable),
+			Objects:        int64(pool.Objects),
+			PercentUsed:    pool.PercentUsed,
+		})
+	}
+
+	// Convert services
+	for _, svc := range ceph.Services {
+		cluster.Services = append(cluster.Services, models.CephServiceStatus{
+			Type:    svc.Type,
+			Running: svc.Running,
+			Total:   svc.Total,
+		})
+	}
+
+	return cluster
 }

@@ -7,7 +7,7 @@ import { formField, labelClass, controlClass, formHelpText } from '@/components/
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
-import type { AISettings as AISettingsType, AIProvider } from '@/types/ai';
+import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
 import { PROVIDER_NAMES, PROVIDER_DESCRIPTIONS, DEFAULT_MODELS } from '@/types/ai';
 
 const PROVIDERS: AIProvider[] = ['anthropic', 'openai', 'ollama', 'deepseek'];
@@ -17,6 +17,14 @@ export const AISettings: Component = () => {
   const [loading, setLoading] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
+  const [startingOAuth, setStartingOAuth] = createSignal(false);
+  const [disconnectingOAuth, setDisconnectingOAuth] = createSignal(false);
+  const [exchangingCode, setExchangingCode] = createSignal(false);
+
+  // OAuth flow state
+  const [oauthAuthUrl, setOAuthAuthUrl] = createSignal<string | null>(null);
+  const [oauthState, setOAuthState] = createSignal<string | null>(null);
+  const [oauthCode, setOAuthCode] = createSignal('');
 
   const [form, setForm] = createStore({
     enabled: false,
@@ -26,6 +34,7 @@ export const AISettings: Component = () => {
     baseUrl: '',
     clearApiKey: false,
     autonomousMode: false,
+    authMethod: 'api_key' as AuthMethod,
   });
 
   const resetForm = (data: AISettingsType | null) => {
@@ -38,6 +47,7 @@ export const AISettings: Component = () => {
         baseUrl: '',
         clearApiKey: false,
         autonomousMode: false,
+        authMethod: 'api_key',
       });
       return;
     }
@@ -50,6 +60,7 @@ export const AISettings: Component = () => {
       baseUrl: data.base_url || '',
       clearApiKey: false,
       autonomousMode: data.autonomous_mode || false,
+      authMethod: data.auth_method || 'api_key',
     });
   };
 
@@ -71,6 +82,29 @@ export const AISettings: Component = () => {
 
   onMount(() => {
     loadSettings();
+
+    // Check for OAuth callback parameters in URL
+    const params = new URLSearchParams(window.location.search);
+    const oauthSuccess = params.get('ai_oauth_success');
+    const oauthError = params.get('ai_oauth_error');
+
+    if (oauthSuccess === 'true') {
+      notificationStore.success('Successfully connected to Claude with your subscription!');
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+      // Reload settings to get updated OAuth status
+      loadSettings();
+    } else if (oauthError) {
+      const errorMessages: Record<string, string> = {
+        'missing_params': 'OAuth callback missing required parameters',
+        'invalid_state': 'Invalid OAuth state - please try again',
+        'token_exchange_failed': 'Failed to complete authentication with Claude',
+        'save_failed': 'Failed to save OAuth credentials',
+      };
+      notificationStore.error(errorMessages[oauthError] || `OAuth error: ${oauthError}`);
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   });
 
   const handleProviderChange = (provider: AIProvider) => {
@@ -145,8 +179,82 @@ export const AISettings: Component = () => {
     }
   };
 
-  const needsApiKey = () => form.provider !== 'ollama';
+  const handleStartOAuth = async () => {
+    setStartingOAuth(true);
+    try {
+      const result = await AIAPI.startOAuth();
+      // Store the auth URL and state for the user to visit manually
+      setOAuthAuthUrl(result.auth_url);
+      setOAuthState(result.state);
+      setOAuthCode('');
+      notificationStore.info('Click the link below to sign in, then paste the code back here', 5000);
+    } catch (error) {
+      logger.error('[AISettings] OAuth start failed:', error);
+      const message = error instanceof Error ? error.message : 'Failed to start OAuth flow';
+      notificationStore.error(message);
+    } finally {
+      setStartingOAuth(false);
+    }
+  };
+
+  const handleExchangeCode = async () => {
+    const code = oauthCode().trim();
+    const state = oauthState();
+
+    if (!code || !state) {
+      notificationStore.error('Please enter the authorization code');
+      return;
+    }
+
+    setExchangingCode(true);
+    try {
+      await AIAPI.exchangeOAuthCode(code, state);
+      notificationStore.success('Successfully connected to Claude with your subscription!');
+      // Clear OAuth flow state
+      setOAuthAuthUrl(null);
+      setOAuthState(null);
+      setOAuthCode('');
+      // Reload settings
+      await loadSettings();
+    } catch (error) {
+      logger.error('[AISettings] OAuth code exchange failed:', error);
+      const message = error instanceof Error ? error.message : 'Failed to exchange authorization code';
+      notificationStore.error(message);
+    } finally {
+      setExchangingCode(false);
+    }
+  };
+
+  const handleCancelOAuth = () => {
+    setOAuthAuthUrl(null);
+    setOAuthState(null);
+    setOAuthCode('');
+  };
+
+  const handleDisconnectOAuth = async () => {
+    if (!confirm('Are you sure you want to disconnect your Claude subscription? You will need to provide an API key to continue using AI features.')) {
+      return;
+    }
+
+    setDisconnectingOAuth(true);
+    try {
+      await AIAPI.disconnectOAuth();
+      notificationStore.success('Claude subscription disconnected');
+      // Reload settings
+      await loadSettings();
+    } catch (error) {
+      logger.error('[AISettings] OAuth disconnect failed:', error);
+      const message = error instanceof Error ? error.message : 'Failed to disconnect OAuth';
+      notificationStore.error(message);
+    } finally {
+      setDisconnectingOAuth(false);
+    }
+  };
+
+  const needsApiKey = () => form.provider !== 'ollama' && (form.provider !== 'anthropic' || form.authMethod !== 'oauth');
   const showBaseUrl = () => form.provider === 'ollama' || form.provider === 'openai' || form.provider === 'deepseek';
+  const isAnthropicWithOAuth = () => form.provider === 'anthropic' && form.authMethod === 'oauth';
+  const showAuthMethodSelector = () => form.provider === 'anthropic';
 
   return (
     <Card
@@ -239,7 +347,163 @@ export const AISettings: Component = () => {
               </div>
             </div>
 
-            {/* API Key - not shown for Ollama */}
+            {/* Authentication Method - only for Anthropic */}
+            <Show when={showAuthMethodSelector()}>
+              <div class={formField}>
+                <label class={labelClass()}>Authentication Method</label>
+                <div class="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    class={`p-3 rounded-lg border-2 text-left transition-all ${form.authMethod === 'api_key'
+                      ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                      }`}
+                    onClick={() => setForm('authMethod', 'api_key')}
+                    disabled={saving()}
+                  >
+                    <div class="font-medium text-sm text-gray-900 dark:text-gray-100">
+                      API Key
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Pay per token usage
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    class={`p-3 rounded-lg border-2 text-left transition-all opacity-60 cursor-not-allowed ${form.authMethod === 'oauth'
+                      ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                      : 'border-gray-200 dark:border-gray-700'
+                      }`}
+                    disabled={true}
+                    title="OAuth with Claude Pro/Max subscription is not yet available. Anthropic currently restricts third-party OAuth access."
+                  >
+                    <div class="font-medium text-sm text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                      Claude Pro/Max
+                      <span class="inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded">
+                        Unavailable
+                      </span>
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Use your subscription
+                    </div>
+                  </button>
+                </div>
+                <p class={formHelpText}>
+                  {form.authMethod === 'api_key'
+                    ? 'Pay-per-use API billing from console.anthropic.com'
+                    : 'Use your Claude Pro ($20/mo) or Max ($100+/mo) subscription'}
+                </p>
+              </div>
+            </Show>
+
+            {/* OAuth Login/Status - shown when Anthropic + OAuth selected */}
+            <Show when={isAnthropicWithOAuth()}>
+              <div class={`${formField} p-4 rounded-lg border ${settings()?.oauth_connected
+                ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                : oauthAuthUrl()
+                  ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+                  : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                }`}>
+                {/* Connected state */}
+                <Show when={settings()?.oauth_connected}>
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <div class="flex items-center gap-2 text-sm font-medium text-green-800 dark:text-green-200">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        Connected to Claude with your subscription
+                      </div>
+                      <p class="text-xs text-green-700 dark:text-green-300 mt-1">
+                        AI requests use your Claude Pro/Max subscription limits instead of API billing.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      class="px-3 py-1.5 text-xs border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 rounded hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
+                      onClick={handleDisconnectOAuth}
+                      disabled={disconnectingOAuth() || saving()}
+                    >
+                      {disconnectingOAuth() ? 'Disconnecting...' : 'Disconnect'}
+                    </button>
+                  </div>
+                </Show>
+
+                {/* OAuth flow in progress - show URL and code input */}
+                <Show when={!settings()?.oauth_connected && oauthAuthUrl()}>
+                  <div class="space-y-4">
+                    <div class="text-sm text-amber-800 dark:text-amber-200">
+                      <strong>Step 1:</strong> Click the link below to sign in with your Anthropic account:
+                    </div>
+                    <a
+                      href={oauthAuthUrl()!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="block p-2 bg-white dark:bg-gray-800 rounded border border-amber-300 dark:border-amber-700 text-xs text-blue-600 dark:text-blue-400 hover:underline break-all"
+                    >
+                      {oauthAuthUrl()}
+                    </a>
+                    <div class="text-sm text-amber-800 dark:text-amber-200">
+                      <strong>Step 2:</strong> After signing in, you'll see a code. Paste it here:
+                    </div>
+                    <div class="flex gap-2">
+                      <input
+                        type="text"
+                        value={oauthCode()}
+                        onInput={(e) => setOAuthCode(e.currentTarget.value)}
+                        placeholder="Paste authorization code here..."
+                        class="flex-1 px-3 py-2 text-sm border border-amber-300 dark:border-amber-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+                      />
+                      <button
+                        type="button"
+                        class="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm rounded-md hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={handleExchangeCode}
+                        disabled={exchangingCode() || !oauthCode().trim()}
+                      >
+                        {exchangingCode() ? 'Connecting...' : 'Connect'}
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      class="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                      onClick={handleCancelOAuth}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </Show>
+
+                {/* Initial state - show sign in button */}
+                <Show when={!settings()?.oauth_connected && !oauthAuthUrl()}>
+                  <div class="text-center">
+                    <div class="text-sm text-blue-800 dark:text-blue-200 mb-3">
+                      <strong>Use your Claude subscription</strong>
+                      <p class="text-xs mt-1 text-blue-700 dark:text-blue-300">
+                        Sign in with your Anthropic account to use your Pro/Max subscription for AI features instead of API billing.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      class="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-md hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
+                      onClick={handleStartOAuth}
+                      disabled={startingOAuth() || saving()}
+                    >
+                      <Show when={startingOAuth()}>
+                        <span class="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      </Show>
+                      <Show when={!startingOAuth()}>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                        </svg>
+                      </Show>
+                      {startingOAuth() ? 'Starting...' : 'Sign in with Claude'}
+                    </button>
+                  </div>
+                </Show>
+              </div>
+            </Show>
+
+            {/* API Key - not shown for Ollama or when using OAuth */}
             <Show when={needsApiKey()}>
               <div class={formField}>
                 <div class="flex items-center justify-between">
@@ -382,17 +646,21 @@ export const AISettings: Component = () => {
               />
               <span class="text-xs font-medium">
                 {settings()?.configured
-                  ? `Ready to use with ${settings()?.model}`
-                  : needsApiKey()
-                    ? 'API key required to enable AI features'
-                    : 'Configure Ollama server URL to enable AI features'}
+                  ? settings()?.oauth_connected
+                    ? `Ready to use with ${settings()?.model} (via Claude subscription)`
+                    : `Ready to use with ${settings()?.model}`
+                  : form.authMethod === 'oauth' && form.provider === 'anthropic'
+                    ? 'Sign in with your Claude subscription to enable AI features'
+                    : needsApiKey()
+                      ? 'API key required to enable AI features'
+                      : 'Configure Ollama server URL to enable AI features'}
               </span>
             </div>
           </Show>
 
           {/* Actions */}
           <div class="flex flex-wrap items-center justify-between gap-3 pt-4">
-            <Show when={settings()?.api_key_set}>
+            <Show when={settings()?.api_key_set || settings()?.oauth_connected}>
               <button
                 type="button"
                 class="px-4 py-2 text-sm border border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300 rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/30 disabled:opacity-50 disabled:cursor-not-allowed"

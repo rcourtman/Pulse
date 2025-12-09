@@ -31,6 +31,8 @@ export interface ChartsResponse {
     data: Record<string, ChartData>;       // VM/Container data keyed by ID
     nodeData: Record<string, ChartData>;   // Node data keyed by ID
     storageData: Record<string, ChartData>; // Storage data keyed by ID
+    dockerData?: Record<string, ChartData>; // Docker container data keyed by container ID
+    dockerHostData?: Record<string, ChartData>; // Docker host data keyed by host ID
     guestTypes?: Record<string, 'vm' | 'container'>; // Maps guest ID to type
     timestamp: number;
     stats: ChartStats;

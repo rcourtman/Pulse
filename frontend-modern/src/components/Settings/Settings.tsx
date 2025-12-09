@@ -463,6 +463,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/system-network')) return 'system-network';
     if (path.includes('/settings/system-updates')) return 'system-updates';
     if (path.includes('/settings/system-backups')) return 'system-backups';
+    if (path.includes('/settings/system-ai')) return 'system-ai';
     if (path.includes('/settings/system')) return 'system-general';
     if (path.includes('/settings/api')) return 'api';
     if (path.includes('/settings/security-overview')) return 'security-overview';

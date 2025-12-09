@@ -388,6 +388,28 @@ export async function seedFromBackend(range: TimeRange = '1h'): Promise<void> {
         }
       }
 
+      // Process Docker containers
+      if (response.dockerData) {
+        for (const [id, chartData] of Object.entries(response.dockerData)) {
+          const resourceKey = buildMetricKey('dockerContainer', id);
+          processChartData(resourceKey, chartData as ChartData);
+        }
+        logger.debug('[MetricsHistory] Processed Docker container data', {
+          count: Object.keys(response.dockerData).length
+        });
+      }
+
+      // Process Docker hosts
+      if (response.dockerHostData) {
+        for (const [id, chartData] of Object.entries(response.dockerHostData)) {
+          const resourceKey = buildMetricKey('dockerHost', id);
+          processChartData(resourceKey, chartData as ChartData);
+        }
+        logger.debug('[MetricsHistory] Processed Docker host data', {
+          count: Object.keys(response.dockerHostData).length
+        });
+      }
+
 
       hasSeededFromBackend = true;
       logger.info('[MetricsHistory] Seeded from backend', { seededCount, totalResources: metricsHistoryMap.size });

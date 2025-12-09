@@ -32,6 +32,30 @@ export class AIAPI {
     }) as Promise<AITestResult>;
   }
 
+  // Start OAuth flow for Claude Pro/Max subscription
+  // Returns the authorization URL to redirect the user to
+  static async startOAuth(): Promise<{ auth_url: string; state: string }> {
+    return apiFetchJSON(`${this.baseUrl}/ai/oauth/start`, {
+      method: 'POST',
+    }) as Promise<{ auth_url: string; state: string }>;
+  }
+
+  // Exchange manually-pasted authorization code for tokens
+  static async exchangeOAuthCode(code: string, state: string): Promise<{ success: boolean; message: string }> {
+    return apiFetchJSON(`${this.baseUrl}/ai/oauth/exchange`, {
+      method: 'POST',
+      body: JSON.stringify({ code, state }),
+    }) as Promise<{ success: boolean; message: string }>;
+  }
+
+  // Disconnect OAuth and clear tokens
+  static async disconnectOAuth(): Promise<{ success: boolean; message: string }> {
+    return apiFetchJSON(`${this.baseUrl}/ai/oauth/disconnect`, {
+      method: 'POST',
+    }) as Promise<{ success: boolean; message: string }>;
+  }
+
+
   // Execute an AI prompt
   static async execute(request: AIExecuteRequest): Promise<AIExecuteResponse> {
     return apiFetchJSON(`${this.baseUrl}/ai/execute`, {

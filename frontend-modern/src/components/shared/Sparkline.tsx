@@ -95,11 +95,9 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     const dpr = window.devicePixelRatio || 1;
     canvas.width = w * dpr;
     canvas.height = h * dpr;
-    // Only set explicit width style if a fixed width was provided
-    // Otherwise let CSS handle the width (w-full class)
-    if (props.width !== 0) {
-      canvas.style.width = `${w}px`;
-    }
+    // Always set explicit width style to prevent canvas from expanding beyond container
+    // When width=0, we use the calculated container width
+    canvas.style.width = `${w}px`;
     canvas.style.height = `${h}px`;
     ctx.scale(dpr, dpr);
 
@@ -255,12 +253,13 @@ export const Sparkline: Component<SparklineProps> = (props) => {
 
   return (
     <>
-      <div class="relative block w-full" style={{ height: `${height()}px` }}>
+      <div class="relative block w-full overflow-hidden" style={{ height: `${height()}px`, 'max-width': '100%' }}>
         <canvas
           ref={canvasRef}
-          class="block cursor-crosshair w-full"
+          class="block cursor-crosshair"
           style={{
             height: `${height()}px`,
+            'max-width': '100%',
           }}
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}

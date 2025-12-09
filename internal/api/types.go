@@ -62,12 +62,14 @@ type StateResponse struct {
 
 // ChartResponse represents chart data
 type ChartResponse struct {
-	ChartData   map[string]VMChartData      `json:"data"`
-	NodeData    map[string]NodeChartData    `json:"nodeData"`
-	StorageData map[string]StorageChartData `json:"storageData"`
-	GuestTypes  map[string]string           `json:"guestTypes"` // Maps guest ID to type ("vm" or "container")
-	Timestamp   int64                       `json:"timestamp"`
-	Stats       ChartStats                  `json:"stats"`
+	ChartData      map[string]VMChartData      `json:"data"`
+	NodeData       map[string]NodeChartData    `json:"nodeData"`
+	StorageData    map[string]StorageChartData `json:"storageData"`
+	DockerData     map[string]VMChartData      `json:"dockerData"`     // Docker container metrics (keyed by container ID)
+	DockerHostData map[string]VMChartData      `json:"dockerHostData"` // Docker host metrics (keyed by host ID)
+	GuestTypes     map[string]string           `json:"guestTypes"`     // Maps guest ID to type ("vm" or "container")
+	Timestamp      int64                       `json:"timestamp"`
+	Stats          ChartStats                  `json:"stats"`
 }
 
 // ChartStats represents chart statistics

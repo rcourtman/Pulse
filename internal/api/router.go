@@ -1055,6 +1055,12 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/knowledge/clear", RequireAuth(r.config, r.aiSettingsHandler.HandleClearGuestKnowledge))
 	r.mux.HandleFunc("/api/ai/debug/context", RequireAdmin(r.config, r.aiSettingsHandler.HandleDebugContext))
 	r.mux.HandleFunc("/api/ai/agents", RequireAuth(r.config, r.aiSettingsHandler.HandleGetConnectedAgents))
+	// OAuth endpoints for Claude Pro/Max subscription authentication
+	r.mux.HandleFunc("/api/ai/oauth/start", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthStart))
+	r.mux.HandleFunc("/api/ai/oauth/exchange", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthExchange)) // Manual code input
+	r.mux.HandleFunc("/api/ai/oauth/callback", r.aiSettingsHandler.HandleOAuthCallback) // Public - receives redirect from Anthropic
+	r.mux.HandleFunc("/api/ai/oauth/disconnect", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthDisconnect))
+
 
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
@@ -1448,6 +1454,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/system/proxy-public-key",                       // Temperature proxy public key for setup script
 				"/api/temperature-proxy/register",                    // Temperature proxy registration (called by installer)
 				"/api/temperature-proxy/authorized-nodes",            // Proxy control-plane sync
+				"/api/ai/oauth/callback",                             // OAuth callback from Anthropic for Claude subscription auth
 			}
 
 			// Also allow static assets without auth (JS, CSS, etc)
@@ -2895,12 +2902,117 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		guestTypes[ct.ID] = "container"
 	}
 
+	// Process Docker containers - get historical data
+	dockerData := make(map[string]VMChartData)
+	for _, host := range state.DockerHosts {
+		for _, container := range host.Containers {
+			if container.ID == "" {
+				continue
+			}
+
+			if dockerData[container.ID] == nil {
+				dockerData[container.ID] = make(VMChartData)
+			}
+
+			// Get historical metrics using the docker: prefix key
+			metricKey := fmt.Sprintf("docker:%s", container.ID)
+			metrics := r.monitor.GetGuestMetrics(metricKey, duration)
+
+			// Convert metric points to API format
+			for metricType, points := range metrics {
+				dockerData[container.ID][metricType] = make([]MetricPoint, len(points))
+				for i, point := range points {
+					ts := point.Timestamp.Unix() * 1000
+					if ts < oldestTimestamp {
+						oldestTimestamp = ts
+					}
+					dockerData[container.ID][metricType][i] = MetricPoint{
+						Timestamp: ts,
+						Value:     point.Value,
+					}
+				}
+			}
+
+			// If no historical data, add current value
+			if len(dockerData[container.ID]["cpu"]) == 0 {
+				dockerData[container.ID]["cpu"] = []MetricPoint{
+					{Timestamp: currentTime, Value: container.CPUPercent},
+				}
+				dockerData[container.ID]["memory"] = []MetricPoint{
+					{Timestamp: currentTime, Value: container.MemoryPercent},
+				}
+				// Calculate disk percentage for Docker containers
+				var diskPercent float64
+				if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
+					diskPercent = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
+					if diskPercent > 100 {
+						diskPercent = 100
+					}
+				}
+				dockerData[container.ID]["disk"] = []MetricPoint{
+					{Timestamp: currentTime, Value: diskPercent},
+				}
+			}
+		}
+	}
+
+	// Process Docker hosts - get historical data
+	dockerHostData := make(map[string]VMChartData)
+	for _, host := range state.DockerHosts {
+		if host.ID == "" {
+			continue
+		}
+
+		if dockerHostData[host.ID] == nil {
+			dockerHostData[host.ID] = make(VMChartData)
+		}
+
+		// Get historical metrics using the dockerHost: prefix key
+		metricKey := fmt.Sprintf("dockerHost:%s", host.ID)
+		metrics := r.monitor.GetGuestMetrics(metricKey, duration)
+
+		// Convert metric points to API format
+		for metricType, points := range metrics {
+			dockerHostData[host.ID][metricType] = make([]MetricPoint, len(points))
+			for i, point := range points {
+				ts := point.Timestamp.Unix() * 1000
+				if ts < oldestTimestamp {
+					oldestTimestamp = ts
+				}
+				dockerHostData[host.ID][metricType][i] = MetricPoint{
+					Timestamp: ts,
+					Value:     point.Value,
+				}
+			}
+		}
+
+		// If no historical data, add current value
+		if len(dockerHostData[host.ID]["cpu"]) == 0 {
+			dockerHostData[host.ID]["cpu"] = []MetricPoint{
+				{Timestamp: currentTime, Value: host.CPUUsage},
+			}
+			dockerHostData[host.ID]["memory"] = []MetricPoint{
+				{Timestamp: currentTime, Value: host.Memory.Usage},
+			}
+			// Use first disk for host disk percentage
+			var diskPercent float64
+			if len(host.Disks) > 0 {
+				diskPercent = host.Disks[0].Usage
+			}
+			dockerHostData[host.ID]["disk"] = []MetricPoint{
+				{Timestamp: currentTime, Value: diskPercent},
+			}
+		}
+	}
+
 	response := ChartResponse{
-		ChartData:   chartData,
-		NodeData:    nodeData,
-		StorageData: storageData,
-		GuestTypes:  guestTypes,
-		Timestamp:   currentTime,
+		ChartData:      chartData,
+		NodeData:       nodeData,
+		StorageData:    storageData,
+		DockerData:     dockerData,
+		DockerHostData: dockerHostData,
+		GuestTypes:     guestTypes,
+		Timestamp:      currentTime,
 		Stats: ChartStats{
 			OldestDataTimestamp: oldestTimestamp,
 		},
@@ -2917,6 +3029,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		Int("guests", len(chartData)).
 		Int("nodes", len(nodeData)).
 		Int("storage", len(storageData)).
+		Int("dockerContainers", len(dockerData)).
 		Str("range", timeRange).
 		Msg("Chart data response sent")
 }

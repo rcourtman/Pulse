@@ -1,6 +1,7 @@
 // AI feature types
 
 export type AIProvider = 'anthropic' | 'openai' | 'ollama' | 'deepseek';
+export type AuthMethod = 'api_key' | 'oauth';
 
 export interface AISettings {
   enabled: boolean;
@@ -11,6 +12,9 @@ export interface AISettings {
   configured: boolean; // true if AI is ready to use
   autonomous_mode: boolean; // true if AI can execute commands without approval
   custom_context: string; // user-provided infrastructure context
+  // OAuth fields for Claude Pro/Max subscription authentication
+  auth_method: AuthMethod; // "api_key" or "oauth"
+  oauth_connected: boolean; // true if OAuth tokens are configured
 }
 
 export interface AISettingsUpdateRequest {
@@ -21,7 +25,9 @@ export interface AISettingsUpdateRequest {
   base_url?: string;
   autonomous_mode?: boolean;
   custom_context?: string; // user-provided infrastructure context
+  auth_method?: AuthMethod; // "api_key" or "oauth"
 }
+
 
 export interface AITestResult {
   success: boolean;
