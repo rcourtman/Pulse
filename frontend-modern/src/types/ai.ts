@@ -15,6 +15,10 @@ export interface AISettings {
   // OAuth fields for Claude Pro/Max subscription authentication
   auth_method: AuthMethod; // "api_key" or "oauth"
   oauth_connected: boolean; // true if OAuth tokens are configured
+  // Patrol settings for token efficiency
+  patrol_schedule_preset?: string; // "15min" | "1hr" | "6hr" | "12hr" | "daily" | "disabled"
+  alert_triggered_analysis?: boolean; // true if AI should analyze when alerts fire
+  patrol_auto_fix?: boolean; // true if patrol can attempt automatic remediation
 }
 
 export interface AISettingsUpdateRequest {
@@ -26,6 +30,10 @@ export interface AISettingsUpdateRequest {
   autonomous_mode?: boolean;
   custom_context?: string; // user-provided infrastructure context
   auth_method?: AuthMethod; // "api_key" or "oauth"
+  // Patrol settings for token efficiency
+  patrol_schedule_preset?: string; // "15min" | "1hr" | "6hr" | "12hr" | "daily" | "disabled"
+  alert_triggered_analysis?: boolean; // true if AI should analyze when alerts fire
+  patrol_auto_fix?: boolean; // true if patrol can attempt automatic remediation
 }
 
 

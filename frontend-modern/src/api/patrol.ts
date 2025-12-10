@@ -3,6 +3,8 @@
  * Provides access to background AI monitoring findings and status
  */
 
+import { apiFetchJSON } from '@/utils/apiClient';
+
 export type FindingSeverity = 'info' | 'watch' | 'warning' | 'critical';
 export type FindingCategory = 'performance' | 'capacity' | 'reliability' | 'backup' | 'security' | 'general';
 
@@ -43,8 +45,38 @@ export interface PatrolStatus {
     last_duration_ms: number;
     resources_checked: number;
     findings_count: number;
+    error_count: number;
     healthy: boolean;
+    interval_ms: number; // Patrol interval in milliseconds
     summary: FindingsSummary;
+}
+
+export interface PatrolRunRecord {
+    id: string;
+    started_at: string;
+    completed_at: string;
+    duration_ms: number;
+    type: 'quick' | 'deep';
+    resources_checked: number;
+    // Breakdown by resource type
+    nodes_checked: number;
+    guests_checked: number;
+    docker_checked: number;
+    storage_checked: number;
+    hosts_checked: number;
+    pbs_checked: number;
+    // Findings from this run
+    new_findings: number;
+    existing_findings: number;
+    resolved_findings: number;
+    findings_summary: string;
+    finding_ids: string[];
+    error_count: number;
+    status: 'healthy' | 'issues_found' | 'critical' | 'error';
+    // AI Analysis details
+    ai_analysis?: string;    // The AI's raw response/analysis
+    input_tokens?: number;   // Tokens sent to AI
+    output_tokens?: number;  // Tokens received from AI
 }
 
 /**
@@ -83,14 +115,7 @@ export async function getFindings(resourceId?: string): Promise<Finding[]> {
  */
 export async function forcePatrol(deep: boolean = false): Promise<{ success: boolean; message: string }> {
     const url = deep ? '/api/ai/patrol/run?deep=true' : '/api/ai/patrol/run';
-    const resp = await fetch(url, {
-        method: 'POST',
-        credentials: 'include',
-    });
-    if (!resp.ok) {
-        throw new Error(`Failed to trigger patrol: ${resp.status}`);
-    }
-    return resp.json();
+    return apiFetchJSON(url, { method: 'POST' });
 }
 
 /**
@@ -112,22 +137,32 @@ export async function getFindingsHistory(startTime?: string): Promise<Finding[]>
 }
 
 /**
+ * Get the history of patrol check runs
+ * @param limit Maximum number of records to return (default: 50, max: 100)
+ */
+export async function getPatrolRunHistory(limit?: number): Promise<PatrolRunRecord[]> {
+    const url = limit
+        ? `/api/ai/patrol/runs?limit=${limit}`
+        : '/api/ai/patrol/runs';
+    const resp = await fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+    });
+    if (!resp.ok) {
+        throw new Error(`Failed to get patrol run history: ${resp.status}`);
+    }
+    return resp.json();
+}
+
+/**
  * Acknowledge a finding (marks as seen but keeps visible, like alert acknowledgement)
  * Finding will auto-resolve when the underlying condition clears.
  */
 export async function acknowledgeFinding(findingId: string): Promise<{ success: boolean; message: string }> {
-    const resp = await fetch('/api/ai/patrol/acknowledge', {
+    return apiFetchJSON('/api/ai/patrol/acknowledge', {
         method: 'POST',
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ finding_id: findingId }),
     });
-    if (!resp.ok) {
-        throw new Error(`Failed to acknowledge finding: ${resp.status}`);
-    }
-    return resp.json();
 }
 
 /**
@@ -136,18 +171,21 @@ export async function acknowledgeFinding(findingId: string): Promise<{ success: 
  * @param durationHours Duration in hours (e.g., 1, 24, 168 for 7 days)
  */
 export async function snoozeFinding(findingId: string, durationHours: number): Promise<{ success: boolean; message: string }> {
-    const resp = await fetch('/api/ai/patrol/snooze', {
+    return apiFetchJSON('/api/ai/patrol/snooze', {
         method: 'POST',
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ finding_id: findingId, duration_hours: durationHours }),
     });
-    if (!resp.ok) {
-        throw new Error(`Failed to snooze finding: ${resp.status}`);
-    }
-    return resp.json();
+}
+
+/**
+ * Manually resolve a finding (mark as fixed)
+ * @param findingId The ID of the finding to resolve
+ */
+export async function resolveFinding(findingId: string): Promise<{ success: boolean; message: string }> {
+    return apiFetchJSON('/api/ai/patrol/resolve', {
+        method: 'POST',
+        body: JSON.stringify({ finding_id: findingId }),
+    });
 }
 
 /**
@@ -188,4 +226,46 @@ export function formatTimestamp(ts: string): string {
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString();
+}
+
+/**
+ * Event types from patrol stream
+ */
+export interface PatrolStreamEvent {
+    type: 'start' | 'content' | 'thinking' | 'phase' | 'complete' | 'error';
+    content?: string;
+    phase?: string;
+    tokens?: number;
+}
+
+/**
+ * Subscribe to live patrol stream via SSE
+ * Returns an unsubscribe function
+ */
+export function subscribeToPatrolStream(
+    onEvent: (event: PatrolStreamEvent) => void,
+    onError?: (error: Error) => void
+): () => void {
+    const eventSource = new EventSource('/api/ai/patrol/stream', { withCredentials: true });
+
+    eventSource.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data) as PatrolStreamEvent;
+            onEvent(data);
+        } catch (e) {
+            console.error('Failed to parse patrol stream event:', e);
+        }
+    };
+
+    eventSource.onerror = () => {
+        if (onError) {
+            onError(new Error('Patrol stream connection error'));
+        }
+        eventSource.close();
+    };
+
+    // Return unsubscribe function
+    return () => {
+        eventSource.close();
+    };
 }

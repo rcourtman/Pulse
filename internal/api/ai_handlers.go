@@ -83,9 +83,22 @@ func (h *AISettingsHandler) SetPatrolFindingsPersistence(persistence ai.Findings
 	return nil
 }
 
+// SetPatrolRunHistoryPersistence enables patrol run history persistence for the patrol service
+func (h *AISettingsHandler) SetPatrolRunHistoryPersistence(persistence ai.PatrolHistoryPersistence) error {
+	if patrol := h.aiService.GetPatrolService(); patrol != nil {
+		return patrol.SetRunHistoryPersistence(persistence)
+	}
+	return nil
+}
+
 // StopPatrol stops the background AI patrol service
 func (h *AISettingsHandler) StopPatrol() {
 	h.aiService.StopPatrol()
+}
+
+// GetAlertTriggeredAnalyzer returns the alert-triggered analyzer for wiring into alert callbacks
+func (h *AISettingsHandler) GetAlertTriggeredAnalyzer() *ai.AlertTriggeredAnalyzer {
+	return h.aiService.GetAlertTriggeredAnalyzer()
 }
 
 // AISettingsResponse is returned by GET /api/settings/ai
@@ -100,8 +113,11 @@ type AISettingsResponse struct {
 	AutonomousMode bool   `json:"autonomous_mode"` // true if AI can execute without approval
 	CustomContext  string `json:"custom_context"`  // user-provided infrastructure context
 	// OAuth fields for Claude Pro/Max subscription authentication
-	AuthMethod     string `json:"auth_method"`       // "api_key" or "oauth"
-	OAuthConnected bool   `json:"oauth_connected"`   // true if OAuth tokens are configured
+	AuthMethod     string `json:"auth_method"`     // "api_key" or "oauth"
+	OAuthConnected bool   `json:"oauth_connected"` // true if OAuth tokens are configured
+	// Patrol settings for token efficiency
+	PatrolSchedulePreset   string `json:"patrol_schedule_preset"`   // "15min", "1hr", "6hr", "12hr", "daily", "disabled"
+	AlertTriggeredAnalysis bool   `json:"alert_triggered_analysis"` // true if AI analyzes when alerts fire
 }
 
 // AISettingsUpdateRequest is the request body for PUT /api/settings/ai
@@ -114,6 +130,9 @@ type AISettingsUpdateRequest struct {
 	AutonomousMode *bool   `json:"autonomous_mode,omitempty"`
 	CustomContext  *string `json:"custom_context,omitempty"` // user-provided infrastructure context
 	AuthMethod     *string `json:"auth_method,omitempty"`    // "api_key" or "oauth"
+	// Patrol settings for token efficiency
+	PatrolSchedulePreset   *string `json:"patrol_schedule_preset,omitempty"`   // "15min", "1hr", "6hr", "12hr", "daily", "disabled"
+	AlertTriggeredAnalysis *bool   `json:"alert_triggered_analysis,omitempty"` // true if AI analyzes when alerts fire
 }
 
 // HandleGetAISettings returns the current AI settings (GET /api/settings/ai)
@@ -151,6 +170,9 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		CustomContext:  settings.CustomContext,
 		AuthMethod:     authMethod,
 		OAuthConnected: settings.OAuthAccessToken != "",
+		// Patrol settings
+		PatrolSchedulePreset:   settings.PatrolSchedulePreset,
+		AlertTriggeredAnalysis: settings.AlertTriggeredAnalysis,
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -256,6 +278,24 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.Enabled = *req.Enabled
 	}
 
+	// Handle patrol schedule preset
+	if req.PatrolSchedulePreset != nil {
+		preset := strings.ToLower(strings.TrimSpace(*req.PatrolSchedulePreset))
+		switch preset {
+		case "15min", "1hr", "6hr", "12hr", "daily", "disabled":
+			settings.PatrolSchedulePreset = preset
+			settings.PatrolIntervalMinutes = config.PresetToMinutes(preset)
+		default:
+			http.Error(w, "Invalid patrol_schedule_preset. Must be '15min', '1hr', '6hr', '12hr', 'daily', or 'disabled'", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Handle alert-triggered analysis toggle
+	if req.AlertTriggeredAnalysis != nil {
+		settings.AlertTriggeredAnalysis = *req.AlertTriggeredAnalysis
+	}
+
 	// Save settings
 	if err := h.persistence.SaveAIConfig(*settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save AI settings")
@@ -268,22 +308,42 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		log.Warn().Err(err).Msg("Failed to reload AI service after settings update")
 	}
 
+	// Reconfigure patrol service with new settings (applies interval changes immediately)
+	h.aiService.ReconfigurePatrol()
+
+	// Update alert-triggered analyzer if available
+	if analyzer := h.aiService.GetAlertTriggeredAnalyzer(); analyzer != nil {
+		analyzer.SetEnabled(settings.AlertTriggeredAnalysis)
+	}
+
 	log.Info().
 		Bool("enabled", settings.Enabled).
 		Str("provider", settings.Provider).
 		Str("model", settings.GetModel()).
+		Str("patrolPreset", settings.PatrolSchedulePreset).
+		Bool("alertTriggeredAnalysis", settings.AlertTriggeredAnalysis).
 		Msg("AI settings updated")
+
+	// Determine auth method for response
+	authMethod := string(settings.AuthMethod)
+	if authMethod == "" {
+		authMethod = string(config.AuthMethodAPIKey)
+	}
 
 	// Return updated settings
 	response := AISettingsResponse{
-		Enabled:        settings.Enabled,
-		Provider:       settings.Provider,
-		APIKeySet:      settings.APIKey != "",
-		Model:          settings.GetModel(),
-		BaseURL:        settings.BaseURL,
-		Configured:     settings.IsConfigured(),
-		AutonomousMode: settings.AutonomousMode,
-		CustomContext:  settings.CustomContext,
+		Enabled:                settings.Enabled,
+		Provider:               settings.Provider,
+		APIKeySet:              settings.APIKey != "",
+		Model:                  settings.GetModel(),
+		BaseURL:                settings.BaseURL,
+		Configured:             settings.IsConfigured(),
+		AutonomousMode:         settings.AutonomousMode,
+		CustomContext:          settings.CustomContext,
+		AuthMethod:             authMethod,
+		OAuthConnected:         settings.OAuthAccessToken != "",
+		PatrolSchedulePreset:   settings.PatrolSchedulePreset,
+		AlertTriggeredAnalysis: settings.AlertTriggeredAnalysis,
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -1618,6 +1678,56 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 	}
 }
 
+// HandlePatrolStream streams real-time patrol analysis via SSE (GET /api/ai/patrol/stream)
+func (h *AISettingsHandler) HandlePatrolStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// Subscribe to patrol stream
+	// Note: SubscribeToStream already sends the current buffered output to the channel
+	ch := patrol.SubscribeToStream()
+	defer patrol.UnsubscribeFromStream(ch)
+
+	// Stream events until client disconnects
+	ctx := r.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-ch:
+			if !ok {
+				return
+			}
+			data, err := json.Marshal(event)
+			if err != nil {
+				continue
+			}
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			flusher.Flush()
+		}
+	}
+}
+
 // HandleGetPatrolFindings returns all active findings (GET /api/ai/patrol/findings)
 func (h *AISettingsHandler) HandleGetPatrolFindings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -1809,6 +1919,60 @@ func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.R
 	}
 }
 
+// HandleResolveFinding manually marks a finding as resolved (POST /api/ai/patrol/resolve)
+// Use this when the user has fixed the issue and wants to mark it as resolved
+func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require authentication
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		FindingID string `json:"finding_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.FindingID == "" {
+		http.Error(w, "finding_id is required", http.StatusBadRequest)
+		return
+	}
+
+	findings := patrol.GetFindings()
+	
+	// Mark as manually resolved (auto=false since user did it)
+	if !findings.Resolve(req.FindingID, false) {
+		http.Error(w, "Finding not found or already resolved", http.StatusNotFound)
+		return
+	}
+
+	log.Info().
+		Str("finding_id", req.FindingID).
+		Msg("AI Patrol: Finding manually resolved by user")
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": "Finding marked as resolved",
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write resolve response")
+	}
+}
+
 // HandleGetFindingsHistory returns all findings including resolved for history (GET /api/ai/patrol/history)
 func (h *AISettingsHandler) HandleGetFindingsHistory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -1842,5 +2006,38 @@ func (h *AISettingsHandler) HandleGetFindingsHistory(w http.ResponseWriter, r *h
 
 	if err := utils.WriteJSONResponse(w, findings); err != nil {
 		log.Error().Err(err).Msg("Failed to write findings history response")
+	}
+}
+
+// HandleGetPatrolRunHistory returns the history of patrol check runs (GET /api/ai/patrol/runs)
+func (h *AISettingsHandler) HandleGetPatrolRunHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		// Return empty history
+		if err := utils.WriteJSONResponse(w, []interface{}{}); err != nil {
+			log.Error().Err(err).Msg("Failed to write patrol run history response")
+		}
+		return
+	}
+
+	// Parse optional limit query parameter (default: 50)
+	limit := 50
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := fmt.Sscanf(limitStr, "%d", &limit); err == nil && l > 0 {
+			if limit > 100 {
+				limit = 100 // Cap at MaxPatrolRunHistory
+			}
+		}
+	}
+
+	runs := patrol.GetRunHistory(limit)
+
+	if err := utils.WriteJSONResponse(w, runs); err != nil {
+		log.Error().Err(err).Msg("Failed to write patrol run history response")
 	}
 }

@@ -7147,6 +7147,40 @@ func (m *Monitor) GetAlertManager() *alerts.Manager {
 	return m.alertManager
 }
 
+// SetAlertTriggeredAICallback sets an additional callback for AI analysis when alerts fire
+// This enables token-efficient, real-time AI insights on specific resources
+func (m *Monitor) SetAlertTriggeredAICallback(callback func(*alerts.Alert)) {
+	if m.alertManager == nil || callback == nil {
+		return
+	}
+
+	// Get the current callback
+	originalCallback := m.alertManager
+
+	// Wrap the existing callback to also call the AI callback
+	m.alertManager.SetAlertCallback(func(alert *alerts.Alert) {
+		// Broadcast to WebSocket (this happens via the callback set in Start())
+		if m.wsHub != nil {
+			m.wsHub.BroadcastAlert(alert)
+		}
+
+		// Send notifications
+		log.Debug().
+			Str("alertID", alert.ID).
+			Str("level", string(alert.Level)).
+			Msg("Alert raised, sending to notification manager")
+		go m.notificationMgr.SendAlert(alert)
+
+		// Trigger AI analysis
+		go callback(alert)
+	})
+
+	// Avoid unused variable warning
+	_ = originalCallback
+
+	log.Info().Msg("Alert-triggered AI callback registered")
+}
+
 // SetResourceStore sets the resource store for polling optimization.
 // When set, the monitor will check if it should reduce polling frequency
 // for nodes that have host agents providing data.

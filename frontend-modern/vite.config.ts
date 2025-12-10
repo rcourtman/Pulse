@@ -133,6 +133,33 @@ export default defineConfig({
           });
         },
       },
+      // SSE endpoint for AI patrol streaming
+      '/api/ai/patrol/stream': {
+        target: backendUrl,
+        changeOrigin: true,
+        timeout: 0,
+        proxyTimeout: 0,
+        configure: (proxy, _options) => {
+          proxy.options.timeout = 0;
+          proxy.options.proxyTimeout = 0;
+
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            req.socket.setTimeout(0);
+            req.socket.setNoDelay(true);
+            req.socket.setKeepAlive(true, 30000);
+            proxyReq.socket?.setTimeout(0);
+          });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            res.socket?.setTimeout(0);
+            res.socket?.setNoDelay(true);
+            res.socket?.setKeepAlive(true, 30000);
+            proxyRes.socket?.setTimeout(0);
+          });
+          proxy.on('error', (err, req, res) => {
+            console.error('[SSE Proxy Error - Patrol Stream]', err.message);
+          });
+        },
+      },
       '/api/agent/ws': {
         target: backendWsUrl,
         ws: true,
@@ -167,6 +194,7 @@ export default defineConfig({
       '/api': {
         target: backendUrl,
         changeOrigin: true,
+        cookieDomainRewrite: '',
       },
       '/install-docker-agent.sh': {
         target: backendUrl,

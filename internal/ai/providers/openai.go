@@ -339,8 +339,17 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	choice := openaiResp.Choices[0]
+
+	// For DeepSeek reasoner, the actual content may be in reasoning_content
+	// when content is empty (it shows the "thinking" but that's the full response)
+	contentToUse := choice.Message.Content
+	if contentToUse == "" && choice.Message.ReasoningContent != "" {
+		// DeepSeek reasoner puts output in reasoning_content
+		contentToUse = choice.Message.ReasoningContent
+	}
+
 	result := &ChatResponse{
-		Content:          choice.Message.Content,
+		Content:          contentToUse,
 		ReasoningContent: choice.Message.ReasoningContent, // DeepSeek thinking mode
 		Model:            openaiResp.Model,
 		StopReason:       choice.FinishReason,

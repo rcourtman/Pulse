@@ -30,12 +30,17 @@ type AIConfig struct {
 	OAuthExpiresAt    time.Time  `json:"oauth_expires_at,omitempty"`    // Token expiration time
 
 	// Patrol settings for background AI monitoring
-	PatrolEnabled          bool `json:"patrol_enabled"`                     // Enable background AI health patrol
-	PatrolIntervalMinutes  int  `json:"patrol_interval_minutes,omitempty"`  // How often to run quick patrols (default: 15)
-	PatrolAnalyzeNodes     bool `json:"patrol_analyze_nodes,omitempty"`     // Include Proxmox nodes in patrol
-	PatrolAnalyzeGuests    bool `json:"patrol_analyze_guests,omitempty"`    // Include VMs/containers in patrol
-	PatrolAnalyzeDocker    bool `json:"patrol_analyze_docker,omitempty"`    // Include Docker hosts in patrol
-	PatrolAnalyzeStorage   bool `json:"patrol_analyze_storage,omitempty"`   // Include storage in patrol
+	PatrolEnabled          bool   `json:"patrol_enabled"`                      // Enable background AI health patrol
+	PatrolIntervalMinutes  int    `json:"patrol_interval_minutes,omitempty"`   // How often to run quick patrols (default: 360 = 6 hours)
+	PatrolSchedulePreset   string `json:"patrol_schedule_preset,omitempty"`    // User-friendly preset: "15min", "1hr", "6hr", "12hr", "daily", "disabled"
+	PatrolAnalyzeNodes     bool   `json:"patrol_analyze_nodes,omitempty"`      // Include Proxmox nodes in patrol
+	PatrolAnalyzeGuests    bool   `json:"patrol_analyze_guests,omitempty"`     // Include VMs/containers in patrol
+	PatrolAnalyzeDocker    bool   `json:"patrol_analyze_docker,omitempty"`     // Include Docker hosts in patrol
+	PatrolAnalyzeStorage   bool   `json:"patrol_analyze_storage,omitempty"`    // Include storage in patrol
+	PatrolAutoFix          bool   `json:"patrol_auto_fix,omitempty"`           // When true, patrol can attempt automatic remediation (default: false, observe only)
+
+	// Alert-triggered AI analysis - analyze specific resources when alerts fire
+	AlertTriggeredAnalysis bool `json:"alert_triggered_analysis,omitempty"` // Enable AI analysis when alerts fire (token-efficient)
 }
 
 // AIProvider constants
@@ -63,13 +68,17 @@ func NewDefaultAIConfig() *AIConfig {
 		Provider:   AIProviderAnthropic,
 		Model:      DefaultAIModelAnthropic,
 		AuthMethod: AuthMethodAPIKey,
-		// Patrol defaults - enabled when AI is enabled, check every 15 minutes
-		PatrolEnabled:         true,
-		PatrolIntervalMinutes: 15,
-		PatrolAnalyzeNodes:    true,
-		PatrolAnalyzeGuests:   true,
-		PatrolAnalyzeDocker:   true,
-		PatrolAnalyzeStorage:  true,
+		// Patrol defaults - enabled when AI is enabled
+		// Default to 6 hour intervals (much more token-efficient than 15 min)
+		PatrolEnabled:          true,
+		PatrolIntervalMinutes:  360, // 6 hours - balance between coverage and token efficiency
+		PatrolSchedulePreset:   "6hr",
+		PatrolAnalyzeNodes:     true,
+		PatrolAnalyzeGuests:    true,
+		PatrolAnalyzeDocker:    true,
+		PatrolAnalyzeStorage:   true,
+		// Alert-triggered analysis is highly token-efficient - enabled by default
+		AlertTriggeredAnalysis: true,
 	}
 }
 
@@ -147,15 +156,72 @@ func (c *AIConfig) ClearAPIKey() {
 }
 
 // GetPatrolInterval returns the patrol interval as a duration
+// Uses the preset if set, otherwise falls back to custom minutes
 func (c *AIConfig) GetPatrolInterval() time.Duration {
-	if c.PatrolIntervalMinutes <= 0 {
-		return 15 * time.Minute // default
+	// If preset is set, use it
+	if c.PatrolSchedulePreset != "" {
+		switch c.PatrolSchedulePreset {
+		case "15min":
+			return 15 * time.Minute
+		case "1hr":
+			return 1 * time.Hour
+		case "6hr":
+			return 6 * time.Hour
+		case "12hr":
+			return 12 * time.Hour
+		case "daily":
+			return 24 * time.Hour
+		case "disabled":
+			return 0 // Signal that scheduled patrol is disabled
+		}
 	}
-	return time.Duration(c.PatrolIntervalMinutes) * time.Minute
+
+	// Fall back to custom minutes if set
+	// BUT: If PatrolIntervalMinutes is the old default (15), migrate to new default (360 = 6hr)
+	// This provides better token efficiency for existing installations
+	if c.PatrolIntervalMinutes > 0 {
+		// Migrate old 15-minute default to new 6-hour default
+		if c.PatrolIntervalMinutes == 15 && c.PatrolSchedulePreset == "" {
+			return 6 * time.Hour
+		}
+		return time.Duration(c.PatrolIntervalMinutes) * time.Minute
+	}
+
+	return 6 * time.Hour // default to 6 hours
+}
+
+// PresetToMinutes converts a patrol schedule preset to minutes
+func PresetToMinutes(preset string) int {
+	switch preset {
+	case "15min":
+		return 15
+	case "1hr":
+		return 60
+	case "6hr":
+		return 360
+	case "12hr":
+		return 720
+	case "daily":
+		return 1440
+	case "disabled":
+		return 0
+	default:
+		return 360 // default 6hr
+	}
 }
 
 // IsPatrolEnabled returns true if patrol should run
 // Note: Patrol uses local heuristics and doesn't require an AI API key
 func (c *AIConfig) IsPatrolEnabled() bool {
+	// If preset is "disabled", patrol is disabled
+	if c.PatrolSchedulePreset == "disabled" {
+		return false
+	}
 	return c.PatrolEnabled
 }
+
+// IsAlertTriggeredAnalysisEnabled returns true if AI should analyze resources when alerts fire
+func (c *AIConfig) IsAlertTriggeredAnalysisEnabled() bool {
+	return c.AlertTriggeredAnalysis
+}
+

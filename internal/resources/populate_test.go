@@ -109,3 +109,80 @@ func TestStorePopulateFromSnapshot(t *testing.T) {
 	t.Logf("SUCCESS: PopulateFromSnapshot works correctly!")
 	t.Logf("Total resources: %d (1 node + 1 VM + 1 container + 1 host)", len(all))
 }
+
+// TestPopulateFromSnapshotRemovesStaleResources verifies that resources not present
+// in subsequent snapshots are removed from the store (fixing the "ghost LXCs" bug).
+func TestPopulateFromSnapshotRemovesStaleResources(t *testing.T) {
+	store := NewStore()
+
+	// First snapshot with 2 containers
+	snapshot1 := models.StateSnapshot{
+		Containers: []models.Container{
+			{
+				ID:       "ct-100",
+				VMID:     100,
+				Name:     "container-to-keep",
+				Node:     "pve-node-1",
+				Instance: "pve1",
+				Status:   "running",
+			},
+			{
+				ID:       "ct-200",
+				VMID:     200,
+				Name:     "container-to-remove",
+				Node:     "pve-node-1",
+				Instance: "pve1",
+				Status:   "running",
+			},
+		},
+	}
+
+	// Populate with first snapshot
+	store.PopulateFromSnapshot(snapshot1)
+
+	// Verify both containers exist
+	containers := store.Query().OfType(ResourceTypeContainer).Execute()
+	if len(containers) != 2 {
+		t.Fatalf("Expected 2 containers after first snapshot, got %d", len(containers))
+	}
+	t.Logf("After first snapshot: %d containers", len(containers))
+
+	// Second snapshot with only 1 container (the other was "deleted" from Proxmox)
+	snapshot2 := models.StateSnapshot{
+		Containers: []models.Container{
+			{
+				ID:       "ct-100",
+				VMID:     100,
+				Name:     "container-to-keep",
+				Node:     "pve-node-1",
+				Instance: "pve1",
+				Status:   "running",
+			},
+			// container-to-remove is NOT included - simulating it was deleted
+		},
+	}
+
+	// Populate with second snapshot
+	store.PopulateFromSnapshot(snapshot2)
+
+	// Verify only 1 container remains
+	containers = store.Query().OfType(ResourceTypeContainer).Execute()
+	if len(containers) != 1 {
+		t.Fatalf("Expected 1 container after second snapshot (removed container should be gone), got %d", len(containers))
+	}
+
+	// Verify the correct container remains
+	if containers[0].ID != "ct-100" {
+		t.Errorf("Expected container-to-keep (ct-100) to remain, got %s", containers[0].ID)
+	}
+
+	// Verify the removed container is gone
+	_, found := store.Get("ct-200")
+	if found {
+		t.Error("container-to-remove (ct-200) should have been removed from the store")
+	}
+
+	t.Logf("SUCCESS: Removed resources are correctly cleaned up!")
+	t.Logf("After second snapshot: %d container(s) - 'container-to-remove' was properly removed", len(containers))
+}
+

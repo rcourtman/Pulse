@@ -246,6 +246,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   );
   const [input, setInput] = createSignal('');
   const [isLoading, setIsLoading] = createSignal(false);
+  const [queuedMessage, setQueuedMessage] = createSignal<string | null>(null);
   let messagesEndRef: HTMLDivElement | undefined;
   let inputRef: HTMLTextAreaElement | undefined;
   let abortControllerRef: AbortController | null = null;
@@ -284,6 +285,22 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   });
 
+  // Auto-send queued message when AI finishes processing
+  createEffect(() => {
+    const loading = isLoading();
+    const queued = queuedMessage();
+
+    // When loading finishes and we have a queued message, send it
+    if (!loading && queued) {
+      logger.info('[AIChat] AI finished, auto-sending queued message', { prompt: queued.substring(0, 50) });
+      setQueuedMessage(null);
+      // Small delay to let the UI update first
+      setTimeout(() => {
+        handleSubmit(undefined, queued);
+      }, 100);
+    }
+  });
+
   const generateId = () => Math.random().toString(36).substring(2, 9);
 
   // Stop/cancel the current AI request
@@ -300,13 +317,23 @@ export const AIChat: Component<AIChatProps> = (props) => {
           : msg
       )
     );
+    // Clear queued message when stopping - user likely doesn't want it sent
+    setQueuedMessage(null);
     setIsLoading(false);
   };
 
-  const handleSubmit = async (e?: Event) => {
+  const handleSubmit = async (e?: Event, forcePrompt?: string) => {
     e?.preventDefault();
-    const prompt = input().trim();
-    if (!prompt || isLoading()) return;
+    const prompt = forcePrompt || input().trim();
+    if (!prompt) return;
+
+    // If AI is currently working, queue this message for later
+    if (isLoading() && !forcePrompt) {
+      setQueuedMessage(prompt);
+      setInput('');
+      logger.info('[AIChat] Message queued while AI is working', { prompt: prompt.substring(0, 50) });
+      return;
+    }
 
     // IMPORTANT: Capture the current messages BEFORE adding new ones to avoid race conditions
     // SolidJS batches updates, so messages() may not be updated synchronously
@@ -1256,18 +1283,47 @@ export const AIChat: Component<AIChatProps> = (props) => {
               />
             </Show>
           </div>
+          {/* Queued message indicator */}
+          <Show when={queuedMessage()}>
+            <div class="flex items-center gap-2 px-3 py-2 mb-2 text-xs rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300">
+              <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span class="flex-1 truncate">
+                <span class="font-medium">Queued:</span> "{queuedMessage()!.substring(0, 50)}{queuedMessage()!.length > 50 ? '...' : ''}"
+              </span>
+              <button
+                type="button"
+                onClick={() => setQueuedMessage(null)}
+                class="p-0.5 rounded hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors"
+                title="Cancel queued message"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </Show>
           <form onSubmit={handleSubmit} class="flex gap-2">
             <textarea
               ref={inputRef}
               value={input()}
               onInput={(e) => setInput(e.currentTarget.value)}
               onKeyDown={handleKeyDown}
-              placeholder={aiChatStore.contextItems.length > 0
-                ? `Ask about ${aiChatStore.contextItems.length} item${aiChatStore.contextItems.length > 1 ? 's' : ''} in context...`
-                : "Ask about your infrastructure..."}
+              placeholder={
+                isLoading()
+                  ? queuedMessage()
+                    ? "Type another message to replace queued..."
+                    : "Type to queue your next message..."
+                  : aiChatStore.contextItems.length > 0
+                    ? `Ask about ${aiChatStore.contextItems.length} item${aiChatStore.contextItems.length > 1 ? 's' : ''} in context...`
+                    : "Ask about your infrastructure..."
+              }
               rows={2}
-              class="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-              disabled={isLoading()}
+              class={`flex-1 px-3 py-2 text-sm rounded-lg border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:border-transparent resize-none transition-colors ${isLoading()
+                ? 'border-amber-300 dark:border-amber-600 focus:ring-amber-500'
+                : 'border-gray-300 dark:border-gray-600 focus:ring-purple-500'
+                }`}
             />
             <Show
               when={isLoading()}
@@ -1289,20 +1345,37 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </button>
               }
             >
-              <button
-                type="button"
-                onClick={handleStop}
-                class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors self-end"
-                title="Stop generating"
-              >
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <rect x="6" y="6" width="12" height="12" rx="1" />
-                </svg>
-              </button>
+              <div class="flex flex-col gap-1 self-end">
+                {/* Queue button when AI is working */}
+                <button
+                  type="submit"
+                  disabled={!input().trim()}
+                  class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title={queuedMessage() ? "Replace queued message" : "Queue message for when AI finishes"}
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+                {/* Stop button */}
+                <button
+                  type="button"
+                  onClick={handleStop}
+                  class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                  title="Stop generating"
+                >
+                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="6" width="12" height="12" rx="1" />
+                  </svg>
+                </button>
+              </div>
             </Show>
           </form>
           <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">
-            Press Enter to send, Shift+Enter for new line
+            {isLoading()
+              ? "Type and press Enter to queue your next message"
+              : "Press Enter to send, Shift+Enter for new line"
+            }
           </p>
         </div>
       </Show>

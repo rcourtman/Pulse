@@ -317,6 +317,14 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		}
 	}
 
+	// Log content summary for debugging
+	log.Debug().
+		Int("content_blocks", len(anthropicResp.Content)).
+		Int("text_length", len(textContent)).
+		Int("tool_calls", len(toolCalls)).
+		Str("stop_reason", anthropicResp.StopReason).
+		Msg("Anthropic response parsed")
+
 	return &ChatResponse{
 		Content:      textContent,
 		Model:        anthropicResp.Model,

@@ -1105,52 +1105,84 @@ type PlatformSummary struct {
 
 // PopulateFromSnapshot converts all resources from a StateSnapshot to the unified store.
 // This should be called whenever the state is updated (e.g., before WebSocket broadcasts).
+// It also removes resources that are no longer present in the snapshot (except agent-sourced
+// resources which persist independently of the Proxmox API polling).
 func (s *Store) PopulateFromSnapshot(snapshot models.StateSnapshot) {
+	// Track which resource IDs we see in this snapshot
+	seenIDs := make(map[string]bool)
+
 	// Convert nodes
 	for _, node := range snapshot.Nodes {
 		r := FromNode(node)
-		s.Upsert(r)
+		id := s.Upsert(r)
+		seenIDs[id] = true
 	}
 
 	// Convert VMs
 	for _, vm := range snapshot.VMs {
 		r := FromVM(vm)
-		s.Upsert(r)
+		id := s.Upsert(r)
+		seenIDs[id] = true
 	}
 
 	// Convert containers
 	for _, ct := range snapshot.Containers {
 		r := FromContainer(ct)
-		s.Upsert(r)
+		id := s.Upsert(r)
+		seenIDs[id] = true
 	}
 
 	// Convert hosts
 	for _, host := range snapshot.Hosts {
 		r := FromHost(host)
-		s.Upsert(r)
+		id := s.Upsert(r)
+		seenIDs[id] = true
 	}
 
 	// Convert docker hosts and their containers
 	for _, dh := range snapshot.DockerHosts {
 		r := FromDockerHost(dh)
-		s.Upsert(r)
+		id := s.Upsert(r)
+		seenIDs[id] = true
 
 		// Convert containers within the docker host
 		for _, dc := range dh.Containers {
 			r := FromDockerContainer(dc, dh.ID, dh.Hostname)
-			s.Upsert(r)
+			id := s.Upsert(r)
+			seenIDs[id] = true
 		}
 	}
 
 	// Convert PBS instances
 	for _, pbs := range snapshot.PBSInstances {
 		r := FromPBSInstance(pbs)
-		s.Upsert(r)
+		id := s.Upsert(r)
+		seenIDs[id] = true
 	}
 
 	// Convert storage
 	for _, storage := range snapshot.Storage {
 		r := FromStorage(storage)
-		s.Upsert(r)
+		id := s.Upsert(r)
+		seenIDs[id] = true
+	}
+
+	// Remove resources that were NOT in this snapshot BUT were sourced from API
+	// (Agent-sourced resources like hosts from host-agent should persist independently)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var toRemove []string
+	for id, r := range s.resources {
+		if !seenIDs[id] && r.SourceType == SourceAPI {
+			toRemove = append(toRemove, id)
+		}
+	}
+
+	for _, id := range toRemove {
+		if r, ok := s.resources[id]; ok {
+			s.removeFromIndexes(r)
+			delete(s.resources, id)
+		}
 	}
 }
