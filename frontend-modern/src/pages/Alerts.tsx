@@ -2657,76 +2657,78 @@ function OverviewTab(props: {
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                                   </svg>
                                 </button>
-                                {/* Dropdown menu */}
-                                <div class="absolute right-0 mt-1 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                                  <button
-                                    class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded-t-lg transition-colors"
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      try {
-                                        await dismissFinding(finding.id, 'not_an_issue');
-                                        showSuccess('Dismissed - AI will not raise this again');
-                                        fetchAiData();
-                                      } catch (err) {
-                                        showError('Failed to dismiss finding');
-                                      }
-                                    }}
-                                  >
-                                    <span class="font-medium text-gray-700 dark:text-gray-300">Not an Issue</span>
-                                    <p class="text-gray-500 dark:text-gray-500 mt-0.5">This isn't actually a problem</p>
-                                  </button>
-                                  <button
-                                    class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      const note = prompt('Why is this expected? (optional - helps AI understand your environment)');
-                                      try {
-                                        await dismissFinding(finding.id, 'expected_behavior', note || undefined);
-                                        showSuccess('Dismissed - AI will not raise this again');
-                                        fetchAiData();
-                                      } catch (err) {
-                                        showError('Failed to dismiss finding');
-                                      }
-                                    }}
-                                  >
-                                    <span class="font-medium text-gray-700 dark:text-gray-300">Expected Behavior</span>
-                                    <p class="text-gray-500 dark:text-gray-500 mt-0.5">This is intentional/by design</p>
-                                  </button>
-                                  <button
-                                    class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      try {
-                                        await dismissFinding(finding.id, 'will_fix_later');
-                                        showSuccess('Acknowledged - AI will check again later');
-                                        fetchAiData();
-                                      } catch (err) {
-                                        showError('Failed to dismiss finding');
-                                      }
-                                    }}
-                                  >
-                                    <span class="font-medium text-gray-700 dark:text-gray-300">Will Fix Later</span>
-                                    <p class="text-gray-500 dark:text-gray-500 mt-0.5">I know about it, will address</p>
-                                  </button>
-                                  <div class="border-t border-gray-200 dark:border-gray-700">
+                                {/* Dropdown menu - pt-2 creates visual gap while maintaining hover area */}
+                                <div class="absolute right-0 top-full pt-1 w-48 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                                  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
                                     <button
-                                      class="w-full px-3 py-2 text-left text-xs hover:bg-red-50 dark:hover:bg-red-900/30 rounded-b-lg transition-colors text-red-600 dark:text-red-400"
+                                      class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded-t-lg transition-colors"
                                       onClick={async (e) => {
                                         e.stopPropagation();
-                                        if (confirm('Permanently suppress this type of finding for this resource?\n\nThe AI will never raise this issue again.')) {
-                                          try {
-                                            await suppressFinding(finding.id);
-                                            showSuccess('Suppressed - AI will never raise this again');
-                                            fetchAiData();
-                                          } catch (err) {
-                                            showError('Failed to suppress finding');
-                                          }
+                                        try {
+                                          await dismissFinding(finding.id, 'not_an_issue');
+                                          showSuccess('Dismissed - AI will not raise this again');
+                                          fetchAiData();
+                                        } catch (err) {
+                                          showError('Failed to dismiss finding');
                                         }
                                       }}
                                     >
-                                      <span class="font-medium">Never Alert Again</span>
-                                      <p class="text-red-500/80 dark:text-red-400/80 mt-0.5">Permanently suppress for this resource</p>
+                                      <span class="font-medium text-gray-700 dark:text-gray-300">Not an Issue</span>
+                                      <p class="text-gray-500 dark:text-gray-500 mt-0.5">This isn't actually a problem</p>
                                     </button>
+                                    <button
+                                      class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        const note = prompt('Why is this expected? (optional - helps AI understand your environment)');
+                                        try {
+                                          await dismissFinding(finding.id, 'expected_behavior', note || undefined);
+                                          showSuccess('Dismissed - AI will not raise this again');
+                                          fetchAiData();
+                                        } catch (err) {
+                                          showError('Failed to dismiss finding');
+                                        }
+                                      }}
+                                    >
+                                      <span class="font-medium text-gray-700 dark:text-gray-300">Expected Behavior</span>
+                                      <p class="text-gray-500 dark:text-gray-500 mt-0.5">This is intentional/by design</p>
+                                    </button>
+                                    <button
+                                      class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          await dismissFinding(finding.id, 'will_fix_later');
+                                          showSuccess('Acknowledged - AI will check again later');
+                                          fetchAiData();
+                                        } catch (err) {
+                                          showError('Failed to dismiss finding');
+                                        }
+                                      }}
+                                    >
+                                      <span class="font-medium text-gray-700 dark:text-gray-300">Will Fix Later</span>
+                                      <p class="text-gray-500 dark:text-gray-500 mt-0.5">I know about it, will address</p>
+                                    </button>
+                                    <div class="border-t border-gray-200 dark:border-gray-700">
+                                      <button
+                                        class="w-full px-3 py-2 text-left text-xs hover:bg-red-50 dark:hover:bg-red-900/30 rounded-b-lg transition-colors text-red-600 dark:text-red-400"
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          if (confirm('Permanently suppress this type of finding for this resource?\n\nThe AI will never raise this issue again.')) {
+                                            try {
+                                              await suppressFinding(finding.id);
+                                              showSuccess('Suppressed - AI will never raise this again');
+                                              fetchAiData();
+                                            } catch (err) {
+                                              showError('Failed to suppress finding');
+                                            }
+                                          }
+                                        }}
+                                      >
+                                        <span class="font-medium">Never Alert Again</span>
+                                        <p class="text-red-500/80 dark:text-red-400/80 mt-0.5">Permanently suppress for this resource</p>
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                               </div>

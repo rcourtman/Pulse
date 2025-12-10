@@ -1099,8 +1099,9 @@ func (p *PatrolService) GetFindingsHistory(startTime *time.Time) []*Finding {
 
 // ForcePatrol triggers an immediate patrol run
 // The deep parameter is kept for API backwards compatibility but is ignored
+// Uses context.Background() since this runs async after the HTTP response
 func (p *PatrolService) ForcePatrol(ctx context.Context, deep bool) {
-	go p.runPatrol(ctx)
+	go p.runPatrol(context.Background())
 }
 
 // analyzePBSInstance checks a PBS backup server for issues
