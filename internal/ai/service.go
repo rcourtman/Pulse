@@ -75,6 +75,10 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 	// Initialize patrol service if not already done
 	if s.patrolService == nil && sp != nil {
 		s.patrolService = NewPatrolService(s, sp)
+		// Connect knowledge store to patrol for per-resource notes in context
+		if s.knowledgeStore != nil {
+			s.patrolService.SetKnowledgeStore(s.knowledgeStore)
+		}
 	}
 
 	// Initialize alert-triggered analyzer if not already done

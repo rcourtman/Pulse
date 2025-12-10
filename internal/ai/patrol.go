@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
@@ -206,6 +207,7 @@ type PatrolService struct {
 	thresholdProvider ThresholdProvider
 	config            PatrolConfig
 	findings          *FindingsStore
+	knowledgeStore    *knowledge.Store // For per-resource notes in patrol context
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds PatrolThresholds
@@ -318,6 +320,13 @@ func (p *PatrolService) SetRunHistoryPersistence(persistence PatrolHistoryPersis
 		log.Info().Msg("AI Patrol run history persistence enabled")
 	}
 	return nil
+}
+
+// SetKnowledgeStore sets the knowledge store for including per-resource notes in patrol context
+func (p *PatrolService) SetKnowledgeStore(store *knowledge.Store) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.knowledgeStore = store
 }
 
 // GetConfig returns the current patrol configuration
@@ -1632,6 +1641,15 @@ func (p *PatrolService) buildPatrolPrompt(summary string, deep bool) string {
 	// Get user feedback context (dismissed/snoozed findings)
 	feedbackContext := p.findings.GetDismissedForContext()
 	
+	// Get resource notes from knowledge store (per-resource user notes)
+	var knowledgeContext string
+	p.mu.RLock()
+	knowledgeStore := p.knowledgeStore
+	p.mu.RUnlock()
+	if knowledgeStore != nil {
+		knowledgeContext = knowledgeStore.FormatAllForContext()
+	}
+	
 	basePrompt := fmt.Sprintf(`Please perform a comprehensive analysis of the following infrastructure and identify any issues, potential problems, or optimization opportunities.
 
 %s
@@ -1645,16 +1663,31 @@ Analyze the above and report any findings using the structured format. Focus on:
 
 If everything looks healthy, say so briefly.`, summary)
 
-	// If there's user feedback, append instructions
+	var contextAdditions strings.Builder
+	
+	// Append knowledge context (user notes about resources)
+	if knowledgeContext != "" {
+		contextAdditions.WriteString("\n\n")
+		contextAdditions.WriteString(knowledgeContext)
+		contextAdditions.WriteString("\nIMPORTANT: Consider the user's saved notes above when analyzing. If a user has noted that a resource behaves a certain way (e.g., 'runs hot for transcoding'), do not flag it as an issue.\n")
+	}
+	
+	// Append user feedback context (dismissed/snoozed findings)
 	if feedbackContext != "" {
-		return basePrompt + "\n\n" + feedbackContext + `
+		contextAdditions.WriteString("\n\n")
+		contextAdditions.WriteString(feedbackContext)
+		contextAdditions.WriteString(`
 
 IMPORTANT: Respect the user's feedback above. Do NOT re-raise findings that are:
 - Permanently suppressed - the user has explicitly said to never mention these again
 - Dismissed as "not_an_issue" or "expected_behavior" - the user knows about these
 - Currently snoozed - only re-raise if the severity has significantly worsened
 
-Only report NEW issues or issues where the severity has clearly escalated.`
+Only report NEW issues or issues where the severity has clearly escalated.`)
+	}
+	
+	if contextAdditions.Len() > 0 {
+		return basePrompt + contextAdditions.String()
 	}
 	
 	return basePrompt
