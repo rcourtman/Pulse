@@ -1188,16 +1188,20 @@ func (p *Proxy) handleGetTemperatureV2(ctx context.Context, req *RPCRequest, log
 		}
 	}
 
-	// Acquire per-node concurrency lock (prevents multiple simultaneous requests to same node)
-	releaseNode := p.nodeGate.acquire(node)
+	// Acquire per-node concurrency lock (context-aware to prevent goroutine leaks)
+	releaseNode, err := p.nodeGate.acquireContext(ctx, node)
+	if err != nil {
+		logger.Warn().Err(err).Str("node", node).Msg("Request cancelled while waiting for node lock")
+		return nil, fmt.Errorf("request cancelled while waiting for node")
+	}
 	defer releaseNode()
 
 	logger.Debug().Str("node", node).Msg("Fetching temperature via SSH")
 
 	// Fetch temperature data with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	sshCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	tempData, err := p.getTemperatureViaSSH(ctx, node)
+	tempData, err := p.getTemperatureViaSSH(sshCtx, node)
 	if err != nil {
 		logger.Warn().Err(err).Str("node", node).Msg("Failed to get temperatures")
 		return nil, fmt.Errorf("failed to get temperatures: %w", err)
