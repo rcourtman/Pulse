@@ -238,7 +238,7 @@ func (a *AlertTriggeredAnalyzer) analyzeNodeFromAlert(_ context.Context, alert *
 	}
 
 	// Use patrol service's node analysis
-	return a.patrolService.analyzeNode(*targetNode, true) // deep=true for triggered analysis
+	return a.patrolService.analyzeNode(*targetNode)
 }
 
 // analyzeGuestFromAlert analyzes a VM/Container triggered by an alert
@@ -255,7 +255,7 @@ func (a *AlertTriggeredAnalyzer) analyzeGuestFromAlert(_ context.Context, alert 
 			return a.patrolService.analyzeGuest(
 				vm.ID, vm.Name, "vm", vm.Node, vm.Status,
 				vm.CPU, vm.Memory.Usage, vm.Disk.Usage,
-				nil, vm.Template, true, // deep=true for triggered analysis
+				nil, vm.Template,
 			)
 		}
 	}
@@ -266,7 +266,7 @@ func (a *AlertTriggeredAnalyzer) analyzeGuestFromAlert(_ context.Context, alert 
 			return a.patrolService.analyzeGuest(
 				ct.ID, ct.Name, "container", ct.Node, ct.Status,
 				ct.CPU, ct.Memory.Usage, ct.Disk.Usage,
-				nil, ct.Template, true, // deep=true for triggered analysis
+				nil, ct.Template,
 			)
 		}
 	}
@@ -291,13 +291,13 @@ func (a *AlertTriggeredAnalyzer) analyzeDockerFromAlert(_ context.Context, alert
 	for _, dh := range state.DockerHosts {
 		// Check if this is a host alert
 		if dh.ID == alert.ResourceID || dh.Hostname == alert.ResourceName {
-			return a.patrolService.analyzeDockerHost(dh, true) // deep=true
+			return a.patrolService.analyzeDockerHost(dh)
 		}
 
 		// Check containers within this host
 		for _, container := range dh.Containers {
 			if container.ID == alert.ResourceID || container.Name == alert.ResourceName {
-				return a.patrolService.analyzeDockerHost(dh, true) // deep=true
+				return a.patrolService.analyzeDockerHost(dh)
 			}
 		}
 	}
@@ -320,7 +320,7 @@ func (a *AlertTriggeredAnalyzer) analyzeStorageFromAlert(_ context.Context, aler
 	// Storage is at the top level of StateSnapshot
 	for _, storage := range state.Storage {
 		if storage.ID == alert.ResourceID || storage.Name == alert.ResourceName {
-			return a.patrolService.analyzeStorage(storage, true)
+			return a.patrolService.analyzeStorage(storage)
 		}
 	}
 

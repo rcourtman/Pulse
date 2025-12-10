@@ -2,6 +2,8 @@
 package ai
 
 import (
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -54,11 +56,23 @@ type Finding struct {
 	SnoozedUntil   *time.Time      `json:"snoozed_until,omitempty"` // Finding hidden until this time
 	// Link to alert if this finding was triggered by or attached to an alert
 	AlertID string `json:"alert_id,omitempty"`
+
+	// User feedback fields - enables LLM "memory" by tracking how users respond
+	// This helps prevent the LLM from repeatedly raising the same dismissed issues
+	DismissedReason string `json:"dismissed_reason,omitempty"` // "not_an_issue", "expected_behavior", "will_fix_later"
+	UserNote        string `json:"user_note,omitempty"`        // Freeform user explanation, included in LLM context
+	TimesRaised     int    `json:"times_raised"`               // How many times this finding has been detected
+	Suppressed      bool   `json:"suppressed"`                 // Permanently suppress similar findings for this resource
 }
 
-// IsActive returns true if the finding is still active (not resolved and not snoozed)
+// IsActive returns true if the finding is still active (not resolved, not snoozed, not suppressed)
 func (f *Finding) IsActive() bool {
-	return f.ResolvedAt == nil && !f.IsSnoozed()
+	return f.ResolvedAt == nil && !f.IsSnoozed() && !f.Suppressed
+}
+
+// IsDismissed returns true if the user has dismissed this finding with a reason
+func (f *Finding) IsDismissed() bool {
+	return f.DismissedReason != ""
 }
 
 // IsSnoozed returns true if the finding is currently snoozed
@@ -186,7 +200,7 @@ func (s *FindingsStore) ForceSave() error {
 }
 
 // Add adds or updates a finding
-// If a finding with the same ID exists, it updates LastSeenAt
+// If a finding with the same ID exists, it updates LastSeenAt and increments TimesRaised
 // Returns true if this is a new finding
 func (s *FindingsStore) Add(f *Finding) bool {
 	s.mu.Lock()
@@ -199,6 +213,7 @@ func (s *FindingsStore) Add(f *Finding) bool {
 		existing.Recommendation = f.Recommendation
 		existing.Evidence = f.Evidence
 		existing.Severity = f.Severity
+		existing.TimesRaised++ // Track recurrence
 		s.mu.Unlock()
 		s.scheduleSave()
 		return false
@@ -298,6 +313,83 @@ func (s *FindingsStore) Unsnooze(id string) bool {
 	s.mu.Unlock()
 	s.scheduleSave()
 	return true
+}
+
+// Dismiss marks a finding as dismissed with a reason and optional note
+// Reasons: "not_an_issue", "expected_behavior", "will_fix_later"
+func (s *FindingsStore) Dismiss(id, reason, note string) bool {
+	s.mu.Lock()
+
+	f, exists := s.findings[id]
+	if !exists {
+		s.mu.Unlock()
+		return false
+	}
+
+	f.DismissedReason = reason
+	if note != "" {
+		f.UserNote = note
+	}
+	// Also mark as acknowledged
+	now := time.Now()
+	f.AcknowledgedAt = &now
+
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+// SetUserNote updates the user note on a finding
+func (s *FindingsStore) SetUserNote(id, note string) bool {
+	s.mu.Lock()
+
+	f, exists := s.findings[id]
+	if !exists {
+		s.mu.Unlock()
+		return false
+	}
+
+	f.UserNote = note
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+// Suppress marks a finding type as permanently suppressed for a resource
+// Future findings with the same resource+category will be auto-dismissed
+func (s *FindingsStore) Suppress(id string) bool {
+	s.mu.Lock()
+
+	f, exists := s.findings[id]
+	if !exists {
+		s.mu.Unlock()
+		return false
+	}
+
+	f.Suppressed = true
+	f.DismissedReason = "suppressed"
+	now := time.Now()
+	f.AcknowledgedAt = &now
+
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+// IsSuppressed checks if findings of this type for this resource are suppressed
+func (s *FindingsStore) IsSuppressed(resourceID string, category FindingCategory, title string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ids := s.byResource[resourceID]
+	for _, id := range ids {
+		if f, exists := s.findings[id]; exists {
+			if f.Suppressed && f.Category == category && f.Title == title {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Get returns a finding by ID
@@ -423,6 +515,85 @@ func (s *FindingsStore) Cleanup(maxAge time.Duration) int {
 	}
 
 	return removed
+}
+
+// GetDismissedForContext returns findings that the user has dismissed/acknowledged, 
+// formatted for injection into LLM prompts. This is the core of the "memory" system -
+// it tells the LLM what not to re-raise.
+func (s *FindingsStore) GetDismissedForContext() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var suppressed, dismissed, snoozed []string
+	
+	for _, f := range s.findings {
+		// Skip very old findings (more than 30 days)
+		if time.Since(f.LastSeenAt) > 30*24*time.Hour {
+			continue
+		}
+		
+		// Collect suppressed findings
+		if f.Suppressed {
+			note := ""
+			if f.UserNote != "" {
+				note = " - User note: " + f.UserNote
+			}
+			suppressed = append(suppressed, 
+				fmt.Sprintf("- %s on %s: %s%s", f.Title, f.ResourceName, f.DismissedReason, note))
+			continue
+		}
+		
+		// Collect dismissed/acknowledged findings
+		if f.DismissedReason != "" {
+			note := ""
+			if f.UserNote != "" {
+				note = " - User note: " + f.UserNote
+			}
+			dismissed = append(dismissed, 
+				fmt.Sprintf("- %s on %s (%s)%s", f.Title, f.ResourceName, f.DismissedReason, note))
+			continue
+		}
+		
+		// Collect snoozed findings  
+		if f.IsSnoozed() {
+			snoozed = append(snoozed, 
+				fmt.Sprintf("- %s on %s (snoozed until %s)", 
+					f.Title, f.ResourceName, f.SnoozedUntil.Format("Jan 2")))
+		}
+	}
+	
+	if len(suppressed) == 0 && len(dismissed) == 0 && len(snoozed) == 0 {
+		return ""
+	}
+	
+	var result strings.Builder
+	result.WriteString("\n## Previous Findings - User Feedback\n")
+	result.WriteString("The following findings have been addressed by the user. Do NOT re-raise these unless the situation has significantly worsened:\n\n")
+	
+	if len(suppressed) > 0 {
+		result.WriteString("### Permanently Suppressed (never re-raise):\n")
+		for _, s := range suppressed {
+			result.WriteString(s + "\n")
+		}
+		result.WriteString("\n")
+	}
+	
+	if len(dismissed) > 0 {
+		result.WriteString("### Dismissed by User:\n")
+		for _, d := range dismissed {
+			result.WriteString(d + "\n")
+		}
+		result.WriteString("\n")
+	}
+	
+	if len(snoozed) > 0 {
+		result.WriteString("### Temporarily Snoozed:\n")
+		for _, s := range snoozed {
+			result.WriteString(s + "\n")
+		}
+	}
+	
+	return result.String()
 }
 
 // FindingsSummary provides a quick count of findings by severity

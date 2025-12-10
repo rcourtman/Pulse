@@ -32,11 +32,13 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 
 	// Skip CSRF for API token auth (API clients don't have sessions)
 	if r.Header.Get("X-API-Token") != "" {
+		log.Debug().Str("path", r.URL.Path).Msg("CSRF check skipped: API token auth")
 		return true
 	}
 
 	// Skip CSRF for Basic Auth (doesn't use sessions, not vulnerable to CSRF)
 	if r.Header.Get("Authorization") != "" {
+		log.Debug().Str("path", r.URL.Path).Msg("CSRF check skipped: Basic Auth header present")
 		return true
 	}
 
@@ -45,6 +47,7 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 	if err != nil {
 		// No session cookie means no CSRF check needed
 		// (either no auth configured or using basic auth which doesn't use sessions)
+		log.Debug().Str("path", r.URL.Path).Msg("CSRF check skipped: no session cookie")
 		return true
 	}
 
@@ -53,6 +56,14 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 	if csrfToken == "" {
 		csrfToken = r.FormValue("csrf_token")
 	}
+
+	// Log CSRF validation attempt for debugging
+	log.Debug().
+		Str("path", r.URL.Path).
+		Str("method", r.Method).
+		Str("session", cookie.Value[:8]+"...").
+		Bool("has_csrf_token", csrfToken != "").
+		Msg("CSRF validation attempt")
 
 	// No CSRF token means request is not eligible for mutation
 	if csrfToken == "" {
@@ -63,6 +74,7 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 		clearCSRFCookie(w)
 		if newToken := issueNewCSRFCookie(w, r, cookie.Value); newToken != "" {
 			w.Header().Set("X-CSRF-Token", newToken)
+			log.Debug().Str("new_token", newToken[:8]+"...").Msg("Issued new CSRF token after missing")
 		}
 		return false
 	}
@@ -77,10 +89,15 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 		clearCSRFCookie(w)
 		if newToken := issueNewCSRFCookie(w, r, cookie.Value); newToken != "" {
 			w.Header().Set("X-CSRF-Token", newToken)
+			log.Debug().Str("new_token", newToken[:8]+"...").Msg("Issued new CSRF token after invalid")
 		}
 		return false
 	}
 
+	log.Debug().
+		Str("path", r.URL.Path).
+		Str("session", cookie.Value[:8]+"...").
+		Msg("CSRF validation successful")
 	return true
 }
 
