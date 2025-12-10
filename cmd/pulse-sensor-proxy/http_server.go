@@ -304,8 +304,13 @@ func (h *HTTPServer) handleTemperature(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Acquire per-node concurrency lock
-	releaseNode := h.proxy.nodeGate.acquire(nodeName)
+	// Acquire per-node concurrency lock (context-aware to prevent goroutine leaks)
+	releaseNode, err := h.proxy.nodeGate.acquireContext(ctx, nodeName)
+	if err != nil {
+		log.Warn().Err(err).Str("node", nodeName).Msg("Request cancelled while waiting for node lock")
+		h.sendJSONError(w, http.StatusServiceUnavailable, "request cancelled while waiting for node")
+		return
+	}
 	defer releaseNode()
 
 	// Fetch temperature data via SSH with context timeout
