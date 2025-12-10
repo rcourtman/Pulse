@@ -485,7 +485,7 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 	initialDelay := 30 * time.Second
 	select {
 	case <-time.After(initialDelay):
-		p.runPatrol(ctx, false)
+		p.runPatrol(ctx)
 	case <-p.stopCh:
 		return
 	case <-ctx.Done():
@@ -591,198 +591,18 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		return isNew
 	}
 
-	// Analyze nodes
-	if cfg.AnalyzeNodes {
-		for _, node := range state.Nodes {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			runStats.resourceCount++
-			runStats.nodesChecked++
-			findings := p.analyzeNode(node)
-			for _, f := range findings {
-				trackFinding(f)
-			}
-		}
-	}
+	// Count resources for statistics (but analysis is done by LLM only)
+	runStats.nodesChecked = len(state.Nodes)
+	runStats.guestsChecked = len(state.VMs) + len(state.Containers)
+	runStats.dockerChecked = len(state.DockerHosts)
+	runStats.storageChecked = len(state.Storage)
+	runStats.pbsChecked = len(state.PBSInstances)
+	runStats.hostsChecked = len(state.Hosts)
+	runStats.resourceCount = runStats.nodesChecked + runStats.guestsChecked + 
+		runStats.dockerChecked + runStats.storageChecked + runStats.pbsChecked + runStats.hostsChecked
 
-	// Analyze VMs and containers
-	if cfg.AnalyzeGuests {
-		for _, vm := range state.VMs {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			runStats.resourceCount++
-			runStats.guestsChecked++
-			// Calculate usage percentages from Memory/Disk structs
-			var memUsage, diskUsage float64
-			if vm.Memory.Total > 0 {
-				memUsage = float64(vm.Memory.Used) / float64(vm.Memory.Total)
-				// Cap at 1.0 to prevent impossible percentages from data anomalies
-				if memUsage > 1.0 {
-					log.Debug().
-						Str("guest", vm.Name).
-						Str("type", "vm").
-						Int64("memUsed", vm.Memory.Used).
-						Int64("memTotal", vm.Memory.Total).
-						Float64("rawRatio", memUsage).
-						Msg("AI Patrol: Capping memory usage ratio > 1.0")
-					memUsage = 1.0
-				}
-			}
-			if vm.Disk.Total > 0 {
-				diskUsage = float64(vm.Disk.Used) / float64(vm.Disk.Total)
-				// Cap at 1.0 to prevent impossible percentages from data anomalies
-				if diskUsage > 1.0 {
-					log.Debug().
-						Str("guest", vm.Name).
-						Str("type", "vm").
-						Int64("diskUsed", vm.Disk.Used).
-						Int64("diskTotal", vm.Disk.Total).
-						Float64("rawRatio", diskUsage).
-						Msg("AI Patrol: Capping disk usage ratio > 1.0")
-					diskUsage = 1.0
-				}
-			}
-			// Handle LastBackup - pass nil if zero time
-			var lastBackup *time.Time
-			if !vm.LastBackup.IsZero() {
-				t := vm.LastBackup
-				lastBackup = &t
-			}
-			findings := p.analyzeGuest(vm.ID, vm.Name, "vm", vm.Node, vm.Status,
-				vm.CPU, memUsage, diskUsage, lastBackup, vm.Template)
-			for _, f := range findings {
-				trackFinding(f)
-			}
-		}
-
-		for _, ct := range state.Containers {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			runStats.resourceCount++
-			runStats.guestsChecked++
-			// Calculate usage percentages from Memory/Disk structs
-			var memUsage, diskUsage float64
-			if ct.Memory.Total > 0 {
-				memUsage = float64(ct.Memory.Used) / float64(ct.Memory.Total)
-				// Cap at 1.0 to prevent impossible percentages from data anomalies
-				if memUsage > 1.0 {
-					log.Debug().
-						Str("guest", ct.Name).
-						Str("type", "container").
-						Int64("memUsed", ct.Memory.Used).
-						Int64("memTotal", ct.Memory.Total).
-						Float64("rawRatio", memUsage).
-						Msg("AI Patrol: Capping memory usage ratio > 1.0")
-					memUsage = 1.0
-				}
-			}
-			if ct.Disk.Total > 0 {
-				diskUsage = float64(ct.Disk.Used) / float64(ct.Disk.Total)
-				// Cap at 1.0 to prevent impossible percentages from data anomalies
-				if diskUsage > 1.0 {
-					log.Debug().
-						Str("guest", ct.Name).
-						Str("type", "container").
-						Int64("diskUsed", ct.Disk.Used).
-						Int64("diskTotal", ct.Disk.Total).
-						Float64("rawRatio", diskUsage).
-						Msg("AI Patrol: Capping disk usage ratio > 1.0")
-					diskUsage = 1.0
-				}
-			}
-			// Handle LastBackup - pass nil if zero time
-			var lastBackup *time.Time
-			if !ct.LastBackup.IsZero() {
-				t := ct.LastBackup
-				lastBackup = &t
-			}
-			findings := p.analyzeGuest(ct.ID, ct.Name, "container", ct.Node, ct.Status,
-				ct.CPU, memUsage, diskUsage, lastBackup, ct.Template)
-			for _, f := range findings {
-				trackFinding(f)
-			}
-		}
-	}
-
-	// Analyze Docker hosts
-	if cfg.AnalyzeDocker {
-		for _, dh := range state.DockerHosts {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			runStats.resourceCount++
-			runStats.dockerChecked++
-			findings := p.analyzeDockerHost(dh)
-			for _, f := range findings {
-				trackFinding(f)
-			}
-		}
-	}
-
-	// Analyze storage
-	if cfg.AnalyzeStorage {
-		for _, st := range state.Storage {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			runStats.resourceCount++
-			runStats.storageChecked++
-			findings := p.analyzeStorage(st)
-			for _, f := range findings {
-				trackFinding(f)
-			}
-		}
-	}
-
-	// Analyze PBS instances (backup servers)
-	if cfg.AnalyzePBS {
-		for _, pbs := range state.PBSInstances {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			runStats.resourceCount++
-			runStats.pbsChecked++
-			findings := p.analyzePBSInstance(pbs, state.PBSBackups)
-			for _, f := range findings {
-				trackFinding(f)
-			}
-		}
-	}
-
-	// Analyze agent hosts (RAID, sensors)
-	if cfg.AnalyzeHosts {
-		for _, host := range state.Hosts {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			runStats.resourceCount++
-			runStats.hostsChecked++
-			findings := p.analyzeHost(host)
-			for _, f := range findings {
-				trackFinding(f)
-			}
-		}
-	}
-
-	// Run real AI analysis using the LLM
-	// This asks the AI to analyze the infrastructure and identify issues
+	// Run AI analysis using the LLM - this is the ONLY analysis method
+	// The LLM analyzes the infrastructure and identifies issues
 	aiResult, aiErr := p.runAIAnalysis(ctx, state)
 	if aiErr != nil {
 		log.Warn().Err(aiErr).Msg("AI Patrol: LLM analysis failed")
@@ -878,9 +698,6 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 	p.lastDuration = duration
 	p.resourcesChecked = runStats.resourceCount
 	p.errorCount = runStats.errors
-	if deep {
-		p.lastDeepAnalysis = completedAt
-	}
 	p.mu.Unlock()
 
 	// Add to history store (handles persistence automatically)
@@ -1410,40 +1227,38 @@ func (p *PatrolService) analyzePBSInstance(pbs models.PBSInstance, allBackups []
 		}
 	}
 
-	// Check backup jobs for failures (only during deep analysis)
-	if deep {
-		for _, job := range pbs.BackupJobs {
-			if job.Status == "error" || job.Error != "" {
-				findings = append(findings, &Finding{
-					ID:             generateFindingID(pbs.ID+":job:"+job.ID, "backup", "job-failed"),
-					Severity:       FindingSeverityWarning,
-					Category:       FindingCategoryBackup,
-					ResourceID:     pbs.ID + ":job:" + job.ID,
-					ResourceName:   fmt.Sprintf("%s/job/%s", pbsName, job.ID),
-					ResourceType:   "pbs_job",
-					Title:          "Backup job failed",
-					Description:    fmt.Sprintf("Backup job '%s' on PBS '%s' is failing", job.ID, pbsName),
-					Recommendation: "Check PBS task logs for error details",
-					Evidence:       job.Error,
-				})
-			}
+	// Check backup jobs for failures
+	for _, job := range pbs.BackupJobs {
+		if job.Status == "error" || job.Error != "" {
+			findings = append(findings, &Finding{
+				ID:             generateFindingID(pbs.ID+":job:"+job.ID, "backup", "job-failed"),
+				Severity:       FindingSeverityWarning,
+				Category:       FindingCategoryBackup,
+				ResourceID:     pbs.ID + ":job:" + job.ID,
+				ResourceName:   fmt.Sprintf("%s/job/%s", pbsName, job.ID),
+				ResourceType:   "pbs_job",
+				Title:          "Backup job failed",
+				Description:    fmt.Sprintf("Backup job '%s' on PBS '%s' is failing", job.ID, pbsName),
+				Recommendation: "Check PBS task logs for error details",
+				Evidence:       job.Error,
+			})
 		}
+	}
 
-		for _, job := range pbs.VerifyJobs {
-			if job.Status == "error" || job.Error != "" {
-				findings = append(findings, &Finding{
-					ID:             generateFindingID(pbs.ID+":verify:"+job.ID, "backup", "verify-failed"),
-					Severity:       FindingSeverityWarning,
-					Category:       FindingCategoryBackup,
-					ResourceID:     pbs.ID + ":verify:" + job.ID,
-					ResourceName:   fmt.Sprintf("%s/verify/%s", pbsName, job.ID),
-					ResourceType:   "pbs_job",
-					Title:          "Verify job failed",
-					Description:    fmt.Sprintf("Verify job '%s' on PBS '%s' is failing", job.ID, pbsName),
-					Recommendation: "Check PBS task logs - verify failures may indicate backup corruption",
-					Evidence:       job.Error,
-				})
-			}
+	for _, job := range pbs.VerifyJobs {
+		if job.Status == "error" || job.Error != "" {
+			findings = append(findings, &Finding{
+				ID:             generateFindingID(pbs.ID+":verify:"+job.ID, "backup", "verify-failed"),
+				Severity:       FindingSeverityWarning,
+				Category:       FindingCategoryBackup,
+				ResourceID:     pbs.ID + ":verify:" + job.ID,
+				ResourceName:   fmt.Sprintf("%s/verify/%s", pbsName, job.ID),
+				ResourceType:   "pbs_job",
+				Title:          "Verify job failed",
+				Description:    fmt.Sprintf("Verify job '%s' on PBS '%s' is failing", job.ID, pbsName),
+				Recommendation: "Check PBS task logs - verify failures may indicate backup corruption",
+				Evidence:       job.Error,
+			})
 		}
 	}
 
@@ -1547,8 +1362,8 @@ func (p *PatrolService) analyzeHost(host models.Host) []*Finding {
 		}
 	}
 
-	// Check high temperature (during deep analysis)
-	if deep && len(host.Sensors.TemperatureCelsius) > 0 {
+	// Check high temperature
+	if len(host.Sensors.TemperatureCelsius) > 0 {
 		for sensorName, temp := range host.Sensors.TemperatureCelsius {
 			if temp > 85 {
 				severity := FindingSeverityWarning
@@ -1594,10 +1409,9 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 		return nil, nil // Nothing to analyze
 	}
 
-	// Build the patrol analysis prompt
-	prompt := p.buildPatrolPrompt(summary)
+	prompt := p.buildPatrolPrompt(summary, false)
 
-		Msg("AI Patrol: Sending infrastructure to LLM for analysis")
+	log.Debug().Msg("AI Patrol: Sending infrastructure to LLM for analysis")
 
 	// Start streaming phase
 	p.setStreamPhase("analyzing")
@@ -1813,20 +1627,37 @@ func (p *PatrolService) buildInfrastructureSummary(state models.StateSnapshot) s
 }
 
 // buildPatrolPrompt creates the prompt for AI analysis
+// Includes user feedback context to prevent re-raising dismissed findings
 func (p *PatrolService) buildPatrolPrompt(summary string, deep bool) string {
-	// Always run comprehensive analysis (deep flag kept for API backwards compat but ignored)
-	return fmt.Sprintf(`Please perform a comprehensive analysis of the following infrastructure and identify any issues, potential problems, or optimization opportunities.
+	// Get user feedback context (dismissed/snoozed findings)
+	feedbackContext := p.findings.GetDismissedForContext()
+	
+	basePrompt := fmt.Sprintf(`Please perform a comprehensive analysis of the following infrastructure and identify any issues, potential problems, or optimization opportunities.
 
 %s
 
 Analyze the above and report any findings using the structured format. Focus on:
 - Resources showing high utilization
 - Patterns that might indicate problems
-- Missing backups or stale backup schedules
+- Missing backups or stale backup schedules  
 - Unbalanced resource distribution
 - Any anomalies or concerns
 
 If everything looks healthy, say so briefly.`, summary)
+
+	// If there's user feedback, append instructions
+	if feedbackContext != "" {
+		return basePrompt + "\n\n" + feedbackContext + `
+
+IMPORTANT: Respect the user's feedback above. Do NOT re-raise findings that are:
+- Permanently suppressed - the user has explicitly said to never mention these again
+- Dismissed as "not_an_issue" or "expected_behavior" - the user knows about these
+- Currently snoozed - only re-raise if the severity has significantly worsened
+
+Only report NEW issues or issues where the severity has clearly escalated.`
+	}
+	
+	return basePrompt
 }
 
 // parseAIFindings extracts structured findings from AI response

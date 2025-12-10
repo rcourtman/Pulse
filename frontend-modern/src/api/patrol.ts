@@ -27,6 +27,11 @@ export interface Finding {
     acknowledged_at?: string;
     snoozed_until?: string; // Finding hidden until this time
     alert_id?: string;
+    // User feedback fields (LLM memory system)
+    dismissed_reason?: 'not_an_issue' | 'expected_behavior' | 'will_fix_later';
+    user_note?: string;
+    times_raised: number;
+    suppressed: boolean;
 }
 
 export interface FindingsSummary {
@@ -183,6 +188,36 @@ export async function snoozeFinding(findingId: string, durationHours: number): P
  */
 export async function resolveFinding(findingId: string): Promise<{ success: boolean; message: string }> {
     return apiFetchJSON('/api/ai/patrol/resolve', {
+        method: 'POST',
+        body: JSON.stringify({ finding_id: findingId }),
+    });
+}
+
+/**
+ * Dismiss a finding with a reason (LLM memory feature)
+ * The LLM will be told not to re-raise this issue in future patrols.
+ * @param findingId The ID of the finding to dismiss
+ * @param reason One of: "not_an_issue", "expected_behavior", "will_fix_later"
+ * @param note Optional freeform explanation
+ */
+export async function dismissFinding(
+    findingId: string,
+    reason: 'not_an_issue' | 'expected_behavior' | 'will_fix_later',
+    note?: string
+): Promise<{ success: boolean; message: string }> {
+    return apiFetchJSON('/api/ai/patrol/dismiss', {
+        method: 'POST',
+        body: JSON.stringify({ finding_id: findingId, reason, note }),
+    });
+}
+
+/**
+ * Permanently suppress a finding type (LLM memory feature)
+ * The LLM will never re-raise this type of finding for this resource.
+ * @param findingId The ID of the finding to suppress
+ */
+export async function suppressFinding(findingId: string): Promise<{ success: boolean; message: string }> {
+    return apiFetchJSON('/api/ai/patrol/suppress', {
         method: 'POST',
         body: JSON.stringify({ finding_id: findingId }),
     });

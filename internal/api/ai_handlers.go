@@ -1661,7 +1661,6 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		Running:          status.Running,
 		Enabled:          h.aiService.IsEnabled(),
 		LastPatrolAt:     status.LastPatrolAt,
-		LastDeepAnalysis: status.LastDeepAnalysis,
 		NextPatrolAt:     status.NextPatrolAt,
 		LastDurationMs:   status.LastDuration.Milliseconds(),
 		ResourcesChecked: status.ResourcesChecked,
@@ -1970,6 +1969,128 @@ func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to write resolve response")
+	}
+}
+
+// HandleDismissFinding dismisses a finding with a reason and optional note (POST /api/ai/patrol/dismiss)
+// This is part of the LLM memory system - dismissed findings are included in context to prevent re-raising
+// Valid reasons: "not_an_issue", "expected_behavior", "will_fix_later"
+func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require authentication
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		FindingID string `json:"finding_id"`
+		Reason    string `json:"reason"`     // "not_an_issue", "expected_behavior", "will_fix_later"
+		Note      string `json:"note"`       // Optional freeform note
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.FindingID == "" {
+		http.Error(w, "finding_id is required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate reason
+	validReasons := map[string]bool{
+		"not_an_issue":      true,
+		"expected_behavior": true,
+		"will_fix_later":    true,
+	}
+	if req.Reason != "" && !validReasons[req.Reason] {
+		http.Error(w, "Invalid reason. Valid values: not_an_issue, expected_behavior, will_fix_later", http.StatusBadRequest)
+		return
+	}
+
+	findings := patrol.GetFindings()
+	
+	if !findings.Dismiss(req.FindingID, req.Reason, req.Note) {
+		http.Error(w, "Finding not found", http.StatusNotFound)
+		return
+	}
+
+	log.Info().
+		Str("finding_id", req.FindingID).
+		Str("reason", req.Reason).
+		Bool("has_note", req.Note != "").
+		Msg("AI Patrol: Finding dismissed by user with reason")
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": "Finding dismissed",
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write dismiss response")
+	}
+}
+
+// HandleSuppressFinding permanently suppresses similar findings for a resource (POST /api/ai/patrol/suppress)
+// The LLM will be told never to re-raise findings of this type for this resource
+func (h *AISettingsHandler) HandleSuppressFinding(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require authentication
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		FindingID string `json:"finding_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.FindingID == "" {
+		http.Error(w, "finding_id is required", http.StatusBadRequest)
+		return
+	}
+
+	findings := patrol.GetFindings()
+	
+	if !findings.Suppress(req.FindingID) {
+		http.Error(w, "Finding not found", http.StatusNotFound)
+		return
+	}
+
+	log.Info().
+		Str("finding_id", req.FindingID).
+		Msg("AI Patrol: Finding type permanently suppressed by user")
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": "Finding type suppressed - similar issues will not be raised again",
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write suppress response")
 	}
 }
 
