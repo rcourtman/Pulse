@@ -29,18 +29,19 @@ type StateProvider interface {
 
 // Service orchestrates AI interactions
 type Service struct {
-	mu               sync.RWMutex
-	persistence      *config.ConfigPersistence
-	provider         providers.Provider
-	cfg              *config.AIConfig
-	agentServer      *agentexec.Server
-	policy           *agentexec.CommandPolicy
-	stateProvider    StateProvider
-	alertProvider    AlertProvider
-	knowledgeStore   *knowledge.Store
-	resourceProvider ResourceProvider // Unified resource model provider (Phase 2)
-	patrolService    *PatrolService   // Background AI monitoring service
-	metadataProvider MetadataProvider // Enables AI to update resource URLs
+	mu                  sync.RWMutex
+	persistence         *config.ConfigPersistence
+	provider            providers.Provider
+	cfg                 *config.AIConfig
+	agentServer         *agentexec.Server
+	policy              *agentexec.CommandPolicy
+	stateProvider       StateProvider
+	alertProvider       AlertProvider
+	knowledgeStore      *knowledge.Store
+	resourceProvider    ResourceProvider      // Unified resource model provider (Phase 2)
+	patrolService       *PatrolService        // Background AI monitoring service
+	metadataProvider    MetadataProvider      // Enables AI to update resource URLs
+	urlDiscoveryService *URLDiscoveryService  // Bulk URL discovery service
 }
 
 // NewService creates a new AI service
@@ -80,6 +81,17 @@ func (s *Service) GetPatrolService() *PatrolService {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.patrolService
+}
+
+// GetURLDiscoveryService returns the URL discovery service for bulk discovery
+func (s *Service) GetURLDiscoveryService() *URLDiscoveryService {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// Lazy initialization
+	if s.urlDiscoveryService == nil {
+		s.urlDiscoveryService = NewURLDiscoveryService(s)
+	}
+	return s.urlDiscoveryService
 }
 
 // SetPatrolThresholdProvider sets the threshold provider for patrol
