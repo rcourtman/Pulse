@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -253,6 +254,7 @@ func newNodeGate() *nodeGate {
 
 // acquire gets exclusive access to make requests to a node
 // Returns a release function that must be called when done
+// Deprecated: Use acquireContext for context-aware acquisition
 func (g *nodeGate) acquire(node string) func() {
 	g.mu.Lock()
 	lock := g.inFlight[node]
@@ -277,5 +279,44 @@ func (g *nodeGate) acquire(node string) func() {
 			delete(g.inFlight, node)
 		}
 		g.mu.Unlock()
+	}
+}
+
+// acquireContext gets exclusive access to make requests to a node with context cancellation support.
+// Returns a release function and nil error on success.
+// Returns nil and context error if context is cancelled while waiting.
+func (g *nodeGate) acquireContext(ctx context.Context, node string) (func(), error) {
+	g.mu.Lock()
+	lock := g.inFlight[node]
+	if lock == nil {
+		lock = &nodeLock{
+			guard: make(chan struct{}, 1),
+		}
+		g.inFlight[node] = lock
+	}
+	lock.refCount++
+	g.mu.Unlock()
+
+	// Wait for exclusive access OR context cancellation
+	select {
+	case lock.guard <- struct{}{}:
+		return func() {
+			<-lock.guard
+			g.mu.Lock()
+			lock.refCount--
+			if lock.refCount == 0 {
+				delete(g.inFlight, node)
+			}
+			g.mu.Unlock()
+		}, nil
+	case <-ctx.Done():
+		// Clean up refCount since we're not proceeding
+		g.mu.Lock()
+		lock.refCount--
+		if lock.refCount == 0 {
+			delete(g.inFlight, node)
+		}
+		g.mu.Unlock()
+		return nil, ctx.Err()
 	}
 }
