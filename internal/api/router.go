@@ -1103,6 +1103,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, r.aiSettingsHandler.HandleAcknowledgeFinding)) // Backward compat
 	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, r.aiSettingsHandler.HandleSnoozeFinding))
 
+	// AI URL Discovery routes for bulk scanning
+	r.mux.HandleFunc("/api/ai/discover-urls/start", RequireAdmin(r.config, r.aiSettingsHandler.HandleStartURLDiscovery))
+	r.mux.HandleFunc("/api/ai/discover-urls/status", RequireAuth(r.config, r.aiSettingsHandler.HandleURLDiscoveryStatus))
+	r.mux.HandleFunc("/api/ai/discover-urls/cancel", RequireAdmin(r.config, r.aiSettingsHandler.HandleCancelURLDiscovery))
+
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
 
