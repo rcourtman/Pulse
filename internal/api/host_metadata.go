@@ -22,6 +22,11 @@ func NewHostMetadataHandler(dataPath string) *HostMetadataHandler {
 	}
 }
 
+// Store returns the underlying metadata store
+func (h *HostMetadataHandler) Store() *config.HostMetadataStore {
+	return h.store
+}
+
 // HandleGetMetadata retrieves metadata for a specific host or all hosts
 func (h *HostMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

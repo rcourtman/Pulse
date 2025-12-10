@@ -60,6 +60,34 @@ func (h *AISettingsHandler) SetResourceProvider(rp ai.ResourceProvider) {
 	h.aiService.SetResourceProvider(rp)
 }
 
+// SetMetadataProvider sets the metadata provider for AI URL discovery
+func (h *AISettingsHandler) SetMetadataProvider(mp ai.MetadataProvider) {
+	h.aiService.SetMetadataProvider(mp)
+}
+
+// StartPatrol starts the background AI patrol service
+func (h *AISettingsHandler) StartPatrol(ctx context.Context) {
+	h.aiService.StartPatrol(ctx)
+}
+
+// SetPatrolThresholdProvider sets the threshold provider for the patrol service
+func (h *AISettingsHandler) SetPatrolThresholdProvider(provider ai.ThresholdProvider) {
+	h.aiService.SetPatrolThresholdProvider(provider)
+}
+
+// SetPatrolFindingsPersistence enables findings persistence for the patrol service
+func (h *AISettingsHandler) SetPatrolFindingsPersistence(persistence ai.FindingsPersistence) error {
+	if patrol := h.aiService.GetPatrolService(); patrol != nil {
+		return patrol.SetFindingsPersistence(persistence)
+	}
+	return nil
+}
+
+// StopPatrol stops the background AI patrol service
+func (h *AISettingsHandler) StopPatrol() {
+	h.aiService.StopPatrol()
+}
+
 // AISettingsResponse is returned by GET /api/settings/ai
 // API key is masked for security
 type AISettingsResponse struct {
@@ -1526,3 +1554,293 @@ func (h *AISettingsHandler) HandleOAuthDisconnect(w http.ResponseWriter, r *http
 	}
 }
 
+// PatrolStatusResponse is the response for GET /api/ai/patrol/status
+type PatrolStatusResponse struct {
+	Running          bool       `json:"running"`
+	Enabled          bool       `json:"enabled"`
+	LastPatrolAt     *time.Time `json:"last_patrol_at,omitempty"`
+	LastDeepAnalysis *time.Time `json:"last_deep_analysis_at,omitempty"`
+	NextPatrolAt     *time.Time `json:"next_patrol_at,omitempty"`
+	LastDurationMs   int64      `json:"last_duration_ms"`
+	ResourcesChecked int        `json:"resources_checked"`
+	FindingsCount    int        `json:"findings_count"`
+	Healthy          bool       `json:"healthy"`
+	Summary          struct {
+		Critical int `json:"critical"`
+		Warning  int `json:"warning"`
+		Watch    int `json:"watch"`
+		Info     int `json:"info"`
+	} `json:"summary"`
+}
+
+// HandleGetPatrolStatus returns the current patrol status (GET /api/ai/patrol/status)
+func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		// Patrol not initialized
+		response := PatrolStatusResponse{
+			Running: false,
+			Enabled: false,
+			Healthy: true,
+		}
+		if err := utils.WriteJSONResponse(w, response); err != nil {
+			log.Error().Err(err).Msg("Failed to write patrol status response")
+		}
+		return
+	}
+
+	status := patrol.GetStatus()
+	summary := patrol.GetFindingsSummary()
+
+	response := PatrolStatusResponse{
+		Running:          status.Running,
+		Enabled:          h.aiService.IsEnabled(),
+		LastPatrolAt:     status.LastPatrolAt,
+		LastDeepAnalysis: status.LastDeepAnalysis,
+		NextPatrolAt:     status.NextPatrolAt,
+		LastDurationMs:   status.LastDuration.Milliseconds(),
+		ResourcesChecked: status.ResourcesChecked,
+		FindingsCount:    status.FindingsCount,
+		Healthy:          status.Healthy,
+	}
+	response.Summary.Critical = summary.Critical
+	response.Summary.Warning = summary.Warning
+	response.Summary.Watch = summary.Watch
+	response.Summary.Info = summary.Info
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write patrol status response")
+	}
+}
+
+// HandleGetPatrolFindings returns all active findings (GET /api/ai/patrol/findings)
+func (h *AISettingsHandler) HandleGetPatrolFindings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		// Return empty findings
+		if err := utils.WriteJSONResponse(w, []interface{}{}); err != nil {
+			log.Error().Err(err).Msg("Failed to write patrol findings response")
+		}
+		return
+	}
+
+	// Check for resource_id query parameter
+	resourceID := r.URL.Query().Get("resource_id")
+	var findings []*ai.Finding
+	if resourceID != "" {
+		findings = patrol.GetFindingsForResource(resourceID)
+	} else {
+		findings = patrol.GetAllFindings()
+	}
+
+	if err := utils.WriteJSONResponse(w, findings); err != nil {
+		log.Error().Err(err).Msg("Failed to write patrol findings response")
+	}
+}
+
+// HandleForcePatrol triggers an immediate patrol run (POST /api/ai/patrol/run)
+func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require admin authentication
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Check for deep=true query parameter
+	deep := r.URL.Query().Get("deep") == "true"
+
+	// Trigger patrol asynchronously
+	patrol.ForcePatrol(r.Context(), deep)
+
+	patrolType := "quick"
+	if deep {
+		patrolType = "deep"
+	}
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Triggered %s patrol run", patrolType),
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write force patrol response")
+	}
+}
+
+// HandleAcknowledgeFinding acknowledges a finding (POST /api/ai/patrol/acknowledge)
+// This marks the finding as seen but keeps it visible (dimmed). Auto-resolve removes it when condition clears.
+// This matches alert acknowledgement behavior for UI consistency.
+func (h *AISettingsHandler) HandleAcknowledgeFinding(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require authentication
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		FindingID string `json:"finding_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.FindingID == "" {
+		http.Error(w, "finding_id is required", http.StatusBadRequest)
+		return
+	}
+
+	findings := patrol.GetFindings()
+	
+	// Just acknowledge - don't resolve. Finding stays visible but marked as seen.
+	// Auto-resolve will remove it when the underlying condition clears.
+	if !findings.Acknowledge(req.FindingID) {
+		http.Error(w, "Finding not found", http.StatusNotFound)
+		return
+	}
+
+	log.Info().
+		Str("finding_id", req.FindingID).
+		Msg("AI Patrol: Finding acknowledged by user")
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": "Finding acknowledged",
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write acknowledge response")
+	}
+}
+
+// HandleSnoozeFinding snoozes a finding for a specified duration (POST /api/ai/patrol/snooze)
+// Snoozed findings are hidden from the active list but will reappear if condition persists after snooze expires
+func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require authentication
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		FindingID     string `json:"finding_id"`
+		DurationHours int    `json:"duration_hours"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.FindingID == "" {
+		http.Error(w, "finding_id is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.DurationHours <= 0 {
+		http.Error(w, "duration_hours must be positive", http.StatusBadRequest)
+		return
+	}
+
+	// Cap snooze duration at 7 days
+	if req.DurationHours > 168 {
+		req.DurationHours = 168
+	}
+
+	findings := patrol.GetFindings()
+	duration := time.Duration(req.DurationHours) * time.Hour
+	
+	if !findings.Snooze(req.FindingID, duration) {
+		http.Error(w, "Finding not found or already resolved", http.StatusNotFound)
+		return
+	}
+
+	log.Info().
+		Str("finding_id", req.FindingID).
+		Int("hours", req.DurationHours).
+		Msg("AI Patrol: Finding snoozed by user")
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Finding snoozed for %d hours", req.DurationHours),
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write snooze response")
+	}
+}
+
+// HandleGetFindingsHistory returns all findings including resolved for history (GET /api/ai/patrol/history)
+func (h *AISettingsHandler) HandleGetFindingsHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require authentication
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		// Return empty history
+		if err := utils.WriteJSONResponse(w, []interface{}{}); err != nil {
+			log.Error().Err(err).Msg("Failed to write findings history response")
+		}
+		return
+	}
+
+	// Parse optional startTime query parameter
+	var startTime *time.Time
+	if startTimeStr := r.URL.Query().Get("start_time"); startTimeStr != "" {
+		if t, err := time.Parse(time.RFC3339, startTimeStr); err == nil {
+			startTime = &t
+		}
+	}
+
+	findings := patrol.GetFindingsHistory(startTime)
+
+	if err := utils.WriteJSONResponse(w, findings); err != nil {
+		log.Error().Err(err).Msg("Failed to write findings history response")
+	}
+}
