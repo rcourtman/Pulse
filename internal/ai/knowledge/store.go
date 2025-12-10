@@ -357,27 +357,69 @@ func (s *Store) ListGuests() ([]string, error) {
 
 // FormatAllForContext returns a summary of all saved knowledge across all guests
 // This is used when no specific target is selected to give the AI full context
+// To prevent context bloat, it limits output to maxGuests and maxBytes
 func (s *Store) FormatAllForContext() string {
+	const maxGuests = 10   // Only include the 10 most recently updated guests
+	const maxBytes = 8000  // Cap total output at ~8KB to leave room for other context
+
 	guests, err := s.ListGuests()
 	if err != nil || len(guests) == 0 {
 		return ""
 	}
 
-	var sections []string
-	totalNotes := 0
+	// Load all guests with notes and sort by most recently updated
+	type guestWithTime struct {
+		id        string
+		knowledge *GuestKnowledge
+	}
+	var guestsWithNotes []guestWithTime
 
 	for _, guestID := range guests {
 		knowledge, err := s.GetKnowledge(guestID)
 		if err != nil || len(knowledge.Notes) == 0 {
 			continue
 		}
+		guestsWithNotes = append(guestsWithNotes, guestWithTime{id: guestID, knowledge: knowledge})
+	}
 
-		totalNotes += len(knowledge.Notes)
+	if len(guestsWithNotes) == 0 {
+		return ""
+	}
+
+	// Sort by UpdatedAt descending (most recent first)
+	for i := 0; i < len(guestsWithNotes)-1; i++ {
+		for j := i + 1; j < len(guestsWithNotes); j++ {
+			if guestsWithNotes[j].knowledge.UpdatedAt.After(guestsWithNotes[i].knowledge.UpdatedAt) {
+				guestsWithNotes[i], guestsWithNotes[j] = guestsWithNotes[j], guestsWithNotes[i]
+			}
+		}
+	}
+
+	// Track how many guests and notes we're including vs total
+	totalGuests := len(guestsWithNotes)
+	totalNotes := 0
+	for _, g := range guestsWithNotes {
+		totalNotes += len(g.knowledge.Notes)
+	}
+
+	// Limit to maxGuests
+	truncatedGuests := false
+	if len(guestsWithNotes) > maxGuests {
+		guestsWithNotes = guestsWithNotes[:maxGuests]
+		truncatedGuests = true
+	}
+
+	var sections []string
+	includedNotes := 0
+	currentBytes := 0
+
+	for _, g := range guestsWithNotes {
+		knowledge := g.knowledge
 
 		// Build a summary for this guest
 		guestName := knowledge.GuestName
 		if guestName == "" {
-			guestName = guestID
+			guestName = g.id
 		}
 
 		// Group notes by category
@@ -401,18 +443,44 @@ func (s *Store) FormatAllForContext() string {
 				if cat == "credential" && len(content) > 6 {
 					content = content[:2] + "****" + content[len(content)-2:]
 				}
-				guestSection += fmt.Sprintf("\n- **%s**: %s", note.Title, content)
+				noteLine := fmt.Sprintf("\n- **%s**: %s", note.Title, content)
+				
+				// Check if adding this note would exceed our byte limit
+				if currentBytes+len(guestSection)+len(noteLine) > maxBytes {
+					// Stop adding notes, we've hit the limit
+					if includedNotes > 0 {
+						log.Warn().
+							Int("total_notes", totalNotes).
+							Int("included_notes", includedNotes).
+							Int("total_guests", totalGuests).
+							Int("max_bytes", maxBytes).
+							Msg("Knowledge context truncated to prevent bloat - consider cleaning up old notes")
+					}
+					goto finalize
+				}
+				guestSection += noteLine
+				includedNotes++
 			}
 		}
 
+		currentBytes += len(guestSection)
 		sections = append(sections, guestSection)
 	}
 
+finalize:
 	if len(sections) == 0 {
 		return ""
 	}
 
-	result := fmt.Sprintf("\n\n## Saved Knowledge (%d notes across %d guests)\n", totalNotes, len(sections))
+	// Build result with info about truncation if applicable
+	var header string
+	if truncatedGuests || includedNotes < totalNotes {
+		header = fmt.Sprintf("\n\n## Saved Knowledge (%d/%d notes from %d/%d guests, most recent)\n",
+			includedNotes, totalNotes, len(sections), totalGuests)
+	} else {
+		header = fmt.Sprintf("\n\n## Saved Knowledge (%d notes across %d guests)\n", totalNotes, len(sections))
+	}
+	result := header
 	result += "This is information learned from previous sessions. Use it to avoid rediscovery.\n"
 	result += strings.Join(sections, "\n")
 

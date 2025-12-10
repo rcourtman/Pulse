@@ -256,6 +256,10 @@ func (s *Server) pingLoop(ac *agentConn, done chan struct{}) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
+	// Track consecutive ping failures to detect dead connections faster
+	consecutiveFailures := 0
+	const maxConsecutiveFailures = 3
+
 	for {
 		select {
 		case <-done:
@@ -267,8 +271,28 @@ func (s *Server) pingLoop(ac *agentConn, done chan struct{}) {
 			err := ac.conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(5*time.Second))
 			ac.writeMu.Unlock()
 			if err != nil {
-				log.Debug().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to send ping to agent")
-				return
+				consecutiveFailures++
+				log.Warn().
+					Err(err).
+					Str("agent_id", ac.agent.AgentID).
+					Str("hostname", ac.agent.Hostname).
+					Int("consecutive_failures", consecutiveFailures).
+					Msg("Failed to send ping to agent")
+				
+				if consecutiveFailures >= maxConsecutiveFailures {
+					log.Error().
+						Str("agent_id", ac.agent.AgentID).
+						Str("hostname", ac.agent.Hostname).
+						Int("failures", consecutiveFailures).
+						Msg("Agent connection appears dead after multiple ping failures, closing connection")
+					
+					// Close the connection - this will cause readLoop to exit and clean up
+					ac.conn.Close()
+					return
+				}
+			} else {
+				// Reset failure counter on successful ping
+				consecutiveFailures = 0
 			}
 		}
 	}

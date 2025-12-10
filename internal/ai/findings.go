@@ -1,0 +1,444 @@
+// Package ai provides AI-powered infrastructure monitoring and investigation.
+package ai
+
+import (
+	"sync"
+	"time"
+)
+
+// FindingSeverity represents how urgent a finding is
+type FindingSeverity string
+
+const (
+	// FindingSeverityInfo is informational - user may want to know
+	FindingSeverityInfo FindingSeverity = "info"
+	// FindingSeverityWatch means something to keep an eye on
+	FindingSeverityWatch FindingSeverity = "watch"
+	// FindingSeverityWarning means action should be taken soon
+	FindingSeverityWarning FindingSeverity = "warning"
+	// FindingSeverityCritical means immediate action needed
+	FindingSeverityCritical FindingSeverity = "critical"
+)
+
+// FindingCategory groups findings by type
+type FindingCategory string
+
+const (
+	FindingCategoryPerformance FindingCategory = "performance"
+	FindingCategoryCapacity    FindingCategory = "capacity"
+	FindingCategoryReliability FindingCategory = "reliability"
+	FindingCategoryBackup      FindingCategory = "backup"
+	FindingCategorySecurity    FindingCategory = "security"
+	FindingCategoryGeneral     FindingCategory = "general"
+)
+
+// Finding represents an AI-discovered insight about infrastructure
+type Finding struct {
+	ID             string          `json:"id"`
+	Severity       FindingSeverity `json:"severity"`
+	Category       FindingCategory `json:"category"`
+	ResourceID     string          `json:"resource_id"`
+	ResourceName   string          `json:"resource_name"`
+	ResourceType   string          `json:"resource_type"` // node, vm, container, docker, storage, host, pbs, host_raid
+	Node           string          `json:"node,omitempty"`
+	Title          string          `json:"title"`
+	Description    string          `json:"description"`
+	Recommendation string          `json:"recommendation,omitempty"`
+	Evidence       string          `json:"evidence,omitempty"` // data/commands that led to this finding
+	DetectedAt     time.Time       `json:"detected_at"`
+	LastSeenAt     time.Time       `json:"last_seen_at"`
+	ResolvedAt     *time.Time      `json:"resolved_at,omitempty"`
+	AutoResolved   bool            `json:"auto_resolved"`
+	AcknowledgedAt *time.Time      `json:"acknowledged_at,omitempty"`
+	SnoozedUntil   *time.Time      `json:"snoozed_until,omitempty"` // Finding hidden until this time
+	// Link to alert if this finding was triggered by or attached to an alert
+	AlertID string `json:"alert_id,omitempty"`
+}
+
+// IsActive returns true if the finding is still active (not resolved and not snoozed)
+func (f *Finding) IsActive() bool {
+	return f.ResolvedAt == nil && !f.IsSnoozed()
+}
+
+// IsSnoozed returns true if the finding is currently snoozed
+func (f *Finding) IsSnoozed() bool {
+	return f.SnoozedUntil != nil && time.Now().Before(*f.SnoozedUntil)
+}
+
+// IsResolved returns true if the finding has been resolved (ignores snooze)
+func (f *Finding) IsResolved() bool {
+	return f.ResolvedAt != nil
+}
+
+// FindingsPersistence interface for saving/loading findings (avoids circular imports)
+type FindingsPersistence interface {
+	SaveFindings(findings map[string]*Finding) error
+	LoadFindings() (map[string]*Finding, error)
+}
+
+// FindingsStore provides thread-safe storage for AI findings with optional persistence
+type FindingsStore struct {
+	mu       sync.RWMutex
+	findings map[string]*Finding // keyed by ID
+	// Index by resource for quick lookups
+	byResource map[string][]string // resource_id -> []finding_id
+	// Keep track of active findings count by severity (cached, but GetSummary calculates dynamically)
+	activeCounts map[FindingSeverity]int
+	// Persistence layer (optional)
+	persistence FindingsPersistence
+	// Debounce save operations
+	saveTimer    *time.Timer
+	savePending  bool
+	saveDebounce time.Duration
+}
+
+// NewFindingsStore creates a new findings store
+func NewFindingsStore() *FindingsStore {
+	return &FindingsStore{
+		findings:     make(map[string]*Finding),
+		byResource:   make(map[string][]string),
+		activeCounts: make(map[FindingSeverity]int),
+		saveDebounce: 5 * time.Second, // Debounce saves by 5 seconds
+	}
+}
+
+// SetPersistence sets the persistence layer and loads existing findings
+func (s *FindingsStore) SetPersistence(p FindingsPersistence) error {
+	s.mu.Lock()
+	s.persistence = p
+	s.mu.Unlock()
+
+	// Load existing findings from disk
+	if p != nil {
+		findings, err := p.LoadFindings()
+		if err != nil {
+			return err
+		}
+		if len(findings) > 0 {
+			s.mu.Lock()
+			for id, f := range findings {
+				s.findings[id] = f
+				s.byResource[f.ResourceID] = append(s.byResource[f.ResourceID], id)
+				if f.IsActive() {
+					s.activeCounts[f.Severity]++
+				}
+			}
+			s.mu.Unlock()
+		}
+	}
+	return nil
+}
+
+// scheduleSave schedules a debounced save operation
+func (s *FindingsStore) scheduleSave() {
+	if s.persistence == nil {
+		return
+	}
+
+	// Already have a save pending
+	if s.savePending {
+		return
+	}
+
+	s.savePending = true
+	s.saveTimer = time.AfterFunc(s.saveDebounce, func() {
+		s.mu.Lock()
+		s.savePending = false
+		// Make a copy for saving
+		findingsCopy := make(map[string]*Finding, len(s.findings))
+		for id, f := range s.findings {
+			copy := *f
+			findingsCopy[id] = &copy
+		}
+		persistence := s.persistence
+		s.mu.Unlock()
+
+		if persistence != nil {
+			if err := persistence.SaveFindings(findingsCopy); err != nil {
+				// Log error but don't fail - persistence is best-effort
+				// (log import would create circular dep, so we silently fail)
+			}
+		}
+	})
+}
+
+// ForceSave immediately saves findings (useful for shutdown)
+func (s *FindingsStore) ForceSave() error {
+	s.mu.Lock()
+	if s.saveTimer != nil {
+		s.saveTimer.Stop()
+	}
+	s.savePending = false
+	
+	findingsCopy := make(map[string]*Finding, len(s.findings))
+	for id, f := range s.findings {
+		copy := *f
+		findingsCopy[id] = &copy
+	}
+	persistence := s.persistence
+	s.mu.Unlock()
+
+	if persistence != nil {
+		return persistence.SaveFindings(findingsCopy)
+	}
+	return nil
+}
+
+// Add adds or updates a finding
+// If a finding with the same ID exists, it updates LastSeenAt
+// Returns true if this is a new finding
+func (s *FindingsStore) Add(f *Finding) bool {
+	s.mu.Lock()
+
+	existing, exists := s.findings[f.ID]
+	if exists {
+		// Update existing finding
+		existing.LastSeenAt = time.Now()
+		existing.Description = f.Description
+		existing.Recommendation = f.Recommendation
+		existing.Evidence = f.Evidence
+		existing.Severity = f.Severity
+		s.mu.Unlock()
+		s.scheduleSave()
+		return false
+	}
+
+	// New finding
+	if f.DetectedAt.IsZero() {
+		f.DetectedAt = time.Now()
+	}
+	f.LastSeenAt = time.Now()
+
+	s.findings[f.ID] = f
+	s.byResource[f.ResourceID] = append(s.byResource[f.ResourceID], f.ID)
+	if f.IsActive() {
+		s.activeCounts[f.Severity]++
+	}
+	s.mu.Unlock()
+	s.scheduleSave()
+
+	return true
+}
+
+// Resolve marks a finding as resolved
+func (s *FindingsStore) Resolve(id string, auto bool) bool {
+	s.mu.Lock()
+
+	f, exists := s.findings[id]
+	if !exists || !f.IsActive() {
+		s.mu.Unlock()
+		return false
+	}
+
+	now := time.Now()
+	f.ResolvedAt = &now
+	f.AutoResolved = auto
+	s.activeCounts[f.Severity]--
+	s.mu.Unlock()
+	s.scheduleSave()
+
+	return true
+}
+
+// Acknowledge marks a finding as acknowledged
+func (s *FindingsStore) Acknowledge(id string) bool {
+	s.mu.Lock()
+
+	f, exists := s.findings[id]
+	if !exists {
+		s.mu.Unlock()
+		return false
+	}
+
+	now := time.Now()
+	f.AcknowledgedAt = &now
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+// Snooze hides a finding for the specified duration
+// Common durations: 1h, 24h, 7d (168h)
+func (s *FindingsStore) Snooze(id string, duration time.Duration) bool {
+	s.mu.Lock()
+
+	f, exists := s.findings[id]
+	if !exists || f.IsResolved() {
+		s.mu.Unlock()
+		return false
+	}
+
+	// If was previously active (not snoozed), decrement count
+	if f.SnoozedUntil == nil || time.Now().After(*f.SnoozedUntil) {
+		s.activeCounts[f.Severity]--
+	}
+
+	until := time.Now().Add(duration)
+	f.SnoozedUntil = &until
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+// Unsnooze removes the snooze from a finding, making it active again
+func (s *FindingsStore) Unsnooze(id string) bool {
+	s.mu.Lock()
+
+	f, exists := s.findings[id]
+	if !exists || f.IsResolved() {
+		s.mu.Unlock()
+		return false
+	}
+
+	if f.SnoozedUntil != nil {
+		f.SnoozedUntil = nil
+		s.activeCounts[f.Severity]++
+	}
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+// Get returns a finding by ID
+func (s *FindingsStore) Get(id string) *Finding {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if f, exists := s.findings[id]; exists {
+		// Return a copy to prevent mutations
+		copy := *f
+		return &copy
+	}
+	return nil
+}
+
+// GetByResource returns all active findings for a resource
+func (s *FindingsStore) GetByResource(resourceID string) []*Finding {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ids := s.byResource[resourceID]
+	result := make([]*Finding, 0, len(ids))
+	for _, id := range ids {
+		if f, exists := s.findings[id]; exists && f.IsActive() {
+			copy := *f
+			result = append(result, &copy)
+		}
+	}
+	return result
+}
+
+// GetActive returns all active findings, optionally filtered by severity
+func (s *FindingsStore) GetActive(minSeverity FindingSeverity) []*Finding {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	severityOrder := map[FindingSeverity]int{
+		FindingSeverityInfo:     0,
+		FindingSeverityWatch:    1,
+		FindingSeverityWarning:  2,
+		FindingSeverityCritical: 3,
+	}
+	minOrder := severityOrder[minSeverity]
+
+	result := make([]*Finding, 0)
+	for _, f := range s.findings {
+		if f.IsActive() && severityOrder[f.Severity] >= minOrder {
+			copy := *f
+			result = append(result, &copy)
+		}
+	}
+	return result
+}
+
+// GetSummary returns a summary of active findings
+// Note: This calculates counts dynamically to handle time-based snooze expiration
+func (s *FindingsStore) GetSummary() FindingsSummary {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	summary := FindingsSummary{
+		Total: len(s.findings),
+	}
+
+	// Calculate active counts dynamically since IsActive() checks time-based snooze
+	for _, f := range s.findings {
+		if f.IsActive() {
+			switch f.Severity {
+			case FindingSeverityCritical:
+				summary.Critical++
+			case FindingSeverityWarning:
+				summary.Warning++
+			case FindingSeverityWatch:
+				summary.Watch++
+			case FindingSeverityInfo:
+				summary.Info++
+			}
+		}
+	}
+
+	return summary
+}
+
+// GetAll returns all findings including resolved ones (for history)
+// Results can be filtered by time range using startTime parameter
+func (s *FindingsStore) GetAll(startTime *time.Time) []*Finding {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]*Finding, 0, len(s.findings))
+	for _, f := range s.findings {
+		// If startTime specified, only include findings detected after it
+		if startTime != nil && f.DetectedAt.Before(*startTime) {
+			continue
+		}
+		copy := *f
+		result = append(result, &copy)
+	}
+	return result
+}
+
+// Cleanup removes old resolved findings
+func (s *FindingsStore) Cleanup(maxAge time.Duration) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cutoff := time.Now().Add(-maxAge)
+	removed := 0
+
+	for id, f := range s.findings {
+		if f.ResolvedAt != nil && f.ResolvedAt.Before(cutoff) {
+			delete(s.findings, id)
+			// Clean up resource index
+			ids := s.byResource[f.ResourceID]
+			for i, fid := range ids {
+				if fid == id {
+					s.byResource[f.ResourceID] = append(ids[:i], ids[i+1:]...)
+					break
+				}
+			}
+			removed++
+		}
+	}
+
+	return removed
+}
+
+// FindingsSummary provides a quick count of findings by severity
+type FindingsSummary struct {
+	Critical int `json:"critical"`
+	Warning  int `json:"warning"`
+	Watch    int `json:"watch"`
+	Info     int `json:"info"`
+	Total    int `json:"total"`
+}
+
+// HasIssues returns true if there are any warning or critical findings
+func (s FindingsSummary) HasIssues() bool {
+	return s.Critical > 0 || s.Warning > 0
+}
+
+// IsHealthy returns true if there are no watch, warning, or critical findings
+func (s FindingsSummary) IsHealthy() bool {
+	return s.Critical == 0 && s.Warning == 0 && s.Watch == 0
+}

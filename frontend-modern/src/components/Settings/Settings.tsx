@@ -5359,7 +5359,7 @@ const Settings: Component<SettingsProps> = (props) => {
 
                           <div class="mt-3 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
                             <p class="text-xs text-green-700 dark:text-green-300">
-                              💡 <strong>Tip:</strong> Make sure you've saved your credentials
+                              <strong>Tip:</strong> Make sure you've saved your credentials
                               before restarting!
                             </p>
                           </div>
@@ -7425,7 +7425,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             <div class="space-y-3">
                               <Show when={!diagnosticsData()}>
                                 <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded p-2">
-                                  💡 Run diagnostics first for more comprehensive export data
+                                  Run diagnostics first for more comprehensive export data
                                 </div>
                               </Show>
                               <div class="flex gap-2">

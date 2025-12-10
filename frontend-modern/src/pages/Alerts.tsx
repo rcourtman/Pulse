@@ -28,6 +28,8 @@ import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
 import Send from 'lucide-solid/icons/send';
 import Calendar from 'lucide-solid/icons/calendar';
+import { getPatrolStatus, getFindings, getFindingsHistory, acknowledgeFinding, snoozeFinding, type Finding, type PatrolStatus, severityColors, formatTimestamp } from '@/api/patrol';
+import { aiChatStore } from '@/stores/aiChat';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
 
@@ -1453,7 +1455,9 @@ export function Alerts() {
     ];
 
   const flatTabs = tabGroups.flatMap((group) => group.items);
-  const [sidebarCollapsed, setSidebarCollapsed] = createSignal(true);
+  // Sidebar always starts expanded for discoverability (consistent with Settings)
+  // Users can collapse during session but it resets on page reload
+  const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
 
   return (
     <div class="space-y-4">
@@ -1746,16 +1750,58 @@ export function Alerts() {
       <div class={`transition-opacity ${isAlertsActive() ? 'opacity-100' : 'opacity-50 pointer-events-none'
         }`}>
 
-        <Card padding="none" class="relative lg:flex">
+        <Card padding="none" class="relative lg:flex overflow-hidden">
           <div
-            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-300`}
-            onMouseEnter={() => setSidebarCollapsed(false)}
-            onMouseLeave={() => setSidebarCollapsed(true)}
+            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-200`}
             aria-label="Alerts navigation"
             aria-expanded={!sidebarCollapsed()}
           >
-            <div class={`sticky top-24 ${sidebarCollapsed() ? 'px-2' : 'px-5'} py-6 space-y-6 transition-all duration-300`}>
-              <div id="alerts-sidebar-menu" class="space-y-6">
+            <div
+              class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
+            >
+              <Show when={!sidebarCollapsed()}>
+                <div class="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-700">
+                  <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Alerts</h2>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarCollapsed(true)}
+                    class="p-1 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    aria-label="Collapse sidebar"
+                  >
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </Show>
+              <Show when={sidebarCollapsed()}>
+                <button
+                  type="button"
+                  onClick={() => setSidebarCollapsed(false)}
+                  class="w-full p-2 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  aria-label="Expand sidebar"
+                >
+                  <svg
+                    class="w-5 h-5 mx-auto"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 5l7 7-7 7M5 5l7 7-7 7"
+                    />
+                  </svg>
+                </button>
+              </Show>
+              <div id="alerts-sidebar-menu" class="space-y-5">
                 <For each={tabGroups}>
                   {(group) => (
                     <div class="space-y-2">
@@ -1772,24 +1818,18 @@ export function Alerts() {
                               <button
                                 type="button"
                                 aria-current={activeTab() === item.id ? 'page' : undefined}
-                                class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${activeTab() === item.id
-                                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
-                                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
-                                  } ${disabled() ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
                                 disabled={disabled()}
+                                class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${disabled()
+                                  ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600'
+                                  : activeTab() === item.id
+                                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
+                                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
+                                  }`}
                                 onClick={() => {
                                   if (disabled()) return;
                                   handleTabChange(item.id);
                                 }}
-                                title={
-                                  sidebarCollapsed()
-                                    ? disabled()
-                                      ? 'Activate alerts to configure'
-                                      : item.label
-                                    : disabled()
-                                      ? 'Activate alerts to configure'
-                                      : undefined
-                                }
+                                title={sidebarCollapsed() ? item.label : undefined}
                               >
                                 {item.icon}
                                 <Show when={!sidebarCollapsed()}>
@@ -1807,7 +1847,7 @@ export function Alerts() {
             </div>
           </div>
 
-          <div class="flex-1 min-w-0">
+          <div class="flex-1 overflow-hidden">
             <Show when={flatTabs.length > 0}>
               <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
                 <div class="p-1">
@@ -1999,6 +2039,30 @@ function OverviewTab(props: {
   // Loading states for buttons
   const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
 
+  // AI Patrol findings state
+  const [aiFindings, setAiFindings] = createSignal<Finding[]>([]);
+  const [patrolStatus, setPatrolStatus] = createSignal<PatrolStatus | null>(null);
+  const [processingFindings, setProcessingFindings] = createSignal<Set<string>>(new Set());
+
+  // Fetch AI findings on mount and every 30 seconds
+  onMount(() => {
+    const fetchAiData = async () => {
+      try {
+        const [status, findings] = await Promise.all([
+          getPatrolStatus(),
+          getFindings()
+        ]);
+        setPatrolStatus(status);
+        setAiFindings(findings);
+      } catch (e) {
+        // AI patrol may not be enabled - silently fail
+      }
+    };
+    fetchAiData();
+    const interval = setInterval(fetchAiData, 30000);
+    onCleanup(() => clearInterval(interval));
+  });
+
   // Get alert stats from actual active alerts
   const alertStats = createMemo(() => {
     // Access the store properly for reactivity
@@ -2011,6 +2075,7 @@ function OverviewTab(props: {
       overrides: props.overrides.length,
     };
   });
+
 
   const filteredAlerts = createMemo(() => {
     const alerts = Object.values(props.activeAlerts);
@@ -2033,34 +2098,23 @@ function OverviewTab(props: {
 
   const [bulkAckProcessing, setBulkAckProcessing] = createSignal(false);
 
+  // Sub-tab for switching between AI Insights and Active Alerts
+  type OverviewSubTab = 'ai-insights' | 'active-alerts';
+
+  // Read subtab from URL query parameter to allow deep linking
+  const location = useLocation();
+  const getInitialSubTab = (): OverviewSubTab => {
+    const params = new URLSearchParams(location.search);
+    const subtab = params.get('subtab');
+    if (subtab === 'ai-insights') return 'ai-insights';
+    return 'active-alerts';
+  };
+  const [overviewSubTab, setOverviewSubTab] = createSignal<OverviewSubTab>(getInitialSubTab());
+
   return (
     <div class="space-y-6">
-      {/* Stats Cards */}
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
-        <Card padding="sm" class="sm:p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Active Alerts</p>
-              <p class="text-xl sm:text-2xl font-semibold text-gray-600 dark:text-gray-300">
-                {alertStats().active}
-              </p>
-            </div>
-            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-red-100 dark:bg-red-900/50 rounded-full flex items-center justify-center">
-              <svg
-                width="16"
-                height="16"
-                class="sm:w-5 sm:h-5 text-red-600 dark:text-red-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-              </svg>
-            </div>
-          </div>
-        </Card>
+      {/* Stats Cards - only show cards not duplicated in sub-tabs */}
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
 
         <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
@@ -2138,256 +2192,483 @@ function OverviewTab(props: {
         </Card>
       </div>
 
-      {/* Recent Alerts */}
-      <div>
-        <SectionHeader title="Active Alerts" size="md" class="mb-3" />
-        <Show
-          when={Object.keys(props.activeAlerts).length > 0}
-          fallback={
-            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-              <div class="flex justify-center mb-3">
-                <svg class="w-12 h-12 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
-                </svg>
-              </div>
-              <p class="text-sm">No active alerts</p>
-              <p class="text-xs mt-1">Alerts will appear here when thresholds are exceeded</p>
-            </div>
-          }
-        >
-          <Show when={alertStats().acknowledged > 0 || alertStats().active > 0}>
-            <div class="flex flex-wrap items-center justify-between gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-t-lg border border-gray-200 dark:border-gray-700">
-              <Show when={alertStats().acknowledged > 0}>
-                <button
-                  onClick={() => props.setShowAcknowledged(!props.showAcknowledged())}
-                  class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                >
-                  {props.showAcknowledged() ? 'Hide' : 'Show'} acknowledged
-                </button>
-              </Show>
-              <Show when={alertStats().active > 0}>
-                <button
-                  type="button"
-                  class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-60 disabled:cursor-not-allowed"
-                  disabled={bulkAckProcessing()}
-                  onClick={async () => {
-                    if (bulkAckProcessing()) return;
-                    const pending = unacknowledgedAlerts();
-                    if (pending.length === 0) {
-                      return;
-                    }
-                    setBulkAckProcessing(true);
-                    try {
-                      const result = await AlertsAPI.bulkAcknowledge(pending.map((alert) => alert.id));
-                      const successes = result.results.filter((r) => r.success);
-                      const failures = result.results.filter((r) => !r.success);
-
-                      successes.forEach((res) => {
-                        props.updateAlert(res.alertId, {
-                          acknowledged: true,
-                          ackTime: new Date().toISOString(),
-                        });
-                      });
-
-                      if (successes.length > 0) {
-                        showSuccess(
-                          `Acknowledged ${successes.length} ${successes.length === 1 ? 'alert' : 'alerts'}.`,
-                        );
-                      }
-
-                      if (failures.length > 0) {
-                        showError(
-                          `Failed to acknowledge ${failures.length} ${failures.length === 1 ? 'alert' : 'alerts'}.`,
-                        );
-                      }
-                    } catch (error) {
-                      logger.error('Bulk acknowledge failed', error);
-                      showError('Failed to acknowledge alerts');
-                    } finally {
-                      setBulkAckProcessing(false);
-                    }
-                  }}
-                >
-                  {bulkAckProcessing()
-                    ? 'Acknowledging…'
-                    : `Acknowledge all (${alertStats().active})`}
-                </button>
-              </Show>
-            </div>
-          </Show>
-          <div class="space-y-2">
-            <Show when={filteredAlerts().length === 0}>
-              <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                {props.showAcknowledged() ? 'No active alerts' : 'No unacknowledged alerts'}
-              </div>
+      {/* Sub-tabs for AI Insights vs Active Alerts */}
+      <Show when={patrolStatus()?.enabled}>
+        <div class="flex items-center gap-1 border-b border-gray-200 dark:border-gray-700/50 pb-1">
+          <button
+            class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${overviewSubTab() === 'active-alerts'
+              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-b-0 border-gray-200 dark:border-gray-700'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            onClick={() => setOverviewSubTab('active-alerts')}
+          >
+            Active Alerts
+            <Show when={alertStats().active > 0}>
+              <span class="ml-2 px-1.5 py-0.5 text-xs font-medium rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
+                {alertStats().active}
+              </span>
             </Show>
-            <For each={filteredAlerts()}>
-              {(alert) => (
-                <div
-                  class={`border rounded-lg p-4 transition-all ${processingAlerts().has(alert.id) ? 'opacity-50' : ''
-                    } ${alert.acknowledged
-                      ? 'opacity-60 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20'
-                      : alert.level === 'critical'
-                        ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
-                        : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
-                    }`}
-                >
-                  <div class="flex flex-col sm:flex-row sm:items-start">
-                    <div class="flex items-start flex-1">
-                      {/* Status icon */}
-                      <div
-                        class={`mr-3 mt-0.5 transition-all ${alert.acknowledged
-                          ? 'text-green-600 dark:text-green-400'
-                          : alert.level === 'critical'
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-yellow-600 dark:text-yellow-400'
-                          }`}
-                      >
-                        {alert.acknowledged ? (
-                          // Checkmark for acknowledged
-                          <svg
-                            class="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                          </svg>
-                        ) : (
-                          // Warning/Alert icon
-                          <svg
-                            class="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                            />
-                          </svg>
-                        )}
-                      </div>
-                      <div class="flex-1 min-w-0">
-                        <div class="flex flex-wrap items-center gap-2">
+          </button>
+          <button
+            class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${overviewSubTab() === 'ai-insights'
+              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-b-0 border-gray-200 dark:border-gray-700'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            onClick={() => setOverviewSubTab('ai-insights')}
+          >
+            AI Insights
+            <Show when={aiFindings().length > 0}>
+              <span class="ml-2 px-1.5 py-0.5 text-xs font-medium rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300">
+                {aiFindings().length}
+              </span>
+            </Show>
+          </button>
+        </div>
+      </Show>
+
+      {/* AI Insights Section - show when AI tab selected and there are findings */}
+      <Show when={overviewSubTab() === 'ai-insights' && patrolStatus()?.enabled}>
+        <div>
+          <SectionHeader
+            title="AI Insights"
+            size="md"
+            class="mb-3"
+          />
+          <div class="text-xs text-gray-500 dark:text-gray-400 mb-3 flex items-center gap-2">
+            <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Proactively detected by AI patrol • Last check: {patrolStatus()?.last_patrol_at ? formatTimestamp(patrolStatus()!.last_patrol_at!) : 'never'}</span>
+          </div>
+          <div class="space-y-2">
+            <For each={aiFindings()}>
+              {(finding) => {
+                const colors = severityColors[finding.severity];
+                return (
+                  <div
+                    class={`border rounded-lg p-4 transition-all ${finding.acknowledged_at ? 'opacity-60' : ''}`}
+                    style={{
+                      'background-color': colors.bg,
+                      'border-color': colors.border,
+                    }}
+                  >
+                    <div class="flex flex-col sm:flex-row sm:items-start">
+                      <div class="flex items-start flex-1">
+                        {/* AI badge */}
+                        <div class="mr-3 mt-0.5">
                           <span
-                            class={`text-sm font-medium truncate ${alert.level === 'critical'
-                              ? 'text-red-700 dark:text-red-400'
-                              : 'text-yellow-700 dark:text-yellow-400'
-                              }`}
+                            class="inline-flex items-center justify-center w-5 h-5 rounded text-xs font-bold"
+                            style={{ 'background-color': colors.border, color: colors.text }}
                           >
-                            {alert.resourceName}
+                            AI
                           </span>
-                          <span class="text-xs text-gray-600 dark:text-gray-400">
-                            ({alert.type})
-                          </span>
-                          <Show when={alert.node}>
-                            <span class="text-xs text-gray-500 dark:text-gray-500">
-                              on {alert.node}
-                            </span>
-                          </Show>
-                          <Show when={alert.acknowledged}>
-                            <span class="px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded">
-                              Acknowledged
-                            </span>
-                          </Show>
                         </div>
-                        <p class="text-sm text-gray-700 dark:text-gray-300 mt-1 break-words">
-                          {alert.message}
-                        </p>
-                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                          Started: {new Date(alert.startTime).toLocaleString()}
-                        </p>
+                        <div class="flex-1 min-w-0">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <span
+                              class="text-sm font-medium truncate"
+                              style={{ color: colors.text }}
+                            >
+                              {finding.resource_name}
+                            </span>
+                            <span class="text-xs text-gray-600 dark:text-gray-400">
+                              ({finding.category})
+                            </span>
+                            <Show when={finding.node}>
+                              <span class="text-xs text-gray-500 dark:text-gray-500">
+                                on {finding.node}
+                              </span>
+                            </Show>
+                            <span
+                              class="px-2 py-0.5 text-xs rounded capitalize"
+                              style={{ 'background-color': colors.border, color: colors.text }}
+                            >
+                              {finding.severity}
+                            </span>
+                          </div>
+                          <p class="text-sm text-gray-700 dark:text-gray-300 mt-1 font-medium">
+                            {finding.title}
+                          </p>
+                          <p class="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
+                            {finding.description}
+                          </p>
+                          <Show when={finding.recommendation}>
+                            <p class="text-xs text-gray-500 dark:text-gray-500 mt-1 italic">
+                              {finding.recommendation}
+                            </p>
+                          </Show>
+                          <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            Detected: {formatTimestamp(finding.detected_at)}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                    <div class="flex gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start">
-                      <button
-                        class={`px-3 py-1.5 text-xs font-medium border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${alert.acknowledged
-                          ? 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                          : 'bg-white dark:bg-gray-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
-                          }`}
-                        disabled={processingAlerts().has(alert.id)}
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-
-                          // Prevent double-clicks
-                          if (processingAlerts().has(alert.id)) return;
-
-                          setProcessingAlerts((prev) => new Set(prev).add(alert.id));
-
-                          // Store current state to avoid race conditions
-                          const wasAcknowledged = alert.acknowledged;
-
-                          try {
-                            if (wasAcknowledged) {
-                              // Call API first, only update local state if successful
-                              await AlertsAPI.unacknowledge(alert.id);
-                              // Only update local state after successful API call
-                              props.updateAlert(alert.id, {
-                                acknowledged: false,
-                                ackTime: undefined,
-                                ackUser: undefined,
-                              });
-                              showSuccess('Alert restored');
-                            } else {
-                              // Call API first, only update local state if successful
-                              await AlertsAPI.acknowledge(alert.id);
-                              // Only update local state after successful API call
-                              props.updateAlert(alert.id, {
-                                acknowledged: true,
-                                ackTime: new Date().toISOString(),
-                              });
-                              showSuccess('Alert acknowledged');
-                            }
-                          } catch (err) {
-                            logger.error(
-                              `Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`,
-                              err,
-                            );
-                            showError(
-                              `Failed to ${wasAcknowledged ? 'restore' : 'acknowledge'} alert`,
-                            );
-                            // Don't update local state on error - let WebSocket keep the correct state
-                          } finally {
-                            // Keep button disabled for longer to prevent race conditions with WebSocket updates
-                            setTimeout(() => {
-                              setProcessingAlerts((prev) => {
+                      <div class="flex gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start">
+                        <button
+                          class={`px-3 py-1.5 text-xs font-medium border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${finding.acknowledged_at
+                            ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700'
+                            : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                            }`}
+                          disabled={processingFindings().has(finding.id) || !!finding.acknowledged_at}
+                          onClick={async () => {
+                            if (processingFindings().has(finding.id)) return;
+                            setProcessingFindings((prev) => new Set(prev).add(finding.id));
+                            try {
+                              await acknowledgeFinding(finding.id);
+                              // Update local state to mark as acknowledged (keep visible but dimmed)
+                              setAiFindings((prev) => prev.map(f =>
+                                f.id === finding.id
+                                  ? { ...f, acknowledged_at: new Date().toISOString() }
+                                  : f
+                              ));
+                              showSuccess('Finding acknowledged');
+                            } catch (err) {
+                              logger.error('Failed to acknowledge finding:', err);
+                              showError('Failed to acknowledge finding');
+                            } finally {
+                              setProcessingFindings((prev) => {
                                 const next = new Set(prev);
-                                next.delete(alert.id);
+                                next.delete(finding.id);
                                 return next;
                               });
-                            }, 1500); // 1.5 seconds to allow server to process and WebSocket to sync
-                          }
-                        }}
-                      >
-                        {processingAlerts().has(alert.id)
-                          ? 'Processing...'
-                          : alert.acknowledged
-                            ? 'Unacknowledge'
-                            : 'Acknowledge'}
-                      </button>
-                      <InvestigateAlertButton
-                        alert={alert}
-                        variant="text"
-                        size="sm"
-                      />
+                            }
+                          }}
+                        >
+                          {processingFindings().has(finding.id) ? 'Acknowledging...' : finding.acknowledged_at ? '✓ Acknowledged' : 'Acknowledge'}
+                        </button>
+                        {/* Snooze dropdown */}
+                        <div class="relative group">
+                          <button
+                            class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+                            disabled={processingFindings().has(finding.id)}
+                          >
+                            Snooze ▾
+                          </button>
+                          <div class="absolute right-0 mt-1 w-28 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                            <button
+                              class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded-t-lg"
+                              onClick={async () => {
+                                setProcessingFindings((prev) => new Set(prev).add(finding.id));
+                                try {
+                                  await snoozeFinding(finding.id, 1);
+                                  setAiFindings((prev) => prev.filter(f => f.id !== finding.id));
+                                  showSuccess('Snoozed for 1 hour');
+                                } catch (err) {
+                                  showError('Failed to snooze');
+                                } finally {
+                                  setProcessingFindings((prev) => { const n = new Set(prev); n.delete(finding.id); return n; });
+                                }
+                              }}
+                            >
+                              1 hour
+                            </button>
+                            <button
+                              class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700"
+                              onClick={async () => {
+                                setProcessingFindings((prev) => new Set(prev).add(finding.id));
+                                try {
+                                  await snoozeFinding(finding.id, 24);
+                                  setAiFindings((prev) => prev.filter(f => f.id !== finding.id));
+                                  showSuccess('Snoozed for 24 hours');
+                                } catch (err) {
+                                  showError('Failed to snooze');
+                                } finally {
+                                  setProcessingFindings((prev) => { const n = new Set(prev); n.delete(finding.id); return n; });
+                                }
+                              }}
+                            >
+                              24 hours
+                            </button>
+                            <button
+                              class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded-b-lg"
+                              onClick={async () => {
+                                setProcessingFindings((prev) => new Set(prev).add(finding.id));
+                                try {
+                                  await snoozeFinding(finding.id, 168);
+                                  setAiFindings((prev) => prev.filter(f => f.id !== finding.id));
+                                  showSuccess('Snoozed for 7 days');
+                                } catch (err) {
+                                  showError('Failed to snooze');
+                                } finally {
+                                  setProcessingFindings((prev) => { const n = new Set(prev); n.delete(finding.id); return n; });
+                                }
+                              }}
+                            >
+                              7 days
+                            </button>
+                          </div>
+                        </div>
+                        <button
+                          class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/50"
+                          onClick={() => {
+                            aiChatStore.openWithPrompt(
+                              `Tell me more about this issue: ${finding.title} on ${finding.resource_name}. ${finding.description}`
+                            );
+                          }}
+                        >
+                          Investigate
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              }}
             </For>
           </div>
-        </Show>
-      </div>
+        </div>
+      </Show>
+
+      {/* Active Alerts - show when alerts tab selected OR when patrol is disabled (no sub-tabs) */}
+      <Show when={overviewSubTab() === 'active-alerts' || !patrolStatus()?.enabled}>
+        <div>
+          <SectionHeader title="Active Alerts" size="md" class="mb-3" />
+          <Show
+            when={Object.keys(props.activeAlerts).length > 0}
+            fallback={
+              <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                <div class="flex justify-center mb-3">
+                  <svg class="w-12 h-12 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
+                  </svg>
+                </div>
+                <p class="text-sm">No active alerts</p>
+                <p class="text-xs mt-1">Alerts will appear here when thresholds are exceeded</p>
+              </div>
+            }
+          >
+            <Show when={alertStats().acknowledged > 0 || alertStats().active > 0}>
+              <div class="flex flex-wrap items-center justify-between gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-t-lg border border-gray-200 dark:border-gray-700">
+                <Show when={alertStats().acknowledged > 0}>
+                  <button
+                    onClick={() => props.setShowAcknowledged(!props.showAcknowledged())}
+                    class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                  >
+                    {props.showAcknowledged() ? 'Hide' : 'Show'} acknowledged
+                  </button>
+                </Show>
+                <Show when={alertStats().active > 0}>
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                    disabled={bulkAckProcessing()}
+                    onClick={async () => {
+                      if (bulkAckProcessing()) return;
+                      const pending = unacknowledgedAlerts();
+                      if (pending.length === 0) {
+                        return;
+                      }
+                      setBulkAckProcessing(true);
+                      try {
+                        const result = await AlertsAPI.bulkAcknowledge(pending.map((alert) => alert.id));
+                        const successes = result.results.filter((r) => r.success);
+                        const failures = result.results.filter((r) => !r.success);
+
+                        successes.forEach((res) => {
+                          props.updateAlert(res.alertId, {
+                            acknowledged: true,
+                            ackTime: new Date().toISOString(),
+                          });
+                        });
+
+                        if (successes.length > 0) {
+                          showSuccess(
+                            `Acknowledged ${successes.length} ${successes.length === 1 ? 'alert' : 'alerts'}.`,
+                          );
+                        }
+
+                        if (failures.length > 0) {
+                          showError(
+                            `Failed to acknowledge ${failures.length} ${failures.length === 1 ? 'alert' : 'alerts'}.`,
+                          );
+                        }
+                      } catch (error) {
+                        logger.error('Bulk acknowledge failed', error);
+                        showError('Failed to acknowledge alerts');
+                      } finally {
+                        setBulkAckProcessing(false);
+                      }
+                    }}
+                  >
+                    {bulkAckProcessing()
+                      ? 'Acknowledging…'
+                      : `Acknowledge all (${alertStats().active})`}
+                  </button>
+                </Show>
+              </div>
+            </Show>
+            <div class="space-y-2">
+              <Show when={filteredAlerts().length === 0}>
+                <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                  {props.showAcknowledged() ? 'No active alerts' : 'No unacknowledged alerts'}
+                </div>
+              </Show>
+              <For each={filteredAlerts()}>
+                {(alert) => (
+                  <div
+                    class={`border rounded-lg p-4 transition-all ${processingAlerts().has(alert.id) ? 'opacity-50' : ''
+                      } ${alert.acknowledged
+                        ? 'opacity-60 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20'
+                        : alert.level === 'critical'
+                          ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
+                          : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
+                      }`}
+                  >
+                    <div class="flex flex-col sm:flex-row sm:items-start">
+                      <div class="flex items-start flex-1">
+                        {/* Status icon */}
+                        <div
+                          class={`mr-3 mt-0.5 transition-all ${alert.acknowledged
+                            ? 'text-green-600 dark:text-green-400'
+                            : alert.level === 'critical'
+                              ? 'text-red-600 dark:text-red-400'
+                              : 'text-yellow-600 dark:text-yellow-400'
+                            }`}
+                        >
+                          {alert.acknowledged ? (
+                            // Checkmark for acknowledged
+                            <svg
+                              class="w-5 h-5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                          ) : (
+                            // Warning/Alert icon
+                            <svg
+                              class="w-5 h-5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                              />
+                            </svg>
+                          )}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <span
+                              class={`text-sm font-medium truncate ${alert.level === 'critical'
+                                ? 'text-red-700 dark:text-red-400'
+                                : 'text-yellow-700 dark:text-yellow-400'
+                                }`}
+                            >
+                              {alert.resourceName}
+                            </span>
+                            <span class="text-xs text-gray-600 dark:text-gray-400">
+                              ({alert.type})
+                            </span>
+                            <Show when={alert.node}>
+                              <span class="text-xs text-gray-500 dark:text-gray-500">
+                                on {alert.node}
+                              </span>
+                            </Show>
+                            <Show when={alert.acknowledged}>
+                              <span class="px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded">
+                                Acknowledged
+                              </span>
+                            </Show>
+                          </div>
+                          <p class="text-sm text-gray-700 dark:text-gray-300 mt-1 break-words">
+                            {alert.message}
+                          </p>
+                          <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                            Started: {new Date(alert.startTime).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div class="flex gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start">
+                        <button
+                          class={`px-3 py-1.5 text-xs font-medium border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${alert.acknowledged
+                            ? 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                            : 'bg-white dark:bg-gray-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
+                            }`}
+                          disabled={processingAlerts().has(alert.id)}
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            // Prevent double-clicks
+                            if (processingAlerts().has(alert.id)) return;
+
+                            setProcessingAlerts((prev) => new Set(prev).add(alert.id));
+
+                            // Store current state to avoid race conditions
+                            const wasAcknowledged = alert.acknowledged;
+
+                            try {
+                              if (wasAcknowledged) {
+                                // Call API first, only update local state if successful
+                                await AlertsAPI.unacknowledge(alert.id);
+                                // Only update local state after successful API call
+                                props.updateAlert(alert.id, {
+                                  acknowledged: false,
+                                  ackTime: undefined,
+                                  ackUser: undefined,
+                                });
+                                showSuccess('Alert restored');
+                              } else {
+                                // Call API first, only update local state if successful
+                                await AlertsAPI.acknowledge(alert.id);
+                                // Only update local state after successful API call
+                                props.updateAlert(alert.id, {
+                                  acknowledged: true,
+                                  ackTime: new Date().toISOString(),
+                                });
+                                showSuccess('Alert acknowledged');
+                              }
+                            } catch (err) {
+                              logger.error(
+                                `Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`,
+                                err,
+                              );
+                              showError(
+                                `Failed to ${wasAcknowledged ? 'restore' : 'acknowledge'} alert`,
+                              );
+                              // Don't update local state on error - let WebSocket keep the correct state
+                            } finally {
+                              // Keep button disabled for longer to prevent race conditions with WebSocket updates
+                              setTimeout(() => {
+                                setProcessingAlerts((prev) => {
+                                  const next = new Set(prev);
+                                  next.delete(alert.id);
+                                  return next;
+                                });
+                              }, 1500); // 1.5 seconds to allow server to process and WebSocket to sync
+                            }
+                          }}
+                        >
+                          {processingAlerts().has(alert.id)
+                            ? 'Processing...'
+                            : alert.acknowledged
+                              ? 'Unacknowledge'
+                              : 'Acknowledge'}
+                        </button>
+                        <InvestigateAlertButton
+                          alert={alert}
+                          variant="text"
+                          size="sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </For>
+            </div>
+          </Show>
+        </div>
+      </Show>
     </div>
   );
 }
@@ -3897,8 +4178,16 @@ function HistoryTab() {
       deserialize: (raw) => (raw === 'warning' || raw === 'critical' ? raw : 'all'),
     },
   );
+  const [sourceFilter, setSourceFilter] = usePersistentSignal<'all' | 'alerts' | 'ai'>(
+    'alertHistorySourceFilter',
+    'all',
+    {
+      deserialize: (raw) => (raw === 'alerts' || raw === 'ai' ? raw : 'all'),
+    },
+  );
   const [searchTerm, setSearchTerm] = createSignal('');
   const [alertHistory, setAlertHistory] = createSignal<Alert[]>([]);
+  const [aiFindingsHistory, setAiFindingsHistory] = createSignal<Finding[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [selectedBarIndex, setSelectedBarIndex] = createSignal<number | null>(null);
   const MS_PER_HOUR = 60 * 60 * 1000;
@@ -3935,18 +4224,27 @@ function HistoryTab() {
   };
 
   let fetchRequestId = 0;
-  const fetchAlertHistory = async (range: string) => {
+  const fetchHistory = async (range: string) => {
     const requestId = ++fetchRequestId;
     setLoading(true);
 
     try {
-      const history = await AlertsAPI.getHistory(buildHistoryParams(range));
+      // Fetch both alert history and AI findings history in parallel
+      const params = buildHistoryParams(range);
+      const startTimeStr = params.startTime;
+
+      const [alertHistoryData, aiFindingsData] = await Promise.all([
+        AlertsAPI.getHistory(params),
+        getFindingsHistory(startTimeStr),
+      ]);
+
       if (requestId === fetchRequestId) {
-        setAlertHistory(history);
+        setAlertHistory(alertHistoryData);
+        setAiFindingsHistory(aiFindingsData);
       }
     } catch (err) {
       if (requestId === fetchRequestId) {
-        logger.error('Failed to load alert history:', err);
+        logger.error('Failed to load history:', err);
       }
     } finally {
       if (requestId === fetchRequestId) {
@@ -3981,7 +4279,7 @@ function HistoryTab() {
 
   // Load alert history on mount
   onMount(() => {
-    fetchAlertHistory(timeFilter());
+    fetchHistory(timeFilter());
 
     // Add keyboard event listeners
     const handleKeydown = (e: KeyboardEvent) => {
@@ -4023,7 +4321,7 @@ function HistoryTab() {
       skipInitialFetchEffect = false;
       return;
     }
-    fetchAlertHistory(range);
+    fetchHistory(range);
   });
 
   // Format duration for display
@@ -4140,66 +4438,155 @@ function HistoryTab() {
     return 'Unknown';
   };
 
-  // Extended alert type for display
-  interface ExtendedAlert extends Alert {
-    status?: string;
-    duration?: string;
-    resourceType?: string;
+  // Unified history item type that can be either an alert or an AI finding
+  type HistoryItemSource = 'alert' | 'ai';
+  interface HistoryItem {
+    id: string;
+    source: HistoryItemSource;
+    status: string;
+    startTime: string;
+    endTime?: string;
+    duration: string;
+    resourceName: string;
+    resourceType: string;
+    resourceId?: string;
+    node?: string;
+    severity: string; // warning, critical for alerts; severity for findings
+    // Aliases for backward compat with existing rendering code
+    level: string; // same as severity
+    type: string; // same as title
+    message?: string; // same as description
+    title: string;
+    description?: string;
+    acknowledged?: boolean;
+    autoResolved?: boolean;
   }
 
-  // Prepare all alerts without filtering
-  const allAlertsData = createMemo(() => {
-    // Combine active and historical alerts
-    const allAlerts: ExtendedAlert[] = [];
+  // Prepare all history items (alerts + AI findings) based on source filter
+  const allHistoryData = createMemo(() => {
+    const items: HistoryItem[] = [];
+    const currentSource = sourceFilter();
 
-    // Add active alerts
-    Object.values(activeAlerts || {}).forEach((alert) => {
-      allAlerts.push({
-        ...alert,
-        status: 'active',
-        duration: formatDuration(alert.startTime),
-        resourceType: getResourceType(alert.resourceName, alert.metadata),
+    // Add alerts if not filtering to AI only
+    if (currentSource === 'all' || currentSource === 'alerts') {
+      // Add active alerts
+      Object.values(activeAlerts || {}).forEach((alert) => {
+        items.push({
+          id: alert.id,
+          source: 'alert',
+          status: 'active',
+          startTime: alert.startTime,
+          duration: formatDuration(alert.startTime),
+          resourceName: alert.resourceName,
+          resourceType: getResourceType(alert.resourceName, alert.metadata),
+          resourceId: alert.resourceId,
+          node: alert.node,
+          severity: alert.level,
+          level: alert.level,
+          type: alert.type,
+          message: alert.message,
+          title: alert.type,
+          description: alert.message,
+          acknowledged: false,
+        });
       });
-    });
 
-    // Create a set of active alert IDs for quick lookup
-    const activeAlertIds = new Set(Object.keys(activeAlerts || {}));
+      // Create a set of active alert IDs for quick lookup
+      const activeAlertIds = new Set(Object.keys(activeAlerts || {}));
 
-    // Add historical alerts
-    alertHistory().forEach((alert) => {
-      // Skip if this alert is already in active alerts (avoid duplicates)
-      if (activeAlertIds.has(alert.id)) {
-        return;
-      }
+      // Add historical alerts
+      alertHistory().forEach((alert) => {
+        if (activeAlertIds.has(alert.id)) return;
 
-      allAlerts.push({
-        ...alert,
-        status: alert.acknowledged ? 'acknowledged' : 'resolved',
-        duration: formatDuration(alert.startTime, alert.lastSeen),
-        resourceType: getResourceType(alert.resourceName, alert.metadata),
+        items.push({
+          id: alert.id,
+          source: 'alert',
+          status: alert.acknowledged ? 'acknowledged' : 'resolved',
+          startTime: alert.startTime,
+          endTime: alert.lastSeen,
+          duration: formatDuration(alert.startTime, alert.lastSeen),
+          resourceName: alert.resourceName,
+          resourceType: getResourceType(alert.resourceName, alert.metadata),
+          resourceId: alert.resourceId,
+          node: alert.node,
+          severity: alert.level,
+          level: alert.level,
+          type: alert.type,
+          message: alert.message,
+          title: alert.type,
+          description: alert.message,
+          acknowledged: alert.acknowledged,
+        });
       });
-    });
+    }
 
-    return allAlerts;
+    // Add AI findings if not filtering to alerts only
+    if (currentSource === 'all' || currentSource === 'ai') {
+      aiFindingsHistory().forEach((finding) => {
+        const isSnoozed = finding.snoozed_until && new Date(finding.snoozed_until) > new Date();
+
+        let status = 'active';
+        if (finding.resolved_at) {
+          status = finding.auto_resolved ? 'auto-resolved' : 'resolved';
+        } else if (isSnoozed) {
+          status = 'snoozed';
+        } else if (finding.acknowledged_at) {
+          status = 'acknowledged';
+        }
+
+        items.push({
+          id: finding.id,
+          source: 'ai',
+          status,
+          startTime: finding.detected_at,
+          endTime: finding.resolved_at,
+          duration: formatDuration(finding.detected_at, finding.resolved_at),
+          resourceName: finding.resource_name,
+          resourceType: finding.resource_type,
+          resourceId: finding.resource_id,
+          node: finding.node,
+          severity: finding.severity,
+          level: finding.severity, // Map severity to level for compatibility
+          type: `AI: ${finding.title}`, // Prefix with AI to distinguish
+          message: finding.description,
+          title: finding.title,
+          description: finding.description,
+          acknowledged: !!finding.acknowledged_at,
+          autoResolved: finding.auto_resolved,
+        });
+      });
+    }
+
+    return items;
   });
 
   // Apply severity & search filters (time filtering is layered separately)
-  const severityAndSearchFilteredAlerts = createMemo(() => {
-    let filtered = allAlertsData();
+  const severityAndSearchFilteredItems = createMemo(() => {
+    let filtered = allHistoryData();
 
+    // Filter by severity (map AI severity to alert levels for consistent filtering)
     if (severityFilter() !== 'all') {
-      filtered = filtered.filter((a) => a.level === severityFilter());
+      const sevFilter = severityFilter();
+      filtered = filtered.filter((item) => {
+        // For alerts, use level; for AI findings, map severity
+        if (item.source === 'alert') {
+          return item.severity === sevFilter;
+        } else {
+          // AI findings: map warning->warning, critical->critical
+          return item.severity === sevFilter;
+        }
+      });
     }
 
     if (searchTerm()) {
       const term = searchTerm().toLowerCase();
-      filtered = filtered.filter((alert) => {
-        const name = alert.resourceName?.toLowerCase() ?? '';
-        const message = alert.message?.toLowerCase() ?? '';
-        const type = alert.type?.toLowerCase() ?? '';
-        const nodeName = alert.node?.toLowerCase() ?? '';
+      filtered = filtered.filter((item) => {
+        const name = item.resourceName?.toLowerCase() ?? '';
+        const title = item.title?.toLowerCase() ?? '';
+        const description = item.description?.toLowerCase() ?? '';
+        const nodeName = item.node?.toLowerCase() ?? '';
         return (
-          name.includes(term) || message.includes(term) || type.includes(term) || nodeName.includes(term)
+          name.includes(term) || title.includes(term) || description.includes(term) || nodeName.includes(term)
         );
       });
     }
@@ -4209,7 +4596,7 @@ function HistoryTab() {
 
   // Apply filters to get the final alert data
   const alertData = createMemo(() => {
-    let filtered = severityAndSearchFilteredAlerts();
+    let filtered = severityAndSearchFilteredItems();
     const currentTimeFilter = timeFilter();
 
     // Selected bar filter (takes precedence over time filter)
@@ -4343,7 +4730,7 @@ function HistoryTab() {
   const alertTrends = createMemo(() => {
     const now = Date.now();
     const msPerHour = MS_PER_HOUR;
-    const filteredAlerts = severityAndSearchFilteredAlerts();
+    const filteredAlerts = severityAndSearchFilteredItems();
     const niceBucketSizes = [1, 2, 3, 6, 12, 24, 48, 72, 168, 336, 720, 1440]; // hours
     const maxBuckets = 30;
 
@@ -4760,6 +5147,16 @@ function HistoryTab() {
           <option value="warning">Warning Only</option>
         </select>
 
+        <select
+          value={sourceFilter()}
+          onChange={(e) => setSourceFilter(e.currentTarget.value as 'all' | 'alerts' | 'ai')}
+          class="w-full sm:w-auto px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+        >
+          <option value="all">All Sources</option>
+          <option value="alerts">Alerts Only</option>
+          <option value="ai">AI Insights Only</option>
+        </select>
+
         <div class="w-full sm:flex-1 sm:max-w-xs">
           <input
             ref={searchInputRef}
@@ -4794,12 +5191,15 @@ function HistoryTab() {
           >
             {/* Table */}
             <div class="mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
-              <ScrollableTable minWidth="900px">
-                <table class="w-full min-w-[900px] text-xs sm:text-sm">
+              <ScrollableTable minWidth="1000px">
+                <table class="w-full min-w-[1000px] text-xs sm:text-sm">
                   <thead>
                     <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
                       <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Timestamp
+                      </th>
+                      <th class="p-1 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                        Source
                       </th>
                       <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Resource
@@ -4834,7 +5234,7 @@ function HistoryTab() {
                           {/* Date divider */}
                           <tr class="bg-gray-50 dark:bg-gray-900/40">
                             <td
-                              colspan="9"
+                              colspan="10"
                               class="py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
                             >
                               <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
@@ -4842,8 +5242,14 @@ function HistoryTab() {
                                   {group.label}
                                 </span>
                                 <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                                  {group.alerts.length}{' '}
-                                  {group.alerts.length === 1 ? 'alert' : 'alerts'}
+                                  {(() => {
+                                    const alertCount = group.alerts.filter(a => a.source === 'alert').length;
+                                    const aiCount = group.alerts.filter(a => a.source === 'ai').length;
+                                    const parts = [];
+                                    if (alertCount > 0) parts.push(`${alertCount} alert${alertCount === 1 ? '' : 's'}`);
+                                    if (aiCount > 0) parts.push(`${aiCount} AI insight${aiCount === 1 ? '' : 's'}`);
+                                    return parts.join(', ') || `${group.alerts.length} item${group.alerts.length === 1 ? '' : 's'}`;
+                                  })()}
                                 </span>
                               </div>
                             </td>
@@ -4862,6 +5268,18 @@ function HistoryTab() {
                                     hour: '2-digit',
                                     minute: '2-digit',
                                   })}
+                                </td>
+
+                                {/* Source */}
+                                <td class="p-1 px-2 text-center">
+                                  <span
+                                    class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${alert.source === 'ai'
+                                      ? 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300'
+                                      : 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300'
+                                      }`}
+                                  >
+                                    {alert.source === 'ai' ? 'AI' : 'Alert'}
+                                  </span>
                                 </td>
 
                                 {/* Resource */}
@@ -4939,11 +5357,11 @@ function HistoryTab() {
                                         id: alert.id,
                                         type: alert.type,
                                         level: alert.level as 'warning' | 'critical',
-                                        resourceId: alert.resourceId,
+                                        resourceId: alert.resourceId || '',
                                         resourceName: alert.resourceName,
-                                        node: alert.node,
+                                        node: alert.node || '',
                                         instance: '',
-                                        message: alert.message,
+                                        message: alert.message || '',
                                         value: 0,
                                         threshold: 0,
                                         startTime: alert.startTime,

@@ -184,6 +184,9 @@ func runServer() {
 	// This must be done after router creation since resourceHandlers is created in NewRouter
 	router.SetMonitor(reloadableMonitor.GetMonitor())
 
+	// Start AI patrol service for background infrastructure monitoring
+	router.StartPatrol(ctx)
+
 	// Create HTTP server with unified configuration
 	// In production, serve everything (frontend + API) on the frontend port
 	// NOTE: We use ReadHeaderTimeout instead of ReadTimeout to avoid affecting

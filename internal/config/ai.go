@@ -24,10 +24,18 @@ type AIConfig struct {
 	CustomContext  string `json:"custom_context"`  // user-provided context about their infrastructure
 
 	// OAuth fields for Claude Pro/Max subscription authentication
-	AuthMethod       AuthMethod `json:"auth_method,omitempty"`        // "api_key" or "oauth" (for anthropic only)
-	OAuthAccessToken string     `json:"oauth_access_token,omitempty"` // OAuth access token (encrypted at rest)
-	OAuthRefreshToken string    `json:"oauth_refresh_token,omitempty"` // OAuth refresh token (encrypted at rest)
-	OAuthExpiresAt   time.Time  `json:"oauth_expires_at,omitempty"`   // Token expiration time
+	AuthMethod        AuthMethod `json:"auth_method,omitempty"`         // "api_key" or "oauth" (for anthropic only)
+	OAuthAccessToken  string     `json:"oauth_access_token,omitempty"`  // OAuth access token (encrypted at rest)
+	OAuthRefreshToken string     `json:"oauth_refresh_token,omitempty"` // OAuth refresh token (encrypted at rest)
+	OAuthExpiresAt    time.Time  `json:"oauth_expires_at,omitempty"`    // Token expiration time
+
+	// Patrol settings for background AI monitoring
+	PatrolEnabled          bool `json:"patrol_enabled"`                     // Enable background AI health patrol
+	PatrolIntervalMinutes  int  `json:"patrol_interval_minutes,omitempty"`  // How often to run quick patrols (default: 15)
+	PatrolAnalyzeNodes     bool `json:"patrol_analyze_nodes,omitempty"`     // Include Proxmox nodes in patrol
+	PatrolAnalyzeGuests    bool `json:"patrol_analyze_guests,omitempty"`    // Include VMs/containers in patrol
+	PatrolAnalyzeDocker    bool `json:"patrol_analyze_docker,omitempty"`    // Include Docker hosts in patrol
+	PatrolAnalyzeStorage   bool `json:"patrol_analyze_storage,omitempty"`   // Include storage in patrol
 }
 
 // AIProvider constants
@@ -55,6 +63,13 @@ func NewDefaultAIConfig() *AIConfig {
 		Provider:   AIProviderAnthropic,
 		Model:      DefaultAIModelAnthropic,
 		AuthMethod: AuthMethodAPIKey,
+		// Patrol defaults - enabled when AI is enabled, check every 15 minutes
+		PatrolEnabled:         true,
+		PatrolIntervalMinutes: 15,
+		PatrolAnalyzeNodes:    true,
+		PatrolAnalyzeGuests:   true,
+		PatrolAnalyzeDocker:   true,
+		PatrolAnalyzeStorage:  true,
 	}
 }
 
@@ -129,4 +144,18 @@ func (c *AIConfig) ClearOAuthTokens() {
 // ClearAPIKey clears the API key (used when switching to OAuth auth)
 func (c *AIConfig) ClearAPIKey() {
 	c.APIKey = ""
+}
+
+// GetPatrolInterval returns the patrol interval as a duration
+func (c *AIConfig) GetPatrolInterval() time.Duration {
+	if c.PatrolIntervalMinutes <= 0 {
+		return 15 * time.Minute // default
+	}
+	return time.Duration(c.PatrolIntervalMinutes) * time.Minute
+}
+
+// IsPatrolEnabled returns true if patrol should run
+// Note: Patrol uses local heuristics and doesn't require an AI API key
+func (c *AIConfig) IsPatrolEnabled() bool {
+	return c.PatrolEnabled
 }
