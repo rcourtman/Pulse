@@ -1065,6 +1065,14 @@ func (r *Router) setupRoutes() {
 	if r.resourceHandlers != nil {
 		r.aiSettingsHandler.SetResourceProvider(r.resourceHandlers.Store())
 	}
+	// Inject metadata provider for AI URL discovery feature
+	// This allows AI to set resource URLs when it discovers web services
+	metadataProvider := NewMetadataProvider(
+		guestMetadataHandler.Store(),
+		dockerMetadataHandler.Store(),
+		hostMetadataHandler.Store(),
+	)
+	r.aiSettingsHandler.SetMetadataProvider(metadataProvider)
 	r.mux.HandleFunc("/api/settings/ai", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetAISettings)))
 	r.mux.HandleFunc("/api/settings/ai/update", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleUpdateAISettings)))
 	r.mux.HandleFunc("/api/ai/test", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestAIConnection)))
@@ -1086,6 +1094,14 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/oauth/callback", r.aiSettingsHandler.HandleOAuthCallback) // Public - receives redirect from Anthropic
 	r.mux.HandleFunc("/api/ai/oauth/disconnect", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthDisconnect))
 
+	// AI Patrol routes for background monitoring
+	r.mux.HandleFunc("/api/ai/patrol/status", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolStatus))
+	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolFindings))
+	r.mux.HandleFunc("/api/ai/patrol/history", RequireAuth(r.config, r.aiSettingsHandler.HandleGetFindingsHistory))
+	r.mux.HandleFunc("/api/ai/patrol/run", RequireAdmin(r.config, r.aiSettingsHandler.HandleForcePatrol))
+	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, r.aiSettingsHandler.HandleAcknowledgeFinding))
+	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, r.aiSettingsHandler.HandleAcknowledgeFinding)) // Backward compat
+	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, r.aiSettingsHandler.HandleSnoozeFinding))
 
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
@@ -1342,6 +1358,36 @@ func (r *Router) SetConfig(cfg *config.Config) {
 	}
 	if r.temperatureProxyHandlers != nil {
 		r.temperatureProxyHandlers.SetConfig(r.config)
+	}
+}
+
+// StartPatrol starts the AI patrol service for background infrastructure monitoring
+func (r *Router) StartPatrol(ctx context.Context) {
+	if r.aiSettingsHandler != nil {
+		// Connect patrol to user-configured alert thresholds so it warns before alerts fire
+		if r.monitor != nil {
+			if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+				thresholdAdapter := ai.NewAlertThresholdAdapter(alertManager)
+				r.aiSettingsHandler.SetPatrolThresholdProvider(thresholdAdapter)
+			}
+		}
+
+		// Enable findings persistence (load from disk, auto-save on changes)
+		if r.persistence != nil {
+			findingsPersistence := ai.NewFindingsPersistenceAdapter(r.persistence)
+			if err := r.aiSettingsHandler.SetPatrolFindingsPersistence(findingsPersistence); err != nil {
+				log.Error().Err(err).Msg("Failed to initialize AI findings persistence")
+			}
+		}
+
+		r.aiSettingsHandler.StartPatrol(ctx)
+	}
+}
+
+// StopPatrol stops the AI patrol service
+func (r *Router) StopPatrol() {
+	if r.aiSettingsHandler != nil {
+		r.aiSettingsHandler.StopPatrol()
 	}
 }
 

@@ -39,6 +39,8 @@ type Service struct {
 	alertProvider    AlertProvider
 	knowledgeStore   *knowledge.Store
 	resourceProvider ResourceProvider // Unified resource model provider (Phase 2)
+	patrolService    *PatrolService   // Background AI monitoring service
+	metadataProvider MetadataProvider // Enables AI to update resource URLs
 }
 
 // NewService creates a new AI service
@@ -66,6 +68,72 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.stateProvider = sp
+
+	// Initialize patrol service if not already done
+	if s.patrolService == nil && sp != nil {
+		s.patrolService = NewPatrolService(s, sp)
+	}
+}
+
+// GetPatrolService returns the patrol service for background monitoring
+func (s *Service) GetPatrolService() *PatrolService {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.patrolService
+}
+
+// SetPatrolThresholdProvider sets the threshold provider for patrol
+// This should be called with an AlertThresholdAdapter to connect patrol to user-configured thresholds
+func (s *Service) SetPatrolThresholdProvider(provider ThresholdProvider) {
+	s.mu.RLock()
+	patrol := s.patrolService
+	s.mu.RUnlock()
+
+	if patrol != nil {
+		patrol.SetThresholdProvider(provider)
+	}
+}
+
+// StartPatrol starts the background patrol service
+func (s *Service) StartPatrol(ctx context.Context) {
+	s.mu.RLock()
+	patrol := s.patrolService
+	cfg := s.cfg
+	s.mu.RUnlock()
+
+	if patrol == nil {
+		log.Debug().Msg("Patrol service not initialized, cannot start")
+		return
+	}
+
+	if cfg == nil || !cfg.IsPatrolEnabled() {
+		log.Debug().Msg("AI Patrol not enabled")
+		return
+	}
+
+	// Configure patrol from AI config
+	patrolCfg := PatrolConfig{
+		Enabled:              true,
+		QuickCheckInterval:   cfg.GetPatrolInterval(),
+		DeepAnalysisInterval: 6 * time.Hour,
+		AnalyzeNodes:         cfg.PatrolAnalyzeNodes,
+		AnalyzeGuests:        cfg.PatrolAnalyzeGuests,
+		AnalyzeDocker:        cfg.PatrolAnalyzeDocker,
+		AnalyzeStorage:       cfg.PatrolAnalyzeStorage,
+	}
+	patrol.SetConfig(patrolCfg)
+	patrol.Start(ctx)
+}
+
+// StopPatrol stops the background patrol service
+func (s *Service) StopPatrol() {
+	s.mu.RLock()
+	patrol := s.patrolService
+	s.mu.RUnlock()
+
+	if patrol != nil {
+		patrol.Stop()
+	}
 }
 
 // GuestInfo contains information about a guest (VM or container) found by VMID lookup
@@ -878,12 +946,20 @@ Always execute the commands rather than telling the user how to do it.`
 			callback(StreamEvent{Type: "thinking", Data: resp.ReasoningContent})
 		}
 
+		// Stream intermediate content so users see the AI's explanations between tool calls
+		// This gives users visibility into the AI's reasoning as it works, not just at the end
+		if resp.Content != "" {
+			callback(StreamEvent{Type: "content", Data: resp.Content})
+		}
+
 		log.Debug().
 			Int("tool_calls", len(resp.ToolCalls)).
 			Str("stop_reason", resp.StopReason).
 			Int("iteration", iteration).
 			Int("total_input_tokens", totalInputTokens).
 			Int("total_output_tokens", totalOutputTokens).
+			Int("content_length", len(resp.Content)).
+			Bool("has_content", resp.Content != "").
 			Msg("AI streaming iteration complete")
 
 		// If no tool calls, we're done
@@ -1057,6 +1133,10 @@ func (s *Service) getToolInputDisplay(tc providers.ToolCall) string {
 	case "fetch_url":
 		url, _ := tc.Input["url"].(string)
 		return url
+	case "set_resource_url":
+		resourceType, _ := tc.Input["resource_type"].(string)
+		url, _ := tc.Input["url"].(string)
+		return fmt.Sprintf("Set %s URL: %s", resourceType, url)
 	default:
 		return fmt.Sprintf("%v", tc.Input)
 	}
@@ -1154,41 +1234,26 @@ func (s *Service) getTools() []providers.Tool {
 			},
 		},
 		{
-			Name:        "save_note",
-			Description: "Save a note about the current guest for future reference. Use this to remember important paths, configurations, services, credentials, or learnings. Notes are persisted and will be available in future sessions.",
+			Name:        "set_resource_url",
+			Description: "Set the web URL for a resource in Pulse after discovering a web service. Use this when you've found a web server running on a guest/container/host and want to save it for quick access. The URL will appear as a clickable link in the Pulse dashboard.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"category": map[string]interface{}{
+					"resource_type": map[string]interface{}{
 						"type":        "string",
-						"enum":        []string{"service", "path", "config", "credential", "learning"},
-						"description": "Category of note: 'service' for discovered services, 'path' for important file paths, 'config' for configuration details, 'credential' for passwords/API keys, 'learning' for general learnings",
+						"description": "Type of resource: 'guest' for VMs/LXC containers, 'docker' for Docker containers/services, or 'host' for standalone hosts",
+						"enum":        []string{"guest", "docker", "host"},
 					},
-					"title": map[string]interface{}{
+					"resource_id": map[string]interface{}{
 						"type":        "string",
-						"description": "Short title for the note (e.g., 'MQTT Password', 'Config File Location', 'Web UI Port')",
+						"description": "The resource ID from the context (e.g., 'pve1-delly-101' for guests, 'dockerhost:container:abc123' for Docker). Use the ID from the current context.",
 					},
-					"content": map[string]interface{}{
+					"url": map[string]interface{}{
 						"type":        "string",
-						"description": "The information to save (e.g., '/opt/zigbee2mqtt/data/configuration.yaml', 'admin:secret123', 'Port 8080')",
-					},
-				},
-				"required": []string{"category", "title", "content"},
-			},
-		},
-		{
-			Name:        "get_notes",
-			Description: "Retrieve previously saved notes about the current guest. Use this to recall what was learned in previous sessions.",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"category": map[string]interface{}{
-						"type":        "string",
-						"enum":        []string{"service", "path", "config", "credential", "learning", ""},
-						"description": "Optional category filter. Leave empty to get all notes.",
+						"description": "The discovered URL (e.g., 'http://192.168.1.50:8096' for Jellyfin). Use the IP/hostname and port you discovered.",
 					},
 				},
-				"required": []string{},
+				"required": []string{"resource_type", "resource_id", "url"},
 			},
 		},
 	}
@@ -1273,8 +1338,21 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		
 		// If run_on_host is true, override the target type to run on host
 		if runOnHost {
+			log.Debug().
+				Str("command", command).
+				Str("target_host", targetHost).
+				Str("original_target_type", req.TargetType).
+				Str("original_target_id", req.TargetID).
+				Msg("run_on_host=true - overriding target type to 'host'")
 			execReq.TargetType = "host"
 			execReq.TargetID = ""
+		} else {
+			log.Debug().
+				Str("command", command).
+				Str("target_type", req.TargetType).
+				Str("target_id", req.TargetID).
+				Bool("run_on_host", runOnHost).
+				Msg("Executing command with current target type")
 		}
 
 		// Execute via agent
@@ -1424,75 +1502,37 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		execution.Success = true
 		return result, execution
 
-	case "save_note":
-		category, _ := tc.Input["category"].(string)
-		title, _ := tc.Input["title"].(string)
-		content, _ := tc.Input["content"].(string)
-		execution.Input = fmt.Sprintf("%s: %s", category, title)
+	case "set_resource_url":
+		resourceType, _ := tc.Input["resource_type"].(string)
+		resourceID, _ := tc.Input["resource_id"].(string)
+		url, _ := tc.Input["url"].(string)
+		execution.Input = fmt.Sprintf("%s %s -> %s", resourceType, resourceID, url)
 
-		if category == "" || title == "" || content == "" {
-			execution.Output = "Error: category, title, and content are all required"
+		if resourceType == "" {
+			execution.Output = "Error: resource_type is required (use 'guest', 'docker', or 'host')"
+			return execution.Output, execution
+		}
+		if resourceID == "" {
+			// Try to get the resource ID from the request context
+			if req.TargetID != "" {
+				resourceID = req.TargetID
+			} else {
+				execution.Output = "Error: resource_id is required"
+				return execution.Output, execution
+			}
+		}
+		if url == "" {
+			execution.Output = "Error: url is required"
 			return execution.Output, execution
 		}
 
-		if s.knowledgeStore == nil {
-			execution.Output = "Error: knowledge store not available"
+		// Update the metadata
+		if err := s.SetResourceURL(resourceType, resourceID, url); err != nil {
+			execution.Output = fmt.Sprintf("Error setting URL: %s", err)
 			return execution.Output, execution
 		}
 
-		// Get guest info from request
-		guestID := s.getGuestID(req)
-		guestName := req.TargetID
-		guestType := req.TargetType
-
-		if guestID == "" {
-			execution.Output = "Error: no guest context - save_note requires a target guest"
-			return execution.Output, execution
-		}
-
-		if err := s.knowledgeStore.SaveNote(guestID, guestName, guestType, category, title, content); err != nil {
-			execution.Output = fmt.Sprintf("Error saving note: %s", err)
-			return execution.Output, execution
-		}
-
-		execution.Output = fmt.Sprintf("Saved note [%s] %s: %s", category, title, content)
-		execution.Success = true
-		return execution.Output, execution
-
-	case "get_notes":
-		category, _ := tc.Input["category"].(string)
-		execution.Input = fmt.Sprintf("category=%s", category)
-
-		if s.knowledgeStore == nil {
-			execution.Output = "Error: knowledge store not available"
-			return execution.Output, execution
-		}
-
-		guestID := s.getGuestID(req)
-		if guestID == "" {
-			execution.Output = "Error: no guest context - get_notes requires a target guest"
-			return execution.Output, execution
-		}
-
-		notes, err := s.knowledgeStore.GetNotesByCategory(guestID, category)
-		if err != nil {
-			execution.Output = fmt.Sprintf("Error getting notes: %s", err)
-			return execution.Output, execution
-		}
-
-		if len(notes) == 0 {
-			execution.Output = "No notes found for this guest"
-			execution.Success = true
-			return execution.Output, execution
-		}
-
-		var result strings.Builder
-		result.WriteString(fmt.Sprintf("Found %d notes:\n", len(notes)))
-		for _, note := range notes {
-			result.WriteString(fmt.Sprintf("- [%s] %s: %s\n", note.Category, note.Title, note.Content))
-		}
-
-		execution.Output = result.String()
+		execution.Output = fmt.Sprintf("✅ Successfully set URL for %s '%s' to: %s\nThe URL is now visible in the Pulse dashboard as a clickable link.", resourceType, resourceID, url)
 		execution.Success = true
 		return execution.Output, execution
 
@@ -1582,6 +1622,43 @@ func (s *Service) fetchURL(ctx context.Context, urlStr string) (string, error) {
 	return result, nil
 }
 
+// sanitizeError cleans up error messages to remove internal networking details
+// that are not helpful to users or AI models (IP addresses, port numbers, etc.)
+func sanitizeError(err error) error {
+	if err == nil {
+		return nil
+	}
+	
+	errMsg := err.Error()
+	
+	// Replace raw TCP connection details with generic message
+	// e.g., "write tcp 192.168.0.123:7655->192.168.0.134:58004: i/o timeout" 
+	// becomes "connection to agent timed out"
+	if strings.Contains(errMsg, "i/o timeout") {
+		if strings.Contains(errMsg, "failed to send command") {
+			return fmt.Errorf("connection to agent timed out - the agent may be disconnected or unreachable")
+		}
+		return fmt.Errorf("network timeout - the target may be unreachable")
+	}
+	
+	// Replace "write tcp ... connection refused" style errors
+	if strings.Contains(errMsg, "connection refused") {
+		return fmt.Errorf("connection refused - the agent may not be running on the target host")
+	}
+	
+	// Replace "no such host" errors
+	if strings.Contains(errMsg, "no such host") {
+		return fmt.Errorf("host not found - verify the hostname is correct and DNS is working")
+	}
+	
+	// Replace "context deadline exceeded" with friendlier message
+	if strings.Contains(errMsg, "context deadline exceeded") {
+		return fmt.Errorf("operation timed out - the command may have taken too long")
+	}
+	
+	return err
+}
+
 // executeOnAgent executes a command via the agent WebSocket
 func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, command string) (string, error) {
 	if s.agentServer == nil {
@@ -1665,7 +1742,7 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 
 	result, err := s.agentServer.ExecuteCommand(ctx, agentID, cmd)
 	if err != nil {
-		return "", err
+		return "", sanitizeError(err)
 	}
 
 	if !result.Success {
@@ -1814,7 +1891,23 @@ Rules:
 Pulse manages LXC containers agentlessly from the PVE host.
 - DO NOT check for a Pulse agent process or service inside an LXC. It does not exist.
 - Use run_command with run_on_host=false to execute commands inside the LXC. Pulse handles the routing.
-- For pct commands, always use run_on_host=true and set target_host to the container's node.`
+- For pct commands, always use run_on_host=true and set target_host to the container's node.
+
+## URL Discovery Feature
+When asked to find the web URL for a guest/container/host, or when you discover a web service:
+
+1. **Inspect for web servers**: Check for listening ports (ss -tlnp), running services (nginx, apache, node, etc.)
+2. **Get the IP address**: Use 'hostname -I' or 'ip addr' to find the IP
+3. **Test the URL**: Use fetch_url to verify the service is responding
+4. **Save the URL**: Use set_resource_url tool to save it to Pulse
+
+Common discovery commands:
+- Check listening ports: ss -tlnp | grep LISTEN
+- Check nginx: systemctl status nginx && grep -r 'listen' /etc/nginx/
+- Check running processes: ps aux | grep -E 'node|python|java|nginx|apache|httpd'
+- Get IP: hostname -I | awk '{print $1}'
+
+When you find a web service and are confident, use set_resource_url to save it. The resource_id should match the ID from the current context.`
 
 
 	// Add custom context from AI settings (user's infrastructure description)

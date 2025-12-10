@@ -27,6 +27,11 @@ func (h *GuestMetadataHandler) Reload() error {
 	return h.store.Load()
 }
 
+// Store returns the underlying metadata store
+func (h *GuestMetadataHandler) Store() *config.GuestMetadataStore {
+	return h.store
+}
+
 // HandleGetMetadata retrieves metadata for a specific guest or all guests
 func (h *GuestMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
