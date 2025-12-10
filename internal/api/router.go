@@ -1096,12 +1096,15 @@ func (r *Router) setupRoutes() {
 
 	// AI Patrol routes for background monitoring
 	r.mux.HandleFunc("/api/ai/patrol/status", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolStatus))
+	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, r.aiSettingsHandler.HandlePatrolStream))
 	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolFindings))
 	r.mux.HandleFunc("/api/ai/patrol/history", RequireAuth(r.config, r.aiSettingsHandler.HandleGetFindingsHistory))
 	r.mux.HandleFunc("/api/ai/patrol/run", RequireAdmin(r.config, r.aiSettingsHandler.HandleForcePatrol))
 	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, r.aiSettingsHandler.HandleAcknowledgeFinding))
 	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, r.aiSettingsHandler.HandleAcknowledgeFinding)) // Backward compat
 	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, r.aiSettingsHandler.HandleSnoozeFinding))
+	r.mux.HandleFunc("/api/ai/patrol/resolve", RequireAuth(r.config, r.aiSettingsHandler.HandleResolveFinding))
+	r.mux.HandleFunc("/api/ai/patrol/runs", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolRunHistory))
 
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
@@ -1378,6 +1381,12 @@ func (r *Router) StartPatrol(ctx context.Context) {
 			if err := r.aiSettingsHandler.SetPatrolFindingsPersistence(findingsPersistence); err != nil {
 				log.Error().Err(err).Msg("Failed to initialize AI findings persistence")
 			}
+
+			// Enable patrol run history persistence
+			historyPersistence := ai.NewPatrolHistoryPersistenceAdapter(r.persistence)
+			if err := r.aiSettingsHandler.SetPatrolRunHistoryPersistence(historyPersistence); err != nil {
+				log.Error().Err(err).Msg("Failed to initialize AI patrol run history persistence")
+			}
 		}
 
 		r.aiSettingsHandler.StartPatrol(ctx)
@@ -1389,6 +1398,34 @@ func (r *Router) StopPatrol() {
 	if r.aiSettingsHandler != nil {
 		r.aiSettingsHandler.StopPatrol()
 	}
+}
+
+// GetAlertTriggeredAnalyzer returns the alert-triggered analyzer for wiring into the monitor's alert callback
+// This enables AI to analyze specific resources when alerts fire, providing token-efficient real-time insights
+func (r *Router) GetAlertTriggeredAnalyzer() *ai.AlertTriggeredAnalyzer {
+	if r.aiSettingsHandler != nil {
+		return r.aiSettingsHandler.GetAlertTriggeredAnalyzer()
+	}
+	return nil
+}
+
+// WireAlertTriggeredAI connects the alert-triggered AI analyzer to the monitor's alert callback
+// This should be called after StartPatrol() to ensure the analyzer is initialized
+func (r *Router) WireAlertTriggeredAI() {
+	analyzer := r.GetAlertTriggeredAnalyzer()
+	if analyzer == nil {
+		log.Debug().Msg("Alert-triggered AI analyzer not available")
+		return
+	}
+
+	if r.monitor == nil {
+		log.Debug().Msg("Monitor not available for AI alert callback")
+		return
+	}
+
+	// Wire the analyzer's OnAlertFired method to the monitor's alert callback
+	r.monitor.SetAlertTriggeredAICallback(analyzer.OnAlertFired)
+	log.Info().Msg("Alert-triggered AI analysis wired to monitor")
 }
 
 // reloadSystemSettings loads system settings from disk and caches them

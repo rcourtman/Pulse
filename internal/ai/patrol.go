@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -102,10 +104,12 @@ func clampThreshold(v float64) float64 {
 type PatrolConfig struct {
 	// Enabled controls whether background patrol runs
 	Enabled bool `json:"enabled"`
-	// QuickCheckInterval is how often to do quick health checks
-	QuickCheckInterval time.Duration `json:"quick_check_interval"`
-	// DeepAnalysisInterval is how often to do thorough analysis
-	DeepAnalysisInterval time.Duration `json:"deep_analysis_interval"`
+	// Interval is how often to run AI patrol analysis
+	Interval time.Duration `json:"interval"`
+	// QuickCheckInterval is deprecated, kept for backwards compat with old configs
+	QuickCheckInterval time.Duration `json:"quick_check_interval,omitempty"`
+	// DeepAnalysisInterval is deprecated, kept for backwards compat with old configs
+	DeepAnalysisInterval time.Duration `json:"deep_analysis_interval,omitempty"`
 	// AnalyzeNodes controls whether to analyze Proxmox nodes
 	AnalyzeNodes bool `json:"analyze_nodes"`
 	// AnalyzeGuests controls whether to analyze VMs/containers
@@ -120,33 +124,78 @@ type PatrolConfig struct {
 	AnalyzeHosts bool `json:"analyze_hosts"`
 }
 
+// GetInterval returns the effective patrol interval, handling migration from old config
+func (c PatrolConfig) GetInterval() time.Duration {
+	if c.Interval > 0 {
+		return c.Interval
+	}
+	// Migrate from old config: use QuickCheckInterval if set
+	if c.QuickCheckInterval > 0 {
+		return c.QuickCheckInterval
+	}
+	// Default to 15 minutes
+	return 15 * time.Minute
+}
+
 // DefaultPatrolConfig returns sensible defaults
 func DefaultPatrolConfig() PatrolConfig {
 	return PatrolConfig{
-		Enabled:              true,
-		QuickCheckInterval:   15 * time.Minute,
-		DeepAnalysisInterval: 6 * time.Hour,
-		AnalyzeNodes:         true,
-		AnalyzeGuests:        true,
-		AnalyzeDocker:        true,
-		AnalyzeStorage:       true,
-		AnalyzePBS:           true,
-		AnalyzeHosts:         true,
+		Enabled:       true,
+		Interval:      15 * time.Minute,
+		AnalyzeNodes:  true,
+		AnalyzeGuests: true,
+		AnalyzeDocker: true,
+		AnalyzeStorage: true,
+		AnalyzePBS:    true,
+		AnalyzeHosts:  true,
 	}
 }
 
 // PatrolStatus represents the current state of the patrol service
 type PatrolStatus struct {
 	Running          bool          `json:"running"`
+	Enabled          bool          `json:"enabled"`
 	LastPatrolAt     *time.Time    `json:"last_patrol_at,omitempty"`
-	LastDeepAnalysis *time.Time    `json:"last_deep_analysis_at,omitempty"`
 	NextPatrolAt     *time.Time    `json:"next_patrol_at,omitempty"`
 	LastDuration     time.Duration `json:"last_duration_ms"`
 	ResourcesChecked int           `json:"resources_checked"`
 	FindingsCount    int           `json:"findings_count"`
 	ErrorCount       int           `json:"error_count"`
 	Healthy          bool          `json:"healthy"`
+	IntervalMs       int64         `json:"interval_ms"` // Patrol interval in milliseconds
 }
+
+// PatrolRunRecord represents a single patrol check run
+type PatrolRunRecord struct {
+	ID               string        `json:"id"`
+	StartedAt        time.Time     `json:"started_at"`
+	CompletedAt      time.Time     `json:"completed_at"`
+	Duration         time.Duration `json:"duration_ms"`
+	Type             string        `json:"type"` // Always "patrol" now (kept for backwards compat)
+	ResourcesChecked int           `json:"resources_checked"`
+	// Breakdown by resource type
+	NodesChecked     int `json:"nodes_checked"`
+	GuestsChecked    int `json:"guests_checked"`
+	DockerChecked    int `json:"docker_checked"`
+	StorageChecked   int `json:"storage_checked"`
+	HostsChecked     int `json:"hosts_checked"`
+	PBSChecked       int `json:"pbs_checked"`
+	// Findings from this run
+	NewFindings      int      `json:"new_findings"`
+	ExistingFindings int      `json:"existing_findings"`
+	ResolvedFindings int      `json:"resolved_findings"`
+	FindingsSummary  string   `json:"findings_summary"`   // e.g., "All healthy" or "2 warnings, 1 critical"
+	FindingIDs       []string `json:"finding_ids"`        // IDs of findings from this run
+	ErrorCount       int      `json:"error_count"`
+	Status           string   `json:"status"` // "healthy", "issues_found", "error"
+	// AI Analysis details
+	AIAnalysis   string `json:"ai_analysis,omitempty"`   // The AI's raw response/analysis
+	InputTokens  int    `json:"input_tokens,omitempty"`  // Tokens sent to AI
+	OutputTokens int    `json:"output_tokens,omitempty"` // Tokens received from AI
+}
+
+// MaxPatrolRunHistory is the maximum number of patrol runs to keep in history
+const MaxPatrolRunHistory = 100
 
 // PatrolService runs background AI analysis of infrastructure
 type PatrolService struct {
@@ -164,30 +213,65 @@ type PatrolService struct {
 	// Runtime state
 	running          bool
 	stopCh           chan struct{}
+	configChanged    chan struct{} // Signal when config changes to reset ticker
 	lastPatrol       time.Time
-	lastDeepAnalysis time.Time
 	lastDuration     time.Duration
 	resourcesChecked int
 	errorCount       int
+
+	// Patrol run history with persistence support
+	runHistoryStore *PatrolRunHistoryStore
+
+	// Live streaming support
+	streamMu          sync.RWMutex
+	streamSubscribers map[chan PatrolStreamEvent]struct{}
+	currentOutput     strings.Builder // Buffer for current streaming output
+	streamPhase       string          // "idle", "analyzing", "complete"
+}
+
+// PatrolStreamEvent represents a streaming update from the patrol
+type PatrolStreamEvent struct {
+	Type    string `json:"type"`    // "start", "content", "phase", "complete", "error"
+	Content string `json:"content,omitempty"`
+	Phase   string `json:"phase,omitempty"`   // Current phase description
+	Tokens  int    `json:"tokens,omitempty"`  // Token count so far
 }
 
 // NewPatrolService creates a new patrol service
 func NewPatrolService(aiService *Service, stateProvider StateProvider) *PatrolService {
 	return &PatrolService{
-		aiService:     aiService,
-		stateProvider: stateProvider,
-		config:        DefaultPatrolConfig(),
-		findings:      NewFindingsStore(),
-		thresholds:    DefaultPatrolThresholds(),
-		stopCh:        make(chan struct{}),
+		aiService:         aiService,
+		stateProvider:     stateProvider,
+		config:            DefaultPatrolConfig(),
+		findings:          NewFindingsStore(),
+		thresholds:        DefaultPatrolThresholds(),
+		stopCh:            make(chan struct{}),
+		runHistoryStore:   NewPatrolRunHistoryStore(MaxPatrolRunHistory),
+		streamSubscribers: make(map[chan PatrolStreamEvent]struct{}),
+		streamPhase:       "idle",
 	}
 }
 
 // SetConfig updates the patrol configuration
 func (p *PatrolService) SetConfig(cfg PatrolConfig) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
+	oldInterval := p.config.QuickCheckInterval
 	p.config = cfg
+	configCh := p.configChanged
+	p.mu.Unlock()
+
+	// Signal config change if patrol is running and interval changed
+	if configCh != nil && cfg.QuickCheckInterval != oldInterval {
+		select {
+		case configCh <- struct{}{}:
+			log.Info().
+				Dur("old_interval", oldInterval).
+				Dur("new_interval", cfg.QuickCheckInterval).
+				Msg("Patrol interval updated, resetting ticker")
+		default:
+			// Channel full or not ready, config will be picked up on next cycle
+		}
+	}
 }
 
 // SetThresholdProvider sets the provider for user-configured alert thresholds
@@ -220,6 +304,22 @@ func (p *PatrolService) SetFindingsPersistence(persistence FindingsPersistence) 
 	return nil
 }
 
+// SetRunHistoryPersistence enables patrol run history persistence (load from and save to disk)
+// This should be called before Start() to load any existing history
+func (p *PatrolService) SetRunHistoryPersistence(persistence PatrolHistoryPersistence) error {
+	p.mu.Lock()
+	store := p.runHistoryStore
+	p.mu.Unlock()
+
+	if store != nil && persistence != nil {
+		if err := store.SetPersistence(persistence); err != nil {
+			return err
+		}
+		log.Info().Msg("AI Patrol run history persistence enabled")
+	}
+	return nil
+}
+
 // GetConfig returns the current patrol configuration
 func (p *PatrolService) GetConfig() PatrolConfig {
 	p.mu.RLock()
@@ -237,23 +337,32 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
+	interval := p.config.GetInterval()
+	intervalMs := int64(interval / time.Millisecond)
+
+	// "Running" means an analysis is currently in progress, not just the service loop
+	// Check streamPhase to determine if we're actively analyzing
+	p.streamMu.RLock()
+	analysisInProgress := p.streamPhase == "analyzing"
+	p.streamMu.RUnlock()
+
 	status := PatrolStatus{
-		Running:          p.running,
+		Running:          analysisInProgress,
+		Enabled:          p.config.Enabled,
 		LastDuration:     p.lastDuration,
 		ResourcesChecked: p.resourcesChecked,
 		FindingsCount:    len(p.findings.GetActive(FindingSeverityInfo)),
 		ErrorCount:       p.errorCount,
+		IntervalMs:       intervalMs,
 	}
 
 	if !p.lastPatrol.IsZero() {
 		status.LastPatrolAt = &p.lastPatrol
 	}
-	if !p.lastDeepAnalysis.IsZero() {
-		status.LastDeepAnalysis = &p.lastDeepAnalysis
-	}
 
-	if p.running && p.config.QuickCheckInterval > 0 {
-		next := p.lastPatrol.Add(p.config.QuickCheckInterval)
+	// Calculate next patrol time if we have interval and last patrol time
+	if interval > 0 && !p.lastPatrol.IsZero() {
+		next := p.lastPatrol.Add(interval)
 		status.NextPatrolAt = &next
 	}
 
@@ -261,6 +370,79 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 	status.Healthy = summary.IsHealthy()
 
 	return status
+}
+
+// SubscribeToStream returns a channel that will receive streaming patrol events
+func (p *PatrolService) SubscribeToStream() chan PatrolStreamEvent {
+	ch := make(chan PatrolStreamEvent, 100) // Buffered to prevent blocking
+
+	p.streamMu.Lock()
+	p.streamSubscribers[ch] = struct{}{}
+	// Send current state to new subscriber
+	if p.streamPhase != "idle" {
+		ch <- PatrolStreamEvent{
+			Type:    "content",
+			Content: p.currentOutput.String(),
+			Phase:   p.streamPhase,
+		}
+	}
+	p.streamMu.Unlock()
+
+	return ch
+}
+
+// UnsubscribeFromStream removes a subscriber
+func (p *PatrolService) UnsubscribeFromStream(ch chan PatrolStreamEvent) {
+	p.streamMu.Lock()
+	delete(p.streamSubscribers, ch)
+	p.streamMu.Unlock()
+	close(ch)
+}
+
+// broadcast sends an event to all subscribers
+func (p *PatrolService) broadcast(event PatrolStreamEvent) {
+	p.streamMu.RLock()
+	defer p.streamMu.RUnlock()
+
+	for ch := range p.streamSubscribers {
+		select {
+		case ch <- event:
+		default:
+			// Channel full, skip (don't block on slow consumers)
+		}
+	}
+}
+
+// appendStreamContent adds content to the current output and broadcasts it
+func (p *PatrolService) appendStreamContent(content string) {
+	p.streamMu.Lock()
+	p.currentOutput.WriteString(content)
+	p.streamMu.Unlock()
+
+	p.broadcast(PatrolStreamEvent{
+		Type:    "content",
+		Content: content,
+	})
+}
+
+// setStreamPhase updates the current phase (internal state tracking only)
+// Does not broadcast phase changes - those are explicit via broadcast()
+func (p *PatrolService) setStreamPhase(phase string) {
+	p.streamMu.Lock()
+	p.streamPhase = phase
+	if phase == "idle" {
+		p.currentOutput.Reset()
+	}
+	p.streamMu.Unlock()
+	// Note: We don't broadcast phase changes automatically
+	// The patrol explicitly broadcasts "start" and "complete" events
+}
+
+// GetCurrentStreamOutput returns the current buffered output (for late joiners)
+func (p *PatrolService) GetCurrentStreamOutput() (string, string) {
+	p.streamMu.RLock()
+	defer p.streamMu.RUnlock()
+	return p.currentOutput.String(), p.streamPhase
 }
 
 // Start begins the background patrol loop
@@ -272,6 +454,7 @@ func (p *PatrolService) Start(ctx context.Context) {
 	}
 	p.running = true
 	p.stopCh = make(chan struct{})
+	p.configChanged = make(chan struct{}, 1) // Buffered to allow non-blocking send
 	p.mu.Unlock()
 
 	log.Info().
@@ -309,28 +492,32 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 		return
 	}
 
-	quickTicker := time.NewTicker(p.config.QuickCheckInterval)
-	defer quickTicker.Stop()
+	p.mu.RLock()
+	interval := p.config.GetInterval()
+	configCh := p.configChanged
+	p.mu.RUnlock()
 
-	// Deep analysis ticker (if configured)
-	var deepTicker *time.Ticker
-	if p.config.DeepAnalysisInterval > 0 {
-		deepTicker = time.NewTicker(p.config.DeepAnalysisInterval)
-		defer deepTicker.Stop()
-	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
 	for {
 		select {
-		case <-quickTicker.C:
-			p.runPatrol(ctx, false)
+		case <-ticker.C:
+			p.runPatrol(ctx)
 
-		case <-func() <-chan time.Time {
-			if deepTicker != nil {
-				return deepTicker.C
+		case <-configCh:
+			// Config changed - reset ticker with new interval
+			p.mu.RLock()
+			newInterval := p.config.GetInterval()
+			p.mu.RUnlock()
+
+			if newInterval != interval {
+				interval = newInterval
+				ticker.Reset(interval)
+				log.Info().
+					Dur("interval", interval).
+					Msg("Patrol ticker reset to new interval")
 			}
-			return make(chan time.Time) // never fires
-		}():
-			p.runPatrol(ctx, true)
 
 		case <-p.stopCh:
 			return
@@ -342,7 +529,7 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 }
 
 // runPatrol executes a patrol run
-func (p *PatrolService) runPatrol(ctx context.Context, deep bool) {
+func (p *PatrolService) runPatrol(ctx context.Context) {
 	p.mu.RLock()
 	cfg := p.config
 	p.mu.RUnlock()
@@ -358,15 +545,25 @@ func (p *PatrolService) runPatrol(ctx context.Context, deep bool) {
 	}
 
 	start := time.Now()
-	patrolType := "quick"
-	if deep {
-		patrolType = "deep"
+	patrolType := "patrol" // Simplified - no longer distinguishing quick/deep
+
+	log.Debug().Msg("AI Patrol: Starting patrol run")
+
+	// Track run statistics
+	var runStats struct {
+		resourceCount    int
+		nodesChecked     int
+		guestsChecked    int
+		dockerChecked    int
+		storageChecked   int
+		hostsChecked     int
+		pbsChecked       int
+		newFindings      int
+		existingFindings int
+		findingIDs       []string
+		errors           int
+		aiAnalysis       *AIAnalysisResult // Stores the AI's analysis for the run record
 	}
-
-	log.Debug().Str("type", patrolType).Msg("AI Patrol: Starting patrol run")
-
-	var resourceCount int
-	var errors int
 
 	// Get current state
 	if p.stateProvider == nil {
@@ -376,6 +573,24 @@ func (p *PatrolService) runPatrol(ctx context.Context, deep bool) {
 
 	state := p.stateProvider.GetState()
 
+	// Helper to track findings
+	trackFinding := func(f *Finding) bool {
+		isNew := p.findings.Add(f)
+		if isNew {
+			runStats.newFindings++
+			log.Info().
+				Str("finding_id", f.ID).
+				Str("severity", string(f.Severity)).
+				Str("resource", f.ResourceName).
+				Str("title", f.Title).
+				Msg("AI Patrol: New finding")
+		} else {
+			runStats.existingFindings++
+		}
+		runStats.findingIDs = append(runStats.findingIDs, f.ID)
+		return isNew
+	}
+
 	// Analyze nodes
 	if cfg.AnalyzeNodes {
 		for _, node := range state.Nodes {
@@ -384,17 +599,11 @@ func (p *PatrolService) runPatrol(ctx context.Context, deep bool) {
 				return
 			default:
 			}
-			resourceCount++
-			findings := p.analyzeNode(node, deep)
+			runStats.resourceCount++
+			runStats.nodesChecked++
+			findings := p.analyzeNode(node)
 			for _, f := range findings {
-				if p.findings.Add(f) {
-					log.Info().
-						Str("finding_id", f.ID).
-						Str("severity", string(f.Severity)).
-						Str("resource", f.ResourceName).
-						Str("title", f.Title).
-						Msg("AI Patrol: New finding")
-				}
+				trackFinding(f)
 			}
 		}
 	}
@@ -407,14 +616,37 @@ func (p *PatrolService) runPatrol(ctx context.Context, deep bool) {
 				return
 			default:
 			}
-			resourceCount++
+			runStats.resourceCount++
+			runStats.guestsChecked++
 			// Calculate usage percentages from Memory/Disk structs
 			var memUsage, diskUsage float64
 			if vm.Memory.Total > 0 {
 				memUsage = float64(vm.Memory.Used) / float64(vm.Memory.Total)
+				// Cap at 1.0 to prevent impossible percentages from data anomalies
+				if memUsage > 1.0 {
+					log.Debug().
+						Str("guest", vm.Name).
+						Str("type", "vm").
+						Int64("memUsed", vm.Memory.Used).
+						Int64("memTotal", vm.Memory.Total).
+						Float64("rawRatio", memUsage).
+						Msg("AI Patrol: Capping memory usage ratio > 1.0")
+					memUsage = 1.0
+				}
 			}
 			if vm.Disk.Total > 0 {
 				diskUsage = float64(vm.Disk.Used) / float64(vm.Disk.Total)
+				// Cap at 1.0 to prevent impossible percentages from data anomalies
+				if diskUsage > 1.0 {
+					log.Debug().
+						Str("guest", vm.Name).
+						Str("type", "vm").
+						Int64("diskUsed", vm.Disk.Used).
+						Int64("diskTotal", vm.Disk.Total).
+						Float64("rawRatio", diskUsage).
+						Msg("AI Patrol: Capping disk usage ratio > 1.0")
+					diskUsage = 1.0
+				}
 			}
 			// Handle LastBackup - pass nil if zero time
 			var lastBackup *time.Time
@@ -423,16 +655,9 @@ func (p *PatrolService) runPatrol(ctx context.Context, deep bool) {
 				lastBackup = &t
 			}
 			findings := p.analyzeGuest(vm.ID, vm.Name, "vm", vm.Node, vm.Status,
-				vm.CPU, memUsage, diskUsage, lastBackup, vm.Template, deep)
+				vm.CPU, memUsage, diskUsage, lastBackup, vm.Template)
 			for _, f := range findings {
-				if p.findings.Add(f) {
-					log.Info().
-						Str("finding_id", f.ID).
-						Str("severity", string(f.Severity)).
-						Str("resource", f.ResourceName).
-						Str("title", f.Title).
-						Msg("AI Patrol: New finding")
-				}
+				trackFinding(f)
 			}
 		}
 
@@ -442,14 +667,37 @@ func (p *PatrolService) runPatrol(ctx context.Context, deep bool) {
 				return
 			default:
 			}
-			resourceCount++
+			runStats.resourceCount++
+			runStats.guestsChecked++
 			// Calculate usage percentages from Memory/Disk structs
 			var memUsage, diskUsage float64
 			if ct.Memory.Total > 0 {
 				memUsage = float64(ct.Memory.Used) / float64(ct.Memory.Total)
+				// Cap at 1.0 to prevent impossible percentages from data anomalies
+				if memUsage > 1.0 {
+					log.Debug().
+						Str("guest", ct.Name).
+						Str("type", "container").
+						Int64("memUsed", ct.Memory.Used).
+						Int64("memTotal", ct.Memory.Total).
+						Float64("rawRatio", memUsage).
+						Msg("AI Patrol: Capping memory usage ratio > 1.0")
+					memUsage = 1.0
+				}
 			}
 			if ct.Disk.Total > 0 {
 				diskUsage = float64(ct.Disk.Used) / float64(ct.Disk.Total)
+				// Cap at 1.0 to prevent impossible percentages from data anomalies
+				if diskUsage > 1.0 {
+					log.Debug().
+						Str("guest", ct.Name).
+						Str("type", "container").
+						Int64("diskUsed", ct.Disk.Used).
+						Int64("diskTotal", ct.Disk.Total).
+						Float64("rawRatio", diskUsage).
+						Msg("AI Patrol: Capping disk usage ratio > 1.0")
+					diskUsage = 1.0
+				}
 			}
 			// Handle LastBackup - pass nil if zero time
 			var lastBackup *time.Time
@@ -458,16 +706,9 @@ func (p *PatrolService) runPatrol(ctx context.Context, deep bool) {
 				lastBackup = &t
 			}
 			findings := p.analyzeGuest(ct.ID, ct.Name, "container", ct.Node, ct.Status,
-				ct.CPU, memUsage, diskUsage, lastBackup, ct.Template, deep)
+				ct.CPU, memUsage, diskUsage, lastBackup, ct.Template)
 			for _, f := range findings {
-				if p.findings.Add(f) {
-					log.Info().
-						Str("finding_id", f.ID).
-						Str("severity", string(f.Severity)).
-						Str("resource", f.ResourceName).
-						Str("title", f.Title).
-						Msg("AI Patrol: New finding")
-				}
+				trackFinding(f)
 			}
 		}
 	}
@@ -480,17 +721,11 @@ func (p *PatrolService) runPatrol(ctx context.Context, deep bool) {
 				return
 			default:
 			}
-			resourceCount++
-			findings := p.analyzeDockerHost(dh, deep)
+			runStats.resourceCount++
+			runStats.dockerChecked++
+			findings := p.analyzeDockerHost(dh)
 			for _, f := range findings {
-				if p.findings.Add(f) {
-					log.Info().
-						Str("finding_id", f.ID).
-						Str("severity", string(f.Severity)).
-						Str("resource", f.ResourceName).
-						Str("title", f.Title).
-						Msg("AI Patrol: New finding")
-				}
+				trackFinding(f)
 			}
 		}
 	}
@@ -503,17 +738,11 @@ func (p *PatrolService) runPatrol(ctx context.Context, deep bool) {
 				return
 			default:
 			}
-			resourceCount++
-			findings := p.analyzeStorage(st, deep)
+			runStats.resourceCount++
+			runStats.storageChecked++
+			findings := p.analyzeStorage(st)
 			for _, f := range findings {
-				if p.findings.Add(f) {
-					log.Info().
-						Str("finding_id", f.ID).
-						Str("severity", string(f.Severity)).
-						Str("resource", f.ResourceName).
-						Str("title", f.Title).
-						Msg("AI Patrol: New finding")
-				}
+				trackFinding(f)
 			}
 		}
 	}
@@ -526,17 +755,11 @@ func (p *PatrolService) runPatrol(ctx context.Context, deep bool) {
 				return
 			default:
 			}
-			resourceCount++
-			findings := p.analyzePBSInstance(pbs, state.PBSBackups, deep)
+			runStats.resourceCount++
+			runStats.pbsChecked++
+			findings := p.analyzePBSInstance(pbs, state.PBSBackups)
 			for _, f := range findings {
-				if p.findings.Add(f) {
-					log.Info().
-						Str("finding_id", f.ID).
-						Str("severity", string(f.Severity)).
-						Str("resource", f.ResourceName).
-						Str("title", f.Title).
-						Msg("AI Patrol: New finding")
-				}
+				trackFinding(f)
 			}
 		}
 	}
@@ -549,23 +772,30 @@ func (p *PatrolService) runPatrol(ctx context.Context, deep bool) {
 				return
 			default:
 			}
-			resourceCount++
-			findings := p.analyzeHost(host, deep)
+			runStats.resourceCount++
+			runStats.hostsChecked++
+			findings := p.analyzeHost(host)
 			for _, f := range findings {
-				if p.findings.Add(f) {
-					log.Info().
-						Str("finding_id", f.ID).
-						Str("severity", string(f.Severity)).
-						Str("resource", f.ResourceName).
-						Str("title", f.Title).
-						Msg("AI Patrol: New finding")
-				}
+				trackFinding(f)
 			}
 		}
 	}
 
+	// Run real AI analysis using the LLM
+	// This asks the AI to analyze the infrastructure and identify issues
+	aiResult, aiErr := p.runAIAnalysis(ctx, state)
+	if aiErr != nil {
+		log.Warn().Err(aiErr).Msg("AI Patrol: LLM analysis failed")
+		runStats.errors++
+	} else if aiResult != nil {
+		runStats.aiAnalysis = aiResult
+		for _, f := range aiResult.Findings {
+			trackFinding(f)
+		}
+	}
+
 	// Auto-resolve findings that weren't seen in this patrol run
-	p.autoResolveStaleFindings(start)
+	resolvedCount := p.autoResolveStaleFindings(start)
 
 	// Cleanup old resolved findings
 	cleaned := p.findings.Cleanup(24 * time.Hour)
@@ -574,26 +804,114 @@ func (p *PatrolService) runPatrol(ctx context.Context, deep bool) {
 	}
 
 	duration := time.Since(start)
+	completedAt := time.Now()
+
+	// Build findings summary string
+	summary := p.findings.GetSummary()
+	var findingsSummaryStr string
+	var status string
+	totalActive := summary.Critical + summary.Warning + summary.Watch
+	if totalActive == 0 {
+		findingsSummaryStr = "All healthy"
+		status = "healthy"
+	} else {
+		parts := []string{}
+		if summary.Critical > 0 {
+			parts = append(parts, fmt.Sprintf("%d critical", summary.Critical))
+		}
+		if summary.Warning > 0 {
+			parts = append(parts, fmt.Sprintf("%d warning", summary.Warning))
+		}
+		if summary.Watch > 0 {
+			parts = append(parts, fmt.Sprintf("%d watch", summary.Watch))
+		}
+		findingsSummaryStr = fmt.Sprintf("%s", joinParts(parts))
+		if summary.Critical > 0 {
+			status = "critical"
+		} else {
+			status = "issues_found"
+		}
+	}
+	if runStats.errors > 0 {
+		status = "error"
+	}
+
+	// Create run record
+	runRecord := PatrolRunRecord{
+		ID:               fmt.Sprintf("%d", start.UnixNano()),
+		StartedAt:        start,
+		CompletedAt:      completedAt,
+		Duration:         duration,
+		Type:             patrolType,
+		ResourcesChecked: runStats.resourceCount,
+		NodesChecked:     runStats.nodesChecked,
+		GuestsChecked:    runStats.guestsChecked,
+		DockerChecked:    runStats.dockerChecked,
+		StorageChecked:   runStats.storageChecked,
+		HostsChecked:     runStats.hostsChecked,
+		PBSChecked:       runStats.pbsChecked,
+		NewFindings:      runStats.newFindings,
+		ExistingFindings: runStats.existingFindings,
+		ResolvedFindings: resolvedCount,
+		FindingsSummary:  findingsSummaryStr,
+		FindingIDs:       runStats.findingIDs,
+		ErrorCount:       runStats.errors,
+		Status:           status,
+	}
+
+	// Add AI analysis details if available
+	if runStats.aiAnalysis != nil {
+		runRecord.AIAnalysis = runStats.aiAnalysis.Response
+		runRecord.InputTokens = runStats.aiAnalysis.InputTokens
+		runRecord.OutputTokens = runStats.aiAnalysis.OutputTokens
+		log.Debug().
+			Int("response_length", len(runStats.aiAnalysis.Response)).
+			Int("input_tokens", runStats.aiAnalysis.InputTokens).
+			Int("output_tokens", runStats.aiAnalysis.OutputTokens).
+			Msg("AI Patrol: Storing AI analysis in run record")
+	} else {
+		log.Debug().Msg("AI Patrol: No AI analysis to store (aiAnalysis is nil)")
+	}
 
 	p.mu.Lock()
-	p.lastPatrol = time.Now()
+	p.lastPatrol = completedAt
 	p.lastDuration = duration
-	p.resourcesChecked = resourceCount
-	p.errorCount = errors
+	p.resourcesChecked = runStats.resourceCount
+	p.errorCount = runStats.errors
 	if deep {
-		p.lastDeepAnalysis = time.Now()
+		p.lastDeepAnalysis = completedAt
 	}
 	p.mu.Unlock()
 
-	summary := p.findings.GetSummary()
+	// Add to history store (handles persistence automatically)
+	p.runHistoryStore.Add(runRecord)
+
 	log.Info().
 		Str("type", patrolType).
 		Dur("duration", duration).
-		Int("resources", resourceCount).
+		Int("resources", runStats.resourceCount).
+		Int("new_findings", runStats.newFindings).
+		Int("resolved", resolvedCount).
 		Int("critical", summary.Critical).
 		Int("warning", summary.Warning).
 		Int("watch", summary.Watch).
 		Msg("AI Patrol: Completed patrol run")
+}
+
+// joinParts joins string parts with commas and "and" for the last element
+func joinParts(parts []string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	if len(parts) == 2 {
+		return parts[0] + " and " + parts[1]
+	}
+	return fmt.Sprintf("%s, and %s", 
+		fmt.Sprintf("%s", parts[0:len(parts)-1]),
+		parts[len(parts)-1])
 }
 
 // generateFindingID creates a stable ID for a finding based on resource and issue
@@ -603,7 +921,7 @@ func generateFindingID(resourceID, category, issue string) string {
 }
 
 // analyzeNode checks a Proxmox node for issues
-func (p *PatrolService) analyzeNode(node models.Node, deep bool) []*Finding {
+func (p *PatrolService) analyzeNode(node models.Node) []*Finding {
 	var findings []*Finding
 
 	// Calculate memory usage from Memory struct (as percentage 0-100)
@@ -675,7 +993,7 @@ func (p *PatrolService) analyzeNode(node models.Node, deep bool) []*Finding {
 
 // analyzeGuest checks a VM or container for issues
 func (p *PatrolService) analyzeGuest(id, name, guestType, node, status string,
-	cpu, memUsage, diskUsage float64, lastBackup *time.Time, template, deep bool) []*Finding {
+	cpu, memUsage, diskUsage float64, lastBackup *time.Time, template bool) []*Finding {
 	var findings []*Finding
 
 	// Skip templates
@@ -773,7 +1091,7 @@ func (p *PatrolService) analyzeGuest(id, name, guestType, node, status string,
 }
 
 // analyzeDockerHost checks a Docker host for issues
-func (p *PatrolService) analyzeDockerHost(host models.DockerHost, deep bool) []*Finding {
+func (p *PatrolService) analyzeDockerHost(host models.DockerHost) []*Finding {
 	var findings []*Finding
 
 	hostName := host.Hostname
@@ -837,7 +1155,7 @@ func (p *PatrolService) analyzeDockerHost(host models.DockerHost, deep bool) []*
 }
 
 // analyzeStorage checks storage for issues
-func (p *PatrolService) analyzeStorage(storage models.Storage, deep bool) []*Finding {
+func (p *PatrolService) analyzeStorage(storage models.Storage) []*Finding {
 	var findings []*Finding
 
 	// Note: storage.Usage is already a percentage (0-100, e.g. 85.5 means 85.5%)
@@ -876,15 +1194,18 @@ func (p *PatrolService) analyzeStorage(storage models.Storage, deep bool) []*Fin
 
 // autoResolveHealthyResources marks findings as resolved when they weren't seen in the current patrol
 // patrolStartTime is used to determine which findings are stale (LastSeenAt < patrolStartTime)
-func (p *PatrolService) autoResolveStaleFindings(patrolStartTime time.Time) {
+// Returns the count of findings that were resolved
+func (p *PatrolService) autoResolveStaleFindings(patrolStartTime time.Time) int {
 	// Get all active findings and check if they're stale
 	activeFindings := p.findings.GetActive(FindingSeverityInfo)
+	resolvedCount := 0
 	
 	for _, f := range activeFindings {
 		// If the finding wasn't updated during this patrol (LastSeenAt is before patrol started),
 		// it means the condition that caused it has been resolved
 		if f.LastSeenAt.Before(patrolStartTime) {
 			if p.findings.Resolve(f.ID, true) {
+				resolvedCount++
 				log.Info().
 					Str("finding_id", f.ID).
 					Str("resource", f.ResourceName).
@@ -893,6 +1214,7 @@ func (p *PatrolService) autoResolveStaleFindings(patrolStartTime time.Time) {
 			}
 		}
 	}
+	return resolvedCount
 }
 
 // GetFindingsForResource returns active findings for a specific resource
@@ -903,6 +1225,15 @@ func (p *PatrolService) GetFindingsForResource(resourceID string) []*Finding {
 // GetFindingsSummary returns a summary of all findings
 func (p *PatrolService) GetFindingsSummary() FindingsSummary {
 	return p.findings.GetSummary()
+}
+
+// GetRunHistory returns the history of patrol runs
+// If limit is > 0, returns at most that many records
+func (p *PatrolService) GetRunHistory(limit int) []PatrolRunRecord {
+	if limit <= 0 {
+		return p.runHistoryStore.GetAll()
+	}
+	return p.runHistoryStore.GetRecent(limit)
 }
 
 // GetAllFindings returns all active findings sorted by severity
@@ -941,12 +1272,13 @@ func (p *PatrolService) GetFindingsHistory(startTime *time.Time) []*Finding {
 }
 
 // ForcePatrol triggers an immediate patrol run
+// The deep parameter is kept for API backwards compatibility but is ignored
 func (p *PatrolService) ForcePatrol(ctx context.Context, deep bool) {
-	go p.runPatrol(ctx, deep)
+	go p.runPatrol(ctx)
 }
 
 // analyzePBSInstance checks a PBS backup server for issues
-func (p *PatrolService) analyzePBSInstance(pbs models.PBSInstance, allBackups []models.PBSBackup, deep bool) []*Finding {
+func (p *PatrolService) analyzePBSInstance(pbs models.PBSInstance, allBackups []models.PBSBackup) []*Finding {
 	var findings []*Finding
 
 	pbsName := pbs.Name
@@ -1119,7 +1451,7 @@ func (p *PatrolService) analyzePBSInstance(pbs models.PBSInstance, allBackups []
 }
 
 // analyzeHost checks an agent host for issues (RAID, sensors, connectivity)
-func (p *PatrolService) analyzeHost(host models.Host, deep bool) []*Finding {
+func (p *PatrolService) analyzeHost(host models.Host) []*Finding {
 	var findings []*Finding
 
 	hostName := host.DisplayName
@@ -1240,4 +1572,388 @@ func (p *PatrolService) analyzeHost(host models.Host, deep bool) []*Finding {
 	}
 
 	return findings
+}
+
+// AIAnalysisResult contains the results of an AI analysis
+type AIAnalysisResult struct {
+	Response     string     // The AI's raw response text
+	Findings     []*Finding // Parsed findings from the response
+	InputTokens  int
+	OutputTokens int
+}
+
+// runAIAnalysis uses the LLM to analyze infrastructure and identify issues
+func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSnapshot) (*AIAnalysisResult, error) {
+	if p.aiService == nil {
+		return nil, fmt.Errorf("AI service not available")
+	}
+
+	// Build infrastructure summary for the AI
+	summary := p.buildInfrastructureSummary(state)
+	if summary == "" {
+		return nil, nil // Nothing to analyze
+	}
+
+	// Build the patrol analysis prompt
+	prompt := p.buildPatrolPrompt(summary)
+
+		Msg("AI Patrol: Sending infrastructure to LLM for analysis")
+
+	// Start streaming phase
+	p.setStreamPhase("analyzing")
+	p.broadcast(PatrolStreamEvent{Type: "start"})
+
+	// Use streaming to broadcast updates in real-time
+	var contentBuffer strings.Builder
+	var inputTokens, outputTokens int
+
+	resp, err := p.aiService.ExecuteStream(ctx, ExecuteRequest{
+		Prompt:       prompt,
+		SystemPrompt: p.getPatrolSystemPrompt(),
+	}, func(event StreamEvent) {
+		switch event.Type {
+		case "content":
+			if content, ok := event.Data.(string); ok {
+				contentBuffer.WriteString(content)
+				p.appendStreamContent(content)
+			}
+		case "thinking":
+			// Thinking chunks become separate blocks (like AI chat)
+			if thinking, ok := event.Data.(string); ok && thinking != "" {
+				contentBuffer.WriteString(thinking)
+				// Send as a "thinking" event type so frontend can style it differently
+				p.broadcast(PatrolStreamEvent{
+					Type:    "thinking",
+					Content: thinking,
+				})
+			}
+		}
+	})
+	
+	if err != nil {
+		p.setStreamPhase("idle")
+		p.broadcast(PatrolStreamEvent{Type: "error", Content: err.Error()})
+		return nil, fmt.Errorf("LLM analysis failed: %w", err)
+	}
+
+	// Use response content (streaming may have captured it already)
+	finalContent := resp.Content
+	if finalContent == "" {
+		finalContent = contentBuffer.String()
+	}
+	inputTokens = resp.InputTokens
+	outputTokens = resp.OutputTokens
+
+	log.Debug().
+		Int("input_tokens", inputTokens).
+		Int("output_tokens", outputTokens).
+		Int("content_length", len(finalContent)).
+		Msg("AI Patrol: LLM analysis complete")
+
+	// Broadcast completion
+	p.broadcast(PatrolStreamEvent{
+		Type:   "complete",
+		Tokens: outputTokens,
+	})
+	p.setStreamPhase("idle")
+
+	// Parse findings from AI response
+	findings := p.parseAIFindings(finalContent)
+
+	return &AIAnalysisResult{
+		Response:     finalContent,
+		Findings:     findings,
+		InputTokens:  inputTokens,
+		OutputTokens: outputTokens,
+	}, nil
+}
+
+// getPatrolSystemPrompt returns the system prompt for AI patrol analysis
+// The prompt varies based on whether auto-fix mode is enabled
+func (p *PatrolService) getPatrolSystemPrompt() string {
+	autoFix := false
+	if cfg := p.aiService.GetAIConfig(); cfg != nil {
+		autoFix = cfg.PatrolAutoFix
+	}
+
+	basePrompt := `You are an infrastructure analyst for Pulse, a Proxmox monitoring system. Your job is to analyze infrastructure state and identify issues, potential problems, and optimization opportunities.
+
+IMPORTANT: You must respond in a specific structured format so findings can be parsed.
+
+For each issue you identify, output a finding block like this:
+
+[FINDING]
+SEVERITY: critical|warning|watch|info
+CATEGORY: performance|reliability|security|capacity|configuration
+RESOURCE: <resource name or ID>
+RESOURCE_TYPE: node|vm|container|docker_container|storage|host
+TITLE: <brief issue title>
+DESCRIPTION: <detailed description of the issue>
+RECOMMENDATION: <specific actionable recommendation>
+EVIDENCE: <specific data that supports this finding>
+[/FINDING]
+
+Guidelines:
+- CRITICAL: Immediate action required (data loss risk, service down)
+- WARNING: Should be addressed soon (degraded performance, nearing limits)  
+- WATCH: Worth monitoring (trends, minor inefficiencies)
+- INFO: Informational observations
+
+Focus on:
+1. Resource utilization patterns and anomalies
+2. Potential capacity issues before they become problems
+3. Configuration issues or inefficiencies
+4. Correlation between resources (e.g., multiple VMs on an overloaded node)
+5. Missing best practices (no backups, no HA, etc.)
+
+If everything looks healthy, you can say so briefly without any FINDING blocks.`
+
+	if autoFix {
+		return basePrompt + `
+
+AUTO-FIX MODE ENABLED: You may use the run_command tool to attempt automatic remediation of issues you find. Use caution and only fix issues where you are confident the fix is safe. Always log what you're doing.`
+	}
+
+	return basePrompt + `
+
+OBSERVE ONLY MODE: You are in observation mode. Gather data using read-only commands (like checking status, memory usage, disk space) to investigate issues, but DO NOT attempt to fix or modify anything. Present your findings for the user to review and action.`
+}
+
+// buildInfrastructureSummary creates a text summary of infrastructure state for the AI
+func (p *PatrolService) buildInfrastructureSummary(state models.StateSnapshot) string {
+	var sb strings.Builder
+
+	sb.WriteString("# Infrastructure State Summary\n\n")
+
+	// Nodes
+	if len(state.Nodes) > 0 {
+		sb.WriteString("## Proxmox Nodes\n")
+		for _, n := range state.Nodes {
+			memPct := 0.0
+			if n.Memory.Total > 0 {
+				memPct = float64(n.Memory.Used) / float64(n.Memory.Total) * 100
+			}
+			sb.WriteString(fmt.Sprintf("- **%s**: Status=%s, CPU=%.1f%%, Memory=%.1f%%, Uptime=%s\n",
+				n.Name, n.Status, n.CPU*100, memPct, formatDurationPatrol(time.Duration(n.Uptime)*time.Second)))
+		}
+		sb.WriteString("\n")
+	}
+
+	// VMs
+	if len(state.VMs) > 0 {
+		sb.WriteString("## Virtual Machines\n")
+		for _, vm := range state.VMs {
+			if vm.Template {
+				continue // Skip templates
+			}
+			memPct := 0.0
+			if vm.Memory.Total > 0 {
+				memPct = float64(vm.Memory.Used) / float64(vm.Memory.Total) * 100
+			}
+			backupStatus := "never"
+			if !vm.LastBackup.IsZero() {
+				backupStatus = fmt.Sprintf("%s ago", time.Since(vm.LastBackup).Round(time.Hour))
+			}
+			sb.WriteString(fmt.Sprintf("- **%s** (ID:%s, Node:%s): Status=%s, CPU=%.1f%%, Memory=%.1f%%, LastBackup=%s\n",
+				vm.Name, vm.ID, vm.Node, vm.Status, vm.CPU*100, memPct, backupStatus))
+		}
+		sb.WriteString("\n")
+	}
+
+	// Containers
+	if len(state.Containers) > 0 {
+		sb.WriteString("## LXC Containers\n")
+		for _, ct := range state.Containers {
+			if ct.Template {
+				continue
+			}
+			memPct := 0.0
+			if ct.Memory.Total > 0 {
+				memPct = float64(ct.Memory.Used) / float64(ct.Memory.Total) * 100
+			}
+			backupStatus := "never"
+			if !ct.LastBackup.IsZero() {
+				backupStatus = fmt.Sprintf("%s ago", time.Since(ct.LastBackup).Round(time.Hour))
+			}
+			sb.WriteString(fmt.Sprintf("- **%s** (ID:%s, Node:%s): Status=%s, CPU=%.1f%%, Memory=%.1f%%, LastBackup=%s\n",
+				ct.Name, ct.ID, ct.Node, ct.Status, ct.CPU*100, memPct, backupStatus))
+		}
+		sb.WriteString("\n")
+	}
+
+	// Storage
+	if len(state.Storage) > 0 {
+		sb.WriteString("## Storage\n")
+		for _, st := range state.Storage {
+			usedPct := 0.0
+			if st.Total > 0 {
+				usedPct = float64(st.Used) / float64(st.Total) * 100
+			}
+			sb.WriteString(fmt.Sprintf("- **%s** (Node:%s, Type:%s): %.1f%% used (%s / %s)\n",
+				st.Name, st.Node, st.Type, usedPct, formatBytesInt64(st.Used), formatBytesInt64(st.Total)))
+		}
+		sb.WriteString("\n")
+	}
+
+	// Docker hosts
+	if len(state.DockerHosts) > 0 {
+		sb.WriteString("## Docker Hosts\n")
+		for _, dh := range state.DockerHosts {
+			sb.WriteString(fmt.Sprintf("- **%s**: Status=%s, Containers=%d\n",
+				dh.Hostname, dh.Status, len(dh.Containers)))
+			for _, c := range dh.Containers {
+				sb.WriteString(fmt.Sprintf("  - %s: State=%s, CPU=%.1f%%, Memory=%.1f%%, Restarts=%d\n",
+					c.Name, c.State, c.CPUPercent, c.MemoryPercent, c.RestartCount))
+			}
+		}
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
+}
+
+// buildPatrolPrompt creates the prompt for AI analysis
+func (p *PatrolService) buildPatrolPrompt(summary string, deep bool) string {
+	// Always run comprehensive analysis (deep flag kept for API backwards compat but ignored)
+	return fmt.Sprintf(`Please perform a comprehensive analysis of the following infrastructure and identify any issues, potential problems, or optimization opportunities.
+
+%s
+
+Analyze the above and report any findings using the structured format. Focus on:
+- Resources showing high utilization
+- Patterns that might indicate problems
+- Missing backups or stale backup schedules
+- Unbalanced resource distribution
+- Any anomalies or concerns
+
+If everything looks healthy, say so briefly.`, summary)
+}
+
+// parseAIFindings extracts structured findings from AI response
+func (p *PatrolService) parseAIFindings(response string) []*Finding {
+	var findings []*Finding
+
+	// Find all [FINDING]...[/FINDING] blocks
+	findingPattern := regexp.MustCompile(`(?s)\[FINDING\](.*?)\[/FINDING\]`)
+	matches := findingPattern.FindAllStringSubmatch(response, -1)
+
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+
+		block := match[1]
+		finding := p.parseFindingBlock(block)
+		if finding != nil {
+			findings = append(findings, finding)
+		}
+	}
+
+	return findings
+}
+
+// parseFindingBlock extracts a single finding from a block
+func (p *PatrolService) parseFindingBlock(block string) *Finding {
+	extract := func(key string) string {
+		pattern := regexp.MustCompile(`(?i)` + key + `:\s*(.+?)(?:\n|$)`)
+		match := pattern.FindStringSubmatch(block)
+		if len(match) >= 2 {
+			return strings.TrimSpace(match[1])
+		}
+		return ""
+	}
+
+	severity := extract("SEVERITY")
+	category := extract("CATEGORY")
+	resource := extract("RESOURCE")
+	resourceType := extract("RESOURCE_TYPE")
+	title := extract("TITLE")
+	description := extract("DESCRIPTION")
+	recommendation := extract("RECOMMENDATION")
+	evidence := extract("EVIDENCE")
+
+	// Validate required fields
+	if title == "" || description == "" {
+		return nil
+	}
+
+	// Map severity
+	var sev FindingSeverity
+	switch strings.ToLower(severity) {
+	case "critical":
+		sev = FindingSeverityCritical
+	case "warning":
+		sev = FindingSeverityWarning
+	case "watch":
+		sev = FindingSeverityWatch
+	default:
+		sev = FindingSeverityInfo
+	}
+
+	// Map category
+	var cat FindingCategory
+	switch strings.ToLower(category) {
+	case "performance":
+		cat = FindingCategoryPerformance
+	case "reliability":
+		cat = FindingCategoryReliability
+	case "security":
+		cat = FindingCategorySecurity
+	case "capacity":
+		cat = FindingCategoryCapacity
+	case "configuration":
+		cat = FindingCategoryGeneral // Configuration maps to General
+	default:
+		cat = FindingCategoryPerformance
+	}
+
+	// Generate stable ID from content
+	id := generateFindingID(resource, string(cat), title)
+
+	return &Finding{
+		ID:             id,
+		Severity:       sev,
+		Category:       cat,
+		ResourceID:     resource,
+		ResourceName:   resource,
+		ResourceType:   resourceType,
+		Title:          title,
+		Description:    description,
+		Recommendation: recommendation,
+		Evidence:       evidence,
+		Source:         "ai-analysis", // Mark as coming from AI
+	}
+}
+
+// formatDurationPatrol formats a duration as a human-readable string for patrol
+func formatDurationPatrol(d time.Duration) string {
+	if d < time.Hour {
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+	if d < 24*time.Hour {
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
+	return fmt.Sprintf("%dd", int(d.Hours()/24))
+}
+
+// formatBytes formats bytes as a human-readable string
+func formatBytes(b uint64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := uint64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+// formatBytesInt64 formats int64 bytes as a human-readable string
+func formatBytesInt64(b int64) string {
+	if b < 0 {
+		return "0 B"
+	}
+	return formatBytes(uint64(b))
 }

@@ -20,20 +20,21 @@ import (
 
 // ConfigPersistence handles saving and loading configuration
 type ConfigPersistence struct {
-	mu             sync.RWMutex
-	tx             *importTransaction
-	configDir      string
-	alertFile      string
-	emailFile      string
-	webhookFile    string
-	appriseFile    string
-	nodesFile      string
-	systemFile     string
-	oidcFile       string
-	apiTokensFile  string
-	aiFile         string
-	aiFindingsFile string
-	crypto         *crypto.CryptoManager
+	mu              sync.RWMutex
+	tx              *importTransaction
+	configDir       string
+	alertFile       string
+	emailFile       string
+	webhookFile     string
+	appriseFile     string
+	nodesFile       string
+	systemFile      string
+	oidcFile        string
+	apiTokensFile   string
+	aiFile          string
+	aiFindingsFile  string
+	aiPatrolRunsFile string
+	crypto          *crypto.CryptoManager
 }
 
 // NewConfigPersistence creates a new config persistence manager.
@@ -66,18 +67,19 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 	}
 
 	cp := &ConfigPersistence{
-		configDir:      configDir,
-		alertFile:      filepath.Join(configDir, "alerts.json"),
-		emailFile:      filepath.Join(configDir, "email.enc"),
-		webhookFile:    filepath.Join(configDir, "webhooks.enc"),
-		appriseFile:    filepath.Join(configDir, "apprise.enc"),
-		nodesFile:      filepath.Join(configDir, "nodes.enc"),
-		systemFile:     filepath.Join(configDir, "system.json"),
-		oidcFile:       filepath.Join(configDir, "oidc.enc"),
-		apiTokensFile:  filepath.Join(configDir, "api_tokens.json"),
-		aiFile:         filepath.Join(configDir, "ai.enc"),
-		aiFindingsFile: filepath.Join(configDir, "ai_findings.json"),
-		crypto:         cryptoMgr,
+		configDir:        configDir,
+		alertFile:        filepath.Join(configDir, "alerts.json"),
+		emailFile:        filepath.Join(configDir, "email.enc"),
+		webhookFile:      filepath.Join(configDir, "webhooks.enc"),
+		appriseFile:      filepath.Join(configDir, "apprise.enc"),
+		nodesFile:        filepath.Join(configDir, "nodes.enc"),
+		systemFile:       filepath.Join(configDir, "system.json"),
+		oidcFile:         filepath.Join(configDir, "oidc.enc"),
+		apiTokensFile:    filepath.Join(configDir, "api_tokens.json"),
+		aiFile:           filepath.Join(configDir, "ai.enc"),
+		aiFindingsFile:   filepath.Join(configDir, "ai_findings.json"),
+		aiPatrolRunsFile: filepath.Join(configDir, "ai_patrol_runs.json"),
+		crypto:           cryptoMgr,
 	}
 
 	log.Debug().
@@ -1468,6 +1470,112 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 		Time("last_saved", findingsData.LastSaved).
 		Msg("AI findings loaded")
 	return &findingsData, nil
+}
+
+// PatrolRunHistoryData represents persisted patrol run history with metadata
+type PatrolRunHistoryData struct {
+	Version   int                  `json:"version"`
+	LastSaved time.Time            `json:"last_saved"`
+	Runs      []PatrolRunRecord    `json:"runs"`
+}
+
+// PatrolRunRecord represents a single patrol check run
+type PatrolRunRecord struct {
+	ID               string        `json:"id"`
+	StartedAt        time.Time     `json:"started_at"`
+	CompletedAt      time.Time     `json:"completed_at"`
+	DurationMs       int64         `json:"duration_ms"`
+	Type             string        `json:"type"` // "quick" or "deep"
+	ResourcesChecked int           `json:"resources_checked"`
+	// Breakdown by resource type
+	NodesChecked     int `json:"nodes_checked"`
+	GuestsChecked    int `json:"guests_checked"`
+	DockerChecked    int `json:"docker_checked"`
+	StorageChecked   int `json:"storage_checked"`
+	HostsChecked     int `json:"hosts_checked"`
+	PBSChecked       int `json:"pbs_checked"`
+	// Findings from this run
+	NewFindings      int      `json:"new_findings"`
+	ExistingFindings int      `json:"existing_findings"`
+	ResolvedFindings int      `json:"resolved_findings"`
+	FindingsSummary  string   `json:"findings_summary"`
+	FindingIDs       []string `json:"finding_ids,omitempty"`
+	ErrorCount       int      `json:"error_count"`
+	Status           string   `json:"status"` // "healthy", "issues_found", "critical", "error"
+	// AI Analysis details
+	AIAnalysis   string `json:"ai_analysis,omitempty"`   // The AI's raw response/analysis
+	InputTokens  int    `json:"input_tokens,omitempty"`  // Tokens sent to AI
+	OutputTokens int    `json:"output_tokens,omitempty"` // Tokens received from AI
+}
+
+// SavePatrolRunHistory persists patrol run history to disk
+func (c *ConfigPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	data := PatrolRunHistoryData{
+		Version:   1,
+		LastSaved: time.Now(),
+		Runs:      runs,
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	if err := c.writeConfigFileLocked(c.aiPatrolRunsFile, jsonData, 0600); err != nil {
+		return err
+	}
+
+	log.Debug().
+		Str("file", c.aiPatrolRunsFile).
+		Int("count", len(runs)).
+		Msg("Patrol run history saved")
+	return nil
+}
+
+// LoadPatrolRunHistory loads patrol run history from disk
+func (c *ConfigPersistence) LoadPatrolRunHistory() (*PatrolRunHistoryData, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := os.ReadFile(c.aiPatrolRunsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Return empty data if file doesn't exist
+			return &PatrolRunHistoryData{
+				Version: 1,
+				Runs:    make([]PatrolRunRecord, 0),
+			}, nil
+		}
+		return nil, err
+	}
+
+	var historyData PatrolRunHistoryData
+	if err := json.Unmarshal(data, &historyData); err != nil {
+		log.Error().Err(err).Str("file", c.aiPatrolRunsFile).Msg("Failed to parse patrol run history file")
+		// Return empty data on parse error rather than failing
+		return &PatrolRunHistoryData{
+			Version: 1,
+			Runs:    make([]PatrolRunRecord, 0),
+		}, nil
+	}
+
+	if historyData.Runs == nil {
+		historyData.Runs = make([]PatrolRunRecord, 0)
+	}
+
+	log.Info().
+		Str("file", c.aiPatrolRunsFile).
+		Int("count", len(historyData.Runs)).
+		Time("last_saved", historyData.LastSaved).
+		Msg("Patrol run history loaded")
+	return &historyData, nil
 }
 
 // LoadSystemSettings loads system settings from file

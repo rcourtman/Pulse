@@ -35,6 +35,9 @@ export const AISettings: Component = () => {
     clearApiKey: false,
     autonomousMode: false,
     authMethod: 'api_key' as AuthMethod,
+    patrolSchedulePreset: '6hr',
+    alertTriggeredAnalysis: true,
+    patrolAutoFix: false,
   });
 
   const resetForm = (data: AISettingsType | null) => {
@@ -48,6 +51,9 @@ export const AISettings: Component = () => {
         clearApiKey: false,
         autonomousMode: false,
         authMethod: 'api_key',
+        patrolSchedulePreset: '6hr',
+        alertTriggeredAnalysis: true,
+        patrolAutoFix: false,
       });
       return;
     }
@@ -61,6 +67,9 @@ export const AISettings: Component = () => {
       clearApiKey: false,
       autonomousMode: data.autonomous_mode || false,
       authMethod: data.auth_method || 'api_key',
+      patrolSchedulePreset: data.patrol_schedule_preset || '6hr',
+      alertTriggeredAnalysis: data.alert_triggered_analysis !== false, // default to true
+      patrolAutoFix: data.patrol_auto_fix || false, // default to false (observe only)
     });
   };
 
@@ -146,6 +155,19 @@ export const AISettings: Component = () => {
       // Include autonomous mode if changed
       if (form.autonomousMode !== settings()?.autonomous_mode) {
         payload.autonomous_mode = form.autonomousMode;
+      }
+
+      // Include patrol settings if changed
+      if (form.patrolSchedulePreset !== settings()?.patrol_schedule_preset) {
+        payload.patrol_schedule_preset = form.patrolSchedulePreset;
+      }
+
+      if (form.alertTriggeredAnalysis !== settings()?.alert_triggered_analysis) {
+        payload.alert_triggered_analysis = form.alertTriggeredAnalysis;
+      }
+
+      if (form.patrolAutoFix !== settings()?.patrol_auto_fix) {
+        payload.patrol_auto_fix = form.patrolAutoFix;
       }
 
       const updated = await AIAPI.updateSettings(payload);
@@ -629,6 +651,89 @@ export const AISettings: Component = () => {
                 />
               </div>
             </div>
+
+            {/* AI Patrol & Efficiency Settings */}
+            <div class={`${formField} p-4 rounded-lg border bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800`}>
+              <div class="mb-3">
+                <label class={`${labelClass()} flex items-center gap-2`}>
+                  <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  AI Patrol & Token Efficiency
+                </label>
+                <p class="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                  Configure how AI monitors your infrastructure. Balance between coverage and token usage.
+                </p>
+              </div>
+
+              {/* Patrol Schedule Preset */}
+              <div class="space-y-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Background Patrol Frequency
+                  </label>
+                  <select
+                    class={controlClass()}
+                    value={form.patrolSchedulePreset}
+                    onChange={(e) => setForm('patrolSchedulePreset', e.currentTarget.value)}
+                    disabled={saving()}
+                  >
+                    <option value="15min">Every 15 minutes (high token usage)</option>
+                    <option value="1hr">Every hour</option>
+                    <option value="6hr">Every 6 hours (recommended)</option>
+                    <option value="12hr">Every 12 hours</option>
+                    <option value="daily">Once daily</option>
+                    <option value="disabled">Disabled (use alert-triggered only)</option>
+                  </select>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    How often to scan all infrastructure for potential issues
+                  </p>
+                </div>
+
+                {/* Alert-Triggered Analysis Toggle */}
+                <div class="flex items-start justify-between gap-4 pt-2">
+                  <div class="flex-1">
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                      Alert-Triggered Analysis
+                      <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
+                        TOKEN EFFICIENT
+                      </span>
+                    </label>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      When enabled, AI automatically analyzes specific resources when alerts fire.
+                      Uses minimal tokens since it only analyzes affected resources.
+                    </p>
+                  </div>
+                  <Toggle
+                    checked={form.alertTriggeredAnalysis}
+                    onChange={(event) => setForm('alertTriggeredAnalysis', event.currentTarget.checked)}
+                    disabled={saving()}
+                  />
+                </div>
+
+                {/* Auto-Fix Mode Toggle */}
+                <div class="flex items-start justify-between gap-4 pt-3 mt-3 border-t border-blue-200 dark:border-blue-800">
+                  <div class="flex-1">
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                      Auto-Fix Mode
+                      <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded">
+                        ADVANCED
+                      </span>
+                    </label>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      When enabled, patrol can attempt automatic remediation of issues.
+                      When disabled (default), patrol only observes and reports - it won't make changes.
+                    </p>
+                  </div>
+                  <Toggle
+                    checked={form.patrolAutoFix}
+                    onChange={(event) => setForm('patrolAutoFix', event.currentTarget.checked)}
+                    disabled={saving()}
+                  />
+                </div>
+              </div>
+            </div>
+
 
           </div>
 

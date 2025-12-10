@@ -45,6 +45,7 @@ type Finding struct {
 	Description    string          `json:"description"`
 	Recommendation string          `json:"recommendation,omitempty"`
 	Evidence       string          `json:"evidence,omitempty"` // data/commands that led to this finding
+	Source         string          `json:"source,omitempty"`   // "ai-analysis" for LLM findings, empty for rule-based
 	DetectedAt     time.Time       `json:"detected_at"`
 	LastSeenAt     time.Time       `json:"last_seen_at"`
 	ResolvedAt     *time.Time      `json:"resolved_at,omitempty"`

@@ -187,6 +187,9 @@ func runServer() {
 	// Start AI patrol service for background infrastructure monitoring
 	router.StartPatrol(ctx)
 
+	// Wire alert-triggered AI analysis (token-efficient real-time insights when alerts fire)
+	router.WireAlertTriggeredAI()
+
 	// Create HTTP server with unified configuration
 	// In production, serve everything (frontend + API) on the frontend port
 	// NOTE: We use ReadHeaderTimeout instead of ReadTimeout to avoid affecting

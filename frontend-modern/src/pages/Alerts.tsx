@@ -28,7 +28,7 @@ import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
 import Send from 'lucide-solid/icons/send';
 import Calendar from 'lucide-solid/icons/calendar';
-import { getPatrolStatus, getFindings, getFindingsHistory, acknowledgeFinding, snoozeFinding, type Finding, type PatrolStatus, severityColors, formatTimestamp } from '@/api/patrol';
+import { getPatrolStatus, getFindings, getFindingsHistory, getPatrolRunHistory, forcePatrol, subscribeToPatrolStream, type Finding, type PatrolStatus, type PatrolRunRecord, severityColors, formatTimestamp } from '@/api/patrol';
 import { aiChatStore } from '@/stores/aiChat';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
@@ -2042,22 +2042,215 @@ function OverviewTab(props: {
   // AI Patrol findings state
   const [aiFindings, setAiFindings] = createSignal<Finding[]>([]);
   const [patrolStatus, setPatrolStatus] = createSignal<PatrolStatus | null>(null);
-  const [processingFindings, setProcessingFindings] = createSignal<Set<string>>(new Set());
+  const [patrolRunHistory, setPatrolRunHistory] = createSignal<PatrolRunRecord[]>([]);
+  // Track findings user marked as "I Fixed It" - hidden until next patrol verifies
+  const [pendingFixFindings, setPendingFixFindings] = createSignal<Set<string>>(new Set());
+  const [lastKnownPatrolAt, setLastKnownPatrolAt] = createSignal<string | null>(null);
+  const [showRunHistory, setShowRunHistory] = createSignal(false);
+  const [forcePatrolLoading, setForcePatrolLoading] = createSignal(false);
+  const [expandedRunId, setExpandedRunId] = createSignal<string | null>(null);
+  const [historyTimeFilter, setHistoryTimeFilter] = createSignal<'24h' | '7d' | 'all'>('all');
+  // Live streaming state for running patrol
+  const [expandedLiveStream, setExpandedLiveStream] = createSignal(false);
+  // Track streaming blocks for sequential display (like AI chat)
+  interface StreamBlock {
+    type: 'phase' | 'content' | 'thinking';
+    text: string;
+    timestamp: number;
+  }
+  const [liveStreamBlocks, setLiveStreamBlocks] = createSignal<StreamBlock[]>([]);
+  const [currentThinking, setCurrentThinking] = createSignal('');
+  let liveStreamUnsubscribe: (() => void) | null = null;
+
+  // Effect to manage live stream subscription when expanded
+  createEffect(() => {
+    const isExpanded = expandedLiveStream();
+    const isRunning = patrolStatus()?.running;
+
+    if (isExpanded && isRunning && !liveStreamUnsubscribe) {
+      // Subscribe to stream
+      liveStreamUnsubscribe = subscribeToPatrolStream(
+        (event) => {
+          if (event.type === 'start') {
+            // Clear previous content
+            setLiveStreamBlocks([]);
+            setCurrentThinking('');
+          } else if (event.type === 'thinking' && event.content) {
+            // Thinking events are separate blocks - just like AI chat
+            // Finalize any current content first
+            const current = currentThinking();
+            if (current.trim()) {
+              setLiveStreamBlocks(prev => [...prev, {
+                type: 'thinking',
+                text: current.trim(),
+                timestamp: Date.now()
+              }]);
+              setCurrentThinking('');
+            }
+            // Add the thinking chunk as a new block
+            setLiveStreamBlocks(prev => [...prev, {
+              type: 'thinking',
+              text: event.content!.trim(),
+              timestamp: Date.now()
+            }]);
+          } else if (event.type === 'content' && event.content) {
+            // Content streams into current block
+            setCurrentThinking(prev => prev + event.content);
+          } else if (event.type === 'complete') {
+            // Finalize current thinking block
+            const finalThinking = currentThinking();
+            if (finalThinking.trim()) {
+              setLiveStreamBlocks(prev => [...prev, {
+                type: 'thinking',
+                text: finalThinking.trim(),
+                timestamp: Date.now()
+              }]);
+              setCurrentThinking('');
+            }
+            // Mark as complete
+            setLiveStreamBlocks(prev => [...prev, {
+              type: 'phase',
+              text: 'Analysis complete',
+              timestamp: Date.now()
+            }]);
+            // Patrol completed, refresh data
+            fetchAiData();
+          }
+          // Ignore 'phase' events - they're internal
+        },
+        () => {
+          // Error - just log it
+          console.error('Patrol stream error');
+        }
+      );
+    } else if ((!isExpanded || !isRunning) && liveStreamUnsubscribe) {
+      // Unsubscribe
+      liveStreamUnsubscribe();
+      liveStreamUnsubscribe = null;
+      if (!isRunning) {
+        setLiveStreamBlocks([]);
+        setCurrentThinking('');
+        setExpandedLiveStream(false);
+      }
+    }
+  });
+
+  // Cleanup on unmount
+  onCleanup(() => {
+    if (liveStreamUnsubscribe) {
+      liveStreamUnsubscribe();
+      liveStreamUnsubscribe = null;
+    }
+  });
+
+  // Fetch AI data - extracted for reuse
+  const fetchAiData = async () => {
+    try {
+      const [status, findings, runHistory] = await Promise.all([
+        getPatrolStatus(),
+        getFindings(),
+        getPatrolRunHistory(50) // Fetch more for filtering
+      ]);
+
+      // Check if a new patrol has completed - if so, clear pending fix findings
+      const newPatrolAt = status.last_patrol_at;
+      if (newPatrolAt && newPatrolAt !== lastKnownPatrolAt()) {
+        setLastKnownPatrolAt(newPatrolAt);
+        // Clear pending fixes - the patrol has now verified what's actually fixed
+        if (pendingFixFindings().size > 0) {
+          setPendingFixFindings(new Set<string>());
+        }
+      }
+
+      setPatrolStatus(status);
+      setAiFindings(findings);
+      setPatrolRunHistory(runHistory);
+
+      // Auto-expand history if most recent run found issues
+      if (runHistory.length > 0 && runHistory[0].status !== 'healthy') {
+        setShowRunHistory(true);
+      }
+    } catch (e) {
+      // AI patrol may not be enabled - silently fail
+    }
+  };
+
+  // Handle force patrol button click
+  const handleForcePatrol = async (deep: boolean = false) => {
+    setForcePatrolLoading(true);
+    try {
+      const result = await forcePatrol(deep);
+      if (!result.success) {
+        showError(result.message || 'Failed to start patrol');
+        setForcePatrolLoading(false);
+        return;
+      }
+      showSuccess('Patrol started - results will appear shortly');
+      // Wait a bit for the patrol to start and potentially complete
+      setTimeout(() => {
+        fetchAiData();
+        setForcePatrolLoading(false);
+      }, 2000);
+    } catch (e) {
+      console.error('Force patrol error:', e);
+      showError('Failed to start patrol: ' + (e instanceof Error ? e.message : 'Unknown error'));
+      setForcePatrolLoading(false);
+    }
+  };
+
+  // Filter patrol history by time
+  const filteredPatrolHistory = createMemo(() => {
+    const history = patrolRunHistory();
+    const filter = historyTimeFilter();
+    if (filter === 'all') return history;
+
+    const now = Date.now();
+    const cutoffs = {
+      '24h': now - 24 * 60 * 60 * 1000,
+      '7d': now - 7 * 24 * 60 * 60 * 1000,
+    };
+    const cutoff = cutoffs[filter];
+    return history.filter(r => new Date(r.completed_at).getTime() > cutoff);
+  });
+
+  // Calculate next patrol time
+  const nextPatrolIn = createMemo(() => {
+    const status = patrolStatus();
+    if (!status) return null;
+
+    let nextPatrolTime: number;
+
+    // Use next_patrol_at from backend if available
+    if (status.next_patrol_at) {
+      nextPatrolTime = new Date(status.next_patrol_at).getTime();
+    } else if (status.last_patrol_at && status.interval_ms) {
+      // Calculate from last patrol + interval
+      const lastPatrol = new Date(status.last_patrol_at).getTime();
+      nextPatrolTime = lastPatrol + status.interval_ms;
+    } else {
+      return null;
+    }
+
+    const now = Date.now();
+    const remainingMs = nextPatrolTime - now;
+
+    if (remainingMs <= 0) return 'Soon';
+
+    const hours = Math.floor(remainingMs / 3600000);
+    const minutes = Math.floor((remainingMs % 3600000) / 60000);
+    const seconds = Math.floor((remainingMs % 60000) / 1000);
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
+  });
 
   // Fetch AI findings on mount and every 30 seconds
   onMount(() => {
-    const fetchAiData = async () => {
-      try {
-        const [status, findings] = await Promise.all([
-          getPatrolStatus(),
-          getFindings()
-        ]);
-        setPatrolStatus(status);
-        setAiFindings(findings);
-      } catch (e) {
-        // AI patrol may not be enabled - silently fail
-      }
-    };
     fetchAiData();
     const interval = setInterval(fetchAiData, 30000);
     onCleanup(() => clearInterval(interval));
@@ -2229,46 +2422,131 @@ function OverviewTab(props: {
       {/* AI Insights Section - show when AI tab selected and there are findings */}
       <Show when={overviewSubTab() === 'ai-insights' && patrolStatus()?.enabled}>
         <div>
-          <SectionHeader
-            title="AI Insights"
-            size="md"
-            class="mb-3"
-          />
-          <div class="text-xs text-gray-500 dark:text-gray-400 mb-3 flex items-center gap-2">
-            <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>Proactively detected by AI patrol • Last check: {patrolStatus()?.last_patrol_at ? formatTimestamp(patrolStatus()!.last_patrol_at!) : 'never'}</span>
+          <div class="flex items-center justify-between mb-3">
+            <SectionHeader
+              title="AI Insights"
+              size="md"
+              class="mb-0"
+            />
+            <button
+              class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700 hover:bg-purple-200 dark:hover:bg-purple-900/60 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => handleForcePatrol(true)}
+              disabled={forcePatrolLoading() || patrolStatus()?.running}
+              title={patrolStatus()?.running ? 'Patrol in progress - see table below' : 'Run a patrol check now'}
+            >
+              <span class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Run Patrol
+              </span>
+            </button>
+          </div>
+
+          {/* Summary Stats Bar */}
+          <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 mb-4 flex flex-wrap items-center gap-4 text-xs">
+            <div class="flex items-center gap-1.5">
+              <span class="text-gray-500 dark:text-gray-400">Runs:</span>
+              <span class="font-medium text-gray-700 dark:text-gray-300">{patrolRunHistory().length}</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="text-gray-500 dark:text-gray-400">Healthy:</span>
+              <span class="font-medium text-green-600 dark:text-green-400">
+                {patrolRunHistory().filter(r => r.status === 'healthy').length}
+              </span>
+            </div>
+            <Show when={patrolRunHistory().filter(r => r.status !== 'healthy').length > 0}>
+              <div class="flex items-center gap-1.5">
+                <span class="text-gray-500 dark:text-gray-400">Issues:</span>
+                <span class="font-medium text-yellow-600 dark:text-yellow-400">
+                  {patrolRunHistory().filter(r => r.status !== 'healthy').length}
+                </span>
+              </div>
+            </Show>
+            <div class="flex items-center gap-1.5">
+              <span class="text-gray-500 dark:text-gray-400">Last:</span>
+              <span class="font-medium text-gray-700 dark:text-gray-300">
+                {patrolStatus()?.last_patrol_at ? formatTimestamp(patrolStatus()!.last_patrol_at!) : 'never'}
+              </span>
+            </div>
+            <Show when={patrolStatus()?.resources_checked}>
+              <div class="flex items-center gap-1.5">
+                <span class="text-gray-500 dark:text-gray-400">Resources:</span>
+                <span class="font-medium text-gray-700 dark:text-gray-300">{patrolStatus()?.resources_checked}</span>
+              </div>
+            </Show>
           </div>
           <div class="space-y-2">
-            <For each={aiFindings()}>
-              {(finding) => {
-                const colors = severityColors[finding.severity];
-                return (
-                  <div
-                    class={`border rounded-lg p-4 transition-all ${finding.acknowledged_at ? 'opacity-60' : ''}`}
-                    style={{
-                      'background-color': colors.bg,
-                      'border-color': colors.border,
-                    }}
-                  >
-                    <div class="flex flex-col sm:flex-row sm:items-start">
-                      <div class="flex items-start flex-1">
+            <Show
+              when={aiFindings().length > 0}
+              fallback={
+                <div class="text-center py-6 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <div class="flex justify-center mb-2">
+                    <svg class="w-10 h-10 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
+                    </svg>
+                  </div>
+                  <p class="text-sm font-medium text-green-700 dark:text-green-400">All Systems Healthy</p>
+                  <p class="text-xs text-green-600 dark:text-green-500 mt-1">AI patrol found no issues to report</p>
+                </div>
+              }
+            >
+              <For each={aiFindings().filter(f => !pendingFixFindings().has(f.id))}>
+                {(finding) => {
+                  const colors = severityColors[finding.severity];
+                  const [isExpanded, setIsExpanded] = createSignal(false);
+                  return (
+                    <div
+                      class="border rounded-lg transition-all"
+                      style={{
+                        'background-color': colors.bg,
+                        'border-color': colors.border,
+                      }}
+                    >
+                      {/* Compact header - always visible, clickable */}
+                      <div
+                        class="flex items-center gap-3 p-3 cursor-pointer hover:opacity-80"
+                        onClick={() => setIsExpanded(!isExpanded())}
+                      >
+                        {/* Expand chevron */}
+                        <svg
+                          class={`w-4 h-4 text-gray-500 transition-transform flex-shrink-0 ${isExpanded() ? 'rotate-90' : ''}`}
+                          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        >
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                        {/* Severity badge */}
+                        <span
+                          class="px-2 py-0.5 text-xs rounded capitalize font-medium flex-shrink-0"
+                          style={{ 'background-color': colors.border, color: colors.text }}
+                        >
+                          {finding.severity}
+                        </span>
+                        {/* Title (main info) */}
+                        <span class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate flex-1">
+                          {finding.title}
+                        </span>
+                        {/* Resource name pill */}
+                        <span class="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 flex-shrink-0 hidden sm:inline">
+                          {finding.resource_name}
+                        </span>
                         {/* AI badge */}
-                        <div class="mr-3 mt-0.5">
-                          <span
-                            class="inline-flex items-center justify-center w-5 h-5 rounded text-xs font-bold"
-                            style={{ 'background-color': colors.border, color: colors.text }}
-                          >
-                            AI
-                          </span>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                          <div class="flex flex-wrap items-center gap-2">
-                            <span
-                              class="text-sm font-medium truncate"
-                              style={{ color: colors.text }}
-                            >
+                        <span
+                          class="inline-flex items-center justify-center w-5 h-5 rounded text-[9px] font-bold flex-shrink-0"
+                          style={{ 'background-color': colors.border, color: colors.text }}
+                        >
+                          AI
+                        </span>
+                      </div>
+
+                      {/* Expanded details */}
+                      <Show when={isExpanded()}>
+                        <div class="px-4 pb-4 pt-1 border-t" style={{ 'border-color': colors.border }}>
+                          {/* Resource and category info */}
+                          <div class="flex flex-wrap items-center gap-2 mb-2">
+                            <span class="text-sm font-medium" style={{ color: colors.text }}>
                               {finding.resource_name}
                             </span>
                             <span class="text-xs text-gray-600 dark:text-gray-400">
@@ -2279,146 +2557,457 @@ function OverviewTab(props: {
                                 on {finding.node}
                               </span>
                             </Show>
-                            <span
-                              class="px-2 py-0.5 text-xs rounded capitalize"
-                              style={{ 'background-color': colors.border, color: colors.text }}
-                            >
-                              {finding.severity}
-                            </span>
                           </div>
-                          <p class="text-sm text-gray-700 dark:text-gray-300 mt-1 font-medium">
-                            {finding.title}
-                          </p>
-                          <p class="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
+
+                          {/* Description */}
+                          <p class="text-sm text-gray-600 dark:text-gray-400">
                             {finding.description}
                           </p>
+
+                          {/* Recommendation */}
                           <Show when={finding.recommendation}>
-                            <p class="text-xs text-gray-500 dark:text-gray-500 mt-1 italic">
-                              {finding.recommendation}
+                            <p class="text-xs text-gray-500 dark:text-gray-500 mt-2 italic">
+                              Suggested: {finding.recommendation}
                             </p>
                           </Show>
-                          <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                            Detected: {formatTimestamp(finding.detected_at)}
-                          </p>
-                        </div>
-                      </div>
-                      <div class="flex gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start">
-                        <button
-                          class={`px-3 py-1.5 text-xs font-medium border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${finding.acknowledged_at
-                            ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700'
-                            : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                            }`}
-                          disabled={processingFindings().has(finding.id) || !!finding.acknowledged_at}
-                          onClick={async () => {
-                            if (processingFindings().has(finding.id)) return;
-                            setProcessingFindings((prev) => new Set(prev).add(finding.id));
-                            try {
-                              await acknowledgeFinding(finding.id);
-                              // Update local state to mark as acknowledged (keep visible but dimmed)
-                              setAiFindings((prev) => prev.map(f =>
-                                f.id === finding.id
-                                  ? { ...f, acknowledged_at: new Date().toISOString() }
-                                  : f
-                              ));
-                              showSuccess('Finding acknowledged');
-                            } catch (err) {
-                              logger.error('Failed to acknowledge finding:', err);
-                              showError('Failed to acknowledge finding');
-                            } finally {
-                              setProcessingFindings((prev) => {
-                                const next = new Set(prev);
-                                next.delete(finding.id);
-                                return next;
-                              });
-                            }
-                          }}
-                        >
-                          {processingFindings().has(finding.id) ? 'Acknowledging...' : finding.acknowledged_at ? '✓ Acknowledged' : 'Acknowledge'}
-                        </button>
-                        {/* Snooze dropdown */}
-                        <div class="relative group">
-                          <button
-                            class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
-                            disabled={processingFindings().has(finding.id)}
-                          >
-                            Snooze ▾
-                          </button>
-                          <div class="absolute right-0 mt-1 w-28 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                            <button
-                              class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded-t-lg"
-                              onClick={async () => {
-                                setProcessingFindings((prev) => new Set(prev).add(finding.id));
-                                try {
-                                  await snoozeFinding(finding.id, 1);
-                                  setAiFindings((prev) => prev.filter(f => f.id !== finding.id));
-                                  showSuccess('Snoozed for 1 hour');
-                                } catch (err) {
-                                  showError('Failed to snooze');
-                                } finally {
-                                  setProcessingFindings((prev) => { const n = new Set(prev); n.delete(finding.id); return n; });
-                                }
-                              }}
-                            >
-                              1 hour
-                            </button>
-                            <button
-                              class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700"
-                              onClick={async () => {
-                                setProcessingFindings((prev) => new Set(prev).add(finding.id));
-                                try {
-                                  await snoozeFinding(finding.id, 24);
-                                  setAiFindings((prev) => prev.filter(f => f.id !== finding.id));
-                                  showSuccess('Snoozed for 24 hours');
-                                } catch (err) {
-                                  showError('Failed to snooze');
-                                } finally {
-                                  setProcessingFindings((prev) => { const n = new Set(prev); n.delete(finding.id); return n; });
-                                }
-                              }}
-                            >
-                              24 hours
-                            </button>
-                            <button
-                              class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded-b-lg"
-                              onClick={async () => {
-                                setProcessingFindings((prev) => new Set(prev).add(finding.id));
-                                try {
-                                  await snoozeFinding(finding.id, 168);
-                                  setAiFindings((prev) => prev.filter(f => f.id !== finding.id));
-                                  showSuccess('Snoozed for 7 days');
-                                } catch (err) {
-                                  showError('Failed to snooze');
-                                } finally {
-                                  setProcessingFindings((prev) => { const n = new Set(prev); n.delete(finding.id); return n; });
-                                }
-                              }}
-                            >
-                              7 days
-                            </button>
+
+                          {/* Footer with time and actions */}
+                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-3 pt-2 border-t border-gray-200 dark:border-gray-600">
+                            <p class="text-xs text-gray-500 dark:text-gray-500">
+                              Detected: {formatTimestamp(finding.detected_at)}
+                            </p>
+                            <div class="flex items-center gap-2">
+                              {/* Get Help with AI button */}
+                              <button
+                                class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/50 flex items-center gap-1.5"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  aiChatStore.openWithPrompt(
+                                    `Help me fix this issue on ${finding.resource_name}: ${finding.title}\n\nDescription: ${finding.description}\n\nSuggested fix: ${finding.recommendation || 'None provided'}\n\nPlease guide me through applying this fix.`
+                                  );
+                                }}
+                              >
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                </svg>
+                                Get Help
+                              </button>
+                              {/* I Fixed It button - hides until next patrol verifies */}
+                              <button
+                                class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50 flex items-center gap-1.5"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPendingFixFindings(prev => {
+                                    const next = new Set(prev);
+                                    next.add(finding.id);
+                                    return next;
+                                  });
+                                }}
+                                title="Hide until next patrol verifies the fix"
+                              >
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                                I Fixed It
+                              </button>
+                            </div>
                           </div>
                         </div>
-                        <button
-                          class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/50"
-                          onClick={() => {
-                            aiChatStore.openWithPrompt(
-                              `Tell me more about this issue: ${finding.title} on ${finding.resource_name}. ${finding.description}`
+                      </Show>
+                    </div>
+                  );
+                }}
+              </For>
+            </Show>
+          </div>
+
+          {/* Patrol Check History */}
+          <div class="mt-6">
+            <div class="flex items-center justify-between">
+              <button
+                class="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                onClick={() => setShowRunHistory(!showRunHistory())}
+              >
+                <svg
+                  class={`w-4 h-4 transition-transform ${showRunHistory() ? 'rotate-90' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+                Patrol Check History ({filteredPatrolHistory().length} runs)
+                <Show when={patrolRunHistory().length > 0 && patrolRunHistory()[0].status !== 'healthy'}>
+                  <span class="ml-1 px-1.5 py-0.5 text-[10px] bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 rounded">Issues Found</span>
+                </Show>
+              </button>
+
+              {/* Next Patrol Timer */}
+              <Show when={nextPatrolIn()}>
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                  Next patrol in <span class="font-mono font-medium text-purple-600 dark:text-purple-400">{nextPatrolIn()}</span>
+                </span>
+              </Show>
+            </div>
+
+            <Show when={showRunHistory()}>
+              <div class="mt-3">
+                {/* Time Filter + Mini Health Chart */}
+                <div class="flex flex-wrap items-center gap-3 mb-3">
+                  <div class="flex gap-1">
+                    <button
+                      class={`px-2 py-1 text-xs rounded transition-colors ${historyTimeFilter() === '24h' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                      onClick={() => setHistoryTimeFilter('24h')}
+                    >
+                      24h
+                    </button>
+                    <button
+                      class={`px-2 py-1 text-xs rounded transition-colors ${historyTimeFilter() === '7d' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                      onClick={() => setHistoryTimeFilter('7d')}
+                    >
+                      7d
+                    </button>
+                    <button
+                      class={`px-2 py-1 text-xs rounded transition-colors ${historyTimeFilter() === 'all' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                      onClick={() => setHistoryTimeFilter('all')}
+                    >
+                      All
+                    </button>
+                  </div>
+
+                  {/* Mini Health Chart */}
+                  <Show when={filteredPatrolHistory().length > 0}>
+                    <div class="flex items-center gap-0.5 h-4">
+                      <For each={filteredPatrolHistory().slice(0, 20).reverse()}>
+                        {(run) => (
+                          <div
+                            class={`w-1.5 h-full rounded-sm transition-all hover:opacity-75 ${run.status === 'healthy' ? 'bg-green-400 dark:bg-green-500' :
+                              run.status === 'critical' || run.status === 'error' ? 'bg-red-400 dark:bg-red-500' :
+                                'bg-yellow-400 dark:bg-yellow-500'
+                              }`}
+                            title={`${formatTimestamp(run.completed_at)}: ${run.findings_summary}`}
+                          />
+                        )}
+                      </For>
+                      <span class="ml-1.5 text-[10px] text-gray-400">← newest</span>
+                    </div>
+                  </Show>
+                </div>
+
+                <Show
+                  when={filteredPatrolHistory().length > 0}
+                  fallback={
+                    <p class="text-sm text-gray-500 dark:text-gray-400 italic py-4">No patrol runs in selected time range.</p>
+                  }
+                >
+                  <div class="border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+                    <table class="w-full text-xs sm:text-sm">
+                      <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+                          <th class="p-1.5 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-4"></th>
+                          <th class="p-1.5 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Time</th>
+                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Type</th>
+                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Status</th>
+                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Resources</th>
+                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">New</th>
+                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Resolved</th>
+                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Duration</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {/* Show "Currently Running" row when patrol is in progress */}
+                        <Show when={patrolStatus()?.running}>
+                          <tr
+                            class="border-b border-gray-200 dark:border-gray-600 bg-purple-50 dark:bg-purple-900/20 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/30"
+                            onClick={() => setExpandedLiveStream(!expandedLiveStream())}
+                          >
+                            <td class="p-1.5 px-2 text-purple-500">
+                              <svg class={`w-3 h-3 transition-transform ${expandedLiveStream() ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                              </svg>
+                            </td>
+                            <td class="p-1.5 px-2 text-purple-600 dark:text-purple-400 font-mono whitespace-nowrap">
+                              <div class="flex items-center gap-1.5">
+                                <svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                                Now
+                              </div>
+                            </td>
+                            <td class="p-1.5 px-2 text-center">
+                              <span class="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
+                                Running
+                              </span>
+                            </td>
+                            <td class="p-1.5 px-2 text-center" colspan="5">
+                              <span class="text-xs text-purple-600 dark:text-purple-400">
+                                {expandedLiveStream() ? 'Click to collapse' : 'Click to view live AI analysis'}
+                              </span>
+                            </td>
+                          </tr>
+                          {/* Expanded Live Stream Row */}
+                          <Show when={expandedLiveStream()}>
+                            <tr class="bg-purple-50 dark:bg-purple-900/10 border-b border-gray-200 dark:border-gray-600">
+                              <td colspan="8" class="p-3">
+                                <div class="flex items-center justify-between mb-3">
+                                  <span class="text-[10px] text-purple-500 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+                                    <svg class="w-3 h-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                    </svg>
+                                    Live AI Analysis
+                                  </span>
+                                  <span class="text-[9px] text-purple-400 dark:text-purple-500">
+                                    Streaming in real-time...
+                                  </span>
+                                </div>
+                                {/* Sequential blocks display - like AI chat */}
+                                <div class="space-y-2 max-h-80 overflow-y-auto">
+                                  {/* Rendered blocks */}
+                                  <For each={liveStreamBlocks()}>
+                                    {(block) => (
+                                      <Show
+                                        when={block.type === 'phase'}
+                                        fallback={
+                                          /* Thinking block */
+                                          <div class="px-3 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-gray-700 dark:text-gray-300 rounded-lg border-l-2 border-blue-400 whitespace-pre-wrap font-mono leading-relaxed">
+                                            {block.text.length > 800 ? block.text.substring(0, 800) + '...' : block.text}
+                                          </div>
+                                        }
+                                      >
+                                        {/* Phase marker */}
+                                        <div class="flex items-center gap-2 px-2 py-1">
+                                          <Show
+                                            when={block.text === 'Analysis complete'}
+                                            fallback={
+                                              <svg class="w-3 h-3 animate-spin text-purple-500" viewBox="0 0 24 24" fill="none">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                              </svg>
+                                            }
+                                          >
+                                            <svg class="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                          </Show>
+                                          <span class="text-[10px] font-medium text-purple-600 dark:text-purple-400">
+                                            {block.text}
+                                          </span>
+                                        </div>
+                                      </Show>
+                                    )}
+                                  </For>
+                                  {/* Currently streaming content */}
+                                  <Show when={currentThinking()}>
+                                    <div class="px-3 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-gray-700 dark:text-gray-300 rounded-lg border-l-2 border-blue-400 whitespace-pre-wrap font-mono leading-relaxed">
+                                      {currentThinking().length > 500 ? currentThinking().substring(0, 500) + '...' : currentThinking()}
+                                      <span class="inline-block w-1.5 h-3 bg-blue-500 ml-0.5 animate-pulse" />
+                                    </div>
+                                  </Show>
+                                  {/* Empty state */}
+                                  <Show when={liveStreamBlocks().length === 0 && !currentThinking()}>
+                                    <div class="flex items-center gap-2 px-2 py-3 text-xs text-gray-500 dark:text-gray-400">
+                                      <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                      </svg>
+                                      <span class="italic">Waiting for AI response...</span>
+                                    </div>
+                                  </Show>
+                                </div>
+                              </td>
+                            </tr>
+                          </Show>
+                        </Show>
+                        <For each={filteredPatrolHistory()}>
+                          {(run) => {
+                            const statusStyles = {
+                              healthy: 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300',
+                              issues_found: 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300',
+                              critical: 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
+                              error: 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
+                            };
+                            const statusStyle = statusStyles[run.status] || statusStyles.healthy;
+                            const hasDetails = run.nodes_checked > 0 || run.guests_checked > 0 || run.docker_checked > 0 || run.storage_checked > 0 || run.ai_analysis;
+
+                            return (
+                              <>
+                                <tr
+                                  class={`border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${hasDetails ? 'cursor-pointer' : ''}`}
+                                  onClick={() => hasDetails && setExpandedRunId(expandedRunId() === run.id ? null : run.id)}
+                                >
+                                  <td class="p-1.5 px-2 text-gray-400">
+                                    <Show when={hasDetails}>
+                                      <svg class={`w-3 h-3 transition-transform ${expandedRunId() === run.id ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                      </svg>
+                                    </Show>
+                                  </td>
+                                  <td class="p-1.5 px-2 text-gray-600 dark:text-gray-400 font-mono whitespace-nowrap">
+                                    {formatTimestamp(run.completed_at)}
+                                  </td>
+                                  <td class="p-1.5 px-2 text-center">
+                                    <span class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${run.type === 'deep'
+                                      ? 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300'
+                                      : 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300'
+                                      }`}>
+                                      {run.type === 'deep' ? 'Deep' : 'Quick'}
+                                    </span>
+                                  </td>
+                                  <td class="p-1.5 px-2 text-center">
+                                    <span class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusStyle}`}>
+                                      {run.findings_summary}
+                                    </span>
+                                  </td>
+                                  <td class="p-1.5 px-2 text-center text-gray-700 dark:text-gray-300">
+                                    {run.resources_checked}
+                                  </td>
+                                  <td class="p-1.5 px-2 text-center">
+                                    <Show when={run.new_findings > 0} fallback={<span class="text-gray-400">-</span>}>
+                                      <span class="text-yellow-600 dark:text-yellow-400 font-medium">{run.new_findings}</span>
+                                    </Show>
+                                  </td>
+                                  <td class="p-1.5 px-2 text-center">
+                                    <Show when={run.resolved_findings > 0} fallback={<span class="text-gray-400">-</span>}>
+                                      <span class="text-green-600 dark:text-green-400 font-medium">{run.resolved_findings}</span>
+                                    </Show>
+                                  </td>
+                                  <td class="p-1.5 px-2 text-center text-gray-500 dark:text-gray-400 font-mono">
+                                    {(() => {
+                                      const totalSeconds = Math.round(run.duration_ms / 1000000000);
+                                      if (totalSeconds < 60) {
+                                        return `${totalSeconds}s`;
+                                      }
+                                      const minutes = Math.floor(totalSeconds / 60);
+                                      const seconds = totalSeconds % 60;
+                                      return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+                                    })()}
+                                  </td>
+                                </tr>
+                                {/* Expanded Details Row */}
+                                <Show when={expandedRunId() === run.id}>
+                                  <tr class="bg-gray-50 dark:bg-gray-800/50">
+                                    <td colspan="8" class="p-3">
+                                      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                        <Show when={run.nodes_checked > 0}>
+                                          <div class="flex items-center gap-2">
+                                            <span class="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-[10px]">Nodes</span>
+                                            <span class="font-medium">{run.nodes_checked}</span>
+                                          </div>
+                                        </Show>
+                                        <Show when={run.guests_checked > 0}>
+                                          <div class="flex items-center gap-2">
+                                            <span class="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded text-[10px]">VMs/CTs</span>
+                                            <span class="font-medium">{run.guests_checked}</span>
+                                          </div>
+                                        </Show>
+                                        <Show when={run.docker_checked > 0}>
+                                          <div class="flex items-center gap-2">
+                                            <span class="px-1.5 py-0.5 bg-cyan-100 dark:bg-cyan-900/50 text-cyan-700 dark:text-cyan-300 rounded text-[10px]">Docker</span>
+                                            <span class="font-medium">{run.docker_checked}</span>
+                                          </div>
+                                        </Show>
+                                        <Show when={run.storage_checked > 0}>
+                                          <div class="flex items-center gap-2">
+                                            <span class="px-1.5 py-0.5 bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 rounded text-[10px]">Storage</span>
+                                            <span class="font-medium">{run.storage_checked}</span>
+                                          </div>
+                                        </Show>
+                                        <Show when={run.hosts_checked > 0}>
+                                          <div class="flex items-center gap-2">
+                                            <span class="px-1.5 py-0.5 bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 rounded text-[10px]">Hosts</span>
+                                            <span class="font-medium">{run.hosts_checked}</span>
+                                          </div>
+                                        </Show>
+                                        <Show when={run.pbs_checked > 0}>
+                                          <div class="flex items-center gap-2">
+                                            <span class="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded text-[10px]">PBS</span>
+                                            <span class="font-medium">{run.pbs_checked}</span>
+                                          </div>
+                                        </Show>
+                                      </div>
+                                      {/* Only show findings section if we have active findings to display */}
+                                      {(() => {
+                                        const activeFindings = (run.finding_ids || [])
+                                          .map(id => aiFindings().find(f => f.id === id))
+                                          .filter(f => f !== undefined);
+                                        const resolvedCount = (run.finding_ids?.length || 0) - activeFindings.length;
+
+                                        if (activeFindings.length === 0 && resolvedCount === 0) return null;
+
+                                        return (
+                                          <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                            <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                              Findings from this run:
+                                            </span>
+                                            <div class="flex flex-col gap-1 mt-1">
+                                              <For each={activeFindings}>
+                                                {(finding) => (
+                                                  <div class="flex items-center gap-2 text-xs">
+                                                    <span class={`px-1.5 py-0.5 rounded text-[10px] ${finding!.severity === 'critical' ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' :
+                                                      finding!.severity === 'warning' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                                                        'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                                                      }`}>
+                                                      {finding!.severity}
+                                                    </span>
+                                                    <span class="font-medium text-gray-700 dark:text-gray-300">{finding!.title}</span>
+                                                    <span class="text-gray-500 dark:text-gray-400">on {finding!.resource_name}</span>
+                                                  </div>
+                                                )}
+                                              </For>
+                                              <Show when={resolvedCount > 0}>
+                                                <div class="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                                                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                  </svg>
+                                                  {resolvedCount} finding{resolvedCount > 1 ? 's' : ''} since resolved
+                                                </div>
+                                              </Show>
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
+                                      {/* AI Analysis Section */}
+                                      <Show when={run.ai_analysis}>
+                                        <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                          <div class="flex items-center justify-between mb-2">
+                                            <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                                              <svg class="w-3 h-3 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                              </svg>
+                                              AI Analysis
+                                            </span>
+                                            <Show when={run.input_tokens || run.output_tokens}>
+                                              <span class="text-[9px] text-gray-400 dark:text-gray-500">
+                                                {run.input_tokens?.toLocaleString()} in / {run.output_tokens?.toLocaleString()} out tokens
+                                              </span>
+                                            </Show>
+                                          </div>
+                                          <div class="bg-gray-100 dark:bg-gray-900 rounded-lg p-3 max-h-64 overflow-y-auto">
+                                            <pre class="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">{run.ai_analysis}</pre>
+                                          </div>
+                                        </div>
+                                      </Show>
+                                    </td>
+                                  </tr>
+                                </Show>
+                              </>
                             );
                           }}
-                        >
-                          Investigate
-                        </button>
-                      </div>
-                    </div>
+                        </For>
+                      </tbody>
+                    </table>
                   </div>
-                );
-              }}
-            </For>
+                </Show>
+              </div>
+            </Show>
           </div>
         </div>
-      </Show>
+      </Show >
 
       {/* Active Alerts - show when alerts tab selected OR when patrol is disabled (no sub-tabs) */}
-      <Show when={overviewSubTab() === 'active-alerts' || !patrolStatus()?.enabled}>
+      < Show when={overviewSubTab() === 'active-alerts' || !patrolStatus()?.enabled
+      }>
         <div>
           <SectionHeader title="Active Alerts" size="md" class="mb-3" />
           <Show
@@ -2668,8 +3257,8 @@ function OverviewTab(props: {
             </div>
           </Show>
         </div>
-      </Show>
-    </div>
+      </Show >
+    </div >
   );
 }
 

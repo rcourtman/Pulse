@@ -41,6 +41,9 @@ type Service struct {
 	resourceProvider ResourceProvider // Unified resource model provider (Phase 2)
 	patrolService    *PatrolService   // Background AI monitoring service
 	metadataProvider MetadataProvider // Enables AI to update resource URLs
+
+	// Alert-triggered analysis - token-efficient real-time AI insights
+	alertTriggeredAnalyzer *AlertTriggeredAnalyzer
 }
 
 // NewService creates a new AI service
@@ -73,6 +76,11 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 	if s.patrolService == nil && sp != nil {
 		s.patrolService = NewPatrolService(s, sp)
 	}
+
+	// Initialize alert-triggered analyzer if not already done
+	if s.alertTriggeredAnalyzer == nil && sp != nil && s.patrolService != nil {
+		s.alertTriggeredAnalyzer = NewAlertTriggeredAnalyzer(s.patrolService, sp)
+	}
 }
 
 // GetPatrolService returns the patrol service for background monitoring
@@ -82,7 +90,19 @@ func (s *Service) GetPatrolService() *PatrolService {
 	return s.patrolService
 }
 
+// GetAlertTriggeredAnalyzer returns the alert-triggered analyzer for token-efficient real-time analysis
+func (s *Service) GetAlertTriggeredAnalyzer() *AlertTriggeredAnalyzer {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.alertTriggeredAnalyzer
+}
 
+// GetAIConfig returns the current AI configuration
+func (s *Service) GetAIConfig() *config.AIConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg
+}
 
 // SetPatrolThresholdProvider sets the threshold provider for patrol
 // This should be called with an AlertThresholdAdapter to connect patrol to user-configured thresholds
@@ -100,6 +120,7 @@ func (s *Service) SetPatrolThresholdProvider(provider ThresholdProvider) {
 func (s *Service) StartPatrol(ctx context.Context) {
 	s.mu.RLock()
 	patrol := s.patrolService
+	alertAnalyzer := s.alertTriggeredAnalyzer
 	cfg := s.cfg
 	s.mu.RUnlock()
 
@@ -125,6 +146,14 @@ func (s *Service) StartPatrol(ctx context.Context) {
 	}
 	patrol.SetConfig(patrolCfg)
 	patrol.Start(ctx)
+
+	// Configure alert-triggered analyzer
+	if alertAnalyzer != nil {
+		alertAnalyzer.SetEnabled(cfg.IsAlertTriggeredAnalysisEnabled())
+		log.Info().
+			Bool("enabled", cfg.IsAlertTriggeredAnalysisEnabled()).
+			Msg("Alert-triggered AI analysis configured")
+	}
 }
 
 // StopPatrol stops the background patrol service
@@ -135,6 +164,42 @@ func (s *Service) StopPatrol() {
 
 	if patrol != nil {
 		patrol.Stop()
+	}
+}
+
+// ReconfigurePatrol updates the patrol configuration without restarting
+// Call this after changing patrol settings to apply them immediately
+func (s *Service) ReconfigurePatrol() {
+	s.mu.RLock()
+	patrol := s.patrolService
+	alertAnalyzer := s.alertTriggeredAnalyzer
+	cfg := s.cfg
+	s.mu.RUnlock()
+
+	if patrol == nil || cfg == nil {
+		return
+	}
+
+	// Update patrol configuration
+	patrolCfg := PatrolConfig{
+		Enabled:              cfg.IsPatrolEnabled(),
+		QuickCheckInterval:   cfg.GetPatrolInterval(),
+		DeepAnalysisInterval: 6 * time.Hour,
+		AnalyzeNodes:         cfg.PatrolAnalyzeNodes,
+		AnalyzeGuests:        cfg.PatrolAnalyzeGuests,
+		AnalyzeDocker:        cfg.PatrolAnalyzeDocker,
+		AnalyzeStorage:       cfg.PatrolAnalyzeStorage,
+	}
+	patrol.SetConfig(patrolCfg)
+
+	log.Info().
+		Bool("enabled", patrolCfg.Enabled).
+		Dur("interval", patrolCfg.QuickCheckInterval).
+		Msg("Patrol configuration updated")
+
+	// Update alert-triggered analyzer
+	if alertAnalyzer != nil {
+		alertAnalyzer.SetEnabled(cfg.IsAlertTriggeredAnalysisEnabled())
 	}
 }
 
@@ -1864,6 +1929,32 @@ GOOD: Do it, then report the result.
 BAD: Tables, headers, bullet-heavy summaries
 GOOD: Plain prose, 2-4 sentences.
 
+## ACTION BIAS - AVOID INVESTIGATION LOOPS
+When the user asks you to DO something (install, fix, update, configure), ACT IMMEDIATELY:
+- Don't extensively investigate before acting. Run 1-2 diagnostic commands max, then DO the thing.
+- Don't explain what you're about to do - just do it.
+- Don't ask for confirmation. The user asked you to do it, so do it.
+- If the first approach fails, try the next most obvious approach. Don't stop to report.
+- Complete the task END TO END. If asked to "install and run X", you're not done until X is running.
+
+INVESTIGATION ANTI-PATTERNS TO AVOID:
+- Running 10+ diagnostic commands before taking action
+- Explaining each step before doing it
+- Stopping to report partial progress
+- Asking "would you like me to proceed?" after the user already asked you to do it
+- Checking version, checking config, checking service, checking ports, checking this, checking that... JUST ACT.
+
+GOOD PATTERN for "install X and make sure it's running":
+1. Download/install X (1 command)
+2. Start X (1 command)  
+3. Verify X is running (1 command)
+4. Report: "Installed X vN.N. Service is running on port NNNN."
+
+BAD PATTERN:
+1. Check current version... 2. Check if installed... 3. Check service status... 4. Check config file... 
+5. Check another config... 6. Try to enable something... 7. Check if it worked... 8. Read a script...
+9. Check yet another file... [user: "do it"] 10. Still investigating... [user: "DO IT"]
+
 ## Using Context Data
 Pulse provides real metrics in "Current Metrics and State". Use this data directly - don't ask users to check things you already know.
 
@@ -1909,7 +2000,21 @@ Common discovery commands:
 - Check running processes: ps aux | grep -E 'node|python|java|nginx|apache|httpd'
 - Get IP: hostname -I | awk '{print $1}'
 
-When you find a web service and are confident, use set_resource_url to save it. The resource_id should match the ID from the current context.`
+When you find a web service and are confident, use set_resource_url to save it. The resource_id should match the ID from the current context.
+
+## Installing/Updating Pulse Itself
+If asked to install or update Pulse itself, use the official install script. DO NOT investigate configs/services first.
+Quick install/update command (x86_64 Linux):
+` + "`" + `curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash` + "`" + `
+
+To install a specific version: 
+` + "`" + `curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version vX.Y.Z` + "`" + `
+
+After install, enable and start the service:
+` + "`" + `systemctl enable pulse && systemctl start pulse` + "`" + `
+
+The latest version can be found at: https://api.github.com/repos/rcourtman/Pulse/releases/latest
+This is a 3-command job. Don't over-investigate.`
 
 
 	// Add custom context from AI settings (user's infrastructure description)
