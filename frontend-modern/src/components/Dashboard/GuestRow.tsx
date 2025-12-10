@@ -701,8 +701,8 @@ export function GuestRow(props: GuestRowProps) {
       ? ''
       : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
-    // Make row clickable if click handler provided
-    const clickable = props.onRowClick ? 'cursor-pointer' : '';
+    // Make row clickable if AI is enabled (for context selection)
+    const clickable = aiChatStore.enabled ? 'cursor-pointer' : '';
     // AI context highlight with merged borders for adjacent rows
     let aiContext = '';
     if (isInAIContext()) {

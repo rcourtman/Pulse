@@ -1171,7 +1171,7 @@ export function Dashboard(props: DashboardProps) {
                                     visibleColumnIds={visibleColumnIds()}
                                     aboveGuestId={prevGuestId}
                                     belowGuestId={nextGuestId}
-                                    onRowClick={aiChatStore.isOpen ? handleGuestRowClick : undefined}
+                                    onRowClick={aiChatStore.enabled ? handleGuestRowClick : undefined}
                                   />
                                 </ComponentErrorBoundary>
                               );

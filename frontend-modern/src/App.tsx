@@ -46,6 +46,7 @@ import { useAlertsActivation } from './stores/alertsActivation';
 import { UpdateProgressModal } from './components/UpdateProgressModal';
 import type { UpdateStatus } from './api/updates';
 import { AIChat } from './components/AI/AIChat';
+import { AIStatusIndicator } from './components/AI/AIStatusIndicator';
 import { aiChatStore } from './stores/aiChat';
 import { useResourcesAsLegacy } from './hooks/useResources';
 
@@ -1167,6 +1168,8 @@ function AppLayout(props: {
         <div class="header-controls flex items-center gap-2 justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end">
           <Show when={props.hasAuth() && !props.needsAuth()}>
             <div class="flex items-center gap-2">
+              {/* AI Patrol Status Indicator */}
+              <AIStatusIndicator />
               <Show when={props.proxyAuthInfo()?.username}>
                 <span class="text-xs px-2 py-1 text-gray-600 dark:text-gray-400">
                   {props.proxyAuthInfo()?.username}

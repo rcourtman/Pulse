@@ -20,19 +20,20 @@ import (
 
 // ConfigPersistence handles saving and loading configuration
 type ConfigPersistence struct {
-	mu            sync.RWMutex
-	tx            *importTransaction
-	configDir     string
-	alertFile     string
-	emailFile     string
-	webhookFile   string
-	appriseFile   string
-	nodesFile     string
-	systemFile    string
-	oidcFile      string
-	apiTokensFile string
-	aiFile        string
-	crypto        *crypto.CryptoManager
+	mu             sync.RWMutex
+	tx             *importTransaction
+	configDir      string
+	alertFile      string
+	emailFile      string
+	webhookFile    string
+	appriseFile    string
+	nodesFile      string
+	systemFile     string
+	oidcFile       string
+	apiTokensFile  string
+	aiFile         string
+	aiFindingsFile string
+	crypto         *crypto.CryptoManager
 }
 
 // NewConfigPersistence creates a new config persistence manager.
@@ -65,17 +66,18 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 	}
 
 	cp := &ConfigPersistence{
-		configDir:     configDir,
-		alertFile:     filepath.Join(configDir, "alerts.json"),
-		emailFile:     filepath.Join(configDir, "email.enc"),
-		webhookFile:   filepath.Join(configDir, "webhooks.enc"),
-		appriseFile:   filepath.Join(configDir, "apprise.enc"),
-		nodesFile:     filepath.Join(configDir, "nodes.enc"),
-		systemFile:    filepath.Join(configDir, "system.json"),
-		oidcFile:      filepath.Join(configDir, "oidc.enc"),
-		apiTokensFile: filepath.Join(configDir, "api_tokens.json"),
-		aiFile:        filepath.Join(configDir, "ai.enc"),
-		crypto:        cryptoMgr,
+		configDir:      configDir,
+		alertFile:      filepath.Join(configDir, "alerts.json"),
+		emailFile:      filepath.Join(configDir, "email.enc"),
+		webhookFile:    filepath.Join(configDir, "webhooks.enc"),
+		appriseFile:    filepath.Join(configDir, "apprise.enc"),
+		nodesFile:      filepath.Join(configDir, "nodes.enc"),
+		systemFile:     filepath.Join(configDir, "system.json"),
+		oidcFile:       filepath.Join(configDir, "oidc.enc"),
+		apiTokensFile:  filepath.Join(configDir, "api_tokens.json"),
+		aiFile:         filepath.Join(configDir, "ai.enc"),
+		aiFindingsFile: filepath.Join(configDir, "ai_findings.json"),
+		crypto:         cryptoMgr,
 	}
 
 	log.Debug().
@@ -1350,13 +1352,122 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 		data = decrypted
 	}
 
-	var settings AIConfig
-	if err := json.Unmarshal(data, &settings); err != nil {
+	// Start with defaults so new fields get proper values
+	settings := NewDefaultAIConfig()
+	if err := json.Unmarshal(data, settings); err != nil {
 		return nil, err
 	}
 
-	log.Info().Str("file", c.aiFile).Bool("enabled", settings.Enabled).Msg("AI configuration loaded")
-	return &settings, nil
+	// Migration: Ensure patrol settings have sensible defaults for existing configs
+	// PatrolIntervalMinutes=0 means it was never set - use default
+	if settings.PatrolIntervalMinutes <= 0 {
+		settings.PatrolIntervalMinutes = 15
+	}
+
+	log.Info().Str("file", c.aiFile).Bool("enabled", settings.Enabled).Bool("patrol_enabled", settings.PatrolEnabled).Msg("AI configuration loaded")
+	return settings, nil
+}
+
+// AIFindingsData represents persisted AI findings with metadata
+type AIFindingsData struct {
+	// Version for future migrations
+	Version int `json:"version"`
+	// LastSaved for debugging/diagnostics
+	LastSaved time.Time `json:"last_saved"`
+	// Findings is a map of finding ID to finding data
+	Findings map[string]*AIFindingRecord `json:"findings"`
+}
+
+// AIFindingRecord is a persisted finding with full history
+type AIFindingRecord struct {
+	ID             string    `json:"id"`
+	Severity       string    `json:"severity"`
+	Category       string    `json:"category"`
+	ResourceID     string    `json:"resource_id"`
+	ResourceName   string    `json:"resource_name"`
+	ResourceType   string    `json:"resource_type"`
+	Node           string    `json:"node,omitempty"`
+	Title          string    `json:"title"`
+	Description    string    `json:"description"`
+	Recommendation string    `json:"recommendation,omitempty"`
+	Evidence       string    `json:"evidence,omitempty"`
+	DetectedAt     time.Time `json:"detected_at"`
+	LastSeenAt     time.Time `json:"last_seen_at"`
+	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
+	AutoResolved   bool      `json:"auto_resolved"`
+	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty"`
+	SnoozedUntil   *time.Time `json:"snoozed_until,omitempty"`
+	AlertID        string    `json:"alert_id,omitempty"`
+}
+
+// SaveAIFindings persists AI findings to disk
+func (c *ConfigPersistence) SaveAIFindings(findings map[string]*AIFindingRecord) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	data := AIFindingsData{
+		Version:   1,
+		LastSaved: time.Now(),
+		Findings:  findings,
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	if err := c.writeConfigFileLocked(c.aiFindingsFile, jsonData, 0600); err != nil {
+		return err
+	}
+
+	log.Debug().
+		Str("file", c.aiFindingsFile).
+		Int("count", len(findings)).
+		Msg("AI findings saved")
+	return nil
+}
+
+// LoadAIFindings loads AI findings from disk
+func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := os.ReadFile(c.aiFindingsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Return empty data if file doesn't exist
+			return &AIFindingsData{
+				Version:  1,
+				Findings: make(map[string]*AIFindingRecord),
+			}, nil
+		}
+		return nil, err
+	}
+
+	var findingsData AIFindingsData
+	if err := json.Unmarshal(data, &findingsData); err != nil {
+		log.Error().Err(err).Str("file", c.aiFindingsFile).Msg("Failed to parse AI findings file")
+		// Return empty data on parse error rather than failing
+		return &AIFindingsData{
+			Version:  1,
+			Findings: make(map[string]*AIFindingRecord),
+		}, nil
+	}
+
+	if findingsData.Findings == nil {
+		findingsData.Findings = make(map[string]*AIFindingRecord)
+	}
+
+	log.Info().
+		Str("file", c.aiFindingsFile).
+		Int("count", len(findingsData.Findings)).
+		Time("last_saved", findingsData.LastSaved).
+		Msg("AI findings loaded")
+	return &findingsData, nil
 }
 
 // LoadSystemSettings loads system settings from file

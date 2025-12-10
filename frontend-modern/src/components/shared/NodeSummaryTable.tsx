@@ -337,11 +337,11 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     return sortDirection() === 'asc' ? '▲' : '▼';
   };
 
-  const thClassBase = "px-2 py-1.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap";
+  const thClassBase = "px-2 py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap";
   const thClass = `${thClassBase} text-center`;
 
   // Cell class constants for consistency
-  const tdClass = "px-2 py-1.5 align-middle";
+  const tdClass = "px-2 py-1 align-middle";
   const metricColumnStyle = { width: "200px", "min-width": "200px", "max-width": "200px" } as const;
 
   return (
@@ -482,11 +482,11 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 return (
                   <tr
                     class={rowClass()}
-                    style={rowStyle()}
+                    style={{ ...rowStyle(), height: '29px', 'max-height': '29px' }}
                     onClick={() => props.onNodeClick(nodeId, isPVEItem ? 'pve' : 'pbs')}
                   >
                     {/* Name */}
-                    <td class={`pr-2 py-1.5 align-middle ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}>
+                    <td class={`pr-2 py-1 align-middle ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}>
                       <div class="flex items-center gap-1.5">
                         <StatusDot
                           variant={statusIndicator().variant}
@@ -568,11 +568,11 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     {/* CPU */}
                     <td class={tdClass} style={metricColumnStyle}>
                       <Show when={isMobile()}>
-                        <div class="md:hidden flex justify-center">
+                        <div class="md:hidden h-4 flex items-center justify-center">
                           <MetricText value={cpuPercentValue} type="cpu" />
                         </div>
                       </Show>
-                      <div class="hidden md:block">
+                      <div class="hidden md:block h-4">
                         <Show when={isPVEItem} fallback={
                           <ResponsiveMetricCell
                             value={cpuPercentValue}
@@ -596,11 +596,11 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     {/* Memory */}
                     <td class={tdClass} style={metricColumnStyle}>
                       <Show when={isMobile()}>
-                        <div class="md:hidden flex justify-center">
+                        <div class="md:hidden h-4 flex items-center justify-center">
                           <MetricText value={memoryPercentValue} type="memory" />
                         </div>
                       </Show>
-                      <div class="hidden md:block">
+                      <div class="hidden md:block h-4">
                         <Show when={isPVEItem} fallback={
                           <ResponsiveMetricCell
                             value={memoryPercentValue}
