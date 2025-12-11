@@ -1772,8 +1772,10 @@ func (p *PatrolService) parseFindingBlock(block string) *Finding {
 		cat = FindingCategoryPerformance
 	}
 
-	// Generate stable ID from content
-	id := generateFindingID(resource, string(cat), title)
+	// Generate stable ID from resource and category ONLY (not title)
+	// This ensures the same issue on the same resource gets the same ID even if
+	// the LLM phrases it differently each time
+	id := generateFindingID(resource, string(cat), "llm-finding")
 
 	return &Finding{
 		ID:             id,

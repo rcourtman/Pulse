@@ -201,21 +201,57 @@ func (s *FindingsStore) ForceSave() error {
 
 // Add adds or updates a finding
 // If a finding with the same ID exists, it updates LastSeenAt and increments TimesRaised
+// If the finding is suppressed or dismissed, it may be skipped
 // Returns true if this is a new finding
 func (s *FindingsStore) Add(f *Finding) bool {
 	s.mu.Lock()
 
 	existing, exists := s.findings[f.ID]
 	if exists {
+		// Check if it's permanently suppressed - don't update at all
+		if existing.Suppressed {
+			s.mu.Unlock()
+			return false
+		}
+		
+		// Check if dismissed - only update if severity has escalated
+		if existing.DismissedReason != "" {
+			severityOrder := map[FindingSeverity]int{
+				FindingSeverityInfo:     0,
+				FindingSeverityWatch:    1,
+				FindingSeverityWarning:  2,
+				FindingSeverityCritical: 3,
+			}
+			// If new severity is same or lower, don't reactivate
+			if severityOrder[f.Severity] <= severityOrder[existing.Severity] {
+				existing.LastSeenAt = time.Now()
+				existing.TimesRaised++
+				s.mu.Unlock()
+				s.scheduleSave()
+				return false
+			}
+			// Severity escalated - clear dismissal and reactivate
+			existing.DismissedReason = ""
+			existing.UserNote = "" // Clear note since situation changed
+			existing.AcknowledgedAt = nil
+		}
+		
 		// Update existing finding
 		existing.LastSeenAt = time.Now()
 		existing.Description = f.Description
 		existing.Recommendation = f.Recommendation
 		existing.Evidence = f.Evidence
+		existing.Title = f.Title // Update title in case LLM phrased it better
 		existing.Severity = f.Severity
 		existing.TimesRaised++ // Track recurrence
 		s.mu.Unlock()
 		s.scheduleSave()
+		return false
+	}
+
+	// New finding - check if resource+category is suppressed
+	if s.isSuppressedInternal(f.ResourceID, f.Category) {
+		s.mu.Unlock()
 		return false
 	}
 
@@ -377,14 +413,20 @@ func (s *FindingsStore) Suppress(id string) bool {
 }
 
 // IsSuppressed checks if findings of this type for this resource are suppressed
-func (s *FindingsStore) IsSuppressed(resourceID string, category FindingCategory, title string) bool {
+// Checks by resource+category only (not title, since LLM titles vary)
+func (s *FindingsStore) IsSuppressed(resourceID string, category FindingCategory) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.isSuppressedInternal(resourceID, category)
+}
 
+// isSuppressedInternal checks suppression without locking (caller must hold lock)
+func (s *FindingsStore) isSuppressedInternal(resourceID string, category FindingCategory) bool {
 	ids := s.byResource[resourceID]
 	for _, id := range ids {
 		if f, exists := s.findings[id]; exists {
-			if f.Suppressed && f.Category == category && f.Title == title {
+			// Match by resource+category only
+			if f.Suppressed && f.Category == category {
 				return true
 			}
 		}
