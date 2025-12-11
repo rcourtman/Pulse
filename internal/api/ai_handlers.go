@@ -456,6 +456,75 @@ func (h *AISettingsHandler) HandleTestAIConnection(w http.ResponseWriter, r *htt
 	}
 }
 
+// HandleTestProvider tests a specific AI provider connection (POST /api/ai/test/:provider)
+func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require admin authentication
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	// Get provider from URL path (e.g., /api/ai/test/anthropic -> anthropic)
+	provider := strings.TrimPrefix(r.URL.Path, "/api/ai/test/")
+	if provider == "" || provider == r.URL.Path {
+		http.Error(w, `{"error":"Provider is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	var testResult struct {
+		Success  bool   `json:"success"`
+		Message  string `json:"message"`
+		Provider string `json:"provider"`
+	}
+	testResult.Provider = provider
+
+	// Load config and create provider for testing
+	cfg := h.aiService.GetConfig()
+	if cfg == nil {
+		testResult.Success = false
+		testResult.Message = "AI not configured"
+		utils.WriteJSONResponse(w, testResult)
+		return
+	}
+
+	// Check if provider is configured
+	if !cfg.HasProvider(provider) {
+		testResult.Success = false
+		testResult.Message = "Provider not configured"
+		utils.WriteJSONResponse(w, testResult)
+		return
+	}
+
+	// Create provider and test connection
+	testProvider, err := providers.NewForProvider(cfg, provider, cfg.GetModel())
+	if err != nil {
+		testResult.Success = false
+		testResult.Message = fmt.Sprintf("Failed to create provider: %v", err)
+		utils.WriteJSONResponse(w, testResult)
+		return
+	}
+
+	err = testProvider.TestConnection(ctx)
+	if err != nil {
+		testResult.Success = false
+		testResult.Message = err.Error()
+	} else {
+		testResult.Success = true
+		testResult.Message = "Connection successful"
+	}
+
+	if err := utils.WriteJSONResponse(w, testResult); err != nil {
+		log.Error().Err(err).Msg("Failed to write provider test response")
+	}
+}
+
 // HandleListModels fetches available models from the configured AI provider (GET /api/ai/models)
 func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
