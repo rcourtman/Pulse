@@ -8,16 +8,15 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
-import { DEFAULT_MODELS } from '@/types/ai';
 
 // Providers are now configured via accordion sections, not a single-provider selector
 
 // Provider display names for optgroup labels
 const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
-  anthropic: 'Anthropic (Claude)',
-  openai: 'OpenAI (GPT)',
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
   deepseek: 'DeepSeek',
-  ollama: 'Ollama (Local)',
+  ollama: 'Ollama',
 };
 
 // Parse provider from model ID (format: "provider:model-name")
@@ -98,7 +97,7 @@ export const AISettings: Component = () => {
         enabled: false,
         provider: 'anthropic',
         apiKey: '',
-        model: DEFAULT_MODELS.anthropic,
+        model: '', // Will be set when provider is configured
         chatModel: '',
         patrolModel: '',
         baseUrl: '',
@@ -122,7 +121,7 @@ export const AISettings: Component = () => {
       enabled: data.enabled,
       provider: data.provider,
       apiKey: '',
-      model: data.model || DEFAULT_MODELS[data.provider],
+      model: data.model || '', // User must select a model
       chatModel: data.chat_model || '',
       patrolModel: data.patrol_model || '',
       baseUrl: data.base_url || '',
@@ -470,7 +469,7 @@ export const AISettings: Component = () => {
                   type="text"
                   value={form.model}
                   onInput={(e) => setForm('model', e.currentTarget.value)}
-                  placeholder={DEFAULT_MODELS[form.provider]}
+                  placeholder="Configure a provider below to see available models"
                   class={controlClass()}
                   disabled={saving()}
                 />
@@ -614,7 +613,7 @@ export const AISettings: Component = () => {
                     }}
                   >
                     <div class="flex items-center gap-2">
-                      <span class="font-medium text-sm">Anthropic (Claude)</span>
+                      <span class="font-medium text-sm">Anthropic</span>
                       <Show when={settings()?.anthropic_configured}>
                         <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
                       </Show>
@@ -682,7 +681,7 @@ export const AISettings: Component = () => {
                     }}
                   >
                     <div class="flex items-center gap-2">
-                      <span class="font-medium text-sm">OpenAI (GPT-4)</span>
+                      <span class="font-medium text-sm">OpenAI</span>
                       <Show when={settings()?.openai_configured}>
                         <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
                       </Show>
@@ -826,7 +825,7 @@ export const AISettings: Component = () => {
                     }}
                   >
                     <div class="flex items-center gap-2">
-                      <span class="font-medium text-sm">Ollama (Local)</span>
+                      <span class="font-medium text-sm">Ollama</span>
                       <Show when={settings()?.ollama_configured}>
                         <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Available</span>
                       </Show>
