@@ -304,3 +304,76 @@ export function subscribeToPatrolStream(
         eventSource.close();
     };
 }
+
+// === Suppression Rules ===
+
+export interface SuppressionRule {
+    id: string;
+    resource_id?: string;   // Empty means "any resource"
+    resource_name?: string; // Human-readable name
+    category?: FindingCategory; // Empty means "any category"
+    description: string;    // User's reason
+    created_at: string;
+    created_from: 'finding' | 'manual';
+    finding_id?: string;    // Original finding ID if created from dismissal
+}
+
+/**
+ * Get all suppression rules (both manual and from dismissed findings)
+ */
+export async function getSuppressionRules(): Promise<SuppressionRule[]> {
+    const resp = await fetch('/api/ai/patrol/suppressions', {
+        credentials: 'include',
+    });
+    if (!resp.ok) {
+        throw new Error(`Failed to get suppression rules: ${resp.status}`);
+    }
+    return resp.json();
+}
+
+/**
+ * Create a new manual suppression rule
+ * @param resourceId Resource ID (empty for "any resource")
+ * @param resourceName Human-readable name for display
+ * @param category Category (empty for "any category")
+ * @param description User's reason for the rule
+ */
+export async function addSuppressionRule(
+    resourceId: string,
+    resourceName: string,
+    category: FindingCategory | '',
+    description: string
+): Promise<{ success: boolean; message: string; rule: SuppressionRule }> {
+    return apiFetchJSON('/api/ai/patrol/suppressions', {
+        method: 'POST',
+        body: JSON.stringify({
+            resource_id: resourceId,
+            resource_name: resourceName,
+            category: category,
+            description: description,
+        }),
+    });
+}
+
+/**
+ * Delete a suppression rule
+ * @param ruleId The ID of the rule to delete
+ */
+export async function deleteSuppressionRule(ruleId: string): Promise<{ success: boolean; message: string }> {
+    return apiFetchJSON(`/api/ai/patrol/suppressions/${encodeURIComponent(ruleId)}`, {
+        method: 'DELETE',
+    });
+}
+
+/**
+ * Get all dismissed/suppressed findings
+ */
+export async function getDismissedFindings(): Promise<Finding[]> {
+    const resp = await fetch('/api/ai/patrol/dismissed', {
+        credentials: 'include',
+    });
+    if (!resp.ok) {
+        throw new Error(`Failed to get dismissed findings: ${resp.status}`);
+    }
+    return resp.json();
+}

@@ -1106,6 +1106,19 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, r.aiSettingsHandler.HandleSnoozeFinding))
 	r.mux.HandleFunc("/api/ai/patrol/resolve", RequireAuth(r.config, r.aiSettingsHandler.HandleResolveFinding))
 	r.mux.HandleFunc("/api/ai/patrol/runs", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolRunHistory))
+	// Suppression rules management
+	r.mux.HandleFunc("/api/ai/patrol/suppressions", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			r.aiSettingsHandler.HandleGetSuppressionRules(w, req)
+		case http.MethodPost:
+			r.aiSettingsHandler.HandleAddSuppressionRule(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	r.mux.HandleFunc("/api/ai/patrol/suppressions/", RequireAuth(r.config, r.aiSettingsHandler.HandleDeleteSuppressionRule))
+	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, r.aiSettingsHandler.HandleGetDismissedFindings))
 
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
