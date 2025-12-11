@@ -447,10 +447,24 @@ export const AISettings: Component = () => {
           <div class="space-y-4">
             {/* Model Selection */}
             <div class={formField}>
-              <label class={labelClass()}>
-                Default Model
-                {modelsLoading() && <span class="ml-2 text-xs text-gray-500">(loading models...)</span>}
-              </label>
+              <div class="flex items-center justify-between mb-1">
+                <label class={labelClass()}>
+                  Default Model
+                  {modelsLoading() && <span class="ml-2 text-xs text-gray-500">(loading...)</span>}
+                </label>
+                <button
+                  type="button"
+                  onClick={loadModels}
+                  disabled={modelsLoading()}
+                  class="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 disabled:opacity-50 flex items-center gap-1"
+                  title="Refresh model list from all configured providers"
+                >
+                  <svg class={`w-3 h-3 ${modelsLoading() ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh Models
+                </button>
+              </div>
               <Show when={availableModels().length > 0} fallback={
                 <input
                   type="text"
