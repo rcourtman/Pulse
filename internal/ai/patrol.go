@@ -467,8 +467,7 @@ func (p *PatrolService) Start(ctx context.Context) {
 	p.mu.Unlock()
 
 	log.Info().
-		Dur("quick_interval", p.config.QuickCheckInterval).
-		Dur("deep_interval", p.config.DeepAnalysisInterval).
+		Dur("interval", p.config.GetInterval()).
 		Msg("Starting AI Patrol Service")
 
 	go p.patrolLoop(ctx)
@@ -1053,6 +1052,35 @@ func (p *PatrolService) GetFindingsSummary() FindingsSummary {
 	return p.findings.GetSummary()
 }
 
+// ResolveFinding marks a finding as resolved with a resolution note
+// This is called when the AI successfully fixes an issue
+func (p *PatrolService) ResolveFinding(findingID string, resolutionNote string) error {
+	if findingID == "" {
+		return fmt.Errorf("finding ID is required")
+	}
+
+	// Get the finding first to update its resolution note
+	finding := p.findings.Get(findingID)
+	if finding == nil {
+		return fmt.Errorf("finding not found: %s", findingID)
+	}
+
+	// Update the user note with the resolution
+	finding.UserNote = resolutionNote
+
+	// Mark as resolved (not auto-resolved since user/AI initiated it)
+	if !p.findings.Resolve(findingID, false) {
+		return fmt.Errorf("failed to resolve finding: %s", findingID)
+	}
+
+	log.Info().
+		Str("finding_id", findingID).
+		Str("resolution_note", resolutionNote).
+		Msg("AI resolved finding")
+
+	return nil
+}
+
 // GetRunHistory returns the history of patrol runs
 // If limit is > 0, returns at most that many records
 func (p *PatrolService) GetRunHistory(limit int) []PatrolRunRecord {
@@ -1419,7 +1447,7 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 		return nil, nil // Nothing to analyze
 	}
 
-	prompt := p.buildPatrolPrompt(summary, false)
+	prompt := p.buildPatrolPrompt(summary)
 
 	log.Debug().Msg("AI Patrol: Sending infrastructure to LLM for analysis")
 
@@ -1434,6 +1462,7 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	resp, err := p.aiService.ExecuteStream(ctx, ExecuteRequest{
 		Prompt:       prompt,
 		SystemPrompt: p.getPatrolSystemPrompt(),
+		UseCase:      "patrol", // Use patrol model for background analysis
 	}, func(event StreamEvent) {
 		switch event.Type {
 		case "content":
@@ -1638,7 +1667,7 @@ func (p *PatrolService) buildInfrastructureSummary(state models.StateSnapshot) s
 
 // buildPatrolPrompt creates the prompt for AI analysis
 // Includes user feedback context to prevent re-raising dismissed findings
-func (p *PatrolService) buildPatrolPrompt(summary string, deep bool) string {
+func (p *PatrolService) buildPatrolPrompt(summary string) string {
 	// Get user feedback context (dismissed/snoozed findings)
 	feedbackContext := p.findings.GetDismissedForContext()
 	

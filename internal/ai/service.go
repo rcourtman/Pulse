@@ -710,6 +710,9 @@ type ExecuteRequest struct {
 	Context      map[string]interface{} `json:"context,omitempty"`       // Current metrics, state, etc.
 	SystemPrompt string                 `json:"system_prompt,omitempty"` // Override system prompt
 	History      []ConversationMessage  `json:"history,omitempty"`       // Previous conversation messages
+	FindingID    string                 `json:"finding_id,omitempty"`    // If fixing a patrol finding, the ID to resolve
+	Model        string                 `json:"model,omitempty"`         // Override model for this request (for user selection in chat)
+	UseCase      string                 `json:"use_case,omitempty"`      // "chat" or "patrol" - determines which default model to use
 }
 
 // ExecuteResponse represents the AI's response
@@ -727,6 +730,34 @@ type ToolExecution struct {
 	Input   string `json:"input"`   // Human-readable input (e.g., the command)
 	Output  string `json:"output"`  // Result of execution
 	Success bool   `json:"success"`
+}
+
+// getModelForRequest determines which model to use for a request
+// Priority: explicit override > use case default > config default
+func (s *Service) getModelForRequest(req ExecuteRequest) string {
+	// If request has explicit model override, use it
+	if req.Model != "" {
+		return req.Model
+	}
+
+	s.mu.RLock()
+	cfg := s.cfg
+	s.mu.RUnlock()
+
+	if cfg == nil {
+		return ""
+	}
+
+	// Use case-specific model selection
+	switch req.UseCase {
+	case "patrol":
+		return cfg.GetPatrolModel()
+	case "chat":
+		return cfg.GetChatModel()
+	default:
+		// Default to chat model for interactive requests
+		return cfg.GetChatModel()
+	}
 }
 
 // StreamEvent represents an event during AI execution for streaming
@@ -765,10 +796,21 @@ type ApprovalNeededData struct {
 // If tools are available and the AI requests them, it executes them in a loop
 func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteResponse, error) {
 	s.mu.RLock()
-	provider := s.provider
-	cfg := s.cfg
+	defaultProvider := s.provider
 	agentServer := s.agentServer
+	cfg := s.cfg
 	s.mu.RUnlock()
+
+	// Determine the model to use for this request
+	modelString := s.getModelForRequest(req)
+
+	// Create a provider for this specific model (supports multi-provider switching)
+	provider, err := providers.NewForModel(cfg, modelString)
+	if err != nil {
+		// Fall back to default provider if model-specific provider can't be created
+		log.Debug().Err(err).Str("model", modelString).Msg("Could not create provider for model, using default")
+		provider = defaultProvider
+	}
 
 	if provider == nil {
 		return nil, fmt.Errorf("AI is not enabled or configured")
@@ -836,7 +878,7 @@ Always execute the commands rather than telling the user how to do it.`
 	for i := 0; i < maxIterations; i++ {
 		resp, err := provider.Chat(ctx, providers.ChatRequest{
 			Messages:  messages,
-			Model:     cfg.GetModel(),
+			Model:     s.getModelForRequest(req),
 			System:    systemPrompt,
 			MaxTokens: 4096,
 			Tools:     tools,
@@ -893,10 +935,21 @@ Always execute the commands rather than telling the user how to do it.`
 // This allows the UI to show real-time progress during tool execution
 func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callback StreamCallback) (*ExecuteResponse, error) {
 	s.mu.RLock()
-	provider := s.provider
-	cfg := s.cfg
+	defaultProvider := s.provider
 	agentServer := s.agentServer
+	cfg := s.cfg
 	s.mu.RUnlock()
+
+	// Determine the model to use for this request
+	modelString := s.getModelForRequest(req)
+
+	// Create a provider for this specific model (supports multi-provider switching)
+	provider, err := providers.NewForModel(cfg, modelString)
+	if err != nil {
+		// Fall back to default provider if model-specific provider can't be created
+		log.Debug().Err(err).Str("model", modelString).Msg("Could not create provider for model, using default")
+		provider = defaultProvider
+	}
 
 	if provider == nil {
 		return nil, fmt.Errorf("AI is not enabled or configured")
@@ -994,7 +1047,7 @@ Always execute the commands rather than telling the user how to do it.`
 
 		resp, err := provider.Chat(ctx, providers.ChatRequest{
 			Messages:  messages,
-			Model:     cfg.GetModel(),
+			Model:     s.getModelForRequest(req),
 			System:    systemPrompt,
 			MaxTokens: 4096,
 			Tools:     tools,
@@ -1327,6 +1380,24 @@ func (s *Service) getTools() []providers.Tool {
 				"required": []string{"resource_type", "resource_id", "url"},
 			},
 		},
+		{
+			Name:        "resolve_finding",
+			Description: "Mark an AI patrol finding as resolved after you have successfully fixed the underlying issue. Only use this after confirming the fix worked (e.g., by running a verification command). The finding ID is provided in your context when helping with a patrol finding.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"finding_id": map[string]interface{}{
+						"type":        "string",
+						"description": "The ID of the finding to resolve. Use the finding_id from the request context.",
+					},
+					"resolution_note": map[string]interface{}{
+						"type":        "string",
+						"description": "Brief description of how the issue was resolved (e.g., 'Restarted nginx service', 'Cleaned up disk space').",
+					},
+				},
+				"required": []string{"finding_id", "resolution_note"},
+			},
+		},
 	}
 
 	// Add web search tool for Anthropic provider
@@ -1604,6 +1675,47 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		}
 
 		execution.Output = fmt.Sprintf("✅ Successfully set URL for %s '%s' to: %s\nThe URL is now visible in the Pulse dashboard as a clickable link.", resourceType, resourceID, url)
+		execution.Success = true
+		return execution.Output, execution
+
+	case "resolve_finding":
+		findingID, _ := tc.Input["finding_id"].(string)
+		resolutionNote, _ := tc.Input["resolution_note"].(string)
+		execution.Input = fmt.Sprintf("finding: %s, note: %s", findingID, resolutionNote)
+
+		// If no finding ID provided by AI, check the request context
+		if findingID == "" {
+			findingID = req.FindingID
+		}
+
+		if findingID == "" {
+			execution.Output = "Error: finding_id is required. The finding ID should be provided in the request context when helping fix a patrol finding."
+			return execution.Output, execution
+		}
+
+		if resolutionNote == "" {
+			execution.Output = "Error: resolution_note is required. Please describe how the issue was resolved."
+			return execution.Output, execution
+		}
+
+		// Get the patrol service to resolve the finding
+		s.mu.RLock()
+		patrolService := s.patrolService
+		s.mu.RUnlock()
+
+		if patrolService == nil {
+			execution.Output = "Error: Patrol service not available"
+			return execution.Output, execution
+		}
+
+		// Resolve the finding
+		err := patrolService.ResolveFinding(findingID, resolutionNote)
+		if err != nil {
+			execution.Output = fmt.Sprintf("Error resolving finding: %s", err)
+			return execution.Output, execution
+		}
+
+		execution.Output = fmt.Sprintf("✅ Finding resolved! The AI Insight has been marked as fixed.\nID: %s\nResolution: %s", findingID, resolutionNote)
 		execution.Success = true
 		return execution.Output, execution
 
@@ -2255,29 +2367,107 @@ func (s *Service) buildUserAnnotationsContext() string {
 }
 
 // TestConnection tests the AI provider connection
+// Tests the provider for the currently configured default model
 func (s *Service) TestConnection(ctx context.Context) error {
 	s.mu.RLock()
-	provider := s.provider
+	cfg := s.cfg
+	defaultProvider := s.provider
 	s.mu.RUnlock()
 
-	if provider == nil {
-		// Try to create a temporary provider from config to test
-		cfg, err := s.persistence.LoadAIConfig()
+	// Load config if not available
+	if cfg == nil {
+		var err error
+		cfg, err = s.persistence.LoadAIConfig()
 		if err != nil {
 			return fmt.Errorf("failed to load AI config: %w", err)
 		}
-		if cfg == nil || cfg.APIKey == "" {
-			return fmt.Errorf("API key not configured")
-		}
+	}
 
-		tempProvider, err := providers.NewFromConfig(cfg)
-		if err != nil {
-			return err
+	if cfg == nil || !cfg.IsConfigured() {
+		return fmt.Errorf("no AI provider configured")
+	}
+
+	// Try to create a provider for the current default model
+	provider, err := providers.NewForModel(cfg, cfg.GetModel())
+	if err != nil {
+		// Fall back to default provider or NewFromConfig
+		log.Debug().Err(err).Str("model", cfg.GetModel()).Msg("Could not create provider for model, using fallback")
+		if defaultProvider != nil {
+			provider = defaultProvider
+		} else {
+			provider, err = providers.NewFromConfig(cfg)
+			if err != nil {
+				return err
+			}
 		}
-		provider = tempProvider
 	}
 
 	return provider.TestConnection(ctx)
+}
+
+// ListModels fetches available models from ALL configured AI providers
+// Returns a unified list with models prefixed by provider name
+func (s *Service) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
+	cfg, err := s.persistence.LoadAIConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load AI config: %w", err)
+	}
+	if cfg == nil {
+		return nil, fmt.Errorf("AI not configured")
+	}
+
+	var allModels []providers.ModelInfo
+
+	// Query each configured provider
+	providersList := []string{config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderDeepSeek, config.AIProviderOllama}
+
+	for _, providerName := range providersList {
+		if !cfg.HasProvider(providerName) {
+			continue
+		}
+
+		// Create provider for this specific provider
+		provider, err := providers.NewForProvider(cfg, providerName, "")
+		if err != nil {
+			log.Debug().Err(err).Str("provider", providerName).Msg("Skipping provider - not configured")
+			continue
+		}
+
+		// Fetch models from this provider
+		models, err := provider.ListModels(ctx)
+		if err != nil {
+			log.Warn().Err(err).Str("provider", providerName).Msg("Failed to fetch models from provider")
+			continue
+		}
+
+		// Add provider prefix to each model
+		for _, m := range models {
+			allModels = append(allModels, providers.ModelInfo{
+				ID:          config.FormatModelString(providerName, m.ID),
+				Name:        m.Name,
+				Description: providerDisplayName(providerName) + ": " + m.ID,
+				CreatedAt:   m.CreatedAt,
+			})
+		}
+	}
+
+	return allModels, nil
+}
+
+// providerDisplayName returns a user-friendly name for a provider
+func providerDisplayName(provider string) string {
+	switch provider {
+	case config.AIProviderAnthropic:
+		return "Anthropic"
+	case config.AIProviderOpenAI:
+		return "OpenAI"
+	case config.AIProviderDeepSeek:
+		return "DeepSeek"
+	case config.AIProviderOllama:
+		return "Ollama"
+	default:
+		return provider
+	}
 }
 
 // Reload reloads the AI configuration (call after settings change)

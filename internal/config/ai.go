@@ -16,12 +16,21 @@ const (
 // This is stored in ai.enc (encrypted) in the config directory
 type AIConfig struct {
 	Enabled        bool   `json:"enabled"`
-	Provider       string `json:"provider"`        // "anthropic", "openai", "ollama", "deepseek"
-	APIKey         string `json:"api_key"`         // encrypted at rest (not needed for ollama or oauth)
-	Model          string `json:"model"`           // e.g., "claude-opus-4-5-20250514", "gpt-4o", "llama3"
-	BaseURL        string `json:"base_url"`        // custom endpoint (required for ollama, optional for openai)
+	Provider       string `json:"provider"`        // DEPRECATED: legacy single provider field, kept for migration
+	APIKey         string `json:"api_key"`         // DEPRECATED: legacy single API key, kept for migration
+	Model          string `json:"model"`           // Currently selected default model (format: "provider:model-name")
+	ChatModel      string `json:"chat_model,omitempty"`   // Model for interactive chat (defaults to Model)
+	PatrolModel    string `json:"patrol_model,omitempty"` // Model for background patrol (defaults to Model, can be cheaper)
+	BaseURL        string `json:"base_url"`        // DEPRECATED: legacy base URL, kept for migration
 	AutonomousMode bool   `json:"autonomous_mode"` // when true, AI executes commands without approval
 	CustomContext  string `json:"custom_context"`  // user-provided context about their infrastructure
+
+	// Multi-provider credentials - each provider can be configured independently
+	AnthropicAPIKey string `json:"anthropic_api_key,omitempty"` // Anthropic API key
+	OpenAIAPIKey    string `json:"openai_api_key,omitempty"`    // OpenAI API key
+	DeepSeekAPIKey  string `json:"deepseek_api_key,omitempty"`  // DeepSeek API key
+	OllamaBaseURL   string `json:"ollama_base_url,omitempty"`   // Ollama server URL (default: http://localhost:11434)
+	OpenAIBaseURL   string `json:"openai_base_url,omitempty"`   // Custom OpenAI-compatible base URL (optional)
 
 	// OAuth fields for Claude Pro/Max subscription authentication
 	AuthMethod        AuthMethod `json:"auth_method,omitempty"`         // "api_key" or "oauth" (for anthropic only)
@@ -61,6 +70,21 @@ const (
 	DefaultDeepSeekBaseURL  = "https://api.deepseek.com/chat/completions"
 )
 
+// ModelInfo represents information about an available model
+// Deprecated: Use providers.ModelInfo instead - models are now fetched dynamically from APIs
+type ModelInfo struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	IsDefault   bool   `json:"is_default,omitempty"`
+}
+
+// GetAvailableModels is deprecated - models are now fetched dynamically from provider APIs
+// This returns nil; use the /api/ai/models endpoint instead which queries the actual API
+func GetAvailableModels(provider string) []ModelInfo {
+	return nil
+}
+
 // NewDefaultAIConfig returns an AIConfig with sensible defaults
 func NewDefaultAIConfig() *AIConfig {
 	return &AIConfig{
@@ -83,14 +107,21 @@ func NewDefaultAIConfig() *AIConfig {
 }
 
 // IsConfigured returns true if the AI config has enough info to make API calls
+// For multi-provider setup, returns true if ANY provider is configured
 func (c *AIConfig) IsConfigured() bool {
 	if !c.Enabled {
 		return false
 	}
 
+	// Check multi-provider credentials first (new format)
+	if c.HasProvider(AIProviderAnthropic) || c.HasProvider(AIProviderOpenAI) ||
+		c.HasProvider(AIProviderDeepSeek) || c.HasProvider(AIProviderOllama) {
+		return true
+	}
+
+	// Fall back to legacy single-provider check for backward compatibility
 	switch c.Provider {
 	case AIProviderAnthropic:
-		// Anthropic can use API key OR OAuth
 		if c.AuthMethod == AuthMethodOAuth {
 			return c.OAuthAccessToken != ""
 		}
@@ -98,19 +129,140 @@ func (c *AIConfig) IsConfigured() bool {
 	case AIProviderOpenAI, AIProviderDeepSeek:
 		return c.APIKey != ""
 	case AIProviderOllama:
-		// Ollama doesn't need an API key
 		return true
 	default:
 		return false
 	}
 }
 
+// HasProvider returns true if the specified provider has credentials configured
+func (c *AIConfig) HasProvider(provider string) bool {
+	switch provider {
+	case AIProviderAnthropic:
+		// Anthropic can use API key OR OAuth
+		if c.AuthMethod == AuthMethodOAuth && c.OAuthAccessToken != "" {
+			return true
+		}
+		return c.AnthropicAPIKey != ""
+	case AIProviderOpenAI:
+		return c.OpenAIAPIKey != ""
+	case AIProviderDeepSeek:
+		return c.DeepSeekAPIKey != ""
+	case AIProviderOllama:
+		// Ollama is available if URL is set (or default localhost)
+		return true // Always available for attempt
+	default:
+		return false
+	}
+}
+
+// GetConfiguredProviders returns a list of all providers with credentials configured
+func (c *AIConfig) GetConfiguredProviders() []string {
+	var providers []string
+	if c.HasProvider(AIProviderAnthropic) {
+		providers = append(providers, AIProviderAnthropic)
+	}
+	if c.HasProvider(AIProviderOpenAI) {
+		providers = append(providers, AIProviderOpenAI)
+	}
+	if c.HasProvider(AIProviderDeepSeek) {
+		providers = append(providers, AIProviderDeepSeek)
+	}
+	if c.HasProvider(AIProviderOllama) {
+		providers = append(providers, AIProviderOllama)
+	}
+	return providers
+}
+
+// GetAPIKeyForProvider returns the API key for the specified provider
+func (c *AIConfig) GetAPIKeyForProvider(provider string) string {
+	switch provider {
+	case AIProviderAnthropic:
+		if c.AnthropicAPIKey != "" {
+			return c.AnthropicAPIKey
+		}
+		// Fall back to legacy API key if provider matches
+		if c.Provider == AIProviderAnthropic {
+			return c.APIKey
+		}
+	case AIProviderOpenAI:
+		if c.OpenAIAPIKey != "" {
+			return c.OpenAIAPIKey
+		}
+		if c.Provider == AIProviderOpenAI {
+			return c.APIKey
+		}
+	case AIProviderDeepSeek:
+		if c.DeepSeekAPIKey != "" {
+			return c.DeepSeekAPIKey
+		}
+		if c.Provider == AIProviderDeepSeek {
+			return c.APIKey
+		}
+	}
+	return ""
+}
+
+// GetBaseURLForProvider returns the base URL for the specified provider
+func (c *AIConfig) GetBaseURLForProvider(provider string) string {
+	switch provider {
+	case AIProviderOllama:
+		if c.OllamaBaseURL != "" {
+			return c.OllamaBaseURL
+		}
+		// Fall back to legacy BaseURL if provider matches
+		if c.Provider == AIProviderOllama && c.BaseURL != "" {
+			return c.BaseURL
+		}
+		return DefaultOllamaBaseURL
+	case AIProviderOpenAI:
+		if c.OpenAIBaseURL != "" {
+			return c.OpenAIBaseURL
+		}
+		return "" // Uses default OpenAI URL
+	case AIProviderDeepSeek:
+		return DefaultDeepSeekBaseURL
+	}
+	return ""
+}
+
 // IsUsingOAuth returns true if OAuth authentication is configured for Anthropic
 func (c *AIConfig) IsUsingOAuth() bool {
-	return c.Provider == AIProviderAnthropic && c.AuthMethod == AuthMethodOAuth && c.OAuthAccessToken != ""
+	return c.AuthMethod == AuthMethodOAuth && c.OAuthAccessToken != ""
+}
+
+// ParseModelString parses a model string in "provider:model-name" format
+// Returns the provider and model name. If no provider prefix, attempts to detect.
+func ParseModelString(model string) (provider, modelName string) {
+	// Check for explicit provider prefix
+	for _, p := range []string{AIProviderAnthropic, AIProviderOpenAI, AIProviderDeepSeek, AIProviderOllama} {
+		prefix := p + ":"
+		if len(model) > len(prefix) && model[:len(prefix)] == prefix {
+			return p, model[len(prefix):]
+		}
+	}
+
+	// No prefix - try to detect from model name patterns
+	switch {
+	case len(model) >= 6 && model[:6] == "claude":
+		return AIProviderAnthropic, model
+	case len(model) >= 3 && (model[:3] == "gpt" || model[:2] == "o1" || model[:2] == "o3" || model[:2] == "o4"):
+		return AIProviderOpenAI, model
+	case len(model) >= 8 && model[:8] == "deepseek":
+		return AIProviderDeepSeek, model
+	default:
+		// Assume Ollama for unrecognized models (local models have varied names)
+		return AIProviderOllama, model
+	}
+}
+
+// FormatModelString creates a "provider:model-name" format string
+func FormatModelString(provider, modelName string) string {
+	return provider + ":" + modelName
 }
 
 // GetBaseURL returns the base URL, using defaults where appropriate
+// DEPRECATED: Use GetBaseURLForProvider instead
 func (c *AIConfig) GetBaseURL() string {
 	if c.BaseURL != "" {
 		return c.BaseURL
@@ -141,6 +293,24 @@ func (c *AIConfig) GetModel() string {
 	default:
 		return ""
 	}
+}
+
+// GetChatModel returns the model for interactive chat conversations
+// Falls back to the main Model if ChatModel is not set
+func (c *AIConfig) GetChatModel() string {
+	if c.ChatModel != "" {
+		return c.ChatModel
+	}
+	return c.GetModel()
+}
+
+// GetPatrolModel returns the model for background patrol analysis
+// Falls back to the main Model if PatrolModel is not set
+func (c *AIConfig) GetPatrolModel() string {
+	if c.PatrolModel != "" {
+		return c.PatrolModel
+	}
+	return c.GetModel()
 }
 
 // ClearOAuthTokens clears OAuth tokens (used when switching back to API key auth)

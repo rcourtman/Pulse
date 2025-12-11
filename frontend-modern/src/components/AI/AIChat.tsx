@@ -1,4 +1,4 @@
-import { Component, Show, createSignal, For, createEffect, createMemo } from 'solid-js';
+import { Component, Show, createSignal, For, createEffect, createMemo, onMount } from 'solid-js';
 import { marked } from 'marked';
 import { AIAPI } from '@/api/ai';
 import { notificationStore } from '@/stores/notifications';
@@ -13,7 +13,49 @@ import type {
   AIStreamToolEndData,
   AIStreamCompleteData,
   AIStreamApprovalNeededData,
+  ModelInfo,
 } from '@/types/ai';
+
+// Provider display names for grouped model selection
+const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
+  anthropic: 'Anthropic (Claude)',
+  openai: 'OpenAI (GPT)',
+  deepseek: 'DeepSeek',
+  ollama: 'Ollama (Local)',
+};
+
+// Parse provider from model ID (format: "provider:model-name")
+function getProviderFromModelId(modelId: string): string {
+  const colonIndex = modelId.indexOf(':');
+  if (colonIndex > 0) {
+    return modelId.substring(0, colonIndex);
+  }
+  // Default detection for models without prefix
+  if (modelId.includes('claude') || modelId.includes('opus') || modelId.includes('sonnet') || modelId.includes('haiku')) {
+    return 'anthropic';
+  }
+  if (modelId.includes('gpt') || modelId.includes('o1') || modelId.includes('o3')) {
+    return 'openai';
+  }
+  if (modelId.includes('deepseek')) {
+    return 'deepseek';
+  }
+  return 'ollama';
+}
+
+// Group models by provider for grouped rendering
+function groupModelsByProvider(models: ModelInfo[]): Map<string, ModelInfo[]> {
+  const grouped = new Map<string, ModelInfo[]>();
+
+  for (const model of models) {
+    const provider = getProviderFromModelId(model.id);
+    const existing = grouped.get(provider) || [];
+    existing.push(model);
+    grouped.set(provider, existing);
+  }
+
+  return grouped;
+}
 
 // Configure marked for safe rendering
 marked.setOptions({
@@ -116,6 +158,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const targetId = () => context().targetId;
   const contextData = () => context().context;
   const initialPrompt = () => context().initialPrompt;
+  const findingId = () => context().findingId; // For resolving patrol findings
 
   // Access WebSocket state for listing available resources
   const wsContext = useWebSocket();
@@ -247,9 +290,31 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [input, setInput] = createSignal('');
   const [isLoading, setIsLoading] = createSignal(false);
   const [queuedMessage, setQueuedMessage] = createSignal<string | null>(null);
+
+  // Model selection
+  const [availableModels, setAvailableModels] = createSignal<ModelInfo[]>([]);
+  const [selectedModel, setSelectedModel] = createSignal<string>(''); // Empty = use default
+  const [showModelSelector, setShowModelSelector] = createSignal(false);
+
   let messagesEndRef: HTMLDivElement | undefined;
   let inputRef: HTMLTextAreaElement | undefined;
   let abortControllerRef: AbortController | null = null;
+
+  // Fetch available models on mount using the dynamic API
+  onMount(async () => {
+    try {
+      const result = await AIAPI.getModels();
+      if (result.models && result.models.length > 0) {
+        setAvailableModels(result.models.map(m => ({
+          id: m.id,
+          name: m.name || m.id,
+          description: m.description,
+        })));
+      }
+    } catch (e) {
+      // Silently fail - models will just not be selectable
+    }
+  });
 
   // Wrapper to sync messages to global store
   const setMessages = (updater: Message[] | ((prev: Message[]) => Message[])) => {
@@ -425,6 +490,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
           target_id: targetId(),
           context: contextData(),
           history: history.length > 0 ? history : undefined,
+          finding_id: findingId(), // Pass finding ID so AI can resolve it when fixed
+          model: selectedModel() || undefined, // Use selected model or default
         },
         (event: AIStreamEvent) => {
           lastEventTime = Date.now(); // Update last event time
@@ -871,6 +938,58 @@ export const AIChat: Component<AIChatProps> = (props) => {
             </div>
           </div>
           <div class="flex items-center gap-2">
+            {/* Model selector dropdown */}
+            <Show when={availableModels().length > 0}>
+              <div class="relative">
+                <button
+                  onClick={() => setShowModelSelector(!showModelSelector())}
+                  class="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800"
+                  title="Select AI model"
+                >
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <span class="max-w-[80px] truncate">
+                    {selectedModel() || 'Default'}
+                  </span>
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <Show when={showModelSelector()}>
+                  <div class="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 py-1">
+                    <button
+                      onClick={() => { setSelectedModel(''); setShowModelSelector(false); }}
+                      class={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${!selectedModel() ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}
+                    >
+                      <div class="font-medium text-gray-900 dark:text-gray-100">Default</div>
+                      <div class="text-xs text-gray-500 dark:text-gray-400">Use configured default model</div>
+                    </button>
+                    <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
+                      {([provider, models]) => (
+                        <>
+                          <div class="px-3 py-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 sticky top-0">
+                            {PROVIDER_DISPLAY_NAMES[provider] || provider}
+                          </div>
+                          <For each={models}>
+                            {(model) => (
+                              <button
+                                onClick={() => { setSelectedModel(model.id); setShowModelSelector(false); }}
+                                class={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${selectedModel() === model.id ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}
+                              >
+                                <div class="font-medium text-gray-900 dark:text-gray-100">
+                                  {model.name || model.id.split(':').pop()}
+                                </div>
+                              </button>
+                            )}
+                          </For>
+                        </>
+                      )}
+                    </For>
+                  </div>
+                </Show>
+              </div>
+            </Show>
             <button
               onClick={clearChat}
               class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"

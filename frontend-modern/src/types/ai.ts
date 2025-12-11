@@ -3,12 +3,21 @@
 export type AIProvider = 'anthropic' | 'openai' | 'ollama' | 'deepseek';
 export type AuthMethod = 'api_key' | 'oauth';
 
+export interface ModelInfo {
+  id: string;
+  name: string;
+  description?: string;
+  is_default?: boolean;
+}
+
 export interface AISettings {
   enabled: boolean;
-  provider: AIProvider;
-  api_key_set: boolean; // API key is never exposed, just whether it's set
+  provider: AIProvider; // DEPRECATED: legacy single provider
+  api_key_set: boolean; // DEPRECATED: whether legacy API key is set
   model: string;
-  base_url?: string;
+  chat_model?: string; // Model for interactive chat (empty = use default)
+  patrol_model?: string; // Model for background patrol (empty = use default)
+  base_url?: string; // DEPRECATED: legacy base URL
   configured: boolean; // true if AI is ready to use
   autonomous_mode: boolean; // true if AI can execute commands without approval
   custom_context: string; // user-provided infrastructure context
@@ -19,21 +28,39 @@ export interface AISettings {
   patrol_schedule_preset?: string; // "15min" | "1hr" | "6hr" | "12hr" | "daily" | "disabled"
   alert_triggered_analysis?: boolean; // true if AI should analyze when alerts fire
   patrol_auto_fix?: boolean; // true if patrol can attempt automatic remediation
+  available_models?: ModelInfo[]; // DEPRECATED: use /api/ai/models endpoint
+  // Multi-provider configuration
+  anthropic_configured: boolean; // true if Anthropic API key or OAuth is set
+  openai_configured: boolean; // true if OpenAI API key is set
+  deepseek_configured: boolean; // true if DeepSeek API key is set
+  ollama_configured: boolean; // true (always available for attempt)
+  ollama_base_url: string; // Ollama server URL
+  openai_base_url?: string; // Custom OpenAI base URL
+  configured_providers: AIProvider[]; // List of providers with credentials
 }
 
 export interface AISettingsUpdateRequest {
   enabled?: boolean;
-  provider?: AIProvider;
-  api_key?: string; // empty string clears, undefined preserves
+  provider?: AIProvider; // DEPRECATED: use model selection instead
+  api_key?: string; // DEPRECATED: use per-provider keys
   model?: string;
-  base_url?: string;
+  base_url?: string; // DEPRECATED: use per-provider URLs
   autonomous_mode?: boolean;
   custom_context?: string; // user-provided infrastructure context
   auth_method?: AuthMethod; // "api_key" or "oauth"
+  // Model overrides for different use cases
+  chat_model?: string; // Model for interactive chat
+  patrol_model?: string; // Model for background patrol
   // Patrol settings for token efficiency
   patrol_schedule_preset?: string; // "15min" | "1hr" | "6hr" | "12hr" | "daily" | "disabled"
   alert_triggered_analysis?: boolean; // true if AI should analyze when alerts fire
   patrol_auto_fix?: boolean; // true if patrol can attempt automatic remediation
+  // Multi-provider credentials
+  anthropic_api_key?: string; // Set Anthropic API key
+  openai_api_key?: string; // Set OpenAI API key
+  deepseek_api_key?: string; // Set DeepSeek API key
+  ollama_base_url?: string; // Set Ollama server URL
+  openai_base_url?: string; // Set custom OpenAI base URL
 }
 
 
@@ -80,6 +107,8 @@ export interface AIExecuteRequest {
   target_id?: string;
   context?: Record<string, unknown>;
   history?: AIConversationMessage[]; // Previous conversation messages
+  finding_id?: string; // If fixing a patrol finding, the ID to resolve on success
+  model?: string; // Override model for this request (user selection in chat)
 }
 
 // Tool execution info

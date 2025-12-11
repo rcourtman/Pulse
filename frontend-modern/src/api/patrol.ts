@@ -61,7 +61,7 @@ export interface PatrolRunRecord {
     started_at: string;
     completed_at: string;
     duration_ms: number;
-    type: 'quick' | 'deep';
+    type: string; // Always 'patrol' now (kept for backwards compat with old records)
     resources_checked: number;
     // Breakdown by resource type
     nodes_checked: number;

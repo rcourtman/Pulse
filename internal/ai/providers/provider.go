@@ -58,6 +58,14 @@ type ChatResponse struct {
 	OutputTokens     int         `json:"output_tokens,omitempty"`
 }
 
+// ModelInfo represents information about an available model
+type ModelInfo struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	CreatedAt   int64  `json:"created_at,omitempty"`
+}
+
 // Provider defines the interface for AI providers
 type Provider interface {
 	// Chat sends a chat request and returns the response
@@ -68,4 +76,8 @@ type Provider interface {
 
 	// Name returns the provider name
 	Name() string
+
+	// ListModels returns available models from the provider's API
+	// Returns nil if the provider doesn't support listing models
+	ListModels(ctx context.Context) ([]ModelInfo, error)
 }

@@ -32,6 +32,11 @@ export class AIAPI {
     }) as Promise<AITestResult>;
   }
 
+  // Get available models from the AI provider
+  static async getModels(): Promise<{ models: { id: string; name: string; description?: string }[]; error?: string }> {
+    return apiFetchJSON(`${this.baseUrl}/ai/models`) as Promise<{ models: { id: string; name: string; description?: string }[]; error?: string }>;
+  }
+
   // Start OAuth flow for Claude Pro/Max subscription
   // Returns the authorization URL to redirect the user to
   static async startOAuth(): Promise<{ auth_url: string; state: string }> {
