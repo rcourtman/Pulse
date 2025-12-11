@@ -25,7 +25,8 @@ export interface AISettings {
   auth_method: AuthMethod; // "api_key" or "oauth"
   oauth_connected: boolean; // true if OAuth tokens are configured
   // Patrol settings for token efficiency
-  patrol_schedule_preset?: string; // "15min" | "1hr" | "6hr" | "12hr" | "daily" | "disabled"
+  patrol_schedule_preset?: string; // DEPRECATED: use patrol_interval_minutes
+  patrol_interval_minutes?: number; // Patrol interval in minutes (0 = disabled, minimum 10)
   alert_triggered_analysis?: boolean; // true if AI should analyze when alerts fire
   patrol_auto_fix?: boolean; // true if patrol can attempt automatic remediation
   available_models?: ModelInfo[]; // DEPRECATED: use /api/ai/models endpoint
@@ -52,7 +53,8 @@ export interface AISettingsUpdateRequest {
   chat_model?: string; // Model for interactive chat
   patrol_model?: string; // Model for background patrol
   // Patrol settings for token efficiency
-  patrol_schedule_preset?: string; // "15min" | "1hr" | "6hr" | "12hr" | "daily" | "disabled"
+  patrol_schedule_preset?: string; // DEPRECATED: use patrol_interval_minutes
+  patrol_interval_minutes?: number; // Custom interval in minutes (0 = disabled, minimum 10)
   alert_triggered_analysis?: boolean; // true if AI should analyze when alerts fire
   patrol_auto_fix?: boolean; // true if patrol can attempt automatic remediation
   // Multi-provider credentials

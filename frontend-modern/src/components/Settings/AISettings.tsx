@@ -69,6 +69,9 @@ export const AISettings: Component = () => {
   const [testingProvider, setTestingProvider] = createSignal<string | null>(null);
   const [providerTestResult, setProviderTestResult] = createSignal<{ provider: string; success: boolean; message: string } | null>(null);
 
+  // Auto-fix acknowledgement state (not persisted - must acknowledge each session)
+  const [autoFixAcknowledged, setAutoFixAcknowledged] = createSignal(false);
+
   const [form, setForm] = createStore({
     enabled: false,
     provider: 'anthropic' as AIProvider, // Legacy - kept for compatibility
@@ -80,7 +83,7 @@ export const AISettings: Component = () => {
     clearApiKey: false,
     autonomousMode: false,
     authMethod: 'api_key' as AuthMethod,
-    patrolSchedulePreset: '6hr',
+    patrolIntervalMinutes: 360, // 6 hours default
     alertTriggeredAnalysis: true,
     patrolAutoFix: false,
     // Multi-provider credentials
@@ -104,7 +107,7 @@ export const AISettings: Component = () => {
         clearApiKey: false,
         autonomousMode: false,
         authMethod: 'api_key',
-        patrolSchedulePreset: '6hr',
+        patrolIntervalMinutes: 360, // 6 hours default
         alertTriggeredAnalysis: true,
         patrolAutoFix: false,
         // Multi-provider - empty by default
@@ -128,7 +131,7 @@ export const AISettings: Component = () => {
       clearApiKey: false,
       autonomousMode: data.autonomous_mode || false,
       authMethod: data.auth_method || 'api_key',
-      patrolSchedulePreset: data.patrol_schedule_preset || '6hr',
+      patrolIntervalMinutes: data.patrol_interval_minutes ?? 360, // Use minutes, default to 6hr
       alertTriggeredAnalysis: data.alert_triggered_analysis !== false, // default to true
       patrolAutoFix: data.patrol_auto_fix || false, // default to false (observe only)
       // Multi-provider - never load actual keys from server (security), just track if configured
@@ -249,8 +252,8 @@ export const AISettings: Component = () => {
       }
 
       // Include patrol settings if changed
-      if (form.patrolSchedulePreset !== settings()?.patrol_schedule_preset) {
-        payload.patrol_schedule_preset = form.patrolSchedulePreset;
+      if (form.patrolIntervalMinutes !== (settings()?.patrol_interval_minutes ?? 360)) {
+        payload.patrol_interval_minutes = form.patrolIntervalMinutes;
       }
 
       if (form.alertTriggeredAnalysis !== settings()?.alert_triggered_analysis) {
@@ -922,27 +925,39 @@ export const AISettings: Component = () => {
                 </p>
               </div>
 
-              {/* Patrol Schedule Preset */}
+              {/* Patrol Interval */}
               <div class="space-y-3">
                 <div>
                   <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    Background Patrol Frequency
+                    Background Patrol Interval (minutes)
                   </label>
-                  <select
-                    class={controlClass()}
-                    value={form.patrolSchedulePreset}
-                    onChange={(e) => setForm('patrolSchedulePreset', e.currentTarget.value)}
-                    disabled={saving()}
-                  >
-                    <option value="15min">Every 15 minutes (high token usage)</option>
-                    <option value="1hr">Every hour</option>
-                    <option value="6hr">Every 6 hours (recommended)</option>
-                    <option value="12hr">Every 12 hours</option>
-                    <option value="daily">Once daily</option>
-                    <option value="disabled">Disabled (use alert-triggered only)</option>
-                  </select>
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="number"
+                      class={controlClass()}
+                      value={form.patrolIntervalMinutes}
+                      onInput={(e) => {
+                        const value = parseInt(e.currentTarget.value, 10);
+                        if (!isNaN(value)) {
+                          setForm('patrolIntervalMinutes', Math.max(0, value));
+                        }
+                      }}
+                      min={0}
+                      max={10080}
+                      step={15}
+                      disabled={saving()}
+                      style={{ width: '120px' }}
+                    />
+                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                      {form.patrolIntervalMinutes === 0
+                        ? 'Disabled'
+                        : form.patrolIntervalMinutes >= 60
+                          ? `${Math.floor(form.patrolIntervalMinutes / 60)}h ${form.patrolIntervalMinutes % 60 > 0 ? `${form.patrolIntervalMinutes % 60}m` : ''}`
+                          : `${form.patrolIntervalMinutes}m`}
+                    </span>
+                  </div>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    How often to scan all infrastructure for potential issues
+                    Set to 0 to disable scheduled patrol. Minimum 10 minutes when enabled.
                   </p>
                 </div>
 
@@ -983,10 +998,59 @@ export const AISettings: Component = () => {
                   </div>
                   <Toggle
                     checked={form.patrolAutoFix}
-                    onChange={(event) => setForm('patrolAutoFix', event.currentTarget.checked)}
-                    disabled={saving()}
+                    onChange={(event) => {
+                      // Can only enable if acknowledged
+                      if (event.currentTarget.checked && !autoFixAcknowledged()) {
+                        return; // Prevent enabling without acknowledgement
+                      }
+                      setForm('patrolAutoFix', event.currentTarget.checked);
+                    }}
+                    disabled={saving() || (!form.patrolAutoFix && !autoFixAcknowledged())}
                   />
                 </div>
+
+                {/* Auto-Fix Warning & Acknowledgement */}
+                <Show when={!form.patrolAutoFix}>
+                  <div class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    <div class="flex gap-2">
+                      <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <div class="text-xs text-amber-800 dark:text-amber-200">
+                        <p class="font-semibold mb-1">Before enabling Auto-Fix Mode:</p>
+                        <ul class="list-disc pl-4 space-y-0.5 mb-2">
+                          <li>AI will execute commands <strong>without asking for approval</strong></li>
+                          <li>Actions may be <strong>irreversible</strong> (e.g., restarting services, clearing caches)</li>
+                          <li>Recommended to test in non-production environments first</li>
+                        </ul>
+                        <label class="flex items-center gap-2 cursor-pointer mt-2 pt-2 border-t border-amber-200 dark:border-amber-700">
+                          <input
+                            type="checkbox"
+                            checked={autoFixAcknowledged()}
+                            onChange={(e) => setAutoFixAcknowledged(e.currentTarget.checked)}
+                            class="w-4 h-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                          />
+                          <span class="font-medium">I understand the risks and want to enable Auto-Fix</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </Show>
+
+                {/* Warning when enabled */}
+                <Show when={form.patrolAutoFix}>
+                  <div class="mt-3 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+                    <div class="flex gap-2">
+                      <svg class="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <div class="text-xs text-red-800 dark:text-red-200">
+                        <p class="font-semibold">⚠️ Auto-Fix is ENABLED</p>
+                        <p class="mt-1">AI patrol will automatically attempt to fix issues without asking for approval. Review findings regularly.</p>
+                      </div>
+                    </div>
+                  </div>
+                </Show>
               </div>
             </div>
 
