@@ -66,6 +66,10 @@ export const AISettings: Component = () => {
   // Accordion state for provider configuration sections
   const [expandedProviders, setExpandedProviders] = createSignal<Set<AIProvider>>(new Set(['anthropic']));
 
+  // Per-provider test state
+  const [testingProvider, setTestingProvider] = createSignal<string | null>(null);
+  const [providerTestResult, setProviderTestResult] = createSignal<{ provider: string; success: boolean; message: string } | null>(null);
+
   const [form, setForm] = createStore({
     enabled: false,
     provider: 'anthropic' as AIProvider, // Legacy - kept for compatibility
@@ -316,6 +320,27 @@ export const AISettings: Component = () => {
     }
   };
 
+  const handleTestProvider = async (provider: string) => {
+    setTestingProvider(provider);
+    setProviderTestResult(null);
+    try {
+      const result = await AIAPI.testProvider(provider);
+      setProviderTestResult(result);
+      if (result.success) {
+        notificationStore.success(`${provider}: ${result.message}`);
+      } else {
+        notificationStore.error(`${provider}: ${result.message}`);
+      }
+    } catch (error) {
+      logger.error(`[AISettings] Test ${provider} failed:`, error);
+      const message = error instanceof Error ? error.message : 'Connection test failed';
+      setProviderTestResult({ provider, success: false, message });
+      notificationStore.error(`${provider}: ${message}`);
+    } finally {
+      setTestingProvider(null);
+    }
+  };
+
   // OAuth handlers removed - OAuth is currently unavailable from Anthropic for third-party apps
   // When OAuth becomes available, handlers can be added back to the Anthropic accordion section
 
@@ -550,16 +575,35 @@ export const AISettings: Component = () => {
                     </svg>
                   </button>
                   <Show when={expandedProviders().has('anthropic')}>
-                    <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700">
+                    <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
                       <input
                         type="password"
                         value={form.anthropicApiKey}
                         onInput={(e) => setForm('anthropicApiKey', e.currentTarget.value)}
-                        placeholder={settings()?.anthropic_configured ? '••••••••••• (configured)' : 'sk-ant-... (from console.anthropic.com)'}
+                        placeholder={settings()?.anthropic_configured ? '••••••••••• (configured)' : 'sk-ant-...'}
                         class={controlClass()}
                         disabled={saving()}
                       />
-                      <p class="text-xs text-gray-500 mt-1">Get your API key from <a href="https://console.anthropic.com" target="_blank" class="text-purple-600 hover:underline">console.anthropic.com</a></p>
+                      <div class="flex items-center justify-between">
+                        <p class="text-xs text-gray-500">
+                          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
+                        </p>
+                        <Show when={settings()?.anthropic_configured}>
+                          <button
+                            type="button"
+                            onClick={() => handleTestProvider('anthropic')}
+                            disabled={testingProvider() === 'anthropic'}
+                            class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                          >
+                            {testingProvider() === 'anthropic' ? 'Testing...' : 'Test'}
+                          </button>
+                        </Show>
+                      </div>
+                      <Show when={providerTestResult()?.provider === 'anthropic'}>
+                        <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
+                          {providerTestResult()?.message}
+                        </p>
+                      </Show>
                     </div>
                   </Show>
                 </div>
@@ -593,7 +637,7 @@ export const AISettings: Component = () => {
                         type="password"
                         value={form.openaiApiKey}
                         onInput={(e) => setForm('openaiApiKey', e.currentTarget.value)}
-                        placeholder={settings()?.openai_configured ? '••••••••••• (configured)' : 'sk-... (from platform.openai.com)'}
+                        placeholder={settings()?.openai_configured ? '••••••••••• (configured)' : 'sk-...'}
                         class={controlClass()}
                         disabled={saving()}
                       />
@@ -605,7 +649,26 @@ export const AISettings: Component = () => {
                         class={controlClass()}
                         disabled={saving()}
                       />
-                      <p class="text-xs text-gray-500">Get your API key from <a href="https://platform.openai.com" target="_blank" class="text-purple-600 hover:underline">platform.openai.com</a></p>
+                      <div class="flex items-center justify-between">
+                        <p class="text-xs text-gray-500">
+                          <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
+                        </p>
+                        <Show when={settings()?.openai_configured}>
+                          <button
+                            type="button"
+                            onClick={() => handleTestProvider('openai')}
+                            disabled={testingProvider() === 'openai'}
+                            class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                          >
+                            {testingProvider() === 'openai' ? 'Testing...' : 'Test'}
+                          </button>
+                        </Show>
+                      </div>
+                      <Show when={providerTestResult()?.provider === 'openai'}>
+                        <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
+                          {providerTestResult()?.message}
+                        </p>
+                      </Show>
                     </div>
                   </Show>
                 </div>
@@ -634,16 +697,35 @@ export const AISettings: Component = () => {
                     </svg>
                   </button>
                   <Show when={expandedProviders().has('deepseek')}>
-                    <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700">
+                    <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
                       <input
                         type="password"
                         value={form.deepseekApiKey}
                         onInput={(e) => setForm('deepseekApiKey', e.currentTarget.value)}
-                        placeholder={settings()?.deepseek_configured ? '••••••••••• (configured)' : 'sk-... (from platform.deepseek.com)'}
+                        placeholder={settings()?.deepseek_configured ? '••••••••••• (configured)' : 'sk-...'}
                         class={controlClass()}
                         disabled={saving()}
                       />
-                      <p class="text-xs text-gray-500 mt-1">Get your API key from <a href="https://platform.deepseek.com" target="_blank" class="text-purple-600 hover:underline">platform.deepseek.com</a></p>
+                      <div class="flex items-center justify-between">
+                        <p class="text-xs text-gray-500">
+                          <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
+                        </p>
+                        <Show when={settings()?.deepseek_configured}>
+                          <button
+                            type="button"
+                            onClick={() => handleTestProvider('deepseek')}
+                            disabled={testingProvider() === 'deepseek'}
+                            class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                          >
+                            {testingProvider() === 'deepseek' ? 'Testing...' : 'Test'}
+                          </button>
+                        </Show>
+                      </div>
+                      <Show when={providerTestResult()?.provider === 'deepseek'}>
+                        <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
+                          {providerTestResult()?.message}
+                        </p>
+                      </Show>
                     </div>
                   </Show>
                 </div>
@@ -672,7 +754,7 @@ export const AISettings: Component = () => {
                     </svg>
                   </button>
                   <Show when={expandedProviders().has('ollama')}>
-                    <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700">
+                    <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
                       <input
                         type="url"
                         value={form.ollamaBaseUrl}
@@ -681,7 +763,27 @@ export const AISettings: Component = () => {
                         class={controlClass()}
                         disabled={saving()}
                       />
-                      <p class="text-xs text-gray-500 mt-1">URL where your Ollama server is running. No API key needed - it's free!</p>
+                      <div class="flex items-center justify-between">
+                        <p class="text-xs text-gray-500">
+                          <a href="https://ollama.ai" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Learn about Ollama →</a>
+                          <span class="text-gray-400"> · Free & local</span>
+                        </p>
+                        <Show when={settings()?.ollama_configured}>
+                          <button
+                            type="button"
+                            onClick={() => handleTestProvider('ollama')}
+                            disabled={testingProvider() === 'ollama'}
+                            class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                          >
+                            {testingProvider() === 'ollama' ? 'Testing...' : 'Test'}
+                          </button>
+                        </Show>
+                      </div>
+                      <Show when={providerTestResult()?.provider === 'ollama'}>
+                        <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
+                          {providerTestResult()?.message}
+                        </p>
+                      </Show>
                     </div>
                   </Show>
                 </div>

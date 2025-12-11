@@ -32,6 +32,13 @@ export class AIAPI {
     }) as Promise<AITestResult>;
   }
 
+  // Test a specific provider connection
+  static async testProvider(provider: string): Promise<{ success: boolean; message: string; provider: string }> {
+    return apiFetchJSON(`${this.baseUrl}/ai/test/${provider}`, {
+      method: 'POST',
+    }) as Promise<{ success: boolean; message: string; provider: string }>;
+  }
+
   // Get available models from the AI provider
   static async getModels(): Promise<{ models: { id: string; name: string; description?: string }[]; error?: string }> {
     return apiFetchJSON(`${this.baseUrl}/ai/models`) as Promise<{ models: { id: string; name: string; description?: string }[]; error?: string }>;
