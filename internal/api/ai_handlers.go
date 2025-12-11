@@ -118,7 +118,8 @@ type AISettingsResponse struct {
 	AuthMethod     string `json:"auth_method"`     // "api_key" or "oauth"
 	OAuthConnected bool   `json:"oauth_connected"` // true if OAuth tokens are configured
 	// Patrol settings for token efficiency
-	PatrolSchedulePreset   string              `json:"patrol_schedule_preset"`   // "15min", "1hr", "6hr", "12hr", "daily", "disabled"
+	PatrolSchedulePreset   string              `json:"patrol_schedule_preset"`   // DEPRECATED: legacy preset
+	PatrolIntervalMinutes  int                 `json:"patrol_interval_minutes"`  // Patrol interval in minutes (0 = disabled)
 	AlertTriggeredAnalysis bool                `json:"alert_triggered_analysis"` // true if AI analyzes when alerts fire
 	AvailableModels        []config.ModelInfo  `json:"available_models"`         // List of models for current provider
 	// Multi-provider credentials - shows which providers are configured
@@ -144,7 +145,8 @@ type AISettingsUpdateRequest struct {
 	CustomContext  *string `json:"custom_context,omitempty"` // user-provided infrastructure context
 	AuthMethod     *string `json:"auth_method,omitempty"`    // "api_key" or "oauth"
 	// Patrol settings for token efficiency
-	PatrolSchedulePreset   *string `json:"patrol_schedule_preset,omitempty"`   // "15min", "1hr", "6hr", "12hr", "daily", "disabled"
+	PatrolSchedulePreset   *string `json:"patrol_schedule_preset,omitempty"`   // DEPRECATED: use patrol_interval_minutes
+	PatrolIntervalMinutes  *int    `json:"patrol_interval_minutes,omitempty"`  // Custom interval in minutes (0 = disabled, minimum 10)
 	AlertTriggeredAnalysis *bool   `json:"alert_triggered_analysis,omitempty"` // true if AI analyzes when alerts fire
 	// Multi-provider credentials
 	AnthropicAPIKey *string `json:"anthropic_api_key,omitempty"` // Set Anthropic API key
@@ -198,6 +200,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		OAuthConnected: settings.OAuthAccessToken != "",
 		// Patrol settings
 		PatrolSchedulePreset:   settings.PatrolSchedulePreset,
+		PatrolIntervalMinutes:  settings.PatrolIntervalMinutes,
 		AlertTriggeredAnalysis: settings.AlertTriggeredAnalysis,
 		AvailableModels:        nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
@@ -321,8 +324,25 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.Enabled = *req.Enabled
 	}
 
-	// Handle patrol schedule preset
-	if req.PatrolSchedulePreset != nil {
+	// Handle patrol interval - prefer custom minutes over preset
+	if req.PatrolIntervalMinutes != nil {
+		minutes := *req.PatrolIntervalMinutes
+		if minutes < 0 {
+			http.Error(w, "patrol_interval_minutes cannot be negative", http.StatusBadRequest)
+			return
+		}
+		if minutes > 0 && minutes < 10 {
+			http.Error(w, "patrol_interval_minutes must be at least 10 minutes (or 0 to disable)", http.StatusBadRequest)
+			return
+		}
+		if minutes > 10080 { // 7 days max
+			http.Error(w, "patrol_interval_minutes cannot exceed 10080 (7 days)", http.StatusBadRequest)
+			return
+		}
+		settings.PatrolIntervalMinutes = minutes
+		settings.PatrolSchedulePreset = "" // Clear preset when using custom minutes
+	} else if req.PatrolSchedulePreset != nil {
+		// Legacy preset support
 		preset := strings.ToLower(strings.TrimSpace(*req.PatrolSchedulePreset))
 		switch preset {
 		case "15min", "1hr", "6hr", "12hr", "daily", "disabled":
@@ -414,6 +434,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		AuthMethod:             authMethod,
 		OAuthConnected:         settings.OAuthAccessToken != "",
 		PatrolSchedulePreset:   settings.PatrolSchedulePreset,
+		PatrolIntervalMinutes:  settings.PatrolIntervalMinutes,
 		AlertTriggeredAnalysis: settings.AlertTriggeredAnalysis,
 		AvailableModels:        nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
