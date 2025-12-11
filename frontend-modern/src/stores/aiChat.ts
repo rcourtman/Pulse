@@ -5,6 +5,7 @@ interface AIChatContext {
   targetId?: string;
   context?: Record<string, unknown>;
   initialPrompt?: string;
+  findingId?: string; // If opened from AI Insights "Get Help", the finding ID to resolve on success
 }
 
 // A single context item that can be accumulated
@@ -170,16 +171,16 @@ export const aiChatStore = {
   setTargetContext(targetType: string, targetId: string, additionalContext?: Record<string, unknown>) {
     // Use addContextItem instead of replacing
     const name = (additionalContext?.guestName as string) ||
-                 (additionalContext?.name as string) ||
-                 targetId;
+      (additionalContext?.name as string) ||
+      targetId;
     this.addContextItem(targetType, targetId, name, additionalContext || {});
   },
 
   // Open for a specific target - opens the panel and adds to context
   openForTarget(targetType: string, targetId: string, additionalContext?: Record<string, unknown>) {
     const name = (additionalContext?.guestName as string) ||
-                 (additionalContext?.name as string) ||
-                 targetId;
+      (additionalContext?.name as string) ||
+      targetId;
     this.addContextItem(targetType, targetId, name, additionalContext || {});
     setIsAIChatOpen(true);
   },

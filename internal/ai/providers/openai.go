@@ -386,3 +386,58 @@ func (c *OpenAIClient) TestConnection(ctx context.Context) error {
 	})
 	return err
 }
+
+// ListModels fetches available models from the OpenAI API
+func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	// Determine the models endpoint based on the base URL
+	modelsURL := "https://api.openai.com/v1/models"
+	if c.isDeepSeek() {
+		modelsURL = "https://api.deepseek.com/models"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", modelsURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Data []struct {
+			ID      string `json:"id"`
+			Object  string `json:"object"`
+			Created int64  `json:"created"`
+			OwnedBy string `json:"owned_by"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	models := make([]ModelInfo, 0, len(result.Data))
+	for _, m := range result.Data {
+		// Filter to only chat-capable models
+		if strings.Contains(m.ID, "gpt") || strings.Contains(m.ID, "o1") ||
+			strings.Contains(m.ID, "o3") || strings.Contains(m.ID, "deepseek") {
+			models = append(models, ModelInfo{
+				ID:        m.ID,
+				Name:      m.ID, // OpenAI uses ID as name
+				CreatedAt: m.Created,
+			})
+		}
+	}
+
+	return models, nil
+}

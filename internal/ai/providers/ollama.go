@@ -171,3 +171,45 @@ func (c *OllamaClient) TestConnection(ctx context.Context) error {
 
 	return nil
 }
+
+// ListModels fetches available models from the local Ollama instance
+func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	url := c.baseURL + "/api/tags"
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Models []struct {
+			Name       string `json:"name"`
+			ModifiedAt string `json:"modified_at"`
+			Size       int64  `json:"size"`
+		} `json:"models"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	models := make([]ModelInfo, 0, len(result.Models))
+	for _, m := range result.Models {
+		models = append(models, ModelInfo{
+			ID:   m.Name,
+			Name: m.Name,
+		})
+	}
+
+	return models, nil
+}

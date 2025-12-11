@@ -2171,12 +2171,12 @@ function OverviewTab(props: {
       }
 
       setPatrolStatus(status);
-      setAiFindings(findings);
-      setPatrolRunHistory(runHistory);
-      setSuppressionRules(rules);
+      setAiFindings(findings || []);
+      setPatrolRunHistory(runHistory || []);
+      setSuppressionRules(rules || []);
 
       // Auto-expand history if most recent run found issues
-      if (runHistory.length > 0 && runHistory[0].status !== 'healthy') {
+      if (runHistory && runHistory.length > 0 && runHistory[0].status !== 'healthy') {
         setShowRunHistory(true);
       }
     } catch (e) {
@@ -2624,7 +2624,8 @@ function OverviewTab(props: {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   aiChatStore.openWithPrompt(
-                                    `Help me fix this issue on ${finding.resource_name}: ${finding.title}\n\nDescription: ${finding.description}\n\nSuggested fix: ${finding.recommendation || 'None provided'}\n\nPlease guide me through applying this fix.`
+                                    `Help me fix this issue on ${finding.resource_name}: ${finding.title}\n\nDescription: ${finding.description}\n\nSuggested fix: ${finding.recommendation || 'None provided'}\n\nPlease guide me through applying this fix. When you've successfully fixed the issue, use the resolve_finding tool to mark it as resolved.`,
+                                    { findingId: finding.id }
                                   );
                                 }}
                               >

@@ -8,36 +8,84 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
-import { PROVIDER_NAMES, PROVIDER_DESCRIPTIONS, DEFAULT_MODELS } from '@/types/ai';
+import { DEFAULT_MODELS } from '@/types/ai';
 
-const PROVIDERS: AIProvider[] = ['anthropic', 'openai', 'ollama', 'deepseek'];
+// Providers are now configured via accordion sections, not a single-provider selector
+
+// Provider display names for optgroup labels
+const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
+  anthropic: 'Anthropic (Claude)',
+  openai: 'OpenAI (GPT)',
+  deepseek: 'DeepSeek',
+  ollama: 'Ollama (Local)',
+};
+
+// Parse provider from model ID (format: "provider:model-name")
+function getProviderFromModelId(modelId: string): string {
+  const colonIndex = modelId.indexOf(':');
+  if (colonIndex > 0) {
+    return modelId.substring(0, colonIndex);
+  }
+  // Default detection for models without prefix
+  if (modelId.includes('claude') || modelId.includes('opus') || modelId.includes('sonnet') || modelId.includes('haiku')) {
+    return 'anthropic';
+  }
+  if (modelId.includes('gpt') || modelId.includes('o1') || modelId.includes('o3')) {
+    return 'openai';
+  }
+  if (modelId.includes('deepseek')) {
+    return 'deepseek';
+  }
+  return 'ollama';
+}
+
+// Group models by provider for optgroup rendering
+function groupModelsByProvider(models: { id: string; name: string; description?: string }[]): Map<string, { id: string; name: string; description?: string }[]> {
+  const grouped = new Map<string, { id: string; name: string; description?: string }[]>();
+
+  for (const model of models) {
+    const provider = getProviderFromModelId(model.id);
+    const existing = grouped.get(provider) || [];
+    existing.push(model);
+    grouped.set(provider, existing);
+  }
+
+  return grouped;
+}
 
 export const AISettings: Component = () => {
   const [settings, setSettings] = createSignal<AISettingsType | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
-  const [startingOAuth, setStartingOAuth] = createSignal(false);
-  const [disconnectingOAuth, setDisconnectingOAuth] = createSignal(false);
-  const [exchangingCode, setExchangingCode] = createSignal(false);
 
-  // OAuth flow state
-  const [oauthAuthUrl, setOAuthAuthUrl] = createSignal<string | null>(null);
-  const [oauthState, setOAuthState] = createSignal<string | null>(null);
-  const [oauthCode, setOAuthCode] = createSignal('');
+  // Dynamic model list from provider API
+  const [availableModels, setAvailableModels] = createSignal<{ id: string; name: string; description?: string }[]>([]);
+  const [modelsLoading, setModelsLoading] = createSignal(false);
+
+  // Accordion state for provider configuration sections
+  const [expandedProviders, setExpandedProviders] = createSignal<Set<AIProvider>>(new Set(['anthropic']));
 
   const [form, setForm] = createStore({
     enabled: false,
-    provider: 'anthropic' as AIProvider,
-    apiKey: '',
+    provider: 'anthropic' as AIProvider, // Legacy - kept for compatibility
+    apiKey: '', // Legacy - kept for compatibility
     model: '',
-    baseUrl: '',
+    chatModel: '', // Empty means use default model
+    patrolModel: '', // Empty means use default model
+    baseUrl: '', // Legacy - kept for compatibility
     clearApiKey: false,
     autonomousMode: false,
     authMethod: 'api_key' as AuthMethod,
     patrolSchedulePreset: '6hr',
     alertTriggeredAnalysis: true,
     patrolAutoFix: false,
+    // Multi-provider credentials
+    anthropicApiKey: '',
+    openaiApiKey: '',
+    deepseekApiKey: '',
+    ollamaBaseUrl: 'http://localhost:11434',
+    openaiBaseUrl: '',
   });
 
   const resetForm = (data: AISettingsType | null) => {
@@ -47,6 +95,8 @@ export const AISettings: Component = () => {
         provider: 'anthropic',
         apiKey: '',
         model: DEFAULT_MODELS.anthropic,
+        chatModel: '',
+        patrolModel: '',
         baseUrl: '',
         clearApiKey: false,
         autonomousMode: false,
@@ -54,6 +104,12 @@ export const AISettings: Component = () => {
         patrolSchedulePreset: '6hr',
         alertTriggeredAnalysis: true,
         patrolAutoFix: false,
+        // Multi-provider - empty by default
+        anthropicApiKey: '',
+        openaiApiKey: '',
+        deepseekApiKey: '',
+        ollamaBaseUrl: 'http://localhost:11434',
+        openaiBaseUrl: '',
       });
       return;
     }
@@ -63,6 +119,8 @@ export const AISettings: Component = () => {
       provider: data.provider,
       apiKey: '',
       model: data.model || DEFAULT_MODELS[data.provider],
+      chatModel: data.chat_model || '',
+      patrolModel: data.patrol_model || '',
       baseUrl: data.base_url || '',
       clearApiKey: false,
       autonomousMode: data.autonomous_mode || false,
@@ -70,7 +128,39 @@ export const AISettings: Component = () => {
       patrolSchedulePreset: data.patrol_schedule_preset || '6hr',
       alertTriggeredAnalysis: data.alert_triggered_analysis !== false, // default to true
       patrolAutoFix: data.patrol_auto_fix || false, // default to false (observe only)
+      // Multi-provider - never load actual keys from server (security), just track if configured
+      anthropicApiKey: '', // Always empty - we only show if configured
+      openaiApiKey: '',
+      deepseekApiKey: '',
+      ollamaBaseUrl: data.ollama_base_url || 'http://localhost:11434',
+      openaiBaseUrl: data.openai_base_url || '',
     });
+
+    // Auto-expand providers that are configured
+    const configured = new Set<AIProvider>();
+    if (data.anthropic_configured) configured.add('anthropic');
+    if (data.openai_configured) configured.add('openai');
+    if (data.deepseek_configured) configured.add('deepseek');
+    if (data.ollama_configured) configured.add('ollama');
+    // Default to anthropic if nothing is configured
+    if (configured.size === 0) configured.add('anthropic');
+    setExpandedProviders(configured);
+  };
+
+  // Load available models from the provider's API
+  const loadModels = async () => {
+    setModelsLoading(true);
+    try {
+      const result = await AIAPI.getModels();
+      if (result.models && result.models.length > 0) {
+        setAvailableModels(result.models);
+      }
+    } catch (e) {
+      // Silently fail - user can still type model names manually
+      logger.debug('[AISettings] Failed to load models from API:', e);
+    } finally {
+      setModelsLoading(false);
+    }
   };
 
   const loadSettings = async () => {
@@ -79,6 +169,10 @@ export const AISettings: Component = () => {
       const data = await AIAPI.getSettings();
       setSettings(data);
       resetForm(data);
+      // Load available models after settings (needs API key to be configured)
+      if (data.configured) {
+        loadModels();
+      }
     } catch (error) {
       logger.error('[AISettings] Failed to load settings:', error);
       notificationStore.error('Failed to load AI settings');
@@ -116,14 +210,8 @@ export const AISettings: Component = () => {
     }
   });
 
-  const handleProviderChange = (provider: AIProvider) => {
-    setForm('provider', provider);
-    // Update model to default for new provider if current model doesn't look like it belongs
-    const currentModel = form.model;
-    if (!currentModel || currentModel === DEFAULT_MODELS[settings()?.provider || 'anthropic']) {
-      setForm('model', DEFAULT_MODELS[provider]);
-    }
-  };
+  // Note: handleProviderChange is no longer used as we now use multi-provider accordions
+  // The provider is implicitly determined by the selected model (e.g., "anthropic:claude-opus")
 
   const handleSave = async (event?: Event) => {
     event?.preventDefault();
@@ -170,6 +258,33 @@ export const AISettings: Component = () => {
         payload.patrol_auto_fix = form.patrolAutoFix;
       }
 
+      // Include model overrides if changed
+      if (form.chatModel !== (settings()?.chat_model || '')) {
+        payload.chat_model = form.chatModel;
+      }
+
+      if (form.patrolModel !== (settings()?.patrol_model || '')) {
+        payload.patrol_model = form.patrolModel;
+      }
+
+      // Include multi-provider credentials if set (non-empty)
+      if (form.anthropicApiKey.trim()) {
+        payload.anthropic_api_key = form.anthropicApiKey.trim();
+      }
+      if (form.openaiApiKey.trim()) {
+        payload.openai_api_key = form.openaiApiKey.trim();
+      }
+      if (form.deepseekApiKey.trim()) {
+        payload.deepseek_api_key = form.deepseekApiKey.trim();
+      }
+      // Always include Ollama URL changes
+      if (form.ollamaBaseUrl !== (settings()?.ollama_base_url || 'http://localhost:11434')) {
+        payload.ollama_base_url = form.ollamaBaseUrl.trim();
+      }
+      if (form.openaiBaseUrl !== (settings()?.openai_base_url || '')) {
+        payload.openai_base_url = form.openaiBaseUrl.trim();
+      }
+
       const updated = await AIAPI.updateSettings(payload);
       setSettings(updated);
       resetForm(updated);
@@ -201,82 +316,10 @@ export const AISettings: Component = () => {
     }
   };
 
-  const handleStartOAuth = async () => {
-    setStartingOAuth(true);
-    try {
-      const result = await AIAPI.startOAuth();
-      // Store the auth URL and state for the user to visit manually
-      setOAuthAuthUrl(result.auth_url);
-      setOAuthState(result.state);
-      setOAuthCode('');
-      notificationStore.info('Click the link below to sign in, then paste the code back here', 5000);
-    } catch (error) {
-      logger.error('[AISettings] OAuth start failed:', error);
-      const message = error instanceof Error ? error.message : 'Failed to start OAuth flow';
-      notificationStore.error(message);
-    } finally {
-      setStartingOAuth(false);
-    }
-  };
+  // OAuth handlers removed - OAuth is currently unavailable from Anthropic for third-party apps
+  // When OAuth becomes available, handlers can be added back to the Anthropic accordion section
 
-  const handleExchangeCode = async () => {
-    const code = oauthCode().trim();
-    const state = oauthState();
-
-    if (!code || !state) {
-      notificationStore.error('Please enter the authorization code');
-      return;
-    }
-
-    setExchangingCode(true);
-    try {
-      await AIAPI.exchangeOAuthCode(code, state);
-      notificationStore.success('Successfully connected to Claude with your subscription!');
-      // Clear OAuth flow state
-      setOAuthAuthUrl(null);
-      setOAuthState(null);
-      setOAuthCode('');
-      // Reload settings
-      await loadSettings();
-    } catch (error) {
-      logger.error('[AISettings] OAuth code exchange failed:', error);
-      const message = error instanceof Error ? error.message : 'Failed to exchange authorization code';
-      notificationStore.error(message);
-    } finally {
-      setExchangingCode(false);
-    }
-  };
-
-  const handleCancelOAuth = () => {
-    setOAuthAuthUrl(null);
-    setOAuthState(null);
-    setOAuthCode('');
-  };
-
-  const handleDisconnectOAuth = async () => {
-    if (!confirm('Are you sure you want to disconnect your Claude subscription? You will need to provide an API key to continue using AI features.')) {
-      return;
-    }
-
-    setDisconnectingOAuth(true);
-    try {
-      await AIAPI.disconnectOAuth();
-      notificationStore.success('Claude subscription disconnected');
-      // Reload settings
-      await loadSettings();
-    } catch (error) {
-      logger.error('[AISettings] OAuth disconnect failed:', error);
-      const message = error instanceof Error ? error.message : 'Failed to disconnect OAuth';
-      notificationStore.error(message);
-    } finally {
-      setDisconnectingOAuth(false);
-    }
-  };
-
-  const needsApiKey = () => form.provider !== 'ollama' && (form.provider !== 'anthropic' || form.authMethod !== 'oauth');
-  const showBaseUrl = () => form.provider === 'ollama' || form.provider === 'openai' || form.provider === 'deepseek';
-  const isAnthropicWithOAuth = () => form.provider === 'anthropic' && form.authMethod === 'oauth';
-  const showAuthMethodSelector = () => form.provider === 'anthropic';
+  // Legacy helper functions removed - multi-provider accordions handle all provider-specific UI
 
   return (
     <Card
@@ -342,289 +385,308 @@ export const AISettings: Component = () => {
 
         <Show when={!loading()}>
           <div class="space-y-4">
-            {/* Provider Selection */}
+            {/* Model Selection */}
             <div class={formField}>
-              <label class={labelClass()}>AI Provider</label>
-              <div class="grid grid-cols-3 gap-3">
-                <For each={PROVIDERS}>
-                  {(provider) => (
-                    <button
-                      type="button"
-                      class={`p-3 rounded-lg border-2 text-left transition-all ${form.provider === provider
-                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                        }`}
-                      onClick={() => handleProviderChange(provider)}
-                      disabled={saving()}
-                    >
-                      <div class="font-medium text-sm text-gray-900 dark:text-gray-100">
-                        {PROVIDER_NAMES[provider]}
-                      </div>
-                      <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {PROVIDER_DESCRIPTIONS[provider]}
-                      </div>
-                    </button>
-                  )}
-                </For>
-              </div>
-            </div>
-
-            {/* Authentication Method - only for Anthropic */}
-            <Show when={showAuthMethodSelector()}>
-              <div class={formField}>
-                <label class={labelClass()}>Authentication Method</label>
-                <div class="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    class={`p-3 rounded-lg border-2 text-left transition-all ${form.authMethod === 'api_key'
-                      ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                      }`}
-                    onClick={() => setForm('authMethod', 'api_key')}
-                    disabled={saving()}
-                  >
-                    <div class="font-medium text-sm text-gray-900 dark:text-gray-100">
-                      API Key
-                    </div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      Pay per token usage
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    class={`p-3 rounded-lg border-2 text-left transition-all opacity-60 cursor-not-allowed ${form.authMethod === 'oauth'
-                      ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
-                      : 'border-gray-200 dark:border-gray-700'
-                      }`}
-                    disabled={true}
-                    title="OAuth with Claude Pro/Max subscription is not yet available. Anthropic currently restricts third-party OAuth access."
-                  >
-                    <div class="font-medium text-sm text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
-                      Claude Pro/Max
-                      <span class="inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded">
-                        Unavailable
-                      </span>
-                    </div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      Use your subscription
-                    </div>
-                  </button>
-                </div>
-                <p class={formHelpText}>
-                  {form.authMethod === 'api_key'
-                    ? 'Pay-per-use API billing from console.anthropic.com'
-                    : 'Use your Claude Pro ($20/mo) or Max ($100+/mo) subscription'}
-                </p>
-              </div>
-            </Show>
-
-            {/* OAuth Login/Status - shown when Anthropic + OAuth selected */}
-            <Show when={isAnthropicWithOAuth()}>
-              <div class={`${formField} p-4 rounded-lg border ${settings()?.oauth_connected
-                ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                : oauthAuthUrl()
-                  ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
-                  : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-                }`}>
-                {/* Connected state */}
-                <Show when={settings()?.oauth_connected}>
-                  <div class="flex items-center justify-between">
-                    <div>
-                      <div class="flex items-center gap-2 text-sm font-medium text-green-800 dark:text-green-200">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                        </svg>
-                        Connected to Claude with your subscription
-                      </div>
-                      <p class="text-xs text-green-700 dark:text-green-300 mt-1">
-                        AI requests use your Claude Pro/Max subscription limits instead of API billing.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      class="px-3 py-1.5 text-xs border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 rounded hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
-                      onClick={handleDisconnectOAuth}
-                      disabled={disconnectingOAuth() || saving()}
-                    >
-                      {disconnectingOAuth() ? 'Disconnecting...' : 'Disconnect'}
-                    </button>
-                  </div>
-                </Show>
-
-                {/* OAuth flow in progress - show URL and code input */}
-                <Show when={!settings()?.oauth_connected && oauthAuthUrl()}>
-                  <div class="space-y-4">
-                    <div class="text-sm text-amber-800 dark:text-amber-200">
-                      <strong>Step 1:</strong> Click the link below to sign in with your Anthropic account:
-                    </div>
-                    <a
-                      href={oauthAuthUrl()!}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="block p-2 bg-white dark:bg-gray-800 rounded border border-amber-300 dark:border-amber-700 text-xs text-blue-600 dark:text-blue-400 hover:underline break-all"
-                    >
-                      {oauthAuthUrl()}
-                    </a>
-                    <div class="text-sm text-amber-800 dark:text-amber-200">
-                      <strong>Step 2:</strong> After signing in, you'll see a code. Paste it here:
-                    </div>
-                    <div class="flex gap-2">
-                      <input
-                        type="text"
-                        value={oauthCode()}
-                        onInput={(e) => setOAuthCode(e.currentTarget.value)}
-                        placeholder="Paste authorization code here..."
-                        class="flex-1 px-3 py-2 text-sm border border-amber-300 dark:border-amber-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-                      />
-                      <button
-                        type="button"
-                        class="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm rounded-md hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        onClick={handleExchangeCode}
-                        disabled={exchangingCode() || !oauthCode().trim()}
-                      >
-                        {exchangingCode() ? 'Connecting...' : 'Connect'}
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      class="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                      onClick={handleCancelOAuth}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </Show>
-
-                {/* Initial state - show sign in button */}
-                <Show when={!settings()?.oauth_connected && !oauthAuthUrl()}>
-                  <div class="text-center">
-                    <div class="text-sm text-blue-800 dark:text-blue-200 mb-3">
-                      <strong>Use your Claude subscription</strong>
-                      <p class="text-xs mt-1 text-blue-700 dark:text-blue-300">
-                        Sign in with your Anthropic account to use your Pro/Max subscription for AI features instead of API billing.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      class="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-md hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
-                      onClick={handleStartOAuth}
-                      disabled={startingOAuth() || saving()}
-                    >
-                      <Show when={startingOAuth()}>
-                        <span class="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      </Show>
-                      <Show when={!startingOAuth()}>
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                        </svg>
-                      </Show>
-                      {startingOAuth() ? 'Starting...' : 'Sign in with Claude'}
-                    </button>
-                  </div>
-                </Show>
-              </div>
-            </Show>
-
-            {/* API Key - not shown for Ollama or when using OAuth */}
-            <Show when={needsApiKey()}>
-              <div class={formField}>
-                <div class="flex items-center justify-between">
-                  <label class={labelClass('mb-0')}>API Key</label>
-                  <Show when={settings()?.api_key_set}>
-                    <button
-                      type="button"
-                      class="text-xs text-purple-600 hover:underline dark:text-purple-300"
-                      onClick={() => {
-                        if (!saving()) {
-                          setForm('apiKey', '');
-                          setForm('clearApiKey', true);
-                          notificationStore.info('API key will be cleared on save', 2500);
-                        }
-                      }}
-                      disabled={saving()}
-                    >
-                      Clear stored key
-                    </button>
-                  </Show>
-                </div>
+              <label class={labelClass()}>
+                Default Model
+                {modelsLoading() && <span class="ml-2 text-xs text-gray-500">(loading models...)</span>}
+              </label>
+              <Show when={availableModels().length > 0} fallback={
                 <input
-                  type="password"
-                  value={form.apiKey}
-                  onInput={(event) => {
-                    setForm('apiKey', event.currentTarget.value);
-                    if (event.currentTarget.value.trim() !== '') {
-                      setForm('clearApiKey', false);
-                    }
-                  }}
-                  placeholder={
-                    settings()?.api_key_set
-                      ? '•••••••• (leave blank to keep existing)'
-                      : `Enter ${PROVIDER_NAMES[form.provider]} API key`
-                  }
+                  type="text"
+                  value={form.model}
+                  onInput={(e) => setForm('model', e.currentTarget.value)}
+                  placeholder={DEFAULT_MODELS[form.provider]}
                   class={controlClass()}
                   disabled={saving()}
                 />
-                <p class={formHelpText}>
-                  {form.provider === 'anthropic'
-                    ? 'Get your API key from console.anthropic.com'
-                    : form.provider === 'deepseek'
-                      ? 'Get your API key from platform.deepseek.com'
-                      : 'Get your API key from platform.openai.com'}
-                </p>
-              </div>
-            </Show>
-
-            {/* Model */}
-            <div class={formField}>
-              <label class={labelClass()}>Model</label>
-              <input
-                type="text"
-                value={form.model}
-                onInput={(event) => setForm('model', event.currentTarget.value)}
-                placeholder={DEFAULT_MODELS[form.provider]}
-                class={controlClass()}
-                disabled={saving()}
-              />
+              }>
+                <select
+                  value={form.model}
+                  onChange={(e) => setForm('model', e.currentTarget.value)}
+                  class={controlClass()}
+                  disabled={saving()}
+                >
+                  <Show when={!form.model || !availableModels().some(m => m.id === form.model)}>
+                    <option value={form.model}>{form.model || 'Select a model...'}</option>
+                  </Show>
+                  <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
+                    {([provider, models]) => (
+                      <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
+                        <For each={models}>
+                          {(model) => (
+                            <option value={model.id}>
+                              {model.name || model.id.split(':').pop()}
+                            </option>
+                          )}
+                        </For>
+                      </optgroup>
+                    )}
+                  </For>
+                </select>
+              </Show>
               <p class={formHelpText}>
-                {form.provider === 'anthropic'
-                  ? 'e.g., claude-opus-4-5-20251101, claude-sonnet-4-20250514'
-                  : form.provider === 'openai'
-                    ? 'e.g., gpt-4o, gpt-4-turbo'
-                    : form.provider === 'deepseek'
-                      ? 'e.g., deepseek-chat, deepseek-coder'
-                      : 'e.g., llama3, mixtral, codellama'}
+                Main model used when no specific override is set. {availableModels().length === 0 && 'Save API key and refresh to see available models.'}
               </p>
             </div>
 
-            {/* Base URL - shown for Ollama (required) and OpenAI (optional) */}
-            <Show when={showBaseUrl()}>
-              <div class={formField}>
-                <label class={labelClass()}>
-                  {form.provider === 'ollama' ? 'Ollama Server URL' : 'API Base URL (optional)'}
-                </label>
+            {/* Chat Model Override */}
+            <div class={formField}>
+              <label class={labelClass()}>Chat Model (Interactive)</label>
+              <Show when={availableModels().length > 0} fallback={
                 <input
-                  type="url"
-                  value={form.baseUrl}
-                  onInput={(event) => setForm('baseUrl', event.currentTarget.value)}
-                  placeholder={
-                    form.provider === 'ollama'
-                      ? 'http://localhost:11434'
-                      : form.provider === 'deepseek'
-                        ? 'https://api.deepseek.com/chat/completions'
-                        : 'https://api.openai.com/v1'
-                  }
+                  type="text"
+                  value={form.chatModel}
+                  onInput={(e) => setForm('chatModel', e.currentTarget.value)}
+                  placeholder="Leave empty to use default model"
                   class={controlClass()}
                   disabled={saving()}
                 />
-                <p class={formHelpText}>
-                  {form.provider === 'ollama'
-                    ? 'URL where your Ollama server is running'
-                    : form.provider === 'deepseek'
-                      ? 'Custom endpoint (leave blank for default DeepSeek API)'
-                      : 'Custom endpoint for Azure OpenAI or compatible APIs'}
+              }>
+                <select
+                  value={form.chatModel}
+                  onChange={(e) => setForm('chatModel', e.currentTarget.value)}
+                  class={controlClass()}
+                  disabled={saving()}
+                >
+                  <option value="">Use default model ({form.model || 'not set'})</option>
+                  <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
+                    {([provider, models]) => (
+                      <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
+                        <For each={models}>
+                          {(model) => (
+                            <option value={model.id}>
+                              {model.name || model.id.split(':').pop()}
+                            </option>
+                          )}
+                        </For>
+                      </optgroup>
+                    )}
+                  </For>
+                </select>
+              </Show>
+              <p class={formHelpText}>
+                Model for interactive AI chat. Use a more capable model for complex reasoning.
+              </p>
+            </div>
+
+            {/* Patrol Model Override */}
+            <div class={formField}>
+              <label class={labelClass()}>Patrol Model (Background)</label>
+              <Show when={availableModels().length > 0} fallback={
+                <input
+                  type="text"
+                  value={form.patrolModel}
+                  onInput={(e) => setForm('patrolModel', e.currentTarget.value)}
+                  placeholder="Leave empty to use default model"
+                  class={controlClass()}
+                  disabled={saving()}
+                />
+              }>
+                <select
+                  value={form.patrolModel}
+                  onChange={(e) => setForm('patrolModel', e.currentTarget.value)}
+                  class={controlClass()}
+                  disabled={saving()}
+                >
+                  <option value="">Use default model ({form.model || 'not set'})</option>
+                  <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
+                    {([provider, models]) => (
+                      <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
+                        <For each={models}>
+                          {(model) => (
+                            <option value={model.id}>
+                              {model.name || model.id.split(':').pop()}
+                            </option>
+                          )}
+                        </For>
+                      </optgroup>
+                    )}
+                  </For>
+                </select>
+              </Show>
+              <p class={formHelpText}>
+                Model for background patrol analysis. Use a cheaper/faster model to save tokens.
+              </p>
+            </div>
+
+            {/* AI Provider Configuration - Configure API keys for all providers */}
+            <div class={`${formField} p-4 rounded-lg border bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-purple-200 dark:border-purple-800`}>
+              <div class="mb-3">
+                <h4 class="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                  <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  AI Provider Configuration
+                </h4>
+                <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  Configure API keys for each AI provider you want to use. Models from all configured providers will appear in the model selectors.
                 </p>
               </div>
-            </Show>
+
+              {/* Provider Accordions */}
+              <div class="space-y-2">
+                {/* Anthropic */}
+                <div class={`border rounded-lg overflow-hidden ${settings()?.anthropic_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                  <button
+                    type="button"
+                    class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    onClick={() => {
+                      const current = expandedProviders();
+                      const next = new Set(current);
+                      if (next.has('anthropic')) next.delete('anthropic');
+                      else next.add('anthropic');
+                      setExpandedProviders(next);
+                    }}
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium text-sm">Anthropic (Claude)</span>
+                      <Show when={settings()?.anthropic_configured}>
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
+                      </Show>
+                    </div>
+                    <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('anthropic') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  <Show when={expandedProviders().has('anthropic')}>
+                    <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700">
+                      <input
+                        type="password"
+                        value={form.anthropicApiKey}
+                        onInput={(e) => setForm('anthropicApiKey', e.currentTarget.value)}
+                        placeholder={settings()?.anthropic_configured ? '••••••••••• (configured)' : 'sk-ant-... (from console.anthropic.com)'}
+                        class={controlClass()}
+                        disabled={saving()}
+                      />
+                      <p class="text-xs text-gray-500 mt-1">Get your API key from <a href="https://console.anthropic.com" target="_blank" class="text-purple-600 hover:underline">console.anthropic.com</a></p>
+                    </div>
+                  </Show>
+                </div>
+
+                {/* OpenAI */}
+                <div class={`border rounded-lg overflow-hidden ${settings()?.openai_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                  <button
+                    type="button"
+                    class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    onClick={() => {
+                      const current = expandedProviders();
+                      const next = new Set(current);
+                      if (next.has('openai')) next.delete('openai');
+                      else next.add('openai');
+                      setExpandedProviders(next);
+                    }}
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium text-sm">OpenAI (GPT-4)</span>
+                      <Show when={settings()?.openai_configured}>
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
+                      </Show>
+                    </div>
+                    <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('openai') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  <Show when={expandedProviders().has('openai')}>
+                    <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                      <input
+                        type="password"
+                        value={form.openaiApiKey}
+                        onInput={(e) => setForm('openaiApiKey', e.currentTarget.value)}
+                        placeholder={settings()?.openai_configured ? '••••••••••• (configured)' : 'sk-... (from platform.openai.com)'}
+                        class={controlClass()}
+                        disabled={saving()}
+                      />
+                      <input
+                        type="url"
+                        value={form.openaiBaseUrl}
+                        onInput={(e) => setForm('openaiBaseUrl', e.currentTarget.value)}
+                        placeholder="Custom base URL (optional, for Azure OpenAI)"
+                        class={controlClass()}
+                        disabled={saving()}
+                      />
+                      <p class="text-xs text-gray-500">Get your API key from <a href="https://platform.openai.com" target="_blank" class="text-purple-600 hover:underline">platform.openai.com</a></p>
+                    </div>
+                  </Show>
+                </div>
+
+                {/* DeepSeek */}
+                <div class={`border rounded-lg overflow-hidden ${settings()?.deepseek_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                  <button
+                    type="button"
+                    class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    onClick={() => {
+                      const current = expandedProviders();
+                      const next = new Set(current);
+                      if (next.has('deepseek')) next.delete('deepseek');
+                      else next.add('deepseek');
+                      setExpandedProviders(next);
+                    }}
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium text-sm">DeepSeek</span>
+                      <Show when={settings()?.deepseek_configured}>
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
+                      </Show>
+                    </div>
+                    <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('deepseek') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  <Show when={expandedProviders().has('deepseek')}>
+                    <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700">
+                      <input
+                        type="password"
+                        value={form.deepseekApiKey}
+                        onInput={(e) => setForm('deepseekApiKey', e.currentTarget.value)}
+                        placeholder={settings()?.deepseek_configured ? '••••••••••• (configured)' : 'sk-... (from platform.deepseek.com)'}
+                        class={controlClass()}
+                        disabled={saving()}
+                      />
+                      <p class="text-xs text-gray-500 mt-1">Get your API key from <a href="https://platform.deepseek.com" target="_blank" class="text-purple-600 hover:underline">platform.deepseek.com</a></p>
+                    </div>
+                  </Show>
+                </div>
+
+                {/* Ollama */}
+                <div class={`border rounded-lg overflow-hidden ${settings()?.ollama_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                  <button
+                    type="button"
+                    class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    onClick={() => {
+                      const current = expandedProviders();
+                      const next = new Set(current);
+                      if (next.has('ollama')) next.delete('ollama');
+                      else next.add('ollama');
+                      setExpandedProviders(next);
+                    }}
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium text-sm">Ollama (Local)</span>
+                      <Show when={settings()?.ollama_configured}>
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Available</span>
+                      </Show>
+                    </div>
+                    <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('ollama') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  <Show when={expandedProviders().has('ollama')}>
+                    <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700">
+                      <input
+                        type="url"
+                        value={form.ollamaBaseUrl}
+                        onInput={(e) => setForm('ollamaBaseUrl', e.currentTarget.value)}
+                        placeholder="http://localhost:11434"
+                        class={controlClass()}
+                        disabled={saving()}
+                      />
+                      <p class="text-xs text-gray-500 mt-1">URL where your Ollama server is running. No API key needed - it's free!</p>
+                    </div>
+                  </Show>
+                </div>
+              </div>
+            </div>
 
             {/* Autonomous Mode */}
             <div class={`${formField} p-4 rounded-lg border ${form.autonomousMode ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'}`}>
@@ -754,11 +816,7 @@ export const AISettings: Component = () => {
                   ? settings()?.oauth_connected
                     ? `Ready to use with ${settings()?.model} (via Claude subscription)`
                     : `Ready to use with ${settings()?.model}`
-                  : form.authMethod === 'oauth' && form.provider === 'anthropic'
-                    ? 'Sign in with your Claude subscription to enable AI features'
-                    : needsApiKey()
-                      ? 'API key required to enable AI features'
-                      : 'Configure Ollama server URL to enable AI features'}
+                  : 'Configure at least one AI provider above to enable AI features'}
               </span>
             </div>
           </Show>

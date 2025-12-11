@@ -102,13 +102,15 @@ func (h *AISettingsHandler) GetAlertTriggeredAnalyzer() *ai.AlertTriggeredAnalyz
 }
 
 // AISettingsResponse is returned by GET /api/settings/ai
-// API key is masked for security
+// API keys are masked for security
 type AISettingsResponse struct {
 	Enabled        bool   `json:"enabled"`
-	Provider       string `json:"provider"`
-	APIKeySet      bool   `json:"api_key_set"` // true if API key is configured (never expose actual key)
+	Provider       string `json:"provider"`          // DEPRECATED: legacy single provider
+	APIKeySet      bool   `json:"api_key_set"`       // DEPRECATED: true if legacy API key is configured
 	Model          string `json:"model"`
-	BaseURL        string `json:"base_url,omitempty"`
+	ChatModel      string `json:"chat_model,omitempty"`   // Model for interactive chat (empty = use default)
+	PatrolModel    string `json:"patrol_model,omitempty"` // Model for patrol (empty = use default)
+	BaseURL        string `json:"base_url,omitempty"`     // DEPRECATED: legacy base URL
 	Configured     bool   `json:"configured"`      // true if AI is ready to use
 	AutonomousMode bool   `json:"autonomous_mode"` // true if AI can execute without approval
 	CustomContext  string `json:"custom_context"`  // user-provided infrastructure context
@@ -116,23 +118,40 @@ type AISettingsResponse struct {
 	AuthMethod     string `json:"auth_method"`     // "api_key" or "oauth"
 	OAuthConnected bool   `json:"oauth_connected"` // true if OAuth tokens are configured
 	// Patrol settings for token efficiency
-	PatrolSchedulePreset   string `json:"patrol_schedule_preset"`   // "15min", "1hr", "6hr", "12hr", "daily", "disabled"
-	AlertTriggeredAnalysis bool   `json:"alert_triggered_analysis"` // true if AI analyzes when alerts fire
+	PatrolSchedulePreset   string              `json:"patrol_schedule_preset"`   // "15min", "1hr", "6hr", "12hr", "daily", "disabled"
+	AlertTriggeredAnalysis bool                `json:"alert_triggered_analysis"` // true if AI analyzes when alerts fire
+	AvailableModels        []config.ModelInfo  `json:"available_models"`         // List of models for current provider
+	// Multi-provider credentials - shows which providers are configured
+	AnthropicConfigured bool   `json:"anthropic_configured"` // true if Anthropic API key or OAuth is set
+	OpenAIConfigured    bool   `json:"openai_configured"`    // true if OpenAI API key is set
+	DeepSeekConfigured  bool   `json:"deepseek_configured"`  // true if DeepSeek API key is set
+	OllamaConfigured    bool   `json:"ollama_configured"`    // true (always available for attempt)
+	OllamaBaseURL       string `json:"ollama_base_url"`      // Ollama server URL
+	OpenAIBaseURL       string `json:"openai_base_url,omitempty"` // Custom OpenAI base URL
+	ConfiguredProviders []string `json:"configured_providers"` // List of provider names with credentials
 }
 
 // AISettingsUpdateRequest is the request body for PUT /api/settings/ai
 type AISettingsUpdateRequest struct {
 	Enabled        *bool   `json:"enabled,omitempty"`
-	Provider       *string `json:"provider,omitempty"`
-	APIKey         *string `json:"api_key,omitempty"` // empty string clears, null preserves
+	Provider       *string `json:"provider,omitempty"`    // DEPRECATED: use model selection instead
+	APIKey         *string `json:"api_key,omitempty"`     // DEPRECATED: use per-provider keys
 	Model          *string `json:"model,omitempty"`
-	BaseURL        *string `json:"base_url,omitempty"`
+	ChatModel      *string `json:"chat_model,omitempty"`   // Model for interactive chat
+	PatrolModel    *string `json:"patrol_model,omitempty"` // Model for background patrol
+	BaseURL        *string `json:"base_url,omitempty"`     // DEPRECATED: use per-provider URLs
 	AutonomousMode *bool   `json:"autonomous_mode,omitempty"`
 	CustomContext  *string `json:"custom_context,omitempty"` // user-provided infrastructure context
 	AuthMethod     *string `json:"auth_method,omitempty"`    // "api_key" or "oauth"
 	// Patrol settings for token efficiency
 	PatrolSchedulePreset   *string `json:"patrol_schedule_preset,omitempty"`   // "15min", "1hr", "6hr", "12hr", "daily", "disabled"
 	AlertTriggeredAnalysis *bool   `json:"alert_triggered_analysis,omitempty"` // true if AI analyzes when alerts fire
+	// Multi-provider credentials
+	AnthropicAPIKey *string `json:"anthropic_api_key,omitempty"` // Set Anthropic API key
+	OpenAIAPIKey    *string `json:"openai_api_key,omitempty"`    // Set OpenAI API key
+	DeepSeekAPIKey  *string `json:"deepseek_api_key,omitempty"`  // Set DeepSeek API key
+	OllamaBaseURL   *string `json:"ollama_base_url,omitempty"`   // Set Ollama server URL
+	OpenAIBaseURL   *string `json:"openai_base_url,omitempty"`   // Set custom OpenAI base URL
 }
 
 // HandleGetAISettings returns the current AI settings (GET /api/settings/ai)
@@ -164,6 +183,8 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		Provider:       settings.Provider,
 		APIKeySet:      settings.APIKey != "",
 		Model:          settings.GetModel(),
+		ChatModel:      settings.ChatModel,
+		PatrolModel:    settings.PatrolModel,
 		BaseURL:        settings.BaseURL,
 		Configured:     settings.IsConfigured(),
 		AutonomousMode: settings.AutonomousMode,
@@ -173,6 +194,15 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		// Patrol settings
 		PatrolSchedulePreset:   settings.PatrolSchedulePreset,
 		AlertTriggeredAnalysis: settings.AlertTriggeredAnalysis,
+		AvailableModels:        nil, // Now populated via /api/ai/models endpoint
+		// Multi-provider configuration
+		AnthropicConfigured: settings.HasProvider(config.AIProviderAnthropic),
+		OpenAIConfigured:    settings.HasProvider(config.AIProviderOpenAI),
+		DeepSeekConfigured:  settings.HasProvider(config.AIProviderDeepSeek),
+		OllamaConfigured:    settings.HasProvider(config.AIProviderOllama),
+		OllamaBaseURL:       settings.GetBaseURLForProvider(config.AIProviderOllama),
+		OpenAIBaseURL:       settings.OpenAIBaseURL,
+		ConfiguredProviders: settings.GetConfiguredProviders(),
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -247,6 +277,14 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.Model = strings.TrimSpace(*req.Model)
 	}
 
+	if req.ChatModel != nil {
+		settings.ChatModel = strings.TrimSpace(*req.ChatModel)
+	}
+
+	if req.PatrolModel != nil {
+		settings.PatrolModel = strings.TrimSpace(*req.PatrolModel)
+	}
+
 	if req.BaseURL != nil {
 		settings.BaseURL = strings.TrimSpace(*req.BaseURL)
 	}
@@ -296,6 +334,23 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.AlertTriggeredAnalysis = *req.AlertTriggeredAnalysis
 	}
 
+	// Handle multi-provider credentials
+	if req.AnthropicAPIKey != nil {
+		settings.AnthropicAPIKey = strings.TrimSpace(*req.AnthropicAPIKey)
+	}
+	if req.OpenAIAPIKey != nil {
+		settings.OpenAIAPIKey = strings.TrimSpace(*req.OpenAIAPIKey)
+	}
+	if req.DeepSeekAPIKey != nil {
+		settings.DeepSeekAPIKey = strings.TrimSpace(*req.DeepSeekAPIKey)
+	}
+	if req.OllamaBaseURL != nil {
+		settings.OllamaBaseURL = strings.TrimSpace(*req.OllamaBaseURL)
+	}
+	if req.OpenAIBaseURL != nil {
+		settings.OpenAIBaseURL = strings.TrimSpace(*req.OpenAIBaseURL)
+	}
+
 	// Save settings
 	if err := h.persistence.SaveAIConfig(*settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save AI settings")
@@ -336,6 +391,8 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		Provider:               settings.Provider,
 		APIKeySet:              settings.APIKey != "",
 		Model:                  settings.GetModel(),
+		ChatModel:              settings.ChatModel,
+		PatrolModel:            settings.PatrolModel,
 		BaseURL:                settings.BaseURL,
 		Configured:             settings.IsConfigured(),
 		AutonomousMode:         settings.AutonomousMode,
@@ -344,6 +401,15 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		OAuthConnected:         settings.OAuthAccessToken != "",
 		PatrolSchedulePreset:   settings.PatrolSchedulePreset,
 		AlertTriggeredAnalysis: settings.AlertTriggeredAnalysis,
+		AvailableModels:        nil, // Now populated via /api/ai/models endpoint
+		// Multi-provider configuration
+		AnthropicConfigured: settings.HasProvider(config.AIProviderAnthropic),
+		OpenAIConfigured:    settings.HasProvider(config.AIProviderOpenAI),
+		DeepSeekConfigured:  settings.HasProvider(config.AIProviderDeepSeek),
+		OllamaConfigured:    settings.HasProvider(config.AIProviderOllama),
+		OllamaBaseURL:       settings.GetBaseURLForProvider(config.AIProviderOllama),
+		OpenAIBaseURL:       settings.OpenAIBaseURL,
+		ConfiguredProviders: settings.GetConfiguredProviders(),
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -387,6 +453,65 @@ func (h *AISettingsHandler) HandleTestAIConnection(w http.ResponseWriter, r *htt
 
 	if err := utils.WriteJSONResponse(w, testResult); err != nil {
 		log.Error().Err(err).Msg("Failed to write AI test response")
+	}
+}
+
+// HandleListModels fetches available models from the configured AI provider (GET /api/ai/models)
+func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require authentication
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	type ModelInfo struct {
+		ID          string `json:"id"`
+		Name        string `json:"name"`
+		Description string `json:"description,omitempty"`
+	}
+
+	type Response struct {
+		Models  []ModelInfo `json:"models"`
+		Error   string      `json:"error,omitempty"`
+		Cached  bool        `json:"cached"`
+	}
+
+	models, err := h.aiService.ListModels(ctx)
+	if err != nil {
+		// Return error but don't fail the request - frontend can show a fallback
+		resp := Response{
+			Models: []ModelInfo{},
+			Error:  err.Error(),
+		}
+		if jsonErr := utils.WriteJSONResponse(w, resp); jsonErr != nil {
+			log.Error().Err(jsonErr).Msg("Failed to write AI models response")
+		}
+		return
+	}
+
+	// Convert provider models to response format
+	responseModels := make([]ModelInfo, 0, len(models))
+	for _, m := range models {
+		responseModels = append(responseModels, ModelInfo{
+			ID:          m.ID,
+			Name:        m.Name,
+			Description: m.Description,
+		})
+	}
+
+	resp := Response{
+		Models: responseModels,
+	}
+
+	if err := utils.WriteJSONResponse(w, resp); err != nil {
+		log.Error().Err(err).Msg("Failed to write AI models response")
 	}
 }
 
