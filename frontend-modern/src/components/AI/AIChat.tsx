@@ -18,10 +18,10 @@ import type {
 
 // Provider display names for grouped model selection
 const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
-  anthropic: 'Anthropic (Claude)',
-  openai: 'OpenAI (GPT)',
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
   deepseek: 'DeepSeek',
-  ollama: 'Ollama (Local)',
+  ollama: 'Ollama',
 };
 
 // Parse provider from model ID (format: "provider:model-name")
