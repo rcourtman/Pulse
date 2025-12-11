@@ -2162,3 +2162,182 @@ func (h *AISettingsHandler) HandleGetPatrolRunHistory(w http.ResponseWriter, r *
 		log.Error().Err(err).Msg("Failed to write patrol run history response")
 	}
 }
+
+// HandleGetSuppressionRules returns all suppression rules (GET /api/ai/patrol/suppressions)
+func (h *AISettingsHandler) HandleGetSuppressionRules(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require authentication
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		if err := utils.WriteJSONResponse(w, []interface{}{}); err != nil {
+			log.Error().Err(err).Msg("Failed to write suppression rules response")
+		}
+		return
+	}
+
+	findings := patrol.GetFindings()
+	rules := findings.GetSuppressionRules()
+
+	if err := utils.WriteJSONResponse(w, rules); err != nil {
+		log.Error().Err(err).Msg("Failed to write suppression rules response")
+	}
+}
+
+// HandleAddSuppressionRule creates a new suppression rule (POST /api/ai/patrol/suppressions)
+func (h *AISettingsHandler) HandleAddSuppressionRule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require authentication  
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		ResourceID   string `json:"resource_id"`   // Can be empty for "any resource"
+		ResourceName string `json:"resource_name"` // Human-readable name
+		Category     string `json:"category"`      // Can be empty for "any category"
+		Description  string `json:"description"`   // Required - user's reason
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Description == "" {
+		http.Error(w, "description is required", http.StatusBadRequest)
+		return
+	}
+
+	// Convert category string to FindingCategory
+	var category ai.FindingCategory
+	switch req.Category {
+	case "performance":
+		category = ai.FindingCategoryPerformance
+	case "capacity":
+		category = ai.FindingCategoryCapacity
+	case "reliability":
+		category = ai.FindingCategoryReliability
+	case "backup":
+		category = ai.FindingCategoryBackup
+	case "security":
+		category = ai.FindingCategorySecurity
+	case "general":
+		category = ai.FindingCategoryGeneral
+	case "":
+		category = "" // Any category
+	default:
+		http.Error(w, "Invalid category", http.StatusBadRequest)
+		return
+	}
+
+	findings := patrol.GetFindings()
+	rule := findings.AddSuppressionRule(req.ResourceID, req.ResourceName, category, req.Description)
+
+	log.Info().
+		Str("rule_id", rule.ID).
+		Str("resource_id", req.ResourceID).
+		Str("category", req.Category).
+		Str("description", req.Description).
+		Msg("AI Patrol: Manual suppression rule created")
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": "Suppression rule created",
+		"rule":    rule,
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write add suppression rule response")
+	}
+}
+
+// HandleDeleteSuppressionRule removes a suppression rule (DELETE /api/ai/patrol/suppressions/:id)
+func (h *AISettingsHandler) HandleDeleteSuppressionRule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require authentication
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Get rule ID from URL path
+	ruleID := strings.TrimPrefix(r.URL.Path, "/api/ai/patrol/suppressions/")
+	if ruleID == "" {
+		http.Error(w, "rule_id is required", http.StatusBadRequest)
+		return
+	}
+
+	findings := patrol.GetFindings()
+	
+	if !findings.DeleteSuppressionRule(ruleID) {
+		http.Error(w, "Rule not found", http.StatusNotFound)
+		return
+	}
+
+	log.Info().
+		Str("rule_id", ruleID).
+		Msg("AI Patrol: Suppression rule deleted")
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": "Suppression rule deleted",
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write delete suppression rule response")
+	}
+}
+
+// HandleGetDismissedFindings returns all dismissed/suppressed findings (GET /api/ai/patrol/dismissed)
+func (h *AISettingsHandler) HandleGetDismissedFindings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require authentication
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		if err := utils.WriteJSONResponse(w, []interface{}{}); err != nil {
+			log.Error().Err(err).Msg("Failed to write dismissed findings response")
+		}
+		return
+	}
+
+	findings := patrol.GetFindings()
+	dismissed := findings.GetDismissedFindings()
+
+	if err := utils.WriteJSONResponse(w, dismissed); err != nil {
+		log.Error().Err(err).Msg("Failed to write dismissed findings response")
+	}
+}

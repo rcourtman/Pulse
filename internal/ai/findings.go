@@ -85,6 +85,19 @@ func (f *Finding) IsResolved() bool {
 	return f.ResolvedAt != nil
 }
 
+// SuppressionRule represents a user-defined rule to suppress certain AI findings
+// Users can create these manually to prevent alerts before they happen
+type SuppressionRule struct {
+	ID           string          `json:"id"`
+	ResourceID   string          `json:"resource_id,omitempty"`   // Empty means "any resource"
+	ResourceName string          `json:"resource_name,omitempty"` // Human-readable name for display
+	Category     FindingCategory `json:"category,omitempty"`      // Empty means "any category"
+	Description  string          `json:"description"`             // User's reason, e.g., "dev VM runs hot"
+	CreatedAt    time.Time       `json:"created_at"`
+	CreatedFrom  string          `json:"created_from,omitempty"` // "finding" if created from a dismissed finding, "manual" if user-created
+	FindingID    string          `json:"finding_id,omitempty"`   // Original finding ID if created from dismissal
+}
+
 // FindingsPersistence interface for saving/loading findings (avoids circular imports)
 type FindingsPersistence interface {
 	SaveFindings(findings map[string]*Finding) error
@@ -99,6 +112,8 @@ type FindingsStore struct {
 	byResource map[string][]string // resource_id -> []finding_id
 	// Keep track of active findings count by severity (cached, but GetSummary calculates dynamically)
 	activeCounts map[FindingSeverity]int
+	// User-defined suppression rules (separate from dismissed findings)
+	suppressionRules map[string]*SuppressionRule
 	// Persistence layer (optional)
 	persistence FindingsPersistence
 	// Debounce save operations
@@ -110,10 +125,11 @@ type FindingsStore struct {
 // NewFindingsStore creates a new findings store
 func NewFindingsStore() *FindingsStore {
 	return &FindingsStore{
-		findings:     make(map[string]*Finding),
-		byResource:   make(map[string][]string),
-		activeCounts: make(map[FindingSeverity]int),
-		saveDebounce: 5 * time.Second, // Debounce saves by 5 seconds
+		findings:         make(map[string]*Finding),
+		byResource:       make(map[string][]string),
+		activeCounts:     make(map[FindingSeverity]int),
+		suppressionRules: make(map[string]*SuppressionRule),
+		saveDebounce:     5 * time.Second, // Debounce saves by 5 seconds
 	}
 }
 
@@ -422,6 +438,7 @@ func (s *FindingsStore) IsSuppressed(resourceID string, category FindingCategory
 
 // isSuppressedInternal checks suppression without locking (caller must hold lock)
 func (s *FindingsStore) isSuppressedInternal(resourceID string, category FindingCategory) bool {
+	// Check if any finding for this resource+category is suppressed
 	ids := s.byResource[resourceID]
 	for _, id := range ids {
 		if f, exists := s.findings[id]; exists {
@@ -431,6 +448,16 @@ func (s *FindingsStore) isSuppressedInternal(resourceID string, category Finding
 			}
 		}
 	}
+	
+	// Also check manual suppression rules
+	for _, rule := range s.suppressionRules {
+		resourceMatches := rule.ResourceID == "" || rule.ResourceID == resourceID
+		categoryMatches := rule.Category == "" || rule.Category == category
+		if resourceMatches && categoryMatches {
+			return true
+		}
+	}
+	
 	return false
 }
 
@@ -655,4 +682,126 @@ func (s FindingsSummary) HasIssues() bool {
 // IsHealthy returns true if there are no watch, warning, or critical findings
 func (s FindingsSummary) IsHealthy() bool {
 	return s.Critical == 0 && s.Warning == 0 && s.Watch == 0
+}
+
+// --- Suppression Rule Management ---
+
+// AddSuppressionRule creates a new user-defined suppression rule
+func (s *FindingsStore) AddSuppressionRule(resourceID, resourceName string, category FindingCategory, description string) *SuppressionRule {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Generate ID based on resource+category
+	ruleID := fmt.Sprintf("rule_%s_%s_%d", resourceID, category, time.Now().UnixNano())
+	if resourceID == "" {
+		ruleID = fmt.Sprintf("rule_any_%s_%d", category, time.Now().UnixNano())
+	}
+	if category == "" {
+		ruleID = fmt.Sprintf("rule_%s_any_%d", resourceID, time.Now().UnixNano())
+	}
+
+	rule := &SuppressionRule{
+		ID:           ruleID,
+		ResourceID:   resourceID,
+		ResourceName: resourceName,
+		Category:     category,
+		Description:  description,
+		CreatedAt:    time.Now(),
+		CreatedFrom:  "manual",
+	}
+
+	s.suppressionRules[ruleID] = rule
+	s.scheduleSave()
+	return rule
+}
+
+// GetSuppressionRules returns all suppression rules (both manual and from dismissed findings)
+func (s *FindingsStore) GetSuppressionRules() []*SuppressionRule {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var rules []*SuppressionRule
+
+	// Add explicit suppression rules
+	for _, rule := range s.suppressionRules {
+		rules = append(rules, rule)
+	}
+
+	// Also include suppressed findings as rules (for visibility)
+	for _, f := range s.findings {
+		if f.Suppressed {
+			rules = append(rules, &SuppressionRule{
+				ID:           "finding_" + f.ID,
+				ResourceID:   f.ResourceID,
+				ResourceName: f.ResourceName,
+				Category:     f.Category,
+				Description:  f.UserNote,
+				CreatedAt:    *f.AcknowledgedAt,
+				CreatedFrom:  "finding",
+				FindingID:    f.ID,
+			})
+		}
+	}
+
+	return rules
+}
+
+// DeleteSuppressionRule removes a suppression rule
+func (s *FindingsStore) DeleteSuppressionRule(ruleID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check if it's an explicit rule
+	if _, exists := s.suppressionRules[ruleID]; exists {
+		delete(s.suppressionRules, ruleID)
+		s.scheduleSave()
+		return true
+	}
+
+	// Check if it's a finding-based rule (e.g., "finding_abc123")
+	if strings.HasPrefix(ruleID, "finding_") {
+		findingID := strings.TrimPrefix(ruleID, "finding_")
+		if f, exists := s.findings[findingID]; exists && f.Suppressed {
+			// Un-suppress the finding
+			f.Suppressed = false
+			f.DismissedReason = ""
+			s.scheduleSave()
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetDismissedFindings returns all findings that have been dismissed or suppressed
+func (s *FindingsStore) GetDismissedFindings() []*Finding {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var dismissed []*Finding
+	for _, f := range s.findings {
+		if f.DismissedReason != "" || f.Suppressed {
+			copy := *f
+			dismissed = append(dismissed, &copy)
+		}
+	}
+	return dismissed
+}
+
+// MatchesSuppressionRule checks if a finding matches any suppression rule
+func (s *FindingsStore) MatchesSuppressionRule(resourceID string, category FindingCategory) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, rule := range s.suppressionRules {
+		// Check if resource matches (or rule is for "any resource")
+		resourceMatches := rule.ResourceID == "" || rule.ResourceID == resourceID
+		// Check if category matches (or rule is for "any category")
+		categoryMatches := rule.Category == "" || rule.Category == category
+
+		if resourceMatches && categoryMatches {
+			return true
+		}
+	}
+	return false
 }
