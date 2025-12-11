@@ -1,4 +1,4 @@
-import { Component, Show, createSignal, For, createEffect, createMemo, onMount } from 'solid-js';
+import { Component, Show, createSignal, For, createEffect, createMemo, onMount, Switch, Match } from 'solid-js';
 import { marked } from 'marked';
 import { AIAPI } from '@/api/ai';
 import { notificationStore } from '@/stores/notifications';
@@ -116,9 +116,10 @@ interface PendingApproval {
 
 // Unified event type for chronological display
 interface StreamDisplayEvent {
-  type: 'thinking' | 'tool';
+  type: 'thinking' | 'tool' | 'content';
   thinking?: string;
   tool?: AIToolExecution;
+  content?: string; // Text content chunk for chronological display
 }
 
 interface Message {
@@ -548,13 +549,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 }
                 case 'content': {
                   const content = event.data as string;
-                  // Append content rather than replace - this allows intermediate AI responses
-                  // during tool execution to accumulate, showing the user the full conversation flow
+                  if (!content.trim()) return msg; // Skip empty content
+                  // Track content in streamEvents for chronological display
+                  const events = msg.streamEvents || [];
+                  // Also accumulate in content for backwards compatibility / summary
                   const existingContent = msg.content || '';
                   const separator = existingContent && !existingContent.endsWith('\n') ? '\n\n' : '';
                   return {
                     ...msg,
                     content: existingContent + separator + content,
+                    streamEvents: [...events, { type: 'content' as const, content: content.trim() }],
                   };
                 }
                 case 'complete': {
@@ -1089,38 +1093,45 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
                     }`}
                 >
-                  {/* Render all events in chronological order - thinking and tools interleaved */}
+                  {/* Render all events in chronological order - thinking, tools, and content interleaved */}
                   <Show when={message.role === 'assistant' && message.streamEvents && message.streamEvents.length > 0}>
-                    <div class="mb-3 space-y-2">
+                    <div class="space-y-2">
                       <For each={message.streamEvents}>
                         {(evt) => (
-                          <Show
-                            when={evt.type === 'tool' && evt.tool}
-                            fallback={
-                              // Thinking chunk
+                          <Switch>
+                            <Match when={evt.type === 'tool' && evt.tool}>
+                              {/* Tool call */}
+                              <div class="rounded border border-gray-300 dark:border-gray-600 overflow-hidden">
+                                <div class={`px-2 py-1 text-xs font-medium flex items-center gap-2 ${evt.tool!.success
+                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+                                  : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200'
+                                  }`}>
+                                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                  <code class="font-mono">{evt.tool!.input}</code>
+                                </div>
+                                <Show when={evt.tool!.output}>
+                                  <pre class="px-2 py-1 text-xs font-mono bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300 overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
+                                    {evt.tool!.output.length > 500 ? evt.tool!.output.substring(0, 500) + '...' : evt.tool!.output}
+                                  </pre>
+                                </Show>
+                              </div>
+                            </Match>
+                            <Match when={evt.type === 'thinking' && evt.thinking}>
+                              {/* Thinking chunk */}
                               <div class="px-2 py-1.5 text-xs bg-blue-50 dark:bg-blue-900/20 text-gray-700 dark:text-gray-300 rounded border-l-2 border-blue-400 whitespace-pre-wrap">
-                                {sanitizeThinking(evt.thinking && evt.thinking.length > 500 ? evt.thinking.substring(0, 500) + '...' : evt.thinking || '')}
+                                {sanitizeThinking(evt.thinking!.length > 500 ? evt.thinking!.substring(0, 500) + '...' : evt.thinking!)}
                               </div>
-                            }
-                          >
-                            {/* Tool call */}
-                            <div class="rounded border border-gray-300 dark:border-gray-600 overflow-hidden">
-                              <div class={`px-2 py-1 text-xs font-medium flex items-center gap-2 ${evt.tool!.success
-                                ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
-                                : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200'
-                                }`}>
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                                <code class="font-mono">{evt.tool!.input}</code>
-                              </div>
-                              <Show when={evt.tool!.output}>
-                                <pre class="px-2 py-1 text-xs font-mono bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300 overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
-                                  {evt.tool!.output.length > 500 ? evt.tool!.output.substring(0, 500) + '...' : evt.tool!.output}
-                                </pre>
-                              </Show>
-                            </div>
-                          </Show>
+                            </Match>
+                            <Match when={evt.type === 'content' && evt.content}>
+                              {/* Content chunk - rendered as markdown */}
+                              <div
+                                class="text-sm prose prose-sm dark:prose-invert max-w-none prose-pre:bg-gray-800 prose-pre:text-gray-100 prose-code:text-purple-600 dark:prose-code:text-purple-400 prose-code:before:content-none prose-code:after:content-none"
+                                innerHTML={renderMarkdown(evt.content!)}
+                              />
+                            </Match>
+                          </Switch>
                         )}
                       </For>
                     </div>
@@ -1146,8 +1157,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     </div>
                   </Show>
 
-                  {/* Show AI's response text AFTER tool calls */}
-                  <Show when={message.content}>
+                  {/* Show AI's response text - only if no streamEvents (fallback for old messages or messages without streaming) */}
+                  <Show when={message.content && (!message.streamEvents || message.streamEvents.length === 0)}>
                     <div
                       class="text-sm prose prose-sm dark:prose-invert max-w-none prose-pre:bg-gray-800 prose-pre:text-gray-100 prose-code:text-purple-600 dark:prose-code:text-purple-400 prose-code:before:content-none prose-code:after:content-none"
                       innerHTML={renderMarkdown(message.content)}

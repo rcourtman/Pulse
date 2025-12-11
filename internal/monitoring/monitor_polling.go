@@ -2143,7 +2143,10 @@ func (m *Monitor) pollPVENode(
 		var proxyTemp *models.Temperature
 		var err error
 		if m.tempCollector != nil {
-			tempCtx, tempCancel := context.WithTimeout(ctx, 30*time.Second) // Increased to accommodate SSH operations via proxy
+			// Temperature collection is best-effort - use a short timeout to avoid blocking node polling
+			// Use context.Background() so the timeout is truly independent of the parent polling context
+			// If SSH is slow or unresponsive, we'll preserve previous temperature data
+			tempCtx, tempCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer tempCancel()
 
 			// Determine SSH hostname to use (most robust approach):

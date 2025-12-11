@@ -632,6 +632,8 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		// Error 400 with "ds" parameter error means Proxmox 9.x doesn't support RRD data source filtering
 		// JSON unmarshal errors are data format issues, not connectivity problems
 		// Context deadline/timeout errors on storage endpoints mean storage issues, not node unreachability
+		// PBS (Proxmox Backup Server) errors are upstream storage issues, not node connectivity problems
+		// RRD data timeouts are secondary data fetch failures, not node unreachability
 		if isVMSpecificError(errStr) ||
 			strings.Contains(errStr, "595") ||
 			(strings.Contains(errStr, "500") && strings.Contains(errStr, "hostname lookup")) ||
@@ -643,7 +645,14 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 			(strings.Contains(errStr, "storage '") && strings.Contains(errStr, "is not available on node")) ||
 			strings.Contains(errStr, "unexpected response format") ||
 			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/storage")) ||
-			(strings.Contains(errStr, "Client.Timeout exceeded") && strings.Contains(errStr, "/storage")) {
+			(strings.Contains(errStr, "Client.Timeout exceeded") && strings.Contains(errStr, "/storage")) ||
+			// PBS storage errors - Proxmox can't reach PBS, but node is still reachable
+			(strings.Contains(errStr, "500") && strings.Contains(errStr, "pbs-") && strings.Contains(errStr, "error fetching datastores")) ||
+			(strings.Contains(errStr, "500") && strings.Contains(errStr, "Can't connect to") && strings.Contains(errStr, ":8007")) ||
+			// RRD data timeouts - secondary metric fetch failures, node is still working
+			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/rrddata")) ||
+			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/lxc/") && strings.Contains(errStr, "rrd")) ||
+			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/qemu/") && strings.Contains(errStr, "rrd")) {
 			// This is likely a node-specific failure, not an endpoint failure
 			// Return the error but don't mark the endpoint as unhealthy
 			log.Debug().
