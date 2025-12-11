@@ -1006,13 +1006,18 @@ export const AISettings: Component = () => {
                 class={`w-2 h-2 rounded-full ${settings()?.configured ? 'bg-green-500' : 'bg-amber-500'
                   }`}
               />
-              <span class="text-xs font-medium">
-                {settings()?.configured
-                  ? settings()?.oauth_connected
-                    ? `Ready to use with ${settings()?.model} (via Claude subscription)`
-                    : `Ready to use with ${settings()?.model}`
-                  : 'Configure at least one AI provider above to enable AI features'}
-              </span>
+              <div class="flex-1">
+                <span class="text-xs font-medium">
+                  {settings()?.configured
+                    ? `Ready • ${settings()?.configured_providers?.length || 0} provider${(settings()?.configured_providers?.length || 0) !== 1 ? 's' : ''} • ${availableModels().length} models`
+                    : 'Configure at least one AI provider above to enable AI features'}
+                </span>
+                <Show when={settings()?.configured && settings()?.model}>
+                  <span class="text-xs opacity-75 ml-2">
+                    • Default: {settings()?.model?.split(':').pop() || settings()?.model}
+                  </span>
+                </Show>
+              </div>
             </div>
           </Show>
 
