@@ -149,8 +149,8 @@ func (c *AIConfig) HasProvider(provider string) bool {
 	case AIProviderDeepSeek:
 		return c.DeepSeekAPIKey != ""
 	case AIProviderOllama:
-		// Ollama is available if URL is set (or default localhost)
-		return true // Always available for attempt
+		// Ollama is only "configured" if user has explicitly set a base URL
+		return c.OllamaBaseURL != ""
 	default:
 		return false
 	}
