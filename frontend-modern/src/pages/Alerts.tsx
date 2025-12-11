@@ -28,7 +28,7 @@ import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
 import Send from 'lucide-solid/icons/send';
 import Calendar from 'lucide-solid/icons/calendar';
-import { getPatrolStatus, getFindings, getFindingsHistory, getPatrolRunHistory, forcePatrol, subscribeToPatrolStream, dismissFinding, suppressFinding, type Finding, type PatrolStatus, type PatrolRunRecord, severityColors, formatTimestamp } from '@/api/patrol';
+import { getPatrolStatus, getFindings, getFindingsHistory, getPatrolRunHistory, forcePatrol, subscribeToPatrolStream, dismissFinding, suppressFinding, getSuppressionRules, addSuppressionRule, deleteSuppressionRule, type Finding, type PatrolStatus, type PatrolRunRecord, type SuppressionRule, severityColors, formatTimestamp, categoryLabels } from '@/api/patrol';
 import { aiChatStore } from '@/stores/aiChat';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
@@ -2050,6 +2050,13 @@ function OverviewTab(props: {
   const [forcePatrolLoading, setForcePatrolLoading] = createSignal(false);
   const [expandedRunId, setExpandedRunId] = createSignal<string | null>(null);
   const [historyTimeFilter, setHistoryTimeFilter] = createSignal<'24h' | '7d' | 'all'>('all');
+  // Suppression rules management
+  const [suppressionRules, setSuppressionRules] = createSignal<SuppressionRule[]>([]);
+  const [showSuppressionRules, setShowSuppressionRules] = createSignal(false);
+  const [showAddRuleForm, setShowAddRuleForm] = createSignal(false);
+  const [newRuleResource, setNewRuleResource] = createSignal('');
+  const [newRuleCategory, setNewRuleCategory] = createSignal('');
+  const [newRuleDescription, setNewRuleDescription] = createSignal('');
   // Live streaming state for running patrol
   const [expandedLiveStream, setExpandedLiveStream] = createSignal(false);
   // Track streaming blocks for sequential display (like AI chat)
@@ -2146,10 +2153,11 @@ function OverviewTab(props: {
   // Fetch AI data - extracted for reuse
   const fetchAiData = async () => {
     try {
-      const [status, findings, runHistory] = await Promise.all([
+      const [status, findings, runHistory, rules] = await Promise.all([
         getPatrolStatus(),
         getFindings(),
-        getPatrolRunHistory(50) // Fetch more for filtering
+        getPatrolRunHistory(50), // Fetch more for filtering
+        getSuppressionRules().catch(() => []) // May not be available
       ]);
 
       // Check if a new patrol has completed - if so, clear pending fix findings
@@ -2165,6 +2173,7 @@ function OverviewTab(props: {
       setPatrolStatus(status);
       setAiFindings(findings);
       setPatrolRunHistory(runHistory);
+      setSuppressionRules(rules);
 
       // Auto-expand history if most recent run found issues
       if (runHistory.length > 0 && runHistory[0].status !== 'healthy') {
@@ -2740,6 +2749,157 @@ function OverviewTab(props: {
                   );
                 }}
               </For>
+            </Show>
+          </div>
+
+          {/* Suppression Rules - What's being ignored */}
+          <div class="mt-6">
+            <div class="flex items-center justify-between">
+              <button
+                class="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                onClick={() => setShowSuppressionRules(!showSuppressionRules())}
+              >
+                <svg
+                  class={`w-4 h-4 transition-transform ${showSuppressionRules() ? 'rotate-90' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+                🔇 Suppression Rules ({suppressionRules().length} active)
+              </button>
+              <button
+                class="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                onClick={() => setShowAddRuleForm(!showAddRuleForm())}
+              >
+                + Add Rule
+              </button>
+            </div>
+
+            {/* Add rule form */}
+            <Show when={showAddRuleForm()}>
+              <div class="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-3">
+                  Add a suppression rule to prevent alerts
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                  <input
+                    type="text"
+                    class="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    placeholder="Resource ID (or leave empty for any)"
+                    value={newRuleResource()}
+                    onInput={(e) => setNewRuleResource(e.currentTarget.value)}
+                  />
+                  <select
+                    class="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    value={newRuleCategory()}
+                    onChange={(e) => setNewRuleCategory(e.currentTarget.value)}
+                  >
+                    <option value="">Any category</option>
+                    <option value="performance">Performance</option>
+                    <option value="capacity">Capacity</option>
+                    <option value="reliability">Reliability</option>
+                    <option value="backup">Backup</option>
+                    <option value="security">Security</option>
+                    <option value="general">General</option>
+                  </select>
+                  <input
+                    type="text"
+                    class="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    placeholder="Reason (e.g., 'Dev container runs hot')"
+                    value={newRuleDescription()}
+                    onInput={(e) => setNewRuleDescription(e.currentTarget.value)}
+                  />
+                </div>
+                <div class="flex gap-2">
+                  <button
+                    class="px-3 py-1.5 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    disabled={!newRuleDescription()}
+                    onClick={async () => {
+                      try {
+                        await addSuppressionRule(
+                          newRuleResource(),
+                          newRuleResource() || 'Any resource',
+                          (newRuleCategory() as 'performance' | 'capacity' | 'reliability' | 'backup' | 'security' | 'general' | ''),
+                          newRuleDescription()
+                        );
+                        showSuccess('Suppression rule created');
+                        setShowAddRuleForm(false);
+                        setNewRuleResource('');
+                        setNewRuleCategory('');
+                        setNewRuleDescription('');
+                        fetchAiData();
+                      } catch (err) {
+                        showError('Failed to create rule');
+                      }
+                    }}
+                  >
+                    Create Rule
+                  </button>
+                  <button
+                    class="px-3 py-1.5 text-sm font-medium rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                    onClick={() => setShowAddRuleForm(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </Show>
+
+            {/* Rules list */}
+            <Show when={showSuppressionRules()}>
+              <div class="mt-3 space-y-2">
+                <Show when={suppressionRules().length === 0}>
+                  <p class="text-sm text-gray-500 dark:text-gray-500 italic">
+                    No suppression rules. Dismiss findings or add rules to prevent unwanted alerts.
+                  </p>
+                </Show>
+                <For each={suppressionRules()}>
+                  {(rule) => (
+                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 text-sm">
+                          <span class="font-medium text-gray-800 dark:text-gray-200">
+                            {rule.resource_name || rule.resource_id || 'Any resource'}
+                          </span>
+                          <Show when={rule.category}>
+                            <span class="px-2 py-0.5 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                              {categoryLabels[rule.category!] || rule.category}
+                            </span>
+                          </Show>
+                          <Show when={!rule.category}>
+                            <span class="px-2 py-0.5 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                              Any category
+                            </span>
+                          </Show>
+                          <span class="px-1.5 py-0.5 text-xs rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                            {rule.created_from === 'finding' ? 'From Finding' : 'Manual'}
+                          </span>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
+                          {rule.description || 'No description'}
+                        </p>
+                      </div>
+                      <button
+                        class="ml-3 px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
+                        onClick={async () => {
+                          try {
+                            await deleteSuppressionRule(rule.id);
+                            showSuccess('Rule deleted');
+                            fetchAiData();
+                          } catch (err) {
+                            showError('Failed to delete rule');
+                          }
+                        }}
+                        title="Delete this rule"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </For>
+              </div>
             </Show>
           </div>
 
