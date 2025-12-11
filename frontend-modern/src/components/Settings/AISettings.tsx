@@ -341,6 +341,41 @@ export const AISettings: Component = () => {
     }
   };
 
+  const handleClearProvider = async (provider: string) => {
+    if (!confirm(`Clear ${provider} credentials? You'll need to re-enter them to use this provider.`)) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const clearPayload: Record<string, boolean> = {};
+      if (provider === 'anthropic') clearPayload.clear_anthropic_key = true;
+      if (provider === 'openai') clearPayload.clear_openai_key = true;
+      if (provider === 'deepseek') clearPayload.clear_deepseek_key = true;
+      if (provider === 'ollama') clearPayload.clear_ollama_url = true;
+
+      await AIAPI.updateSettings(clearPayload);
+
+      // Reload settings to reflect the change
+      const newSettings = await AIAPI.getSettings();
+      setSettings(newSettings);
+
+      // Clear the local form field
+      if (provider === 'anthropic') setForm('anthropicApiKey', '');
+      if (provider === 'openai') setForm('openaiApiKey', '');
+      if (provider === 'deepseek') setForm('deepseekApiKey', '');
+      if (provider === 'ollama') setForm('ollamaBaseUrl', '');
+
+      notificationStore.success(`${provider} credentials cleared`);
+    } catch (error) {
+      logger.error(`[AISettings] Clear ${provider} failed:`, error);
+      const message = error instanceof Error ? error.message : 'Failed to clear credentials';
+      notificationStore.error(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // OAuth handlers removed - OAuth is currently unavailable from Anthropic for third-party apps
   // When OAuth becomes available, handlers can be added back to the Anthropic accordion section
 
@@ -589,14 +624,25 @@ export const AISettings: Component = () => {
                           <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
                         </p>
                         <Show when={settings()?.anthropic_configured}>
-                          <button
-                            type="button"
-                            onClick={() => handleTestProvider('anthropic')}
-                            disabled={testingProvider() === 'anthropic'}
-                            class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
-                          >
-                            {testingProvider() === 'anthropic' ? 'Testing...' : 'Test'}
-                          </button>
+                          <div class="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleTestProvider('anthropic')}
+                              disabled={testingProvider() === 'anthropic' || saving()}
+                              class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                            >
+                              {testingProvider() === 'anthropic' ? 'Testing...' : 'Test'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleClearProvider('anthropic')}
+                              disabled={saving()}
+                              class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                              title="Clear API key"
+                            >
+                              Clear
+                            </button>
+                          </div>
                         </Show>
                       </div>
                       <Show when={providerTestResult()?.provider === 'anthropic'}>
@@ -654,14 +700,25 @@ export const AISettings: Component = () => {
                           <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
                         </p>
                         <Show when={settings()?.openai_configured}>
-                          <button
-                            type="button"
-                            onClick={() => handleTestProvider('openai')}
-                            disabled={testingProvider() === 'openai'}
-                            class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
-                          >
-                            {testingProvider() === 'openai' ? 'Testing...' : 'Test'}
-                          </button>
+                          <div class="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleTestProvider('openai')}
+                              disabled={testingProvider() === 'openai' || saving()}
+                              class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                            >
+                              {testingProvider() === 'openai' ? 'Testing...' : 'Test'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleClearProvider('openai')}
+                              disabled={saving()}
+                              class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                              title="Clear API key"
+                            >
+                              Clear
+                            </button>
+                          </div>
                         </Show>
                       </div>
                       <Show when={providerTestResult()?.provider === 'openai'}>
@@ -711,14 +768,25 @@ export const AISettings: Component = () => {
                           <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
                         </p>
                         <Show when={settings()?.deepseek_configured}>
-                          <button
-                            type="button"
-                            onClick={() => handleTestProvider('deepseek')}
-                            disabled={testingProvider() === 'deepseek'}
-                            class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
-                          >
-                            {testingProvider() === 'deepseek' ? 'Testing...' : 'Test'}
-                          </button>
+                          <div class="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleTestProvider('deepseek')}
+                              disabled={testingProvider() === 'deepseek' || saving()}
+                              class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                            >
+                              {testingProvider() === 'deepseek' ? 'Testing...' : 'Test'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleClearProvider('deepseek')}
+                              disabled={saving()}
+                              class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                              title="Clear API key"
+                            >
+                              Clear
+                            </button>
+                          </div>
                         </Show>
                       </div>
                       <Show when={providerTestResult()?.provider === 'deepseek'}>
@@ -769,14 +837,25 @@ export const AISettings: Component = () => {
                           <span class="text-gray-400"> · Free & local</span>
                         </p>
                         <Show when={settings()?.ollama_configured}>
-                          <button
-                            type="button"
-                            onClick={() => handleTestProvider('ollama')}
-                            disabled={testingProvider() === 'ollama'}
-                            class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
-                          >
-                            {testingProvider() === 'ollama' ? 'Testing...' : 'Test'}
-                          </button>
+                          <div class="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleTestProvider('ollama')}
+                              disabled={testingProvider() === 'ollama' || saving()}
+                              class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                            >
+                              {testingProvider() === 'ollama' ? 'Testing...' : 'Test'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleClearProvider('ollama')}
+                              disabled={saving()}
+                              class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                              title="Clear Ollama URL"
+                            >
+                              Clear
+                            </button>
+                          </div>
                         </Show>
                       </div>
                       <Show when={providerTestResult()?.provider === 'ollama'}>

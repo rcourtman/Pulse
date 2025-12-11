@@ -152,6 +152,11 @@ type AISettingsUpdateRequest struct {
 	DeepSeekAPIKey  *string `json:"deepseek_api_key,omitempty"`  // Set DeepSeek API key
 	OllamaBaseURL   *string `json:"ollama_base_url,omitempty"`   // Set Ollama server URL
 	OpenAIBaseURL   *string `json:"openai_base_url,omitempty"`   // Set custom OpenAI base URL
+	// Clear flags for removing credentials
+	ClearAnthropicKey *bool `json:"clear_anthropic_key,omitempty"` // Clear Anthropic API key
+	ClearOpenAIKey    *bool `json:"clear_openai_key,omitempty"`    // Clear OpenAI API key
+	ClearDeepSeekKey  *bool `json:"clear_deepseek_key,omitempty"`  // Clear DeepSeek API key
+	ClearOllamaURL    *bool `json:"clear_ollama_url,omitempty"`    // Clear Ollama URL
 }
 
 // HandleGetAISettings returns the current AI settings (GET /api/settings/ai)
@@ -335,16 +340,25 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 
 	// Handle multi-provider credentials
-	if req.AnthropicAPIKey != nil {
+	// Clear flags take priority over setting new values
+	if req.ClearAnthropicKey != nil && *req.ClearAnthropicKey {
+		settings.AnthropicAPIKey = ""
+	} else if req.AnthropicAPIKey != nil {
 		settings.AnthropicAPIKey = strings.TrimSpace(*req.AnthropicAPIKey)
 	}
-	if req.OpenAIAPIKey != nil {
+	if req.ClearOpenAIKey != nil && *req.ClearOpenAIKey {
+		settings.OpenAIAPIKey = ""
+	} else if req.OpenAIAPIKey != nil {
 		settings.OpenAIAPIKey = strings.TrimSpace(*req.OpenAIAPIKey)
 	}
-	if req.DeepSeekAPIKey != nil {
+	if req.ClearDeepSeekKey != nil && *req.ClearDeepSeekKey {
+		settings.DeepSeekAPIKey = ""
+	} else if req.DeepSeekAPIKey != nil {
 		settings.DeepSeekAPIKey = strings.TrimSpace(*req.DeepSeekAPIKey)
 	}
-	if req.OllamaBaseURL != nil {
+	if req.ClearOllamaURL != nil && *req.ClearOllamaURL {
+		settings.OllamaBaseURL = ""
+	} else if req.OllamaBaseURL != nil {
 		settings.OllamaBaseURL = strings.TrimSpace(*req.OllamaBaseURL)
 	}
 	if req.OpenAIBaseURL != nil {

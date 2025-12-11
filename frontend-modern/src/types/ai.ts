@@ -61,6 +61,11 @@ export interface AISettingsUpdateRequest {
   deepseek_api_key?: string; // Set DeepSeek API key
   ollama_base_url?: string; // Set Ollama server URL
   openai_base_url?: string; // Set custom OpenAI base URL
+  // Clear flags for removing credentials
+  clear_anthropic_key?: boolean; // Clear Anthropic API key
+  clear_openai_key?: boolean; // Clear OpenAI API key
+  clear_deepseek_key?: boolean; // Clear DeepSeek API key
+  clear_ollama_url?: boolean; // Clear Ollama URL
 }
 
 
