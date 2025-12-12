@@ -187,10 +187,14 @@ export const AICostDashboard: Component = () => {
   };
 
   const resetHistory = async () => {
-    if (!confirm('Reset AI usage history? This clears the stored token/cost history.')) return;
+    if (!confirm('Reset AI usage history? A backup will be created in the Pulse config directory.')) return;
     try {
-      await AIAPI.resetCostHistory();
-      notificationStore.success('AI usage history reset');
+      const result = await AIAPI.resetCostHistory();
+      if (result.backup_file) {
+        notificationStore.success(`AI usage history reset (backup: ${result.backup_file})`);
+      } else {
+        notificationStore.success('AI usage history reset');
+      }
       await loadSummary(days());
     } catch (err) {
       logger.error('[AICostDashboard] Failed to reset AI cost history:', err);
