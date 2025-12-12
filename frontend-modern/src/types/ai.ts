@@ -38,6 +38,9 @@ export interface AISettings {
   ollama_base_url: string; // Ollama server URL
   openai_base_url?: string; // Custom OpenAI base URL
   configured_providers: AIProvider[]; // List of providers with credentials
+
+  // Cost controls (30-day budget, pro-rated in UI)
+  cost_budget_usd_30d?: number;
 }
 
 export interface AISettingsUpdateRequest {
@@ -68,6 +71,9 @@ export interface AISettingsUpdateRequest {
   clear_openai_key?: boolean; // Clear OpenAI API key
   clear_deepseek_key?: boolean; // Clear DeepSeek API key
   clear_ollama_url?: boolean; // Clear Ollama URL
+
+  // Cost controls
+  cost_budget_usd_30d?: number;
 }
 
 

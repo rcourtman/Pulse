@@ -1096,6 +1096,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/debug/context", RequireAdmin(r.config, r.aiSettingsHandler.HandleDebugContext))
 	r.mux.HandleFunc("/api/ai/agents", RequireAuth(r.config, r.aiSettingsHandler.HandleGetConnectedAgents))
 	r.mux.HandleFunc("/api/ai/cost/summary", RequireAuth(r.config, r.aiSettingsHandler.HandleGetAICostSummary))
+	r.mux.HandleFunc("/api/ai/cost/reset", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleResetAICostHistory)))
 	// OAuth endpoints for Claude Pro/Max subscription authentication
 	r.mux.HandleFunc("/api/ai/oauth/start", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthStart))
 	r.mux.HandleFunc("/api/ai/oauth/exchange", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthExchange)) // Manual code input
@@ -1418,7 +1419,7 @@ func (r *Router) StartPatrol(ctx context.Context) {
 				if adapter != nil {
 					r.aiSettingsHandler.SetMetricsHistoryProvider(adapter)
 				}
-				
+
 				// Initialize baseline store for anomaly detection
 				// Uses config dir for persistence
 				baselineCfg := ai.DefaultBaselineConfig()
@@ -1428,7 +1429,7 @@ func (r *Router) StartPatrol(ctx context.Context) {
 				baselineStore := ai.NewBaselineStore(baselineCfg)
 				if baselineStore != nil {
 					r.aiSettingsHandler.SetBaselineStore(baselineStore)
-					
+
 					// Start background baseline learning loop
 					go r.startBaselineLearning(ctx, baselineStore, metricsHistory)
 				}
@@ -1452,11 +1453,11 @@ func (r *Router) startBaselineLearning(ctx context.Context, store *ai.BaselineSt
 	if store == nil || metricsHistory == nil {
 		return
 	}
-	
+
 	// Learn every hour
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
-	
+
 	// Run initial learning after a short delay (allow metrics to accumulate)
 	select {
 	case <-ctx.Done():
@@ -1464,9 +1465,9 @@ func (r *Router) startBaselineLearning(ctx context.Context, store *ai.BaselineSt
 	case <-time.After(5 * time.Minute):
 		r.learnBaselines(store, metricsHistory)
 	}
-	
+
 	log.Info().Msg("Baseline learning loop started")
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -1487,11 +1488,11 @@ func (r *Router) learnBaselines(store *ai.BaselineStore, metricsHistory *monitor
 	if r.monitor == nil {
 		return
 	}
-	
+
 	state := r.monitor.GetState()
 	learningWindow := 7 * 24 * time.Hour // Learn from 7 days of data
 	var learned int
-	
+
 	// Learn baselines for nodes
 	for _, node := range state.Nodes {
 		for _, metric := range []string{"cpu", "memory"} {
@@ -1507,7 +1508,7 @@ func (r *Router) learnBaselines(store *ai.BaselineStore, metricsHistory *monitor
 			}
 		}
 	}
-	
+
 	// Learn baselines for VMs
 	for _, vm := range state.VMs {
 		if vm.Template {
@@ -1526,7 +1527,7 @@ func (r *Router) learnBaselines(store *ai.BaselineStore, metricsHistory *monitor
 			}
 		}
 	}
-	
+
 	// Learn baselines for containers
 	for _, ct := range state.Containers {
 		if ct.Template {
@@ -1545,12 +1546,12 @@ func (r *Router) learnBaselines(store *ai.BaselineStore, metricsHistory *monitor
 			}
 		}
 	}
-	
+
 	// Save after learning
 	if err := store.Save(); err != nil {
 		log.Warn().Err(err).Msg("Failed to save baselines")
 	}
-	
+
 	log.Debug().
 		Int("baselines_updated", learned).
 		Int("resources", store.ResourceCount()).

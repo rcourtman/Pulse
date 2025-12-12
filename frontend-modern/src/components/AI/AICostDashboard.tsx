@@ -1,11 +1,11 @@
-import { Component, Show, createMemo, createSignal, onMount, For, createEffect } from 'solid-js';
+import { Component, Show, createMemo, createSignal, onMount, For } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { AIAPI } from '@/api/ai';
 import { formatNumber } from '@/utils/format';
 import { logger } from '@/utils/logger';
 import { notificationStore } from '@/stores/notifications';
-import type { AICostSummary } from '@/types/ai';
+import type { AICostSummary, AISettings } from '@/types/ai';
 import { PROVIDER_NAMES } from '@/types/ai';
 
 const usdFormatter = new Intl.NumberFormat(undefined, {
@@ -14,8 +14,6 @@ const usdFormatter = new Intl.NumberFormat(undefined, {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
-
-const budgetStorageKey = 'pulse_ai_cost_budget_usd_v1';
 
 const TinySparkline: Component<{
   values: number[];
@@ -58,7 +56,9 @@ export const AICostDashboard: Component = () => {
   const [loading, setLoading] = createSignal(false);
   const [loadError, setLoadError] = createSignal<string | null>(null);
   const [summary, setSummary] = createSignal<AICostSummary | null>(null);
-  const [budgetUSD, setBudgetUSD] = createSignal<string>('');
+  const [aiSettings, setAISettings] = createSignal<AISettings | null>(null);
+  const [budgetUSD30dInput, setBudgetUSD30dInput] = createSignal<string>('');
+  const [savingBudget, setSavingBudget] = createSignal(false);
   let requestSeq = 0;
 
   const anyPricingKnown = createMemo(() => {
@@ -120,39 +120,83 @@ export const AICostDashboard: Component = () => {
     loadSummary(days());
   });
 
+  const loadBudgetSettings = async () => {
+    try {
+      const s = await AIAPI.getSettings();
+      setAISettings(s);
+      if (typeof s.cost_budget_usd_30d === 'number' && Number.isFinite(s.cost_budget_usd_30d) && s.cost_budget_usd_30d > 0) {
+        setBudgetUSD30dInput(String(s.cost_budget_usd_30d));
+      } else {
+        setBudgetUSD30dInput('');
+      }
+    } catch (err) {
+      logger.debug('[AICostDashboard] Failed to load AI settings for budget:', err);
+      setAISettings(null);
+      setBudgetUSD30dInput('');
+    }
+  };
+
   onMount(() => {
-    try {
-      const stored = localStorage.getItem(budgetStorageKey);
-      if (stored) setBudgetUSD(stored);
-    } catch (_err) {
-      // ignore
-    }
+    loadBudgetSettings();
   });
 
-  createEffect(() => {
-    const value = budgetUSD();
-    try {
-      if (!value) localStorage.removeItem(budgetStorageKey);
-      else localStorage.setItem(budgetStorageKey, value);
-    } catch (_err) {
-      // ignore
-    }
-  });
-
-  const parsedBudgetUSD = createMemo(() => {
-    const raw = budgetUSD().trim();
+  const parsedBudgetUSD30d = createMemo(() => {
+    const raw = budgetUSD30dInput().trim();
     if (!raw) return null;
     const n = Number(raw);
     if (!Number.isFinite(n) || n <= 0) return null;
     return n;
   });
 
+  const budgetForRange = createMemo(() => {
+    const budget30d = parsedBudgetUSD30d();
+    if (budget30d == null) return null;
+    const rangeDays = days();
+    return (budget30d * rangeDays) / 30;
+  });
+
   const isOverBudget = createMemo(() => {
-    const budget = parsedBudgetUSD();
+    const budget = budgetForRange();
     const usd = estimatedTotalUSD();
     if (budget == null || usd == null) return false;
     return usd > budget;
   });
+
+  const isDirtyBudget = createMemo(() => {
+    const s = aiSettings();
+    const current = typeof s?.cost_budget_usd_30d === 'number' ? s.cost_budget_usd_30d : 0;
+    const next = parsedBudgetUSD30d() ?? 0;
+    return Math.abs(current - next) > 0.0001;
+  });
+
+  const saveBudget = async () => {
+    if (savingBudget()) return;
+    setSavingBudget(true);
+    try {
+      const value = parsedBudgetUSD30d() ?? 0;
+      const next = await AIAPI.updateSettings({ cost_budget_usd_30d: value });
+      setAISettings(next);
+      notificationStore.success('AI cost budget saved');
+    } catch (err) {
+      logger.error('[AICostDashboard] Failed to save budget:', err);
+      notificationStore.error('Failed to save AI cost budget');
+      await loadBudgetSettings();
+    } finally {
+      setSavingBudget(false);
+    }
+  };
+
+  const resetHistory = async () => {
+    if (!confirm('Reset AI usage history? This clears the stored token/cost history.')) return;
+    try {
+      await AIAPI.resetCostHistory();
+      notificationStore.success('AI usage history reset');
+      await loadSummary(days());
+    } catch (err) {
+      logger.error('[AICostDashboard] Failed to reset AI cost history:', err);
+      notificationStore.error('Failed to reset AI usage history');
+    }
+  };
 
   const handleRangeClick = (rangeDays: number) => {
     if (loading() || rangeDays === days()) return;
@@ -251,7 +295,7 @@ export const AICostDashboard: Component = () => {
 
         <Show when={isOverBudget()}>
           <div class="text-xs px-3 py-2 rounded border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100">
-            Estimated spend ({formatUSD(estimatedTotalUSD() ?? 0)}) is above your budget ({formatUSD(parsedBudgetUSD() ?? 0)}).
+            Estimated spend ({formatUSD(estimatedTotalUSD() ?? 0)}) is above your budget ({formatUSD(budgetForRange() ?? 0)}).
           </div>
         </Show>
 
@@ -338,15 +382,28 @@ export const AICostDashboard: Component = () => {
                   </div>
                 </div>
                 <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
-                  <div class="text-xs text-gray-500 dark:text-gray-400">Budget (USD)</div>
+                  <div class="flex items-center justify-between gap-2">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Budget alert (USD per 30d)</div>
+                    <button
+                      type="button"
+                      disabled={!isDirtyBudget() || savingBudget()}
+                      onClick={saveBudget}
+                      class={`text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 ${(!isDirtyBudget() || savingBudget()) ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    >
+                      Save
+                    </button>
+                  </div>
                   <input
-                    value={budgetUSD()}
-                    onInput={(e) => setBudgetUSD(e.currentTarget.value)}
+                    value={budgetUSD30dInput()}
+                    onInput={(e) => setBudgetUSD30dInput(e.currentTarget.value)}
                     placeholder="e.g. 25"
                     class="mt-1 w-full px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   />
                   <div class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                    Applies to selected range.
+                    Cross-provider estimate. Pro-rated for {days()}d:{' '}
+                    <Show when={budgetForRange() != null} fallback={<span>—</span>}>
+                      {formatUSD(budgetForRange() ?? 0)}
+                    </Show>
                   </div>
                 </div>
               </div>
@@ -374,6 +431,20 @@ export const AICostDashboard: Component = () => {
 
               <div class="text-xs text-gray-500 dark:text-gray-400">
                 USD is an estimate based on public list prices. It may differ from billing.
+              </div>
+
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                  History retention: {data().retention_days} days
+                </div>
+                <button
+                  type="button"
+                  disabled={loading()}
+                  onClick={resetHistory}
+                  class={`text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                >
+                  Reset history
+                </button>
               </div>
 
               <div class="overflow-x-auto">

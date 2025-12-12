@@ -50,6 +50,14 @@ export class AIAPI {
     return apiFetchJSON(`${this.baseUrl}/ai/cost/summary?days=${days}`) as Promise<AICostSummary>;
   }
 
+  // Reset AI usage history (admin-only)
+  static async resetCostHistory(): Promise<{ ok: boolean }> {
+    return apiFetchJSON(`${this.baseUrl}/ai/cost/reset`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }) as Promise<{ ok: boolean }>;
+  }
+
   // Start OAuth flow for Claude Pro/Max subscription
   // Returns the authorization URL to redirect the user to
   static async startOAuth(): Promise<{ auth_url: string; state: string }> {

@@ -149,6 +149,17 @@ func (s *Service) GetCostSummary(days int) cost.Summary {
 	return store.GetSummary(days)
 }
 
+// ClearCostHistory deletes retained AI usage events (admin operation).
+func (s *Service) ClearCostHistory() error {
+	s.mu.RLock()
+	store := s.costStore
+	s.mu.RUnlock()
+	if store == nil {
+		return nil
+	}
+	return store.Clear()
+}
+
 // SetPatrolThresholdProvider sets the threshold provider for patrol
 // This should be called with an AlertThresholdAdapter to connect patrol to user-configured thresholds
 func (s *Service) SetPatrolThresholdProvider(provider ThresholdProvider) {

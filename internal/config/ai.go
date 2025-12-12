@@ -16,14 +16,14 @@ const (
 // This is stored in ai.enc (encrypted) in the config directory
 type AIConfig struct {
 	Enabled        bool   `json:"enabled"`
-	Provider       string `json:"provider"`        // DEPRECATED: legacy single provider field, kept for migration
-	APIKey         string `json:"api_key"`         // DEPRECATED: legacy single API key, kept for migration
-	Model          string `json:"model"`           // Currently selected default model (format: "provider:model-name")
+	Provider       string `json:"provider"`               // DEPRECATED: legacy single provider field, kept for migration
+	APIKey         string `json:"api_key"`                // DEPRECATED: legacy single API key, kept for migration
+	Model          string `json:"model"`                  // Currently selected default model (format: "provider:model-name")
 	ChatModel      string `json:"chat_model,omitempty"`   // Model for interactive chat (defaults to Model)
 	PatrolModel    string `json:"patrol_model,omitempty"` // Model for background patrol (defaults to Model, can be cheaper)
-	BaseURL        string `json:"base_url"`        // DEPRECATED: legacy base URL, kept for migration
-	AutonomousMode bool   `json:"autonomous_mode"` // when true, AI executes commands without approval
-	CustomContext  string `json:"custom_context"`  // user-provided context about their infrastructure
+	BaseURL        string `json:"base_url"`               // DEPRECATED: legacy base URL, kept for migration
+	AutonomousMode bool   `json:"autonomous_mode"`        // when true, AI executes commands without approval
+	CustomContext  string `json:"custom_context"`         // user-provided context about their infrastructure
 
 	// Multi-provider credentials - each provider can be configured independently
 	AnthropicAPIKey string `json:"anthropic_api_key,omitempty"` // Anthropic API key
@@ -39,17 +39,21 @@ type AIConfig struct {
 	OAuthExpiresAt    time.Time  `json:"oauth_expires_at,omitempty"`    // Token expiration time
 
 	// Patrol settings for background AI monitoring
-	PatrolEnabled          bool   `json:"patrol_enabled"`                      // Enable background AI health patrol
-	PatrolIntervalMinutes  int    `json:"patrol_interval_minutes,omitempty"`   // How often to run quick patrols (default: 360 = 6 hours)
-	PatrolSchedulePreset   string `json:"patrol_schedule_preset,omitempty"`    // User-friendly preset: "15min", "1hr", "6hr", "12hr", "daily", "disabled"
-	PatrolAnalyzeNodes     bool   `json:"patrol_analyze_nodes,omitempty"`      // Include Proxmox nodes in patrol
-	PatrolAnalyzeGuests    bool   `json:"patrol_analyze_guests,omitempty"`     // Include VMs/containers in patrol
-	PatrolAnalyzeDocker    bool   `json:"patrol_analyze_docker,omitempty"`     // Include Docker hosts in patrol
-	PatrolAnalyzeStorage   bool   `json:"patrol_analyze_storage,omitempty"`    // Include storage in patrol
-	PatrolAutoFix          bool   `json:"patrol_auto_fix,omitempty"`           // When true, patrol can attempt automatic remediation (default: false, observe only)
+	PatrolEnabled         bool   `json:"patrol_enabled"`                    // Enable background AI health patrol
+	PatrolIntervalMinutes int    `json:"patrol_interval_minutes,omitempty"` // How often to run quick patrols (default: 360 = 6 hours)
+	PatrolSchedulePreset  string `json:"patrol_schedule_preset,omitempty"`  // User-friendly preset: "15min", "1hr", "6hr", "12hr", "daily", "disabled"
+	PatrolAnalyzeNodes    bool   `json:"patrol_analyze_nodes,omitempty"`    // Include Proxmox nodes in patrol
+	PatrolAnalyzeGuests   bool   `json:"patrol_analyze_guests,omitempty"`   // Include VMs/containers in patrol
+	PatrolAnalyzeDocker   bool   `json:"patrol_analyze_docker,omitempty"`   // Include Docker hosts in patrol
+	PatrolAnalyzeStorage  bool   `json:"patrol_analyze_storage,omitempty"`  // Include storage in patrol
+	PatrolAutoFix         bool   `json:"patrol_auto_fix,omitempty"`         // When true, patrol can attempt automatic remediation (default: false, observe only)
 
 	// Alert-triggered AI analysis - analyze specific resources when alerts fire
 	AlertTriggeredAnalysis bool `json:"alert_triggered_analysis,omitempty"` // Enable AI analysis when alerts fire (token-efficient)
+
+	// AI cost controls
+	// Budget is expressed as an estimated USD amount over a 30-day window (pro-rated in UI for other ranges).
+	CostBudgetUSD30d float64 `json:"cost_budget_usd_30d,omitempty"`
 }
 
 // AIProvider constants
@@ -94,13 +98,13 @@ func NewDefaultAIConfig() *AIConfig {
 		AuthMethod: AuthMethodAPIKey,
 		// Patrol defaults - enabled when AI is enabled
 		// Default to 6 hour intervals (much more token-efficient than 15 min)
-		PatrolEnabled:          true,
-		PatrolIntervalMinutes:  360, // 6 hours - balance between coverage and token efficiency
-		PatrolSchedulePreset:   "6hr",
-		PatrolAnalyzeNodes:     true,
-		PatrolAnalyzeGuests:    true,
-		PatrolAnalyzeDocker:    true,
-		PatrolAnalyzeStorage:   true,
+		PatrolEnabled:         true,
+		PatrolIntervalMinutes: 360, // 6 hours - balance between coverage and token efficiency
+		PatrolSchedulePreset:  "6hr",
+		PatrolAnalyzeNodes:    true,
+		PatrolAnalyzeGuests:   true,
+		PatrolAnalyzeDocker:   true,
+		PatrolAnalyzeStorage:  true,
 		// Alert-triggered analysis is highly token-efficient - enabled by default
 		AlertTriggeredAnalysis: true,
 	}
@@ -394,4 +398,3 @@ func (c *AIConfig) IsPatrolEnabled() bool {
 func (c *AIConfig) IsAlertTriggeredAnalysisEnabled() bool {
 	return c.AlertTriggeredAnalysis
 }
-
