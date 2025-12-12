@@ -99,6 +99,18 @@ func TestSummaryGroupsByProviderModelAndDailyTotals(t *testing.T) {
 	if dailyGot[todayKey].InputTokens != 200 || dailyGot[todayKey].OutputTokens != 100 {
 		t.Fatalf("daily totals for %s wrong: %+v", todayKey, dailyGot[todayKey])
 	}
+
+	// Use-case rollups.
+	useCases := make(map[string]UseCaseSummary)
+	for _, uc := range summary.UseCases {
+		useCases[uc.UseCase] = uc
+	}
+	if useCases["chat"].TotalTokens != (110 + 55 + 200 + 100) {
+		t.Fatalf("chat use-case totals wrong: %+v", useCases["chat"])
+	}
+	if useCases["patrol"].TotalTokens != (20 + 10) {
+		t.Fatalf("patrol use-case totals wrong: %+v", useCases["patrol"])
+	}
 }
 
 func TestRetentionTrimsOldEvents(t *testing.T) {
@@ -116,6 +128,28 @@ func TestRetentionTrimsOldEvents(t *testing.T) {
 	summary := store.GetSummary(7)
 	if len(summary.ProviderModels) != 0 {
 		t.Fatalf("expected old event to be trimmed, got %+v", summary.ProviderModels)
+	}
+}
+
+func TestSummaryTruncationReflectsRetentionWindow(t *testing.T) {
+	store := NewStore(30)
+	now := time.Now()
+
+	store.Record(UsageEvent{
+		Timestamp:    now.Add(-10 * 24 * time.Hour),
+		Provider:     "openai",
+		RequestModel: "openai:gpt-4o",
+		InputTokens:  10,
+		OutputTokens: 10,
+		UseCase:      "chat",
+	})
+
+	summary := store.GetSummary(365)
+	if !summary.Truncated {
+		t.Fatalf("expected summary to be truncated when requesting beyond retention")
+	}
+	if summary.RetentionDays != 30 || summary.EffectiveDays != 30 {
+		t.Fatalf("unexpected retention/effective days: %+v", summary)
 	}
 }
 

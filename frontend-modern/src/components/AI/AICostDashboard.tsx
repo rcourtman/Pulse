@@ -1,4 +1,4 @@
-import { Component, Show, createMemo, createSignal, onMount, For } from 'solid-js';
+import { Component, Show, createMemo, createSignal, onMount, For, createEffect } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { AIAPI } from '@/api/ai';
@@ -15,11 +15,50 @@ const usdFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 2,
 });
 
+const budgetStorageKey = 'pulse_ai_cost_budget_usd_v1';
+
+const TinySparkline: Component<{
+  values: number[];
+  width?: number;
+  height?: number;
+  stroke?: string;
+}> = (props) => {
+  const width = () => props.width ?? 160;
+  const height = () => props.height ?? 28;
+  const stroke = () => props.stroke ?? '#22c55e';
+
+  const pathD = createMemo(() => {
+    const values = props.values;
+    const w = width();
+    const h = height();
+    if (!values || values.length === 0) return '';
+
+    const max = Math.max(...values, 0);
+    const safeMax = max <= 0 ? 1 : max;
+
+    const xStep = values.length <= 1 ? 0 : w / (values.length - 1);
+    let d = '';
+    values.forEach((v, idx) => {
+      const x = idx * xStep;
+      const y = h - (Math.max(0, v) / safeMax) * h;
+      d += `${idx === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)} `;
+    });
+    return d.trim();
+  });
+
+  return (
+    <svg width={width()} height={height()} viewBox={`0 0 ${width()} ${height()}`} class="block">
+      <path d={pathD()} fill="none" stroke={stroke()} stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  );
+};
+
 export const AICostDashboard: Component = () => {
   const [days, setDays] = createSignal(30);
   const [loading, setLoading] = createSignal(false);
   const [loadError, setLoadError] = createSignal<string | null>(null);
   const [summary, setSummary] = createSignal<AICostSummary | null>(null);
+  const [budgetUSD, setBudgetUSD] = createSignal<string>('');
   let requestSeq = 0;
 
   const anyPricingKnown = createMemo(() => {
@@ -34,15 +73,29 @@ export const AICostDashboard: Component = () => {
     return data.totals.estimated_usd ?? 0;
   });
 
+  const useCaseMap = createMemo(() => {
+    const data = summary();
+    const map = new Map<string, { tokens: number; usd: number; pricingKnown: boolean }>();
+    if (!data) return map;
+    for (const uc of data.use_cases ?? []) {
+      map.set(uc.use_case, {
+        tokens: uc.total_tokens,
+        usd: uc.estimated_usd ?? 0,
+        pricingKnown: uc.pricing_known,
+      });
+    }
+    return map;
+  });
+
+  const dailyTokenValues = createMemo(() => (summary()?.daily_totals ?? []).map((d) => d.total_tokens));
+  const dailyUSDValues = createMemo(() => (summary()?.daily_totals ?? []).map((d) => d.estimated_usd ?? 0));
+
   const formatUSD = (usd: number) => usdFormatter.format(usd);
 
   const loadSummary = async (rangeDays: number) => {
     const seq = ++requestSeq;
     const isInitialLoad = summary() === null;
-    // Only show loading indicator on initial load to prevent flicker on range changes
-    if (isInitialLoad) {
-      setLoading(true);
-    }
+    setLoading(true);
     setLoadError(null);
     try {
       const data = await AIAPI.getCostSummary(rangeDays);
@@ -65,6 +118,40 @@ export const AICostDashboard: Component = () => {
 
   onMount(() => {
     loadSummary(days());
+  });
+
+  onMount(() => {
+    try {
+      const stored = localStorage.getItem(budgetStorageKey);
+      if (stored) setBudgetUSD(stored);
+    } catch (_err) {
+      // ignore
+    }
+  });
+
+  createEffect(() => {
+    const value = budgetUSD();
+    try {
+      if (!value) localStorage.removeItem(budgetStorageKey);
+      else localStorage.setItem(budgetStorageKey, value);
+    } catch (_err) {
+      // ignore
+    }
+  });
+
+  const parsedBudgetUSD = createMemo(() => {
+    const raw = budgetUSD().trim();
+    if (!raw) return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return n;
+  });
+
+  const isOverBudget = createMemo(() => {
+    const budget = parsedBudgetUSD();
+    const usd = estimatedTotalUSD();
+    if (budget == null || usd == null) return false;
+    return usd > budget;
   });
 
   const handleRangeClick = (rangeDays: number) => {
@@ -156,6 +243,18 @@ export const AICostDashboard: Component = () => {
           <div class="text-sm text-gray-500 dark:text-gray-400">Loading usage…</div>
         </Show>
 
+        <Show when={summary()?.truncated}>
+          <div class="text-xs px-3 py-2 rounded border border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100">
+            Showing the last {summary()?.effective_days} days due to a {summary()?.retention_days}-day retention window.
+          </div>
+        </Show>
+
+        <Show when={isOverBudget()}>
+          <div class="text-xs px-3 py-2 rounded border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100">
+            Estimated spend ({formatUSD(estimatedTotalUSD() ?? 0)}) is above your budget ({formatUSD(parsedBudgetUSD() ?? 0)}).
+          </div>
+        </Show>
+
         <Show when={loadError() && summary()}>
           <div class="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-100">
             <div class="truncate">
@@ -205,6 +304,70 @@ export const AICostDashboard: Component = () => {
                   <div class="text-xs text-gray-500 dark:text-gray-400">Model/provider pairs</div>
                   <div class="text-lg font-semibold text-gray-900 dark:text-white">
                     {formatNumber(data().provider_models.length)}
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
+                  <div class="text-xs text-gray-500 dark:text-gray-400">Chat</div>
+                  <div class="text-sm font-semibold text-gray-900 dark:text-white">
+                    {formatNumber(useCaseMap().get('chat')?.tokens ?? 0)} tokens
+                  </div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">
+                    <Show
+                      when={useCaseMap().get('chat')?.pricingKnown}
+                      fallback={<span>—</span>}
+                    >
+                      {formatUSD(useCaseMap().get('chat')?.usd ?? 0)}
+                    </Show>
+                  </div>
+                </div>
+                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
+                  <div class="text-xs text-gray-500 dark:text-gray-400">Patrol</div>
+                  <div class="text-sm font-semibold text-gray-900 dark:text-white">
+                    {formatNumber(useCaseMap().get('patrol')?.tokens ?? 0)} tokens
+                  </div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">
+                    <Show
+                      when={useCaseMap().get('patrol')?.pricingKnown}
+                      fallback={<span>—</span>}
+                    >
+                      {formatUSD(useCaseMap().get('patrol')?.usd ?? 0)}
+                    </Show>
+                  </div>
+                </div>
+                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
+                  <div class="text-xs text-gray-500 dark:text-gray-400">Budget (USD)</div>
+                  <input
+                    value={budgetUSD()}
+                    onInput={(e) => setBudgetUSD(e.currentTarget.value)}
+                    placeholder="e.g. 25"
+                    class="mt-1 w-full px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                  />
+                  <div class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                    Applies to selected range.
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
+                  <div class="flex items-center justify-between">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Daily estimated USD</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">{data().daily_totals.length} points</div>
+                  </div>
+                  <div class="mt-2">
+                    <TinySparkline values={dailyUSDValues()} stroke="#10b981" />
+                  </div>
+                </div>
+                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
+                  <div class="flex items-center justify-between">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Daily total tokens</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">{data().daily_totals.length} points</div>
+                  </div>
+                  <div class="mt-2">
+                    <TinySparkline values={dailyTokenValues()} stroke="#3b82f6" />
                   </div>
                 </div>
               </div>

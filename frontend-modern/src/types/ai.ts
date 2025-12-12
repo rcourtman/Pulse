@@ -189,9 +189,22 @@ export interface AICostDailySummary {
   estimated_usd?: number;
 }
 
+export interface AICostUseCaseSummary {
+  use_case: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_usd?: number;
+  pricing_known: boolean;
+}
+
 export interface AICostSummary {
   days: number;
+  retention_days: number;
+  effective_days: number;
+  truncated: boolean;
   provider_models: AICostProviderModelSummary[];
+  use_cases: AICostUseCaseSummary[];
   daily_totals: AICostDailySummary[];
   totals: AICostProviderModelSummary;
 }

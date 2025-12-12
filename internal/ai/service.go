@@ -127,9 +127,19 @@ func (s *Service) GetCostSummary(days int) cost.Summary {
 		if days <= 0 {
 			days = 30
 		}
+		effectiveDays := days
+		truncated := false
+		if cost.DefaultMaxDays > 0 && days > cost.DefaultMaxDays {
+			effectiveDays = cost.DefaultMaxDays
+			truncated = true
+		}
 		return cost.Summary{
 			Days:           days,
+			RetentionDays:  cost.DefaultMaxDays,
+			EffectiveDays:  effectiveDays,
+			Truncated:      truncated,
 			ProviderModels: []cost.ProviderModelSummary{},
+			UseCases:       []cost.UseCaseSummary{},
 			DailyTotals:    []cost.DailySummary{},
 			Totals: cost.ProviderModelSummary{
 				Provider: "all",

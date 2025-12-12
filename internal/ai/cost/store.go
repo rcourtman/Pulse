@@ -31,7 +31,7 @@ type Persistence interface {
 }
 
 // DefaultMaxDays is the default retention window for raw usage events.
-const DefaultMaxDays = 90
+const DefaultMaxDays = 365
 
 // Store provides thread-safe usage tracking with optional persistence.
 type Store struct {
@@ -100,7 +100,15 @@ func (s *Store) GetSummary(days int) Summary {
 	}
 
 	now := time.Now()
-	cutoff := now.AddDate(0, 0, -days)
+	retentionDays := s.maxDays
+	effectiveDays := days
+	truncated := false
+	if retentionDays > 0 && effectiveDays > retentionDays {
+		effectiveDays = retentionDays
+		truncated = true
+	}
+
+	cutoff := now.AddDate(0, 0, -effectiveDays)
 
 	s.mu.RLock()
 	events := make([]UsageEvent, 0, len(s.events))
@@ -188,12 +196,17 @@ func (s *Store) GetSummary(days int) Summary {
 	for _, pm := range providerModels {
 		if pm.PricingKnown {
 			totals.EstimatedUSD += pm.EstimatedUSD
+			totals.PricingKnown = true
 		}
 	}
 
 	return Summary{
 		Days:           days,
+		RetentionDays:  retentionDays,
+		EffectiveDays:  effectiveDays,
+		Truncated:      truncated,
 		ProviderModels: providerModels,
+		UseCases:       summarizeUseCases(events),
 		DailyTotals:    daily,
 		Totals:         totals,
 	}
@@ -312,10 +325,90 @@ type DailySummary struct {
 	EstimatedUSD float64 `json:"estimated_usd,omitempty"`
 }
 
+// UseCaseSummary is a rollup for a use-case (e.g. "chat", "patrol").
+type UseCaseSummary struct {
+	UseCase      string  `json:"use_case"`
+	InputTokens  int64   `json:"input_tokens"`
+	OutputTokens int64   `json:"output_tokens"`
+	TotalTokens  int64   `json:"total_tokens"`
+	EstimatedUSD float64 `json:"estimated_usd,omitempty"`
+	PricingKnown bool    `json:"pricing_known"`
+}
+
 // Summary is returned by the cost summary API.
 type Summary struct {
-	Days           int                    `json:"days"`
+	Days          int  `json:"days"`
+	RetentionDays int  `json:"retention_days"`
+	EffectiveDays int  `json:"effective_days"`
+	Truncated     bool `json:"truncated"`
+
 	ProviderModels []ProviderModelSummary `json:"provider_models"`
+	UseCases       []UseCaseSummary       `json:"use_cases"`
 	DailyTotals    []DailySummary         `json:"daily_totals"`
 	Totals         ProviderModelSummary   `json:"totals"`
+}
+
+func summarizeUseCases(events []UsageEvent) []UseCaseSummary {
+	type totals struct {
+		input  int64
+		output int64
+		usd    float64
+		known  bool
+	}
+
+	perUseCase := make(map[string]*totals)
+	for _, e := range events {
+		useCase := strings.TrimSpace(strings.ToLower(e.UseCase))
+		if useCase == "" {
+			useCase = "unknown"
+		}
+		t := perUseCase[useCase]
+		if t == nil {
+			t = &totals{}
+			perUseCase[useCase] = t
+		}
+
+		t.input += int64(e.InputTokens)
+		t.output += int64(e.OutputTokens)
+
+		provider := strings.ToLower(strings.TrimSpace(e.Provider))
+		model := normalizeModel(provider, e.RequestModel, e.ResponseModel)
+		provider, model = inferProviderAndModel(provider, model)
+
+		usd, known, _ := EstimateUSD(provider, model, int64(e.InputTokens), int64(e.OutputTokens))
+		if known {
+			t.usd += usd
+			t.known = true
+		}
+	}
+
+	out := make([]UseCaseSummary, 0, len(perUseCase))
+	for useCase, t := range perUseCase {
+		out = append(out, UseCaseSummary{
+			UseCase:      useCase,
+			InputTokens:  t.input,
+			OutputTokens: t.output,
+			TotalTokens:  t.input + t.output,
+			EstimatedUSD: t.usd,
+			PricingKnown: t.known,
+		})
+	}
+
+	order := map[string]int{
+		"chat":    0,
+		"patrol":  1,
+		"unknown": 2,
+	}
+	sort.Slice(out, func(i, j int) bool {
+		oi, okI := order[out[i].UseCase]
+		oj, okJ := order[out[j].UseCase]
+		if okI && okJ && oi != oj {
+			return oi < oj
+		}
+		if okI != okJ {
+			return okI
+		}
+		return out[i].UseCase < out[j].UseCase
+	})
+	return out
 }
