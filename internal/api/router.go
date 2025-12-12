@@ -1436,6 +1436,28 @@ func (r *Router) StartPatrol(ctx context.Context) {
 				}
 			}
 		}
+		
+		// Initialize operational memory (change detection and remediation logging)
+		dataDir := ""
+		if r.persistence != nil {
+			dataDir = r.persistence.DataDir()
+		}
+		
+		changeDetector := ai.NewChangeDetector(ai.ChangeDetectorConfig{
+			MaxChanges: 1000,
+			DataDir:    dataDir,
+		})
+		if changeDetector != nil {
+			r.aiSettingsHandler.SetChangeDetector(changeDetector)
+		}
+		
+		remediationLog := ai.NewRemediationLog(ai.RemediationLogConfig{
+			MaxRecords: 500,
+			DataDir:    dataDir,
+		})
+		if remediationLog != nil {
+			r.aiSettingsHandler.SetRemediationLog(remediationLog)
+		}
 
 		r.aiSettingsHandler.StartPatrol(ctx)
 	}

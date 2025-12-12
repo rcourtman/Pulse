@@ -105,6 +105,16 @@ func (h *AISettingsHandler) SetBaselineStore(store *ai.BaselineStore) {
 	h.aiService.SetBaselineStore(store)
 }
 
+// SetChangeDetector sets the change detector for operational memory
+func (h *AISettingsHandler) SetChangeDetector(detector *ai.ChangeDetector) {
+	h.aiService.SetChangeDetector(detector)
+}
+
+// SetRemediationLog sets the remediation log for tracking fix attempts
+func (h *AISettingsHandler) SetRemediationLog(remLog *ai.RemediationLog) {
+	h.aiService.SetRemediationLog(remLog)
+}
+
 // StopPatrol stops the background AI patrol service
 func (h *AISettingsHandler) StopPatrol() {
 	h.aiService.StopPatrol()

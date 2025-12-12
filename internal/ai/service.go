@@ -219,6 +219,28 @@ func (s *Service) SetBaselineStore(store *BaselineStore) {
 	}
 }
 
+// SetChangeDetector sets the change detector for operational memory
+func (s *Service) SetChangeDetector(detector *ChangeDetector) {
+	s.mu.RLock()
+	patrol := s.patrolService
+	s.mu.RUnlock()
+
+	if patrol != nil {
+		patrol.SetChangeDetector(detector)
+	}
+}
+
+// SetRemediationLog sets the remediation log for tracking fix attempts
+func (s *Service) SetRemediationLog(remLog *RemediationLog) {
+	s.mu.RLock()
+	patrol := s.patrolService
+	s.mu.RUnlock()
+
+	if patrol != nil {
+		patrol.SetRemediationLog(remLog)
+	}
+}
+
 // StartPatrol starts the background patrol service
 func (s *Service) StartPatrol(ctx context.Context) {
 	s.mu.RLock()
