@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	aicontext "github.com/rcourtman/pulse-go-rewrite/internal/ai/context"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -210,6 +211,7 @@ type PatrolService struct {
 	findings          *FindingsStore
 	knowledgeStore    *knowledge.Store // For per-resource notes in patrol context
 	metricsHistory    MetricsHistoryProvider // For trend analysis and predictions
+	baselineStore     *baseline.Store  // For anomaly detection via learned baselines
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds PatrolThresholds
@@ -338,6 +340,22 @@ func (p *PatrolService) SetMetricsHistoryProvider(provider MetricsHistoryProvide
 	defer p.mu.Unlock()
 	p.metricsHistory = provider
 	log.Info().Msg("AI Patrol: Metrics history provider set for enriched context")
+}
+
+// SetBaselineStore sets the baseline store for anomaly detection
+// This enables the patrol service to detect anomalies based on learned normal behavior
+func (p *PatrolService) SetBaselineStore(store *baseline.Store) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.baselineStore = store
+	log.Info().Msg("AI Patrol: Baseline store set for anomaly detection")
+}
+
+// GetBaselineStore returns the baseline store (for external baseline learning)
+func (p *PatrolService) GetBaselineStore() *baseline.Store {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.baselineStore
 }
 
 // GetConfig returns the current patrol configuration
@@ -828,6 +846,7 @@ func (p *PatrolService) analyzeNode(node models.Node) []*Finding {
 }
 
 // analyzeGuest checks a VM or container for issues
+// Note: cpu is 0-1 ratio, memUsage and diskUsage are already 0-100 percentages from Memory.Usage/Disk.Usage
 func (p *PatrolService) analyzeGuest(id, name, guestType, node, status string,
 	cpu, memUsage, diskUsage float64, lastBackup *time.Time, template bool) []*Finding {
 	var findings []*Finding
@@ -837,9 +856,9 @@ func (p *PatrolService) analyzeGuest(id, name, guestType, node, status string,
 		return findings
 	}
 
-	// Convert ratios to percentages for comparison with thresholds
-	memPct := memUsage * 100
-	diskPct := diskUsage * 100
+	// memUsage and diskUsage are already percentages (0-100)
+	memPct := memUsage
+	diskPct := diskUsage
 
 	// High memory (sustained) - use dynamic thresholds
 	if memPct > p.thresholds.GuestMemWatch {
@@ -1683,6 +1702,7 @@ func (p *PatrolService) buildEnrichedContext(state models.StateSnapshot) string 
 	p.mu.RLock()
 	metricsHistory := p.metricsHistory
 	knowledgeStore := p.knowledgeStore
+	baselineStore := p.baselineStore
 	p.mu.RUnlock()
 
 	// If no metrics history, fall back to basic summary
@@ -1699,6 +1719,14 @@ func (p *PatrolService) buildEnrichedContext(state models.StateSnapshot) string 
 	if knowledgeStore != nil {
 		builder = builder.WithKnowledge(&knowledgeShim{store: knowledgeStore})
 	}
+	
+	// Add baseline provider for anomaly detection if available
+	if baselineStore != nil {
+		adapter := NewBaselineStoreAdapter(baselineStore)
+		if adapter != nil {
+			builder = builder.WithBaseline(&baselineShim{adapter: adapter})
+		}
+	}
 
 	// Build full infrastructure context with trends
 	infraCtx := builder.BuildForInfrastructure(state)
@@ -1713,6 +1741,7 @@ func (p *PatrolService) buildEnrichedContext(state models.StateSnapshot) string 
 	log.Debug().
 		Int("resources", infraCtx.TotalResources).
 		Int("predictions", len(infraCtx.Predictions)).
+		Int("anomalies", len(infraCtx.Anomalies)).
 		Msg("AI Patrol: Built enriched context with trends")
 
 	return formatted
@@ -1781,6 +1810,25 @@ func (k *knowledgeShim) FormatAllForContext() string {
 		return ""
 	}
 	return k.store.FormatAllForContext()
+}
+
+// baselineShim adapts BaselineStoreAdapter to aicontext.BaselineProvider
+type baselineShim struct {
+	adapter *BaselineStoreAdapter
+}
+
+func (b *baselineShim) CheckAnomaly(resourceID, metric string, value float64) (severity string, zScore float64, mean float64, stddev float64, ok bool) {
+	if b.adapter == nil {
+		return "", 0, 0, 0, false
+	}
+	return b.adapter.CheckAnomaly(resourceID, metric, value)
+}
+
+func (b *baselineShim) GetBaseline(resourceID, metric string) (mean float64, stddev float64, sampleCount int, ok bool) {
+	if b.adapter == nil {
+		return 0, 0, 0, false
+	}
+	return b.adapter.GetBaseline(resourceID, metric)
 }
 
 // convertToContextPoints converts ai.MetricPoint to aicontext.MetricPoint

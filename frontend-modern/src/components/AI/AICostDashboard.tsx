@@ -38,7 +38,11 @@ export const AICostDashboard: Component = () => {
 
   const loadSummary = async (rangeDays: number) => {
     const seq = ++requestSeq;
-    setLoading(true);
+    const isInitialLoad = summary() === null;
+    // Only show loading indicator on initial load to prevent flicker on range changes
+    if (isInitialLoad) {
+      setLoading(true);
+    }
     setLoadError(null);
     try {
       const data = await AIAPI.getCostSummary(rangeDays);
@@ -47,7 +51,10 @@ export const AICostDashboard: Component = () => {
     } catch (err) {
       if (seq !== requestSeq) return;
       logger.error('[AICostDashboard] Failed to load cost summary:', err);
-      notificationStore.error('Failed to load AI cost summary');
+      // Only show notification on refresh failures, not initial load
+      if (!isInitialLoad) {
+        notificationStore.error('Failed to refresh AI cost summary');
+      }
       const message =
         err instanceof Error && err.message ? err.message : 'Failed to load usage data';
       setLoadError(message);
