@@ -385,6 +385,7 @@ func FormatNodeForContext(node models.Node, trends map[string]Trend) ResourceCon
 }
 
 // FormatGuestForContext creates context for a VM or container
+// Note: cpu is 0-1 ratio from Proxmox API, memUsage and diskUsage are already 0-100 percentages
 func FormatGuestForContext(
 	id, name, node, guestType, status string,
 	cpu, memUsage, diskUsage float64,
@@ -397,9 +398,9 @@ func FormatGuestForContext(
 		ResourceType:  guestType,
 		ResourceName:  name,
 		Node:          node,
-		CurrentCPU:    cpu * 100, // Convert from 0-1 to percentage
-		CurrentMemory: memUsage * 100,
-		CurrentDisk:   diskUsage * 100,
+		CurrentCPU:    cpu * 100,  // Convert from 0-1 to percentage
+		CurrentMemory: memUsage,   // Already 0-100 percentage from Memory.Usage
+		CurrentDisk:   diskUsage,  // Already 0-100 percentage from Disk.Usage
 		Status:        status,
 		Uptime:        time.Duration(uptime) * time.Second,
 		Trends:        trends,

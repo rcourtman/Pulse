@@ -29,12 +29,22 @@ type FindingsProvider interface {
 	GetPastFindingsForResource(resourceID string) []string
 }
 
+// BaselineProvider provides learned baselines for anomaly detection
+type BaselineProvider interface {
+	// CheckAnomaly returns severity, z-score, and baseline data
+	// Severity is "", "low", "medium", "high", or "critical"
+	CheckAnomaly(resourceID, metric string, value float64) (severity string, zScore float64, mean float64, stddev float64, ok bool)
+	// GetBaseline returns the baseline for a resource/metric
+	GetBaseline(resourceID, metric string) (mean float64, stddev float64, sampleCount int, ok bool)
+}
+
 // Builder constructs enriched AI context from multiple data sources
 type Builder struct {
 	// Data sources
 	metricsHistory MetricsHistoryProvider
 	knowledge      KnowledgeProvider
 	findings       FindingsProvider
+	baseline       BaselineProvider
 
 	// Configuration
 	trendWindow24h  time.Duration
@@ -51,7 +61,7 @@ func NewBuilder() *Builder {
 		trendWindow7d:   7 * 24 * time.Hour,
 		includeHistory:  true,
 		includeTrends:   true,
-		includeBaseline: false, // Disabled until baseline store is implemented
+		includeBaseline: true, // Enable when baseline provider is set
 	}
 }
 
@@ -73,6 +83,12 @@ func (b *Builder) WithFindings(f FindingsProvider) *Builder {
 	return b
 }
 
+// WithBaseline sets the baseline provider for anomaly detection
+func (b *Builder) WithBaseline(bp BaselineProvider) *Builder {
+	b.baseline = bp
+	return b
+}
+
 // BuildForInfrastructure creates comprehensive context for the entire infrastructure
 func (b *Builder) BuildForInfrastructure(state models.StateSnapshot) *InfrastructureContext {
 	ctx := &InfrastructureContext{
@@ -84,6 +100,7 @@ func (b *Builder) BuildForInfrastructure(state models.StateSnapshot) *Infrastruc
 		trends := b.computeNodeTrends(node.ID)
 		resourceCtx := FormatNodeForContext(node, trends)
 		b.enrichWithNotes(&resourceCtx)
+		b.enrichWithAnomalies(&resourceCtx)
 		ctx.Nodes = append(ctx.Nodes, resourceCtx)
 	}
 
@@ -99,6 +116,7 @@ func (b *Builder) BuildForInfrastructure(state models.StateSnapshot) *Infrastruc
 			vm.Uptime, vm.LastBackup, trends,
 		)
 		b.enrichWithNotes(&resourceCtx)
+		b.enrichWithAnomalies(&resourceCtx)
 		ctx.VMs = append(ctx.VMs, resourceCtx)
 	}
 
@@ -114,6 +132,7 @@ func (b *Builder) BuildForInfrastructure(state models.StateSnapshot) *Infrastruc
 			ct.Uptime, ct.LastBackup, trends,
 		)
 		b.enrichWithNotes(&resourceCtx)
+		b.enrichWithAnomalies(&resourceCtx)
 		ctx.Containers = append(ctx.Containers, resourceCtx)
 	}
 
@@ -366,6 +385,65 @@ func (b *Builder) enrichWithNotes(ctx *ResourceContext) {
 	if len(notes) > 0 {
 		ctx.UserNotes = notes
 	}
+}
+
+// enrichWithAnomalies checks current values against baselines and adds anomalies
+func (b *Builder) enrichWithAnomalies(ctx *ResourceContext) {
+	if b.baseline == nil || !b.includeBaseline {
+		return
+	}
+
+	// Check each metric type for anomalies
+	metrics := map[string]float64{
+		"cpu":    ctx.CurrentCPU,
+		"memory": ctx.CurrentMemory,
+		"disk":   ctx.CurrentDisk,
+	}
+
+	for metric, value := range metrics {
+		if value == 0 {
+			continue // Skip zeroes (usually means not reported)
+		}
+
+		severity, zScore, mean, stddev, ok := b.baseline.CheckAnomaly(ctx.ResourceID, metric, value)
+		if !ok || severity == "" {
+			continue // No anomaly or no baseline
+		}
+
+		direction := "above"
+		if zScore < 0 {
+			direction = "below"
+		}
+
+		anomaly := Anomaly{
+			Metric:    metric,
+			Current:   value,
+			Expected:  mean,
+			Deviation: zScore,
+			Severity:  severity,
+			Since:     time.Now(), // We don't track onset time yet
+			Description: formatAnomalyDescription(metric, value, mean, stddev, severity, direction),
+		}
+		ctx.Anomalies = append(ctx.Anomalies, anomaly)
+	}
+}
+
+// formatAnomalyDescription creates human-readable anomaly description
+func formatAnomalyDescription(metric string, current, mean, stddev float64, severity, direction string) string {
+	var sb strings.Builder
+	sb.WriteString(strings.Title(metric))
+	sb.WriteString(" is ")
+	sb.WriteString(severity)
+	sb.WriteString(" ")
+	sb.WriteString(direction)
+	sb.WriteString(" normal (")
+	sb.WriteString(formatFloat(current, 1))
+	sb.WriteString("% vs typical ")
+	sb.WriteString(formatFloat(mean, 1))
+	sb.WriteString("% ± ")
+	sb.WriteString(formatFloat(stddev, 1))
+	sb.WriteString("%)")
+	return sb.String()
 }
 
 // filterRecentPoints filters points to only include those within duration
