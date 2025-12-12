@@ -2358,25 +2358,28 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 
 	ensureContainerRootDiskEntry(container)
 
-	if client == nil || container.Status != "running" {
+	if client == nil {
 		return
 	}
 
-	statusCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	status, err := client.GetContainerStatus(statusCtx, nodeName, container.VMID)
-	cancel()
-	if err != nil {
-		log.Debug().
-			Err(err).
-			Str("instance", instanceName).
-			Str("node", nodeName).
-			Str("container", container.Name).
-			Int("vmid", container.VMID).
-			Msg("Container status metadata unavailable")
-		return
-	}
-	if status == nil {
-		return
+	isRunning := container.Status == "running"
+
+	var status *proxmox.Container
+	if isRunning {
+		statusCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		statusResp, err := client.GetContainerStatus(statusCtx, nodeName, container.VMID)
+		cancel()
+		if err != nil {
+			log.Debug().
+				Err(err).
+				Str("instance", instanceName).
+				Str("node", nodeName).
+				Str("container", container.Name).
+				Int("vmid", container.VMID).
+				Msg("Container status metadata unavailable")
+		} else {
+			status = statusResp
+		}
 	}
 
 	rootDeviceHint := ""
@@ -2396,55 +2399,60 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 		addressOrder = append(addressOrder, addr)
 	}
 
-	for _, addr := range sanitizeGuestAddressStrings(status.IP) {
-		addAddress(addr)
-	}
-	for _, addr := range sanitizeGuestAddressStrings(status.IP6) {
-		addAddress(addr)
-	}
-	for _, addr := range parseContainerRawIPs(status.IPv4) {
-		addAddress(addr)
-	}
-	for _, addr := range parseContainerRawIPs(status.IPv6) {
-		addAddress(addr)
+	if status != nil {
+		for _, addr := range sanitizeGuestAddressStrings(status.IP) {
+			addAddress(addr)
+		}
+		for _, addr := range sanitizeGuestAddressStrings(status.IP6) {
+			addAddress(addr)
+		}
+		for _, addr := range parseContainerRawIPs(status.IPv4) {
+			addAddress(addr)
+		}
+		for _, addr := range parseContainerRawIPs(status.IPv6) {
+			addAddress(addr)
+		}
 	}
 
-	networkIfaces := make([]models.GuestNetworkInterface, 0, len(status.Network))
-	for rawName, cfg := range status.Network {
-		if cfg == (proxmox.ContainerNetworkConfig{}) {
-			continue
-		}
+	networkIfaces := make([]models.GuestNetworkInterface, 0, 4)
+	if status != nil {
+		networkIfaces = make([]models.GuestNetworkInterface, 0, len(status.Network))
+		for rawName, cfg := range status.Network {
+			if cfg == (proxmox.ContainerNetworkConfig{}) {
+				continue
+			}
 
-		iface := models.GuestNetworkInterface{}
-		name := strings.TrimSpace(cfg.Name)
-		if name == "" {
-			name = strings.TrimSpace(rawName)
-		}
-		if name != "" {
-			iface.Name = name
-		}
-		if mac := strings.TrimSpace(cfg.HWAddr); mac != "" {
-			iface.MAC = mac
-		}
+			iface := models.GuestNetworkInterface{}
+			name := strings.TrimSpace(cfg.Name)
+			if name == "" {
+				name = strings.TrimSpace(rawName)
+			}
+			if name != "" {
+				iface.Name = name
+			}
+			if mac := strings.TrimSpace(cfg.HWAddr); mac != "" {
+				iface.MAC = mac
+			}
 
-		addrCandidates := make([]string, 0, 4)
-		addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IP)...)
-		addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IP6)...)
-		addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IPv4)...)
-		addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IPv6)...)
+			addrCandidates := make([]string, 0, 4)
+			addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IP)...)
+			addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IP6)...)
+			addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IPv4)...)
+			addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IPv6)...)
 
-		if len(addrCandidates) > 0 {
-			deduped := dedupeStringsPreserveOrder(addrCandidates)
-			if len(deduped) > 0 {
-				iface.Addresses = deduped
-				for _, addr := range deduped {
-					addAddress(addr)
+			if len(addrCandidates) > 0 {
+				deduped := dedupeStringsPreserveOrder(addrCandidates)
+				if len(deduped) > 0 {
+					iface.Addresses = deduped
+					for _, addr := range deduped {
+						addAddress(addr)
+					}
 				}
 			}
-		}
 
-		if iface.Name != "" || iface.MAC != "" || len(iface.Addresses) > 0 {
-			networkIfaces = append(networkIfaces, iface)
+			if iface.Name != "" || iface.MAC != "" || len(iface.Addresses) > 0 {
+				networkIfaces = append(networkIfaces, iface)
+			}
 		}
 	}
 
@@ -2510,38 +2518,26 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 	}
 
 	if len(addressOrder) == 0 {
-		interfacesCtx, cancelInterfaces := context.WithTimeout(ctx, 5*time.Second)
-		ifaceDetails, ifaceErr := client.GetContainerInterfaces(interfacesCtx, nodeName, container.VMID)
-		cancelInterfaces()
-		if ifaceErr != nil {
-			log.Debug().
-				Err(ifaceErr).
-				Str("instance", instanceName).
-				Str("node", nodeName).
-				Str("container", container.Name).
-				Int("vmid", container.VMID).
-				Msg("Container interface metadata unavailable")
-		} else if len(ifaceDetails) > 0 {
-			for _, detail := range ifaceDetails {
-				parsed := containerNetworkDetails{}
-				parsed.Name = strings.TrimSpace(detail.Name)
-				parsed.MAC = strings.ToUpper(strings.TrimSpace(detail.HWAddr))
+		if isRunning {
+			interfacesCtx, cancelInterfaces := context.WithTimeout(ctx, 5*time.Second)
+			ifaceDetails, ifaceErr := client.GetContainerInterfaces(interfacesCtx, nodeName, container.VMID)
+			cancelInterfaces()
+			if ifaceErr != nil {
+				log.Debug().
+					Err(ifaceErr).
+					Str("instance", instanceName).
+					Str("node", nodeName).
+					Str("container", container.Name).
+					Int("vmid", container.VMID).
+					Msg("Container interface metadata unavailable")
+			} else if len(ifaceDetails) > 0 {
+				for _, detail := range ifaceDetails {
+					parsed := containerNetworkDetails{}
+					parsed.Name = strings.TrimSpace(detail.Name)
+					parsed.MAC = strings.ToUpper(strings.TrimSpace(detail.HWAddr))
 
-				for _, addr := range detail.IPAddresses {
-					stripped := strings.TrimSpace(addr.Address)
-					if stripped == "" {
-						continue
-					}
-					if slash := strings.Index(stripped, "/"); slash > 0 {
-						stripped = stripped[:slash]
-					}
-					parsed.Addresses = append(parsed.Addresses, sanitizeGuestAddressStrings(stripped)...)
-				}
-
-				if len(parsed.Addresses) == 0 && strings.TrimSpace(detail.Inet) != "" {
-					parts := strings.Fields(detail.Inet)
-					for _, part := range parts {
-						stripped := strings.TrimSpace(part)
+					for _, addr := range detail.IPAddresses {
+						stripped := strings.TrimSpace(addr.Address)
 						if stripped == "" {
 							continue
 						}
@@ -2550,18 +2546,32 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 						}
 						parsed.Addresses = append(parsed.Addresses, sanitizeGuestAddressStrings(stripped)...)
 					}
-				}
 
-				parsed.Addresses = dedupeStringsPreserveOrder(parsed.Addresses)
-
-				if len(parsed.Addresses) > 0 {
-					for _, addr := range parsed.Addresses {
-						addAddress(addr)
+					if len(parsed.Addresses) == 0 && strings.TrimSpace(detail.Inet) != "" {
+						parts := strings.Fields(detail.Inet)
+						for _, part := range parts {
+							stripped := strings.TrimSpace(part)
+							if stripped == "" {
+								continue
+							}
+							if slash := strings.Index(stripped, "/"); slash > 0 {
+								stripped = stripped[:slash]
+							}
+							parsed.Addresses = append(parsed.Addresses, sanitizeGuestAddressStrings(stripped)...)
+						}
 					}
-				}
 
-				if parsed.Name != "" || parsed.MAC != "" || len(parsed.Addresses) > 0 {
-					mergeContainerNetworkInterface(&networkIfaces, parsed)
+					parsed.Addresses = dedupeStringsPreserveOrder(parsed.Addresses)
+
+					if len(parsed.Addresses) > 0 {
+						for _, addr := range parsed.Addresses {
+							addAddress(addr)
+						}
+					}
+
+					if parsed.Name != "" || parsed.MAC != "" || len(parsed.Addresses) > 0 {
+						mergeContainerNetworkInterface(&networkIfaces, parsed)
+					}
 				}
 			}
 		}
