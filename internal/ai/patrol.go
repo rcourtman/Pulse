@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	aicontext "github.com/rcourtman/pulse-go-rewrite/internal/ai/context"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
@@ -208,6 +209,7 @@ type PatrolService struct {
 	config            PatrolConfig
 	findings          *FindingsStore
 	knowledgeStore    *knowledge.Store // For per-resource notes in patrol context
+	metricsHistory    MetricsHistoryProvider // For trend analysis and predictions
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds PatrolThresholds
@@ -327,6 +329,15 @@ func (p *PatrolService) SetKnowledgeStore(store *knowledge.Store) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.knowledgeStore = store
+}
+
+// SetMetricsHistoryProvider sets the metrics history provider for enriched context
+// This enables the patrol service to compute trends and predictions based on historical data
+func (p *PatrolService) SetMetricsHistoryProvider(provider MetricsHistoryProvider) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.metricsHistory = provider
+	log.Info().Msg("AI Patrol: Metrics history provider set for enriched context")
 }
 
 // GetConfig returns the current patrol configuration
@@ -1441,8 +1452,9 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 		return nil, fmt.Errorf("AI service not available")
 	}
 
-	// Build infrastructure summary for the AI
-	summary := p.buildInfrastructureSummary(state)
+	// Build enriched infrastructure context with trends and predictions
+	// Falls back to basic summary if metrics history is not available
+	summary := p.buildEnrichedContext(state)
 	if summary == "" {
 		return nil, nil // Nothing to analyze
 	}
@@ -1656,13 +1668,148 @@ func (p *PatrolService) buildInfrastructureSummary(state models.StateSnapshot) s
 				dh.Hostname, dh.Status, len(dh.Containers)))
 			for _, c := range dh.Containers {
 				sb.WriteString(fmt.Sprintf("  - %s: State=%s, CPU=%.1f%%, Memory=%.1f%%, Restarts=%d\n",
-					c.Name, c.State, c.CPUPercent, c.MemoryPercent, c.RestartCount))
+				c.Name, c.State, c.CPUPercent, c.MemoryPercent, c.RestartCount))
 			}
 		}
 		sb.WriteString("\n")
 	}
 
 	return sb.String()
+}
+
+// buildEnrichedContext creates context with historical trends and predictions
+// Falls back to basic summary if metrics history is not available
+func (p *PatrolService) buildEnrichedContext(state models.StateSnapshot) string {
+	p.mu.RLock()
+	metricsHistory := p.metricsHistory
+	knowledgeStore := p.knowledgeStore
+	p.mu.RUnlock()
+
+	// If no metrics history, fall back to basic summary
+	if metricsHistory == nil {
+		log.Debug().Msg("AI Patrol: No metrics history available, using basic summary")
+		return p.buildInfrastructureSummary(state)
+	}
+
+	// Build enriched context using the context package
+	builder := aicontext.NewBuilder().
+		WithMetricsHistory(&metricsHistoryShim{provider: metricsHistory})
+
+	// Add knowledge store if available
+	if knowledgeStore != nil {
+		builder = builder.WithKnowledge(&knowledgeShim{store: knowledgeStore})
+	}
+
+	// Build full infrastructure context with trends
+	infraCtx := builder.BuildForInfrastructure(state)
+	if infraCtx == nil {
+		log.Warn().Msg("AI Patrol: Failed to build enriched context, falling back")
+		return p.buildInfrastructureSummary(state)
+	}
+
+	// Format for AI consumption
+	formatted := aicontext.FormatInfrastructureContext(infraCtx)
+
+	log.Debug().
+		Int("resources", infraCtx.TotalResources).
+		Int("predictions", len(infraCtx.Predictions)).
+		Msg("AI Patrol: Built enriched context with trends")
+
+	return formatted
+}
+
+// metricsHistoryShim adapts ai.MetricsHistoryProvider to aicontext.MetricsHistoryProvider
+type metricsHistoryShim struct {
+	provider MetricsHistoryProvider
+}
+
+func (s *metricsHistoryShim) GetNodeMetrics(nodeID string, metricType string, duration time.Duration) []aicontext.MetricPoint {
+	if s.provider == nil {
+		return nil
+	}
+	points := s.provider.GetNodeMetrics(nodeID, metricType, duration)
+	return convertToContextPoints(points)
+}
+
+func (s *metricsHistoryShim) GetGuestMetrics(guestID string, metricType string, duration time.Duration) []aicontext.MetricPoint {
+	if s.provider == nil {
+		return nil
+	}
+	points := s.provider.GetGuestMetrics(guestID, metricType, duration)
+	return convertToContextPoints(points)
+}
+
+func (s *metricsHistoryShim) GetAllGuestMetrics(guestID string, duration time.Duration) map[string][]aicontext.MetricPoint {
+	if s.provider == nil {
+		return nil
+	}
+	metricsMap := s.provider.GetAllGuestMetrics(guestID, duration)
+	return convertToContextMetricsMap(metricsMap)
+}
+
+func (s *metricsHistoryShim) GetAllStorageMetrics(storageID string, duration time.Duration) map[string][]aicontext.MetricPoint {
+	if s.provider == nil {
+		return nil
+	}
+	metricsMap := s.provider.GetAllStorageMetrics(storageID, duration)
+	return convertToContextMetricsMap(metricsMap)
+}
+
+// knowledgeShim adapts knowledge.Store to aicontext.KnowledgeProvider
+type knowledgeShim struct {
+	store *knowledge.Store
+}
+
+func (k *knowledgeShim) GetNotes(guestID string) []string {
+	if k.store == nil {
+		return nil
+	}
+	knowledge, err := k.store.GetKnowledge(guestID)
+	if err != nil || knowledge == nil {
+		return nil
+	}
+	// Extract note contents
+	var notes []string
+	for _, note := range knowledge.Notes {
+		notes = append(notes, note.Content)
+	}
+	return notes
+}
+
+func (k *knowledgeShim) FormatAllForContext() string {
+	if k.store == nil {
+		return ""
+	}
+	return k.store.FormatAllForContext()
+}
+
+// convertToContextPoints converts ai.MetricPoint to aicontext.MetricPoint
+// Since both are aliases for types.MetricPoint, this is just a type assertion
+func convertToContextPoints(points []MetricPoint) []aicontext.MetricPoint {
+	if points == nil {
+		return nil
+	}
+	// Both types are aliases for types.MetricPoint, so they're compatible
+	result := make([]aicontext.MetricPoint, len(points))
+	for i, p := range points {
+		result[i] = aicontext.MetricPoint{
+			Value:     p.Value,
+			Timestamp: p.Timestamp,
+		}
+	}
+	return result
+}
+
+// convertToContextMetricsMap converts a map of metric points
+func convertToContextMetricsMap(metricsMap map[string][]MetricPoint) map[string][]aicontext.MetricPoint {
+	if metricsMap == nil {
+		return nil
+	}
+	result := make(map[string][]aicontext.MetricPoint, len(metricsMap))
+	for key, points := range metricsMap {
+		result[key] = convertToContextPoints(points)
+	}
+	return result
 }
 
 // buildPatrolPrompt creates the prompt for AI analysis
@@ -1685,13 +1832,20 @@ func (p *PatrolService) buildPatrolPrompt(summary string) string {
 %s
 
 Analyze the above and report any findings using the structured format. Focus on:
-- Resources showing high utilization
-- Patterns that might indicate problems
+- Resources showing high utilization or concerning trends (look for ↑ growing indicators)
+- Predictions showing resources approaching capacity (look for ⏰ predictions)
+- Anomalies flagged as unusual (look for ⚠️ anomalies)
+- Patterns that might indicate problems over time (compare 24h vs 7d trends)
 - Missing backups or stale backup schedules  
 - Unbalanced resource distribution
-- Any anomalies or concerns
 
-If everything looks healthy, say so briefly.`, summary)
+IMPORTANT: The context includes historical trends (24h and 7d) where available. Use this to provide actionable insights:
+- A resource that's "growing 5%%/day" needs proactive attention
+- A resource that's "stable" with high usage may just need monitoring
+- A "volatile" resource may indicate workload issues
+
+If predictions show a resource will be full within 7 days, flag it as high priority.
+If everything looks healthy with stable trends, say so briefly.`, summary)
 
 	var contextAdditions strings.Builder
 	

@@ -171,6 +171,7 @@ type DiscoveryConfig struct {
 	EnvironmentOverride string   `json:"environment_override,omitempty"`
 	SubnetAllowlist     []string `json:"subnet_allowlist,omitempty"`
 	SubnetBlocklist     []string `json:"subnet_blocklist,omitempty"`
+	IPBlocklist         []string `json:"ip_blocklist,omitempty"` // Individual IPs to skip (auto-populated with configured Proxmox hosts)
 	MaxHostsPerScan     int      `json:"max_hosts_per_scan,omitempty"`
 	MaxConcurrent       int      `json:"max_concurrent,omitempty"`
 	EnableReverseDNS    bool     `json:"enable_reverse_dns"`
@@ -202,6 +203,9 @@ func CloneDiscoveryConfig(cfg DiscoveryConfig) DiscoveryConfig {
 	}
 	if cfg.SubnetBlocklist != nil {
 		clone.SubnetBlocklist = append([]string(nil), cfg.SubnetBlocklist...)
+	}
+	if cfg.IPBlocklist != nil {
+		clone.IPBlocklist = append([]string(nil), cfg.IPBlocklist...)
 	}
 	return clone
 }

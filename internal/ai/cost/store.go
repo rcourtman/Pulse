@@ -1,0 +1,289 @@
+package cost
+
+import (
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/rs/zerolog/log"
+)
+
+// UsageEvent represents a single AI provider call for cost/token tracking.
+// It intentionally excludes prompt/response content for privacy.
+type UsageEvent struct {
+	Timestamp     time.Time `json:"timestamp"`
+	Provider      string    `json:"provider"`
+	RequestModel  string    `json:"request_model"`
+	ResponseModel string    `json:"response_model,omitempty"`
+	UseCase       string    `json:"use_case,omitempty"` // "chat" or "patrol"
+	InputTokens   int       `json:"input_tokens,omitempty"`
+	OutputTokens  int       `json:"output_tokens,omitempty"`
+	TargetType    string    `json:"target_type,omitempty"`
+	TargetID      string    `json:"target_id,omitempty"`
+	FindingID     string    `json:"finding_id,omitempty"`
+}
+
+// Persistence defines the storage contract for usage history.
+type Persistence interface {
+	SaveUsageHistory(events []UsageEvent) error
+	LoadUsageHistory() ([]UsageEvent, error)
+}
+
+// DefaultMaxDays is the default retention window for raw usage events.
+const DefaultMaxDays = 90
+
+// Store provides thread-safe usage tracking with optional persistence.
+type Store struct {
+	mu          sync.RWMutex
+	events      []UsageEvent
+	maxDays     int
+	persistence Persistence
+
+	// Debounced persistence to avoid frequent disk writes.
+	saveTimer    *time.Timer
+	savePending  bool
+	saveDebounce time.Duration
+}
+
+// NewStore creates a new usage store.
+func NewStore(maxDays int) *Store {
+	if maxDays <= 0 {
+		maxDays = DefaultMaxDays
+	}
+	return &Store{
+		events:       make([]UsageEvent, 0),
+		maxDays:      maxDays,
+		saveDebounce: 5 * time.Second,
+	}
+}
+
+// SetPersistence sets persistence and loads any existing history.
+func (s *Store) SetPersistence(p Persistence) error {
+	s.mu.Lock()
+	s.persistence = p
+	s.mu.Unlock()
+
+	if p == nil {
+		return nil
+	}
+
+	events, err := p.LoadUsageHistory()
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	s.events = events
+	s.trimLocked(time.Now())
+	s.mu.Unlock()
+	return nil
+}
+
+// Record appends a usage event and schedules persistence.
+func (s *Store) Record(event UsageEvent) {
+	if event.Timestamp.IsZero() {
+		event.Timestamp = time.Now()
+	}
+
+	s.mu.Lock()
+	s.events = append(s.events, event)
+	s.trimLocked(time.Now())
+	s.scheduleSaveLocked()
+	s.mu.Unlock()
+}
+
+// GetSummary returns a rollup of usage over the last N days.
+func (s *Store) GetSummary(days int) Summary {
+	if days <= 0 {
+		days = 30
+	}
+
+	now := time.Now()
+	cutoff := now.AddDate(0, 0, -days)
+
+	s.mu.RLock()
+	events := make([]UsageEvent, 0, len(s.events))
+	for _, e := range s.events {
+		if !e.Timestamp.Before(cutoff) {
+			events = append(events, e)
+		}
+	}
+	s.mu.RUnlock()
+
+	type pmKey struct {
+		provider string
+		model    string
+	}
+
+	pmTotals := make(map[pmKey]*ProviderModelSummary)
+	dailyTotals := make(map[string]*DailySummary)
+
+	var totalInput, totalOutput int64
+
+	for _, e := range events {
+		provider := e.Provider
+		model := normalizeModel(provider, e.RequestModel, e.ResponseModel)
+
+		k := pmKey{provider: provider, model: model}
+		pm := pmTotals[k]
+		if pm == nil {
+			pm = &ProviderModelSummary{Provider: provider, Model: model}
+			pmTotals[k] = pm
+		}
+		pm.InputTokens += int64(e.InputTokens)
+		pm.OutputTokens += int64(e.OutputTokens)
+
+		totalInput += int64(e.InputTokens)
+		totalOutput += int64(e.OutputTokens)
+
+		date := e.Timestamp.Format("2006-01-02")
+		ds := dailyTotals[date]
+		if ds == nil {
+			ds = &DailySummary{Date: date}
+			dailyTotals[date] = ds
+		}
+		ds.InputTokens += int64(e.InputTokens)
+		ds.OutputTokens += int64(e.OutputTokens)
+	}
+
+	providerModels := make([]ProviderModelSummary, 0, len(pmTotals))
+	for _, pm := range pmTotals {
+		pm.TotalTokens = pm.InputTokens + pm.OutputTokens
+		providerModels = append(providerModels, *pm)
+	}
+	sort.Slice(providerModels, func(i, j int) bool {
+		if providerModels[i].Provider == providerModels[j].Provider {
+			return providerModels[i].Model < providerModels[j].Model
+		}
+		return providerModels[i].Provider < providerModels[j].Provider
+	})
+
+	daily := make([]DailySummary, 0, len(dailyTotals))
+	for _, ds := range dailyTotals {
+		ds.TotalTokens = ds.InputTokens + ds.OutputTokens
+		daily = append(daily, *ds)
+	}
+	sort.Slice(daily, func(i, j int) bool {
+		return daily[i].Date < daily[j].Date
+	})
+
+	totals := ProviderModelSummary{
+		Provider:     "all",
+		InputTokens:  totalInput,
+		OutputTokens: totalOutput,
+		TotalTokens:  totalInput + totalOutput,
+	}
+
+	return Summary{
+		Days:           days,
+		ProviderModels: providerModels,
+		DailyTotals:    daily,
+		Totals:         totals,
+	}
+}
+
+// Flush immediately writes any pending changes to persistence.
+func (s *Store) Flush() error {
+	s.mu.Lock()
+	if s.saveTimer != nil {
+		s.saveTimer.Stop()
+	}
+	s.savePending = false
+	events := make([]UsageEvent, len(s.events))
+	copy(events, s.events)
+	p := s.persistence
+	s.mu.Unlock()
+
+	if p != nil {
+		return p.SaveUsageHistory(events)
+	}
+	return nil
+}
+
+func (s *Store) trimLocked(now time.Time) {
+	if s.maxDays <= 0 {
+		return
+	}
+	cutoff := now.AddDate(0, 0, -s.maxDays)
+	filtered := s.events[:0]
+	for _, e := range s.events {
+		if !e.Timestamp.Before(cutoff) {
+			filtered = append(filtered, e)
+		}
+	}
+	s.events = filtered
+}
+
+func (s *Store) scheduleSaveLocked() {
+	if s.persistence == nil {
+		return
+	}
+
+	if s.saveTimer != nil {
+		s.saveTimer.Stop()
+	}
+
+	s.savePending = true
+	s.saveTimer = time.AfterFunc(s.saveDebounce, func() {
+		s.mu.Lock()
+		if !s.savePending {
+			s.mu.Unlock()
+			return
+		}
+		s.savePending = false
+		events := make([]UsageEvent, len(s.events))
+		copy(events, s.events)
+		p := s.persistence
+		s.mu.Unlock()
+
+		if p != nil {
+			if err := p.SaveUsageHistory(events); err != nil {
+				log.Error().Err(err).Msg("Failed to save AI usage history")
+			}
+		}
+	})
+}
+
+func normalizeModel(provider, requestModel, responseModel string) string {
+	if requestModel != "" {
+		parts := strings.SplitN(requestModel, ":", 2)
+		if len(parts) == 2 && parts[0] == provider {
+			return parts[1]
+		}
+		return requestModel
+	}
+	if responseModel != "" {
+		parts := strings.SplitN(responseModel, ":", 2)
+		if len(parts) == 2 && parts[0] == provider {
+			return parts[1]
+		}
+		return responseModel
+	}
+	return ""
+}
+
+// ProviderModelSummary is a rollup for a provider/model pair.
+type ProviderModelSummary struct {
+	Provider     string `json:"provider"`
+	Model        string `json:"model"`
+	InputTokens  int64  `json:"input_tokens"`
+	OutputTokens int64  `json:"output_tokens"`
+	TotalTokens  int64  `json:"total_tokens"`
+}
+
+// DailySummary is a rollup for a single day across all providers.
+type DailySummary struct {
+	Date         string `json:"date"`
+	InputTokens  int64  `json:"input_tokens"`
+	OutputTokens int64  `json:"output_tokens"`
+	TotalTokens  int64  `json:"total_tokens"`
+}
+
+// Summary is returned by the cost summary API.
+type Summary struct {
+	Days           int                    `json:"days"`
+	ProviderModels []ProviderModelSummary `json:"provider_models"`
+	DailyTotals    []DailySummary         `json:"daily_totals"`
+	Totals         ProviderModelSummary   `json:"totals"`
+}
