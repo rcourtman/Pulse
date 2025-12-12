@@ -17,6 +17,7 @@ export interface AISettings {
   model: string;
   chat_model?: string; // Model for interactive chat (empty = use default)
   patrol_model?: string; // Model for background patrol (empty = use default)
+  auto_fix_model?: string; // Model for auto-fix remediation (empty = use patrol model)
   base_url?: string; // DEPRECATED: legacy base URL
   configured: boolean; // true if AI is ready to use
   autonomous_mode: boolean; // true if AI can execute commands without approval
@@ -55,6 +56,7 @@ export interface AISettingsUpdateRequest {
   // Model overrides for different use cases
   chat_model?: string; // Model for interactive chat
   patrol_model?: string; // Model for background patrol
+  auto_fix_model?: string; // Model for auto-fix remediation
   // Patrol settings for token efficiency
   patrol_schedule_preset?: string; // DEPRECATED: use patrol_interval_minutes
   patrol_interval_minutes?: number; // Custom interval in minutes (0 = disabled, minimum 10)
