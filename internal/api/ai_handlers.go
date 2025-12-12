@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -2460,13 +2462,36 @@ func (h *AISettingsHandler) HandleResetAICostHistory(w http.ResponseWriter, r *h
 		return
 	}
 
+	backupFile := ""
+	if h.persistence != nil {
+		configDir := h.persistence.DataDir()
+		if strings.TrimSpace(configDir) != "" {
+			usagePath := filepath.Join(configDir, "ai_usage_history.json")
+			if _, err := os.Stat(usagePath); err == nil {
+				ts := time.Now().UTC().Format("20060102-150405")
+				backupFile = fmt.Sprintf("ai_usage_history.json.bak-%s", ts)
+				backupPath := filepath.Join(configDir, backupFile)
+				if err := os.Rename(usagePath, backupPath); err != nil {
+					log.Error().Err(err).Str("path", usagePath).Msg("Failed to backup AI usage history before reset")
+					http.Error(w, "Failed to backup AI usage history", http.StatusInternalServerError)
+					return
+				}
+			}
+		}
+	}
+
 	if err := h.aiService.ClearCostHistory(); err != nil {
 		log.Error().Err(err).Msg("Failed to clear AI cost history")
 		http.Error(w, "Failed to clear AI cost history", http.StatusInternalServerError)
 		return
 	}
 
-	if err := utils.WriteJSONResponse(w, map[string]any{"ok": true}); err != nil {
+	resp := map[string]any{"ok": true}
+	if backupFile != "" {
+		resp["backup_file"] = backupFile
+	}
+
+	if err := utils.WriteJSONResponse(w, resp); err != nil {
 		log.Error().Err(err).Msg("Failed to write clear cost history response")
 	}
 }

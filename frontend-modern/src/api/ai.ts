@@ -55,7 +55,7 @@ export class AIAPI {
     return apiFetchJSON(`${this.baseUrl}/ai/cost/reset`, {
       method: 'POST',
       body: JSON.stringify({}),
-    }) as Promise<{ ok: boolean }>;
+    }) as Promise<{ ok: boolean; backup_file?: string }>;
   }
 
   // Start OAuth flow for Claude Pro/Max subscription
