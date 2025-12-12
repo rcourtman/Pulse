@@ -1,4 +1,4 @@
-import { Component, Show, createSignal, onMount, For } from 'solid-js';
+import { Component, Show, createMemo, createSignal, onMount, For } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { AIAPI } from '@/api/ai';
@@ -8,22 +8,49 @@ import { notificationStore } from '@/stores/notifications';
 import type { AICostSummary } from '@/types/ai';
 import { PROVIDER_NAMES } from '@/types/ai';
 
+const usdFormatter = new Intl.NumberFormat(undefined, {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 export const AICostDashboard: Component = () => {
   const [days, setDays] = createSignal(30);
   const [loading, setLoading] = createSignal(false);
+  const [loadError, setLoadError] = createSignal<string | null>(null);
   const [summary, setSummary] = createSignal<AICostSummary | null>(null);
+  let requestSeq = 0;
+
+  const anyPricingKnown = createMemo(() => {
+    const data = summary();
+    if (!data) return false;
+    return data.provider_models.some((pm) => pm.pricing_known);
+  });
+
+  const estimatedTotalUSD = createMemo(() => {
+    const data = summary();
+    if (!data || !anyPricingKnown()) return null;
+    return data.totals.estimated_usd ?? 0;
+  });
+
+  const formatUSD = (usd: number) => usdFormatter.format(usd);
 
   const loadSummary = async (rangeDays: number) => {
+    const seq = ++requestSeq;
     setLoading(true);
+    setLoadError(null);
     try {
       const data = await AIAPI.getCostSummary(rangeDays);
+      if (seq !== requestSeq) return;
       setSummary(data);
     } catch (err) {
+      if (seq !== requestSeq) return;
       logger.error('[AICostDashboard] Failed to load cost summary:', err);
       notificationStore.error('Failed to load AI cost summary');
-      setSummary(null);
+      setLoadError('Failed to load usage data');
     } finally {
-      setLoading(false);
+      if (seq === requestSeq) setLoading(false);
     }
   };
 
@@ -32,6 +59,7 @@ export const AICostDashboard: Component = () => {
   });
 
   const handleRangeClick = (rangeDays: number) => {
+    if (loading() || rangeDays === days()) return;
     setDays(rangeDays);
     loadSummary(rangeDays);
   };
@@ -51,44 +79,51 @@ export const AICostDashboard: Component = () => {
             size="sm"
             class="flex-1"
           />
+          <Show when={loading()}>
+            <div class="text-xs text-gray-500 dark:text-gray-400">Loading…</div>
+          </Show>
           <div class="flex items-center gap-1">
             <button
               type="button"
+              disabled={loading()}
               onClick={() => handleRangeClick(7)}
               class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${days() === 7
                 ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                 : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
+                } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               7d
             </button>
             <button
               type="button"
+              disabled={loading()}
               onClick={() => handleRangeClick(30)}
               class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${days() === 30
                 ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                 : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
+                } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               30d
             </button>
             <button
               type="button"
+              disabled={loading()}
               onClick={() => handleRangeClick(90)}
               class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${days() === 90
                 ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                 : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
+                } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               90d
             </button>
             <button
               type="button"
+              disabled={loading()}
               onClick={() => handleRangeClick(365)}
               class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${days() === 365
                 ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                 : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
+                } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               1y
             </button>
@@ -97,28 +132,31 @@ export const AICostDashboard: Component = () => {
       </div>
 
       <div class="p-6 space-y-4">
-        <Show when={loading()}>
+        <Show when={!summary() && loading()}>
           <div class="text-sm text-gray-500 dark:text-gray-400">Loading usage…</div>
         </Show>
 
-        <Show when={!loading() && summary() == null}>
+        <Show when={!summary() && !loading() && loadError()}>
+          <div class="text-sm text-gray-500 dark:text-gray-400">{loadError()}</div>
+        </Show>
+
+        <Show when={!summary() && !loading() && !loadError()}>
           <div class="text-sm text-gray-500 dark:text-gray-400">No usage data yet.</div>
         </Show>
 
-        <Show when={!loading() && summary()}>
+        <Show when={summary()}>
           {(data) => (
             <>
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
-                  <div class="text-xs text-gray-500 dark:text-gray-400">Input tokens</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">Estimated spend</div>
                   <div class="text-lg font-semibold text-gray-900 dark:text-white">
-                    {formatNumber(data().totals.input_tokens)}
-                  </div>
-                </div>
-                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
-                  <div class="text-xs text-gray-500 dark:text-gray-400">Output tokens</div>
-                  <div class="text-lg font-semibold text-gray-900 dark:text-white">
-                    {formatNumber(data().totals.output_tokens)}
+                    <Show
+                      when={estimatedTotalUSD() != null}
+                      fallback={<span class="text-gray-500 dark:text-gray-400">—</span>}
+                    >
+                      {formatUSD(estimatedTotalUSD() ?? 0)}
+                    </Show>
                   </div>
                 </div>
                 <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
@@ -127,6 +165,16 @@ export const AICostDashboard: Component = () => {
                     {formatNumber(data().totals.total_tokens)}
                   </div>
                 </div>
+                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
+                  <div class="text-xs text-gray-500 dark:text-gray-400">Model/provider pairs</div>
+                  <div class="text-lg font-semibold text-gray-900 dark:text-white">
+                    {formatNumber(data().provider_models.length)}
+                  </div>
+                </div>
+              </div>
+
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                USD is an estimate based on public list prices. It may differ from billing.
               </div>
 
               <div class="overflow-x-auto">
@@ -135,6 +183,7 @@ export const AICostDashboard: Component = () => {
                     <tr class="border-b border-gray-200 dark:border-gray-700">
                       <th class="text-left py-2 pr-4">Provider</th>
                       <th class="text-left py-2 pr-4">Model</th>
+                      <th class="text-right py-2 px-2">Est. USD</th>
                       <th class="text-right py-2 px-2">Input</th>
                       <th class="text-right py-2 px-2">Output</th>
                       <th class="text-right py-2 px-2">Total</th>
@@ -149,6 +198,14 @@ export const AICostDashboard: Component = () => {
                           </td>
                           <td class="py-2 pr-4 text-gray-700 dark:text-gray-300 font-mono text-xs">
                             {pm.model}
+                          </td>
+                          <td class="py-2 px-2 text-right text-gray-900 dark:text-gray-100">
+                            <Show
+                              when={pm.pricing_known}
+                              fallback={<span class="text-gray-500 dark:text-gray-500">—</span>}
+                            >
+                              {formatUSD(pm.estimated_usd ?? 0)}
+                            </Show>
                           </td>
                           <td class="py-2 px-2 text-right text-gray-700 dark:text-gray-300">
                             {formatNumber(pm.input_tokens)}
