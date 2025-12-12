@@ -571,6 +571,18 @@ export function GuestRow(props: GuestRowProps) {
   const agentVersion = createMemo(() => props.guest.agentVersion?.trim() ?? '');
   const hasOsInfo = createMemo(() => osName().length > 0 || osVersion().length > 0);
 
+  // OCI image info - extract clean image name from osTemplate (similar to Docker container image display)
+  const ociImage = createMemo(() => {
+    if (props.guest.type !== 'oci') return null;
+    const template = (props.guest as Container).osTemplate;
+    if (!template) return null;
+    // Strip common prefixes to get clean image reference
+    let image = template;
+    if (image.startsWith('oci:')) image = image.slice(4);
+    if (image.startsWith('docker:')) image = image.slice(7);
+    return image;
+  });
+
   // Update custom URL when prop changes
   createEffect(() => {
     const prevUrl = customUrl();
@@ -890,16 +902,16 @@ export function GuestRow(props: GuestRowProps) {
           <div class="flex justify-center">
             <span
               class={`inline-block px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${props.guest.type === 'qemu'
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                  : props.guest.type === 'oci'
-                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-                    : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                : props.guest.type === 'oci'
+                  ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+                  : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
                 }`}
               title={
                 isVM(props.guest)
                   ? 'Virtual Machine'
                   : props.guest.type === 'oci'
-                    ? 'OCI Container (Docker image)'
+                    ? `OCI Container${ociImage() ? ` • ${ociImage()}` : ''}`
                     : 'LXC Container'
               }
             >
@@ -1111,7 +1123,23 @@ export function GuestRow(props: GuestRowProps) {
       <Show when={isColVisible('os')}>
         <td class="px-2 py-1 align-middle">
           <div class="flex justify-center">
-            <Show when={hasOsInfo()} fallback={<span class="text-xs text-gray-400">-</span>}>
+            <Show
+              when={hasOsInfo()}
+              fallback={
+                <Show
+                  when={ociImage()}
+                  fallback={<span class="text-xs text-gray-400">-</span>}
+                >
+                  {/* For OCI containers without guest agent, show image name in OS column */}
+                  <span
+                    class="text-xs text-purple-600 dark:text-purple-400 truncate max-w-[100px]"
+                    title={`OCI Image: ${ociImage()}`}
+                  >
+                    {ociImage()}
+                  </span>
+                </Show>
+              }
+            >
               <OSInfoCell
                 osName={osName()}
                 osVersion={osVersion()}

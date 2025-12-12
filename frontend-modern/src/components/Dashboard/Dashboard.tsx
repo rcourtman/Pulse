@@ -914,14 +914,22 @@ export function Dashboard(props: DashboardProps) {
       aiChatStore.removeContextItem(guestId);
       // If no items left in context and sidebar is open, keep it open for now
     } else {
-      aiChatStore.addContextItem(guestType, guestId, guest.name, {
+      // Build context with OCI-specific info when applicable
+      const contextData: Record<string, unknown> = {
         guestName: guest.name,
         name: guest.name,
         type: guest.type === 'qemu' ? 'Virtual Machine' : (guest.type === 'oci' ? 'OCI Container' : 'LXC Container'),
         vmid: guest.vmid,
         node: guest.node,
         status: guest.status,
-      });
+      };
+
+      // Add OCI image info if available
+      if (guest.type === 'oci' && 'osTemplate' in guest && guest.osTemplate) {
+        contextData.ociImage = guest.osTemplate;
+      }
+
+      aiChatStore.addContextItem(guestType, guestId, guest.name, contextData);
       // Auto-open the sidebar when first item is selected
       if (!aiChatStore.isOpen) {
         aiChatStore.open();
