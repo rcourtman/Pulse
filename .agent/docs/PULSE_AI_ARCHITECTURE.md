@@ -162,99 +162,87 @@ When the AI needs context (for chat, patrol, or alert analysis), we build it in 
 
 ---
 
-## Implementation Roadmap
+## Implementation Status
 
-### Phase 1: Historical Context Integration
+### ✅ Phase 1: Historical Context Integration (COMPLETE)
 
-**Goal**: Make the AI aware of trends and history, not just current state.
+**Implemented in `internal/ai/context/` package:**
 
-1. **Create `internal/ai/context/` package**
-   - `historical.go` - Pull data from MetricsHistory
-   - `trends.go` - Compute trend direction, rate of change
-   - `formatter.go` - Format for AI consumption
+- `builder.go` - Context builder with trend and prediction integration
+- `formatter.go` - Format resources with metrics for AI consumption
+- `trends.go` - Linear regression for trend direction and rate of change
 
-2. **Trend Computation**
-   - Simple linear regression for direction
-   - Rate of change calculation
-   - Stability classification (stable/growing/declining/volatile)
+**Features:**
+- Trend computation (growing/declining/stable/volatile)
+- 24h and 7d trend summaries
+- Rate of change calculations
+- Integrated into patrol and chat via `buildEnrichedContext()`
 
-3. **Integrate into Patrol and Chat**
-   - `buildEnrichedContext()` replaces `buildInfrastructureSummary()`
-   - Include "Last 24h" and "Last 7d" summaries
+### ✅ Phase 2: Anomaly Detection (COMPLETE)
 
-**Example output:**
+**Implemented in `internal/ai/baseline/` package:**
+
+- `store.go` - Statistical baseline learning and anomaly detection
+
+**Features:**
+- Rolling statistics per resource (mean, stddev, percentiles)
+- Z-score based anomaly severity (low/medium/high/critical)
+- Persists baselines to disk (`ai_baselines.json`)
+- Background learning loop (hourly updates)
+- 7-day learning window with minimum sample requirements
+
+### ✅ Phase 3: Operational Memory (COMPLETE)
+
+**Implemented in `internal/ai/memory/` package:**
+
+- `changes.go` - Change detection for infrastructure changes
+- `remediation.go` - Remediation action logging
+
+**Change Detection tracks:**
+- Resource creation/deletion
+- Status changes (started, stopped)
+- VM/container migrations between nodes
+- CPU/memory configuration changes
+- Backup completions
+
+**Remediation logging records:**
+- Command executed and output
+- Problem being addressed
+- Linked finding ID (if any)
+- Outcome (resolved/partial/failed/unknown)
+- Automatic vs manual distinction
+
+### ✅ Phase 4: Remediation Integration (COMPLETE)
+
+**AI now learns from past fixes:**
+
+- Commands logged to remediation log after execution
+- System prompts include "Past Successful Fixes for Similar Issues"
+- System prompts include "Remediation History for This Resource"
+- Keyword matching finds relevant past solutions
+
+**Example AI context now includes:**
 ```markdown
-## VM: webserver (node: minipc)
-Current: CPU=12%, Memory=67%, Disk=45%
-24h Trend: CPU stable (8-15%), Memory growing +1.2%/hr, Disk stable
-7d Trend: Memory +15% total (was 52% a week ago)
-Baseline: CPU normal=5-20%, Memory normal=45-60% (currently elevated)
+## Past Successful Fixes for Similar Issues
+These actions worked for similar problems before:
+- **High memory usage causing slo...**: `apt clean && apt autoremove` (resolved)
+
+## Remediation History for This Resource
+- 2 hours ago: Memory at 95% → `systemctl restart nginx` (resolved)
+- 1 day ago: Disk full warning → `journalctl --vacuum-time=1d` (resolved)
 ```
 
-### Phase 2: Anomaly Detection
+---
 
-**Goal**: Automatically detect when something is "unusual" for this specific infrastructure.
+## Next Steps
 
-1. **Baseline Learning**
-   - Track rolling statistics per resource (mean, std dev, percentiles)
-   - Time-of-day / day-of-week patterns
-   - Persist baselines across restarts
-
-2. **Anomaly Scoring**
-   - Statistical deviation from baseline
-   - Pattern breaks (e.g., usually low at night, now high)
-   - Sudden changes vs. gradual drift
-
-3. **Anomaly Context for AI**
-   - "This is unusual" annotations
-   - Confidence levels
-   - Similar past anomalies and outcomes
-
-**Example output:**
-```markdown
-⚠️ ANOMALY: VM 'database' memory at 89%
-- Baseline for this time: 45-55%
-- Current value is 4.2σ above normal
-- Similar anomaly 2 weeks ago led to OOM (resolved by restart)
-```
-
-### Phase 3: Operational Memory
-
-**Goal**: The AI remembers what happened and what worked.
-
-1. **Remediation Logging**
-   - When AI suggests/executes a fix, log it
-   - Track outcome (did it work? for how long?)
-   - Link to findings
-
-2. **Change Detection**
-   - Detect configuration changes (new VMs, resource changes)
-   - Correlate changes with subsequent issues
-   - "This problem started 2 days after you added GPU passthrough"
-
-3. **Solution Database**
-   - Index past problems and solutions
-   - "We've seen this before: [link to past finding]"
-   - "Last time, restarting the service fixed it"
-
-**Example output:**
-```markdown
-## Historical Context for VM 'webserver'
-- Created: 6 months ago
-- Last modified: 2 weeks ago (RAM increased 4GB→8GB)
-- Past issues:
-  - 2 weeks ago: High memory (resolved by RAM increase)
-  - 1 month ago: Disk full (resolved by log rotation)
-- User note: "Runs production web app, critical 9-5"
-```
-
-### Phase 4: Predictive Intelligence
+### Phase 5: Predictive Intelligence (PLANNED)
 
 **Goal**: Warn users before problems occur.
 
-1. **Capacity Forecasting**
-   - Extrapolate growth trends
-   - "Storage will be full in X days at current rate"
+1. **Capacity Forecasting** *(Partially done)*
+   - Extrapolate growth trends ✅
+   - "Storage will be full in X days at current rate" ✅
    - Account for patterns (e.g., weekly backup spikes)
 
 2. **Failure Prediction**
@@ -266,15 +254,7 @@ Baseline: CPU normal=5-20%, Memory normal=45-60% (currently elevated)
    - "When VM A memory exceeds 80%, VM B usually crashes within 2 hours"
    - Learn these from historical data
 
-**Example output:**
-```markdown
-## Predictions
-⏰ Storage 'local-zfs': Full in ~18 days at current growth rate
-⏰ Container 'logstash': Historically OOMs every 10-14 days (last: 9 days ago)
-⏰ Backup jobs: Growing 5% per week, will exceed window in ~6 weeks
-```
-
-### Phase 5: Multi-Resource Correlation
+### Phase 6: Multi-Resource Correlation (PLANNED)
 
 **Goal**: Understand relationships between resources.
 
