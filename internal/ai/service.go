@@ -252,6 +252,17 @@ func (s *Service) SetPatternDetector(detector *PatternDetector) {
 	}
 }
 
+// SetCorrelationDetector sets the correlation detector for multi-resource correlation
+func (s *Service) SetCorrelationDetector(detector *CorrelationDetector) {
+	s.mu.RLock()
+	patrol := s.patrolService
+	s.mu.RUnlock()
+
+	if patrol != nil {
+		patrol.SetCorrelationDetector(detector)
+	}
+}
+
 // StartPatrol starts the background patrol service
 func (s *Service) StartPatrol(ctx context.Context) {
 	s.mu.RLock()
