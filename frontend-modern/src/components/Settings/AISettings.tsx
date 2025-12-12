@@ -614,48 +614,6 @@ export const AISettings: Component = () => {
               </p>
             </div>
 
-            {/* Auto-Fix Model Override */}
-            <Show when={form.patrolAutoFix}>
-              <div class={formField}>
-                <label class={labelClass()}>Auto-Fix Model (Remediation)</label>
-                <Show when={availableModels().length > 0} fallback={
-                  <input
-                    type="text"
-                    value={form.autoFixModel}
-                    onInput={(e) => setForm('autoFixModel', e.currentTarget.value)}
-                    placeholder="Leave empty to use patrol model"
-                    class={controlClass()}
-                    disabled={saving()}
-                  />
-                }>
-                  <select
-                    value={form.autoFixModel}
-                    onChange={(e) => setForm('autoFixModel', e.currentTarget.value)}
-                    class={controlClass()}
-                    disabled={saving()}
-                  >
-                    <option value="">Use patrol model ({form.patrolModel || form.model || 'not set'})</option>
-                    <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
-                      {([provider, models]) => (
-                        <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
-                          <For each={models}>
-                            {(model) => (
-                              <option value={model.id}>
-                                {model.name || model.id.split(':').pop()}
-                              </option>
-                            )}
-                          </For>
-                        </optgroup>
-                      )}
-                    </For>
-                  </select>
-                </Show>
-                <p class={formHelpText}>
-                  Model for automatic remediation actions. Consider a more capable model since it takes action.
-                </p>
-              </div>
-            </Show>
-
             {/* AI Provider Configuration - Configure API keys for all providers */}
             <div class={`${formField} p-4 rounded-lg border bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-purple-200 dark:border-purple-800`}>
               <div class="mb-3">
@@ -1119,6 +1077,46 @@ export const AISettings: Component = () => {
                         <p class="mt-1">AI patrol will automatically attempt to fix issues without asking for approval. Review findings regularly.</p>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Auto-Fix Model Selector - shown when auto-fix is enabled */}
+                  <div class="mt-3">
+                    <label class={labelClass()}>Auto-Fix Model (Remediation)</label>
+                    <Show when={availableModels().length > 0} fallback={
+                      <input
+                        type="text"
+                        value={form.autoFixModel}
+                        onInput={(e) => setForm('autoFixModel', e.currentTarget.value)}
+                        placeholder="Leave empty to use patrol model"
+                        class={controlClass()}
+                        disabled={saving()}
+                      />
+                    }>
+                      <select
+                        value={form.autoFixModel}
+                        onChange={(e) => setForm('autoFixModel', e.currentTarget.value)}
+                        class={controlClass()}
+                        disabled={saving()}
+                      >
+                        <option value="">Use patrol model ({form.patrolModel || form.model || 'not set'})</option>
+                        <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
+                          {([provider, models]) => (
+                            <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
+                              <For each={models}>
+                                {(model) => (
+                                  <option value={model.id}>
+                                    {model.name || model.id.split(':').pop()}
+                                  </option>
+                                )}
+                              </For>
+                            </optgroup>
+                          )}
+                        </For>
+                      </select>
+                    </Show>
+                    <p class={formHelpText}>
+                      Model for automatic remediation. Use a more capable model for better fix accuracy.
+                    </p>
                   </div>
                 </Show>
               </div>
