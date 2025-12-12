@@ -237,6 +237,7 @@ func (s *Store) GetSummary(days int) Summary {
 		RetentionDays:  retentionDays,
 		EffectiveDays:  effectiveDays,
 		Truncated:      truncated,
+		PricingAsOf:    PricingAsOf(),
 		ProviderModels: providerModels,
 		UseCases:       summarizeUseCases(events),
 		Targets:        summarizeTargets(events),
@@ -355,6 +356,8 @@ type Summary struct {
 	RetentionDays int  `json:"retention_days"`
 	EffectiveDays int  `json:"effective_days"`
 	Truncated     bool `json:"truncated"`
+
+	PricingAsOf string `json:"pricing_as_of,omitempty"`
 
 	ProviderModels []ProviderModelSummary `json:"provider_models"`
 	UseCases       []UseCaseSummary       `json:"use_cases"`
