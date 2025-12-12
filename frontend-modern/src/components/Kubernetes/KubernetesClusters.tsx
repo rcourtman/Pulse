@@ -451,53 +451,51 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
 
       {/* Filter Bar */}
       <Card padding="sm">
-        <div class="flex flex-col lg:flex-row gap-3">
-          {/* Search */}
-          <div class="flex gap-2 flex-1 items-center">
-            <div class="relative flex-1">
-              <input
-                ref={searchInputRef}
-                type="text"
-                placeholder="Search clusters, nodes, pods..."
-                value={search()}
-                onInput={(e) => setSearch(e.currentTarget.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    setSearch('');
-                    e.currentTarget.blur();
-                  }
-                }}
-                class="w-full pl-9 pr-8 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
+        <div class="flex flex-col gap-3">
+          {/* Search - full width on its own row */}
+          <div class="relative">
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search clusters, nodes, pods..."
+              value={search()}
+              onInput={(e) => setSearch(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setSearch('');
+                  e.currentTarget.blur();
+                }
+              }}
+              class="w-full pl-9 pr-8 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
+            />
+            <svg
+              class="absolute left-3 top-2 h-4 w-4 text-gray-400 dark:text-gray-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
-              <svg
-                class="absolute left-3 top-2 h-4 w-4 text-gray-400 dark:text-gray-500"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
+            </svg>
+            <Show when={search()}>
+              <button
+                type="button"
+                class="absolute right-2 top-1/2 -translate-y-1/2 transform text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                onClick={() => setSearch('')}
+                aria-label="Clear search"
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-              <Show when={search()}>
-                <button
-                  type="button"
-                  class="absolute right-2 top-1/2 -translate-y-1/2 transform text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                  onClick={() => setSearch('')}
-                  aria-label="Clear search"
-                >
-                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </Show>
-            </div>
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </Show>
           </div>
 
-          {/* Filters */}
+          {/* Filters - second row */}
           <div class="flex flex-wrap items-center gap-2">
             {/* View Mode Toggle */}
             <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
