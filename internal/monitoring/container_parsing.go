@@ -558,3 +558,39 @@ func isOCITemplate(template string) bool {
 
 	return false
 }
+
+// isOCIContainerByConfig detects OCI containers by examining their configuration.
+// Proxmox VE 9.1+ OCI containers have specific config markers:
+//   - "entrypoint" field is set (only OCI containers have this)
+//   - "ostype" is often "unmanaged" for OCI containers
+//   - "cmode" is often "console" for OCI containers
+//
+// This is useful because Proxmox doesn't persist the ostemplate after container creation.
+func isOCIContainerByConfig(config map[string]interface{}) bool {
+	if len(config) == 0 {
+		return false
+	}
+
+	// Primary indicator: OCI containers have an "entrypoint" field
+	// Traditional LXC containers don't have this field
+	if _, hasEntrypoint := config["entrypoint"]; hasEntrypoint {
+		return true
+	}
+
+	// Secondary check: "unmanaged" ostype with console cmode is a strong hint
+	// (though not definitive as users could manually configure this)
+	ostype, _ := config["ostype"].(string)
+	cmode, _ := config["cmode"].(string)
+	if ostype == "unmanaged" && cmode == "console" {
+		// Check for other OCI indicators like lxc.signal.halt: SIGTERM
+		// (which is set by Proxmox for OCI containers)
+		if lxc, ok := config["lxc"]; ok {
+			lxcStr := fmt.Sprint(lxc)
+			if strings.Contains(lxcStr, "lxc.signal.halt") {
+				return true
+			}
+		}
+	}
+
+	return false
+}

@@ -2484,19 +2484,28 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 			container.OSName = osName
 		}
 		// Detect OCI containers (Proxmox VE 9.1+)
-		// OCI containers have ostemplate pointing to an OCI registry (e.g., "oci:docker.io/library/alpine:latest")
+		// Method 1: Check ostemplate for OCI registry patterns
 		if osTemplate := extractContainerOSTemplate(configData); osTemplate != "" {
 			container.OSTemplate = osTemplate
-			// Check if this is an OCI container based on template format
 			if isOCITemplate(osTemplate) {
 				container.IsOCI = true
-				container.Type = "oci" // Override type from "lxc" to "oci"
+				container.Type = "oci"
 				log.Debug().
 					Str("container", container.Name).
 					Int("vmid", container.VMID).
 					Str("osTemplate", osTemplate).
-					Msg("Detected OCI container")
+					Msg("Detected OCI container by template")
 			}
+		}
+		// Method 2: Check config fields (entrypoint, ostype, cmode)
+		// This is needed because Proxmox doesn't persist ostemplate after creation
+		if !container.IsOCI && isOCIContainerByConfig(configData) {
+			container.IsOCI = true
+			container.Type = "oci"
+			log.Debug().
+				Str("container", container.Name).
+				Int("vmid", container.VMID).
+				Msg("Detected OCI container by config (entrypoint/ostype)")
 		}
 	}
 
