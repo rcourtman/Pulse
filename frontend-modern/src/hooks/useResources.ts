@@ -22,6 +22,7 @@
  */
 
 import { createMemo, type Accessor } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type {
     Resource,
@@ -240,12 +241,30 @@ export function useResourcesAsLegacy() {
     // Check if we have unified resources (populated after first broadcast)
     const hasUnifiedResources = createMemo(() => resources().length > 0);
 
+    // Prefer legacy arrays when they exist. The backend currently broadcasts both the
+    // legacy arrays and unified resources, and the legacy arrays are already reconciled
+    // by id in the WebSocket store (stable identities, fine-grained updates).
+    // Only synthesize legacy types from unified resources when it looks like the backend
+    // isn't providing that legacy field (e.g., resources include the type but legacy array is empty).
+    const hasVmResources = createMemo(() => resources().some((r) => r.type === 'vm'));
+    const hasNodeResources = createMemo(() => resources().some((r) => r.type === 'node'));
+    const hasContainerResources = createMemo(() =>
+        resources().some((r) => r.type === 'container' || r.type === 'oci-container'),
+    );
+    const hasHostResources = createMemo(() => resources().some((r) => r.type === 'host'));
+    const hasDockerHostResources = createMemo(() => resources().some((r) => r.type === 'docker-host'));
+
     // Convert resources to legacy VM format
     // Falls back to legacy state.vms array when unified resources aren't yet populated
     const asVMs = createMemo(() => {
+        const legacy = wsStore.state.vms ?? [];
         // If we don't have unified resources yet, use legacy arrays directly
         if (!hasUnifiedResources()) {
-            return wsStore.state.vms ?? [];
+            return legacy;
+        }
+        // If legacy data exists (or there are no VM resources), keep using it.
+        if (legacy.length > 0 || !hasVmResources()) {
+            return legacy;
         }
 
         return byType('vm').map(r => {
@@ -299,9 +318,14 @@ export function useResourcesAsLegacy() {
     // Convert resources to legacy Container format
     // Falls back to legacy state.containers array when unified resources aren't yet populated
     const asContainers = createMemo(() => {
+        const legacy = wsStore.state.containers ?? [];
         // If we don't have unified resources yet, use legacy arrays directly
         if (!hasUnifiedResources()) {
-            return wsStore.state.containers ?? [];
+            return legacy;
+        }
+        // If legacy data exists (or there are no container resources), keep using it.
+        if (legacy.length > 0 || !hasContainerResources()) {
+            return legacy;
         }
 
         // Include both traditional LXC containers and OCI containers (Proxmox VE 9.1+).
@@ -364,14 +388,19 @@ export function useResourcesAsLegacy() {
     // Convert resources to legacy Host format
     // Falls back to legacy state.hosts array when unified resources aren't yet populated
     const asHosts = createMemo(() => {
+        const legacy = wsStore.state.hosts ?? [];
         // If we don't have unified resources yet, use legacy arrays directly
         if (!hasUnifiedResources()) {
-            return wsStore.state.hosts ?? [];
+            return legacy;
+        }
+        // If legacy data exists (or there are no host resources), keep using it.
+        if (legacy.length > 0 || !hasHostResources()) {
+            return legacy;
         }
 
         return byType('host').map((r) => {
             // Extract platform-specific data - unwrap SolidJS Proxy objects into plain JS objects
-            const platformData = r.platformData ? JSON.parse(JSON.stringify(r.platformData)) as Record<string, unknown> : undefined;
+            const platformData = r.platformData ? (unwrap(r.platformData) as Record<string, unknown>) : undefined;
 
             // Interfaces from platformData
             const interfaces = platformData?.interfaces as Array<{
@@ -448,15 +477,20 @@ export function useResourcesAsLegacy() {
     // Convert resources to legacy Node format
     // Falls back to legacy state.nodes array when unified resources aren't yet populated
     const asNodes = createMemo(() => {
+        const legacy = wsStore.state.nodes ?? [];
         // If we don't have unified resources yet, use legacy arrays directly
         if (!hasUnifiedResources()) {
             // Return legacy nodes array as-is (it's already in the right format)
-            return wsStore.state.nodes ?? [];
+            return legacy;
+        }
+        // If legacy data exists (or there are no node resources), keep using it.
+        if (legacy.length > 0 || !hasNodeResources()) {
+            return legacy;
         }
 
         return byType('node').map(r => {
             // Unwrap SolidJS Proxy objects into plain JS objects
-            const platformData = r.platformData ? JSON.parse(JSON.stringify(r.platformData)) as Record<string, unknown> : undefined;
+            const platformData = r.platformData ? (unwrap(r.platformData) as Record<string, unknown>) : undefined;
 
             // Build temperature object from unified resource
             // The unified resource has temperature as a simple number,
@@ -512,9 +546,14 @@ export function useResourcesAsLegacy() {
     // Convert resources to legacy DockerHost format (including nested containers)
     // Falls back to legacy state.dockerHosts array when unified resources aren't yet populated
     const asDockerHosts = createMemo(() => {
+        const legacy = wsStore.state.dockerHosts ?? [];
         // If we don't have unified resources yet, use legacy arrays directly
         if (!hasUnifiedResources()) {
-            return wsStore.state.dockerHosts ?? [];
+            return legacy;
+        }
+        // If legacy data exists (or there are no docker-host resources), keep using it.
+        if (legacy.length > 0 || !hasDockerHostResources()) {
+            return legacy;
         }
 
         const dockerHostResources = byType('docker-host');
@@ -522,13 +561,13 @@ export function useResourcesAsLegacy() {
 
         return dockerHostResources.map(h => {
             // Unwrap SolidJS Proxy objects into plain JS objects
-            const platformData = h.platformData ? JSON.parse(JSON.stringify(h.platformData)) as Record<string, unknown> : undefined;
+            const platformData = h.platformData ? (unwrap(h.platformData) as Record<string, unknown>) : undefined;
 
             // Find containers belonging to this host
             const hostContainers = dockerContainerResources
                 .filter(c => c.parentId === h.id)
                 .map(c => {
-                    const cPlatform = c.platformData ? JSON.parse(JSON.stringify(c.platformData)) as Record<string, unknown> : undefined;
+                    const cPlatform = c.platformData ? (unwrap(c.platformData) as Record<string, unknown>) : undefined;
                     // Extract original container ID from compound resource ID (hostID/containerID)
                     // This is needed for sparkline metrics to match the sampler which uses original IDs
                     const originalContainerId = c.id.includes('/') ? c.id.split('/').pop()! : c.id;

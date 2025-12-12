@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { For, Show, createMemo, createSignal } from 'solid-js';
+import { For, Show, createMemo, createSignal, createEffect } from 'solid-js';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useColumnVisibility, type ColumnDef } from '@/hooks/useColumnVisibility';
 import type {
@@ -165,6 +165,36 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
   };
 
   const sortIndicator = (key: SortKey) => sortKey() === key ? (sortDirection() === 'asc' ? ' ▲' : ' ▼') : '';
+
+  // Search input ref for keyboard focus
+  let searchInputRef: HTMLInputElement | undefined;
+
+  // Global keyboard handler - focus search on typing
+  createEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInputField =
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.contentEditable === 'true';
+
+      // Escape clears search
+      if (e.key === 'Escape' && searchInputRef) {
+        setSearch('');
+        searchInputRef.blur();
+        return;
+      }
+
+      // Focus search on printable character (when not in input field)
+      if (!isInputField && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        searchInputRef?.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  });
 
   // Get all unique namespaces for the filter dropdown
   const allNamespaces = createMemo(() => {
@@ -426,6 +456,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
           <div class="flex gap-2 flex-1 items-center">
             <div class="relative flex-1">
               <input
+                ref={searchInputRef}
                 type="text"
                 placeholder="Search clusters, nodes, pods..."
                 value={search()}
