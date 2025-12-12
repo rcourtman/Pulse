@@ -212,6 +212,8 @@ type PatrolService struct {
 	knowledgeStore    *knowledge.Store // For per-resource notes in patrol context
 	metricsHistory    MetricsHistoryProvider // For trend analysis and predictions
 	baselineStore     *baseline.Store  // For anomaly detection via learned baselines
+	changeDetector    *ChangeDetector  // For tracking infrastructure changes
+	remediationLog    *RemediationLog  // For tracking remediation actions
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds PatrolThresholds
@@ -356,6 +358,29 @@ func (p *PatrolService) GetBaselineStore() *baseline.Store {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.baselineStore
+}
+
+// SetChangeDetector sets the change detector for tracking infrastructure changes
+func (p *PatrolService) SetChangeDetector(detector *ChangeDetector) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.changeDetector = detector
+	log.Info().Msg("AI Patrol: Change detector set for operational memory")
+}
+
+// SetRemediationLog sets the remediation log for tracking fix attempts
+func (p *PatrolService) SetRemediationLog(remLog *RemediationLog) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.remediationLog = remLog
+	log.Info().Msg("AI Patrol: Remediation log set for operational memory")
+}
+
+// GetRemediationLog returns the remediation log (for logging actions)
+func (p *PatrolService) GetRemediationLog() *RemediationLog {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.remediationLog
 }
 
 // GetConfig returns the current patrol configuration
@@ -1703,6 +1728,7 @@ func (p *PatrolService) buildEnrichedContext(state models.StateSnapshot) string 
 	metricsHistory := p.metricsHistory
 	knowledgeStore := p.knowledgeStore
 	baselineStore := p.baselineStore
+	changeDetector := p.changeDetector
 	p.mu.RUnlock()
 
 	// If no metrics history, fall back to basic summary
@@ -1737,6 +1763,25 @@ func (p *PatrolService) buildEnrichedContext(state models.StateSnapshot) string 
 
 	// Format for AI consumption
 	formatted := aicontext.FormatInfrastructureContext(infraCtx)
+	
+	// Append recent changes if change detector is available
+	if changeDetector != nil {
+		// Detect any new changes from current state
+		snapshots := stateToSnapshots(state)
+		newChanges := changeDetector.DetectChanges(snapshots)
+		
+		// Get summary of recent changes (last 24 hours)
+		since := time.Now().Add(-24 * time.Hour)
+		changesSummary := changeDetector.GetChangesSummary(since, 20)
+		
+		if changesSummary != "" {
+			formatted += "\n## Recent Infrastructure Changes (24h)\n\n" + changesSummary
+		}
+		
+		if len(newChanges) > 0 {
+			log.Debug().Int("new_changes", len(newChanges)).Msg("AI Patrol: Detected infrastructure changes")
+		}
+	}
 
 	log.Debug().
 		Int("resources", infraCtx.TotalResources).
@@ -1745,6 +1790,58 @@ func (p *PatrolService) buildEnrichedContext(state models.StateSnapshot) string 
 		Msg("AI Patrol: Built enriched context with trends")
 
 	return formatted
+}
+
+// stateToSnapshots converts state to resource snapshots for change detection
+func stateToSnapshots(state models.StateSnapshot) []ResourceSnapshot {
+	var snapshots []ResourceSnapshot
+	
+	for _, node := range state.Nodes {
+		snapshots = append(snapshots, ResourceSnapshot{
+			ID:          node.ID,
+			Name:        node.Name,
+			Type:        "node",
+			Status:      node.Status,
+			CPUCores:    node.CPUInfo.Cores,
+			MemoryBytes: node.Memory.Total,
+		})
+	}
+	
+	for _, vm := range state.VMs {
+		if vm.Template {
+			continue
+		}
+		snapshots = append(snapshots, ResourceSnapshot{
+			ID:          vm.ID,
+			Name:        vm.Name,
+			Type:        "vm",
+			Status:      vm.Status,
+			Node:        vm.Node,
+			CPUCores:    vm.CPUs,
+			MemoryBytes: vm.Memory.Total,
+			DiskBytes:   vm.Disk.Total,
+			LastBackup:  vm.LastBackup,
+		})
+	}
+	
+	for _, ct := range state.Containers {
+		if ct.Template {
+			continue
+		}
+		snapshots = append(snapshots, ResourceSnapshot{
+			ID:          ct.ID,
+			Name:        ct.Name,
+			Type:        "container",
+			Status:      ct.Status,
+			Node:        ct.Node,
+			CPUCores:    ct.CPUs,
+			MemoryBytes: ct.Memory.Total,
+			DiskBytes:   ct.Disk.Total,
+			LastBackup:  ct.LastBackup,
+		})
+	}
+	
+	return snapshots
 }
 
 // metricsHistoryShim adapts ai.MetricsHistoryProvider to aicontext.MetricsHistoryProvider
