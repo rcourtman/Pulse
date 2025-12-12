@@ -51,11 +51,15 @@ export class AIAPI {
   }
 
   // Reset AI usage history (admin-only)
-  static async resetCostHistory(): Promise<{ ok: boolean }> {
+  static async resetCostHistory(): Promise<{ ok: boolean; backup_file?: string }> {
     return apiFetchJSON(`${this.baseUrl}/ai/cost/reset`, {
       method: 'POST',
       body: JSON.stringify({}),
     }) as Promise<{ ok: boolean; backup_file?: string }>;
+  }
+
+  static async exportCostHistory(days = 30, format: 'json' | 'csv' = 'csv'): Promise<Response> {
+    return apiFetch(`${this.baseUrl}/ai/cost/export?days=${days}&format=${format}`, { method: 'GET' });
   }
 
   // Start OAuth flow for Claude Pro/Max subscription

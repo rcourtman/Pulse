@@ -149,6 +149,17 @@ func (s *Service) GetCostSummary(days int) cost.Summary {
 	return store.GetSummary(days)
 }
 
+// ListCostEvents returns retained AI usage events within the requested time window.
+func (s *Service) ListCostEvents(days int) []cost.UsageEvent {
+	s.mu.RLock()
+	store := s.costStore
+	s.mu.RUnlock()
+	if store == nil {
+		return nil
+	}
+	return store.ListEvents(days)
+}
+
 // ClearCostHistory deletes retained AI usage events (admin operation).
 func (s *Service) ClearCostHistory() error {
 	s.mu.RLock()

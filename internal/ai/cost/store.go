@@ -103,6 +103,30 @@ func (s *Store) Clear() error {
 	return s.Flush()
 }
 
+// ListEvents returns a copy of usage events within the requested time window, applying retention.
+func (s *Store) ListEvents(days int) []UsageEvent {
+	if days <= 0 {
+		days = 30
+	}
+	now := time.Now()
+	effectiveDays := days
+	if s.maxDays > 0 && effectiveDays > s.maxDays {
+		effectiveDays = s.maxDays
+	}
+	cutoff := now.AddDate(0, 0, -effectiveDays)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	out := make([]UsageEvent, 0, len(s.events))
+	for _, e := range s.events {
+		if !e.Timestamp.Before(cutoff) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 // GetSummary returns a rollup of usage over the last N days.
 func (s *Store) GetSummary(days int) Summary {
 	if days <= 0 {
@@ -217,6 +241,7 @@ func (s *Store) GetSummary(days int) Summary {
 		Truncated:      truncated,
 		ProviderModels: providerModels,
 		UseCases:       summarizeUseCases(events),
+		Targets:        summarizeTargets(events),
 		DailyTotals:    daily,
 		Totals:         totals,
 	}
@@ -345,6 +370,18 @@ type UseCaseSummary struct {
 	PricingKnown bool    `json:"pricing_known"`
 }
 
+// TargetSummary is a rollup for a Pulse target (e.g. vm/container/node).
+type TargetSummary struct {
+	TargetType   string  `json:"target_type"`
+	TargetID     string  `json:"target_id"`
+	Calls        int64   `json:"calls"`
+	InputTokens  int64   `json:"input_tokens"`
+	OutputTokens int64   `json:"output_tokens"`
+	TotalTokens  int64   `json:"total_tokens"`
+	EstimatedUSD float64 `json:"estimated_usd,omitempty"`
+	PricingKnown bool    `json:"pricing_known"`
+}
+
 // Summary is returned by the cost summary API.
 type Summary struct {
 	Days          int  `json:"days"`
@@ -354,6 +391,7 @@ type Summary struct {
 
 	ProviderModels []ProviderModelSummary `json:"provider_models"`
 	UseCases       []UseCaseSummary       `json:"use_cases"`
+	Targets        []TargetSummary        `json:"targets"`
 	DailyTotals    []DailySummary         `json:"daily_totals"`
 	Totals         ProviderModelSummary   `json:"totals"`
 }
@@ -420,5 +458,78 @@ func summarizeUseCases(events []UsageEvent) []UseCaseSummary {
 		}
 		return out[i].UseCase < out[j].UseCase
 	})
+	return out
+}
+
+func summarizeTargets(events []UsageEvent) []TargetSummary {
+	type key struct {
+		targetType string
+		targetID   string
+	}
+	type totals struct {
+		calls  int64
+		input  int64
+		output int64
+		usd    float64
+		known  bool
+	}
+
+	perTarget := make(map[key]*totals)
+	for _, e := range events {
+		targetType := strings.TrimSpace(strings.ToLower(e.TargetType))
+		targetID := strings.TrimSpace(e.TargetID)
+		if targetType == "" || targetID == "" {
+			continue
+		}
+		k := key{targetType: targetType, targetID: targetID}
+		t := perTarget[k]
+		if t == nil {
+			t = &totals{}
+			perTarget[k] = t
+		}
+		t.calls++
+		t.input += int64(e.InputTokens)
+		t.output += int64(e.OutputTokens)
+
+		provider := strings.ToLower(strings.TrimSpace(e.Provider))
+		model := normalizeModel(provider, e.RequestModel, e.ResponseModel)
+		provider, model = inferProviderAndModel(provider, model)
+		usd, known, _ := EstimateUSD(provider, model, int64(e.InputTokens), int64(e.OutputTokens))
+		if known {
+			t.usd += usd
+			t.known = true
+		}
+	}
+
+	out := make([]TargetSummary, 0, len(perTarget))
+	for k, t := range perTarget {
+		out = append(out, TargetSummary{
+			TargetType:   k.targetType,
+			TargetID:     k.targetID,
+			Calls:        t.calls,
+			InputTokens:  t.input,
+			OutputTokens: t.output,
+			TotalTokens:  t.input + t.output,
+			EstimatedUSD: t.usd,
+			PricingKnown: t.known,
+		})
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].EstimatedUSD != out[j].EstimatedUSD {
+			return out[i].EstimatedUSD > out[j].EstimatedUSD
+		}
+		if out[i].TotalTokens != out[j].TotalTokens {
+			return out[i].TotalTokens > out[j].TotalTokens
+		}
+		if out[i].TargetType != out[j].TargetType {
+			return out[i].TargetType < out[j].TargetType
+		}
+		return out[i].TargetID < out[j].TargetID
+	})
+
+	if len(out) > 20 {
+		out = out[:20]
+	}
 	return out
 }

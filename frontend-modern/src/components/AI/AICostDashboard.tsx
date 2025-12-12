@@ -169,6 +169,27 @@ export const AICostDashboard: Component = () => {
     }
   };
 
+  const downloadExport = async (format: 'csv' | 'json') => {
+    try {
+      const resp = await AIAPI.exportCostHistory(days(), format);
+      if (!resp.ok) {
+        throw new Error(`Export failed (${resp.status})`);
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pulse-ai-usage-${new Date().toISOString().split('T')[0]}-${days()}d.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      logger.error('[AICostDashboard] Failed to export cost history:', err);
+      notificationStore.error('Failed to export AI usage history');
+    }
+  };
+
   const handleRangeClick = (rangeDays: number) => {
     if (loading() || rangeDays === days()) return;
     setDays(rangeDays);
@@ -397,15 +418,73 @@ export const AICostDashboard: Component = () => {
                 <div class="text-xs text-gray-500 dark:text-gray-400">
                   History retention: {data().retention_days} days
                 </div>
-                <button
-                  type="button"
-                  disabled={loading()}
-                  onClick={resetHistory}
-                  class={`text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
-                >
-                  Reset history
-                </button>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={loading()}
+                    onClick={() => downloadExport('csv')}
+                    class={`text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  >
+                    Export CSV
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loading()}
+                    onClick={() => downloadExport('json')}
+                    class={`text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  >
+                    Export JSON
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loading()}
+                    onClick={resetHistory}
+                    class={`text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  >
+                    Reset history
+                  </button>
+                </div>
               </div>
+
+              <Show when={(data().targets?.length ?? 0) > 0}>
+                <div class="overflow-x-auto">
+                  <table class="min-w-full text-sm">
+                    <thead class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                      <tr class="border-b border-gray-200 dark:border-gray-700">
+                        <th class="text-left py-2 pr-4">Top targets</th>
+                        <th class="text-right py-2 px-2">Est. USD</th>
+                        <th class="text-right py-2 px-2">Calls</th>
+                        <th class="text-right py-2 px-2">Tokens</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <For each={data().targets}>
+                        {(t) => (
+                          <tr class="border-b border-gray-100 dark:border-gray-800">
+                            <td class="py-2 pr-4 text-gray-700 dark:text-gray-300 font-mono text-xs">
+                              {t.target_type}:{t.target_id}
+                            </td>
+                            <td class="py-2 px-2 text-right text-gray-900 dark:text-gray-100">
+                              <Show
+                                when={t.pricing_known}
+                                fallback={<span class="text-gray-500 dark:text-gray-500">—</span>}
+                              >
+                                {formatUSD(t.estimated_usd ?? 0)}
+                              </Show>
+                            </td>
+                            <td class="py-2 px-2 text-right text-gray-700 dark:text-gray-300">
+                              {formatNumber(t.calls)}
+                            </td>
+                            <td class="py-2 px-2 text-right text-gray-900 dark:text-gray-100">
+                              {formatNumber(t.total_tokens)}
+                            </td>
+                          </tr>
+                        )}
+                      </For>
+                    </tbody>
+                  </table>
+                </div>
+              </Show>
 
               <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">

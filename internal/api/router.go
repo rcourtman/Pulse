@@ -1097,6 +1097,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/agents", RequireAuth(r.config, r.aiSettingsHandler.HandleGetConnectedAgents))
 	r.mux.HandleFunc("/api/ai/cost/summary", RequireAuth(r.config, r.aiSettingsHandler.HandleGetAICostSummary))
 	r.mux.HandleFunc("/api/ai/cost/reset", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleResetAICostHistory)))
+	r.mux.HandleFunc("/api/ai/cost/export", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleExportAICostHistory)))
 	// OAuth endpoints for Claude Pro/Max subscription authentication
 	r.mux.HandleFunc("/api/ai/oauth/start", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthStart))
 	r.mux.HandleFunc("/api/ai/oauth/exchange", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthExchange)) // Manual code input
