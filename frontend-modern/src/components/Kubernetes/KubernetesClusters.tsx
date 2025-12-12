@@ -1,5 +1,6 @@
 import type { Component } from 'solid-js';
 import { For, Show, createMemo, createSignal } from 'solid-js';
+import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import type {
   KubernetesCluster,
   KubernetesDeployment,
@@ -129,6 +130,39 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
   const [viewMode, setViewMode] = createSignal<ViewMode>('clusters');
   const [statusFilter, setStatusFilter] = createSignal<StatusFilter>('all');
   const [showHidden, setShowHidden] = createSignal(false);
+  const [namespaceFilter, setNamespaceFilter] = createSignal<string>('all');
+
+  // Sorting state with persistence
+  type SortKey = 'name' | 'status' | 'namespace' | 'cluster' | 'age' | 'restarts' | 'ready' | 'replicas';
+  type SortDir = 'asc' | 'desc';
+  const [sortKey, setSortKey] = usePersistentSignal<SortKey>('k8s-sort-key', 'name');
+  const [sortDirection, setSortDirection] = usePersistentSignal<SortDir>('k8s-sort-dir', 'asc');
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey() === key) {
+      setSortDirection(sortDirection() === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortIndicator = (key: SortKey) => sortKey() === key ? (sortDirection() === 'asc' ? ' ▲' : ' ▼') : '';
+
+  // Get all unique namespaces for the filter dropdown
+  const allNamespaces = createMemo(() => {
+    const namespaces = new Set<string>();
+    for (const cluster of props.clusters ?? []) {
+      if (!showHidden() && cluster.hidden) continue;
+      for (const pod of cluster.pods ?? []) {
+        if (pod.namespace) namespaces.add(pod.namespace);
+      }
+      for (const dep of cluster.deployments ?? []) {
+        if (dep.namespace) namespaces.add(dep.namespace);
+      }
+    }
+    return Array.from(namespaces).sort();
+  });
 
   // Get all nodes flattened across clusters
   const allNodes = createMemo(() => {
@@ -230,9 +264,13 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
   const filteredPods = createMemo(() => {
     const term = search().trim().toLowerCase();
     const status = statusFilter();
+    const ns = namespaceFilter();
+    const key = sortKey();
+    const dir = sortDirection();
 
-    return allPods()
+    const filtered = allPods()
       .filter(({ pod }) => {
+        if (ns !== 'all' && pod.namespace !== ns) return false;
         if (status === 'all') return true;
         const healthy = isPodHealthy(pod);
         if (status === 'healthy') return healthy;
@@ -253,14 +291,33 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
           .toLowerCase();
         return haystack.includes(term);
       });
+
+    // Sort
+    return filtered.sort((a, b) => {
+      let cmp = 0;
+      switch (key) {
+        case 'name': cmp = (a.pod.name ?? '').localeCompare(b.pod.name ?? ''); break;
+        case 'namespace': cmp = (a.pod.namespace ?? '').localeCompare(b.pod.namespace ?? ''); break;
+        case 'cluster': cmp = getClusterDisplayName(a.cluster).localeCompare(getClusterDisplayName(b.cluster)); break;
+        case 'restarts': cmp = (a.pod.restarts ?? 0) - (b.pod.restarts ?? 0); break;
+        case 'age': cmp = (a.pod.createdAt ?? 0) - (b.pod.createdAt ?? 0); break;
+        case 'status': cmp = (isPodHealthy(a.pod) ? 0 : 1) - (isPodHealthy(b.pod) ? 0 : 1); break;
+        default: cmp = (a.pod.name ?? '').localeCompare(b.pod.name ?? '');
+      }
+      return dir === 'desc' ? -cmp : cmp;
+    });
   });
 
   const filteredDeployments = createMemo(() => {
     const term = search().trim().toLowerCase();
     const status = statusFilter();
+    const ns = namespaceFilter();
+    const key = sortKey();
+    const dir = sortDirection();
 
-    return allDeployments()
+    const filtered = allDeployments()
       .filter(({ deployment }) => {
+        if (ns !== 'all' && deployment.namespace !== ns) return false;
         if (status === 'all') return true;
         const healthy = isDeploymentHealthy(deployment);
         if (status === 'healthy') return healthy;
@@ -278,18 +335,34 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
           .toLowerCase();
         return haystack.includes(term);
       });
+
+    // Sort
+    return filtered.sort((a, b) => {
+      let cmp = 0;
+      switch (key) {
+        case 'name': cmp = (a.deployment.name ?? '').localeCompare(b.deployment.name ?? ''); break;
+        case 'namespace': cmp = (a.deployment.namespace ?? '').localeCompare(b.deployment.namespace ?? ''); break;
+        case 'cluster': cmp = getClusterDisplayName(a.cluster).localeCompare(getClusterDisplayName(b.cluster)); break;
+        case 'replicas': cmp = (a.deployment.desiredReplicas ?? 0) - (b.deployment.desiredReplicas ?? 0); break;
+        case 'ready': cmp = (a.deployment.readyReplicas ?? 0) - (b.deployment.readyReplicas ?? 0); break;
+        case 'status': cmp = (isDeploymentHealthy(a.deployment) ? 0 : 1) - (isDeploymentHealthy(b.deployment) ? 0 : 1); break;
+        default: cmp = (a.deployment.name ?? '').localeCompare(b.deployment.name ?? '');
+      }
+      return dir === 'desc' ? -cmp : cmp;
+    });
   });
 
   const isEmpty = createMemo(() => (props.clusters?.length ?? 0) === 0);
 
   const hasActiveFilters = createMemo(
-    () => search().trim() !== '' || statusFilter() !== 'all' || showHidden(),
+    () => search().trim() !== '' || statusFilter() !== 'all' || showHidden() || namespaceFilter() !== 'all',
   );
 
   const handleReset = () => {
     setSearch('');
     setStatusFilter('all');
     setShowHidden(false);
+    setNamespaceFilter('all');
     setViewMode('clusters');
   };
 
@@ -358,8 +431,8 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                 type="button"
                 onClick={() => setViewMode('clusters')}
                 class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${viewMode() === 'clusters'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                   }`}
               >
                 Clusters
@@ -368,8 +441,8 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                 type="button"
                 onClick={() => setViewMode('nodes')}
                 class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${viewMode() === 'nodes'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                   }`}
               >
                 Nodes
@@ -378,8 +451,8 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                 type="button"
                 onClick={() => setViewMode('pods')}
                 class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${viewMode() === 'pods'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                   }`}
               >
                 Pods
@@ -388,8 +461,8 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                 type="button"
                 onClick={() => setViewMode('deployments')}
                 class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${viewMode() === 'deployments'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                   }`}
               >
                 Deployments
@@ -404,8 +477,8 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                 type="button"
                 onClick={() => setStatusFilter('all')}
                 class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${statusFilter() === 'all'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                   }`}
               >
                 All
@@ -414,8 +487,8 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                 type="button"
                 onClick={() => setStatusFilter(statusFilter() === 'healthy' ? 'all' : 'healthy')}
                 class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${statusFilter() === 'healthy'
-                    ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm ring-1 ring-green-200 dark:ring-green-800'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm ring-1 ring-green-200 dark:ring-green-800'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                   }`}
               >
                 <span class={`w-2 h-2 rounded-full ${statusFilter() === 'healthy' ? 'bg-green-500' : 'bg-green-400/60'}`} />
@@ -425,14 +498,29 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                 type="button"
                 onClick={() => setStatusFilter(statusFilter() === 'unhealthy' ? 'all' : 'unhealthy')}
                 class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${statusFilter() === 'unhealthy'
-                    ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm ring-1 ring-amber-200 dark:ring-amber-800'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm ring-1 ring-amber-200 dark:ring-amber-800'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                   }`}
               >
                 <span class={`w-2 h-2 rounded-full ${statusFilter() === 'unhealthy' ? 'bg-amber-500' : 'bg-amber-400/60'}`} />
                 Unhealthy
               </button>
             </div>
+
+            {/* Namespace Filter - only show for pods/deployments */}
+            <Show when={(viewMode() === 'pods' || viewMode() === 'deployments') && allNamespaces().length > 1}>
+              <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" />
+              <select
+                value={namespaceFilter()}
+                onChange={(e) => setNamespaceFilter(e.currentTarget.value)}
+                class="px-2.5 py-1 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              >
+                <option value="all">All namespaces</option>
+                <For each={allNamespaces()}>
+                  {(ns) => <option value={ns}>{ns}</option>}
+                </For>
+              </select>
+            </Show>
 
             <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" />
 
@@ -649,14 +737,14 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
               <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead class="bg-gray-50 dark:bg-gray-900/40">
                   <tr>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pod</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Namespace</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cluster</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ready</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Restarts</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('name')}>Pod{sortIndicator('name')}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('namespace')}>Namespace{sortIndicator('namespace')}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('cluster')}>Cluster{sortIndicator('cluster')}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('status')}>Status{sortIndicator('status')}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('ready')}>Ready{sortIndicator('ready')}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('restarts')}>Restarts{sortIndicator('restarts')}</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Image</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Age</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('age')}>Age{sortIndicator('age')}</th>
                   </tr>
                 </thead>
                 <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -722,12 +810,12 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
               <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead class="bg-gray-50 dark:bg-gray-900/40">
                   <tr>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Deployment</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Namespace</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cluster</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Replicas</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ready</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('name')}>Deployment{sortIndicator('name')}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('namespace')}>Namespace{sortIndicator('namespace')}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('cluster')}>Cluster{sortIndicator('cluster')}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('status')}>Status{sortIndicator('status')}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('replicas')}>Replicas{sortIndicator('replicas')}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('ready')}>Ready{sortIndicator('ready')}</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Up-to-date</th>
                   </tr>
                 </thead>

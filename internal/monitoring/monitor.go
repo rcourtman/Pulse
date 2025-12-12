@@ -655,6 +655,8 @@ type Monitor struct {
 	dlqInsightMap            map[string]*dlqInsight
 	nodeLastOnline           map[string]time.Time   // Track last time each node was seen online (for grace period)
 	resourceStore            ResourceStoreInterface // Optional unified resource store for polling optimization
+	mockMetricsCancel         context.CancelFunc
+	mockMetricsWg             sync.WaitGroup
 }
 
 type rrdMemCacheEntry struct {
@@ -3403,6 +3405,11 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	m.runtimeCtx = ctx
 	m.wsHub = wsHub
 	m.mu.Unlock()
+	defer m.stopMockMetricsSampler()
+
+	if mock.IsMockEnabled() {
+		m.startMockMetricsSampler(ctx)
+	}
 
 	// Initialize and start discovery service if enabled
 	if mock.IsMockEnabled() {
@@ -7259,18 +7266,28 @@ func (m *Monitor) SetMockMode(enable bool) {
 	}
 
 	if enable {
+		m.stopMockMetricsSampler()
 		mock.SetEnabled(true)
 		m.alertManager.ClearActiveAlerts()
 		m.mu.Lock()
 		m.resetStateLocked()
+		m.metricsHistory.Reset()
 		m.mu.Unlock()
 		m.StopDiscoveryService()
+		m.mu.RLock()
+		ctx := m.runtimeCtx
+		m.mu.RUnlock()
+		if ctx != nil {
+			m.startMockMetricsSampler(ctx)
+		}
 		log.Info().Msg("Switched monitor to mock mode")
 	} else {
+		m.stopMockMetricsSampler()
 		mock.SetEnabled(false)
 		m.alertManager.ClearActiveAlerts()
 		m.mu.Lock()
 		m.resetStateLocked()
+		m.metricsHistory.Reset()
 		m.mu.Unlock()
 		log.Info().Msg("Switched monitor to real data mode")
 	}
