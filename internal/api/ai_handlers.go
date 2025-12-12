@@ -1554,7 +1554,7 @@ func (h *AISettingsHandler) HandleOAuthStart(w http.ResponseWriter, r *http.Requ
 	authURL := providers.GetAuthorizationURL(session)
 
 	log.Info().
-		Str("state", session.State[:8]+"...").
+		Str("state", safePrefixForLog(session.State, 8)+"...").
 		Str("verifier_len", fmt.Sprintf("%d", len(session.CodeVerifier))).
 		Str("auth_url", authURL).
 		Msg("Starting Claude OAuth flow - user must visit URL and paste code back")
