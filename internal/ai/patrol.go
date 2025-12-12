@@ -415,6 +415,13 @@ func (p *PatrolService) GetCorrelationDetector() *CorrelationDetector {
 	return p.correlationDetector
 }
 
+// GetChangeDetector returns the change detector
+func (p *PatrolService) GetChangeDetector() *ChangeDetector {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.changeDetector
+}
+
 // GetConfig returns the current patrol configuration
 func (p *PatrolService) GetConfig() PatrolConfig {
 	p.mu.RLock()
