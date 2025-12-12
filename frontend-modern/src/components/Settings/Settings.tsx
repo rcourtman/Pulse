@@ -4033,7 +4033,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   Discovery subnet
                                 </label>
                                 <span
-                                  class="text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-300 cursor-help"
+                                  class="text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-300"
                                   title="Use CIDR notation (comma-separated for multiple), e.g. 192.168.1.0/24, 10.0.0.0/24. Smaller ranges keep scans quick."
                                 >
                                   <svg

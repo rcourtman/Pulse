@@ -123,7 +123,7 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Gues
   return (
     <>
       <span
-        class="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 cursor-help"
+        class="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
@@ -186,12 +186,18 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Gues
 
               {/* Fallback: just show IP list if no interface details */}
               <Show when={!hasInterfaces() && props.ipAddresses.length > 0}>
-                <div class="flex flex-wrap gap-1 py-0.5">
-                  <For each={props.ipAddresses}>
-                    {(ip) => (
-                      <span class="text-gray-300 font-mono">{ip}</span>
-                    )}
-                  </For>
+                <div class="py-1">
+                  <div class="flex items-center gap-2 text-blue-400 font-medium">
+                    <span>IP Addresses</span>
+                    <span class="text-[9px] text-gray-500 font-normal">No agent data</span>
+                  </div>
+                  <div class="mt-0.5 flex flex-wrap gap-1">
+                    <For each={props.ipAddresses}>
+                      {(ip) => (
+                        <span class="text-gray-300 font-mono">{ip}</span>
+                      )}
+                    </For>
+                  </div>
                 </div>
               </Show>
             </div>
@@ -267,7 +273,7 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
   return (
     <>
       <span
-        class="inline-flex items-center gap-1 cursor-help"
+        class="inline-flex items-center gap-1"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
@@ -328,7 +334,7 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
   return (
     <>
       <span
-        class={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded cursor-help ${config().bgColor} ${config().color}`}
+        class={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${config().bgColor} ${config().color}`}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
@@ -991,7 +997,7 @@ export function GuestRow(props: GuestRowProps) {
             when={hasDiskUsage()}
             fallback={
               <div class="flex justify-center">
-                <span class="text-xs text-gray-400 cursor-help" title={getDiskStatusTooltip()}>
+                <span class="text-xs text-gray-400" title={getDiskStatusTooltip()}>
                   -
                 </span>
               </div>

@@ -53,7 +53,7 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
                 // Progress bar mode - full width, flex centered like stacked bars
                 <div ref={containerRef} class="metric-text w-full h-4 flex items-center justify-center">
                     <div
-                        class="relative w-full h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded cursor-help"
+                        class="relative w-full h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded"
                         onMouseEnter={handleMouseEnter}
                         onMouseLeave={handleMouseLeave}
                     >
