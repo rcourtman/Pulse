@@ -1411,6 +1411,12 @@ Always execute the commands rather than telling the user how to do it.`
 					Type: "tool_end",
 					Data: ToolEndData{Name: tc.Name, Input: toolInput, Output: result, Success: execution.Success},
 				})
+				
+				// Log to remediation log for operational memory
+				// Only log run_command since that's the main remediation action
+				if tc.Name == "run_command" {
+					s.logRemediation(req, toolInput, result, execution.Success)
+				}
 			}
 
 			// Truncate large results to prevent context bloat
@@ -1489,6 +1495,70 @@ func (s *Service) getToolInputDisplay(tc providers.ToolCall) string {
 	default:
 		return fmt.Sprintf("%v", tc.Input)
 	}
+}
+
+// logRemediation logs a tool execution to the remediation log for operational memory
+// This enables learning from past fix attempts
+func (s *Service) logRemediation(req ExecuteRequest, command, output string, success bool) {
+	s.mu.RLock()
+	patrol := s.patrolService
+	s.mu.RUnlock()
+	
+	if patrol == nil {
+		return
+	}
+	
+	remLog := patrol.GetRemediationLog()
+	if remLog == nil {
+		return
+	}
+	
+	// Determine outcome
+	outcome := OutcomeUnknown
+	if success {
+		outcome = OutcomeResolved
+	} else {
+		outcome = OutcomeFailed
+	}
+	
+	// Extract problem from the original prompt (first 200 chars as summary)
+	problem := req.Prompt
+	if len(problem) > 200 {
+		problem = problem[:200] + "..."
+	}
+	
+	// Get resource name from context if available
+	resourceName := ""
+	if req.Context != nil {
+		if name, ok := req.Context["name"].(string); ok {
+			resourceName = name
+		}
+	}
+	
+	// Truncate output for storage
+	truncatedOutput := output
+	const maxOutputLen = 1000
+	if len(truncatedOutput) > maxOutputLen {
+		truncatedOutput = truncatedOutput[:maxOutputLen] + "..."
+	}
+	
+	remLog.Log(RemediationRecord{
+		ResourceID:   req.TargetID,
+		ResourceType: req.TargetType,
+		ResourceName: resourceName,
+		FindingID:    req.FindingID,
+		Problem:      problem,
+		Action:       command,
+		Output:       truncatedOutput,
+		Outcome:      outcome,
+		Automatic:    req.UseCase == "patrol", // Patrol runs are automatic
+	})
+	
+	log.Debug().
+		Str("resource_id", req.TargetID).
+		Str("command", command).
+		Bool("success", success).
+		Msg("Logged remediation action to operational memory")
 }
 
 // hasAgentForTarget checks if we have an agent connection for the given target
@@ -2411,6 +2481,9 @@ This is a 3-command job. Don't over-investigate.`
 		} else if req.TargetID != "" {
 			prompt += fmt.Sprintf("\n\n## Current Focus\nYou are analyzing %s '%s'", req.TargetType, req.TargetID)
 		}
+		
+		// Add past remediation history for this resource
+		prompt += s.buildRemediationContext(req.TargetID, req.Prompt)
 	}
 
 	// Add any provided context in a structured way
@@ -2691,4 +2764,64 @@ func providerDisplayName(provider string) string {
 // Reload reloads the AI configuration (call after settings change)
 func (s *Service) Reload() error {
 	return s.LoadConfig()
+}
+
+// buildRemediationContext adds past remediation history to help AI learn from previous fixes
+func (s *Service) buildRemediationContext(resourceID, currentProblem string) string {
+	s.mu.RLock()
+	patrol := s.patrolService
+	s.mu.RUnlock()
+	
+	if patrol == nil {
+		return ""
+	}
+	
+	remLog := patrol.GetRemediationLog()
+	if remLog == nil {
+		return ""
+	}
+	
+	var context string
+	
+	// Get similar past remediations based on the current problem
+	if currentProblem != "" {
+		successful := remLog.GetSuccessfulRemediations(currentProblem, 3)
+		if len(successful) > 0 {
+			context += "\n\n## Past Successful Fixes for Similar Issues\n"
+			context += "These actions worked for similar problems before:\n"
+			for _, rec := range successful {
+				context += fmt.Sprintf("- **%s**: `%s` (%s)\n", 
+					truncateString(rec.Problem, 60), 
+					truncateString(rec.Action, 80),
+					rec.Outcome)
+			}
+		}
+	}
+	
+	// Get history for this specific resource
+	if resourceID != "" {
+		history := remLog.GetForResource(resourceID, 5)
+		if len(history) > 0 {
+			context += "\n\n## Remediation History for This Resource\n"
+			for _, rec := range history {
+				ago := time.Since(rec.Timestamp)
+				agoStr := formatDuration(ago)
+				context += fmt.Sprintf("- %s ago: %s → `%s` (%s)\n",
+					agoStr,
+					truncateString(rec.Problem, 50),
+					truncateString(rec.Action, 60),
+					rec.Outcome)
+			}
+		}
+	}
+	
+	return context
+}
+
+// truncateString truncates a string to maxLen characters
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
 }
