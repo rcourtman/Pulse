@@ -1002,9 +1002,13 @@ Always execute the commands rather than telling the user how to do it.`
 		}
 
 		if costStore != nil {
+			providerName, _ := config.ParseModelString(modelString)
+			if providerName == "" {
+				providerName = provider.Name()
+			}
 			costStore.Record(cost.UsageEvent{
 				Timestamp:     time.Now(),
-				Provider:      provider.Name(),
+				Provider:      providerName,
 				RequestModel:  modelString,
 				ResponseModel: resp.Model,
 				UseCase:       req.UseCase,
@@ -1189,9 +1193,13 @@ Always execute the commands rather than telling the user how to do it.`
 		}
 
 		if costStore != nil {
+			providerName, _ := config.ParseModelString(modelString)
+			if providerName == "" {
+				providerName = provider.Name()
+			}
 			costStore.Record(cost.UsageEvent{
 				Timestamp:     time.Now(),
-				Provider:      provider.Name(),
+				Provider:      providerName,
 				RequestModel:  modelString,
 				ResponseModel: resp.Model,
 				UseCase:       req.UseCase,

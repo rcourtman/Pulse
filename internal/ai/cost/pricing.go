@@ -43,10 +43,13 @@ var providerPrices = map[string][]modelPrice{
 		{Pattern: "claude-sonnet*", InputUSDPerMTok: 3.00, OutputUSDPerMTok: 15.00},
 		{Pattern: "claude-haiku*", InputUSDPerMTok: 0.25, OutputUSDPerMTok: 1.25},
 	},
+	"deepseek": {
+		// DeepSeek docs include an "input cache hit" discount; this uses cache-miss rates for conservative estimates.
+		{Pattern: "deepseek-*", InputUSDPerMTok: 0.28, OutputUSDPerMTok: 0.42},
+	},
 	"ollama": {
 		{Pattern: "*", InputUSDPerMTok: 0, OutputUSDPerMTok: 0},
 	},
-	// deepseek pricing intentionally omitted until stable public pricing is confirmed.
 }
 
 func lookupPrice(provider, model string) (TokenPrice, bool) {
