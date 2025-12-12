@@ -28,6 +28,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -1469,6 +1470,15 @@ func (r *Router) StartPatrol(ctx context.Context) {
 		})
 		if patternDetector != nil {
 			r.aiSettingsHandler.SetPatternDetector(patternDetector)
+			
+			// Wire alert history to pattern detector for event tracking
+			if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+				alertManager.OnAlertHistory(func(alert alerts.Alert) {
+					// Convert alert type to trackable event
+					patternDetector.RecordFromAlert(alert.ResourceID, alert.Type+"_"+string(alert.Level), alert.StartTime)
+				})
+				log.Info().Msg("AI Pattern Detector: Wired to alert history for failure prediction")
+			}
 		}
 
 		r.aiSettingsHandler.StartPatrol(ctx)
