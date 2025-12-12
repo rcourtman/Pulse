@@ -47,6 +47,7 @@ type AIConfig struct {
 	PatrolAnalyzeDocker   bool   `json:"patrol_analyze_docker,omitempty"`   // Include Docker hosts in patrol
 	PatrolAnalyzeStorage  bool   `json:"patrol_analyze_storage,omitempty"`  // Include storage in patrol
 	PatrolAutoFix         bool   `json:"patrol_auto_fix,omitempty"`         // When true, patrol can attempt automatic remediation (default: false, observe only)
+	AutoFixModel          string `json:"auto_fix_model,omitempty"`          // Model for automatic remediation (defaults to PatrolModel, may want more capable model)
 
 	// Alert-triggered AI analysis - analyze specific resources when alerts fire
 	AlertTriggeredAnalysis bool `json:"alert_triggered_analysis,omitempty"` // Enable AI analysis when alerts fire (token-efficient)
@@ -315,6 +316,16 @@ func (c *AIConfig) GetPatrolModel() string {
 		return c.PatrolModel
 	}
 	return c.GetModel()
+}
+
+// GetAutoFixModel returns the model for automatic remediation actions
+// Falls back to PatrolModel, then to the main Model if AutoFixModel is not set
+// Auto-fix may warrant a more capable model since it takes actions
+func (c *AIConfig) GetAutoFixModel() string {
+	if c.AutoFixModel != "" {
+		return c.AutoFixModel
+	}
+	return c.GetPatrolModel()
 }
 
 // ClearOAuthTokens clears OAuth tokens (used when switching back to API key auth)

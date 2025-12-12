@@ -79,6 +79,7 @@ export const AISettings: Component = () => {
     model: '',
     chatModel: '', // Empty means use default model
     patrolModel: '', // Empty means use default model
+    autoFixModel: '', // Empty means use patrol model
     baseUrl: '', // Legacy - kept for compatibility
     clearApiKey: false,
     autonomousMode: false,
@@ -105,6 +106,7 @@ export const AISettings: Component = () => {
         model: '', // Will be set when provider is configured
         chatModel: '',
         patrolModel: '',
+        autoFixModel: '',
         baseUrl: '',
         clearApiKey: false,
         autonomousMode: false,
@@ -130,6 +132,7 @@ export const AISettings: Component = () => {
       model: data.model || '', // User must select a model
       chatModel: data.chat_model || '',
       patrolModel: data.patrol_model || '',
+      autoFixModel: data.auto_fix_model || '',
       baseUrl: data.base_url || '',
       clearApiKey: false,
       autonomousMode: data.autonomous_mode || false,
@@ -278,6 +281,10 @@ export const AISettings: Component = () => {
 
       if (form.patrolModel !== (settings()?.patrol_model || '')) {
         payload.patrol_model = form.patrolModel;
+      }
+
+      if (form.autoFixModel !== (settings()?.auto_fix_model || '')) {
+        payload.auto_fix_model = form.autoFixModel;
       }
 
       // Include multi-provider credentials if set (non-empty)
@@ -606,6 +613,48 @@ export const AISettings: Component = () => {
                 Model for background patrol analysis. Use a cheaper/faster model to save tokens.
               </p>
             </div>
+
+            {/* Auto-Fix Model Override */}
+            <Show when={form.patrolAutoFix}>
+              <div class={formField}>
+                <label class={labelClass()}>Auto-Fix Model (Remediation)</label>
+                <Show when={availableModels().length > 0} fallback={
+                  <input
+                    type="text"
+                    value={form.autoFixModel}
+                    onInput={(e) => setForm('autoFixModel', e.currentTarget.value)}
+                    placeholder="Leave empty to use patrol model"
+                    class={controlClass()}
+                    disabled={saving()}
+                  />
+                }>
+                  <select
+                    value={form.autoFixModel}
+                    onChange={(e) => setForm('autoFixModel', e.currentTarget.value)}
+                    class={controlClass()}
+                    disabled={saving()}
+                  >
+                    <option value="">Use patrol model ({form.patrolModel || form.model || 'not set'})</option>
+                    <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
+                      {([provider, models]) => (
+                        <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
+                          <For each={models}>
+                            {(model) => (
+                              <option value={model.id}>
+                                {model.name || model.id.split(':').pop()}
+                              </option>
+                            )}
+                          </For>
+                        </optgroup>
+                      )}
+                    </For>
+                  </select>
+                </Show>
+                <p class={formHelpText}>
+                  Model for automatic remediation actions. Consider a more capable model since it takes action.
+                </p>
+              </div>
+            </Show>
 
             {/* AI Provider Configuration - Configure API keys for all providers */}
             <div class={`${formField} p-4 rounded-lg border bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-purple-200 dark:border-purple-800`}>

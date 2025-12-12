@@ -144,6 +144,7 @@ type AISettingsResponse struct {
 	Model          string `json:"model"`
 	ChatModel      string `json:"chat_model,omitempty"`   // Model for interactive chat (empty = use default)
 	PatrolModel    string `json:"patrol_model,omitempty"` // Model for patrol (empty = use default)
+	AutoFixModel   string `json:"auto_fix_model,omitempty"` // Model for auto-fix (empty = use patrol model)
 	BaseURL        string `json:"base_url,omitempty"`     // DEPRECATED: legacy base URL
 	Configured     bool   `json:"configured"`             // true if AI is ready to use
 	AutonomousMode bool   `json:"autonomous_mode"`        // true if AI can execute without approval
@@ -154,6 +155,7 @@ type AISettingsResponse struct {
 	// Patrol settings for token efficiency
 	PatrolSchedulePreset   string             `json:"patrol_schedule_preset"`   // DEPRECATED: legacy preset
 	PatrolIntervalMinutes  int                `json:"patrol_interval_minutes"`  // Patrol interval in minutes (0 = disabled)
+	PatrolAutoFix          bool               `json:"patrol_auto_fix"`          // true if patrol can auto-fix issues
 	AlertTriggeredAnalysis bool               `json:"alert_triggered_analysis"` // true if AI analyzes when alerts fire
 	AvailableModels        []config.ModelInfo `json:"available_models"`         // List of models for current provider
 	// Multi-provider credentials - shows which providers are configured
@@ -176,6 +178,7 @@ type AISettingsUpdateRequest struct {
 	Model          *string `json:"model,omitempty"`
 	ChatModel      *string `json:"chat_model,omitempty"`   // Model for interactive chat
 	PatrolModel    *string `json:"patrol_model,omitempty"` // Model for background patrol
+	AutoFixModel   *string `json:"auto_fix_model,omitempty"` // Model for auto-fix remediation
 	BaseURL        *string `json:"base_url,omitempty"`     // DEPRECATED: use per-provider URLs
 	AutonomousMode *bool   `json:"autonomous_mode,omitempty"`
 	CustomContext  *string `json:"custom_context,omitempty"` // user-provided infrastructure context
@@ -183,6 +186,7 @@ type AISettingsUpdateRequest struct {
 	// Patrol settings for token efficiency
 	PatrolSchedulePreset   *string `json:"patrol_schedule_preset,omitempty"`   // DEPRECATED: use patrol_interval_minutes
 	PatrolIntervalMinutes  *int    `json:"patrol_interval_minutes,omitempty"`  // Custom interval in minutes (0 = disabled, minimum 10)
+	PatrolAutoFix          *bool   `json:"patrol_auto_fix,omitempty"`          // true if patrol can auto-fix issues
 	AlertTriggeredAnalysis *bool   `json:"alert_triggered_analysis,omitempty"` // true if AI analyzes when alerts fire
 	// Multi-provider credentials
 	AnthropicAPIKey *string `json:"anthropic_api_key,omitempty"` // Set Anthropic API key
@@ -230,6 +234,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		Model:          settings.GetModel(),
 		ChatModel:      settings.ChatModel,
 		PatrolModel:    settings.PatrolModel,
+		AutoFixModel:   settings.AutoFixModel,
 		BaseURL:        settings.BaseURL,
 		Configured:     settings.IsConfigured(),
 		AutonomousMode: settings.AutonomousMode,
@@ -239,6 +244,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		// Patrol settings
 		PatrolSchedulePreset:   settings.PatrolSchedulePreset,
 		PatrolIntervalMinutes:  settings.PatrolIntervalMinutes,
+		PatrolAutoFix:          settings.PatrolAutoFix,
 		AlertTriggeredAnalysis: settings.AlertTriggeredAnalysis,
 		AvailableModels:        nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
@@ -330,6 +336,14 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 
 	if req.PatrolModel != nil {
 		settings.PatrolModel = strings.TrimSpace(*req.PatrolModel)
+	}
+
+	if req.AutoFixModel != nil {
+		settings.AutoFixModel = strings.TrimSpace(*req.AutoFixModel)
+	}
+
+	if req.PatrolAutoFix != nil {
+		settings.PatrolAutoFix = *req.PatrolAutoFix
 	}
 
 	if req.BaseURL != nil {
@@ -474,6 +488,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		Model:                  settings.GetModel(),
 		ChatModel:              settings.ChatModel,
 		PatrolModel:            settings.PatrolModel,
+		AutoFixModel:           settings.AutoFixModel,
 		BaseURL:                settings.BaseURL,
 		Configured:             settings.IsConfigured(),
 		AutonomousMode:         settings.AutonomousMode,
@@ -482,6 +497,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		OAuthConnected:         settings.OAuthAccessToken != "",
 		PatrolSchedulePreset:   settings.PatrolSchedulePreset,
 		PatrolIntervalMinutes:  settings.PatrolIntervalMinutes,
+		PatrolAutoFix:          settings.PatrolAutoFix,
 		AlertTriggeredAnalysis: settings.AlertTriggeredAnalysis,
 		AvailableModels:        nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
