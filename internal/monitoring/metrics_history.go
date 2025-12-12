@@ -50,6 +50,16 @@ func NewMetricsHistory(maxDataPoints int, retentionTime time.Duration) *MetricsH
 	}
 }
 
+// Reset clears all historical metrics data.
+func (mh *MetricsHistory) Reset() {
+	mh.mu.Lock()
+	defer mh.mu.Unlock()
+
+	mh.guestMetrics = make(map[string]*GuestMetrics)
+	mh.nodeMetrics = make(map[string]*GuestMetrics)
+	mh.storageMetrics = make(map[string]*StorageMetrics)
+}
+
 // AddGuestMetric adds a metric value for a guest
 func (mh *MetricsHistory) AddGuestMetric(guestID string, metricType string, value float64, timestamp time.Time) {
 	mh.mu.Lock()
