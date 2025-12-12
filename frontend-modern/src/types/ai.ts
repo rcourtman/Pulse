@@ -204,6 +204,17 @@ export interface AICostUseCaseSummary {
   pricing_known: boolean;
 }
 
+export interface AICostTargetSummary {
+  target_type: string;
+  target_id: string;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_usd?: number;
+  pricing_known: boolean;
+}
+
 export interface AICostSummary {
   days: number;
   retention_days: number;
@@ -211,6 +222,7 @@ export interface AICostSummary {
   truncated: boolean;
   provider_models: AICostProviderModelSummary[];
   use_cases: AICostUseCaseSummary[];
+  targets: AICostTargetSummary[];
   daily_totals: AICostDailySummary[];
   totals: AICostProviderModelSummary;
 }

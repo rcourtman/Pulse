@@ -111,6 +111,11 @@ func TestSummaryGroupsByProviderModelAndDailyTotals(t *testing.T) {
 	if useCases["patrol"].TotalTokens != (20 + 10) {
 		t.Fatalf("patrol use-case totals wrong: %+v", useCases["patrol"])
 	}
+
+	// Target rollups should be empty for these events (no targets set).
+	if len(summary.Targets) != 0 {
+		t.Fatalf("expected no target rollups, got %+v", summary.Targets)
+	}
 }
 
 func TestRetentionTrimsOldEvents(t *testing.T) {
@@ -191,5 +196,46 @@ func TestEstimateUSDKnownAndUnknownModels(t *testing.T) {
 	expected = 0.70 // 1M input * $0.28 + 1M output * $0.42
 	if math.Abs(usd-expected) > 0.0001 {
 		t.Fatalf("expected usd %.4f, got %.4f", expected, usd)
+	}
+}
+
+func TestSummaryTargetsRollup(t *testing.T) {
+	store := NewStore(30)
+	now := time.Now()
+
+	store.Record(UsageEvent{
+		Timestamp:    now,
+		Provider:     "deepseek",
+		RequestModel: "deepseek:deepseek-chat",
+		InputTokens:  1000,
+		OutputTokens: 100,
+		UseCase:      "chat",
+		TargetType:   "vm",
+		TargetID:     "101",
+	})
+	store.Record(UsageEvent{
+		Timestamp:    now,
+		Provider:     "deepseek",
+		RequestModel: "deepseek:deepseek-chat",
+		InputTokens:  2000,
+		OutputTokens: 200,
+		UseCase:      "chat",
+		TargetType:   "vm",
+		TargetID:     "101",
+	})
+
+	summary := store.GetSummary(7)
+	if len(summary.Targets) != 1 {
+		t.Fatalf("expected 1 target summary, got %d", len(summary.Targets))
+	}
+	got := summary.Targets[0]
+	if got.TargetType != "vm" || got.TargetID != "101" || got.Calls != 2 {
+		t.Fatalf("unexpected target summary: %+v", got)
+	}
+	if got.TotalTokens != 3300 {
+		t.Fatalf("unexpected target token totals: %+v", got)
+	}
+	if !got.PricingKnown || got.EstimatedUSD <= 0 {
+		t.Fatalf("expected pricing known with positive USD: %+v", got)
 	}
 }

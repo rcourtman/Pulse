@@ -2,12 +2,14 @@ package api
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -2493,6 +2495,88 @@ func (h *AISettingsHandler) HandleResetAICostHistory(w http.ResponseWriter, r *h
 
 	if err := utils.WriteJSONResponse(w, resp); err != nil {
 		log.Error().Err(err).Msg("Failed to write clear cost history response")
+	}
+}
+
+// HandleExportAICostHistory exports recent AI usage history as JSON or CSV (GET /api/ai/cost/export?days=N&format=csv|json).
+func (h *AISettingsHandler) HandleExportAICostHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.aiService == nil {
+		http.Error(w, "AI service unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	days := 30
+	if daysStr := r.URL.Query().Get("days"); daysStr != "" {
+		if v, err := strconv.Atoi(daysStr); err == nil && v > 0 {
+			if v > 365 {
+				v = 365
+			}
+			days = v
+		}
+	}
+
+	format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
+	if format == "" {
+		format = "json"
+	}
+	if format != "json" && format != "csv" {
+		http.Error(w, "format must be 'json' or 'csv'", http.StatusBadRequest)
+		return
+	}
+
+	events := h.aiService.ListCostEvents(days)
+
+	filename := fmt.Sprintf("pulse-ai-usage-%s-%dd.%s", time.Now().UTC().Format("20060102"), days, format)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+
+	if format == "json" {
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]any{
+			"days":   days,
+			"events": events,
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Error().Err(err).Msg("Failed to write AI cost export JSON")
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv")
+	cw := csv.NewWriter(w)
+	_ = cw.Write([]string{
+		"timestamp",
+		"provider",
+		"request_model",
+		"response_model",
+		"use_case",
+		"input_tokens",
+		"output_tokens",
+		"target_type",
+		"target_id",
+		"finding_id",
+	})
+	for _, e := range events {
+		_ = cw.Write([]string{
+			e.Timestamp.UTC().Format(time.RFC3339Nano),
+			e.Provider,
+			e.RequestModel,
+			e.ResponseModel,
+			e.UseCase,
+			strconv.Itoa(e.InputTokens),
+			strconv.Itoa(e.OutputTokens),
+			e.TargetType,
+			e.TargetID,
+			e.FindingID,
+		})
+	}
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		log.Error().Err(err).Msg("Failed to write AI cost export CSV")
 	}
 }
 
