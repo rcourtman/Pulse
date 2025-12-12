@@ -313,7 +313,7 @@ export function useResourcesAsLegacy() {
                 node: platformData?.node as string ?? '',
                 instance: platformData?.instance as string ?? r.platformId,
                 status: r.status === 'running' ? 'running' : 'stopped',
-                type: 'lxc',
+                type: (platformData?.type as string) ?? 'lxc', // Preserve oci/lxc type from backend
                 cpu: (r.cpu?.current ?? 0) / 100, // Convert from percentage to ratio for Dashboard
                 cpus: platformData?.cpus as number ?? 1,
                 memory: r.memory ? {
