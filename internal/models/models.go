@@ -146,6 +146,9 @@ type Container struct {
 	IPAddresses       []string                `json:"ipAddresses,omitempty"`
 	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces,omitempty"`
 	OSName            string                  `json:"osName,omitempty"`
+	// OCI container support (Proxmox VE 9.1+)
+	IsOCI      bool   `json:"isOci,omitempty"`      // True if this is an OCI container
+	OSTemplate string `json:"osTemplate,omitempty"` // Template or OCI image used (e.g., "docker:alpine:latest")
 }
 
 // Host represents a generic infrastructure host reporting via external agents.

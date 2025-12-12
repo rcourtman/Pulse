@@ -16,6 +16,7 @@ export type ResourceType =
     | 'truenas'         // TrueNAS system
     | 'vm'              // Proxmox VM
     | 'container'       // LXC container
+    | 'oci-container'   // OCI container (Proxmox VE 9.1+)
     | 'docker-container' // Docker container
     | 'pod'             // Kubernetes pod
     | 'jail'            // BSD jail
@@ -137,7 +138,7 @@ export function isInfrastructure(r: Resource): boolean {
 }
 
 export function isWorkload(r: Resource): boolean {
-    return ['vm', 'container', 'docker-container', 'pod', 'jail'].includes(r.type);
+    return ['vm', 'container', 'oci-container', 'docker-container', 'pod', 'jail'].includes(r.type);
 }
 
 export function isStorage(r: Resource): boolean {

@@ -130,6 +130,9 @@ export interface Container {
   tags: string[] | string | null;
   lock: string;
   lastSeen: string;
+  // OCI container support (Proxmox VE 9.1+)
+  isOci?: boolean; // True if this is an OCI container
+  osTemplate?: string; // Template or OCI image used (e.g., "oci:docker.io/library/alpine:latest")
 }
 
 export interface DockerHost {

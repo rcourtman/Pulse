@@ -2483,6 +2483,21 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 		if osName := extractContainerOSType(configData); osName != "" {
 			container.OSName = osName
 		}
+		// Detect OCI containers (Proxmox VE 9.1+)
+		// OCI containers have ostemplate pointing to an OCI registry (e.g., "oci:docker.io/library/alpine:latest")
+		if osTemplate := extractContainerOSTemplate(configData); osTemplate != "" {
+			container.OSTemplate = osTemplate
+			// Check if this is an OCI container based on template format
+			if isOCITemplate(osTemplate) {
+				container.IsOCI = true
+				container.Type = "oci" // Override type from "lxc" to "oci"
+				log.Debug().
+					Str("container", container.Name).
+					Int("vmid", container.VMID).
+					Str("osTemplate", osTemplate).
+					Msg("Detected OCI container")
+			}
+		}
 	}
 
 	if len(addressOrder) == 0 {

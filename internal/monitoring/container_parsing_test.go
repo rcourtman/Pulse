@@ -1748,3 +1748,208 @@ func containersEqual(a, b *models.Container) bool {
 	}
 	return diskSlicesEqual(a.Disks, b.Disks)
 }
+
+// OCI Container Detection Tests (Proxmox VE 9.1+)
+
+func TestExtractContainerOSTemplate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		config   map[string]interface{}
+		expected string
+	}{
+		{
+			name:     "empty config",
+			config:   map[string]interface{}{},
+			expected: "",
+		},
+		{
+			name: "standard LXC template",
+			config: map[string]interface{}{
+				"ostemplate": "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst",
+			},
+			expected: "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst",
+		},
+		{
+			name: "OCI image with oci prefix",
+			config: map[string]interface{}{
+				"ostemplate": "oci:docker.io/library/alpine:latest",
+			},
+			expected: "oci:docker.io/library/alpine:latest",
+		},
+		{
+			name: "Docker Hub shorthand",
+			config: map[string]interface{}{
+				"ostemplate": "docker:nginx:latest",
+			},
+			expected: "docker:nginx:latest",
+		},
+		{
+			name: "template field fallback",
+			config: map[string]interface{}{
+				"template": "oci:ghcr.io/myorg/myimage:v1.0",
+			},
+			expected: "oci:ghcr.io/myorg/myimage:v1.0",
+		},
+		{
+			name: "ostemplate takes precedence over template",
+			config: map[string]interface{}{
+				"ostemplate": "oci:docker.io/library/alpine:latest",
+				"template":   "local:vztmpl/something-else.tar.gz",
+			},
+			expected: "oci:docker.io/library/alpine:latest",
+		},
+		{
+			name: "whitespace trimmed",
+			config: map[string]interface{}{
+				"ostemplate": "  oci:docker.io/library/alpine:latest  ",
+			},
+			expected: "oci:docker.io/library/alpine:latest",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := extractContainerOSTemplate(tt.config)
+			if result != tt.expected {
+				t.Errorf("extractContainerOSTemplate() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsOCITemplate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		template string
+		expected bool
+	}{
+		// Empty/nil cases
+		{
+			name:     "empty string",
+			template: "",
+			expected: false,
+		},
+
+		// Standard LXC templates (should NOT be detected as OCI)
+		{
+			name:     "standard LXC template",
+			template: "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst",
+			expected: false,
+		},
+		{
+			name:     "Proxmox template store",
+			template: "local:vztmpl/debian-12-standard_12.0-1_amd64.tar.zst",
+			expected: false,
+		},
+
+		// Explicit OCI prefix
+		{
+			name:     "oci prefix - Docker Hub",
+			template: "oci:docker.io/library/alpine:latest",
+			expected: true,
+		},
+		{
+			name:     "oci prefix - GHCR",
+			template: "oci:ghcr.io/myorg/myimage:v1.0",
+			expected: true,
+		},
+		{
+			name:     "oci prefix uppercase",
+			template: "OCI:docker.io/library/nginx:latest",
+			expected: true,
+		},
+
+		// Docker Hub shorthand
+		{
+			name:     "docker prefix simple",
+			template: "docker:alpine:latest",
+			expected: true,
+		},
+		{
+			name:     "docker prefix with path",
+			template: "docker:library/nginx:1.25",
+			expected: true,
+		},
+		{
+			name:     "docker prefix uppercase",
+			template: "DOCKER:redis:7",
+			expected: true,
+		},
+
+		// Registry URLs embedded (with slashes as the detection logic expects)
+		{
+			name:     "Docker Hub URL with slashes",
+			template: "docker.io/library/alpine:latest",
+			expected: true,
+		},
+		{
+			name:     "GHCR URL with slashes",
+			template: "ghcr.io/myorg/myapp:v2",
+			expected: true,
+		},
+		{
+			name:     "GCR URL",
+			template: "gcr.io/myproject/myimage:latest",
+			expected: true,
+		},
+		{
+			name:     "Quay.io URL",
+			template: "quay.io/coreos/etcd:v3.5",
+			expected: true,
+		},
+		{
+			name:     "Microsoft Container Registry",
+			template: "mcr.microsoft.com/dotnet/runtime:7.0",
+			expected: true,
+		},
+		{
+			name:     "AWS ECR Public",
+			template: "public.ecr.aws/amazonlinux/amazonlinux:latest",
+			expected: true,
+		},
+
+		// Locally stored OCI images
+		{
+			name:     "local OCI image with oci- prefix",
+			template: "local:vztmpl/oci-alpine-3.18.tar.xz",
+			expected: true,
+		},
+		{
+			name:     "local OCI image with oci_ prefix",
+			template: "local:vztmpl/oci_nginx_latest.tar.gz",
+			expected: true,
+		},
+
+		// Edge cases
+		{
+			name:     "case insensitive oci",
+			template: "OcI:docker.io/library/alpine:latest",
+			expected: true,
+		},
+		{
+			name:     "whitespace handling",
+			template: "  oci:docker.io/library/alpine:latest  ",
+			expected: true,
+		},
+		{
+			name:     "similar but not OCI - social.io",
+			template: "local:vztmpl/social.io-app.tar.gz",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := isOCITemplate(tt.template)
+			if result != tt.expected {
+				t.Errorf("isOCITemplate(%q) = %v, want %v", tt.template, result, tt.expected)
+			}
+		})
+	}
+}

@@ -549,7 +549,8 @@ export function Dashboard(props: DashboardProps) {
     if (viewMode() === 'vm') {
       guests = guests.filter((g) => g.type === 'qemu');
     } else if (viewMode() === 'lxc') {
-      guests = guests.filter((g) => g.type === 'lxc');
+      // Include both traditional LXC and OCI containers (Proxmox 9.1+)
+      guests = guests.filter((g) => g.type === 'lxc' || g.type === 'oci');
     }
 
     // Filter by status
@@ -807,7 +808,7 @@ export function Dashboard(props: DashboardProps) {
     }).length;
     const stopped = guests.length - running - degraded;
     const vms = guests.filter((g) => g.type === 'qemu').length;
-    const containers = guests.filter((g) => g.type === 'lxc').length;
+    const containers = guests.filter((g) => g.type === 'lxc' || g.type === 'oci').length;
     return {
       total: guests.length,
       running,
@@ -916,7 +917,7 @@ export function Dashboard(props: DashboardProps) {
       aiChatStore.addContextItem(guestType, guestId, guest.name, {
         guestName: guest.name,
         name: guest.name,
-        type: guest.type === 'qemu' ? 'Virtual Machine' : 'LXC Container',
+        type: guest.type === 'qemu' ? 'Virtual Machine' : (guest.type === 'oci' ? 'OCI Container' : 'LXC Container'),
         vmid: guest.vmid,
         node: guest.node,
         status: guest.status,
@@ -939,7 +940,7 @@ export function Dashboard(props: DashboardProps) {
         onNodeSelect={handleNodeSelect}
         nodes={props.nodes}
         filteredVms={filteredGuests().filter((g) => g.type === 'qemu')}
-        filteredContainers={filteredGuests().filter((g) => g.type === 'lxc')}
+        filteredContainers={filteredGuests().filter((g) => g.type === 'lxc' || g.type === 'oci')}
         searchTerm={search()}
       />
 
