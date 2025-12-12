@@ -98,8 +98,21 @@ export const AICostDashboard: Component = () => {
     return map;
   });
 
-  const dailyTokenValues = createMemo(() => (summary()?.daily_totals ?? []).map((d) => d.total_tokens));
-  const dailyUSDValues = createMemo(() => (summary()?.daily_totals ?? []).map((d) => d.estimated_usd ?? 0));
+  const dailyTotals = createMemo(() => summary()?.daily_totals ?? []);
+  const dailyTokenValues = createMemo(() => dailyTotals().map((d) => d.total_tokens));
+  const dailyUSDValues = createMemo(() => dailyTotals().map((d) => d.estimated_usd ?? 0));
+
+  const lastDailyTokens = createMemo(() => {
+    const values = dailyTokenValues();
+    if (values.length === 0) return null;
+    return values[values.length - 1];
+  });
+
+  const lastDailyUSD = createMemo(() => {
+    const values = dailyUSDValues();
+    if (values.length === 0) return null;
+    return values[values.length - 1];
+  });
 
   const formatUSD = (usd: number) => usdFormatter.format(usd);
 
@@ -406,19 +419,37 @@ export const AICostDashboard: Component = () => {
                 <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
                   <div class="flex items-center justify-between">
                     <div class="text-xs text-gray-500 dark:text-gray-400">Daily estimated USD</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">{data().daily_totals.length} points</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                      <Show when={anyPricingKnown() && lastDailyUSD() != null} fallback={<span>—</span>}>
+                        {formatUSD(lastDailyUSD() ?? 0)}
+                      </Show>
+                    </div>
                   </div>
                   <div class="mt-2">
-                    <TinySparkline values={dailyUSDValues()} stroke="#10b981" />
+                    <Show
+                      when={anyPricingKnown() && dailyUSDValues().length >= 2}
+                      fallback={<div class="text-xs text-gray-500 dark:text-gray-400">No daily USD trend yet.</div>}
+                    >
+                      <TinySparkline values={dailyUSDValues()} stroke="#10b981" />
+                    </Show>
                   </div>
                 </div>
                 <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
                   <div class="flex items-center justify-between">
                     <div class="text-xs text-gray-500 dark:text-gray-400">Daily total tokens</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">{data().daily_totals.length} points</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                      <Show when={lastDailyTokens() != null} fallback={<span>—</span>}>
+                        {formatNumber(lastDailyTokens() ?? 0)}
+                      </Show>
+                    </div>
                   </div>
                   <div class="mt-2">
-                    <TinySparkline values={dailyTokenValues()} stroke="#3b82f6" />
+                    <Show
+                      when={dailyTokenValues().length >= 2}
+                      fallback={<div class="text-xs text-gray-500 dark:text-gray-400">No daily token trend yet.</div>}
+                    >
+                      <TinySparkline values={dailyTokenValues()} stroke="#3b82f6" />
+                    </Show>
                   </div>
                 </div>
               </div>
