@@ -122,8 +122,9 @@ func (s *Store) GetSummary(days int) Summary {
 	var totalInput, totalOutput int64
 
 	for _, e := range events {
-		provider := e.Provider
+		provider := strings.ToLower(strings.TrimSpace(e.Provider))
 		model := normalizeModel(provider, e.RequestModel, e.ResponseModel)
+		provider, model = inferProviderAndModel(provider, model)
 
 		k := pmKey{provider: provider, model: model}
 		pm := pmTotals[k]
@@ -276,6 +277,19 @@ func normalizeModel(provider, requestModel, responseModel string) string {
 		return responseModel
 	}
 	return ""
+}
+
+func inferProviderAndModel(provider, model string) (string, string) {
+	if provider == "openai" {
+		parts := strings.SplitN(strings.TrimSpace(model), ":", 2)
+		if len(parts) == 2 && strings.ToLower(parts[0]) == "deepseek" {
+			return "deepseek", parts[1]
+		}
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(model)), "deepseek") {
+			return "deepseek", model
+		}
+	}
+	return provider, model
 }
 
 // ProviderModelSummary is a rollup for a provider/model pair.
