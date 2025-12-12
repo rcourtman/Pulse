@@ -10,6 +10,8 @@ import type {
   Container,
   DockerHost,
   Host,
+  KubernetesCluster,
+  RemovedKubernetesCluster,
 } from '@/types/api';
 import type { ActivationState as ActivationStateType } from '@/types/alerts';
 import { logger } from '@/utils/logger';
@@ -30,6 +32,8 @@ export function createWebSocketStore(url: string) {
     vms: [],
     containers: [],
     dockerHosts: [],
+    kubernetesClusters: [],
+    removedKubernetesClusters: [],
     hosts: [],
     replicationJobs: [],
     storage: [],
@@ -551,6 +555,18 @@ export function createWebSocketStore(url: string) {
               if (shouldApplyHosts && processedHosts !== null) {
                 setState('hosts', reconcile(processedHosts, { key: 'id' }));
               }
+            }
+            if (message.data.kubernetesClusters !== undefined) {
+              const clusters = Array.isArray(message.data.kubernetesClusters)
+                ? (message.data.kubernetesClusters as KubernetesCluster[])
+                : [];
+              setState('kubernetesClusters', reconcile(clusters, { key: 'id' }));
+            }
+            if (message.data.removedKubernetesClusters !== undefined) {
+              const removed = Array.isArray(message.data.removedKubernetesClusters)
+                ? (message.data.removedKubernetesClusters as RemovedKubernetesCluster[])
+                : [];
+              setState('removedKubernetesClusters', reconcile(removed, { key: 'id' }));
             }
             if (message.data.storage !== undefined) setState('storage', reconcile(message.data.storage, { key: 'id' }));
             if (message.data.cephClusters !== undefined)

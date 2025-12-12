@@ -523,8 +523,8 @@ type StateFrontend struct {
 	Containers                   []ContainerFrontend                `json:"containers"`
 	DockerHosts                  []DockerHostFrontend               `json:"dockerHosts"`
 	RemovedDockerHosts           []RemovedDockerHostFrontend        `json:"removedDockerHosts"`
-	KubernetesClusters           []KubernetesClusterFrontend        `json:"kubernetesClusters,omitempty"`
-	RemovedKubernetesClusters    []RemovedKubernetesClusterFrontend `json:"removedKubernetesClusters,omitempty"`
+	KubernetesClusters           []KubernetesClusterFrontend        `json:"kubernetesClusters"`
+	RemovedKubernetesClusters    []RemovedKubernetesClusterFrontend `json:"removedKubernetesClusters"`
 	Hosts                        []HostFrontend                     `json:"hosts"`
 	Storage                      []StorageFrontend                  `json:"storage"`
 	CephClusters                 []CephClusterFrontend              `json:"cephClusters"`

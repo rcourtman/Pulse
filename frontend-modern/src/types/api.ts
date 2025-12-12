@@ -59,6 +59,9 @@ export interface KubernetesCluster {
   tokenLastUsedAt?: number;
   hidden?: boolean;
   pendingUninstall?: boolean;
+  nodes?: KubernetesNode[];
+  pods?: KubernetesPod[];
+  deployments?: KubernetesDeployment[];
 }
 
 export interface RemovedKubernetesCluster {
@@ -66,6 +69,64 @@ export interface RemovedKubernetesCluster {
   name?: string;
   displayName?: string;
   removedAt: number;
+}
+
+export interface KubernetesNode {
+  uid: string;
+  name: string;
+  ready: boolean;
+  unschedulable?: boolean;
+  kubeletVersion?: string;
+  containerRuntimeVersion?: string;
+  osImage?: string;
+  kernelVersion?: string;
+  architecture?: string;
+  capacityCpuCores?: number;
+  capacityMemoryBytes?: number;
+  capacityPods?: number;
+  allocatableCpuCores?: number;
+  allocatableMemoryBytes?: number;
+  allocatablePods?: number;
+  roles?: string[];
+}
+
+export interface KubernetesPodContainer {
+  name: string;
+  image?: string;
+  ready: boolean;
+  restartCount?: number;
+  state?: string;
+  reason?: string;
+  message?: string;
+}
+
+export interface KubernetesPod {
+  uid: string;
+  name: string;
+  namespace: string;
+  nodeName?: string;
+  phase?: string;
+  reason?: string;
+  message?: string;
+  qosClass?: string;
+  createdAt?: number;
+  startTime?: number;
+  restarts?: number;
+  labels?: Record<string, string>;
+  ownerKind?: string;
+  ownerName?: string;
+  containers?: KubernetesPodContainer[];
+}
+
+export interface KubernetesDeployment {
+  uid: string;
+  name: string;
+  namespace: string;
+  desiredReplicas?: number;
+  updatedReplicas?: number;
+  readyReplicas?: number;
+  availableReplicas?: number;
+  labels?: Record<string, string>;
 }
 
 export interface Node {

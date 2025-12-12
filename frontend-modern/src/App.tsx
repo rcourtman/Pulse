@@ -41,6 +41,7 @@ import BoxesIcon from 'lucide-solid/icons/boxes';
 import MonitorIcon from 'lucide-solid/icons/monitor';
 import BellIcon from 'lucide-solid/icons/bell';
 import SettingsIcon from 'lucide-solid/icons/settings';
+import NetworkIcon from 'lucide-solid/icons/network';
 import { TokenRevealDialog } from './components/TokenRevealDialog';
 import { useAlertsActivation } from './stores/alertsActivation';
 import { UpdateProgressModal } from './components/UpdateProgressModal';
@@ -64,6 +65,11 @@ const AlertsPage = lazy(() =>
 const SettingsPage = lazy(() => import('./components/Settings/Settings'));
 const DockerHosts = lazy(() =>
   import('./components/Docker/DockerHosts').then((module) => ({ default: module.DockerHosts })),
+);
+const KubernetesClusters = lazy(() =>
+  import('./components/Kubernetes/KubernetesClusters').then((module) => ({
+    default: module.KubernetesClusters,
+  })),
 );
 const HostsOverview = lazy(() =>
   import('./components/Hosts/HostsOverview').then((module) => ({
@@ -110,6 +116,14 @@ function DockerRoute() {
 // Hosts route component - HostsOverview uses useResourcesAsLegacy directly for proper reactivity
 function HostsRoute() {
   return <HostsOverview />;
+}
+
+function KubernetesRoute() {
+  const wsContext = useContext(WebSocketContext);
+  if (!wsContext) {
+    return <div>Loading...</div>;
+  }
+  return <KubernetesClusters clusters={wsContext.state.kubernetesClusters ?? []} />;
 }
 
 // Helper to detect if an update is actively in progress (not just checking for updates)
@@ -877,6 +891,7 @@ function App() {
       <Route path="/storage" component={() => <Navigate href="/proxmox/storage" />} />
       <Route path="/backups" component={() => <Navigate href="/proxmox/backups" />} />
       <Route path="/docker" component={DockerRoute} />
+      <Route path="/kubernetes" component={KubernetesRoute} />
       <Route path="/hosts" component={HostsRoute} />
 
       <Route path="/servers" component={() => <Navigate href="/hosts" />} />
@@ -998,6 +1013,7 @@ function AppLayout(props: {
     const path = location.pathname;
     if (path.startsWith('/proxmox')) return 'proxmox';
     if (path.startsWith('/docker')) return 'docker';
+    if (path.startsWith('/kubernetes')) return 'kubernetes';
     if (path.startsWith('/hosts')) return 'hosts';
     if (path.startsWith('/servers')) return 'hosts'; // Legacy redirect
     if (path.startsWith('/alerts')) return 'alerts';
@@ -1005,6 +1021,7 @@ function AppLayout(props: {
     return 'proxmox';
   };
   const hasDockerHosts = createMemo(() => (props.state().dockerHosts?.length ?? 0) > 0);
+  const hasKubernetesClusters = createMemo(() => (props.state().kubernetesClusters?.length ?? 0) > 0);
   const hasHosts = createMemo(() => (props.state().hosts?.length ?? 0) > 0);
   const hasProxmoxHosts = createMemo(
     () =>
@@ -1016,6 +1033,12 @@ function AppLayout(props: {
   createEffect(() => {
     if (hasDockerHosts()) {
       markPlatformSeen('docker');
+    }
+  });
+
+  createEffect(() => {
+    if (hasKubernetesClusters()) {
+      markPlatformSeen('kubernetes');
     }
   });
 
@@ -1055,6 +1078,18 @@ function AppLayout(props: {
         live: hasDockerHosts(),
         icon: (
           <BoxesIcon class="w-4 h-4 shrink-0" />
+        ),
+      },
+      {
+        id: 'kubernetes' as const,
+        label: 'Kubernetes',
+        route: '/kubernetes',
+        settingsRoute: '/settings/agents',
+        tooltip: 'Monitor Kubernetes clusters and workloads',
+        enabled: hasKubernetesClusters() || !!seenPlatforms()['kubernetes'],
+        live: hasKubernetesClusters(),
+        icon: (
+          <NetworkIcon class="w-4 h-4 shrink-0" />
         ),
       },
       {
