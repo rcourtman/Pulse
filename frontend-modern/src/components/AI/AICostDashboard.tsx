@@ -34,7 +34,14 @@ const TinySparkline: Component<{
     const max = Math.max(...values, 0);
     const safeMax = max <= 0 ? 1 : max;
 
-    const xStep = values.length <= 1 ? 0 : w / (values.length - 1);
+    // For single point, draw a horizontal line across the middle
+    if (values.length === 1) {
+      const y = h - (Math.max(0, values[0]) / safeMax) * h;
+      // Draw a short horizontal line to make the single point visible
+      return `M0,${y.toFixed(2)} L${w.toFixed(2)},${y.toFixed(2)}`;
+    }
+
+    const xStep = w / (values.length - 1);
     let d = '';
     values.forEach((v, idx) => {
       const x = idx * xStep;
