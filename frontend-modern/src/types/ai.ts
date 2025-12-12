@@ -169,3 +169,26 @@ export interface AIStreamCompleteData {
   output_tokens: number;
   tool_calls?: AIToolExecution[];
 }
+
+// AI cost/usage summary types
+export interface AICostProviderModelSummary {
+  provider: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+}
+
+export interface AICostDailySummary {
+  date: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+}
+
+export interface AICostSummary {
+  days: number;
+  provider_models: AICostProviderModelSummary[];
+  daily_totals: AICostDailySummary[];
+  totals: AICostProviderModelSummary;
+}

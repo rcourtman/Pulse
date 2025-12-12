@@ -7,6 +7,7 @@ import type {
   AIExecuteRequest,
   AIExecuteResponse,
   AIStreamEvent,
+  AICostSummary,
 } from '@/types/ai';
 
 export class AIAPI {
@@ -42,6 +43,11 @@ export class AIAPI {
   // Get available models from the AI provider
   static async getModels(): Promise<{ models: { id: string; name: string; description?: string }[]; error?: string }> {
     return apiFetchJSON(`${this.baseUrl}/ai/models`) as Promise<{ models: { id: string; name: string; description?: string }[]; error?: string }>;
+  }
+
+  // Get AI cost/usage summary
+  static async getCostSummary(days = 30): Promise<AICostSummary> {
+    return apiFetchJSON(`${this.baseUrl}/ai/cost/summary?days=${days}`) as Promise<AICostSummary>;
   }
 
   // Start OAuth flow for Claude Pro/Max subscription
