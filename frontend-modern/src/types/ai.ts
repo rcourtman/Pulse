@@ -177,6 +177,8 @@ export interface AICostProviderModelSummary {
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
+  estimated_usd?: number;
+  pricing_known: boolean;
 }
 
 export interface AICostDailySummary {
@@ -184,6 +186,7 @@ export interface AICostDailySummary {
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
+  estimated_usd?: number;
 }
 
 export interface AICostSummary {

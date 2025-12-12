@@ -137,6 +137,12 @@ func (s *Store) GetSummary(days int) Summary {
 		totalInput += int64(e.InputTokens)
 		totalOutput += int64(e.OutputTokens)
 
+		usd, known, _ := EstimateUSD(provider, model, int64(e.InputTokens), int64(e.OutputTokens))
+		if known {
+			pm.EstimatedUSD += usd
+			pm.PricingKnown = true
+		}
+
 		date := e.Timestamp.Format("2006-01-02")
 		ds := dailyTotals[date]
 		if ds == nil {
@@ -145,6 +151,9 @@ func (s *Store) GetSummary(days int) Summary {
 		}
 		ds.InputTokens += int64(e.InputTokens)
 		ds.OutputTokens += int64(e.OutputTokens)
+		if known {
+			ds.EstimatedUSD += usd
+		}
 	}
 
 	providerModels := make([]ProviderModelSummary, 0, len(pmTotals))
@@ -173,6 +182,12 @@ func (s *Store) GetSummary(days int) Summary {
 		InputTokens:  totalInput,
 		OutputTokens: totalOutput,
 		TotalTokens:  totalInput + totalOutput,
+	}
+
+	for _, pm := range providerModels {
+		if pm.PricingKnown {
+			totals.EstimatedUSD += pm.EstimatedUSD
+		}
 	}
 
 	return Summary{
@@ -265,19 +280,22 @@ func normalizeModel(provider, requestModel, responseModel string) string {
 
 // ProviderModelSummary is a rollup for a provider/model pair.
 type ProviderModelSummary struct {
-	Provider     string `json:"provider"`
-	Model        string `json:"model"`
-	InputTokens  int64  `json:"input_tokens"`
-	OutputTokens int64  `json:"output_tokens"`
-	TotalTokens  int64  `json:"total_tokens"`
+	Provider     string  `json:"provider"`
+	Model        string  `json:"model"`
+	InputTokens  int64   `json:"input_tokens"`
+	OutputTokens int64   `json:"output_tokens"`
+	TotalTokens  int64   `json:"total_tokens"`
+	EstimatedUSD float64 `json:"estimated_usd,omitempty"`
+	PricingKnown bool    `json:"pricing_known"`
 }
 
 // DailySummary is a rollup for a single day across all providers.
 type DailySummary struct {
-	Date         string `json:"date"`
-	InputTokens  int64  `json:"input_tokens"`
-	OutputTokens int64  `json:"output_tokens"`
-	TotalTokens  int64  `json:"total_tokens"`
+	Date         string  `json:"date"`
+	InputTokens  int64   `json:"input_tokens"`
+	OutputTokens int64   `json:"output_tokens"`
+	TotalTokens  int64   `json:"total_tokens"`
+	EstimatedUSD float64 `json:"estimated_usd,omitempty"`
 }
 
 // Summary is returned by the cost summary API.

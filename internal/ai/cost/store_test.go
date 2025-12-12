@@ -1,6 +1,7 @@
 package cost
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -61,6 +62,9 @@ func TestSummaryGroupsByProviderModelAndDailyTotals(t *testing.T) {
 	if openaiGpt4o.InputTokens != 110 || openaiGpt4o.OutputTokens != 55 {
 		t.Fatalf("openai gpt-4o tokens wrong: %+v", openaiGpt4o)
 	}
+	if !openaiGpt4o.PricingKnown || openaiGpt4o.EstimatedUSD <= 0 {
+		t.Fatalf("expected openai gpt-4o pricing to be known with positive USD, got %+v", openaiGpt4o)
+	}
 
 	openaiMini := got[key{"openai", "gpt-4o-mini"}]
 	if openaiMini.InputTokens != 20 || openaiMini.OutputTokens != 10 {
@@ -70,6 +74,9 @@ func TestSummaryGroupsByProviderModelAndDailyTotals(t *testing.T) {
 	anthropicOpus := got[key{"anthropic", "claude-opus-4-5-20251101"}]
 	if anthropicOpus.InputTokens != 200 || anthropicOpus.OutputTokens != 100 {
 		t.Fatalf("anthropic opus tokens wrong: %+v", anthropicOpus)
+	}
+	if !anthropicOpus.PricingKnown || anthropicOpus.EstimatedUSD <= 0 {
+		t.Fatalf("expected anthropic opus pricing to be known with positive USD, got %+v", anthropicOpus)
 	}
 
 	// Daily totals across all providers.
@@ -109,5 +116,21 @@ func TestRetentionTrimsOldEvents(t *testing.T) {
 	summary := store.GetSummary(7)
 	if len(summary.ProviderModels) != 0 {
 		t.Fatalf("expected old event to be trimmed, got %+v", summary.ProviderModels)
+	}
+}
+
+func TestEstimateUSDKnownAndUnknownModels(t *testing.T) {
+	usd, ok, _ := EstimateUSD("openai", "gpt-4o", 1_000_000, 2_000_000)
+	if !ok {
+		t.Fatalf("expected pricing to be known for gpt-4o")
+	}
+	expected := 35.0 // 1M input * $5 + 2M output * $15
+	if math.Abs(usd-expected) > 0.0001 {
+		t.Fatalf("expected usd %.4f, got %.4f", expected, usd)
+	}
+
+	usd, ok, _ = EstimateUSD("deepseek", "deepseek-reasoner", 1_000_000, 1_000_000)
+	if ok || usd != 0 {
+		t.Fatalf("expected deepseek pricing to be unknown, got ok=%v usd=%.4f", ok, usd)
 	}
 }
