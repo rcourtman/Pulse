@@ -51,6 +51,7 @@ type Router struct {
 	notificationHandlers      *NotificationHandlers
 	notificationQueueHandlers *NotificationQueueHandlers
 	dockerAgentHandlers       *DockerAgentHandlers
+	kubernetesAgentHandlers   *KubernetesAgentHandlers
 	hostAgentHandlers         *HostAgentHandlers
 	temperatureProxyHandlers  *TemperatureProxyHandlers
 	systemSettingsHandler     *SystemSettingsHandler
@@ -188,6 +189,7 @@ func (r *Router) setupRoutes() {
 	r.configHandlers = NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings)
 	updateHandlers := NewUpdateHandlers(r.updateManager, r.updateHistory)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.monitor, r.wsHub)
+	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.monitor, r.wsHub)
 	r.hostAgentHandlers = NewHostAgentHandlers(r.monitor, r.wsHub)
 	r.temperatureProxyHandlers = NewTemperatureProxyHandlers(r.config, r.persistence, r.reloadFunc)
 	r.resourceHandlers = NewResourceHandlers()
@@ -197,6 +199,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/monitoring/scheduler/health", RequireAuth(r.config, r.handleSchedulerHealth))
 	r.mux.HandleFunc("/api/state", r.handleState)
 	r.mux.HandleFunc("/api/agents/docker/report", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleReport)))
+	r.mux.HandleFunc("/api/agents/kubernetes/report", RequireAuth(r.config, RequireScope(config.ScopeKubernetesReport, r.kubernetesAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/host/report", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/host/lookup", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleLookup)))
 	r.mux.HandleFunc("/api/agents/host/", RequireAdmin(r.config, RequireScope(config.ScopeHostManage, r.hostAgentHandlers.HandleDeleteHost)))
@@ -207,6 +210,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/temperature-proxy/host-status", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleHostProxyStatus)))
 	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleCommandAck)))
 	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
+	r.mux.HandleFunc("/api/agents/kubernetes/clusters/", RequireAdmin(r.config, RequireScope(config.ScopeKubernetesManage, r.kubernetesAgentHandlers.HandleClusterActions)))
 	r.mux.HandleFunc("/api/version", r.handleVersion)
 	r.mux.HandleFunc("/api/storage/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorage)))
 	r.mux.HandleFunc("/api/storage-charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorageCharts)))
@@ -1130,7 +1134,7 @@ func (r *Router) setupRoutes() {
 	}))
 	r.mux.HandleFunc("/api/ai/patrol/suppressions/", RequireAuth(r.config, r.aiSettingsHandler.HandleDeleteSuppressionRule))
 	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, r.aiSettingsHandler.HandleGetDismissedFindings))
-	
+
 	// AI Intelligence endpoints - expose learned patterns, correlations, and predictions
 	r.mux.HandleFunc("/api/ai/intelligence/patterns", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatterns))
 	r.mux.HandleFunc("/api/ai/intelligence/predictions", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPredictions))
@@ -1444,13 +1448,13 @@ func (r *Router) StartPatrol(ctx context.Context) {
 				}
 			}
 		}
-		
+
 		// Initialize operational memory (change detection and remediation logging)
 		dataDir := ""
 		if r.persistence != nil {
 			dataDir = r.persistence.DataDir()
 		}
-		
+
 		changeDetector := ai.NewChangeDetector(ai.ChangeDetectorConfig{
 			MaxChanges: 1000,
 			DataDir:    dataDir,
@@ -1458,7 +1462,7 @@ func (r *Router) StartPatrol(ctx context.Context) {
 		if changeDetector != nil {
 			r.aiSettingsHandler.SetChangeDetector(changeDetector)
 		}
-		
+
 		remediationLog := ai.NewRemediationLog(ai.RemediationLogConfig{
 			MaxRecords: 500,
 			DataDir:    dataDir,
@@ -1466,7 +1470,7 @@ func (r *Router) StartPatrol(ctx context.Context) {
 		if remediationLog != nil {
 			r.aiSettingsHandler.SetRemediationLog(remediationLog)
 		}
-		
+
 		// Initialize pattern detector for failure prediction
 		patternDetector := ai.NewPatternDetector(ai.PatternDetectorConfig{
 			MaxEvents:       5000,
@@ -1477,7 +1481,7 @@ func (r *Router) StartPatrol(ctx context.Context) {
 		})
 		if patternDetector != nil {
 			r.aiSettingsHandler.SetPatternDetector(patternDetector)
-			
+
 			// Wire alert history to pattern detector for event tracking
 			if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
 				alertManager.OnAlertHistory(func(alert alerts.Alert) {
@@ -1487,7 +1491,7 @@ func (r *Router) StartPatrol(ctx context.Context) {
 				log.Info().Msg("AI Pattern Detector: Wired to alert history for failure prediction")
 			}
 		}
-		
+
 		// Initialize correlation detector for multi-resource relationships
 		correlationDetector := ai.NewCorrelationDetector(ai.CorrelationConfig{
 			MaxEvents:         10000,
@@ -1498,7 +1502,7 @@ func (r *Router) StartPatrol(ctx context.Context) {
 		})
 		if correlationDetector != nil {
 			r.aiSettingsHandler.SetCorrelationDetector(correlationDetector)
-			
+
 			// Wire alert history to correlation detector
 			if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
 				alertManager.OnAlertHistory(func(alert alerts.Alert) {

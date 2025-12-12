@@ -3,7 +3,7 @@
  * 
  * These tests focus on the ring buffer operations and metric recording logic.
  */
-import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // We can't directly test the module due to side effects (localStorage, window),
 // so we test the core logic patterns used in the implementation.

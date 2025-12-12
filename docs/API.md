@@ -146,7 +146,7 @@ Initiate OIDC login flow.
 `GET /download/pulse-agent`
 Downloads the unified agent binary for the current platform.
 
-The unified agent combines host and Docker monitoring. Use `--enable-docker` to enable Docker metrics.
+The unified agent combines host, Docker, and Kubernetes monitoring. Use `--enable-docker` or `--enable-kubernetes` to enable additional metrics.
 
 See [UNIFIED_AGENT.md](UNIFIED_AGENT.md) for installation instructions.
 
@@ -157,6 +157,7 @@ See [UNIFIED_AGENT.md](UNIFIED_AGENT.md) for installation instructions.
 ### Submit Reports
 `POST /api/agents/host/report` - Host metrics
 `POST /api/agents/docker/report` - Docker container metrics
+`POST /api/agents/kubernetes/report` - Kubernetes cluster metrics
 
 ---
 

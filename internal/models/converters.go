@@ -311,6 +311,151 @@ func (r RemovedDockerHost) ToFrontend() RemovedDockerHostFrontend {
 	}
 }
 
+// ToFrontend converts a KubernetesCluster to its frontend representation.
+func (c KubernetesCluster) ToFrontend() KubernetesClusterFrontend {
+	cluster := KubernetesClusterFrontend{
+		ID:                c.ID,
+		AgentID:           c.AgentID,
+		Name:              c.Name,
+		DisplayName:       c.DisplayName,
+		CustomDisplayName: c.CustomDisplayName,
+		Server:            c.Server,
+		Context:           c.Context,
+		Version:           c.Version,
+		Status:            c.Status,
+		LastSeen:          c.LastSeen.Unix() * 1000,
+		IntervalSeconds:   c.IntervalSeconds,
+		AgentVersion:      c.AgentVersion,
+		TokenID:           c.TokenID,
+		TokenName:         c.TokenName,
+		TokenHint:         c.TokenHint,
+		Hidden:            c.Hidden,
+		PendingUninstall:  c.PendingUninstall,
+	}
+
+	if c.TokenLastUsedAt != nil {
+		ts := c.TokenLastUsedAt.Unix() * 1000
+		cluster.TokenLastUsedAt = &ts
+	}
+
+	if len(c.Nodes) > 0 {
+		cluster.Nodes = make([]KubernetesNodeFrontend, len(c.Nodes))
+		for i, n := range c.Nodes {
+			cluster.Nodes[i] = KubernetesNodeFrontend{
+				UID:                     n.UID,
+				Name:                    n.Name,
+				Ready:                   n.Ready,
+				Unschedulable:           n.Unschedulable,
+				KubeletVersion:          n.KubeletVersion,
+				ContainerRuntimeVersion: n.ContainerRuntimeVersion,
+				OSImage:                 n.OSImage,
+				KernelVersion:           n.KernelVersion,
+				Architecture:            n.Architecture,
+				CapacityCPU:             n.CapacityCPU,
+				CapacityMemoryBytes:     n.CapacityMemoryBytes,
+				CapacityPods:            n.CapacityPods,
+				AllocCPU:                n.AllocCPU,
+				AllocMemoryBytes:        n.AllocMemoryBytes,
+				AllocPods:               n.AllocPods,
+				Roles:                   append([]string(nil), n.Roles...),
+			}
+		}
+	}
+
+	if len(c.Pods) > 0 {
+		cluster.Pods = make([]KubernetesPodFrontend, len(c.Pods))
+		for i, p := range c.Pods {
+			labels := make(map[string]string, len(p.Labels))
+			for k, v := range p.Labels {
+				labels[k] = v
+			}
+			containers := make([]KubernetesPodContainerFrontend, 0, len(p.Containers))
+			for _, cn := range p.Containers {
+				containers = append(containers, KubernetesPodContainerFrontend{
+					Name:         cn.Name,
+					Image:        cn.Image,
+					Ready:        cn.Ready,
+					RestartCount: cn.RestartCount,
+					State:        cn.State,
+					Reason:       cn.Reason,
+					Message:      cn.Message,
+				})
+			}
+
+			var startTime *int64
+			if p.StartTime != nil {
+				ts := p.StartTime.Unix() * 1000
+				startTime = &ts
+			}
+
+			cluster.Pods[i] = KubernetesPodFrontend{
+				UID:        p.UID,
+				Name:       p.Name,
+				Namespace:  p.Namespace,
+				NodeName:   p.NodeName,
+				Phase:      p.Phase,
+				Reason:     p.Reason,
+				Message:    p.Message,
+				QoSClass:   p.QoSClass,
+				CreatedAt:  timeToUnixMillis(p.CreatedAt),
+				StartTime:  startTime,
+				Restarts:   p.Restarts,
+				Labels:     labels,
+				OwnerKind:  p.OwnerKind,
+				OwnerName:  p.OwnerName,
+				Containers: containers,
+			}
+		}
+	}
+
+	if len(c.Deployments) > 0 {
+		cluster.Deployments = make([]KubernetesDeploymentFrontend, len(c.Deployments))
+		for i, d := range c.Deployments {
+			labels := make(map[string]string, len(d.Labels))
+			for k, v := range d.Labels {
+				labels[k] = v
+			}
+			cluster.Deployments[i] = KubernetesDeploymentFrontend{
+				UID:               d.UID,
+				Name:              d.Name,
+				Namespace:         d.Namespace,
+				DesiredReplicas:   d.DesiredReplicas,
+				UpdatedReplicas:   d.UpdatedReplicas,
+				ReadyReplicas:     d.ReadyReplicas,
+				AvailableReplicas: d.AvailableReplicas,
+				Labels:            labels,
+			}
+		}
+	}
+
+	if cluster.DisplayName == "" && cluster.Name != "" {
+		cluster.DisplayName = cluster.Name
+	}
+
+	if cluster.DisplayName == "" {
+		cluster.DisplayName = cluster.ID
+	}
+
+	return cluster
+}
+
+func timeToUnixMillis(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix() * 1000
+}
+
+// ToFrontend converts a RemovedKubernetesCluster to its frontend representation.
+func (r RemovedKubernetesCluster) ToFrontend() RemovedKubernetesClusterFrontend {
+	return RemovedKubernetesClusterFrontend{
+		ID:          r.ID,
+		Name:        r.Name,
+		DisplayName: r.DisplayName,
+		RemovedAt:   r.RemovedAt.Unix() * 1000,
+	}
+}
+
 // ToFrontend converts a Host to HostFrontend.
 func (h Host) ToFrontend() HostFrontend {
 	host := HostFrontend{

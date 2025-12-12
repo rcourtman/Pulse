@@ -177,7 +177,7 @@ describe('UnifiedAgents token generation', () => {
       { interval: 0 },
     );
     expect(notificationSuccessMock).toHaveBeenCalledWith(
-      'Token generated with Host and Docker permissions.',
+      'Token generated with Host, Docker, and Kubernetes permissions.',
       4000,
     );
   });

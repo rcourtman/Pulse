@@ -1,7 +1,7 @@
 /**
  * Tests for Charts API types and interface
  */
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { ChartData, ChartsResponse, TimeRange, MetricPoint, ChartStats } from '@/api/charts';
 
 // Note: We test the types and interfaces here since the actual API calls

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -18,6 +19,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
+	"github.com/rcourtman/pulse-go-rewrite/internal/kubernetesagent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
@@ -30,7 +32,7 @@ var (
 	agentInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "pulse_agent_info",
 		Help: "Information about the Pulse agent",
-	}, []string{"version", "host_enabled", "docker_enabled"})
+	}, []string{"version", "host_enabled", "docker_enabled", "kubernetes_enabled"})
 
 	agentUp = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "pulse_agent_up",
@@ -78,6 +80,7 @@ func main() {
 		Str("pulse_url", cfg.PulseURL).
 		Bool("host_agent", cfg.EnableHost).
 		Bool("docker_agent", cfg.EnableDocker).
+		Bool("kubernetes_agent", cfg.EnableKubernetes).
 		Bool("proxmox_mode", cfg.EnableProxmox).
 		Bool("auto_update", !cfg.DisableAutoUpdate).
 		Msg("Starting Pulse Unified Agent")
@@ -87,6 +90,7 @@ func main() {
 		Version,
 		fmt.Sprintf("%t", cfg.EnableHost),
 		fmt.Sprintf("%t", cfg.EnableDocker),
+		fmt.Sprintf("%t", cfg.EnableKubernetes),
 	).Set(1)
 	agentUp.Set(1)
 
@@ -187,10 +191,50 @@ func main() {
 		}
 	}
 
+	// 10. Start Kubernetes Agent (if enabled)
+	if cfg.EnableKubernetes {
+		kubeCfg := kubernetesagent.Config{
+			PulseURL:           cfg.PulseURL,
+			APIToken:           cfg.APIToken,
+			Interval:           cfg.Interval,
+			AgentID:            cfg.AgentID,
+			AgentType:          "unified",
+			AgentVersion:       Version,
+			InsecureSkipVerify: cfg.InsecureSkipVerify,
+			LogLevel:           cfg.LogLevel,
+			Logger:             &logger,
+			KubeconfigPath:     cfg.KubeconfigPath,
+			KubeContext:        cfg.KubeContext,
+			IncludeNamespaces:  cfg.KubeIncludeNamespaces,
+			ExcludeNamespaces:  cfg.KubeExcludeNamespaces,
+			IncludeAllPods:     cfg.KubeIncludeAllPods,
+			MaxPods:            cfg.KubeMaxPods,
+		}
+
+		agent, err := kubernetesagent.New(kubeCfg)
+		if err != nil {
+			logger.Warn().Err(err).Msg("Kubernetes not available, will retry with exponential backoff")
+
+			g.Go(func() error {
+				retried := initKubernetesWithRetry(ctx, kubeCfg, &logger)
+				if retried != nil {
+					logger.Info().Msg("Kubernetes agent module started (after retry)")
+					return retried.Run(ctx)
+				}
+				return nil
+			})
+		} else {
+			g.Go(func() error {
+				logger.Info().Msg("Kubernetes agent module started")
+				return agent.Run(ctx)
+			})
+		}
+	}
+
 	// Mark as ready after all agents started
 	ready.Store(true)
 
-	// 10. Wait for all agents to exit
+	// 11. Wait for all agents to exit
 	if err := g.Wait(); err != nil && err != context.Canceled {
 		logger.Error().Err(err).Msg("Agent terminated with error")
 		agentUp.Set(0)
@@ -198,7 +242,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 11. Cleanup
+	// 12. Cleanup
 	agentUp.Set(0)
 	cleanupDockerAgent(dockerAgent, &logger)
 
@@ -274,16 +318,25 @@ type Config struct {
 	Logger             *zerolog.Logger
 
 	// Module flags
-	EnableHost    bool
-	EnableDocker  bool
-	EnableProxmox bool
-	ProxmoxType   string // "pve", "pbs", or "" for auto-detect
+	EnableHost       bool
+	EnableDocker     bool
+	EnableKubernetes bool
+	EnableProxmox    bool
+	ProxmoxType      string // "pve", "pbs", or "" for auto-detect
 
 	// Auto-update
 	DisableAutoUpdate bool
 
 	// Health/metrics server
 	HealthAddr string
+
+	// Kubernetes
+	KubeconfigPath        string
+	KubeContext           string
+	KubeIncludeNamespaces []string
+	KubeExcludeNamespaces []string
+	KubeIncludeAllPods    bool
+	KubeMaxPods           int
 }
 
 func loadConfig() Config {
@@ -298,10 +351,17 @@ func loadConfig() Config {
 	envLogLevel := utils.GetenvTrim("LOG_LEVEL")
 	envEnableHost := utils.GetenvTrim("PULSE_ENABLE_HOST")
 	envEnableDocker := utils.GetenvTrim("PULSE_ENABLE_DOCKER")
+	envEnableKubernetes := utils.GetenvTrim("PULSE_ENABLE_KUBERNETES")
 	envEnableProxmox := utils.GetenvTrim("PULSE_ENABLE_PROXMOX")
 	envProxmoxType := utils.GetenvTrim("PULSE_PROXMOX_TYPE")
 	envDisableAutoUpdate := utils.GetenvTrim("PULSE_DISABLE_AUTO_UPDATE")
 	envHealthAddr := utils.GetenvTrim("PULSE_HEALTH_ADDR")
+	envKubeconfig := utils.GetenvTrim("PULSE_KUBECONFIG")
+	envKubeContext := utils.GetenvTrim("PULSE_KUBE_CONTEXT")
+	envKubeIncludeNamespaces := utils.GetenvTrim("PULSE_KUBE_INCLUDE_NAMESPACES")
+	envKubeExcludeNamespaces := utils.GetenvTrim("PULSE_KUBE_EXCLUDE_NAMESPACES")
+	envKubeIncludeAllPods := utils.GetenvTrim("PULSE_KUBE_INCLUDE_ALL_PODS")
+	envKubeMaxPods := utils.GetenvTrim("PULSE_KUBE_MAX_PODS")
 
 	// Defaults
 	defaultInterval := 30 * time.Second
@@ -319,6 +379,11 @@ func loadConfig() Config {
 	defaultEnableDocker := false
 	if envEnableDocker != "" {
 		defaultEnableDocker = utils.ParseBool(envEnableDocker)
+	}
+
+	defaultEnableKubernetes := false
+	if envEnableKubernetes != "" {
+		defaultEnableKubernetes = utils.ParseBool(envEnableKubernetes)
 	}
 
 	defaultEnableProxmox := false
@@ -342,14 +407,23 @@ func loadConfig() Config {
 
 	enableHostFlag := flag.Bool("enable-host", defaultEnableHost, "Enable Host Agent module")
 	enableDockerFlag := flag.Bool("enable-docker", defaultEnableDocker, "Enable Docker Agent module")
+	enableKubernetesFlag := flag.Bool("enable-kubernetes", defaultEnableKubernetes, "Enable Kubernetes Agent module")
 	enableProxmoxFlag := flag.Bool("enable-proxmox", defaultEnableProxmox, "Enable Proxmox mode (creates API token, registers node)")
 	proxmoxTypeFlag := flag.String("proxmox-type", envProxmoxType, "Proxmox type: pve or pbs (auto-detected if not specified)")
 	disableAutoUpdateFlag := flag.Bool("disable-auto-update", utils.ParseBool(envDisableAutoUpdate), "Disable automatic updates")
 	healthAddrFlag := flag.String("health-addr", defaultHealthAddr, "Health/metrics server address (empty to disable)")
+	kubeconfigFlag := flag.String("kubeconfig", envKubeconfig, "Path to kubeconfig (optional; uses in-cluster config if available)")
+	kubeContextFlag := flag.String("kube-context", envKubeContext, "Kubeconfig context (optional)")
+	kubeIncludeAllPodsFlag := flag.Bool("kube-include-all-pods", utils.ParseBool(envKubeIncludeAllPods), "Include all non-succeeded pods (may be large)")
+	kubeMaxPodsFlag := flag.Int("kube-max-pods", defaultInt(envKubeMaxPods, 200), "Max pods included in report")
 	showVersion := flag.Bool("version", false, "Print the agent version and exit")
 
 	var tagFlags multiValue
 	flag.Var(&tagFlags, "tag", "Tag to apply (repeatable)")
+	var kubeIncludeNamespaceFlags multiValue
+	flag.Var(&kubeIncludeNamespaceFlags, "kube-include-namespace", "Namespace to include (repeatable; default is all)")
+	var kubeExcludeNamespaceFlags multiValue
+	flag.Var(&kubeExcludeNamespaceFlags, "kube-exclude-namespace", "Namespace to exclude (repeatable)")
 
 	flag.Parse()
 
@@ -376,22 +450,31 @@ func loadConfig() Config {
 	}
 
 	tags := gatherTags(envTags, tagFlags)
+	kubeIncludeNamespaces := gatherCSV(envKubeIncludeNamespaces, kubeIncludeNamespaceFlags)
+	kubeExcludeNamespaces := gatherCSV(envKubeExcludeNamespaces, kubeExcludeNamespaceFlags)
 
 	return Config{
-		PulseURL:           pulseURL,
-		APIToken:           token,
-		Interval:           *intervalFlag,
-		HostnameOverride:   strings.TrimSpace(*hostnameFlag),
-		AgentID:            strings.TrimSpace(*agentIDFlag),
-		Tags:               tags,
-		InsecureSkipVerify: *insecureFlag,
-		LogLevel:           logLevel,
-		EnableHost:         *enableHostFlag,
-		EnableDocker:       *enableDockerFlag,
-		EnableProxmox:      *enableProxmoxFlag,
-		ProxmoxType:        strings.TrimSpace(*proxmoxTypeFlag),
-		DisableAutoUpdate:  *disableAutoUpdateFlag,
-		HealthAddr:         strings.TrimSpace(*healthAddrFlag),
+		PulseURL:              pulseURL,
+		APIToken:              token,
+		Interval:              *intervalFlag,
+		HostnameOverride:      strings.TrimSpace(*hostnameFlag),
+		AgentID:               strings.TrimSpace(*agentIDFlag),
+		Tags:                  tags,
+		InsecureSkipVerify:    *insecureFlag,
+		LogLevel:              logLevel,
+		EnableHost:            *enableHostFlag,
+		EnableDocker:          *enableDockerFlag,
+		EnableKubernetes:      *enableKubernetesFlag,
+		EnableProxmox:         *enableProxmoxFlag,
+		ProxmoxType:           strings.TrimSpace(*proxmoxTypeFlag),
+		DisableAutoUpdate:     *disableAutoUpdateFlag,
+		HealthAddr:            strings.TrimSpace(*healthAddrFlag),
+		KubeconfigPath:        strings.TrimSpace(*kubeconfigFlag),
+		KubeContext:           strings.TrimSpace(*kubeContextFlag),
+		KubeIncludeNamespaces: kubeIncludeNamespaces,
+		KubeExcludeNamespaces: kubeExcludeNamespaces,
+		KubeIncludeAllPods:    *kubeIncludeAllPodsFlag,
+		KubeMaxPods:           *kubeMaxPodsFlag,
 	}
 }
 
@@ -412,6 +495,37 @@ func gatherTags(env string, flags []string) []string {
 		}
 	}
 	return tags
+}
+
+func gatherCSV(env string, flags []string) []string {
+	values := make([]string, 0)
+	if env != "" {
+		for _, value := range strings.Split(env, ",") {
+			value = strings.TrimSpace(value)
+			if value != "" {
+				values = append(values, value)
+			}
+		}
+	}
+	for _, value := range flags {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
+}
+
+func defaultInt(value string, fallback int) int {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func parseLogLevel(value string) (zerolog.Level, error) {
@@ -478,6 +592,61 @@ func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *ze
 			Msg("Docker still not available, will retry")
 
 		// Calculate next delay with exponential backoff, capped at maxDelay
+		delay = time.Duration(float64(delay) * multiplier)
+		if delay > maxDelay {
+			delay = maxDelay
+		}
+	}
+}
+
+// initKubernetesWithRetry attempts to initialize the Kubernetes agent with exponential backoff.
+// It returns the agent when Kubernetes becomes available, or nil if the context is cancelled.
+// Retry intervals: 5s, 10s, 20s, 40s, 80s, 160s, then cap at 5 minutes.
+func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, logger *zerolog.Logger) *kubernetesagent.Agent {
+	const (
+		initialDelay = 5 * time.Second
+		maxDelay     = 5 * time.Minute
+		multiplier   = 2.0
+	)
+
+	delay := initialDelay
+	attempt := 0
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info().Msg("Kubernetes retry cancelled, context done")
+			return nil
+		default:
+		}
+
+		attempt++
+		logger.Info().
+			Int("attempt", attempt).
+			Str("next_retry", delay.String()).
+			Msg("Waiting to retry Kubernetes connection")
+
+		select {
+		case <-ctx.Done():
+			logger.Info().Msg("Kubernetes retry cancelled during wait")
+			return nil
+		case <-time.After(delay):
+		}
+
+		agent, err := kubernetesagent.New(cfg)
+		if err == nil {
+			logger.Info().
+				Int("attempts", attempt).
+				Msg("Successfully connected to Kubernetes after retry")
+			return agent
+		}
+
+		logger.Warn().
+			Err(err).
+			Int("attempt", attempt).
+			Str("next_retry", (time.Duration(float64(delay) * multiplier)).String()).
+			Msg("Kubernetes still not available, will retry")
+
 		delay = time.Duration(float64(delay) * multiplier)
 		if delay > maxDelay {
 			delay = maxDelay

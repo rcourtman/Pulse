@@ -169,13 +169,13 @@ func FromVM(vm models.VM) Resource {
 		CPU: &MetricValue{
 			Current: vm.CPU * 100, // VM CPU is 0-1, convert to percentage
 		},
-		Memory:       memory,
-		Disk:         disk,
-		Network:      network,
-		Uptime:       &vm.Uptime,
-		Tags:         vm.Tags,
-		LastSeen:     vm.LastSeen,
-		PlatformData: platformDataJSON,
+		Memory:        memory,
+		Disk:          disk,
+		Network:       network,
+		Uptime:        &vm.Uptime,
+		Tags:          vm.Tags,
+		LastSeen:      vm.LastSeen,
+		PlatformData:  platformDataJSON,
 		SchemaVersion: CurrentSchemaVersion,
 	}
 }
@@ -255,13 +255,13 @@ func FromContainer(ct models.Container) Resource {
 		CPU: &MetricValue{
 			Current: ct.CPU * 100, // Container CPU is 0-1, convert to percentage
 		},
-		Memory:       memory,
-		Disk:         disk,
-		Network:      network,
-		Uptime:       &ct.Uptime,
-		Tags:         ct.Tags,
-		LastSeen:     ct.LastSeen,
-		PlatformData: platformDataJSON,
+		Memory:        memory,
+		Disk:          disk,
+		Network:       network,
+		Uptime:        &ct.Uptime,
+		Tags:          ct.Tags,
+		LastSeen:      ct.LastSeen,
+		PlatformData:  platformDataJSON,
 		SchemaVersion: CurrentSchemaVersion,
 	}
 }
@@ -347,14 +347,14 @@ func FromHost(h models.Host) Resource {
 	diskIO := make([]DiskIOStats, len(h.DiskIO))
 	for i, d := range h.DiskIO {
 		diskIO[i] = DiskIOStats{
-			Device:     d.Device,
-			ReadBytes:  d.ReadBytes,
-			WriteBytes: d.WriteBytes,
-			ReadOps:    d.ReadOps,
-			WriteOps:   d.WriteOps,
-			ReadTimeMs: d.ReadTime,
+			Device:      d.Device,
+			ReadBytes:   d.ReadBytes,
+			WriteBytes:  d.WriteBytes,
+			ReadOps:     d.ReadOps,
+			WriteOps:    d.WriteOps,
+			ReadTimeMs:  d.ReadTime,
 			WriteTimeMs: d.WriteTime,
-			IOTimeMs:   d.IOTime,
+			IOTimeMs:    d.IOTime,
 		}
 	}
 
@@ -678,11 +678,217 @@ func FromDockerContainer(dc models.DockerContainer, hostID, hostName string) Res
 		CPU: &MetricValue{
 			Current: dc.CPUPercent,
 		},
-		Memory:       memory,
-		Uptime:       &dc.UptimeSeconds,
-		Labels:       dc.Labels,
-		LastSeen:     time.Now(), // Containers don't have their own LastSeen
-		PlatformData: platformDataJSON,
+		Memory:        memory,
+		Uptime:        &dc.UptimeSeconds,
+		Labels:        dc.Labels,
+		LastSeen:      time.Now(), // Containers don't have their own LastSeen
+		PlatformData:  platformDataJSON,
+		SchemaVersion: CurrentSchemaVersion,
+	}
+}
+
+// FromKubernetesCluster converts a KubernetesCluster to a unified Resource.
+func FromKubernetesCluster(cluster models.KubernetesCluster) Resource {
+	platformData := KubernetesClusterPlatformData{
+		AgentID:           cluster.AgentID,
+		Server:            cluster.Server,
+		Context:           cluster.Context,
+		Version:           cluster.Version,
+		CustomDisplayName: cluster.CustomDisplayName,
+		Hidden:            cluster.Hidden,
+		PendingUninstall:  cluster.PendingUninstall,
+		NodeCount:         len(cluster.Nodes),
+		PodCount:          len(cluster.Pods),
+		DeploymentCount:   len(cluster.Deployments),
+		TokenID:           cluster.TokenID,
+		TokenName:         cluster.TokenName,
+		TokenHint:         cluster.TokenHint,
+		TokenLastUsedAt:   cluster.TokenLastUsedAt,
+	}
+	platformDataJSON, _ := json.Marshal(platformData)
+
+	displayName := strings.TrimSpace(cluster.DisplayName)
+	if displayName == "" {
+		displayName = strings.TrimSpace(cluster.Name)
+	}
+	if cluster.CustomDisplayName != "" {
+		displayName = cluster.CustomDisplayName
+	}
+	if displayName == "" {
+		displayName = cluster.ID
+	}
+
+	name := strings.TrimSpace(cluster.Name)
+	if name == "" {
+		name = displayName
+	}
+
+	return Resource{
+		ID:            cluster.ID,
+		Type:          ResourceTypeK8sCluster,
+		Name:          name,
+		DisplayName:   displayName,
+		PlatformID:    cluster.AgentID,
+		PlatformType:  PlatformKubernetes,
+		SourceType:    SourceAgent,
+		Status:        mapKubernetesClusterStatus(cluster.Status),
+		LastSeen:      cluster.LastSeen,
+		PlatformData:  platformDataJSON,
+		SchemaVersion: CurrentSchemaVersion,
+	}
+}
+
+// FromKubernetesNode converts a KubernetesNode to a unified Resource.
+func FromKubernetesNode(node models.KubernetesNode, cluster models.KubernetesCluster) Resource {
+	platformData := KubernetesNodePlatformData{
+		ClusterID:               cluster.ID,
+		Ready:                   node.Ready,
+		Unschedulable:           node.Unschedulable,
+		KubeletVersion:          node.KubeletVersion,
+		ContainerRuntimeVersion: node.ContainerRuntimeVersion,
+		OSImage:                 node.OSImage,
+		KernelVersion:           node.KernelVersion,
+		Architecture:            node.Architecture,
+		CapacityCPUCores:        node.CapacityCPU,
+		CapacityMemoryBytes:     node.CapacityMemoryBytes,
+		CapacityPods:            node.CapacityPods,
+		AllocatableCPUCores:     node.AllocCPU,
+		AllocatableMemoryBytes:  node.AllocMemoryBytes,
+		AllocatablePods:         node.AllocPods,
+		Roles:                   append([]string(nil), node.Roles...),
+	}
+	platformDataJSON, _ := json.Marshal(platformData)
+
+	nodeID := strings.TrimSpace(node.UID)
+	if nodeID == "" {
+		nodeID = node.Name
+	}
+	resourceID := fmt.Sprintf("%s/node/%s", cluster.ID, nodeID)
+
+	status := StatusUnknown
+	if node.Ready {
+		status = StatusOnline
+	} else {
+		status = StatusOffline
+	}
+	if node.Unschedulable && status == StatusOnline {
+		status = StatusDegraded
+	}
+
+	return Resource{
+		ID:            resourceID,
+		Type:          ResourceTypeK8sNode,
+		Name:          node.Name,
+		PlatformID:    cluster.ID,
+		PlatformType:  PlatformKubernetes,
+		SourceType:    SourceAgent,
+		ParentID:      cluster.ID,
+		Status:        status,
+		LastSeen:      cluster.LastSeen,
+		PlatformData:  platformDataJSON,
+		SchemaVersion: CurrentSchemaVersion,
+	}
+}
+
+// FromKubernetesPod converts a KubernetesPod to a unified Resource.
+func FromKubernetesPod(pod models.KubernetesPod, cluster models.KubernetesCluster) Resource {
+	containers := make([]KubernetesPodContainerInfo, 0, len(pod.Containers))
+	for _, c := range pod.Containers {
+		containers = append(containers, KubernetesPodContainerInfo{
+			Name:         c.Name,
+			Image:        c.Image,
+			Ready:        c.Ready,
+			RestartCount: c.RestartCount,
+			State:        c.State,
+			Reason:       c.Reason,
+			Message:      c.Message,
+		})
+	}
+
+	platformData := KubernetesPodPlatformData{
+		ClusterID:  cluster.ID,
+		Namespace:  pod.Namespace,
+		NodeName:   pod.NodeName,
+		Phase:      pod.Phase,
+		Reason:     pod.Reason,
+		Message:    pod.Message,
+		QoSClass:   pod.QoSClass,
+		Restarts:   pod.Restarts,
+		OwnerKind:  pod.OwnerKind,
+		OwnerName:  pod.OwnerName,
+		Containers: containers,
+	}
+	platformDataJSON, _ := json.Marshal(platformData)
+
+	podID := strings.TrimSpace(pod.UID)
+	if podID == "" {
+		podID = fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+	}
+	resourceID := fmt.Sprintf("%s/pod/%s", cluster.ID, podID)
+
+	parentID := cluster.ID
+	if strings.TrimSpace(pod.NodeName) != "" {
+		parentID = fmt.Sprintf("%s/node/%s", cluster.ID, pod.NodeName)
+	}
+
+	lastSeen := cluster.LastSeen
+
+	return Resource{
+		ID:            resourceID,
+		Type:          ResourceTypePod,
+		Name:          pod.Name,
+		PlatformID:    cluster.ID,
+		PlatformType:  PlatformKubernetes,
+		SourceType:    SourceAgent,
+		ParentID:      parentID,
+		Status:        mapKubernetesPodStatus(pod.Phase),
+		Labels:        pod.Labels,
+		LastSeen:      lastSeen,
+		PlatformData:  platformDataJSON,
+		SchemaVersion: CurrentSchemaVersion,
+	}
+}
+
+// FromKubernetesDeployment converts a KubernetesDeployment to a unified Resource.
+func FromKubernetesDeployment(dep models.KubernetesDeployment, cluster models.KubernetesCluster) Resource {
+	platformData := KubernetesDeploymentPlatformData{
+		ClusterID:         cluster.ID,
+		Namespace:         dep.Namespace,
+		DesiredReplicas:   dep.DesiredReplicas,
+		UpdatedReplicas:   dep.UpdatedReplicas,
+		ReadyReplicas:     dep.ReadyReplicas,
+		AvailableReplicas: dep.AvailableReplicas,
+	}
+	platformDataJSON, _ := json.Marshal(platformData)
+
+	depID := strings.TrimSpace(dep.UID)
+	if depID == "" {
+		depID = fmt.Sprintf("%s/%s", dep.Namespace, dep.Name)
+	}
+	resourceID := fmt.Sprintf("%s/deployment/%s", cluster.ID, depID)
+
+	status := StatusUnknown
+	switch {
+	case dep.DesiredReplicas == 0:
+		status = StatusStopped
+	case dep.AvailableReplicas >= dep.DesiredReplicas:
+		status = StatusRunning
+	case dep.AvailableReplicas > 0:
+		status = StatusDegraded
+	}
+
+	return Resource{
+		ID:            resourceID,
+		Type:          ResourceTypeK8sDeployment,
+		Name:          dep.Name,
+		PlatformID:    cluster.ID,
+		PlatformType:  PlatformKubernetes,
+		SourceType:    SourceAgent,
+		ParentID:      cluster.ID,
+		Status:        status,
+		Labels:        dep.Labels,
+		LastSeen:      cluster.LastSeen,
+		PlatformData:  platformDataJSON,
 		SchemaVersion: CurrentSchemaVersion,
 	}
 }
@@ -834,6 +1040,30 @@ func mapDockerContainerStatus(state string) ResourceStatus {
 	case "paused":
 		return StatusPaused
 	case "restarting", "created":
+		return StatusUnknown
+	default:
+		return StatusUnknown
+	}
+}
+
+func mapKubernetesClusterStatus(status string) ResourceStatus {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "online":
+		return StatusOnline
+	case "offline":
+		return StatusOffline
+	default:
+		return StatusUnknown
+	}
+}
+
+func mapKubernetesPodStatus(phase string) ResourceStatus {
+	switch strings.ToLower(strings.TrimSpace(phase)) {
+	case "running":
+		return StatusRunning
+	case "succeeded", "failed":
+		return StatusStopped
+	case "pending":
 		return StatusUnknown
 	default:
 		return StatusUnknown
