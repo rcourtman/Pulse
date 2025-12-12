@@ -1628,7 +1628,7 @@ func (s *Service) getTools() []providers.Tool {
 					},
 					"resource_id": map[string]interface{}{
 						"type":        "string",
-						"description": "The resource ID from the context (e.g., 'pve1-delly-101' for guests, 'dockerhost:container:abc123' for Docker). Use the ID from the current context.",
+						"description": "The resource ID from the context. For Proxmox guests, use format 'instance-VMID' (e.g., 'delly-150' where 'delly' is the PVE instance name and '150' is the VMID). For Docker, use format 'hostid:container:containerid'. Use the ID shown in the current context.",
 					},
 					"url": map[string]interface{}{
 						"type":        "string",
