@@ -1480,6 +1480,45 @@ func (r *Router) StartPatrol(ctx context.Context) {
 				log.Info().Msg("AI Pattern Detector: Wired to alert history for failure prediction")
 			}
 		}
+		
+		// Initialize correlation detector for multi-resource relationships
+		correlationDetector := ai.NewCorrelationDetector(ai.CorrelationConfig{
+			MaxEvents:         10000,
+			CorrelationWindow: 10 * time.Minute,
+			MinOccurrences:    3,
+			RetentionWindow:   30 * 24 * time.Hour,
+			DataDir:           dataDir,
+		})
+		if correlationDetector != nil {
+			r.aiSettingsHandler.SetCorrelationDetector(correlationDetector)
+			
+			// Wire alert history to correlation detector
+			if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+				alertManager.OnAlertHistory(func(alert alerts.Alert) {
+					// Record as correlation event
+					eventType := ai.CorrelationEventType(ai.CorrelationEventAlert)
+					switch alert.Type {
+					case "cpu":
+						eventType = ai.CorrelationEventHighCPU
+					case "memory":
+						eventType = ai.CorrelationEventHighMem
+					case "disk":
+						eventType = ai.CorrelationEventDiskFull
+					case "offline", "connectivity":
+						eventType = ai.CorrelationEventOffline
+					}
+					correlationDetector.RecordEvent(ai.CorrelationEvent{
+						ResourceID:   alert.ResourceID,
+						ResourceName: alert.ResourceName,
+						ResourceType: alert.Type,
+						EventType:    eventType,
+						Timestamp:    alert.StartTime,
+						Value:        alert.Value,
+					})
+				})
+				log.Info().Msg("AI Correlation Detector: Wired to alert history for multi-resource analysis")
+			}
+		}
 
 		r.aiSettingsHandler.StartPatrol(ctx)
 	}

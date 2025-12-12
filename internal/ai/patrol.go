@@ -204,17 +204,18 @@ const MaxPatrolRunHistory = 100
 type PatrolService struct {
 	mu sync.RWMutex
 
-	aiService         *Service
-	stateProvider     StateProvider
-	thresholdProvider ThresholdProvider
-	config            PatrolConfig
-	findings          *FindingsStore
-	knowledgeStore    *knowledge.Store // For per-resource notes in patrol context
-	metricsHistory    MetricsHistoryProvider // For trend analysis and predictions
-	baselineStore     *baseline.Store  // For anomaly detection via learned baselines
-	changeDetector    *ChangeDetector  // For tracking infrastructure changes
-	remediationLog    *RemediationLog  // For tracking remediation actions
-	patternDetector   *PatternDetector // For failure prediction from historical patterns
+	aiService           *Service
+	stateProvider       StateProvider
+	thresholdProvider   ThresholdProvider
+	config              PatrolConfig
+	findings            *FindingsStore
+	knowledgeStore      *knowledge.Store // For per-resource notes in patrol context
+	metricsHistory      MetricsHistoryProvider // For trend analysis and predictions
+	baselineStore       *baseline.Store  // For anomaly detection via learned baselines
+	changeDetector      *ChangeDetector  // For tracking infrastructure changes
+	remediationLog      *RemediationLog  // For tracking remediation actions
+	patternDetector     *PatternDetector // For failure prediction from historical patterns
+	correlationDetector *CorrelationDetector // For multi-resource correlation
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds PatrolThresholds
@@ -397,6 +398,21 @@ func (p *PatrolService) GetPatternDetector() *PatternDetector {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.patternDetector
+}
+
+// SetCorrelationDetector sets the correlation detector for multi-resource correlation
+func (p *PatrolService) SetCorrelationDetector(detector *CorrelationDetector) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.correlationDetector = detector
+	log.Info().Msg("AI Patrol: Correlation detector set for multi-resource analysis")
+}
+
+// GetCorrelationDetector returns the correlation detector
+func (p *PatrolService) GetCorrelationDetector() *CorrelationDetector {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.correlationDetector
 }
 
 // GetConfig returns the current patrol configuration
@@ -1802,12 +1818,21 @@ func (p *PatrolService) buildEnrichedContext(state models.StateSnapshot) string 
 	// Append failure predictions if pattern detector is available
 	p.mu.RLock()
 	patternDetector := p.patternDetector
+	correlationDetector := p.correlationDetector
 	p.mu.RUnlock()
 	
 	if patternDetector != nil {
 		predictionsContext := patternDetector.FormatForContext("")
 		if predictionsContext != "" {
 			formatted += predictionsContext
+		}
+	}
+	
+	// Append resource correlations if correlation detector is available
+	if correlationDetector != nil {
+		correlationsContext := correlationDetector.FormatForContext("")
+		if correlationsContext != "" {
+			formatted += correlationsContext
 		}
 	}
 

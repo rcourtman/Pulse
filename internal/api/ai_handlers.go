@@ -120,6 +120,11 @@ func (h *AISettingsHandler) SetPatternDetector(detector *ai.PatternDetector) {
 	h.aiService.SetPatternDetector(detector)
 }
 
+// SetCorrelationDetector sets the correlation detector for multi-resource correlation
+func (h *AISettingsHandler) SetCorrelationDetector(detector *ai.CorrelationDetector) {
+	h.aiService.SetCorrelationDetector(detector)
+}
+
 // StopPatrol stops the background AI patrol service
 func (h *AISettingsHandler) StopPatrol() {
 	h.aiService.StopPatrol()
