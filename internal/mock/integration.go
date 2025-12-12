@@ -91,6 +91,10 @@ func enableMockMode(fromInit bool) {
 		Int("host_agents", config.GenericHostCount).
 		Int("docker_hosts", config.DockerHostCount).
 		Int("docker_containers_per_host", config.DockerContainersPerHost).
+		Int("k8s_clusters", config.K8sClusterCount).
+		Int("k8s_nodes_per_cluster", config.K8sNodesPerCluster).
+		Int("k8s_pods_per_cluster", config.K8sPodsPerCluster).
+		Int("k8s_deployments_per_cluster", config.K8sDeploymentsPerCluster).
 		Bool("random_metrics", config.RandomMetrics).
 		Float64("stopped_percent", config.StoppedPercent).
 		Msg("Mock mode enabled")
@@ -209,6 +213,30 @@ func LoadMockConfig() MockConfig {
 		}
 	}
 
+	if val := os.Getenv("PULSE_MOCK_K8S_CLUSTERS"); val != "" {
+		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+			config.K8sClusterCount = n
+		}
+	}
+
+	if val := os.Getenv("PULSE_MOCK_K8S_NODES"); val != "" {
+		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+			config.K8sNodesPerCluster = n
+		}
+	}
+
+	if val := os.Getenv("PULSE_MOCK_K8S_PODS"); val != "" {
+		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+			config.K8sPodsPerCluster = n
+		}
+	}
+
+	if val := os.Getenv("PULSE_MOCK_K8S_DEPLOYMENTS"); val != "" {
+		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+			config.K8sDeploymentsPerCluster = n
+		}
+	}
+
 	if val := os.Getenv("PULSE_MOCK_RANDOM_METRICS"); val != "" {
 		config.RandomMetrics = val == "true"
 	}
@@ -239,6 +267,10 @@ func SetMockConfig(cfg MockConfig) {
 		Int("lxcs_per_node", cfg.LXCsPerNode).
 		Int("docker_hosts", cfg.DockerHostCount).
 		Int("docker_containers_per_host", cfg.DockerContainersPerHost).
+		Int("k8s_clusters", cfg.K8sClusterCount).
+		Int("k8s_nodes_per_cluster", cfg.K8sNodesPerCluster).
+		Int("k8s_pods_per_cluster", cfg.K8sPodsPerCluster).
+		Int("k8s_deployments_per_cluster", cfg.K8sDeploymentsPerCluster).
 		Bool("random_metrics", cfg.RandomMetrics).
 		Float64("stopped_percent", cfg.StoppedPercent).
 		Msg("Mock configuration updated")
@@ -301,27 +333,67 @@ func GetMockAlertHistory(limit int) []models.Alert {
 }
 
 func cloneState(state models.StateSnapshot) models.StateSnapshot {
+	kubernetesClusters := make([]models.KubernetesCluster, len(state.KubernetesClusters))
+	for i, cluster := range state.KubernetesClusters {
+		clusterCopy := cluster
+
+		clusterCopy.Nodes = append([]models.KubernetesNode(nil), cluster.Nodes...)
+
+		clusterCopy.Pods = make([]models.KubernetesPod, len(cluster.Pods))
+		for j, pod := range cluster.Pods {
+			podCopy := pod
+
+			if pod.Labels != nil {
+				labelsCopy := make(map[string]string, len(pod.Labels))
+				for k, v := range pod.Labels {
+					labelsCopy[k] = v
+				}
+				podCopy.Labels = labelsCopy
+			}
+
+			podCopy.Containers = append([]models.KubernetesPodContainer(nil), pod.Containers...)
+			clusterCopy.Pods[j] = podCopy
+		}
+
+		clusterCopy.Deployments = make([]models.KubernetesDeployment, len(cluster.Deployments))
+		for j, dep := range cluster.Deployments {
+			depCopy := dep
+			if dep.Labels != nil {
+				labelsCopy := make(map[string]string, len(dep.Labels))
+				for k, v := range dep.Labels {
+					labelsCopy[k] = v
+				}
+				depCopy.Labels = labelsCopy
+			}
+			clusterCopy.Deployments[j] = depCopy
+		}
+
+		kubernetesClusters[i] = clusterCopy
+	}
+
 	copyState := models.StateSnapshot{
-		Nodes:            append([]models.Node(nil), state.Nodes...),
-		VMs:              append([]models.VM(nil), state.VMs...),
-		Containers:       append([]models.Container(nil), state.Containers...),
-		DockerHosts:      append([]models.DockerHost(nil), state.DockerHosts...),
-		Hosts:            append([]models.Host(nil), state.Hosts...),
-		PMGInstances:     append([]models.PMGInstance(nil), state.PMGInstances...),
-		Storage:          append([]models.Storage(nil), state.Storage...),
-		CephClusters:     append([]models.CephCluster(nil), state.CephClusters...),
-		PhysicalDisks:    append([]models.PhysicalDisk(nil), state.PhysicalDisks...),
-		PBSInstances:     append([]models.PBSInstance(nil), state.PBSInstances...),
-		PBSBackups:       append([]models.PBSBackup(nil), state.PBSBackups...),
-		PMGBackups:       append([]models.PMGBackup(nil), state.PMGBackups...),
-		ReplicationJobs:  append([]models.ReplicationJob(nil), state.ReplicationJobs...),
-		Metrics:          append([]models.Metric(nil), state.Metrics...),
-		Performance:      state.Performance,
-		Stats:            state.Stats,
-		ActiveAlerts:     append([]models.Alert(nil), state.ActiveAlerts...),
-		RecentlyResolved: append([]models.ResolvedAlert(nil), state.RecentlyResolved...),
-		LastUpdate:       state.LastUpdate,
-		ConnectionHealth: make(map[string]bool, len(state.ConnectionHealth)),
+		Nodes:                     append([]models.Node(nil), state.Nodes...),
+		VMs:                       append([]models.VM(nil), state.VMs...),
+		Containers:                append([]models.Container(nil), state.Containers...),
+		DockerHosts:               append([]models.DockerHost(nil), state.DockerHosts...),
+		KubernetesClusters:        kubernetesClusters,
+		RemovedKubernetesClusters: append([]models.RemovedKubernetesCluster(nil), state.RemovedKubernetesClusters...),
+		Hosts:                     append([]models.Host(nil), state.Hosts...),
+		PMGInstances:              append([]models.PMGInstance(nil), state.PMGInstances...),
+		Storage:                   append([]models.Storage(nil), state.Storage...),
+		CephClusters:              append([]models.CephCluster(nil), state.CephClusters...),
+		PhysicalDisks:             append([]models.PhysicalDisk(nil), state.PhysicalDisks...),
+		PBSInstances:              append([]models.PBSInstance(nil), state.PBSInstances...),
+		PBSBackups:                append([]models.PBSBackup(nil), state.PBSBackups...),
+		PMGBackups:                append([]models.PMGBackup(nil), state.PMGBackups...),
+		ReplicationJobs:           append([]models.ReplicationJob(nil), state.ReplicationJobs...),
+		Metrics:                   append([]models.Metric(nil), state.Metrics...),
+		Performance:               state.Performance,
+		Stats:                     state.Stats,
+		ActiveAlerts:              append([]models.Alert(nil), state.ActiveAlerts...),
+		RecentlyResolved:          append([]models.ResolvedAlert(nil), state.RecentlyResolved...),
+		LastUpdate:                state.LastUpdate,
+		ConnectionHealth:          make(map[string]bool, len(state.ConnectionHealth)),
 	}
 
 	copyState.PVEBackups = models.PVEBackups{
