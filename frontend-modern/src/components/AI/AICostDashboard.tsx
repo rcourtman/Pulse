@@ -57,8 +57,6 @@ export const AICostDashboard: Component = () => {
   const [loadError, setLoadError] = createSignal<string | null>(null);
   const [summary, setSummary] = createSignal<AICostSummary | null>(null);
   const [aiSettings, setAISettings] = createSignal<AISettings | null>(null);
-  const [budgetUSD30dInput, setBudgetUSD30dInput] = createSignal<string>('');
-  const [savingBudget, setSavingBudget] = createSignal(false);
   let requestSeq = 0;
 
   const anyPricingKnown = createMemo(() => {
@@ -124,15 +122,9 @@ export const AICostDashboard: Component = () => {
     try {
       const s = await AIAPI.getSettings();
       setAISettings(s);
-      if (typeof s.cost_budget_usd_30d === 'number' && Number.isFinite(s.cost_budget_usd_30d) && s.cost_budget_usd_30d > 0) {
-        setBudgetUSD30dInput(String(s.cost_budget_usd_30d));
-      } else {
-        setBudgetUSD30dInput('');
-      }
     } catch (err) {
       logger.debug('[AICostDashboard] Failed to load AI settings for budget:', err);
       setAISettings(null);
-      setBudgetUSD30dInput('');
     }
   };
 
@@ -141,10 +133,9 @@ export const AICostDashboard: Component = () => {
   });
 
   const parsedBudgetUSD30d = createMemo(() => {
-    const raw = budgetUSD30dInput().trim();
-    if (!raw) return null;
-    const n = Number(raw);
-    if (!Number.isFinite(n) || n <= 0) return null;
+    const s = aiSettings();
+    const n = s?.cost_budget_usd_30d;
+    if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0) return null;
     return n;
   });
 
@@ -161,30 +152,6 @@ export const AICostDashboard: Component = () => {
     if (budget == null || usd == null) return false;
     return usd > budget;
   });
-
-  const isDirtyBudget = createMemo(() => {
-    const s = aiSettings();
-    const current = typeof s?.cost_budget_usd_30d === 'number' ? s.cost_budget_usd_30d : 0;
-    const next = parsedBudgetUSD30d() ?? 0;
-    return Math.abs(current - next) > 0.0001;
-  });
-
-  const saveBudget = async () => {
-    if (savingBudget()) return;
-    setSavingBudget(true);
-    try {
-      const value = parsedBudgetUSD30d() ?? 0;
-      const next = await AIAPI.updateSettings({ cost_budget_usd_30d: value });
-      setAISettings(next);
-      notificationStore.success('AI cost budget saved');
-    } catch (err) {
-      logger.error('[AICostDashboard] Failed to save budget:', err);
-      notificationStore.error('Failed to save AI cost budget');
-      await loadBudgetSettings();
-    } finally {
-      setSavingBudget(false);
-    }
-  };
 
   const resetHistory = async () => {
     if (!confirm('Reset AI usage history? A backup will be created in the Pulse config directory.')) return;
@@ -386,25 +353,14 @@ export const AICostDashboard: Component = () => {
                   </div>
                 </div>
                 <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
-                  <div class="flex items-center justify-between gap-2">
-                    <div class="text-xs text-gray-500 dark:text-gray-400">Budget alert (USD per 30d)</div>
-                    <button
-                      type="button"
-                      disabled={!isDirtyBudget() || savingBudget()}
-                      onClick={saveBudget}
-                      class={`text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 ${(!isDirtyBudget() || savingBudget()) ? 'opacity-60 cursor-not-allowed' : ''}`}
-                    >
-                      Save
-                    </button>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">Budget alert (USD per 30d)</div>
+                  <div class="text-sm font-semibold text-gray-900 dark:text-white mt-1">
+                    <Show when={parsedBudgetUSD30d() != null} fallback={<span class="text-gray-500 dark:text-gray-400">—</span>}>
+                      {formatUSD(parsedBudgetUSD30d() ?? 0)}
+                    </Show>
                   </div>
-                  <input
-                    value={budgetUSD30dInput()}
-                    onInput={(e) => setBudgetUSD30dInput(e.currentTarget.value)}
-                    placeholder="e.g. 25"
-                    class="mt-1 w-full px-2 py-1 text-sm rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                  />
                   <div class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                    Cross-provider estimate. Pro-rated for {days()}d:{' '}
+                    Set in AI settings. Pro-rated for {days()}d:{' '}
                     <Show when={budgetForRange() != null} fallback={<span>—</span>}>
                       {formatUSD(budgetForRange() ?? 0)}
                     </Show>
