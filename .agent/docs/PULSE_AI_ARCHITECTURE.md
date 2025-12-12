@@ -267,22 +267,37 @@ Based on historical patterns:
 - OOM events typically occurs every ~14 days (last: 12 days ago, overdue)
 ```
 
-### Phase 6: Multi-Resource Correlation (PLANNED)
+### ✅ Phase 6: Multi-Resource Correlation (COMPLETE)
 
-**Goal**: Understand relationships between resources.
+**Implemented in `internal/ai/correlation/` package:**
 
-1. **Automatic Correlation Detection**
-   - When A spikes, does B spike?
-   - When A restarts, does B show errors?
-   - Statistical correlation over time
+- `detector.go` - Correlation detector for multi-resource relationships
 
-2. **Dependency Mapping**
-   - User-provided: "This VM depends on that NFS storage"
-   - Inferred: "These 3 containers always restart together"
+**Features:**
+1. **Automatic Correlation Detection** ✅
+   - Tracks events across resources
+   - Detects temporal relationships (when A happens, B follows)
+   - Calculates average delay between correlated events
+   - Confidence scoring based on occurrence count
 
-3. **Cascade Analysis**
-   - "If node X goes down, these 5 critical VMs are affected"
-   - "Storage Y failing would impact 12 backup jobs"
+2. **Dependency Mapping** ✅
+   - GetDependencies() - What resources depend on this one
+   - GetDependsOn() - What this resource depends on
+   - Inferred from observed event patterns
+
+3. **Cascade Analysis** ✅
+   - PredictCascade() - Predict downstream effects
+   - "If storage goes critical, database VM may restart within 5 minutes"
+
+**Persistence:** `ai_correlations.json`
+
+**Example AI context now includes:**
+```markdown
+## 🔗 Resource Correlations
+Observed relationships between resources:
+- When local-zfs experiences disk_full, database often follows within 5 minutes
+- When node-1 has high CPU, vm-100 experiences high memory within 3 minutes
+```
 
 ---
 
