@@ -157,6 +157,19 @@ func (c Container) ToFrontend() ContainerFrontend {
 		LastSeen:  c.LastSeen.Unix() * 1000,
 	}
 
+	// OCI containers are classified separately from traditional LXC containers in the UI.
+	// Keep the frontend payload stable even if some internal sources only persist Type.
+	isOCI := c.IsOCI || strings.EqualFold(strings.TrimSpace(c.Type), "oci")
+	if isOCI {
+		ct.IsOCI = true
+		ct.Type = "oci"
+	}
+
+	// Preserve template metadata (LXC template or OCI image reference).
+	if c.OSTemplate != "" {
+		ct.OSTemplate = c.OSTemplate
+	}
+
 	// Convert tags array to string
 	if len(c.Tags) > 0 {
 		ct.Tags = strings.Join(c.Tags, ",")

@@ -379,15 +379,15 @@ describe('UnifiedAgents platform commands', () => {
     const generateButton = screen.getByRole('button', { name: /Generate token/i });
     fireEvent.click(generateButton);
 
-    await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
+	    await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
 
-    await waitFor(() => {
-      expect(screen.getByText('Enable Docker monitoring')).toBeInTheDocument();
-    });
+	    await waitFor(() => {
+	      expect(screen.getByText('Docker monitoring')).toBeInTheDocument();
+	    });
 
-    // Docker monitoring is disabled by default
-    const checkbox = screen.getByRole('checkbox', { name: /Enable Docker monitoring/i });
-    expect(checkbox).not.toBeChecked();
+	    // Docker monitoring is disabled by default
+	    const checkbox = screen.getByRole('checkbox', { name: /Docker monitoring/i });
+	    expect(checkbox).not.toBeChecked();
 
     // Enable it
     fireEvent.click(checkbox);

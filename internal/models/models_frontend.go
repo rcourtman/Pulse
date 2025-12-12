@@ -75,6 +75,9 @@ type ContainerFrontend struct {
 	Instance          string                  `json:"instance"`
 	Status            string                  `json:"status"`
 	Type              string                  `json:"type"`
+	// OCI container support (Proxmox VE 9.1+)
+	IsOCI      bool   `json:"isOci,omitempty"`      // True if this is an OCI container
+	OSTemplate string `json:"osTemplate,omitempty"` // Template or OCI image used (e.g., "oci:docker.io/library/alpine:latest")
 	CPU               float64                 `json:"cpu"`
 	CPUs              int                     `json:"cpus"`
 	Memory            *Memory                 `json:"memory,omitempty"` // Full memory object

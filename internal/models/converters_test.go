@@ -267,42 +267,99 @@ func TestVMToFrontend_NegativeNetworkValues(t *testing.T) {
 func TestContainerToFrontend(t *testing.T) {
 	now := time.Now()
 
-	container := Container{
-		ID:          "ct-101",
-		VMID:        101,
-		Name:        "test-ct",
-		Node:        "pve1",
-		Status:      "running",
-		Type:        "lxc",
-		CPU:         0.10,
-		CPUs:        2,
-		Memory:      Memory{Total: 4000000000, Used: 2000000000},
-		Disk:        Disk{Total: 50000000000, Used: 25000000000},
-		NetworkIn:   500000,
-		NetworkOut:  250000,
-		Uptime:      7200,
-		Tags:        []string{"dev", "database"},
-		LastSeen:    now,
-		IPAddresses: []string{"192.168.1.51"},
-	}
+	t.Run("lxc", func(t *testing.T) {
+		container := Container{
+			ID:          "ct-101",
+			VMID:        101,
+			Name:        "test-ct",
+			Node:        "pve1",
+			Status:      "running",
+			Type:        "lxc",
+			CPU:         0.10,
+			CPUs:        2,
+			Memory:      Memory{Total: 4000000000, Used: 2000000000},
+			Disk:        Disk{Total: 50000000000, Used: 25000000000},
+			NetworkIn:   500000,
+			NetworkOut:  250000,
+			Uptime:      7200,
+			Tags:        []string{"dev", "database"},
+			LastSeen:    now,
+			IPAddresses: []string{"192.168.1.51"},
+		}
 
-	frontend := container.ToFrontend()
+		frontend := container.ToFrontend()
 
-	if frontend.ID != container.ID {
-		t.Errorf("ID = %q, want %q", frontend.ID, container.ID)
-	}
-	if frontend.VMID != container.VMID {
-		t.Errorf("VMID = %d, want %d", frontend.VMID, container.VMID)
-	}
-	if frontend.Type != container.Type {
-		t.Errorf("Type = %q, want %q", frontend.Type, container.Type)
-	}
-	if frontend.Tags != "dev,database" {
-		t.Errorf("Tags = %q, want 'dev,database'", frontend.Tags)
-	}
-	if frontend.Memory == nil {
-		t.Error("Memory should not be nil when Total > 0")
-	}
+		if frontend.ID != container.ID {
+			t.Errorf("ID = %q, want %q", frontend.ID, container.ID)
+		}
+		if frontend.VMID != container.VMID {
+			t.Errorf("VMID = %d, want %d", frontend.VMID, container.VMID)
+		}
+		if frontend.Type != container.Type {
+			t.Errorf("Type = %q, want %q", frontend.Type, container.Type)
+		}
+		if frontend.IsOCI {
+			t.Errorf("IsOCI = %v, want false", frontend.IsOCI)
+		}
+		if frontend.Tags != "dev,database" {
+			t.Errorf("Tags = %q, want 'dev,database'", frontend.Tags)
+		}
+		if frontend.Memory == nil {
+			t.Error("Memory should not be nil when Total > 0")
+		}
+	})
+
+	t.Run("oci", func(t *testing.T) {
+		container := Container{
+			ID:         "ct-300",
+			VMID:       300,
+			Name:       "oci-alpine",
+			Node:       "pve1",
+			Status:     "running",
+			Type:       "lxc",
+			IsOCI:      true,
+			OSTemplate: "oci:docker.io/library/alpine:latest",
+			CPU:        0.05,
+			CPUs:       2,
+			Memory:     Memory{Total: 1000000000, Used: 100000000},
+			Disk:       Disk{Total: 10000000000, Used: 1000000000},
+			LastSeen:   now,
+		}
+
+		frontend := container.ToFrontend()
+
+		if frontend.Type != "oci" {
+			t.Errorf("Type = %q, want %q", frontend.Type, "oci")
+		}
+		if !frontend.IsOCI {
+			t.Errorf("IsOCI = %v, want true", frontend.IsOCI)
+		}
+		if frontend.OSTemplate != container.OSTemplate {
+			t.Errorf("OSTemplate = %q, want %q", frontend.OSTemplate, container.OSTemplate)
+		}
+	})
+
+	t.Run("oci-derived-from-type", func(t *testing.T) {
+		container := Container{
+			ID:       "ct-301",
+			VMID:     301,
+			Name:     "oci-from-type",
+			Node:     "pve1",
+			Status:   "running",
+			Type:     "oci",
+			IsOCI:    false,
+			LastSeen: now,
+		}
+
+		frontend := container.ToFrontend()
+
+		if frontend.Type != "oci" {
+			t.Errorf("Type = %q, want %q", frontend.Type, "oci")
+		}
+		if !frontend.IsOCI {
+			t.Errorf("IsOCI = %v, want true", frontend.IsOCI)
+		}
+	})
 }
 
 func TestDockerContainerToFrontend(t *testing.T) {

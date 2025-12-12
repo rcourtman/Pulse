@@ -53,16 +53,20 @@ type VMPlatformData struct {
 }
 
 // ContainerPlatformData contains Proxmox LXC container-specific fields.
-// Stored in Resource.PlatformData when Type is ResourceTypeContainer.
+// Stored in Resource.PlatformData when Type is ResourceTypeContainer or ResourceTypeOCIContainer.
 type ContainerPlatformData struct {
 	VMID        int      `json:"vmid"`
 	Node        string   `json:"node"`     // Proxmox node hosting this container
 	Instance    string   `json:"instance"` // Proxmox instance URL
+	Type        string   `json:"type,omitempty"`     // lxc or oci
 	CPUs        int      `json:"cpus"`     // Number of vCPUs
 	Template    bool     `json:"template"`
 	Lock        string   `json:"lock,omitempty"`
 	OSName      string   `json:"osName,omitempty"`
 	IPAddresses []string `json:"ipAddresses,omitempty"`
+	// OCI container support (Proxmox VE 9.1+)
+	IsOCI      bool   `json:"isOci,omitempty"`      // True if this is an OCI container
+	OSTemplate string `json:"osTemplate,omitempty"` // Template or OCI image reference if available
 
 	// I/O stats
 	NetworkIn  int64 `json:"networkIn"`

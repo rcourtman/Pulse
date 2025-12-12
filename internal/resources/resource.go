@@ -75,6 +75,7 @@ const (
 	// Compute Workloads - individual running instances
 	ResourceTypeVM              ResourceType = "vm"               // Proxmox VM
 	ResourceTypeContainer       ResourceType = "container"        // LXC container
+	ResourceTypeOCIContainer    ResourceType = "oci-container"    // OCI container (Proxmox VE 9.1+)
 	ResourceTypeDockerContainer ResourceType = "docker-container" // Docker container
 	ResourceTypePod             ResourceType = "pod"              // Kubernetes pod
 	ResourceTypeJail            ResourceType = "jail"             // BSD jail / TrueNAS jail
@@ -201,7 +202,7 @@ func (r *Resource) IsInfrastructure() bool {
 // rather than infrastructure.
 func (r *Resource) IsWorkload() bool {
 	switch r.Type {
-	case ResourceTypeVM, ResourceTypeContainer, ResourceTypeDockerContainer, ResourceTypePod, ResourceTypeJail:
+	case ResourceTypeVM, ResourceTypeContainer, ResourceTypeOCIContainer, ResourceTypeDockerContainer, ResourceTypePod, ResourceTypeJail:
 		return true
 	default:
 		return false

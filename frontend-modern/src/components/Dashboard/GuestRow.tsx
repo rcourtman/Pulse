@@ -571,9 +571,15 @@ export function GuestRow(props: GuestRowProps) {
   const agentVersion = createMemo(() => props.guest.agentVersion?.trim() ?? '');
   const hasOsInfo = createMemo(() => osName().length > 0 || osVersion().length > 0);
 
+  const isOCIContainer = createMemo(() => {
+    if (isVM(props.guest)) return false;
+    const container = props.guest as Container;
+    return props.guest.type === 'oci' || container.isOci === true;
+  });
+
   // OCI image info - extract clean image name from osTemplate (similar to Docker container image display)
   const ociImage = createMemo(() => {
-    if (props.guest.type !== 'oci') return null;
+    if (!isOCIContainer()) return null;
     const template = (props.guest as Container).osTemplate;
     if (!template) return null;
     // Strip common prefixes to get clean image reference
@@ -903,19 +909,19 @@ export function GuestRow(props: GuestRowProps) {
             <span
               class={`inline-block px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${props.guest.type === 'qemu'
                 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                : props.guest.type === 'oci'
+                : isOCIContainer()
                   ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
                   : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
                 }`}
               title={
                 isVM(props.guest)
                   ? 'Virtual Machine'
-                  : props.guest.type === 'oci'
+                  : isOCIContainer()
                     ? `OCI Container${ociImage() ? ` • ${ociImage()}` : ''}`
                     : 'LXC Container'
               }
             >
-              {isVM(props.guest) ? 'VM' : props.guest.type === 'oci' ? 'OCI' : 'LXC'}
+              {isVM(props.guest) ? 'VM' : isOCIContainer() ? 'OCI' : 'LXC'}
             </span>
           </div>
         </td>

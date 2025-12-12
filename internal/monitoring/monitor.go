@@ -5517,6 +5517,22 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		return false
 	}
 
+	// Seed OCI classification from previous state so we never "downgrade" to LXC
+	// if container config fetching intermittently fails (permissions or transient API errors).
+	prevState := m.GetState()
+	prevContainerIsOCI := make(map[int]bool)
+	for _, ct := range prevState.Containers {
+		if ct.Instance != instanceName {
+			continue
+		}
+		if ct.VMID <= 0 {
+			continue
+		}
+		if ct.Type == "oci" || ct.IsOCI {
+			prevContainerIsOCI[ct.VMID] = true
+		}
+	}
+
 	var allVMs []models.VM
 	var allContainers []models.Container
 
@@ -6160,6 +6176,11 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				LastSeen:   time.Now(),
 			}
 
+			if prevContainerIsOCI[container.VMID] {
+				container.IsOCI = true
+				container.Type = "oci"
+			}
+
 			// Parse tags
 			if res.Tags != "" {
 				container.Tags = strings.Split(res.Tags, ";")
@@ -6179,6 +6200,25 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 
 			m.enrichContainerMetadata(ctx, client, instanceName, res.Node, &container)
 
+			// For non-running containers, zero out resource usage metrics to prevent false alerts.
+			// Proxmox may report stale or residual metrics for stopped containers.
+			if container.Status != "running" {
+				log.Debug().
+					Str("container", container.Name).
+					Str("status", container.Status).
+					Float64("originalCpu", container.CPU).
+					Float64("originalMemUsage", container.Memory.Usage).
+					Msg("Non-running container detected - zeroing metrics")
+
+				container.CPU = 0
+				container.Memory.Usage = 0
+				container.Disk.Usage = 0
+				container.NetworkIn = 0
+				container.NetworkOut = 0
+				container.DiskRead = 0
+				container.DiskWrite = 0
+			}
+
 			allContainers = append(allContainers, container)
 
 			m.recordGuestSnapshot(instanceName, container.Type, res.Node, res.VMID, GuestMemorySnapshot{
@@ -6190,26 +6230,6 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				Raw:          guestRaw,
 			})
 
-			// For non-running containers, zero out resource usage metrics to prevent false alerts
-			// Proxmox may report stale or residual metrics for stopped containers
-			if container.Status != "running" {
-				log.Debug().
-					Str("container", container.Name).
-					Str("status", container.Status).
-					Float64("originalCpu", container.CPU).
-					Float64("originalMemUsage", container.Memory.Usage).
-					Msg("Non-running container detected - zeroing metrics")
-
-				// Zero out all usage metrics for stopped/paused containers
-				container.CPU = 0
-				container.Memory.Usage = 0
-				container.Disk.Usage = 0
-				container.NetworkIn = 0
-				container.NetworkOut = 0
-				container.DiskRead = 0
-				container.DiskWrite = 0
-			}
-
 			// Check thresholds for alerts
 			m.alertManager.CheckGuest(container, instanceName)
 		}
@@ -6218,8 +6238,6 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	// Preserve VMs and containers from nodes within grace period
 	// The cluster/resources endpoint doesn't return VMs/containers from nodes Proxmox considers offline,
 	// but we want to keep showing them if the node is within grace period
-	prevState := m.GetState()
-
 	// Count previous resources for this instance
 	prevVMCount := 0
 	prevContainerCount := 0
@@ -8015,6 +8033,17 @@ func persistGuestIdentity(metadataStore *config.GuestMetadataStore, guestKey, na
 			ID:   guestKey,
 			Tags: []string{},
 		}
+	}
+
+	guestType = strings.TrimSpace(guestType)
+	if guestType == "" {
+		return
+	}
+
+	// Never "downgrade" OCI containers back to LXC. OCI classification can be transiently
+	// unavailable if Proxmox config reads fail due to permissions or transient API errors.
+	if existing.LastKnownType == "oci" && guestType != "oci" {
+		guestType = existing.LastKnownType
 	}
 
 	// Only update if the name or type has changed

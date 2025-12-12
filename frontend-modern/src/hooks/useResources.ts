@@ -304,8 +304,16 @@ export function useResourcesAsLegacy() {
             return wsStore.state.containers ?? [];
         }
 
-        return byType('container').map(r => {
+        // Include both traditional LXC containers and OCI containers (Proxmox VE 9.1+).
+        const containerResources = [...byType('container'), ...byType('oci-container')];
+
+        return containerResources.map(r => {
             const platformData = r.platformData as Record<string, unknown> | undefined;
+            const isOCI =
+                r.type === 'oci-container' ||
+                platformData?.isOci === true ||
+                platformData?.type === 'oci';
+            const legacyType = isOCI ? 'oci' : ((platformData?.type as string) ?? 'lxc');
             return {
                 id: r.id,
                 vmid: platformData?.vmid as number ?? parseInt(r.id.split('-').pop() ?? '0', 10),
@@ -313,7 +321,9 @@ export function useResourcesAsLegacy() {
                 node: platformData?.node as string ?? '',
                 instance: platformData?.instance as string ?? r.platformId,
                 status: r.status === 'running' ? 'running' : 'stopped',
-                type: (platformData?.type as string) ?? 'lxc', // Preserve oci/lxc type from backend
+                type: legacyType,
+                isOci: isOCI,
+                osTemplate: platformData?.osTemplate as string | undefined,
                 cpu: (r.cpu?.current ?? 0) / 100, // Convert from percentage to ratio for Dashboard
                 cpus: platformData?.cpus as number ?? 1,
                 memory: r.memory ? {

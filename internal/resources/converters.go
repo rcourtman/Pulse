@@ -219,11 +219,14 @@ func FromContainer(ct models.Container) Resource {
 		VMID:        ct.VMID,
 		Node:        ct.Node,
 		Instance:    ct.Instance,
+		Type:        ct.Type,
 		CPUs:        ct.CPUs,
 		Template:    ct.Template,
 		Lock:        ct.Lock,
 		OSName:      ct.OSName,
 		IPAddresses: ct.IPAddresses,
+		IsOCI:       ct.IsOCI || strings.EqualFold(strings.TrimSpace(ct.Type), "oci"),
+		OSTemplate:  ct.OSTemplate,
 		NetworkIn:   ct.NetworkIn,
 		NetworkOut:  ct.NetworkOut,
 		DiskRead:    ct.DiskRead,
@@ -235,9 +238,14 @@ func FromContainer(ct models.Container) Resource {
 	// Parent is the node - format matches Node.ID: instance-nodename
 	parentID := fmt.Sprintf("%s-%s", ct.Instance, ct.Node)
 
+	resourceType := ResourceTypeContainer
+	if platformData.IsOCI {
+		resourceType = ResourceTypeOCIContainer
+	}
+
 	return Resource{
 		ID:           ct.ID,
-		Type:         ResourceTypeContainer,
+		Type:         resourceType,
 		Name:         ct.Name,
 		PlatformID:   ct.Instance,
 		PlatformType: PlatformProxmoxPVE,

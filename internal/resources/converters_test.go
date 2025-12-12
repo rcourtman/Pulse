@@ -199,47 +199,99 @@ func TestFromVM(t *testing.T) {
 }
 
 func TestFromContainer(t *testing.T) {
-	ct := models.Container{
-		ID:       "pve1/lxc/101",
-		VMID:     101,
-		Name:     "database",
-		Node:     "node1",
-		Instance: "pve1",
-		Status:   "stopped",
-		Type:     "lxc",
-		CPU:      0.0,
-		CPUs:     2,
-		Memory: models.Memory{
-			Total: 4 * 1024 * 1024 * 1024,
-			Used:  0,
-			Free:  4 * 1024 * 1024 * 1024,
-			Usage: 0.0,
-		},
-		Uptime:      0,
-		Tags:        []string{"database"},
-		IPAddresses: []string{"192.168.1.50"},
-		LastSeen:    time.Now(),
-	}
+	now := time.Now()
 
-	r := FromContainer(ct)
+	t.Run("lxc", func(t *testing.T) {
+		ct := models.Container{
+			ID:       "pve1/lxc/101",
+			VMID:     101,
+			Name:     "database",
+			Node:     "node1",
+			Instance: "pve1",
+			Status:   "stopped",
+			Type:     "lxc",
+			CPU:      0.0,
+			CPUs:     2,
+			Memory: models.Memory{
+				Total: 4 * 1024 * 1024 * 1024,
+				Used:  0,
+				Free:  4 * 1024 * 1024 * 1024,
+				Usage: 0.0,
+			},
+			Uptime:      0,
+			Tags:        []string{"database"},
+			IPAddresses: []string{"192.168.1.50"},
+			LastSeen:    now,
+		}
 
-	if r.Type != ResourceTypeContainer {
-		t.Errorf("Expected type %s, got %s", ResourceTypeContainer, r.Type)
-	}
-	if r.Status != StatusStopped {
-		t.Errorf("Expected status %s, got %s", StatusStopped, r.Status)
-	}
-	if r.ParentID != "pve1-node1" {
-		t.Errorf("Expected parent pve1-node1, got %s", r.ParentID)
-	}
+		r := FromContainer(ct)
 
-	var pd ContainerPlatformData
-	if err := r.GetPlatformData(&pd); err != nil {
-		t.Fatalf("Failed to get platform data: %v", err)
-	}
-	if len(pd.IPAddresses) != 1 || pd.IPAddresses[0] != "192.168.1.50" {
-		t.Errorf("Expected IP 192.168.1.50, got %v", pd.IPAddresses)
-	}
+		if r.Type != ResourceTypeContainer {
+			t.Errorf("Expected type %s, got %s", ResourceTypeContainer, r.Type)
+		}
+		if r.Status != StatusStopped {
+			t.Errorf("Expected status %s, got %s", StatusStopped, r.Status)
+		}
+		if r.ParentID != "pve1-node1" {
+			t.Errorf("Expected parent pve1-node1, got %s", r.ParentID)
+		}
+
+		var pd ContainerPlatformData
+		if err := r.GetPlatformData(&pd); err != nil {
+			t.Fatalf("Failed to get platform data: %v", err)
+		}
+		if pd.Type != "lxc" {
+			t.Errorf("Expected platformData type lxc, got %q", pd.Type)
+		}
+		if pd.IsOCI {
+			t.Errorf("Expected IsOCI false, got %v", pd.IsOCI)
+		}
+		if len(pd.IPAddresses) != 1 || pd.IPAddresses[0] != "192.168.1.50" {
+			t.Errorf("Expected IP 192.168.1.50, got %v", pd.IPAddresses)
+		}
+	})
+
+	t.Run("oci", func(t *testing.T) {
+		ct := models.Container{
+			ID:         "pve1/lxc/300",
+			VMID:       300,
+			Name:       "oci-alpine",
+			Node:       "node1",
+			Instance:   "pve1",
+			Status:     "running",
+			Type:       "oci",
+			IsOCI:      true,
+			OSTemplate: "oci:docker.io/library/alpine:latest",
+			CPU:        0.01,
+			CPUs:       1,
+			Memory: models.Memory{
+				Total: 1024 * 1024 * 1024,
+				Used:  128 * 1024 * 1024,
+				Free:  896 * 1024 * 1024,
+				Usage: 12.5,
+			},
+			LastSeen: now,
+		}
+
+		r := FromContainer(ct)
+		if r.Type != ResourceTypeOCIContainer {
+			t.Errorf("Expected type %s, got %s", ResourceTypeOCIContainer, r.Type)
+		}
+
+		var pd ContainerPlatformData
+		if err := r.GetPlatformData(&pd); err != nil {
+			t.Fatalf("Failed to get platform data: %v", err)
+		}
+		if !pd.IsOCI {
+			t.Errorf("Expected IsOCI true, got %v", pd.IsOCI)
+		}
+		if pd.Type != "oci" {
+			t.Errorf("Expected platformData type oci, got %q", pd.Type)
+		}
+		if pd.OSTemplate != ct.OSTemplate {
+			t.Errorf("Expected OSTemplate %q, got %q", ct.OSTemplate, pd.OSTemplate)
+		}
+	})
 }
 
 func TestFromHost(t *testing.T) {
