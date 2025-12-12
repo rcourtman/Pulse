@@ -359,9 +359,7 @@ export const HostsFilter: Component<HostsFilterProps> = (props) => {
               Offline
             </button>
           </div>
-        </div>
 
-        <div class="flex flex-wrap items-center gap-2">
           <Show when={props.activeHostName}>
             <div class="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
               <span>Host: {props.activeHostName}</span>
