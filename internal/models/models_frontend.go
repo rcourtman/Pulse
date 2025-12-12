@@ -68,16 +68,16 @@ type VMFrontend struct {
 
 // ContainerFrontend represents a Container with frontend-friendly field names
 type ContainerFrontend struct {
-	ID                string                  `json:"id"`
-	VMID              int                     `json:"vmid"`
-	Name              string                  `json:"name"`
-	Node              string                  `json:"node"`
-	Instance          string                  `json:"instance"`
-	Status            string                  `json:"status"`
-	Type              string                  `json:"type"`
+	ID       string `json:"id"`
+	VMID     int    `json:"vmid"`
+	Name     string `json:"name"`
+	Node     string `json:"node"`
+	Instance string `json:"instance"`
+	Status   string `json:"status"`
+	Type     string `json:"type"`
 	// OCI container support (Proxmox VE 9.1+)
-	IsOCI      bool   `json:"isOci,omitempty"`      // True if this is an OCI container
-	OSTemplate string `json:"osTemplate,omitempty"` // Template or OCI image used (e.g., "oci:docker.io/library/alpine:latest")
+	IsOCI             bool                    `json:"isOci,omitempty"`      // True if this is an OCI container
+	OSTemplate        string                  `json:"osTemplate,omitempty"` // Template or OCI image used (e.g., "oci:docker.io/library/alpine:latest")
 	CPU               float64                 `json:"cpu"`
 	CPUs              int                     `json:"cpus"`
 	Memory            *Memory                 `json:"memory,omitempty"` // Full memory object
@@ -142,6 +142,98 @@ type DockerHostFrontend struct {
 type RemovedDockerHostFrontend struct {
 	ID          string `json:"id"`
 	Hostname    string `json:"hostname,omitempty"`
+	DisplayName string `json:"displayName,omitempty"`
+	RemovedAt   int64  `json:"removedAt"`
+}
+
+// KubernetesClusterFrontend represents a Kubernetes cluster for the frontend.
+type KubernetesClusterFrontend struct {
+	ID                string `json:"id"`
+	AgentID           string `json:"agentId"`
+	Name              string `json:"name,omitempty"`
+	DisplayName       string `json:"displayName,omitempty"`
+	CustomDisplayName string `json:"customDisplayName,omitempty"`
+	Server            string `json:"server,omitempty"`
+	Context           string `json:"context,omitempty"`
+	Version           string `json:"version,omitempty"`
+	Status            string `json:"status"`
+	LastSeen          int64  `json:"lastSeen"`
+	IntervalSeconds   int    `json:"intervalSeconds"`
+	AgentVersion      string `json:"agentVersion,omitempty"`
+	TokenID           string `json:"tokenId,omitempty"`
+	TokenName         string `json:"tokenName,omitempty"`
+	TokenHint         string `json:"tokenHint,omitempty"`
+	TokenLastUsedAt   *int64 `json:"tokenLastUsedAt,omitempty"`
+	Hidden            bool   `json:"hidden"`
+	PendingUninstall  bool   `json:"pendingUninstall"`
+
+	Nodes       []KubernetesNodeFrontend       `json:"nodes,omitempty"`
+	Pods        []KubernetesPodFrontend        `json:"pods,omitempty"`
+	Deployments []KubernetesDeploymentFrontend `json:"deployments,omitempty"`
+}
+
+type KubernetesNodeFrontend struct {
+	UID                     string   `json:"uid"`
+	Name                    string   `json:"name"`
+	Ready                   bool     `json:"ready"`
+	Unschedulable           bool     `json:"unschedulable,omitempty"`
+	KubeletVersion          string   `json:"kubeletVersion,omitempty"`
+	ContainerRuntimeVersion string   `json:"containerRuntimeVersion,omitempty"`
+	OSImage                 string   `json:"osImage,omitempty"`
+	KernelVersion           string   `json:"kernelVersion,omitempty"`
+	Architecture            string   `json:"architecture,omitempty"`
+	CapacityCPU             int64    `json:"capacityCpuCores,omitempty"`
+	CapacityMemoryBytes     int64    `json:"capacityMemoryBytes,omitempty"`
+	CapacityPods            int64    `json:"capacityPods,omitempty"`
+	AllocCPU                int64    `json:"allocatableCpuCores,omitempty"`
+	AllocMemoryBytes        int64    `json:"allocatableMemoryBytes,omitempty"`
+	AllocPods               int64    `json:"allocatablePods,omitempty"`
+	Roles                   []string `json:"roles,omitempty"`
+}
+
+type KubernetesPodFrontend struct {
+	UID        string                           `json:"uid"`
+	Name       string                           `json:"name"`
+	Namespace  string                           `json:"namespace"`
+	NodeName   string                           `json:"nodeName,omitempty"`
+	Phase      string                           `json:"phase,omitempty"`
+	Reason     string                           `json:"reason,omitempty"`
+	Message    string                           `json:"message,omitempty"`
+	QoSClass   string                           `json:"qosClass,omitempty"`
+	CreatedAt  int64                            `json:"createdAt,omitempty"`
+	StartTime  *int64                           `json:"startTime,omitempty"`
+	Restarts   int                              `json:"restarts,omitempty"`
+	Labels     map[string]string                `json:"labels,omitempty"`
+	OwnerKind  string                           `json:"ownerKind,omitempty"`
+	OwnerName  string                           `json:"ownerName,omitempty"`
+	Containers []KubernetesPodContainerFrontend `json:"containers,omitempty"`
+}
+
+type KubernetesPodContainerFrontend struct {
+	Name         string `json:"name"`
+	Image        string `json:"image,omitempty"`
+	Ready        bool   `json:"ready"`
+	RestartCount int32  `json:"restartCount,omitempty"`
+	State        string `json:"state,omitempty"`
+	Reason       string `json:"reason,omitempty"`
+	Message      string `json:"message,omitempty"`
+}
+
+type KubernetesDeploymentFrontend struct {
+	UID               string            `json:"uid"`
+	Name              string            `json:"name"`
+	Namespace         string            `json:"namespace"`
+	DesiredReplicas   int32             `json:"desiredReplicas,omitempty"`
+	UpdatedReplicas   int32             `json:"updatedReplicas,omitempty"`
+	ReadyReplicas     int32             `json:"readyReplicas,omitempty"`
+	AvailableReplicas int32             `json:"availableReplicas,omitempty"`
+	Labels            map[string]string `json:"labels,omitempty"`
+}
+
+// RemovedKubernetesClusterFrontend represents a blocked kubernetes cluster entry for the frontend.
+type RemovedKubernetesClusterFrontend struct {
+	ID          string `json:"id"`
+	Name        string `json:"name,omitempty"`
 	DisplayName string `json:"displayName,omitempty"`
 	RemovedAt   int64  `json:"removedAt"`
 }
@@ -426,29 +518,31 @@ type ReplicationJobFrontend struct {
 
 // StateFrontend represents the state with frontend-friendly field names
 type StateFrontend struct {
-	Nodes                        []NodeFrontend              `json:"nodes"`
-	VMs                          []VMFrontend                `json:"vms"`
-	Containers                   []ContainerFrontend         `json:"containers"`
-	DockerHosts                  []DockerHostFrontend        `json:"dockerHosts"`
-	RemovedDockerHosts           []RemovedDockerHostFrontend `json:"removedDockerHosts"`
-	Hosts                        []HostFrontend              `json:"hosts"`
-	Storage                      []StorageFrontend           `json:"storage"`
-	CephClusters                 []CephClusterFrontend       `json:"cephClusters"`
-	PhysicalDisks                []PhysicalDisk              `json:"physicalDisks"`
-	PBS                          []PBSInstance               `json:"pbs"` // Keep as is
-	PMG                          []PMGInstance               `json:"pmg"`
-	PBSBackups                   []PBSBackup                 `json:"pbsBackups"`
-	PMGBackups                   []PMGBackup                 `json:"pmgBackups"`
-	Backups                      Backups                     `json:"backups"`
-	ReplicationJobs              []ReplicationJobFrontend    `json:"replicationJobs"`
-	ActiveAlerts                 []Alert                     `json:"activeAlerts"`                 // Active alerts
-	Metrics                      map[string]any              `json:"metrics"`                      // Empty object for now
-	PVEBackups                   PVEBackups                  `json:"pveBackups"`                   // Keep as is
-	Performance                  map[string]any              `json:"performance"`                  // Empty object for now
-	ConnectionHealth             map[string]bool             `json:"connectionHealth"`             // Keep as is
-	Stats                        map[string]any              `json:"stats"`                        // Empty object for now
-	LastUpdate                   int64                       `json:"lastUpdate"`                   // Unix timestamp
-	TemperatureMonitoringEnabled bool                        `json:"temperatureMonitoringEnabled"` // Global temperature monitoring setting
+	Nodes                        []NodeFrontend                     `json:"nodes"`
+	VMs                          []VMFrontend                       `json:"vms"`
+	Containers                   []ContainerFrontend                `json:"containers"`
+	DockerHosts                  []DockerHostFrontend               `json:"dockerHosts"`
+	RemovedDockerHosts           []RemovedDockerHostFrontend        `json:"removedDockerHosts"`
+	KubernetesClusters           []KubernetesClusterFrontend        `json:"kubernetesClusters,omitempty"`
+	RemovedKubernetesClusters    []RemovedKubernetesClusterFrontend `json:"removedKubernetesClusters,omitempty"`
+	Hosts                        []HostFrontend                     `json:"hosts"`
+	Storage                      []StorageFrontend                  `json:"storage"`
+	CephClusters                 []CephClusterFrontend              `json:"cephClusters"`
+	PhysicalDisks                []PhysicalDisk                     `json:"physicalDisks"`
+	PBS                          []PBSInstance                      `json:"pbs"` // Keep as is
+	PMG                          []PMGInstance                      `json:"pmg"`
+	PBSBackups                   []PBSBackup                        `json:"pbsBackups"`
+	PMGBackups                   []PMGBackup                        `json:"pmgBackups"`
+	Backups                      Backups                            `json:"backups"`
+	ReplicationJobs              []ReplicationJobFrontend           `json:"replicationJobs"`
+	ActiveAlerts                 []Alert                            `json:"activeAlerts"`                 // Active alerts
+	Metrics                      map[string]any                     `json:"metrics"`                      // Empty object for now
+	PVEBackups                   PVEBackups                         `json:"pveBackups"`                   // Keep as is
+	Performance                  map[string]any                     `json:"performance"`                  // Empty object for now
+	ConnectionHealth             map[string]bool                    `json:"connectionHealth"`             // Keep as is
+	Stats                        map[string]any                     `json:"stats"`                        // Empty object for now
+	LastUpdate                   int64                              `json:"lastUpdate"`                   // Unix timestamp
+	TemperatureMonitoringEnabled bool                               `json:"temperatureMonitoringEnabled"` // Global temperature monitoring setting
 	// Unified resources - the new way to access all monitored entities
 	Resources []ResourceFrontend `json:"resources,omitempty"`
 }
@@ -481,9 +575,9 @@ type ResourceFrontend struct {
 	Uptime      *int64                   `json:"uptime,omitempty"`
 
 	// Metadata
-	Tags     []string          `json:"tags,omitempty"`
-	Labels   map[string]string `json:"labels,omitempty"`
-	LastSeen int64             `json:"lastSeen"` // Unix milliseconds
+	Tags     []string                `json:"tags,omitempty"`
+	Labels   map[string]string       `json:"labels,omitempty"`
+	LastSeen int64                   `json:"lastSeen"` // Unix milliseconds
 	Alerts   []ResourceAlertFrontend `json:"alerts,omitempty"`
 
 	// Identity for deduplication

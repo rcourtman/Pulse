@@ -1,6 +1,6 @@
 # Pulse Unified Agent
 
-The unified agent (`pulse-agent`) combines host and Docker monitoring into a single binary. It replaces the separate `pulse-host-agent` and `pulse-docker-agent` for simpler deployment and management.
+The unified agent (`pulse-agent`) combines host, Docker, and Kubernetes monitoring into a single binary. It replaces the separate `pulse-host-agent` and `pulse-docker-agent` for simpler deployment and management.
 
 ## Quick Start
 
@@ -29,6 +29,7 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 
 - **Host Metrics**: CPU, memory, disk, network I/O, temperatures
 - **Docker Monitoring**: Container metrics, health checks, Swarm support (when enabled)
+- **Kubernetes Monitoring**: Cluster, node, pod, and deployment health (when enabled)
 - **Auto-Update**: Automatically updates when a new version is released
 - **Multi-Platform**: Linux, macOS, Windows support
 
@@ -41,6 +42,13 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 | `--interval` | `PULSE_INTERVAL` | Reporting interval | `30s` |
 | `--enable-host` | `PULSE_ENABLE_HOST` | Enable host metrics | `true` |
 | `--enable-docker` | `PULSE_ENABLE_DOCKER` | Enable Docker metrics | `false` |
+| `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Enable Kubernetes metrics | `false` |
+| `--kubeconfig` | `PULSE_KUBECONFIG` | Kubeconfig path (optional) | *(auto)* |
+| `--kube-context` | `PULSE_KUBE_CONTEXT` | Kubeconfig context (optional) | *(auto)* |
+| `--kube-include-namespace` | `PULSE_KUBE_INCLUDE_NAMESPACES` | Limit namespaces (repeatable or CSV) | *(all)* |
+| `--kube-exclude-namespace` | `PULSE_KUBE_EXCLUDE_NAMESPACES` | Exclude namespaces (repeatable or CSV) | *(none)* |
+| `--kube-include-all-pods` | `PULSE_KUBE_INCLUDE_ALL_PODS` | Include all non-succeeded pods | `false` |
+| `--kube-max-pods` | `PULSE_KUBE_MAX_PODS` | Max pods per report | `200` |
 | `--disable-auto-update` | `PULSE_DISABLE_AUTO_UPDATE` | Disable auto-updates | `false` |
 | `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
 | `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
@@ -59,6 +67,12 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
   bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-docker
+```
+
+### Host + Kubernetes Monitoring
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-kubernetes
 ```
 
 ### Docker Monitoring Only

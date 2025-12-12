@@ -8,6 +8,8 @@ export interface State {
   containers: Container[];
   dockerHosts: DockerHost[];
   removedDockerHosts?: RemovedDockerHost[];
+  kubernetesClusters?: KubernetesCluster[];
+  removedKubernetesClusters?: RemovedKubernetesCluster[];
   hosts: Host[];
   replicationJobs: ReplicationJob[];
   storage: Storage[];
@@ -34,6 +36,34 @@ export interface State {
 export interface RemovedDockerHost {
   id: string;
   hostname?: string;
+  displayName?: string;
+  removedAt: number;
+}
+
+export interface KubernetesCluster {
+  id: string;
+  agentId: string;
+  name?: string;
+  displayName?: string;
+  customDisplayName?: string;
+  server?: string;
+  context?: string;
+  version?: string;
+  status: string;
+  lastSeen: number;
+  intervalSeconds: number;
+  agentVersion?: string;
+  tokenId?: string;
+  tokenName?: string;
+  tokenHint?: string;
+  tokenLastUsedAt?: number;
+  hidden?: boolean;
+  pendingUninstall?: boolean;
+}
+
+export interface RemovedKubernetesCluster {
+  id: string;
+  name?: string;
   displayName?: string;
   removedAt: number;
 }

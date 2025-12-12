@@ -187,16 +187,10 @@ export const Sparkline: Component<SparklineProps> = (props) => {
 
   // Redraw when data or dimensions change
   createEffect(() => {
-    // Read reactive values to track dependencies
-    // This ensures the effect re-runs when data, metric, or dimensions change
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _data = props.data;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _metric = props.metric;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _w = width();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _h = height();
+    void props.data;
+    void props.metric;
+    void width();
+    void height();
 
     // Unregister previous draw callback if it exists
     if (unregister) {

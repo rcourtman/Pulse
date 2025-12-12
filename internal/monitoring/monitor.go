@@ -602,7 +602,7 @@ type Monitor struct {
 	startTime                  time.Time
 	rateTracker                *RateTracker
 	metricsHistory             *MetricsHistory
-	metricsStore               *metrics.Store            // Persistent SQLite metrics storage
+	metricsStore               *metrics.Store // Persistent SQLite metrics storage
 	alertManager               *alerts.Manager
 	notificationMgr            *notifications.NotificationManager
 	configPersist              *config.ConfigPersistence
@@ -626,6 +626,8 @@ type Monitor struct {
 	nodeRRDMemCache            map[string]rrdMemCacheEntry
 	removedDockerHosts         map[string]time.Time // Track deliberately removed Docker hosts (ID -> removal time)
 	dockerTokenBindings        map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
+	removedKubernetesClusters  map[string]time.Time // Track deliberately removed Kubernetes clusters (ID -> removal time)
+	kubernetesTokenBindings    map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
 	hostTokenBindings          map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
 	dockerCommands             map[string]*dockerHostCommand
 	dockerCommandIndex         map[string]string
@@ -651,7 +653,7 @@ type Monitor struct {
 	instanceInfoCache        map[string]*instanceInfo
 	pollStatusMap            map[string]*pollStatus
 	dlqInsightMap            map[string]*dlqInsight
-	nodeLastOnline           map[string]time.Time // Track last time each node was seen online (for grace period)
+	nodeLastOnline           map[string]time.Time   // Track last time each node was seen online (for grace period)
 	resourceStore            ResourceStoreInterface // Optional unified resource store for polling optimization
 }
 
@@ -917,17 +919,21 @@ func (m *Monitor) shouldRunBackupPoll(last time.Time, now time.Time) (bool, stri
 }
 
 const (
-	dockerConnectionPrefix       = "docker-"
-	hostConnectionPrefix         = "host-"
-	dockerOfflineGraceMultiplier = 4
-	dockerMinimumHealthWindow    = 30 * time.Second
-	dockerMaximumHealthWindow    = 10 * time.Minute
-	hostOfflineGraceMultiplier   = 6
-	hostMinimumHealthWindow      = 60 * time.Second
-	hostMaximumHealthWindow      = 10 * time.Minute
-	nodeOfflineGracePeriod       = 60 * time.Second // Grace period before marking Proxmox nodes offline
-	nodeRRDCacheTTL              = 30 * time.Second
-	nodeRRDRequestTimeout        = 2 * time.Second
+	dockerConnectionPrefix           = "docker-"
+	kubernetesConnectionPrefix       = "kubernetes-"
+	hostConnectionPrefix             = "host-"
+	dockerOfflineGraceMultiplier     = 4
+	dockerMinimumHealthWindow        = 30 * time.Second
+	dockerMaximumHealthWindow        = 10 * time.Minute
+	kubernetesOfflineGraceMultiplier = 4
+	kubernetesMinimumHealthWindow    = 30 * time.Second
+	kubernetesMaximumHealthWindow    = 10 * time.Minute
+	hostOfflineGraceMultiplier       = 6
+	hostMinimumHealthWindow          = 60 * time.Second
+	hostMaximumHealthWindow          = 10 * time.Minute
+	nodeOfflineGracePeriod           = 60 * time.Second // Grace period before marking Proxmox nodes offline
+	nodeRRDCacheTTL                  = 30 * time.Second
+	nodeRRDRequestTimeout            = 2 * time.Second
 )
 
 type taskOutcome struct {
@@ -1766,20 +1772,20 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	// Record Docker HOST metrics for sparkline charts
 	now := time.Now()
 	hostMetricKey := fmt.Sprintf("dockerHost:%s", host.ID)
-	
+
 	// Record host CPU usage
 	m.metricsHistory.AddGuestMetric(hostMetricKey, "cpu", host.CPUUsage, now)
-	
+
 	// Record host Memory usage
 	m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
-	
+
 	// Record host Disk usage (use first disk or calculate total)
 	var hostDiskPercent float64
 	if len(host.Disks) > 0 {
 		hostDiskPercent = host.Disks[0].Usage
 	}
 	m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
-	
+
 	// Also write to persistent SQLite store
 	if m.metricsStore != nil {
 		m.metricsStore.Write("dockerHost", host.ID, "cpu", host.CPUUsage, now)
@@ -1795,13 +1801,13 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		}
 		// Build a unique metric key for Docker containers
 		metricKey := fmt.Sprintf("docker:%s", container.ID)
-		
+
 		// Record CPU (already a percentage 0-100)
 		m.metricsHistory.AddGuestMetric(metricKey, "cpu", container.CPUPercent, now)
-		
+
 		// Record Memory (already a percentage 0-100)
 		m.metricsHistory.AddGuestMetric(metricKey, "memory", container.MemoryPercent, now)
-		
+
 		// Record Disk usage as percentage of writable layer vs root filesystem
 		var diskPercent float64
 		if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
@@ -2875,6 +2881,8 @@ func New(cfg *config.Config) (*Monitor, error) {
 		nodeRRDMemCache:            make(map[string]rrdMemCacheEntry),
 		removedDockerHosts:         make(map[string]time.Time),
 		dockerTokenBindings:        make(map[string]string),
+		removedKubernetesClusters:  make(map[string]time.Time),
+		kubernetesTokenBindings:    make(map[string]string),
 		hostTokenBindings:          make(map[string]string),
 		dockerCommands:             make(map[string]*dockerHostCommand),
 		dockerCommandIndex:         make(map[string]string),
@@ -3518,8 +3526,10 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		case <-pollTicker.C:
 			now := time.Now()
 			m.evaluateDockerAgents(now)
+			m.evaluateKubernetesAgents(now)
 			m.evaluateHostAgents(now)
 			m.cleanupRemovedDockerHosts(now)
+			m.cleanupRemovedKubernetesClusters(now)
 			m.cleanupGuestMetadataCache(now)
 			m.cleanupDiagnosticSnapshots(now)
 			m.cleanupRRDCache(now)
@@ -5098,12 +5108,12 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			// Run physical disk polling in background to avoid blocking the main task
 			go func(inst string, pveClient PVEClientInterface, nodeList []proxmox.Node, nodeStatus map[string]string, modelNodesCopy []models.Node) {
 				defer recoverFromPanic(fmt.Sprintf("pollPhysicalDisks-%s", inst))
-				
+
 				// Use a generous timeout for disk polling
 				diskTimeout := 60 * time.Second
 				diskCtx, diskCancel := context.WithTimeout(context.Background(), diskTimeout)
 				defer diskCancel()
-				
+
 				log.Debug().
 					Int("nodeCount", len(nodeList)).
 					Dur("interval", pollingInterval).
@@ -5131,7 +5141,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 						return
 					default:
 					}
-					
+
 					// Skip offline nodes but preserve their existing disk data
 					if nodeStatus[node.Node] != "online" {
 						log.Debug().Str("node", node.Node).Msg("Skipping disk poll for offline node - preserving existing data")
@@ -5418,12 +5428,12 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		default:
 			go func(inst string, pveClient PVEClientInterface, nodeList []proxmox.Node) {
 				defer recoverFromPanic(fmt.Sprintf("pollStorageWithNodes-%s", inst))
-				
+
 				// Use a generous timeout for storage polling - it's not blocking the main task
 				storageTimeout := 60 * time.Second
 				storageCtx, storageCancel := context.WithTimeout(context.Background(), storageTimeout)
 				defer storageCancel()
-				
+
 				m.pollStorageWithNodes(storageCtx, inst, pveClient, nodeList)
 			}(instanceName, client, nodes)
 		}
@@ -7455,11 +7465,11 @@ func (m *Monitor) shouldSkipNodeMetrics(nodeName string) bool {
 	m.mu.RLock()
 	store := m.resourceStore
 	m.mu.RUnlock()
-	
+
 	if store == nil {
 		return false
 	}
-	
+
 	should := store.ShouldSkipAPIPolling(nodeName)
 	if should {
 		log.Debug().
@@ -7475,12 +7485,12 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	m.mu.RLock()
 	store := m.resourceStore
 	m.mu.RUnlock()
-	
+
 	if store == nil {
 		log.Debug().Msg("[Resources] No resource store configured, skipping population")
 		return
 	}
-	
+
 	log.Debug().
 		Int("nodes", len(state.Nodes)).
 		Int("vms", len(state.VMs)).
@@ -7488,7 +7498,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 		Int("hosts", len(state.Hosts)).
 		Int("dockerHosts", len(state.DockerHosts)).
 		Msg("[Resources] Populating resource store from state snapshot")
-	
+
 	store.PopulateFromSnapshot(state)
 }
 
@@ -7498,18 +7508,18 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 	m.mu.RLock()
 	store := m.resourceStore
 	m.mu.RUnlock()
-	
+
 	if store == nil {
 		log.Debug().Msg("[Resources] No store for broadcast")
 		return nil
 	}
-	
+
 	allResources := store.GetAll()
 	log.Debug().Int("count", len(allResources)).Msg("[Resources] Got resources for broadcast")
 	if len(allResources) == 0 {
 		return nil
 	}
-	
+
 	result := make([]models.ResourceFrontend, len(allResources))
 	for i, r := range allResources {
 		input := models.ResourceConvertInput{
@@ -7529,7 +7539,7 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 			Labels:       r.Labels,
 			LastSeenUnix: r.LastSeen.UnixMilli(),
 		}
-		
+
 		// Convert metrics
 		if r.CPU != nil {
 			input.CPU = &models.ResourceMetricInput{
@@ -7560,7 +7570,7 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 			input.NetworkRX = r.Network.RXBytes
 			input.NetworkTX = r.Network.TXBytes
 		}
-		
+
 		// Convert alerts
 		if len(r.Alerts) > 0 {
 			input.Alerts = make([]models.ResourceAlertInput, len(r.Alerts))
@@ -7576,7 +7586,7 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 				}
 			}
 		}
-		
+
 		// Convert identity
 		if r.Identity != nil {
 			input.Identity = &models.ResourceIdentityInput{
@@ -7585,7 +7595,7 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 				IPs:       r.Identity.IPs,
 			}
 		}
-		
+
 		// Convert platform data from json.RawMessage to map
 		if len(r.PlatformData) > 0 {
 			var platformMap map[string]any
@@ -7593,10 +7603,10 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 				input.PlatformData = platformMap
 			}
 		}
-		
+
 		result[i] = models.ConvertResourceToFrontend(input)
 	}
-	
+
 	return result
 }
 

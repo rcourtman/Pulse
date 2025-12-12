@@ -35,13 +35,13 @@ type Resource struct {
 	ClusterID string `json:"clusterId,omitempty"` // Cluster membership
 
 	// Universal Metrics (nullable - not all resources have all metrics)
-	Status      ResourceStatus `json:"status"`               // online, offline, running, stopped, degraded
-	CPU         *MetricValue   `json:"cpu,omitempty"`        // CPU usage percentage
-	Memory      *MetricValue   `json:"memory,omitempty"`     // Memory usage
-	Disk        *MetricValue   `json:"disk,omitempty"`       // Primary disk usage
-	Network     *NetworkMetric `json:"network,omitempty"`    // Network I/O
+	Status      ResourceStatus `json:"status"`                // online, offline, running, stopped, degraded
+	CPU         *MetricValue   `json:"cpu,omitempty"`         // CPU usage percentage
+	Memory      *MetricValue   `json:"memory,omitempty"`      // Memory usage
+	Disk        *MetricValue   `json:"disk,omitempty"`        // Primary disk usage
+	Network     *NetworkMetric `json:"network,omitempty"`     // Network I/O
 	Temperature *float64       `json:"temperature,omitempty"` // Temperature in Celsius
-	Uptime      *int64         `json:"uptime,omitempty"`     // Uptime in seconds
+	Uptime      *int64         `json:"uptime,omitempty"`      // Uptime in seconds
 
 	// Universal Metadata
 	Tags     []string          `json:"tags,omitempty"`
@@ -69,6 +69,7 @@ const (
 	ResourceTypeNode       ResourceType = "node"        // Proxmox VE node
 	ResourceTypeHost       ResourceType = "host"        // Standalone host (via host-agent)
 	ResourceTypeDockerHost ResourceType = "docker-host" // Docker/Podman host
+	ResourceTypeK8sCluster ResourceType = "k8s-cluster" // Kubernetes cluster
 	ResourceTypeK8sNode    ResourceType = "k8s-node"    // Kubernetes node
 	ResourceTypeTrueNAS    ResourceType = "truenas"     // TrueNAS system
 
@@ -148,8 +149,8 @@ type NetworkMetric struct {
 // ResourceAlert represents an alert associated with a resource.
 type ResourceAlert struct {
 	ID        string    `json:"id"`
-	Type      string    `json:"type"`      // cpu, memory, disk, temperature, etc.
-	Level     string    `json:"level"`     // warning, critical
+	Type      string    `json:"type"`  // cpu, memory, disk, temperature, etc.
+	Level     string    `json:"level"` // warning, critical
 	Message   string    `json:"message"`
 	Value     float64   `json:"value"`
 	Threshold float64   `json:"threshold"`
@@ -191,7 +192,7 @@ func (r *Resource) SetPlatformData(v interface{}) error {
 // (node, host, docker-host) rather than a workload (vm, container).
 func (r *Resource) IsInfrastructure() bool {
 	switch r.Type {
-	case ResourceTypeNode, ResourceTypeHost, ResourceTypeDockerHost, ResourceTypeK8sNode, ResourceTypeTrueNAS:
+	case ResourceTypeNode, ResourceTypeHost, ResourceTypeDockerHost, ResourceTypeK8sCluster, ResourceTypeK8sNode, ResourceTypeTrueNAS:
 		return true
 	default:
 		return false

@@ -12,12 +12,12 @@ import (
 type Store struct {
 	mu        sync.RWMutex
 	resources map[string]*Resource // Keyed by Resource.ID
-	
+
 	// Index by identity for deduplication
 	byHostname  map[string][]string // hostname (lower) -> resource IDs
 	byMachineID map[string]string   // machine-id -> resource ID
 	byIP        map[string][]string // IP -> resource IDs
-	
+
 	// Track merged resources (one source is preferred over another)
 	mergedFrom map[string]string // suppressed ID -> preferred ID
 }
@@ -38,14 +38,14 @@ func NewStore() *Store {
 func (s *Store) Upsert(r Resource) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Check for duplicates
 	if r.Identity != nil {
 		if existingID := s.findDuplicate(&r); existingID != "" {
 			// Found a duplicate - determine which to prefer
 			existing := s.resources[existingID]
 			preferred := s.preferredResource(existing, &r)
-			
+
 			if preferred == &r {
 				// New resource is preferred, replace the old one
 				s.removeFromIndexes(existing)
@@ -58,11 +58,11 @@ func (s *Store) Upsert(r Resource) string {
 			}
 		}
 	}
-	
+
 	// Add/update the resource
 	s.resources[r.ID] = &r
 	s.addToIndexes(&r)
-	
+
 	return r.ID
 }
 
@@ -70,13 +70,13 @@ func (s *Store) Upsert(r Resource) string {
 func (s *Store) Get(id string) (*Resource, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	// Check if this ID was merged into another
 	if preferredID, merged := s.mergedFrom[id]; merged {
 		r, ok := s.resources[preferredID]
 		return r, ok
 	}
-	
+
 	r, ok := s.resources[id]
 	return r, ok
 }
@@ -85,7 +85,7 @@ func (s *Store) Get(id string) (*Resource, bool) {
 func (s *Store) GetAll() []Resource {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	result := make([]Resource, 0, len(s.resources))
 	for _, r := range s.resources {
 		result = append(result, *r)
@@ -97,7 +97,7 @@ func (s *Store) GetAll() []Resource {
 func (s *Store) GetByType(t ResourceType) []Resource {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	var result []Resource
 	for _, r := range s.resources {
 		if r.Type == t {
@@ -111,7 +111,7 @@ func (s *Store) GetByType(t ResourceType) []Resource {
 func (s *Store) GetByPlatform(p PlatformType) []Resource {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	var result []Resource
 	for _, r := range s.resources {
 		if r.PlatformType == p {
@@ -125,7 +125,7 @@ func (s *Store) GetByPlatform(p PlatformType) []Resource {
 func (s *Store) GetInfrastructure() []Resource {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	var result []Resource
 	for _, r := range s.resources {
 		if r.IsInfrastructure() {
@@ -139,7 +139,7 @@ func (s *Store) GetInfrastructure() []Resource {
 func (s *Store) GetWorkloads() []Resource {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	var result []Resource
 	for _, r := range s.resources {
 		if r.IsWorkload() {
@@ -153,7 +153,7 @@ func (s *Store) GetWorkloads() []Resource {
 func (s *Store) GetChildren(parentID string) []Resource {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	var result []Resource
 	for _, r := range s.resources {
 		if r.ParentID == parentID {
@@ -170,13 +170,13 @@ func (s *Store) GetChildren(parentID string) []Resource {
 func (s *Store) FindContainerHost(containerNameOrID string) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	if containerNameOrID == "" {
 		return ""
 	}
-	
+
 	containerNameLower := strings.ToLower(containerNameOrID)
-	
+
 	// Find the container
 	var container *Resource
 	for _, r := range s.resources {
@@ -185,24 +185,24 @@ func (s *Store) FindContainerHost(containerNameOrID string) string {
 		}
 		// Match by name or ID (case-insensitive)
 		if strings.EqualFold(r.Name, containerNameOrID) ||
-		   strings.EqualFold(r.ID, containerNameOrID) ||
-		   strings.Contains(strings.ToLower(r.Name), containerNameLower) ||
-		   strings.Contains(strings.ToLower(r.ID), containerNameLower) {
+			strings.EqualFold(r.ID, containerNameOrID) ||
+			strings.Contains(strings.ToLower(r.Name), containerNameLower) ||
+			strings.Contains(strings.ToLower(r.ID), containerNameLower) {
 			container = r
 			break
 		}
 	}
-	
+
 	if container == nil || container.ParentID == "" {
 		return ""
 	}
-	
+
 	// Find the parent DockerHost
 	parent := s.resources[container.ParentID]
 	if parent == nil {
 		return ""
 	}
-	
+
 	// Return the hostname from identity, or the name
 	if parent.Identity != nil && parent.Identity.Hostname != "" {
 		return parent.Identity.Hostname
@@ -210,17 +210,16 @@ func (s *Store) FindContainerHost(containerNameOrID string) string {
 	return parent.Name
 }
 
-
 // Remove removes a resource from the store.
 func (s *Store) Remove(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if r, ok := s.resources[id]; ok {
 		s.removeFromIndexes(r)
 		delete(s.resources, id)
 	}
-	
+
 	// Also clean up any merge references
 	delete(s.mergedFrom, id)
 	for k, v := range s.mergedFrom {
@@ -234,7 +233,7 @@ func (s *Store) Remove(id string) {
 func (s *Store) IsSuppressed(id string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	_, suppressed := s.mergedFrom[id]
 	return suppressed
 }
@@ -243,7 +242,7 @@ func (s *Store) IsSuppressed(id string) bool {
 func (s *Store) GetPreferredID(id string) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	if preferredID, ok := s.mergedFrom[id]; ok {
 		return preferredID
 	}
@@ -254,7 +253,7 @@ func (s *Store) GetPreferredID(id string) string {
 func (s *Store) GetStats() StoreStats {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	stats := StoreStats{
 		TotalResources:      len(s.resources),
 		SuppressedResources: len(s.mergedFrom),
@@ -264,7 +263,7 @@ func (s *Store) GetStats() StoreStats {
 		WithAlerts:          0,
 		LastUpdated:         time.Now().UTC().Format(time.RFC3339),
 	}
-	
+
 	for _, r := range s.resources {
 		stats.ByType[r.Type]++
 		stats.ByPlatform[r.PlatformType]++
@@ -273,19 +272,19 @@ func (s *Store) GetStats() StoreStats {
 			stats.WithAlerts++
 		}
 	}
-	
+
 	return stats
 }
 
 // StoreStats contains statistics about the resource store.
 type StoreStats struct {
-	TotalResources      int                      `json:"totalResources"`
-	SuppressedResources int                      `json:"suppressedResources"`
-	ByType              map[ResourceType]int     `json:"byType"`
-	ByPlatform          map[PlatformType]int     `json:"byPlatform"`
-	ByStatus            map[ResourceStatus]int   `json:"byStatus"`
-	WithAlerts          int                      `json:"withAlerts"`
-	LastUpdated         string                   `json:"lastUpdated"`
+	TotalResources      int                    `json:"totalResources"`
+	SuppressedResources int                    `json:"suppressedResources"`
+	ByType              map[ResourceType]int   `json:"byType"`
+	ByPlatform          map[PlatformType]int   `json:"byPlatform"`
+	ByStatus            map[ResourceStatus]int `json:"byStatus"`
+	WithAlerts          int                    `json:"withAlerts"`
+	LastUpdated         string                 `json:"lastUpdated"`
 }
 
 // GetPreferredResourceFor returns the preferred resource for a given ID.
@@ -294,14 +293,14 @@ type StoreStats struct {
 func (s *Store) GetPreferredResourceFor(resourceID string) *Resource {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	// Check if this ID was merged
 	if preferredID, merged := s.mergedFrom[resourceID]; merged {
 		if r, ok := s.resources[preferredID]; ok {
 			return r
 		}
 	}
-	
+
 	// Return the resource itself if it exists
 	if r, ok := s.resources[resourceID]; ok {
 		return r
@@ -314,23 +313,23 @@ func (s *Store) GetPreferredResourceFor(resourceID string) *Resource {
 func (s *Store) IsSamePhysicalMachine(id1, id2 string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	// Check if they're literally the same
 	if id1 == id2 {
 		return true
 	}
-	
+
 	// Check if both map to the same preferred resource
 	preferred1 := id1
 	if pid, merged := s.mergedFrom[id1]; merged {
 		preferred1 = pid
 	}
-	
+
 	preferred2 := id2
 	if pid, merged := s.mergedFrom[id2]; merged {
 		preferred2 = pid
 	}
-	
+
 	return preferred1 == preferred2
 }
 
@@ -341,16 +340,16 @@ func (s *Store) HasPreferredSourceForHostname(hostname string) bool {
 	if hostname == "" {
 		return false
 	}
-	
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	hostnameLower := strings.ToLower(hostname)
 	resourceIDs, exists := s.byHostname[hostnameLower]
 	if !exists {
 		return false
 	}
-	
+
 	// Check if any resource with this hostname has a preferred source type
 	for _, id := range resourceIDs {
 		if r, ok := s.resources[id]; ok {
@@ -360,7 +359,7 @@ func (s *Store) HasPreferredSourceForHostname(hostname string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -369,7 +368,7 @@ func (s *Store) HasPreferredSourceForHostname(hostname string) bool {
 // These methods help reduce redundant API polling when agents are active
 // ============================================================================
 
-// ShouldSkipAPIPolling returns true if API polling should be skipped for the 
+// ShouldSkipAPIPolling returns true if API polling should be skipped for the
 // given hostname because an agent is providing richer, more frequent data.
 // This is useful for reducing load when both Proxmox API and host agents monitor
 // the same machine.
@@ -383,10 +382,10 @@ func (s *Store) ShouldSkipAPIPolling(hostname string) bool {
 func (s *Store) GetAgentMonitoredHostnames() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	var hostnames []string
 	seen := make(map[string]bool)
-	
+
 	for _, r := range s.resources {
 		if r.SourceType != SourceAgent && r.SourceType != SourceHybrid {
 			continue
@@ -400,7 +399,7 @@ func (s *Store) GetAgentMonitoredHostnames() []string {
 			hostnames = append(hostnames, r.Identity.Hostname)
 		}
 	}
-	
+
 	return hostnames
 }
 
@@ -412,15 +411,15 @@ func (s *Store) GetAgentMonitoredHostnames() []string {
 func (s *Store) GetPollingRecommendations() map[string]float64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	recommendations := make(map[string]float64)
-	
+
 	for _, r := range s.resources {
 		if r.Identity == nil || r.Identity.Hostname == "" {
 			continue
 		}
 		hostname := strings.ToLower(r.Identity.Hostname)
-		
+
 		switch r.SourceType {
 		case SourceAgent:
 			// Agent provides all data - skip API polling for metrics
@@ -431,7 +430,7 @@ func (s *Store) GetPollingRecommendations() map[string]float64 {
 			recommendations[hostname] = 0.5 // Poll at half frequency
 		}
 	}
-	
+
 	return recommendations
 }
 
@@ -441,7 +440,7 @@ func (s *Store) findDuplicate(r *Resource) string {
 	if r.Identity == nil {
 		return ""
 	}
-	
+
 	// 1. Machine ID match (most reliable) - but only for same type
 	// A node and host agent on the same machine should coexist as different data sources
 	if r.Identity.MachineID != "" && r.IsInfrastructure() {
@@ -453,7 +452,7 @@ func (s *Store) findDuplicate(r *Resource) string {
 			}
 		}
 	}
-	
+
 	// 2. Hostname match (case-insensitive) - only for same infrastructure type
 	// Workloads (VMs, containers) can have duplicate names across clusters
 	if r.Identity.Hostname != "" && r.IsInfrastructure() {
@@ -471,7 +470,7 @@ func (s *Store) findDuplicate(r *Resource) string {
 			}
 		}
 	}
-	
+
 	// 3. IP overlap (if same non-localhost IP, likely same machine) - only for same infrastructure type
 	if r.IsInfrastructure() {
 		for _, ip := range r.Identity.IPs {
@@ -491,7 +490,7 @@ func (s *Store) findDuplicate(r *Resource) string {
 			}
 		}
 	}
-	
+
 	return ""
 }
 
@@ -501,14 +500,14 @@ func (s *Store) preferredResource(a, b *Resource) *Resource {
 	// Prefer agent over API
 	aScore := s.sourceScore(a.SourceType)
 	bScore := s.sourceScore(b.SourceType)
-	
+
 	if aScore > bScore {
 		return a
 	}
 	if bScore > aScore {
 		return b
 	}
-	
+
 	// Same source type - prefer the one with more recent data
 	if a.LastSeen.After(b.LastSeen) {
 		return a
@@ -533,16 +532,16 @@ func (s *Store) addToIndexes(r *Resource) {
 	if r.Identity == nil {
 		return
 	}
-	
+
 	if r.Identity.MachineID != "" {
 		s.byMachineID[r.Identity.MachineID] = r.ID
 	}
-	
+
 	if r.Identity.Hostname != "" {
 		hostnameLower := strings.ToLower(r.Identity.Hostname)
 		s.byHostname[hostnameLower] = append(s.byHostname[hostnameLower], r.ID)
 	}
-	
+
 	for _, ip := range r.Identity.IPs {
 		if !isNonUniqueIP(ip) {
 			s.byIP[ip] = append(s.byIP[ip], r.ID)
@@ -554,13 +553,13 @@ func (s *Store) removeFromIndexes(r *Resource) {
 	if r.Identity == nil {
 		return
 	}
-	
+
 	if r.Identity.MachineID != "" {
 		if s.byMachineID[r.Identity.MachineID] == r.ID {
 			delete(s.byMachineID, r.Identity.MachineID)
 		}
 	}
-	
+
 	if r.Identity.Hostname != "" {
 		hostnameLower := strings.ToLower(r.Identity.Hostname)
 		s.byHostname[hostnameLower] = removeFromSlice(s.byHostname[hostnameLower], r.ID)
@@ -568,7 +567,7 @@ func (s *Store) removeFromIndexes(r *Resource) {
 			delete(s.byHostname, hostnameLower)
 		}
 	}
-	
+
 	for _, ip := range r.Identity.IPs {
 		s.byIP[ip] = removeFromSlice(s.byIP[ip], r.ID)
 		if len(s.byIP[ip]) == 0 {
@@ -594,20 +593,20 @@ func isNonUniqueIP(ip string) bool {
 	if ip == "127.0.0.1" || ip == "::1" || strings.HasPrefix(ip, "127.") {
 		return true
 	}
-	
+
 	// Docker bridge network - 172.17.0.1/16 exists on every Docker host
 	// Also filter other Docker-assigned bridge networks (172.17-31.x.x)
-	if strings.HasPrefix(ip, "172.17.") || strings.HasPrefix(ip, "172.18.") || 
-	   strings.HasPrefix(ip, "172.19.") || strings.HasPrefix(ip, "172.20.") ||
-	   strings.HasPrefix(ip, "172.21.") || strings.HasPrefix(ip, "172.22.") {
+	if strings.HasPrefix(ip, "172.17.") || strings.HasPrefix(ip, "172.18.") ||
+		strings.HasPrefix(ip, "172.19.") || strings.HasPrefix(ip, "172.20.") ||
+		strings.HasPrefix(ip, "172.21.") || strings.HasPrefix(ip, "172.22.") {
 		return true
 	}
-	
+
 	// Link-local addresses (fe80::)
 	if strings.HasPrefix(strings.ToLower(ip), "fe80:") {
 		return true
 	}
-	
+
 	return false
 }
 
@@ -615,10 +614,10 @@ func isNonUniqueIP(ip string) bool {
 func (s *Store) MarkStale(threshold time.Duration) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	now := time.Now()
 	var staleIDs []string
-	
+
 	for id, r := range s.resources {
 		if now.Sub(r.LastSeen) > threshold {
 			// Mark as offline/degraded
@@ -628,7 +627,7 @@ func (s *Store) MarkStale(threshold time.Duration) []string {
 			}
 		}
 	}
-	
+
 	return staleIDs
 }
 
@@ -636,10 +635,10 @@ func (s *Store) MarkStale(threshold time.Duration) []string {
 func (s *Store) PruneStale(staleThreshold, removeThreshold time.Duration) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	now := time.Now()
 	var removedIDs []string
-	
+
 	for id, r := range s.resources {
 		if now.Sub(r.LastSeen) > removeThreshold {
 			s.removeFromIndexes(r)
@@ -647,7 +646,7 @@ func (s *Store) PruneStale(staleThreshold, removeThreshold time.Duration) []stri
 			removedIDs = append(removedIDs, id)
 		}
 	}
-	
+
 	return removedIDs
 }
 
@@ -658,17 +657,17 @@ func (s *Store) Query() *ResourceQuery {
 
 // ResourceQuery provides a fluent query interface.
 type ResourceQuery struct {
-	store       *Store
-	types       []ResourceType
-	platforms   []PlatformType
-	statuses    []ResourceStatus
-	parentID    *string
-	clusterID   *string
-	hasAlerts   *bool
-	sortBy      string
-	sortDesc    bool
-	limit       int
-	offset      int
+	store     *Store
+	types     []ResourceType
+	platforms []PlatformType
+	statuses  []ResourceStatus
+	parentID  *string
+	clusterID *string
+	hasAlerts *bool
+	sortBy    string
+	sortDesc  bool
+	limit     int
+	offset    int
 }
 
 // OfType filters by resource types.
@@ -731,17 +730,17 @@ func (q *ResourceQuery) Offset(n int) *ResourceQuery {
 func (q *ResourceQuery) Execute() []Resource {
 	q.store.mu.RLock()
 	defer q.store.mu.RUnlock()
-	
+
 	var results []Resource
-	
+
 	for _, r := range q.store.resources {
 		if q.matches(r) {
 			results = append(results, *r)
 		}
 	}
-	
+
 	// TODO: Implement sorting
-	
+
 	// Apply pagination
 	if q.offset > 0 {
 		if q.offset >= len(results) {
@@ -749,11 +748,11 @@ func (q *ResourceQuery) Execute() []Resource {
 		}
 		results = results[q.offset:]
 	}
-	
+
 	if q.limit > 0 && q.limit < len(results) {
 		results = results[:q.limit]
 	}
-	
+
 	return results
 }
 
@@ -761,7 +760,7 @@ func (q *ResourceQuery) Execute() []Resource {
 func (q *ResourceQuery) Count() int {
 	q.store.mu.RLock()
 	defer q.store.mu.RUnlock()
-	
+
 	count := 0
 	for _, r := range q.store.resources {
 		if q.matches(r) {
@@ -785,7 +784,7 @@ func (q *ResourceQuery) matches(r *Resource) bool {
 			return false
 		}
 	}
-	
+
 	// Platform filter
 	if len(q.platforms) > 0 {
 		found := false
@@ -799,7 +798,7 @@ func (q *ResourceQuery) matches(r *Resource) bool {
 			return false
 		}
 	}
-	
+
 	// Status filter
 	if len(q.statuses) > 0 {
 		found := false
@@ -813,22 +812,22 @@ func (q *ResourceQuery) matches(r *Resource) bool {
 			return false
 		}
 	}
-	
+
 	// Parent filter
 	if q.parentID != nil && r.ParentID != *q.parentID {
 		return false
 	}
-	
+
 	// Cluster filter
 	if q.clusterID != nil && r.ClusterID != *q.clusterID {
 		return false
 	}
-	
+
 	// Alerts filter
 	if q.hasAlerts != nil && *q.hasAlerts && len(r.Alerts) == 0 {
 		return false
 	}
-	
+
 	return true
 }
 
@@ -842,7 +841,7 @@ func (q *ResourceQuery) matches(r *Resource) bool {
 func (s *Store) GetTopByCPU(limit int, types []ResourceType) []Resource {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	var resources []Resource
 	for _, r := range s.resources {
 		if r.CPU == nil || r.CPU.Current == 0 {
@@ -862,7 +861,7 @@ func (s *Store) GetTopByCPU(limit int, types []ResourceType) []Resource {
 		}
 		resources = append(resources, *r)
 	}
-	
+
 	// Sort by CPU usage descending
 	for i := 0; i < len(resources)-1; i++ {
 		for j := i + 1; j < len(resources); j++ {
@@ -871,7 +870,7 @@ func (s *Store) GetTopByCPU(limit int, types []ResourceType) []Resource {
 			}
 		}
 	}
-	
+
 	if limit > 0 && limit < len(resources) {
 		return resources[:limit]
 	}
@@ -883,7 +882,7 @@ func (s *Store) GetTopByCPU(limit int, types []ResourceType) []Resource {
 func (s *Store) GetTopByMemory(limit int, types []ResourceType) []Resource {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	var resources []Resource
 	for _, r := range s.resources {
 		if r.Memory == nil || r.Memory.Current == 0 {
@@ -903,7 +902,7 @@ func (s *Store) GetTopByMemory(limit int, types []ResourceType) []Resource {
 		}
 		resources = append(resources, *r)
 	}
-	
+
 	// Sort by memory usage descending
 	for i := 0; i < len(resources)-1; i++ {
 		for j := i + 1; j < len(resources); j++ {
@@ -912,7 +911,7 @@ func (s *Store) GetTopByMemory(limit int, types []ResourceType) []Resource {
 			}
 		}
 	}
-	
+
 	if limit > 0 && limit < len(resources) {
 		return resources[:limit]
 	}
@@ -924,7 +923,7 @@ func (s *Store) GetTopByMemory(limit int, types []ResourceType) []Resource {
 func (s *Store) GetTopByDisk(limit int, types []ResourceType) []Resource {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	var resources []Resource
 	for _, r := range s.resources {
 		if r.Disk == nil || r.Disk.Current == 0 {
@@ -944,7 +943,7 @@ func (s *Store) GetTopByDisk(limit int, types []ResourceType) []Resource {
 		}
 		resources = append(resources, *r)
 	}
-	
+
 	// Sort by disk usage descending
 	for i := 0; i < len(resources)-1; i++ {
 		for j := i + 1; j < len(resources); j++ {
@@ -953,7 +952,7 @@ func (s *Store) GetTopByDisk(limit int, types []ResourceType) []Resource {
 			}
 		}
 	}
-	
+
 	if limit > 0 && limit < len(resources) {
 		return resources[:limit]
 	}
@@ -965,21 +964,21 @@ func (s *Store) GetTopByDisk(limit int, types []ResourceType) []Resource {
 func (s *Store) GetRelated(resourceID string) map[string][]Resource {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	result := make(map[string][]Resource)
-	
+
 	r, ok := s.resources[resourceID]
 	if !ok {
 		return result
 	}
-	
+
 	// Get parent
 	if r.ParentID != "" {
 		if parent, ok := s.resources[r.ParentID]; ok {
 			result["parent"] = []Resource{*parent}
 		}
 	}
-	
+
 	// Get children
 	var children []Resource
 	for _, other := range s.resources {
@@ -990,7 +989,7 @@ func (s *Store) GetRelated(resourceID string) map[string][]Resource {
 	if len(children) > 0 {
 		result["children"] = children
 	}
-	
+
 	// Get siblings (same parent)
 	if r.ParentID != "" {
 		var siblings []Resource
@@ -1003,7 +1002,7 @@ func (s *Store) GetRelated(resourceID string) map[string][]Resource {
 			result["siblings"] = siblings
 		}
 	}
-	
+
 	// Get co-located resources (same cluster)
 	if r.ClusterID != "" {
 		var colocated []Resource
@@ -1016,7 +1015,7 @@ func (s *Store) GetRelated(resourceID string) map[string][]Resource {
 			result["cluster_members"] = colocated
 		}
 	}
-	
+
 	return result
 }
 
@@ -1025,15 +1024,15 @@ func (s *Store) GetRelated(resourceID string) map[string][]Resource {
 func (s *Store) GetResourceSummary() ResourceSummary {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	summary := ResourceSummary{
 		ByType:     make(map[ResourceType]TypeSummary),
 		ByPlatform: make(map[PlatformType]PlatformSummary),
 	}
-	
+
 	for _, r := range s.resources {
 		summary.TotalResources++
-		
+
 		// Count by status
 		switch r.Status {
 		case StatusOnline, StatusRunning:
@@ -1043,12 +1042,12 @@ func (s *Store) GetResourceSummary() ResourceSummary {
 		case StatusOffline, StatusStopped, StatusUnknown:
 			summary.Offline++
 		}
-		
+
 		// Track alerts
 		if len(r.Alerts) > 0 {
 			summary.WithAlerts++
 		}
-		
+
 		// Aggregate by type
 		ts := summary.ByType[r.Type]
 		ts.Count++
@@ -1059,13 +1058,13 @@ func (s *Store) GetResourceSummary() ResourceSummary {
 			ts.TotalMemoryPercent += r.MemoryPercent()
 		}
 		summary.ByType[r.Type] = ts
-		
+
 		// Aggregate by platform
 		ps := summary.ByPlatform[r.PlatformType]
 		ps.Count++
 		summary.ByPlatform[r.PlatformType] = ps
 	}
-	
+
 	// Calculate averages
 	for t, ts := range summary.ByType {
 		if ts.Count > 0 {
@@ -1074,7 +1073,7 @@ func (s *Store) GetResourceSummary() ResourceSummary {
 			summary.ByType[t] = ts
 		}
 	}
-	
+
 	return summary
 }
 
@@ -1153,6 +1152,31 @@ func (s *Store) PopulateFromSnapshot(snapshot models.StateSnapshot) {
 		}
 	}
 
+	// Convert Kubernetes clusters and their resources
+	for _, cluster := range snapshot.KubernetesClusters {
+		r := FromKubernetesCluster(cluster)
+		id := s.Upsert(r)
+		seenIDs[id] = true
+
+		for _, node := range cluster.Nodes {
+			r := FromKubernetesNode(node, cluster)
+			id := s.Upsert(r)
+			seenIDs[id] = true
+		}
+
+		for _, pod := range cluster.Pods {
+			r := FromKubernetesPod(pod, cluster)
+			id := s.Upsert(r)
+			seenIDs[id] = true
+		}
+
+		for _, dep := range cluster.Deployments {
+			r := FromKubernetesDeployment(dep, cluster)
+			id := s.Upsert(r)
+			seenIDs[id] = true
+		}
+	}
+
 	// Convert PBS instances
 	for _, pbs := range snapshot.PBSInstances {
 		r := FromPBSInstance(pbs)
@@ -1167,14 +1191,14 @@ func (s *Store) PopulateFromSnapshot(snapshot models.StateSnapshot) {
 		seenIDs[id] = true
 	}
 
-	// Remove resources that were NOT in this snapshot BUT were sourced from API
-	// (Agent-sourced resources like hosts from host-agent should persist independently)
+	// Remove resources that were NOT in this snapshot.
+	// The snapshot is the authoritative source for the in-memory store (including agent-sourced data).
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	var toRemove []string
-	for id, r := range s.resources {
-		if !seenIDs[id] && r.SourceType == SourceAPI {
+	for id := range s.resources {
+		if !seenIDs[id] {
 			toRemove = append(toRemove, id)
 		}
 	}

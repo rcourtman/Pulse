@@ -12,6 +12,7 @@ export type ResourceType =
     | 'node'            // Proxmox VE node
     | 'host'            // Standalone host (via host-agent)
     | 'docker-host'     // Docker/Podman host
+    | 'k8s-cluster'     // Kubernetes cluster
     | 'k8s-node'        // Kubernetes node
     | 'truenas'         // TrueNAS system
     | 'vm'              // Proxmox VM
@@ -134,7 +135,7 @@ export interface Resource {
  * Helper type guards
  */
 export function isInfrastructure(r: Resource): boolean {
-    return ['node', 'host', 'docker-host', 'k8s-node', 'truenas'].includes(r.type);
+    return ['node', 'host', 'docker-host', 'k8s-cluster', 'k8s-node', 'truenas'].includes(r.type);
 }
 
 export function isWorkload(r: Resource): boolean {

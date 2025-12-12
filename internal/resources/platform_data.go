@@ -56,10 +56,10 @@ type VMPlatformData struct {
 // Stored in Resource.PlatformData when Type is ResourceTypeContainer or ResourceTypeOCIContainer.
 type ContainerPlatformData struct {
 	VMID        int      `json:"vmid"`
-	Node        string   `json:"node"`     // Proxmox node hosting this container
-	Instance    string   `json:"instance"` // Proxmox instance URL
-	Type        string   `json:"type,omitempty"`     // lxc or oci
-	CPUs        int      `json:"cpus"`     // Number of vCPUs
+	Node        string   `json:"node"`           // Proxmox node hosting this container
+	Instance    string   `json:"instance"`       // Proxmox instance URL
+	Type        string   `json:"type,omitempty"` // lxc or oci
+	CPUs        int      `json:"cpus"`           // Number of vCPUs
 	Template    bool     `json:"template"`
 	Lock        string   `json:"lock,omitempty"`
 	OSName      string   `json:"osName,omitempty"`
@@ -81,20 +81,20 @@ type ContainerPlatformData struct {
 // HostPlatformData contains host-agent specific fields.
 // Stored in Resource.PlatformData when Type is ResourceTypeHost.
 type HostPlatformData struct {
-	Platform      string              `json:"platform,omitempty"`      // linux, windows, darwin
-	OSName        string              `json:"osName,omitempty"`        // e.g., "Ubuntu 22.04"
-	OSVersion     string              `json:"osVersion,omitempty"`     // OS version string
-	KernelVersion string              `json:"kernelVersion,omitempty"` // Kernel version
-	Architecture  string              `json:"architecture,omitempty"`  // amd64, arm64, etc.
-	CPUCount      int                 `json:"cpuCount,omitempty"`      // Number of CPUs
-	LoadAverage   []float64           `json:"loadAverage,omitempty"`   // 1, 5, 15 minute loads
-	AgentVersion  string              `json:"agentVersion,omitempty"`  // Pulse agent version
-	IsLegacy      bool                `json:"isLegacy,omitempty"`      // Legacy agent indicator
-	Sensors       HostSensorSummary   `json:"sensors,omitempty"`       // Temperature/fan sensors
-	RAID          []HostRAIDArray     `json:"raid,omitempty"`          // RAID arrays
-	DiskIO        []DiskIOStats       `json:"diskIO,omitempty"`        // Per-disk I/O stats
-	Disks         []DiskInfo          `json:"disks,omitempty"`         // Disk usage info
-	Interfaces    []NetworkInterface  `json:"interfaces,omitempty"`    // Network interfaces
+	Platform      string             `json:"platform,omitempty"`      // linux, windows, darwin
+	OSName        string             `json:"osName,omitempty"`        // e.g., "Ubuntu 22.04"
+	OSVersion     string             `json:"osVersion,omitempty"`     // OS version string
+	KernelVersion string             `json:"kernelVersion,omitempty"` // Kernel version
+	Architecture  string             `json:"architecture,omitempty"`  // amd64, arm64, etc.
+	CPUCount      int                `json:"cpuCount,omitempty"`      // Number of CPUs
+	LoadAverage   []float64          `json:"loadAverage,omitempty"`   // 1, 5, 15 minute loads
+	AgentVersion  string             `json:"agentVersion,omitempty"`  // Pulse agent version
+	IsLegacy      bool               `json:"isLegacy,omitempty"`      // Legacy agent indicator
+	Sensors       HostSensorSummary  `json:"sensors,omitempty"`       // Temperature/fan sensors
+	RAID          []HostRAIDArray    `json:"raid,omitempty"`          // RAID arrays
+	DiskIO        []DiskIOStats      `json:"diskIO,omitempty"`        // Per-disk I/O stats
+	Disks         []DiskInfo         `json:"disks,omitempty"`         // Disk usage info
+	Interfaces    []NetworkInterface `json:"interfaces,omitempty"`    // Network interfaces
 
 	// Token information
 	TokenID         string     `json:"tokenId,omitempty"`
@@ -136,14 +136,14 @@ type HostRAIDDevice struct {
 
 // DiskIOStats captures I/O statistics for a disk device.
 type DiskIOStats struct {
-	Device     string `json:"device"`
-	ReadBytes  uint64 `json:"readBytes,omitempty"`
-	WriteBytes uint64 `json:"writeBytes,omitempty"`
-	ReadOps    uint64 `json:"readOps,omitempty"`
-	WriteOps   uint64 `json:"writeOps,omitempty"`
-	ReadTimeMs uint64 `json:"readTimeMs,omitempty"`
+	Device      string `json:"device"`
+	ReadBytes   uint64 `json:"readBytes,omitempty"`
+	WriteBytes  uint64 `json:"writeBytes,omitempty"`
+	ReadOps     uint64 `json:"readOps,omitempty"`
+	WriteOps    uint64 `json:"writeOps,omitempty"`
+	ReadTimeMs  uint64 `json:"readTimeMs,omitempty"`
 	WriteTimeMs uint64 `json:"writeTimeMs,omitempty"`
-	IOTimeMs   uint64 `json:"ioTimeMs,omitempty"`
+	IOTimeMs    uint64 `json:"ioTimeMs,omitempty"`
 }
 
 // DiskInfo represents disk/partition usage.
@@ -170,23 +170,23 @@ type NetworkInterface struct {
 // DockerHostPlatformData contains Docker host-specific fields.
 // Stored in Resource.PlatformData when Type is ResourceTypeDockerHost.
 type DockerHostPlatformData struct {
-	AgentID            string             `json:"agentId"`
-	MachineID          string             `json:"machineId,omitempty"`
-	OS                 string             `json:"os,omitempty"`
-	KernelVersion      string             `json:"kernelVersion,omitempty"`
-	Architecture       string             `json:"architecture,omitempty"`
-	Runtime            string             `json:"runtime,omitempty"`    // docker, podman
-	RuntimeVersion     string             `json:"runtimeVersion,omitempty"`
-	DockerVersion      string             `json:"dockerVersion,omitempty"`
-	LoadAverage        []float64          `json:"loadAverage,omitempty"`
-	AgentVersion       string             `json:"agentVersion,omitempty"`
-	CPUs               int                `json:"cpus"`
-	IsLegacy           bool               `json:"isLegacy,omitempty"`
-	Disks              []DiskInfo         `json:"disks,omitempty"`
-	Interfaces         []NetworkInterface `json:"interfaces,omitempty"`
-	CustomDisplayName  string             `json:"customDisplayName,omitempty"`
-	Hidden             bool               `json:"hidden"`
-	PendingUninstall   bool               `json:"pendingUninstall"`
+	AgentID           string             `json:"agentId"`
+	MachineID         string             `json:"machineId,omitempty"`
+	OS                string             `json:"os,omitempty"`
+	KernelVersion     string             `json:"kernelVersion,omitempty"`
+	Architecture      string             `json:"architecture,omitempty"`
+	Runtime           string             `json:"runtime,omitempty"` // docker, podman
+	RuntimeVersion    string             `json:"runtimeVersion,omitempty"`
+	DockerVersion     string             `json:"dockerVersion,omitempty"`
+	LoadAverage       []float64          `json:"loadAverage,omitempty"`
+	AgentVersion      string             `json:"agentVersion,omitempty"`
+	CPUs              int                `json:"cpus"`
+	IsLegacy          bool               `json:"isLegacy,omitempty"`
+	Disks             []DiskInfo         `json:"disks,omitempty"`
+	Interfaces        []NetworkInterface `json:"interfaces,omitempty"`
+	CustomDisplayName string             `json:"customDisplayName,omitempty"`
+	Hidden            bool               `json:"hidden"`
+	PendingUninstall  bool               `json:"pendingUninstall"`
 
 	// Swarm information
 	Swarm *DockerSwarmInfo `json:"swarm,omitempty"`
@@ -213,23 +213,105 @@ type DockerSwarmInfo struct {
 // DockerContainerPlatformData contains Docker container-specific fields.
 // Stored in Resource.PlatformData when Type is ResourceTypeDockerContainer.
 type DockerContainerPlatformData struct {
-	HostID        string            `json:"hostId"`        // Parent Docker host ID
-	HostName      string            `json:"hostName"`      // Parent Docker host name
-	Image         string            `json:"image"`         // Container image
-	State         string            `json:"state"`         // created, running, paused, restarting, exited, dead
-	Status        string            `json:"status"`        // Human-readable status
-	Health        string            `json:"health"`        // healthy, unhealthy, starting, none
-	RestartCount  int               `json:"restartCount"`
-	ExitCode      int               `json:"exitCode"`
-	CreatedAt     time.Time         `json:"createdAt"`
-	StartedAt     *time.Time        `json:"startedAt,omitempty"`
-	FinishedAt    *time.Time        `json:"finishedAt,omitempty"`
-	Labels        map[string]string `json:"labels,omitempty"`
-	Ports         []ContainerPort   `json:"ports,omitempty"`
-	Networks      []ContainerNetwork `json:"networks,omitempty"`
+	HostID       string             `json:"hostId"`   // Parent Docker host ID
+	HostName     string             `json:"hostName"` // Parent Docker host name
+	Image        string             `json:"image"`    // Container image
+	State        string             `json:"state"`    // created, running, paused, restarting, exited, dead
+	Status       string             `json:"status"`   // Human-readable status
+	Health       string             `json:"health"`   // healthy, unhealthy, starting, none
+	RestartCount int                `json:"restartCount"`
+	ExitCode     int                `json:"exitCode"`
+	CreatedAt    time.Time          `json:"createdAt"`
+	StartedAt    *time.Time         `json:"startedAt,omitempty"`
+	FinishedAt   *time.Time         `json:"finishedAt,omitempty"`
+	Labels       map[string]string  `json:"labels,omitempty"`
+	Ports        []ContainerPort    `json:"ports,omitempty"`
+	Networks     []ContainerNetwork `json:"networks,omitempty"`
 
 	// Podman-specific
 	Podman *PodmanContainerInfo `json:"podman,omitempty"`
+}
+
+// KubernetesClusterPlatformData contains Kubernetes cluster-specific fields.
+// Stored in Resource.PlatformData when Type is ResourceTypeK8sCluster.
+type KubernetesClusterPlatformData struct {
+	AgentID           string `json:"agentId"`
+	Server            string `json:"server,omitempty"`
+	Context           string `json:"context,omitempty"`
+	Version           string `json:"version,omitempty"`
+	CustomDisplayName string `json:"customDisplayName,omitempty"`
+	Hidden            bool   `json:"hidden"`
+	PendingUninstall  bool   `json:"pendingUninstall"`
+
+	NodeCount       int `json:"nodeCount,omitempty"`
+	PodCount        int `json:"podCount,omitempty"`
+	DeploymentCount int `json:"deploymentCount,omitempty"`
+
+	// Token information
+	TokenID         string     `json:"tokenId,omitempty"`
+	TokenName       string     `json:"tokenName,omitempty"`
+	TokenHint       string     `json:"tokenHint,omitempty"`
+	TokenLastUsedAt *time.Time `json:"tokenLastUsedAt,omitempty"`
+}
+
+// KubernetesNodePlatformData contains Kubernetes node-specific fields.
+// Stored in Resource.PlatformData when Type is ResourceTypeK8sNode.
+type KubernetesNodePlatformData struct {
+	ClusterID               string   `json:"clusterId"`
+	Ready                   bool     `json:"ready"`
+	Unschedulable           bool     `json:"unschedulable,omitempty"`
+	KubeletVersion          string   `json:"kubeletVersion,omitempty"`
+	ContainerRuntimeVersion string   `json:"containerRuntimeVersion,omitempty"`
+	OSImage                 string   `json:"osImage,omitempty"`
+	KernelVersion           string   `json:"kernelVersion,omitempty"`
+	Architecture            string   `json:"architecture,omitempty"`
+	CapacityCPUCores        int64    `json:"capacityCpuCores,omitempty"`
+	CapacityMemoryBytes     int64    `json:"capacityMemoryBytes,omitempty"`
+	CapacityPods            int64    `json:"capacityPods,omitempty"`
+	AllocatableCPUCores     int64    `json:"allocatableCpuCores,omitempty"`
+	AllocatableMemoryBytes  int64    `json:"allocatableMemoryBytes,omitempty"`
+	AllocatablePods         int64    `json:"allocatablePods,omitempty"`
+	Roles                   []string `json:"roles,omitempty"`
+}
+
+// KubernetesPodPlatformData contains Kubernetes pod-specific fields.
+// Stored in Resource.PlatformData when Type is ResourceTypePod.
+type KubernetesPodPlatformData struct {
+	ClusterID string `json:"clusterId"`
+	Namespace string `json:"namespace"`
+	NodeName  string `json:"nodeName,omitempty"`
+	Phase     string `json:"phase,omitempty"`
+	Reason    string `json:"reason,omitempty"`
+	Message   string `json:"message,omitempty"`
+	QoSClass  string `json:"qosClass,omitempty"`
+	Restarts  int    `json:"restarts,omitempty"`
+
+	OwnerKind string `json:"ownerKind,omitempty"`
+	OwnerName string `json:"ownerName,omitempty"`
+
+	Containers []KubernetesPodContainerInfo `json:"containers,omitempty"`
+}
+
+// KubernetesPodContainerInfo captures per-container pod status.
+type KubernetesPodContainerInfo struct {
+	Name         string `json:"name"`
+	Image        string `json:"image,omitempty"`
+	Ready        bool   `json:"ready"`
+	RestartCount int32  `json:"restartCount,omitempty"`
+	State        string `json:"state,omitempty"`
+	Reason       string `json:"reason,omitempty"`
+	Message      string `json:"message,omitempty"`
+}
+
+// KubernetesDeploymentPlatformData contains Kubernetes deployment-specific fields.
+// Stored in Resource.PlatformData when Type is ResourceTypeK8sDeployment.
+type KubernetesDeploymentPlatformData struct {
+	ClusterID         string `json:"clusterId"`
+	Namespace         string `json:"namespace"`
+	DesiredReplicas   int32  `json:"desiredReplicas,omitempty"`
+	UpdatedReplicas   int32  `json:"updatedReplicas,omitempty"`
+	ReadyReplicas     int32  `json:"readyReplicas,omitempty"`
+	AvailableReplicas int32  `json:"availableReplicas,omitempty"`
 }
 
 // ContainerPort describes a port mapping.
@@ -280,12 +362,12 @@ type DatastorePlatformData struct {
 // StoragePlatformData contains Proxmox storage-specific fields.
 // Stored in Resource.PlatformData when Type is ResourceTypeStorage.
 type StoragePlatformData struct {
-	Instance  string   `json:"instance"`
-	Node      string   `json:"node"` // Primary node
-	Nodes     []string `json:"nodes,omitempty"` // All nodes (for shared storage)
-	Type      string   `json:"type"`  // zfspool, lvmthin, cephfs, etc.
-	Content   string   `json:"content"`
-	Shared    bool     `json:"shared"`
-	Enabled   bool     `json:"enabled"`
-	Active    bool     `json:"active"`
+	Instance string   `json:"instance"`
+	Node     string   `json:"node"`            // Primary node
+	Nodes    []string `json:"nodes,omitempty"` // All nodes (for shared storage)
+	Type     string   `json:"type"`            // zfspool, lvmthin, cephfs, etc.
+	Content  string   `json:"content"`
+	Shared   bool     `json:"shared"`
+	Enabled  bool     `json:"enabled"`
+	Active   bool     `json:"active"`
 }

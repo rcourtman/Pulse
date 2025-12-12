@@ -4,30 +4,32 @@ import "time"
 
 // StateSnapshot represents a snapshot of the state without mutex
 type StateSnapshot struct {
-	Nodes                        []Node              `json:"nodes"`
-	VMs                          []VM                `json:"vms"`
-	Containers                   []Container         `json:"containers"`
-	DockerHosts                  []DockerHost        `json:"dockerHosts"`
-	RemovedDockerHosts           []RemovedDockerHost `json:"removedDockerHosts"`
-	Hosts                        []Host              `json:"hosts"`
-	Storage                      []Storage           `json:"storage"`
-	CephClusters                 []CephCluster       `json:"cephClusters"`
-	PhysicalDisks                []PhysicalDisk      `json:"physicalDisks"`
-	PBSInstances                 []PBSInstance       `json:"pbs"`
-	PMGInstances                 []PMGInstance       `json:"pmg"`
-	PBSBackups                   []PBSBackup         `json:"pbsBackups"`
-	PMGBackups                   []PMGBackup         `json:"pmgBackups"`
-	Backups                      Backups             `json:"backups"`
-	ReplicationJobs              []ReplicationJob    `json:"replicationJobs"`
-	Metrics                      []Metric            `json:"metrics"`
-	PVEBackups                   PVEBackups          `json:"pveBackups"`
-	Performance                  Performance         `json:"performance"`
-	ConnectionHealth             map[string]bool     `json:"connectionHealth"`
-	Stats                        Stats               `json:"stats"`
-	ActiveAlerts                 []Alert             `json:"activeAlerts"`
-	RecentlyResolved             []ResolvedAlert     `json:"recentlyResolved"`
-	LastUpdate                   time.Time           `json:"lastUpdate"`
-	TemperatureMonitoringEnabled bool                `json:"temperatureMonitoringEnabled"`
+	Nodes                        []Node                     `json:"nodes"`
+	VMs                          []VM                       `json:"vms"`
+	Containers                   []Container                `json:"containers"`
+	DockerHosts                  []DockerHost               `json:"dockerHosts"`
+	RemovedDockerHosts           []RemovedDockerHost        `json:"removedDockerHosts"`
+	KubernetesClusters           []KubernetesCluster        `json:"kubernetesClusters"`
+	RemovedKubernetesClusters    []RemovedKubernetesCluster `json:"removedKubernetesClusters"`
+	Hosts                        []Host                     `json:"hosts"`
+	Storage                      []Storage                  `json:"storage"`
+	CephClusters                 []CephCluster              `json:"cephClusters"`
+	PhysicalDisks                []PhysicalDisk             `json:"physicalDisks"`
+	PBSInstances                 []PBSInstance              `json:"pbs"`
+	PMGInstances                 []PMGInstance              `json:"pmg"`
+	PBSBackups                   []PBSBackup                `json:"pbsBackups"`
+	PMGBackups                   []PMGBackup                `json:"pmgBackups"`
+	Backups                      Backups                    `json:"backups"`
+	ReplicationJobs              []ReplicationJob           `json:"replicationJobs"`
+	Metrics                      []Metric                   `json:"metrics"`
+	PVEBackups                   PVEBackups                 `json:"pveBackups"`
+	Performance                  Performance                `json:"performance"`
+	ConnectionHealth             map[string]bool            `json:"connectionHealth"`
+	Stats                        Stats                      `json:"stats"`
+	ActiveAlerts                 []Alert                    `json:"activeAlerts"`
+	RecentlyResolved             []ResolvedAlert            `json:"recentlyResolved"`
+	LastUpdate                   time.Time                  `json:"lastUpdate"`
+	TemperatureMonitoringEnabled bool                       `json:"temperatureMonitoringEnabled"`
 }
 
 // GetSnapshot returns a snapshot of the current state without mutex
@@ -45,19 +47,21 @@ func (s *State) GetSnapshot() StateSnapshot {
 
 	// Create a snapshot without mutex
 	snapshot := StateSnapshot{
-		Nodes:              append([]Node{}, s.Nodes...),
-		VMs:                append([]VM{}, s.VMs...),
-		Containers:         append([]Container{}, s.Containers...),
-		DockerHosts:        append([]DockerHost{}, s.DockerHosts...),
-		RemovedDockerHosts: append([]RemovedDockerHost{}, s.RemovedDockerHosts...),
-		Hosts:              append([]Host{}, s.Hosts...),
-		Storage:            append([]Storage{}, s.Storage...),
-		CephClusters:       append([]CephCluster{}, s.CephClusters...),
-		PhysicalDisks:      append([]PhysicalDisk{}, s.PhysicalDisks...),
-		PBSInstances:       append([]PBSInstance{}, s.PBSInstances...),
-		PMGInstances:       append([]PMGInstance{}, s.PMGInstances...),
-		PBSBackups:         pbsBackups,
-		PMGBackups:         pmgBackups,
+		Nodes:                     append([]Node{}, s.Nodes...),
+		VMs:                       append([]VM{}, s.VMs...),
+		Containers:                append([]Container{}, s.Containers...),
+		DockerHosts:               append([]DockerHost{}, s.DockerHosts...),
+		RemovedDockerHosts:        append([]RemovedDockerHost{}, s.RemovedDockerHosts...),
+		KubernetesClusters:        append([]KubernetesCluster{}, s.KubernetesClusters...),
+		RemovedKubernetesClusters: append([]RemovedKubernetesCluster{}, s.RemovedKubernetesClusters...),
+		Hosts:                     append([]Host{}, s.Hosts...),
+		Storage:                   append([]Storage{}, s.Storage...),
+		CephClusters:              append([]CephCluster{}, s.CephClusters...),
+		PhysicalDisks:             append([]PhysicalDisk{}, s.PhysicalDisks...),
+		PBSInstances:              append([]PBSInstance{}, s.PBSInstances...),
+		PMGInstances:              append([]PMGInstance{}, s.PMGInstances...),
+		PBSBackups:                pbsBackups,
+		PMGBackups:                pmgBackups,
 		Backups: Backups{
 			PVE: pveBackups,
 			PBS: pbsBackups,
@@ -113,6 +117,16 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 		removedDockerHosts[i] = entry.ToFrontend()
 	}
 
+	kubernetesClusters := make([]KubernetesClusterFrontend, len(s.KubernetesClusters))
+	for i, cluster := range s.KubernetesClusters {
+		kubernetesClusters[i] = cluster.ToFrontend()
+	}
+
+	removedKubernetesClusters := make([]RemovedKubernetesClusterFrontend, len(s.RemovedKubernetesClusters))
+	for i, entry := range s.RemovedKubernetesClusters {
+		removedKubernetesClusters[i] = entry.ToFrontend()
+	}
+
 	hosts := make([]HostFrontend, len(s.Hosts))
 	for i, host := range s.Hosts {
 		hosts[i] = host.ToFrontend()
@@ -141,6 +155,8 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 		Containers:                   containers,
 		DockerHosts:                  dockerHosts,
 		RemovedDockerHosts:           removedDockerHosts,
+		KubernetesClusters:           kubernetesClusters,
+		RemovedKubernetesClusters:    removedKubernetesClusters,
 		Hosts:                        hosts,
 		Storage:                      storage,
 		CephClusters:                 cephClusters,

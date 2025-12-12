@@ -9,6 +9,7 @@
 # Options:
 #   --enable-host       Enable host metrics (default: true)
 #   --enable-docker     Enable docker metrics (default: false)
+#   --enable-kubernetes Enable Kubernetes metrics (default: false)
 #   --interval <dur>    Reporting interval (default: 30s)
 #   --agent-id <id>     Custom agent identifier (default: auto-generated)
 #   --uninstall         Remove the agent
@@ -54,6 +55,7 @@ PULSE_TOKEN=""
 INTERVAL="30s"
 ENABLE_HOST="true"
 ENABLE_DOCKER="false"
+ENABLE_KUBERNETES="false"
 ENABLE_PROXMOX="false"
 PROXMOX_TYPE=""
 UNINSTALL="false"
@@ -85,6 +87,7 @@ build_exec_args() {
         EXEC_ARGS="$EXEC_ARGS --enable-host=false"
     fi
     if [[ "$ENABLE_DOCKER" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-docker"; fi
+    if [[ "$ENABLE_KUBERNETES" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-kubernetes"; fi
     if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-proxmox"; fi
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS="$EXEC_ARGS --proxmox-type ${PROXMOX_TYPE}"; fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
@@ -102,6 +105,7 @@ build_exec_args_array() {
         EXEC_ARGS_ARRAY+=(--enable-host=false)
     fi
     if [[ "$ENABLE_DOCKER" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-docker); fi
+    if [[ "$ENABLE_KUBERNETES" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-kubernetes); fi
     if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-proxmox); fi
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS_ARRAY+=(--proxmox-type "$PROXMOX_TYPE"); fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
@@ -118,6 +122,8 @@ while [[ $# -gt 0 ]]; do
         --disable-host) ENABLE_HOST="false"; shift ;;
         --enable-docker) ENABLE_DOCKER="true"; shift ;;
         --disable-docker) ENABLE_DOCKER="false"; shift ;;
+        --enable-kubernetes) ENABLE_KUBERNETES="true"; shift ;;
+        --disable-kubernetes) ENABLE_KUBERNETES="false"; shift ;;
         --enable-proxmox) ENABLE_PROXMOX="true"; shift ;;
         --proxmox-type) PROXMOX_TYPE="$2"; shift 2 ;;
         --insecure) INSECURE="true"; shift ;;
@@ -405,6 +411,10 @@ if [[ "$OS" == "darwin" ]]; then
     if [[ "$ENABLE_DOCKER" == "true" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
         <string>--enable-docker</string>"
+    fi
+    if [[ "$ENABLE_KUBERNETES" == "true" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--enable-kubernetes</string>"
     fi
     if [[ "$INSECURE" == "true" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
@@ -694,6 +704,7 @@ PULSE_TOKEN=${PULSE_TOKEN}
 PULSE_INTERVAL=${INTERVAL}
 PULSE_ENABLE_HOST=${ENABLE_HOST}
 PULSE_ENABLE_DOCKER=${ENABLE_DOCKER}
+PULSE_ENABLE_KUBERNETES=${ENABLE_KUBERNETES}
 EOF
     chmod 600 "$TRUENAS_ENV_FILE"
 

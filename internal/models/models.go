@@ -11,30 +11,32 @@ import (
 // State represents the current state of all monitored resources
 type State struct {
 	mu                           sync.RWMutex
-	Nodes                        []Node              `json:"nodes"`
-	VMs                          []VM                `json:"vms"`
-	Containers                   []Container         `json:"containers"`
-	DockerHosts                  []DockerHost        `json:"dockerHosts"`
-	RemovedDockerHosts           []RemovedDockerHost `json:"removedDockerHosts"`
-	Hosts                        []Host              `json:"hosts"`
-	Storage                      []Storage           `json:"storage"`
-	CephClusters                 []CephCluster       `json:"cephClusters"`
-	PhysicalDisks                []PhysicalDisk      `json:"physicalDisks"`
-	PBSInstances                 []PBSInstance       `json:"pbs"`
-	PMGInstances                 []PMGInstance       `json:"pmg"`
-	PBSBackups                   []PBSBackup         `json:"pbsBackups"`
-	PMGBackups                   []PMGBackup         `json:"pmgBackups"`
-	Backups                      Backups             `json:"backups"`
-	ReplicationJobs              []ReplicationJob    `json:"replicationJobs"`
-	Metrics                      []Metric            `json:"metrics"`
-	PVEBackups                   PVEBackups          `json:"pveBackups"`
-	Performance                  Performance         `json:"performance"`
-	ConnectionHealth             map[string]bool     `json:"connectionHealth"`
-	Stats                        Stats               `json:"stats"`
-	ActiveAlerts                 []Alert             `json:"activeAlerts"`
-	RecentlyResolved             []ResolvedAlert     `json:"recentlyResolved"`
-	LastUpdate                   time.Time           `json:"lastUpdate"`
-	TemperatureMonitoringEnabled bool                `json:"temperatureMonitoringEnabled"`
+	Nodes                        []Node                     `json:"nodes"`
+	VMs                          []VM                       `json:"vms"`
+	Containers                   []Container                `json:"containers"`
+	DockerHosts                  []DockerHost               `json:"dockerHosts"`
+	RemovedDockerHosts           []RemovedDockerHost        `json:"removedDockerHosts"`
+	KubernetesClusters           []KubernetesCluster        `json:"kubernetesClusters"`
+	RemovedKubernetesClusters    []RemovedKubernetesCluster `json:"removedKubernetesClusters"`
+	Hosts                        []Host                     `json:"hosts"`
+	Storage                      []Storage                  `json:"storage"`
+	CephClusters                 []CephCluster              `json:"cephClusters"`
+	PhysicalDisks                []PhysicalDisk             `json:"physicalDisks"`
+	PBSInstances                 []PBSInstance              `json:"pbs"`
+	PMGInstances                 []PMGInstance              `json:"pmg"`
+	PBSBackups                   []PBSBackup                `json:"pbsBackups"`
+	PMGBackups                   []PMGBackup                `json:"pmgBackups"`
+	Backups                      Backups                    `json:"backups"`
+	ReplicationJobs              []ReplicationJob           `json:"replicationJobs"`
+	Metrics                      []Metric                   `json:"metrics"`
+	PVEBackups                   PVEBackups                 `json:"pveBackups"`
+	Performance                  Performance                `json:"performance"`
+	ConnectionHealth             map[string]bool            `json:"connectionHealth"`
+	Stats                        Stats                      `json:"stats"`
+	ActiveAlerts                 []Alert                    `json:"activeAlerts"`
+	RecentlyResolved             []ResolvedAlert            `json:"recentlyResolved"`
+	LastUpdate                   time.Time                  `json:"lastUpdate"`
+	TemperatureMonitoringEnabled bool                       `json:"temperatureMonitoringEnabled"`
 }
 
 // Alert represents an active alert (simplified for State)
@@ -228,22 +230,22 @@ type HostRAIDDevice struct {
 // HostCephCluster represents Ceph cluster status collected directly by the host agent.
 // This is separate from CephCluster which comes from the Proxmox API.
 type HostCephCluster struct {
-	FSID             string               `json:"fsid"`
-	Health           HostCephHealth       `json:"health"`
-	MonMap           HostCephMonitorMap   `json:"monMap,omitempty"`
-	MgrMap           HostCephManagerMap   `json:"mgrMap,omitempty"`
-	OSDMap           HostCephOSDMap       `json:"osdMap"`
-	PGMap            HostCephPGMap        `json:"pgMap"`
-	Pools            []HostCephPool       `json:"pools,omitempty"`
-	Services         []HostCephService    `json:"services,omitempty"`
-	CollectedAt      time.Time            `json:"collectedAt"`
+	FSID        string             `json:"fsid"`
+	Health      HostCephHealth     `json:"health"`
+	MonMap      HostCephMonitorMap `json:"monMap,omitempty"`
+	MgrMap      HostCephManagerMap `json:"mgrMap,omitempty"`
+	OSDMap      HostCephOSDMap     `json:"osdMap"`
+	PGMap       HostCephPGMap      `json:"pgMap"`
+	Pools       []HostCephPool     `json:"pools,omitempty"`
+	Services    []HostCephService  `json:"services,omitempty"`
+	CollectedAt time.Time          `json:"collectedAt"`
 }
 
 // HostCephHealth represents Ceph cluster health status.
 type HostCephHealth struct {
-	Status  string                    `json:"status"` // HEALTH_OK, HEALTH_WARN, HEALTH_ERR
-	Checks  map[string]HostCephCheck  `json:"checks,omitempty"`
-	Summary []HostCephHealthSummary   `json:"summary,omitempty"`
+	Status  string                   `json:"status"` // HEALTH_OK, HEALTH_WARN, HEALTH_ERR
+	Checks  map[string]HostCephCheck `json:"checks,omitempty"`
+	Summary []HostCephHealthSummary  `json:"summary,omitempty"`
 }
 
 // HostCephCheck represents a health check detail.
@@ -462,6 +464,101 @@ type DockerContainerMount struct {
 	Propagation string `json:"propagation,omitempty"`
 	Name        string `json:"name,omitempty"`
 	Driver      string `json:"driver,omitempty"`
+}
+
+// KubernetesCluster represents a Kubernetes cluster reporting telemetry via the agent.
+type KubernetesCluster struct {
+	ID                string    `json:"id"`
+	AgentID           string    `json:"agentId"`
+	Name              string    `json:"name,omitempty"`
+	DisplayName       string    `json:"displayName,omitempty"`
+	CustomDisplayName string    `json:"customDisplayName,omitempty"`
+	Server            string    `json:"server,omitempty"`
+	Context           string    `json:"context,omitempty"`
+	Version           string    `json:"version,omitempty"`
+	Status            string    `json:"status"`
+	LastSeen          time.Time `json:"lastSeen"`
+	IntervalSeconds   int       `json:"intervalSeconds"`
+	AgentVersion      string    `json:"agentVersion,omitempty"`
+
+	Nodes       []KubernetesNode       `json:"nodes,omitempty"`
+	Pods        []KubernetesPod        `json:"pods,omitempty"`
+	Deployments []KubernetesDeployment `json:"deployments,omitempty"`
+
+	// Token information
+	TokenID         string     `json:"tokenId,omitempty"`
+	TokenName       string     `json:"tokenName,omitempty"`
+	TokenHint       string     `json:"tokenHint,omitempty"`
+	TokenLastUsedAt *time.Time `json:"tokenLastUsedAt,omitempty"`
+
+	Hidden           bool `json:"hidden"`
+	PendingUninstall bool `json:"pendingUninstall"`
+}
+
+// RemovedKubernetesCluster tracks a Kubernetes cluster that was deliberately removed and blocked from reporting.
+type RemovedKubernetesCluster struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name,omitempty"`
+	DisplayName string    `json:"displayName,omitempty"`
+	RemovedAt   time.Time `json:"removedAt"`
+}
+
+type KubernetesNode struct {
+	UID                     string   `json:"uid"`
+	Name                    string   `json:"name"`
+	Ready                   bool     `json:"ready"`
+	Unschedulable           bool     `json:"unschedulable,omitempty"`
+	KubeletVersion          string   `json:"kubeletVersion,omitempty"`
+	ContainerRuntimeVersion string   `json:"containerRuntimeVersion,omitempty"`
+	OSImage                 string   `json:"osImage,omitempty"`
+	KernelVersion           string   `json:"kernelVersion,omitempty"`
+	Architecture            string   `json:"architecture,omitempty"`
+	CapacityCPU             int64    `json:"capacityCpuCores,omitempty"`
+	CapacityMemoryBytes     int64    `json:"capacityMemoryBytes,omitempty"`
+	CapacityPods            int64    `json:"capacityPods,omitempty"`
+	AllocCPU                int64    `json:"allocatableCpuCores,omitempty"`
+	AllocMemoryBytes        int64    `json:"allocatableMemoryBytes,omitempty"`
+	AllocPods               int64    `json:"allocatablePods,omitempty"`
+	Roles                   []string `json:"roles,omitempty"`
+}
+
+type KubernetesPod struct {
+	UID        string                   `json:"uid"`
+	Name       string                   `json:"name"`
+	Namespace  string                   `json:"namespace"`
+	NodeName   string                   `json:"nodeName,omitempty"`
+	Phase      string                   `json:"phase,omitempty"`
+	Reason     string                   `json:"reason,omitempty"`
+	Message    string                   `json:"message,omitempty"`
+	QoSClass   string                   `json:"qosClass,omitempty"`
+	CreatedAt  time.Time                `json:"createdAt,omitempty"`
+	StartTime  *time.Time               `json:"startTime,omitempty"`
+	Restarts   int                      `json:"restarts,omitempty"`
+	Labels     map[string]string        `json:"labels,omitempty"`
+	OwnerKind  string                   `json:"ownerKind,omitempty"`
+	OwnerName  string                   `json:"ownerName,omitempty"`
+	Containers []KubernetesPodContainer `json:"containers,omitempty"`
+}
+
+type KubernetesPodContainer struct {
+	Name         string `json:"name"`
+	Image        string `json:"image,omitempty"`
+	Ready        bool   `json:"ready"`
+	RestartCount int32  `json:"restartCount,omitempty"`
+	State        string `json:"state,omitempty"`
+	Reason       string `json:"reason,omitempty"`
+	Message      string `json:"message,omitempty"`
+}
+
+type KubernetesDeployment struct {
+	UID               string            `json:"uid"`
+	Name              string            `json:"name"`
+	Namespace         string            `json:"namespace"`
+	DesiredReplicas   int32             `json:"desiredReplicas,omitempty"`
+	UpdatedReplicas   int32             `json:"updatedReplicas,omitempty"`
+	ReadyReplicas     int32             `json:"readyReplicas,omitempty"`
+	AvailableReplicas int32             `json:"availableReplicas,omitempty"`
+	Labels            map[string]string `json:"labels,omitempty"`
 }
 
 // DockerService summarises a Docker Swarm service.
@@ -1577,6 +1674,185 @@ func (s *State) GetRemovedDockerHosts() []RemovedDockerHost {
 	return entries
 }
 
+// UpsertKubernetesCluster inserts or updates a Kubernetes cluster in state.
+func (s *State) UpsertKubernetesCluster(cluster KubernetesCluster) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	updated := false
+	for i, existing := range s.KubernetesClusters {
+		if existing.ID == cluster.ID {
+			if existing.CustomDisplayName != "" {
+				cluster.CustomDisplayName = existing.CustomDisplayName
+			}
+			cluster.Hidden = existing.Hidden
+			cluster.PendingUninstall = existing.PendingUninstall
+			s.KubernetesClusters[i] = cluster
+			updated = true
+			break
+		}
+	}
+
+	if !updated {
+		s.KubernetesClusters = append(s.KubernetesClusters, cluster)
+	}
+
+	sort.Slice(s.KubernetesClusters, func(i, j int) bool {
+		left := s.KubernetesClusters[i].Name
+		right := s.KubernetesClusters[j].Name
+		if left == "" {
+			left = s.KubernetesClusters[i].ID
+		}
+		if right == "" {
+			right = s.KubernetesClusters[j].ID
+		}
+		return left < right
+	})
+
+	s.LastUpdate = time.Now()
+}
+
+// RemoveKubernetesCluster removes a Kubernetes cluster by ID and returns the removed cluster.
+func (s *State) RemoveKubernetesCluster(clusterID string) (KubernetesCluster, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, cluster := range s.KubernetesClusters {
+		if cluster.ID == clusterID {
+			s.KubernetesClusters = append(s.KubernetesClusters[:i], s.KubernetesClusters[i+1:]...)
+			s.LastUpdate = time.Now()
+			return cluster, true
+		}
+	}
+
+	return KubernetesCluster{}, false
+}
+
+// SetKubernetesClusterStatus updates the status of a kubernetes cluster if present.
+func (s *State) SetKubernetesClusterStatus(clusterID, status string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	changed := false
+	for i, cluster := range s.KubernetesClusters {
+		if cluster.ID == clusterID {
+			if cluster.Status != status {
+				cluster.Status = status
+				s.KubernetesClusters[i] = cluster
+				s.LastUpdate = time.Now()
+			}
+			changed = true
+			break
+		}
+	}
+	return changed
+}
+
+// SetKubernetesClusterHidden updates the hidden status of a kubernetes cluster and returns the updated cluster.
+func (s *State) SetKubernetesClusterHidden(clusterID string, hidden bool) (KubernetesCluster, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, cluster := range s.KubernetesClusters {
+		if cluster.ID == clusterID {
+			cluster.Hidden = hidden
+			s.KubernetesClusters[i] = cluster
+			s.LastUpdate = time.Now()
+			return cluster, true
+		}
+	}
+	return KubernetesCluster{}, false
+}
+
+// SetKubernetesClusterPendingUninstall updates the pending uninstall flag and returns the updated cluster.
+func (s *State) SetKubernetesClusterPendingUninstall(clusterID string, pending bool) (KubernetesCluster, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, cluster := range s.KubernetesClusters {
+		if cluster.ID == clusterID {
+			cluster.PendingUninstall = pending
+			s.KubernetesClusters[i] = cluster
+			s.LastUpdate = time.Now()
+			return cluster, true
+		}
+	}
+	return KubernetesCluster{}, false
+}
+
+// SetKubernetesClusterCustomDisplayName updates the custom display name for a kubernetes cluster.
+func (s *State) SetKubernetesClusterCustomDisplayName(clusterID string, customName string) (KubernetesCluster, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, cluster := range s.KubernetesClusters {
+		if cluster.ID == clusterID {
+			cluster.CustomDisplayName = customName
+			s.KubernetesClusters[i] = cluster
+			s.LastUpdate = time.Now()
+			return cluster, true
+		}
+	}
+
+	return KubernetesCluster{}, false
+}
+
+// GetKubernetesClusters returns a copy of kubernetes clusters.
+func (s *State) GetKubernetesClusters() []KubernetesCluster {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	clusters := make([]KubernetesCluster, len(s.KubernetesClusters))
+	copy(clusters, s.KubernetesClusters)
+	return clusters
+}
+
+// AddRemovedKubernetesCluster records a removed kubernetes cluster entry.
+func (s *State) AddRemovedKubernetesCluster(entry RemovedKubernetesCluster) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	replaced := false
+	for i, existing := range s.RemovedKubernetesClusters {
+		if existing.ID == entry.ID {
+			s.RemovedKubernetesClusters[i] = entry
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		s.RemovedKubernetesClusters = append(s.RemovedKubernetesClusters, entry)
+	}
+	sort.Slice(s.RemovedKubernetesClusters, func(i, j int) bool {
+		return s.RemovedKubernetesClusters[i].RemovedAt.After(s.RemovedKubernetesClusters[j].RemovedAt)
+	})
+	s.LastUpdate = time.Now()
+}
+
+// RemoveRemovedKubernetesCluster deletes a removed kubernetes cluster entry by ID.
+func (s *State) RemoveRemovedKubernetesCluster(clusterID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, entry := range s.RemovedKubernetesClusters {
+		if entry.ID == clusterID {
+			s.RemovedKubernetesClusters = append(s.RemovedKubernetesClusters[:i], s.RemovedKubernetesClusters[i+1:]...)
+			s.LastUpdate = time.Now()
+			break
+		}
+	}
+}
+
+// GetRemovedKubernetesClusters returns a copy of removed kubernetes cluster entries.
+func (s *State) GetRemovedKubernetesClusters() []RemovedKubernetesCluster {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	entries := make([]RemovedKubernetesCluster, len(s.RemovedKubernetesClusters))
+	copy(entries, s.RemovedKubernetesClusters)
+	return entries
+}
+
 // UpsertHost inserts or updates a generic host in state.
 func (s *State) UpsertHost(host Host) {
 	s.mu.Lock()
@@ -1653,7 +1929,6 @@ func (s *State) UpsertCephCluster(cluster CephCluster) {
 
 	s.LastUpdate = time.Now()
 }
-
 
 // SetHostStatus updates the status of a host if present.
 func (s *State) SetHostStatus(hostID, status string) bool {
