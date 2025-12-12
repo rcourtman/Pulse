@@ -894,6 +894,22 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 		}
 	}
 
+	// Seed OCI classification from previous state so we never "downgrade" to LXC
+	// if container config fetching intermittently fails (permissions or transient API errors).
+	prevState := m.GetState()
+	prevContainerIsOCI := make(map[int]bool)
+	for _, ct := range prevState.Containers {
+		if ct.Instance != instanceName {
+			continue
+		}
+		if ct.VMID <= 0 {
+			continue
+		}
+		if ct.Type == "oci" || ct.IsOCI {
+			prevContainerIsOCI[ct.VMID] = true
+		}
+	}
+
 	log.Info().
 		Str("instance", instanceName).
 		Int("totalNodes", len(nodes)).
@@ -1024,6 +1040,11 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 					Template:   container.Template == 1,
 					LastSeen:   time.Now(),
 					Tags:       tags,
+				}
+
+				if prevContainerIsOCI[modelContainer.VMID] {
+					modelContainer.IsOCI = true
+					modelContainer.Type = "oci"
 				}
 
 				if override, ok := rootUsageOverrides[int(container.VMID)]; ok {

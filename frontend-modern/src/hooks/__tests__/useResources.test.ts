@@ -240,29 +240,62 @@ describe('useResourcesAsLegacy - Legacy Format Conversion', () => {
         });
     });
 
-    describe('Container conversion', () => {
-        it('converts Resource to legacy Container format', () => {
-            const resource = createMockResource({
-                type: 'container',
-                platformData: {
-                    vmid: 200,
-                    node: 'pve1',
-                },
-            });
+	    describe('Container conversion', () => {
+	        it('converts container Resource to legacy Container format', () => {
+	            const resource = createMockResource({
+	                type: 'container',
+	                platformData: {
+	                    vmid: 200,
+	                    node: 'pve1',
+	                },
+	            });
 
-            const platformData = resource.platformData as Record<string, unknown>;
-            const legacyContainer = {
-                id: resource.id,
-                vmid: platformData?.vmid as number,
-                name: resource.name,
-                type: 'lxc',
-                status: resource.status === 'running' ? 'running' : 'stopped',
-            };
+	            const platformData = resource.platformData as Record<string, unknown>;
+	            const isOCI = resource.type === 'oci-container' || platformData?.isOci === true || platformData?.type === 'oci';
+	            const legacyContainer = {
+	                id: resource.id,
+	                vmid: platformData?.vmid as number,
+	                name: resource.name,
+	                type: isOCI ? 'oci' : ((platformData?.type as string) ?? 'lxc'),
+	                isOci: isOCI,
+	                osTemplate: platformData?.osTemplate as string | undefined,
+	                status: resource.status === 'running' ? 'running' : 'stopped',
+	            };
 
-            expect(legacyContainer.vmid).toBe(200);
-            expect(legacyContainer.type).toBe('lxc');
-        });
-    });
+	            expect(legacyContainer.vmid).toBe(200);
+	            expect(legacyContainer.type).toBe('lxc');
+	        });
+
+	        it('converts oci-container Resource to legacy Container format', () => {
+	            const resource = createMockResource({
+	                type: 'oci-container',
+	                platformData: {
+	                    vmid: 300,
+	                    node: 'pve1',
+	                    type: 'oci',
+	                    isOci: true,
+	                    osTemplate: 'oci:docker.io/library/alpine:latest',
+	                },
+	            });
+
+	            const platformData = resource.platformData as Record<string, unknown>;
+	            const isOCI = resource.type === 'oci-container' || platformData?.isOci === true || platformData?.type === 'oci';
+	            const legacyContainer = {
+	                id: resource.id,
+	                vmid: platformData?.vmid as number,
+	                name: resource.name,
+	                type: isOCI ? 'oci' : ((platformData?.type as string) ?? 'lxc'),
+	                isOci: isOCI,
+	                osTemplate: platformData?.osTemplate as string | undefined,
+	                status: resource.status === 'running' ? 'running' : 'stopped',
+	            };
+
+	            expect(legacyContainer.vmid).toBe(300);
+	            expect(legacyContainer.type).toBe('oci');
+	            expect(legacyContainer.isOci).toBe(true);
+	            expect(legacyContainer.osTemplate).toBe('oci:docker.io/library/alpine:latest');
+	        });
+	    });
 
     describe('Node conversion', () => {
         it('converts Resource to legacy Node format with temperature', () => {

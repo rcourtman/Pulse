@@ -908,6 +908,7 @@ export function Dashboard(props: DashboardProps) {
 
     const guestId = guest.id || `${guest.instance}-${guest.vmid}`;
     const guestType = guest.type === 'qemu' ? 'vm' : 'container';
+    const isOCI = guest.type === 'oci' || ('isOci' in guest && guest.isOci === true);
 
     // Toggle: remove if already in context, add if not
     if (aiChatStore.hasContextItem(guestId)) {
@@ -918,14 +919,14 @@ export function Dashboard(props: DashboardProps) {
       const contextData: Record<string, unknown> = {
         guestName: guest.name,
         name: guest.name,
-        type: guest.type === 'qemu' ? 'Virtual Machine' : (guest.type === 'oci' ? 'OCI Container' : 'LXC Container'),
+        type: guest.type === 'qemu' ? 'Virtual Machine' : (isOCI ? 'OCI Container' : 'LXC Container'),
         vmid: guest.vmid,
         node: guest.node,
         status: guest.status,
       };
 
       // Add OCI image info if available
-      if (guest.type === 'oci' && 'osTemplate' in guest && guest.osTemplate) {
+      if (isOCI && 'osTemplate' in guest && guest.osTemplate) {
         contextData.ociImage = guest.osTemplate;
       }
 
