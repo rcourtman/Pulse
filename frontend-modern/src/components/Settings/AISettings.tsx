@@ -92,6 +92,8 @@ export const AISettings: Component = () => {
     deepseekApiKey: '',
     ollamaBaseUrl: 'http://localhost:11434',
     openaiBaseUrl: '',
+    // Cost controls
+    costBudgetUSD30d: '',
   });
 
   const resetForm = (data: AISettingsType | null) => {
@@ -116,6 +118,7 @@ export const AISettings: Component = () => {
         deepseekApiKey: '',
         ollamaBaseUrl: 'http://localhost:11434',
         openaiBaseUrl: '',
+        costBudgetUSD30d: '',
       });
       return;
     }
@@ -140,6 +143,10 @@ export const AISettings: Component = () => {
       deepseekApiKey: '',
       ollamaBaseUrl: data.ollama_base_url || 'http://localhost:11434',
       openaiBaseUrl: data.openai_base_url || '',
+      costBudgetUSD30d:
+        typeof data.cost_budget_usd_30d === 'number' && data.cost_budget_usd_30d > 0
+          ? String(data.cost_budget_usd_30d)
+          : '',
     });
 
     // Auto-expand providers that are configured
@@ -289,6 +296,20 @@ export const AISettings: Component = () => {
       }
       if (form.openaiBaseUrl !== (settings()?.openai_base_url || '')) {
         payload.openai_base_url = form.openaiBaseUrl.trim();
+      }
+
+      // Cost controls (server-side budget, cross-provider estimate)
+      {
+        const raw = form.costBudgetUSD30d.trim();
+        const parsed = raw === '' ? 0 : Number(raw);
+        if (!Number.isFinite(parsed) || parsed < 0) {
+          notificationStore.error('Cost budget must be a non-negative number');
+          return;
+        }
+        const current = settings()?.cost_budget_usd_30d ?? 0;
+        if (Math.abs(parsed - current) > 0.0001) {
+          payload.cost_budget_usd_30d = parsed;
+        }
       }
 
       const updated = await AIAPI.updateSettings(payload);
@@ -1051,6 +1072,38 @@ export const AISettings: Component = () => {
                     </div>
                   </div>
                 </Show>
+              </div>
+            </div>
+
+            {/* AI Cost Controls */}
+            <div class={`${formField} p-4 rounded-lg border bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800`}>
+              <div class="mb-2">
+                <label class={`${labelClass()} flex items-center gap-2`}>
+                  AI Cost Controls
+                </label>
+                <p class="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
+                  This budget is a cross-provider estimate for Pulse usage. Provider dashboards remain the source of truth for billing.
+                </p>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Budget alert (USD per 30 days)
+                </label>
+                <input
+                  type="number"
+                  class={controlClass()}
+                  value={form.costBudgetUSD30d}
+                  onInput={(e) => setForm('costBudgetUSD30d', e.currentTarget.value)}
+                  min={0}
+                  step={1}
+                  placeholder="0 (disabled)"
+                  disabled={saving()}
+                  style={{ width: '180px' }}
+                />
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Set to 0 to disable. Cost dashboard pro-rates for shorter ranges.
+                </p>
               </div>
             </div>
 
