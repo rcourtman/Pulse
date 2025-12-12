@@ -28,6 +28,7 @@ import { UnifiedAgents } from './UnifiedAgents';
 import APITokenManager from './APITokenManager';
 import { OIDCPanel } from './OIDCPanel';
 import { AISettings } from './AISettings';
+import { AICostDashboard } from '@/components/AI/AICostDashboard';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
 import {
@@ -4966,7 +4967,10 @@ const Settings: Component<SettingsProps> = (props) => {
 
               {/* AI Assistant Tab */}
               <Show when={activeTab() === 'system-ai'}>
-                <AISettings />
+                <div class="space-y-6">
+                  <AISettings />
+                  <AICostDashboard />
+                </div>
               </Show>
 
               {/* API Access */}
