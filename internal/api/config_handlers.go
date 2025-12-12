@@ -2429,12 +2429,12 @@ func (h *ConfigHandlers) HandleRefreshClusterNodes(w http.ResponseWriter, r *htt
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":        "success",
-		"clusterName":   pve.ClusterName,
-		"oldNodeCount":  oldEndpointCount,
-		"newNodeCount":  newEndpointCount,
-		"nodesAdded":    newEndpointCount - oldEndpointCount,
-		"clusterNodes":  clusterEndpoints,
+		"status":       "success",
+		"clusterName":  pve.ClusterName,
+		"oldNodeCount": oldEndpointCount,
+		"newNodeCount": newEndpointCount,
+		"nodesAdded":   newEndpointCount - oldEndpointCount,
+		"clusterNodes": clusterEndpoints,
 	})
 }
 
@@ -5374,7 +5374,7 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 	h.codeMutex.Unlock()
 
 	log.Info().
-		Str("token_hash", tokenHash[:8]+"...").
+		Str("token_hash", safePrefixForLog(tokenHash, 8)+"...").
 		Time("expiry", expiry).
 		Str("type", req.Type).
 		Msg("Generated temporary auth token")
@@ -5614,7 +5614,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			codeHash := internalauth.HashAPIToken(authCode)
 			log.Debug().
 				Bool("hasAuthCode", true).
-				Str("codeHash", codeHash[:8]+"...").
+				Str("codeHash", safePrefixForLog(codeHash, 8)+"...").
 				Msg("Checking auth token as setup code")
 			h.codeMutex.Lock()
 			setupCode, exists := h.setupCodes[codeHash]

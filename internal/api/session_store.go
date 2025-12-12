@@ -150,7 +150,7 @@ func (s *SessionStore) cleanup() {
 	for key, session := range s.sessions {
 		if now.After(session.ExpiresAt) {
 			delete(s.sessions, key)
-			log.Debug().Str("sessionKey", key[:8]+"...").Msg("Cleaned up expired session")
+			log.Debug().Str("sessionKey", safePrefixForLog(key, 8)+"...").Msg("Cleaned up expired session")
 		}
 	}
 }

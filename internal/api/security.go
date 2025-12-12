@@ -61,7 +61,7 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 	log.Debug().
 		Str("path", r.URL.Path).
 		Str("method", r.Method).
-		Str("session", cookie.Value[:8]+"...").
+		Str("session", safePrefixForLog(cookie.Value, 8)+"...").
 		Bool("has_csrf_token", csrfToken != "").
 		Msg("CSRF validation attempt")
 
@@ -69,12 +69,12 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 	if csrfToken == "" {
 		log.Warn().
 			Str("path", r.URL.Path).
-			Str("session", cookie.Value[:8]+"...").
+			Str("session", safePrefixForLog(cookie.Value, 8)+"...").
 			Msg("Missing CSRF token")
 		clearCSRFCookie(w)
 		if newToken := issueNewCSRFCookie(w, r, cookie.Value); newToken != "" {
 			w.Header().Set("X-CSRF-Token", newToken)
-			log.Debug().Str("new_token", newToken[:8]+"...").Msg("Issued new CSRF token after missing")
+			log.Debug().Str("new_token", safePrefixForLog(newToken, 8)+"...").Msg("Issued new CSRF token after missing")
 		}
 		return false
 	}
@@ -83,20 +83,20 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 	if !validateCSRFToken(cookie.Value, csrfToken) {
 		log.Warn().
 			Str("path", r.URL.Path).
-			Str("session", cookie.Value[:8]+"...").
-			Str("provided_token", csrfToken[:8]+"...").
+			Str("session", safePrefixForLog(cookie.Value, 8)+"...").
+			Str("provided_token", safePrefixForLog(csrfToken, 8)+"...").
 			Msg("Invalid CSRF token")
 		clearCSRFCookie(w)
 		if newToken := issueNewCSRFCookie(w, r, cookie.Value); newToken != "" {
 			w.Header().Set("X-CSRF-Token", newToken)
-			log.Debug().Str("new_token", newToken[:8]+"...").Msg("Issued new CSRF token after invalid")
+			log.Debug().Str("new_token", safePrefixForLog(newToken, 8)+"...").Msg("Issued new CSRF token after invalid")
 		}
 		return false
 	}
 
 	log.Debug().
 		Str("path", r.URL.Path).
-		Str("session", cookie.Value[:8]+"...").
+		Str("session", safePrefixForLog(cookie.Value, 8)+"...").
 		Msg("CSRF validation successful")
 	return true
 }

@@ -158,7 +158,7 @@ func (c *CSRFTokenStore) cleanup() {
 	for sessionKey, token := range c.tokens {
 		if now.After(token.Expires) {
 			delete(c.tokens, sessionKey)
-			log.Debug().Str("sessionKey", sessionKey[:8]+"...").Msg("Cleaned up expired CSRF token")
+			log.Debug().Str("sessionKey", safePrefixForLog(sessionKey, 8)+"...").Msg("Cleaned up expired CSRF token")
 		}
 	}
 }

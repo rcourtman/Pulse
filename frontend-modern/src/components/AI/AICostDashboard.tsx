@@ -48,7 +48,9 @@ export const AICostDashboard: Component = () => {
       if (seq !== requestSeq) return;
       logger.error('[AICostDashboard] Failed to load cost summary:', err);
       notificationStore.error('Failed to load AI cost summary');
-      setLoadError('Failed to load usage data');
+      const message =
+        err instanceof Error && err.message ? err.message : 'Failed to load usage data';
+      setLoadError(message);
     } finally {
       if (seq === requestSeq) setLoading(false);
     }
@@ -134,6 +136,22 @@ export const AICostDashboard: Component = () => {
       <div class="p-6 space-y-4">
         <Show when={!summary() && loading()}>
           <div class="text-sm text-gray-500 dark:text-gray-400">Loading usage…</div>
+        </Show>
+
+        <Show when={loadError() && summary()}>
+          <div class="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-100">
+            <div class="truncate">
+              Couldn’t refresh. Showing last loaded data. {loadError()}
+            </div>
+            <button
+              type="button"
+              disabled={loading()}
+              onClick={() => loadSummary(days())}
+              class={`shrink-0 px-2 py-1 rounded border border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+            >
+              Retry
+            </button>
+          </div>
         </Show>
 
         <Show when={!summary() && !loading() && loadError()}>

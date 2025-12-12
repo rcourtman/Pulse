@@ -83,7 +83,7 @@ func (r *RecoveryTokenStore) GenerateRecoveryToken(duration time.Duration) (stri
 	r.saveUnsafe()
 
 	log.Info().
-		Str("token", tokenStr[:8]+"...").
+		Str("token", safePrefixForLog(tokenStr, 8)+"...").
 		Time("expires", token.ExpiresAt).
 		Msg("Recovery token generated")
 
@@ -128,7 +128,7 @@ func (r *RecoveryTokenStore) ValidateRecoveryTokenConstantTime(providedToken str
 			r.mu.RLock()
 
 			log.Info().
-				Str("token", tokenStr[:8]+"...").
+				Str("token", safePrefixForLog(tokenStr, 8)+"...").
 				Str("ip", ip).
 				Msg("Recovery token successfully validated")
 
