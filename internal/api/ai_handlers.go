@@ -2536,9 +2536,24 @@ func (h *AISettingsHandler) HandleExportAICostHistory(w http.ResponseWriter, r *
 
 	if format == "json" {
 		w.Header().Set("Content-Type", "application/json")
+		type exportEvent struct {
+			cost.UsageEvent
+			EstimatedUSD float64 `json:"estimated_usd,omitempty"`
+			PricingKnown bool    `json:"pricing_known"`
+		}
+		exported := make([]exportEvent, 0, len(events))
+		for _, e := range events {
+			provider, model := cost.ResolveProviderAndModel(e.Provider, e.RequestModel, e.ResponseModel)
+			usd, ok, _ := cost.EstimateUSD(provider, model, int64(e.InputTokens), int64(e.OutputTokens))
+			exported = append(exported, exportEvent{
+				UsageEvent:   e,
+				EstimatedUSD: usd,
+				PricingKnown: ok,
+			})
+		}
 		resp := map[string]any{
 			"days":   days,
-			"events": events,
+			"events": exported,
 		}
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			log.Error().Err(err).Msg("Failed to write AI cost export JSON")
@@ -2556,11 +2571,16 @@ func (h *AISettingsHandler) HandleExportAICostHistory(w http.ResponseWriter, r *
 		"use_case",
 		"input_tokens",
 		"output_tokens",
+		"estimated_usd",
+		"pricing_known",
 		"target_type",
 		"target_id",
 		"finding_id",
 	})
 	for _, e := range events {
+		provider, model := cost.ResolveProviderAndModel(e.Provider, e.RequestModel, e.ResponseModel)
+		usd, ok, _ := cost.EstimateUSD(provider, model, int64(e.InputTokens), int64(e.OutputTokens))
+
 		_ = cw.Write([]string{
 			e.Timestamp.UTC().Format(time.RFC3339Nano),
 			e.Provider,
@@ -2569,6 +2589,8 @@ func (h *AISettingsHandler) HandleExportAICostHistory(w http.ResponseWriter, r *
 			e.UseCase,
 			strconv.Itoa(e.InputTokens),
 			strconv.Itoa(e.OutputTokens),
+			strconv.FormatFloat(usd, 'f', 6, 64),
+			strconv.FormatBool(ok),
 			e.TargetType,
 			e.TargetID,
 			e.FindingID,

@@ -164,9 +164,7 @@ func (s *Store) GetSummary(days int) Summary {
 	var totalInput, totalOutput int64
 
 	for _, e := range events {
-		provider := strings.ToLower(strings.TrimSpace(e.Provider))
-		model := normalizeModel(provider, e.RequestModel, e.ResponseModel)
-		provider, model = inferProviderAndModel(provider, model)
+		provider, model := ResolveProviderAndModel(e.Provider, e.RequestModel, e.ResponseModel)
 
 		k := pmKey{provider: provider, model: model}
 		pm := pmTotals[k]
@@ -309,37 +307,6 @@ func (s *Store) scheduleSaveLocked() {
 	})
 }
 
-func normalizeModel(provider, requestModel, responseModel string) string {
-	if requestModel != "" {
-		parts := strings.SplitN(requestModel, ":", 2)
-		if len(parts) == 2 && parts[0] == provider {
-			return parts[1]
-		}
-		return requestModel
-	}
-	if responseModel != "" {
-		parts := strings.SplitN(responseModel, ":", 2)
-		if len(parts) == 2 && parts[0] == provider {
-			return parts[1]
-		}
-		return responseModel
-	}
-	return ""
-}
-
-func inferProviderAndModel(provider, model string) (string, string) {
-	if provider == "openai" {
-		parts := strings.SplitN(strings.TrimSpace(model), ":", 2)
-		if len(parts) == 2 && strings.ToLower(parts[0]) == "deepseek" {
-			return "deepseek", parts[1]
-		}
-		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(model)), "deepseek") {
-			return "deepseek", model
-		}
-	}
-	return provider, model
-}
-
 // ProviderModelSummary is a rollup for a provider/model pair.
 type ProviderModelSummary struct {
 	Provider     string  `json:"provider"`
@@ -419,9 +386,7 @@ func summarizeUseCases(events []UsageEvent) []UseCaseSummary {
 		t.input += int64(e.InputTokens)
 		t.output += int64(e.OutputTokens)
 
-		provider := strings.ToLower(strings.TrimSpace(e.Provider))
-		model := normalizeModel(provider, e.RequestModel, e.ResponseModel)
-		provider, model = inferProviderAndModel(provider, model)
+		provider, model := ResolveProviderAndModel(e.Provider, e.RequestModel, e.ResponseModel)
 
 		usd, known, _ := EstimateUSD(provider, model, int64(e.InputTokens), int64(e.OutputTokens))
 		if known {
@@ -491,9 +456,7 @@ func summarizeTargets(events []UsageEvent) []TargetSummary {
 		t.input += int64(e.InputTokens)
 		t.output += int64(e.OutputTokens)
 
-		provider := strings.ToLower(strings.TrimSpace(e.Provider))
-		model := normalizeModel(provider, e.RequestModel, e.ResponseModel)
-		provider, model = inferProviderAndModel(provider, model)
+		provider, model := ResolveProviderAndModel(e.Provider, e.RequestModel, e.ResponseModel)
 		usd, known, _ := EstimateUSD(provider, model, int64(e.InputTokens), int64(e.OutputTokens))
 		if known {
 			t.usd += usd
