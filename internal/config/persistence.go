@@ -20,21 +20,22 @@ import (
 
 // ConfigPersistence handles saving and loading configuration
 type ConfigPersistence struct {
-	mu              sync.RWMutex
-	tx              *importTransaction
-	configDir       string
-	alertFile       string
-	emailFile       string
-	webhookFile     string
-	appriseFile     string
-	nodesFile       string
-	systemFile      string
-	oidcFile        string
-	apiTokensFile   string
-	aiFile          string
-	aiFindingsFile  string
-	aiPatrolRunsFile string
-	crypto          *crypto.CryptoManager
+	mu                 sync.RWMutex
+	tx                 *importTransaction
+	configDir          string
+	alertFile          string
+	emailFile          string
+	webhookFile        string
+	appriseFile        string
+	nodesFile          string
+	systemFile         string
+	oidcFile           string
+	apiTokensFile      string
+	aiFile             string
+	aiFindingsFile     string
+	aiPatrolRunsFile   string
+	aiUsageHistoryFile string
+	crypto             *crypto.CryptoManager
 }
 
 // NewConfigPersistence creates a new config persistence manager.
@@ -67,19 +68,20 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 	}
 
 	cp := &ConfigPersistence{
-		configDir:        configDir,
-		alertFile:        filepath.Join(configDir, "alerts.json"),
-		emailFile:        filepath.Join(configDir, "email.enc"),
-		webhookFile:      filepath.Join(configDir, "webhooks.enc"),
-		appriseFile:      filepath.Join(configDir, "apprise.enc"),
-		nodesFile:        filepath.Join(configDir, "nodes.enc"),
-		systemFile:       filepath.Join(configDir, "system.json"),
-		oidcFile:         filepath.Join(configDir, "oidc.enc"),
-		apiTokensFile:    filepath.Join(configDir, "api_tokens.json"),
-		aiFile:           filepath.Join(configDir, "ai.enc"),
-		aiFindingsFile:   filepath.Join(configDir, "ai_findings.json"),
-		aiPatrolRunsFile: filepath.Join(configDir, "ai_patrol_runs.json"),
-		crypto:           cryptoMgr,
+		configDir:          configDir,
+		alertFile:          filepath.Join(configDir, "alerts.json"),
+		emailFile:          filepath.Join(configDir, "email.enc"),
+		webhookFile:        filepath.Join(configDir, "webhooks.enc"),
+		appriseFile:        filepath.Join(configDir, "apprise.enc"),
+		nodesFile:          filepath.Join(configDir, "nodes.enc"),
+		systemFile:         filepath.Join(configDir, "system.json"),
+		oidcFile:           filepath.Join(configDir, "oidc.enc"),
+		apiTokensFile:      filepath.Join(configDir, "api_tokens.json"),
+		aiFile:             filepath.Join(configDir, "ai.enc"),
+		aiFindingsFile:     filepath.Join(configDir, "ai_findings.json"),
+		aiPatrolRunsFile:   filepath.Join(configDir, "ai_patrol_runs.json"),
+		aiUsageHistoryFile: filepath.Join(configDir, "ai_usage_history.json"),
+		crypto:             cryptoMgr,
 	}
 
 	log.Debug().
@@ -1382,24 +1384,24 @@ type AIFindingsData struct {
 
 // AIFindingRecord is a persisted finding with full history
 type AIFindingRecord struct {
-	ID             string    `json:"id"`
-	Severity       string    `json:"severity"`
-	Category       string    `json:"category"`
-	ResourceID     string    `json:"resource_id"`
-	ResourceName   string    `json:"resource_name"`
-	ResourceType   string    `json:"resource_type"`
-	Node           string    `json:"node,omitempty"`
-	Title          string    `json:"title"`
-	Description    string    `json:"description"`
-	Recommendation string    `json:"recommendation,omitempty"`
-	Evidence       string    `json:"evidence,omitempty"`
-	DetectedAt     time.Time `json:"detected_at"`
-	LastSeenAt     time.Time `json:"last_seen_at"`
+	ID             string     `json:"id"`
+	Severity       string     `json:"severity"`
+	Category       string     `json:"category"`
+	ResourceID     string     `json:"resource_id"`
+	ResourceName   string     `json:"resource_name"`
+	ResourceType   string     `json:"resource_type"`
+	Node           string     `json:"node,omitempty"`
+	Title          string     `json:"title"`
+	Description    string     `json:"description"`
+	Recommendation string     `json:"recommendation,omitempty"`
+	Evidence       string     `json:"evidence,omitempty"`
+	DetectedAt     time.Time  `json:"detected_at"`
+	LastSeenAt     time.Time  `json:"last_seen_at"`
 	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
-	AutoResolved   bool      `json:"auto_resolved"`
+	AutoResolved   bool       `json:"auto_resolved"`
 	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty"`
 	SnoozedUntil   *time.Time `json:"snoozed_until,omitempty"`
-	AlertID        string    `json:"alert_id,omitempty"`
+	AlertID        string     `json:"alert_id,omitempty"`
 }
 
 // SaveAIFindings persists AI findings to disk
@@ -1474,26 +1476,26 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 
 // PatrolRunHistoryData represents persisted patrol run history with metadata
 type PatrolRunHistoryData struct {
-	Version   int                  `json:"version"`
-	LastSaved time.Time            `json:"last_saved"`
-	Runs      []PatrolRunRecord    `json:"runs"`
+	Version   int               `json:"version"`
+	LastSaved time.Time         `json:"last_saved"`
+	Runs      []PatrolRunRecord `json:"runs"`
 }
 
 // PatrolRunRecord represents a single patrol check run
 type PatrolRunRecord struct {
-	ID               string        `json:"id"`
-	StartedAt        time.Time     `json:"started_at"`
-	CompletedAt      time.Time     `json:"completed_at"`
-	DurationMs       int64         `json:"duration_ms"`
-	Type             string        `json:"type"` // "quick" or "deep"
-	ResourcesChecked int           `json:"resources_checked"`
+	ID               string    `json:"id"`
+	StartedAt        time.Time `json:"started_at"`
+	CompletedAt      time.Time `json:"completed_at"`
+	DurationMs       int64     `json:"duration_ms"`
+	Type             string    `json:"type"` // "quick" or "deep"
+	ResourcesChecked int       `json:"resources_checked"`
 	// Breakdown by resource type
-	NodesChecked     int `json:"nodes_checked"`
-	GuestsChecked    int `json:"guests_checked"`
-	DockerChecked    int `json:"docker_checked"`
-	StorageChecked   int `json:"storage_checked"`
-	HostsChecked     int `json:"hosts_checked"`
-	PBSChecked       int `json:"pbs_checked"`
+	NodesChecked   int `json:"nodes_checked"`
+	GuestsChecked  int `json:"guests_checked"`
+	DockerChecked  int `json:"docker_checked"`
+	StorageChecked int `json:"storage_checked"`
+	HostsChecked   int `json:"hosts_checked"`
+	PBSChecked     int `json:"pbs_checked"`
 	// Findings from this run
 	NewFindings      int      `json:"new_findings"`
 	ExistingFindings int      `json:"existing_findings"`
@@ -1506,6 +1508,96 @@ type PatrolRunRecord struct {
 	AIAnalysis   string `json:"ai_analysis,omitempty"`   // The AI's raw response/analysis
 	InputTokens  int    `json:"input_tokens,omitempty"`  // Tokens sent to AI
 	OutputTokens int    `json:"output_tokens,omitempty"` // Tokens received from AI
+}
+
+// AIUsageHistoryData represents persisted AI usage history with metadata
+type AIUsageHistoryData struct {
+	Version   int                  `json:"version"`
+	LastSaved time.Time            `json:"last_saved"`
+	Events    []AIUsageEventRecord `json:"events"`
+}
+
+// AIUsageEventRecord is a persisted usage event for an AI provider call.
+// This intentionally excludes prompt/response content for privacy.
+type AIUsageEventRecord struct {
+	Timestamp     time.Time `json:"timestamp"`
+	Provider      string    `json:"provider"`
+	RequestModel  string    `json:"request_model"`
+	ResponseModel string    `json:"response_model,omitempty"`
+	UseCase       string    `json:"use_case,omitempty"` // "chat" or "patrol"
+	InputTokens   int       `json:"input_tokens,omitempty"`
+	OutputTokens  int       `json:"output_tokens,omitempty"`
+	TargetType    string    `json:"target_type,omitempty"`
+	TargetID      string    `json:"target_id,omitempty"`
+	FindingID     string    `json:"finding_id,omitempty"`
+}
+
+// SaveAIUsageHistory persists AI usage events to disk.
+func (c *ConfigPersistence) SaveAIUsageHistory(events []AIUsageEventRecord) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	data := AIUsageHistoryData{
+		Version:   1,
+		LastSaved: time.Now(),
+		Events:    events,
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	if err := c.writeConfigFileLocked(c.aiUsageHistoryFile, jsonData, 0600); err != nil {
+		return err
+	}
+
+	log.Debug().
+		Str("file", c.aiUsageHistoryFile).
+		Int("count", len(events)).
+		Msg("AI usage history saved")
+	return nil
+}
+
+// LoadAIUsageHistory loads AI usage events from disk.
+func (c *ConfigPersistence) LoadAIUsageHistory() (*AIUsageHistoryData, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := os.ReadFile(c.aiUsageHistoryFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &AIUsageHistoryData{
+				Version: 1,
+				Events:  make([]AIUsageEventRecord, 0),
+			}, nil
+		}
+		return nil, err
+	}
+
+	var usageData AIUsageHistoryData
+	if err := json.Unmarshal(data, &usageData); err != nil {
+		log.Error().Err(err).Str("file", c.aiUsageHistoryFile).Msg("Failed to parse AI usage history file")
+		return &AIUsageHistoryData{
+			Version: 1,
+			Events:  make([]AIUsageEventRecord, 0),
+		}, nil
+	}
+
+	if usageData.Events == nil {
+		usageData.Events = make([]AIUsageEventRecord, 0)
+	}
+
+	log.Info().
+		Str("file", c.aiUsageHistoryFile).
+		Int("count", len(usageData.Events)).
+		Time("last_saved", usageData.LastSaved).
+		Msg("AI usage history loaded")
+	return &usageData, nil
 }
 
 // SavePatrolRunHistory persists patrol run history to disk

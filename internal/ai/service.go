@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,10 +16,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/types"
 	"github.com/rs/zerolog/log"
 )
 
@@ -38,6 +41,7 @@ type Service struct {
 	stateProvider    StateProvider
 	alertProvider    AlertProvider
 	knowledgeStore   *knowledge.Store
+	costStore        *cost.Store
 	resourceProvider ResourceProvider // Unified resource model provider (Phase 2)
 	patrolService    *PatrolService   // Background AI monitoring service
 	metadataProvider MetadataProvider // Enables AI to update resource URLs
@@ -50,11 +54,15 @@ type Service struct {
 func NewService(persistence *config.ConfigPersistence, agentServer *agentexec.Server) *Service {
 	// Initialize knowledge store
 	var knowledgeStore *knowledge.Store
+	costStore := cost.NewStore(cost.DefaultMaxDays)
 	if persistence != nil {
 		var err error
 		knowledgeStore, err = knowledge.NewStore(persistence.DataDir())
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to initialize knowledge store")
+		}
+		if err := costStore.SetPersistence(NewCostPersistenceAdapter(persistence)); err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize AI usage cost store")
 		}
 	}
 
@@ -63,6 +71,7 @@ func NewService(persistence *config.ConfigPersistence, agentServer *agentexec.Se
 		agentServer:    agentServer,
 		policy:         agentexec.DefaultPolicy(),
 		knowledgeStore: knowledgeStore,
+		costStore:      costStore,
 	}
 }
 
@@ -108,6 +117,28 @@ func (s *Service) GetAIConfig() *config.AIConfig {
 	return s.cfg
 }
 
+// GetCostSummary returns usage rollups for the last N days.
+func (s *Service) GetCostSummary(days int) cost.Summary {
+	s.mu.RLock()
+	store := s.costStore
+	s.mu.RUnlock()
+
+	if store == nil {
+		if days <= 0 {
+			days = 30
+		}
+		return cost.Summary{
+			Days:           days,
+			ProviderModels: []cost.ProviderModelSummary{},
+			DailyTotals:    []cost.DailySummary{},
+			Totals: cost.ProviderModelSummary{
+				Provider: "all",
+			},
+		}
+	}
+	return store.GetSummary(days)
+}
+
 // SetPatrolThresholdProvider sets the threshold provider for patrol
 // This should be called with an AlertThresholdAdapter to connect patrol to user-configured thresholds
 func (s *Service) SetPatrolThresholdProvider(provider ThresholdProvider) {
@@ -117,6 +148,30 @@ func (s *Service) SetPatrolThresholdProvider(provider ThresholdProvider) {
 
 	if patrol != nil {
 		patrol.SetThresholdProvider(provider)
+	}
+}
+
+// MetricsHistoryProvider provides access to historical metrics for trend analysis
+// This interface matches the monitoring.MetricsHistory methods we need
+type MetricsHistoryProvider interface {
+	GetNodeMetrics(nodeID string, metricType string, duration time.Duration) []MetricPoint
+	GetGuestMetrics(guestID string, metricType string, duration time.Duration) []MetricPoint
+	GetAllGuestMetrics(guestID string, duration time.Duration) map[string][]MetricPoint
+	GetAllStorageMetrics(storageID string, duration time.Duration) map[string][]MetricPoint
+}
+
+// MetricPoint is an alias for the shared metric point type
+type MetricPoint = types.MetricPoint
+
+// SetMetricsHistoryProvider sets the metrics history provider for enriched AI context
+// This enables the AI to see trends, anomalies, and predictions based on historical data
+func (s *Service) SetMetricsHistoryProvider(provider MetricsHistoryProvider) {
+	s.mu.RLock()
+	patrol := s.patrolService
+	s.mu.RUnlock()
+
+	if patrol != nil {
+		patrol.SetMetricsHistoryProvider(provider)
 	}
 }
 
@@ -325,6 +380,40 @@ func extractVMIDFromCommand(command string) (vmid int, requiresOwnerNode bool, f
 	return 0, false, false
 }
 
+// formatApprovalNeededToolResult returns a structured tool result for commands that require approval.
+// It is encoded as a marker + JSON so the LLM can reliably detect it.
+func formatApprovalNeededToolResult(command, toolID, reason string) string {
+	payload := map[string]interface{}{
+		"type":           "approval_required",
+		"command":        command,
+		"tool_id":        toolID,
+		"reason":         reason,
+		"how_to_approve": "Ask the user to click the approval button shown in the UI.",
+		"do_not_retry":   true,
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		// Fallback to a safe plain-text marker.
+		return fmt.Sprintf("APPROVAL_REQUIRED: %s", command)
+	}
+	return "APPROVAL_REQUIRED: " + string(b)
+}
+
+// formatPolicyBlockedToolResult returns a structured tool result for commands blocked by policy.
+func formatPolicyBlockedToolResult(command, reason string) string {
+	payload := map[string]interface{}{
+		"type":         "policy_blocked",
+		"command":      command,
+		"reason":       reason,
+		"do_not_retry": true,
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Sprintf("POLICY_BLOCKED: %s", reason)
+	}
+	return "POLICY_BLOCKED: " + string(b)
+}
+
 // LoadConfig loads the AI configuration and initializes the provider
 func (s *Service) LoadConfig() error {
 	s.mu.Lock()
@@ -343,17 +432,41 @@ func (s *Service) LoadConfig() error {
 		return nil
 	}
 
-	provider, err := providers.NewFromConfig(cfg)
+	selectedModel := cfg.GetModel()
+	selectedProvider, _ := config.ParseModelString(selectedModel)
+
+	providerClient, err := providers.NewForModel(cfg, selectedModel)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to initialize AI provider")
-		s.provider = nil
-		return nil // Don't fail startup if provider can't be initialized
+		// Only fall back to legacy config if no multi-provider credentials are set.
+		if len(cfg.GetConfiguredProviders()) == 0 && (cfg.Provider != "" || cfg.APIKey != "") {
+			if legacyClient, legacyErr := providers.NewFromConfig(cfg); legacyErr == nil {
+				providerClient = legacyClient
+				selectedProvider = providerClient.Name()
+				log.Info().
+					Str("provider", selectedProvider).
+					Str("model", cfg.GetModel()).
+					Msg("AI service initialized via legacy config (migration path)")
+			} else {
+				log.Warn().Err(legacyErr).Msg("Failed to initialize legacy AI provider")
+				s.provider = nil
+				return nil
+			}
+		} else {
+			log.Warn().
+				Err(err).
+				Str("selected_model", selectedModel).
+				Str("selected_provider", selectedProvider).
+				Strs("configured_providers", cfg.GetConfiguredProviders()).
+				Msg("AI enabled but selected provider is not configured; check API keys or model selection")
+			s.provider = nil
+			return nil
+		}
 	}
 
-	s.provider = provider
+	s.provider = providerClient
 	log.Info().
-		Str("provider", cfg.Provider).
-		Str("model", cfg.GetModel()).
+		Str("provider", selectedProvider).
+		Str("model", selectedModel).
 		Bool("autonomous_mode", cfg.AutonomousMode).
 		Msg("AI service initialized")
 
@@ -400,7 +513,7 @@ func (s *Service) GetDebugContext(req ExecuteRequest) map[string]interface{} {
 			"hosts":         len(state.Hosts),
 			"pbs_instances": len(state.PBSInstances),
 		}
-		
+
 		// List some VMs/containers for verification
 		var vmNames []string
 		for _, vm := range state.VMs {
@@ -491,48 +604,48 @@ func isDangerousCommand(cmd string) bool {
 		"unlink": true,
 		"shred":  true,
 		// Disk/filesystem destructive operations
-		"dd":          true,
-		"mkfs":        true,
-		"fdisk":       true,
-		"parted":      true,
-		"wipefs":      true,
-		"sgdisk":      true,
-		"gdisk":       true,
-		"zpool":       true, // Allow reads but not modifications
-		"zfs":         true, // Allow reads but not modifications
-		"lvremove":    true,
-		"vgremove":    true,
-		"pvremove":    true,
+		"dd":       true,
+		"mkfs":     true,
+		"fdisk":    true,
+		"parted":   true,
+		"wipefs":   true,
+		"sgdisk":   true,
+		"gdisk":    true,
+		"zpool":    true, // Allow reads but not modifications
+		"zfs":      true, // Allow reads but not modifications
+		"lvremove": true,
+		"vgremove": true,
+		"pvremove": true,
 		// System state changes
-		"reboot":      true,
-		"shutdown":    true,
-		"poweroff":    true,
-		"halt":        true,
-		"init":        true,
-		"systemctl":   true, // could stop critical services
-		"service":     true,
+		"reboot":    true,
+		"shutdown":  true,
+		"poweroff":  true,
+		"halt":      true,
+		"init":      true,
+		"systemctl": true, // could stop critical services
+		"service":   true,
 		// User/permission changes
-		"chmod":       true,
-		"chown":       true,
-		"useradd":     true,
-		"userdel":     true,
-		"passwd":      true,
+		"chmod":   true,
+		"chown":   true,
+		"useradd": true,
+		"userdel": true,
+		"passwd":  true,
 		// Package management
-		"apt":         true,
-		"apt-get":     true,
-		"dpkg":        true,
-		"yum":         true,
-		"dnf":         true,
-		"pacman":      true,
-		"pip":         true,
-		"npm":         true,
+		"apt":     true,
+		"apt-get": true,
+		"dpkg":    true,
+		"yum":     true,
+		"dnf":     true,
+		"pacman":  true,
+		"pip":     true,
+		"npm":     true,
 		// Proxmox destructive
-		"vzdump":      true,
-		"vzrestore":   true,
-		"pveam":       true,
+		"vzdump":    true,
+		"vzrestore": true,
+		"pveam":     true,
 		// Network changes
-		"iptables":    true,
-		"nft":         true,
+		"iptables":     true,
+		"nft":          true,
 		"firewall-cmd": true,
 	}
 
@@ -569,7 +682,7 @@ func isDangerousCommand(cmd string) bool {
 				}
 			}
 		}
-		// Special case: allow read-only dpkg operations  
+		// Special case: allow read-only dpkg operations
 		if baseCmd == "dpkg" {
 			safeDpkgOps := []string{"-l", "--list", "-L", "--listfiles", "-s", "--status", "-S", "--search", "-p", "--print-avail", "--get-selections"}
 			for _, safeOp := range safeDpkgOps {
@@ -698,14 +811,14 @@ func isReadOnlyCommand(cmd string) bool {
 
 // ConversationMessage represents a message in conversation history
 type ConversationMessage struct {
-	Role    string `json:"role"`    // "user" or "assistant"
+	Role    string `json:"role"` // "user" or "assistant"
 	Content string `json:"content"`
 }
 
 // ExecuteRequest represents a request to execute an AI prompt
 type ExecuteRequest struct {
 	Prompt       string                 `json:"prompt"`
-	TargetType   string                 `json:"target_type,omitempty"`   // "host", "container", "vm", "node"
+	TargetType   string                 `json:"target_type,omitempty"` // "host", "container", "vm", "node"
 	TargetID     string                 `json:"target_id,omitempty"`
 	Context      map[string]interface{} `json:"context,omitempty"`       // Current metrics, state, etc.
 	SystemPrompt string                 `json:"system_prompt,omitempty"` // Override system prompt
@@ -717,18 +830,18 @@ type ExecuteRequest struct {
 
 // ExecuteResponse represents the AI's response
 type ExecuteResponse struct {
-	Content      string       `json:"content"`
-	Model        string       `json:"model"`
-	InputTokens  int          `json:"input_tokens"`
-	OutputTokens int          `json:"output_tokens"`
+	Content      string          `json:"content"`
+	Model        string          `json:"model"`
+	InputTokens  int             `json:"input_tokens"`
+	OutputTokens int             `json:"output_tokens"`
 	ToolCalls    []ToolExecution `json:"tool_calls,omitempty"` // Commands that were executed
 }
 
 // ToolExecution represents a tool that was executed during the AI conversation
 type ToolExecution struct {
 	Name    string `json:"name"`
-	Input   string `json:"input"`   // Human-readable input (e.g., the command)
-	Output  string `json:"output"`  // Result of execution
+	Input   string `json:"input"`  // Human-readable input (e.g., the command)
+	Output  string `json:"output"` // Result of execution
 	Success bool   `json:"success"`
 }
 
@@ -786,8 +899,8 @@ type ToolEndData struct {
 // ApprovalNeededData is sent when a command needs user approval
 type ApprovalNeededData struct {
 	Command    string `json:"command"`
-	ToolID     string `json:"tool_id"`     // ID to reference when approving
-	ToolName   string `json:"tool_name"`   // "run_command", "read_file", etc.
+	ToolID     string `json:"tool_id"`   // ID to reference when approving
+	ToolName   string `json:"tool_name"` // "run_command", "read_file", etc.
 	RunOnHost  bool   `json:"run_on_host"`
 	TargetHost string `json:"target_host,omitempty"` // Explicit host to route to
 }
@@ -799,6 +912,7 @@ func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteResp
 	defaultProvider := s.provider
 	agentServer := s.agentServer
 	cfg := s.cfg
+	costStore := s.costStore
 	s.mu.RUnlock()
 
 	// Determine the model to use for this request
@@ -887,6 +1001,21 @@ Always execute the commands rather than telling the user how to do it.`
 			return nil, fmt.Errorf("AI request failed: %w", err)
 		}
 
+		if costStore != nil {
+			costStore.Record(cost.UsageEvent{
+				Timestamp:     time.Now(),
+				Provider:      provider.Name(),
+				RequestModel:  modelString,
+				ResponseModel: resp.Model,
+				UseCase:       req.UseCase,
+				InputTokens:   resp.InputTokens,
+				OutputTokens:  resp.OutputTokens,
+				TargetType:    req.TargetType,
+				TargetID:      req.TargetID,
+				FindingID:     req.FindingID,
+			})
+		}
+
 		totalInputTokens += resp.InputTokens
 		totalOutputTokens += resp.OutputTokens
 		model = resp.Model
@@ -938,6 +1067,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	defaultProvider := s.provider
 	agentServer := s.agentServer
 	cfg := s.cfg
+	costStore := s.costStore
 	s.mu.RUnlock()
 
 	// Determine the model to use for this request
@@ -1058,6 +1188,21 @@ Always execute the commands rather than telling the user how to do it.`
 			return nil, fmt.Errorf("AI request failed: %w", err)
 		}
 
+		if costStore != nil {
+			costStore.Record(cost.UsageEvent{
+				Timestamp:     time.Now(),
+				Provider:      provider.Name(),
+				RequestModel:  modelString,
+				ResponseModel: resp.Model,
+				UseCase:       req.UseCase,
+				InputTokens:   resp.InputTokens,
+				OutputTokens:  resp.OutputTokens,
+				TargetType:    req.TargetType,
+				TargetID:      req.TargetID,
+				FindingID:     req.FindingID,
+			})
+		}
+
 		log.Debug().Int("iteration", iteration).Msg("AI provider returned successfully")
 
 		totalInputTokens += resp.InputTokens
@@ -1161,7 +1306,6 @@ Always execute the commands rather than telling the user how to do it.`
 				}
 			}
 
-
 			var result string
 			var execution ToolExecution
 
@@ -1170,7 +1314,14 @@ Always execute the commands rather than telling the user how to do it.`
 				// We'll break out of the loop after processing all tool calls
 				// Note: We don't add to toolExecutions here because the approval_needed event
 				// already tells the frontend to show the approval UI
-				result = fmt.Sprintf("Awaiting user approval: %s", toolInput)
+				cmd, _ := tc.Input["command"].(string)
+				result = formatApprovalNeededToolResult(cmd, tc.ID, "Command requires user approval")
+				execution = ToolExecution{
+					Name:    tc.Name,
+					Input:   toolInput,
+					Output:  result,
+					Success: true, // Not an error; awaiting approval
+				}
 			} else {
 				// Stream tool start event
 				callback(StreamEvent{
@@ -1440,15 +1591,11 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		if !s.IsAutonomous() {
 			decision := s.policy.Evaluate(command)
 			if decision == agentexec.PolicyBlock {
-				execution.Output = "Error: This command is blocked by security policy"
+				execution.Output = formatPolicyBlockedToolResult(command, "This command is blocked by security policy")
 				return execution.Output, execution
 			}
 			if decision == agentexec.PolicyRequireApproval {
-				// Direct the AI to tell the user about the approval button
-				execution.Output = fmt.Sprintf("COMMAND_BLOCKED: This command (%s) requires user approval and was NOT executed. "+
-					"An approval button has been displayed to the user. "+
-					"DO NOT attempt to run this command again. "+
-					"Tell the user to click the 'Run' button to execute it.", command)
+				execution.Output = formatApprovalNeededToolResult(command, tc.ID, "Security policy requires approval")
 				execution.Success = true // Not an error, just needs approval
 				return execution.Output, execution
 			}
@@ -1456,7 +1603,7 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 
 		// Build execution request with proper targeting
 		execReq := req
-		
+
 		// If target_host is explicitly specified by AI, use it for routing
 		if targetHost != "" {
 			// Ensure Context map exists
@@ -1477,7 +1624,7 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 				Str("command", command).
 				Msg("AI explicitly specified target_host for command routing")
 		}
-		
+
 		// If run_on_host is true, override the target type to run on host
 		if runOnHost {
 			log.Debug().
@@ -1576,7 +1723,7 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		// Build the write command using base64 to safely handle any content
 		// This avoids issues with special characters, quotes, newlines, etc.
 		encoded := base64.StdEncoding.EncodeToString([]byte(content))
-		
+
 		var command string
 		if appendMode {
 			// Append mode: decode and append to file (no backup needed for append)
@@ -1591,7 +1738,7 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			dir := filepath.Dir(path)
 			tempFile := path + ".pulse-tmp"
 			backupFile := path + ".bak"
-			
+
 			// Build a safe multi-step command:
 			// - mkdir -p for parent dir
 			// - if file exists, copy to .bak
@@ -1731,7 +1878,7 @@ func (s *Service) getGuestID(req ExecuteRequest) string {
 	if req.TargetType == "" || req.TargetID == "" {
 		return ""
 	}
-	
+
 	// For Proxmox targets, include the node info
 	// Format: instance-node-type-vmid or instance-targetid
 	return fmt.Sprintf("%s-%s", req.TargetType, req.TargetID)
@@ -1811,11 +1958,11 @@ func sanitizeError(err error) error {
 	if err == nil {
 		return nil
 	}
-	
+
 	errMsg := err.Error()
-	
+
 	// Replace raw TCP connection details with generic message
-	// e.g., "write tcp 192.168.0.123:7655->192.168.0.134:58004: i/o timeout" 
+	// e.g., "write tcp 192.168.0.123:7655->192.168.0.134:58004: i/o timeout"
 	// becomes "connection to agent timed out"
 	if strings.Contains(errMsg, "i/o timeout") {
 		if strings.Contains(errMsg, "failed to send command") {
@@ -1823,22 +1970,22 @@ func sanitizeError(err error) error {
 		}
 		return fmt.Errorf("network timeout - the target may be unreachable")
 	}
-	
+
 	// Replace "write tcp ... connection refused" style errors
 	if strings.Contains(errMsg, "connection refused") {
 		return fmt.Errorf("connection refused - the agent may not be running on the target host")
 	}
-	
+
 	// Replace "no such host" errors
 	if strings.Contains(errMsg, "no such host") {
 		return fmt.Errorf("host not found - verify the hostname is correct and DNS is working")
 	}
-	
+
 	// Replace "context deadline exceeded" with friendlier message
 	if strings.Contains(errMsg, "context deadline exceeded") {
 		return fmt.Errorf("operation timed out - the command may have taken too long")
 	}
-	
+
 	return err
 }
 
@@ -1850,7 +1997,7 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 
 	// Find the appropriate agent using robust routing
 	agents := s.agentServer.GetConnectedAgents()
-	
+
 	// Use the new robust routing logic
 	routeResult, err := s.routeToAgent(req, command, agents)
 	if err != nil {
@@ -1870,7 +2017,7 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 	}
 
 	agentID := routeResult.AgentID
-	
+
 	log.Debug().
 		Str("agent_id", agentID).
 		Str("agent_hostname", routeResult.AgentHostname).
@@ -1952,7 +2099,7 @@ type RunCommandRequest struct {
 	Command    string `json:"command"`
 	TargetType string `json:"target_type"` // "host", "container", "vm"
 	TargetID   string `json:"target_id"`
-	RunOnHost  bool   `json:"run_on_host"`  // If true, run on host instead of target
+	RunOnHost  bool   `json:"run_on_host"` // If true, run on host instead of target
 	VMID       string `json:"vmid,omitempty"`
 	TargetHost string `json:"target_host,omitempty"` // Explicit host for routing
 }
@@ -1996,7 +2143,6 @@ func (s *Service) RunCommand(ctx context.Context, req RunCommandRequest) (*RunCo
 			Str("command", req.Command).
 			Msg("RunCommand using explicit target_host for routing")
 	}
-
 
 	output, err := s.executeOnAgent(ctx, execReq, req.Command)
 	if err != nil {
@@ -2132,7 +2278,6 @@ After install, enable and start the service:
 The latest version can be found at: https://api.github.com/repos/rcourtman/Pulse/releases/latest
 This is a 3-command job. Don't over-investigate.`
 
-
 	// Add custom context from AI settings (user's infrastructure description)
 	s.mu.RLock()
 	cfg := s.cfg
@@ -2147,7 +2292,7 @@ This is a 3-command job. Don't over-investigate.`
 	s.mu.RLock()
 	hasResourceProvider := s.resourceProvider != nil
 	s.mu.RUnlock()
-	
+
 	if hasResourceProvider {
 		prompt += s.buildUnifiedResourceContext()
 	} else {
@@ -2193,7 +2338,6 @@ This is a 3-command job. Don't over-investigate.`
 			prompt += fmt.Sprintf("\n\n## Current Focus\nYou are analyzing %s '%s'", req.TargetType, req.TargetID)
 		}
 	}
-
 
 	// Add any provided context in a structured way
 	if len(req.Context) > 0 {
@@ -2259,39 +2403,39 @@ This is a 3-command job. Don't over-investigate.`
 // formatContextKey converts snake_case keys to readable labels
 func formatContextKey(key string) string {
 	replacements := map[string]string{
-		"guestName":          "Guest Name",
-		"name":               "Name",
-		"type":               "Type",
-		"vmid":               "VMID",
-		"node":               "PVE Node (host)",
-		"guest_node":         "PVE Node (host)",
-		"status":             "Status",
-		"uptime":             "Uptime",
-		"cpu_usage":          "CPU Usage",
-		"cpu_cores":          "CPU Cores",
-		"memory_used":        "Memory Used",
-		"memory_total":       "Memory Total",
-		"memory_usage":       "Memory Usage",
-		"memory_balloon":     "Memory Balloon",
-		"swap_used":          "Swap Used",
-		"swap_total":         "Swap Total",
-		"disk_used":          "Disk Used",
-		"disk_total":         "Disk Total",
-		"disk_usage":         "Disk Usage",
-		"disk_read_rate":     "Disk Read Rate",
-		"disk_write_rate":    "Disk Write Rate",
-		"network_in_rate":    "Network In Rate",
-		"network_out_rate":   "Network Out Rate",
-		"backup_status":      "Backup Status",
-		"last_backup":        "Last Backup",
-		"days_since_backup":  "Days Since Backup",
-		"os_name":            "OS Name",
-		"os_version":         "OS Version",
-		"guest_agent":        "Guest Agent",
-		"ip_addresses":       "IP Addresses",
-		"tags":               "Tags",
-		"user_notes":         "User Notes",
-		"user_annotations":   "User Annotations",
+		"guestName":         "Guest Name",
+		"name":              "Name",
+		"type":              "Type",
+		"vmid":              "VMID",
+		"node":              "PVE Node (host)",
+		"guest_node":        "PVE Node (host)",
+		"status":            "Status",
+		"uptime":            "Uptime",
+		"cpu_usage":         "CPU Usage",
+		"cpu_cores":         "CPU Cores",
+		"memory_used":       "Memory Used",
+		"memory_total":      "Memory Total",
+		"memory_usage":      "Memory Usage",
+		"memory_balloon":    "Memory Balloon",
+		"swap_used":         "Swap Used",
+		"swap_total":        "Swap Total",
+		"disk_used":         "Disk Used",
+		"disk_total":        "Disk Total",
+		"disk_usage":        "Disk Usage",
+		"disk_read_rate":    "Disk Read Rate",
+		"disk_write_rate":   "Disk Write Rate",
+		"network_in_rate":   "Network In Rate",
+		"network_out_rate":  "Network Out Rate",
+		"backup_status":     "Backup Status",
+		"last_backup":       "Last Backup",
+		"days_since_backup": "Days Since Backup",
+		"os_name":           "OS Name",
+		"os_version":        "OS Version",
+		"guest_agent":       "Guest Agent",
+		"ip_addresses":      "IP Addresses",
+		"tags":              "Tags",
+		"user_notes":        "User Notes",
+		"user_annotations":  "User Annotations",
 	}
 
 	if label, ok := replacements[key]; ok {
@@ -2474,4 +2618,3 @@ func providerDisplayName(provider string) string {
 func (s *Service) Reload() error {
 	return s.LoadConfig()
 }
-

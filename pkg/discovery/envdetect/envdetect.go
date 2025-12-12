@@ -86,6 +86,7 @@ type EnvironmentProfile struct {
 	Type         Environment       // Detected environment.
 	Phases       []SubnetPhase     // Subnet scanning phases.
 	ExtraTargets []net.IP          // IPs to always probe.
+	IPBlocklist  []net.IP          // Individual IPs to skip (auto-populated with configured Proxmox hosts).
 	Policy       ScanPolicy        // Applied scan policy.
 	Confidence   float64           // Overall confidence (0.0 - 1.0).
 	Warnings     []string          // Non-fatal detection warnings.

@@ -1,9 +1,6 @@
 package api
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -139,26 +136,19 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 			continue
 		}
 
+		checksum, err := r.cachedSHA256(candidate, info)
+		if err != nil {
+			log.Error().Err(err).Str("path", candidate).Msg("Failed to compute unified agent checksum")
+			continue
+		}
+
 		file, err := os.Open(candidate)
 		if err != nil {
 			log.Error().Err(err).Str("path", candidate).Msg("Failed to open unified agent binary for download")
 			continue
 		}
 
-		hasher := sha256.New()
-		if _, err := io.Copy(hasher, file); err != nil {
-			file.Close()
-			log.Error().Err(err).Str("path", candidate).Msg("Failed to hash unified agent binary")
-			continue
-		}
-
-		if _, err := file.Seek(0, io.SeekStart); err != nil {
-			file.Close()
-			log.Error().Err(err).Str("path", candidate).Msg("Failed to rewind unified agent binary")
-			continue
-		}
-
-		w.Header().Set("X-Checksum-Sha256", hex.EncodeToString(hasher.Sum(nil)))
+		w.Header().Set("X-Checksum-Sha256", checksum)
 		http.ServeContent(w, req, filepath.Base(candidate), info.ModTime(), file)
 		file.Close()
 		return

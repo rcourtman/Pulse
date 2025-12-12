@@ -113,6 +113,19 @@ func ApplyConfigToProfile(profile *envdetect.EnvironmentProfile, cfg config.Disc
 	if cfg.HTTPTimeout > 0 {
 		profile.Policy.HTTPTimeout = time.Duration(cfg.HTTPTimeout) * time.Millisecond
 	}
+
+	// Apply IP blocklist (individual IPs to skip, e.g. already-configured Proxmox hosts)
+	for _, ipStr := range cfg.IPBlocklist {
+		ipStr = strings.TrimSpace(ipStr)
+		if ipStr == "" {
+			continue
+		}
+		if ip := net.ParseIP(ipStr); ip != nil {
+			profile.IPBlocklist = append(profile.IPBlocklist, ip)
+		} else {
+			profile.Warnings = append(profile.Warnings, fmt.Sprintf("Invalid IP in blocklist: %s", ipStr))
+		}
+	}
 }
 
 func shouldPruneContainerNetworks(env envdetect.Environment) bool {

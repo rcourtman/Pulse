@@ -61,6 +61,7 @@ type Router struct {
 	updateManager             *updates.Manager
 	updateHistory             *updates.UpdateHistory
 	exportLimiter             *RateLimiter
+	downloadLimiter           *RateLimiter
 	persistence               *config.ConfigPersistence
 	oidcMu                    sync.Mutex
 	oidcService               *OIDCService
@@ -75,6 +76,8 @@ type Router struct {
 	publicURLDetected    bool
 	bootstrapTokenHash   string
 	bootstrapTokenPath   string
+	checksumMu           sync.RWMutex
+	checksumCache        map[string]checksumCacheEntry
 }
 
 func pulseBinDir() string {
@@ -124,17 +127,19 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 	updateManager.SetHistory(updateHistory)
 
 	r := &Router{
-		mux:           http.NewServeMux(),
-		config:        cfg,
-		monitor:       monitor,
-		wsHub:         wsHub,
-		reloadFunc:    reloadFunc,
-		updateManager: updateManager,
-		updateHistory: updateHistory,
-		exportLimiter: NewRateLimiter(5, 1*time.Minute), // 5 attempts per minute
-		persistence:   config.NewConfigPersistence(cfg.DataPath),
-		serverVersion: strings.TrimSpace(serverVersion),
-		projectRoot:   projectRoot,
+		mux:             http.NewServeMux(),
+		config:          cfg,
+		monitor:         monitor,
+		wsHub:           wsHub,
+		reloadFunc:      reloadFunc,
+		updateManager:   updateManager,
+		updateHistory:   updateHistory,
+		exportLimiter:   NewRateLimiter(5, 1*time.Minute),  // 5 attempts per minute
+		downloadLimiter: NewRateLimiter(60, 1*time.Minute), // downloads/installers per minute per IP
+		persistence:     config.NewConfigPersistence(cfg.DataPath),
+		serverVersion:   strings.TrimSpace(serverVersion),
+		projectRoot:     projectRoot,
+		checksumCache:   make(map[string]checksumCacheEntry),
 	}
 
 	r.initializeBootstrapToken()
@@ -1090,10 +1095,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/knowledge/clear", RequireAuth(r.config, r.aiSettingsHandler.HandleClearGuestKnowledge))
 	r.mux.HandleFunc("/api/ai/debug/context", RequireAdmin(r.config, r.aiSettingsHandler.HandleDebugContext))
 	r.mux.HandleFunc("/api/ai/agents", RequireAuth(r.config, r.aiSettingsHandler.HandleGetConnectedAgents))
+	r.mux.HandleFunc("/api/ai/cost/summary", RequireAuth(r.config, r.aiSettingsHandler.HandleGetAICostSummary))
 	// OAuth endpoints for Claude Pro/Max subscription authentication
 	r.mux.HandleFunc("/api/ai/oauth/start", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthStart))
 	r.mux.HandleFunc("/api/ai/oauth/exchange", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthExchange)) // Manual code input
-	r.mux.HandleFunc("/api/ai/oauth/callback", r.aiSettingsHandler.HandleOAuthCallback) // Public - receives redirect from Anthropic
+	r.mux.HandleFunc("/api/ai/oauth/callback", r.aiSettingsHandler.HandleOAuthCallback)                         // Public - receives redirect from Anthropic
 	r.mux.HandleFunc("/api/ai/oauth/disconnect", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthDisconnect))
 
 	// AI Patrol routes for background monitoring
@@ -1103,8 +1109,8 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/patrol/history", RequireAuth(r.config, r.aiSettingsHandler.HandleGetFindingsHistory))
 	r.mux.HandleFunc("/api/ai/patrol/run", RequireAdmin(r.config, r.aiSettingsHandler.HandleForcePatrol))
 	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, r.aiSettingsHandler.HandleAcknowledgeFinding))
-	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, r.aiSettingsHandler.HandleDismissFinding))    // Dismiss with reason (LLM memory)
-	r.mux.HandleFunc("/api/ai/patrol/suppress", RequireAuth(r.config, r.aiSettingsHandler.HandleSuppressFinding))  // Permanently suppress (LLM memory)
+	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, r.aiSettingsHandler.HandleDismissFinding))   // Dismiss with reason (LLM memory)
+	r.mux.HandleFunc("/api/ai/patrol/suppress", RequireAuth(r.config, r.aiSettingsHandler.HandleSuppressFinding)) // Permanently suppress (LLM memory)
 	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, r.aiSettingsHandler.HandleSnoozeFinding))
 	r.mux.HandleFunc("/api/ai/patrol/resolve", RequireAuth(r.config, r.aiSettingsHandler.HandleResolveFinding))
 	r.mux.HandleFunc("/api/ai/patrol/runs", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolRunHistory))
@@ -1125,23 +1131,23 @@ func (r *Router) setupRoutes() {
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
 
-	// Docker agent download endpoints
-	r.mux.HandleFunc("/install-docker-agent.sh", r.handleDownloadInstallScript) // Serves the Docker agent install script
-	r.mux.HandleFunc("/install-container-agent.sh", r.handleDownloadContainerAgentInstallScript)
-	r.mux.HandleFunc("/download/pulse-docker-agent", r.handleDownloadAgent)
+	// Docker agent download endpoints (public but rate limited)
+	r.mux.HandleFunc("/install-docker-agent.sh", r.downloadLimiter.Middleware(r.handleDownloadInstallScript)) // Serves the Docker agent install script
+	r.mux.HandleFunc("/install-container-agent.sh", r.downloadLimiter.Middleware(r.handleDownloadContainerAgentInstallScript))
+	r.mux.HandleFunc("/download/pulse-docker-agent", r.downloadLimiter.Middleware(r.handleDownloadAgent))
 
-	// Host agent download endpoints
-	r.mux.HandleFunc("/install-host-agent.sh", r.handleDownloadHostAgentInstallScript)
-	r.mux.HandleFunc("/install-host-agent.ps1", r.handleDownloadHostAgentInstallScriptPS)
-	r.mux.HandleFunc("/uninstall-host-agent.sh", r.handleDownloadHostAgentUninstallScript)
-	r.mux.HandleFunc("/uninstall-host-agent.ps1", r.handleDownloadHostAgentUninstallScriptPS)
-	r.mux.HandleFunc("/download/pulse-host-agent", r.handleDownloadHostAgent)
-	r.mux.HandleFunc("/download/pulse-host-agent.sha256", r.handleDownloadHostAgent)
+	// Host agent download endpoints (public but rate limited)
+	r.mux.HandleFunc("/install-host-agent.sh", r.downloadLimiter.Middleware(r.handleDownloadHostAgentInstallScript))
+	r.mux.HandleFunc("/install-host-agent.ps1", r.downloadLimiter.Middleware(r.handleDownloadHostAgentInstallScriptPS))
+	r.mux.HandleFunc("/uninstall-host-agent.sh", r.downloadLimiter.Middleware(r.handleDownloadHostAgentUninstallScript))
+	r.mux.HandleFunc("/uninstall-host-agent.ps1", r.downloadLimiter.Middleware(r.handleDownloadHostAgentUninstallScriptPS))
+	r.mux.HandleFunc("/download/pulse-host-agent", r.downloadLimiter.Middleware(r.handleDownloadHostAgent))
+	r.mux.HandleFunc("/download/pulse-host-agent.sha256", r.downloadLimiter.Middleware(r.handleDownloadHostAgent))
 
-	// Unified Agent endpoints
-	r.mux.HandleFunc("/install.sh", r.handleDownloadUnifiedInstallScript)
-	r.mux.HandleFunc("/install.ps1", r.handleDownloadUnifiedInstallScriptPS)
-	r.mux.HandleFunc("/download/pulse-agent", r.handleDownloadUnifiedAgent)
+	// Unified Agent endpoints (public but rate limited)
+	r.mux.HandleFunc("/install.sh", r.downloadLimiter.Middleware(r.handleDownloadUnifiedInstallScript))
+	r.mux.HandleFunc("/install.ps1", r.downloadLimiter.Middleware(r.handleDownloadUnifiedInstallScriptPS))
+	r.mux.HandleFunc("/download/pulse-agent", r.downloadLimiter.Middleware(r.handleDownloadUnifiedAgent))
 
 	r.mux.HandleFunc("/api/agent/version", r.handleAgentVersion)
 	r.mux.HandleFunc("/api/server/info", r.handleServerInfo)
@@ -1402,6 +1408,16 @@ func (r *Router) StartPatrol(ctx context.Context) {
 			historyPersistence := ai.NewPatrolHistoryPersistenceAdapter(r.persistence)
 			if err := r.aiSettingsHandler.SetPatrolRunHistoryPersistence(historyPersistence); err != nil {
 				log.Error().Err(err).Msg("Failed to initialize AI patrol run history persistence")
+			}
+		}
+
+		// Connect patrol to metrics history for enriched context (trends, predictions)
+		if r.monitor != nil {
+			if metricsHistory := r.monitor.GetMetricsHistory(); metricsHistory != nil {
+				adapter := ai.NewMetricsHistoryAdapter(metricsHistory)
+				if adapter != nil {
+					r.aiSettingsHandler.SetMetricsHistoryProvider(adapter)
+				}
 			}
 		}
 
@@ -2620,13 +2636,13 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 	}
 
 	state := r.monitor.GetState()
-	
+
 	// Also populate the unified resource store (Phase 1 of unified architecture)
 	// This runs on every state request to keep resources up-to-date
 	if r.resourceHandlers != nil {
 		r.resourceHandlers.PopulateFromSnapshot(state)
 	}
-	
+
 	frontendState := state.ToFrontend()
 
 	if err := utils.WriteJSONResponse(w, frontendState); err != nil {
@@ -3771,26 +3787,19 @@ func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 			continue
 		}
 
+		checksum, err := r.cachedSHA256(candidate, info)
+		if err != nil {
+			log.Error().Err(err).Str("path", candidate).Msg("Failed to compute docker agent checksum")
+			continue
+		}
+
 		file, err := os.Open(candidate)
 		if err != nil {
 			log.Error().Err(err).Str("path", candidate).Msg("Failed to open docker agent binary for download")
 			continue
 		}
 
-		hasher := sha256.New()
-		if _, err := io.Copy(hasher, file); err != nil {
-			file.Close()
-			log.Error().Err(err).Str("path", candidate).Msg("Failed to hash docker agent binary")
-			continue
-		}
-
-		if _, err := file.Seek(0, io.SeekStart); err != nil {
-			file.Close()
-			log.Error().Err(err).Str("path", candidate).Msg("Failed to rewind docker agent binary")
-			continue
-		}
-
-		w.Header().Set("X-Checksum-Sha256", hex.EncodeToString(hasher.Sum(nil)))
+		w.Header().Set("X-Checksum-Sha256", checksum)
 		http.ServeContent(w, req, filepath.Base(candidate), info.ModTime(), file)
 		file.Close()
 		return
@@ -4041,22 +4050,73 @@ func sortedHostAgentKeys(missing map[string]agentbinaries.HostAgentBinary) []str
 	return keys
 }
 
-// serveChecksum computes and serves the SHA256 checksum of a file
-func (r *Router) serveChecksum(w http.ResponseWriter, filepath string) {
-	file, err := os.Open(filepath)
+type checksumCacheEntry struct {
+	checksum string
+	modTime  time.Time
+	size     int64
+}
+
+func (r *Router) cachedSHA256(filePath string, info os.FileInfo) (string, error) {
+	if filePath == "" {
+		return "", fmt.Errorf("empty file path")
+	}
+
+	if info == nil {
+		var err error
+		info, err = os.Stat(filePath)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	r.checksumMu.RLock()
+	entry, ok := r.checksumCache[filePath]
+	r.checksumMu.RUnlock()
+	if ok && entry.size == info.Size() && entry.modTime.Equal(info.ModTime()) {
+		return entry.checksum, nil
+	}
+
+	file, err := os.Open(filePath)
 	if err != nil {
-		http.Error(w, "Failed to open file", http.StatusInternalServerError)
-		return
+		return "", err
 	}
 	defer file.Close()
 
 	hasher := sha256.New()
 	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+
+	checksum := hex.EncodeToString(hasher.Sum(nil))
+
+	r.checksumMu.Lock()
+	if r.checksumCache == nil {
+		r.checksumCache = make(map[string]checksumCacheEntry)
+	}
+	r.checksumCache[filePath] = checksumCacheEntry{
+		checksum: checksum,
+		modTime:  info.ModTime(),
+		size:     info.Size(),
+	}
+	r.checksumMu.Unlock()
+
+	return checksum, nil
+}
+
+// serveChecksum computes and serves the SHA256 checksum of a file
+func (r *Router) serveChecksum(w http.ResponseWriter, filePath string) {
+	info, err := os.Stat(filePath)
+	if err != nil {
+		http.Error(w, "Failed to stat file", http.StatusInternalServerError)
+		return
+	}
+
+	checksum, err := r.cachedSHA256(filePath, info)
+	if err != nil {
 		http.Error(w, "Failed to compute checksum", http.StatusInternalServerError)
 		return
 	}
 
-	checksum := hex.EncodeToString(hasher.Sum(nil))
 	w.Header().Set("Content-Type", "text/plain")
 	fmt.Fprintf(w, "%s\n", checksum)
 }

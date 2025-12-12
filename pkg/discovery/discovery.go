@@ -234,9 +234,33 @@ func (s *Scanner) DiscoverServersWithCallbacks(ctx context.Context, subnet strin
 
 	seenIPs := make(map[string]struct{})
 
+	// Pre-populate seenIPs with blocked IPs to skip them during scanning
+	// This prevents probing already-configured Proxmox hosts (reduces PBS auth failure log spam)
+	blockedCount := 0
+	if activeProfile != nil {
+		for _, ip := range activeProfile.IPBlocklist {
+			if ip == nil {
+				continue
+			}
+			if ip4 := ip.To4(); ip4 != nil {
+				seenIPs[ip4.String()] = struct{}{}
+				blockedCount++
+			}
+		}
+		if blockedCount > 0 {
+			log.Debug().
+				Int("blocked_ips", blockedCount).
+				Msg("Pre-populated blocked IPs to skip during discovery")
+		}
+	}
+
 	// Calculate total targets and phases for progress tracking
 	// Use a preview map to ensure we count only unique IPs that will actually be scanned
+	// Copy blocked IPs to preview map as well
 	previewSeen := make(map[string]struct{})
+	for ip := range seenIPs {
+		previewSeen[ip] = struct{}{}
+	}
 	var totalTargets int
 	var validPhases []envdetect.SubnetPhase
 	phases := append([]envdetect.SubnetPhase(nil), activeProfile.Phases...)

@@ -12,12 +12,12 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
-
 
 // AISettingsHandler handles AI settings endpoints
 type AISettingsHandler struct {
@@ -91,6 +91,11 @@ func (h *AISettingsHandler) SetPatrolRunHistoryPersistence(persistence ai.Patrol
 	return nil
 }
 
+// SetMetricsHistoryProvider sets the metrics history provider for enriched AI context
+func (h *AISettingsHandler) SetMetricsHistoryProvider(provider ai.MetricsHistoryProvider) {
+	h.aiService.SetMetricsHistoryProvider(provider)
+}
+
 // StopPatrol stops the background AI patrol service
 func (h *AISettingsHandler) StopPatrol() {
 	h.aiService.StopPatrol()
@@ -105,38 +110,38 @@ func (h *AISettingsHandler) GetAlertTriggeredAnalyzer() *ai.AlertTriggeredAnalyz
 // API keys are masked for security
 type AISettingsResponse struct {
 	Enabled        bool   `json:"enabled"`
-	Provider       string `json:"provider"`          // DEPRECATED: legacy single provider
-	APIKeySet      bool   `json:"api_key_set"`       // DEPRECATED: true if legacy API key is configured
+	Provider       string `json:"provider"`    // DEPRECATED: legacy single provider
+	APIKeySet      bool   `json:"api_key_set"` // DEPRECATED: true if legacy API key is configured
 	Model          string `json:"model"`
 	ChatModel      string `json:"chat_model,omitempty"`   // Model for interactive chat (empty = use default)
 	PatrolModel    string `json:"patrol_model,omitempty"` // Model for patrol (empty = use default)
 	BaseURL        string `json:"base_url,omitempty"`     // DEPRECATED: legacy base URL
-	Configured     bool   `json:"configured"`      // true if AI is ready to use
-	AutonomousMode bool   `json:"autonomous_mode"` // true if AI can execute without approval
-	CustomContext  string `json:"custom_context"`  // user-provided infrastructure context
+	Configured     bool   `json:"configured"`             // true if AI is ready to use
+	AutonomousMode bool   `json:"autonomous_mode"`        // true if AI can execute without approval
+	CustomContext  string `json:"custom_context"`         // user-provided infrastructure context
 	// OAuth fields for Claude Pro/Max subscription authentication
 	AuthMethod     string `json:"auth_method"`     // "api_key" or "oauth"
 	OAuthConnected bool   `json:"oauth_connected"` // true if OAuth tokens are configured
 	// Patrol settings for token efficiency
-	PatrolSchedulePreset   string              `json:"patrol_schedule_preset"`   // DEPRECATED: legacy preset
-	PatrolIntervalMinutes  int                 `json:"patrol_interval_minutes"`  // Patrol interval in minutes (0 = disabled)
-	AlertTriggeredAnalysis bool                `json:"alert_triggered_analysis"` // true if AI analyzes when alerts fire
-	AvailableModels        []config.ModelInfo  `json:"available_models"`         // List of models for current provider
+	PatrolSchedulePreset   string             `json:"patrol_schedule_preset"`   // DEPRECATED: legacy preset
+	PatrolIntervalMinutes  int                `json:"patrol_interval_minutes"`  // Patrol interval in minutes (0 = disabled)
+	AlertTriggeredAnalysis bool               `json:"alert_triggered_analysis"` // true if AI analyzes when alerts fire
+	AvailableModels        []config.ModelInfo `json:"available_models"`         // List of models for current provider
 	// Multi-provider credentials - shows which providers are configured
-	AnthropicConfigured bool   `json:"anthropic_configured"` // true if Anthropic API key or OAuth is set
-	OpenAIConfigured    bool   `json:"openai_configured"`    // true if OpenAI API key is set
-	DeepSeekConfigured  bool   `json:"deepseek_configured"`  // true if DeepSeek API key is set
-	OllamaConfigured    bool   `json:"ollama_configured"`    // true (always available for attempt)
-	OllamaBaseURL       string `json:"ollama_base_url"`      // Ollama server URL
-	OpenAIBaseURL       string `json:"openai_base_url,omitempty"` // Custom OpenAI base URL
-	ConfiguredProviders []string `json:"configured_providers"` // List of provider names with credentials
+	AnthropicConfigured bool     `json:"anthropic_configured"`      // true if Anthropic API key or OAuth is set
+	OpenAIConfigured    bool     `json:"openai_configured"`         // true if OpenAI API key is set
+	DeepSeekConfigured  bool     `json:"deepseek_configured"`       // true if DeepSeek API key is set
+	OllamaConfigured    bool     `json:"ollama_configured"`         // true (always available for attempt)
+	OllamaBaseURL       string   `json:"ollama_base_url"`           // Ollama server URL
+	OpenAIBaseURL       string   `json:"openai_base_url,omitempty"` // Custom OpenAI base URL
+	ConfiguredProviders []string `json:"configured_providers"`      // List of provider names with credentials
 }
 
 // AISettingsUpdateRequest is the request body for PUT /api/settings/ai
 type AISettingsUpdateRequest struct {
 	Enabled        *bool   `json:"enabled,omitempty"`
-	Provider       *string `json:"provider,omitempty"`    // DEPRECATED: use model selection instead
-	APIKey         *string `json:"api_key,omitempty"`     // DEPRECATED: use per-provider keys
+	Provider       *string `json:"provider,omitempty"` // DEPRECATED: use model selection instead
+	APIKey         *string `json:"api_key,omitempty"`  // DEPRECATED: use per-provider keys
 	Model          *string `json:"model,omitempty"`
 	ChatModel      *string `json:"chat_model,omitempty"`   // Model for interactive chat
 	PatrolModel    *string `json:"patrol_model,omitempty"` // Model for background patrol
@@ -582,9 +587,9 @@ func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Requ
 	}
 
 	type Response struct {
-		Models  []ModelInfo `json:"models"`
-		Error   string      `json:"error,omitempty"`
-		Cached  bool        `json:"cached"`
+		Models []ModelInfo `json:"models"`
+		Error  string      `json:"error,omitempty"`
+		Cached bool        `json:"cached"`
 	}
 
 	models, err := h.aiService.ListModels(ctx)
@@ -622,25 +627,25 @@ func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Requ
 // AIExecuteRequest is the request body for POST /api/ai/execute
 // AIConversationMessage represents a message in conversation history
 type AIConversationMessage struct {
-	Role    string `json:"role"`    // "user" or "assistant"
+	Role    string `json:"role"` // "user" or "assistant"
 	Content string `json:"content"`
 }
 
 type AIExecuteRequest struct {
-	Prompt     string                   `json:"prompt"`
-	TargetType string                   `json:"target_type,omitempty"` // "host", "container", "vm", "node"
-	TargetID   string                   `json:"target_id,omitempty"`
-	Context    map[string]interface{}   `json:"context,omitempty"` // Current metrics, state, etc.
-	History    []AIConversationMessage  `json:"history,omitempty"` // Previous conversation messages
+	Prompt     string                  `json:"prompt"`
+	TargetType string                  `json:"target_type,omitempty"` // "host", "container", "vm", "node"
+	TargetID   string                  `json:"target_id,omitempty"`
+	Context    map[string]interface{}  `json:"context,omitempty"` // Current metrics, state, etc.
+	History    []AIConversationMessage `json:"history,omitempty"` // Previous conversation messages
 }
 
 // AIExecuteResponse is the response from POST /api/ai/execute
 type AIExecuteResponse struct {
-	Content      string                 `json:"content"`
-	Model        string                 `json:"model"`
-	InputTokens  int                    `json:"input_tokens"`
-	OutputTokens int                    `json:"output_tokens"`
-	ToolCalls    []ai.ToolExecution     `json:"tool_calls,omitempty"` // Commands that were executed
+	Content      string             `json:"content"`
+	Model        string             `json:"model"`
+	InputTokens  int                `json:"input_tokens"`
+	OutputTokens int                `json:"output_tokens"`
+	ToolCalls    []ai.ToolExecution `json:"tool_calls,omitempty"` // Commands that were executed
 }
 
 // HandleExecute executes an AI prompt (POST /api/ai/execute)
@@ -935,7 +940,6 @@ type AIRunCommandRequest struct {
 	TargetHost string `json:"target_host,omitempty"` // Explicit host for routing
 }
 
-
 // HandleRunCommand executes a single approved command (POST /api/ai/run-command)
 func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -957,7 +961,7 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	log.Debug().Str("body", string(bodyBytes)).Msg("run-command request body")
-	
+
 	var req AIRunCommandRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		log.Error().Err(err).Str("body", string(bodyBytes)).Msg("Failed to decode JSON body")
@@ -2059,7 +2063,7 @@ func (h *AISettingsHandler) HandleAcknowledgeFinding(w http.ResponseWriter, r *h
 	}
 
 	findings := patrol.GetFindings()
-	
+
 	// Just acknowledge - don't resolve. Finding stays visible but marked as seen.
 	// Auto-resolve will remove it when the underlying condition clears.
 	if !findings.Acknowledge(req.FindingID) {
@@ -2126,7 +2130,7 @@ func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.R
 
 	findings := patrol.GetFindings()
 	duration := time.Duration(req.DurationHours) * time.Hour
-	
+
 	if !findings.Snooze(req.FindingID, duration) {
 		http.Error(w, "Finding not found or already resolved", http.StatusNotFound)
 		return
@@ -2180,7 +2184,7 @@ func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.
 	}
 
 	findings := patrol.GetFindings()
-	
+
 	// Mark as manually resolved (auto=false since user did it)
 	if !findings.Resolve(req.FindingID, false) {
 		http.Error(w, "Finding not found or already resolved", http.StatusNotFound)
@@ -2223,8 +2227,8 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 
 	var req struct {
 		FindingID string `json:"finding_id"`
-		Reason    string `json:"reason"`     // "not_an_issue", "expected_behavior", "will_fix_later"
-		Note      string `json:"note"`       // Optional freeform note
+		Reason    string `json:"reason"` // "not_an_issue", "expected_behavior", "will_fix_later"
+		Note      string `json:"note"`   // Optional freeform note
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -2248,7 +2252,7 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 	}
 
 	findings := patrol.GetFindings()
-	
+
 	if !findings.Dismiss(req.FindingID, req.Reason, req.Note) {
 		http.Error(w, "Finding not found", http.StatusNotFound)
 		return
@@ -2303,7 +2307,7 @@ func (h *AISettingsHandler) HandleSuppressFinding(w http.ResponseWriter, r *http
 	}
 
 	findings := patrol.GetFindings()
-	
+
 	if !findings.Suppress(req.FindingID) {
 		http.Error(w, "Finding not found", http.StatusNotFound)
 		return
@@ -2392,6 +2396,40 @@ func (h *AISettingsHandler) HandleGetPatrolRunHistory(w http.ResponseWriter, r *
 	}
 }
 
+// HandleGetAICostSummary returns AI usage rollups (GET /api/ai/cost/summary?days=N).
+func (h *AISettingsHandler) HandleGetAICostSummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse optional days query parameter (default: 30, max: 365)
+	days := 30
+	if daysStr := r.URL.Query().Get("days"); daysStr != "" {
+		if _, err := fmt.Sscanf(daysStr, "%d", &days); err == nil && days > 0 {
+			if days > 365 {
+				days = 365
+			}
+		}
+	}
+
+	var summary cost.Summary
+	if h.aiService != nil {
+		summary = h.aiService.GetCostSummary(days)
+	} else {
+		summary = cost.Summary{
+			Days:           days,
+			ProviderModels: []cost.ProviderModelSummary{},
+			DailyTotals:    []cost.DailySummary{},
+			Totals:         cost.ProviderModelSummary{Provider: "all"},
+		}
+	}
+
+	if err := utils.WriteJSONResponse(w, summary); err != nil {
+		log.Error().Err(err).Msg("Failed to write AI cost summary response")
+	}
+}
+
 // HandleGetSuppressionRules returns all suppression rules (GET /api/ai/patrol/suppressions)
 func (h *AISettingsHandler) HandleGetSuppressionRules(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -2427,7 +2465,7 @@ func (h *AISettingsHandler) HandleAddSuppressionRule(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Require authentication  
+	// Require authentication
 	if !CheckAuth(h.config, w, r) {
 		return
 	}
@@ -2523,7 +2561,7 @@ func (h *AISettingsHandler) HandleDeleteSuppressionRule(w http.ResponseWriter, r
 	}
 
 	findings := patrol.GetFindings()
-	
+
 	if !findings.DeleteSuppressionRule(ruleID) {
 		http.Error(w, "Rule not found", http.StatusNotFound)
 		return
