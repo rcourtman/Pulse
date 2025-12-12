@@ -5,6 +5,7 @@ package memory
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -18,26 +19,26 @@ import (
 type ChangeType string
 
 const (
-	ChangeCreated    ChangeType = "created"    // New resource appeared
-	ChangeDeleted    ChangeType = "deleted"    // Resource removed
-	ChangeConfig     ChangeType = "config"     // Configuration changed (RAM, CPU, etc)
-	ChangeStatus     ChangeType = "status"     // Status changed (started, stopped, paused)
-	ChangeMigrated   ChangeType = "migrated"   // Moved to different node
-	ChangeRestarted  ChangeType = "restarted"  // Resource was restarted
-	ChangeBackedUp   ChangeType = "backed_up"  // Backup completed
+	ChangeCreated   ChangeType = "created"   // New resource appeared
+	ChangeDeleted   ChangeType = "deleted"   // Resource removed
+	ChangeConfig    ChangeType = "config"    // Configuration changed (RAM, CPU, etc)
+	ChangeStatus    ChangeType = "status"    // Status changed (started, stopped, paused)
+	ChangeMigrated  ChangeType = "migrated"  // Moved to different node
+	ChangeRestarted ChangeType = "restarted" // Resource was restarted
+	ChangeBackedUp  ChangeType = "backed_up" // Backup completed
 )
 
 // Change represents a detected change to infrastructure
 type Change struct {
-	ID          string      `json:"id"`
-	ResourceID  string      `json:"resource_id"`
-	ResourceType string     `json:"resource_type"` // vm, container, node, storage
-	ResourceName string     `json:"resource_name"`
-	ChangeType  ChangeType  `json:"change_type"`
-	Before      interface{} `json:"before,omitempty"`
-	After       interface{} `json:"after,omitempty"`
-	DetectedAt  time.Time   `json:"detected_at"`
-	Description string      `json:"description"`
+	ID           string      `json:"id"`
+	ResourceID   string      `json:"resource_id"`
+	ResourceType string      `json:"resource_type"` // vm, container, node, storage
+	ResourceName string      `json:"resource_name"`
+	ChangeType   ChangeType  `json:"change_type"`
+	Before       interface{} `json:"before,omitempty"`
+	After        interface{} `json:"after,omitempty"`
+	DetectedAt   time.Time   `json:"detected_at"`
+	Description  string      `json:"description"`
 }
 
 // ResourceSnapshot captures key attributes for change detection
@@ -60,7 +61,7 @@ type ChangeDetector struct {
 	previousState map[string]ResourceSnapshot // resourceID -> snapshot
 	changes       []Change
 	maxChanges    int
-	
+
 	// Persistence
 	dataDir string
 }
@@ -76,14 +77,14 @@ func NewChangeDetector(cfg ChangeDetectorConfig) *ChangeDetector {
 	if cfg.MaxChanges <= 0 {
 		cfg.MaxChanges = 1000
 	}
-	
+
 	d := &ChangeDetector{
 		previousState: make(map[string]ResourceSnapshot),
 		changes:       make([]Change, 0),
 		maxChanges:    cfg.MaxChanges,
 		dataDir:       cfg.DataDir,
 	}
-	
+
 	// Load existing changes from disk
 	if cfg.DataDir != "" {
 		if err := d.loadFromDisk(); err != nil {
@@ -92,7 +93,7 @@ func NewChangeDetector(cfg ChangeDetectorConfig) *ChangeDetector {
 			log.Info().Int("count", len(d.changes)).Msg("Loaded change history from disk")
 		}
 	}
-	
+
 	return d
 }
 
@@ -100,16 +101,16 @@ func NewChangeDetector(cfg ChangeDetectorConfig) *ChangeDetector {
 func (d *ChangeDetector) DetectChanges(currentSnapshots []ResourceSnapshot) []Change {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	
+
 	now := time.Now()
 	var newChanges []Change
-	
+
 	// Track which resources we've seen in current snapshot
 	currentIDs := make(map[string]bool)
-	
+
 	for _, current := range currentSnapshots {
 		currentIDs[current.ID] = true
-		
+
 		prev, exists := d.previousState[current.ID]
 		if !exists {
 			// New resource
@@ -129,11 +130,11 @@ func (d *ChangeDetector) DetectChanges(currentSnapshots []ResourceSnapshot) []Ch
 			changes := d.detectResourceChanges(prev, current, now)
 			newChanges = append(newChanges, changes...)
 		}
-		
+
 		// Update previous state
 		d.previousState[current.ID] = current
 	}
-	
+
 	// Check for deleted resources
 	for id, prev := range d.previousState {
 		if !currentIDs[id] {
@@ -151,12 +152,12 @@ func (d *ChangeDetector) DetectChanges(currentSnapshots []ResourceSnapshot) []Ch
 			delete(d.previousState, id)
 		}
 	}
-	
+
 	// Store new changes
 	if len(newChanges) > 0 {
 		d.changes = append(d.changes, newChanges...)
 		d.trimChanges()
-		
+
 		// Persist asynchronously
 		go func() {
 			if err := d.saveToDisk(); err != nil {
@@ -164,14 +165,14 @@ func (d *ChangeDetector) DetectChanges(currentSnapshots []ResourceSnapshot) []Ch
 			}
 		}()
 	}
-	
+
 	return newChanges
 }
 
 // detectResourceChanges checks for changes between two snapshots of the same resource
 func (d *ChangeDetector) detectResourceChanges(prev, current ResourceSnapshot, now time.Time) []Change {
 	var changes []Change
-	
+
 	// Status change
 	if prev.Status != current.Status {
 		change := Change{
@@ -187,7 +188,7 @@ func (d *ChangeDetector) detectResourceChanges(prev, current ResourceSnapshot, n
 		}
 		changes = append(changes, change)
 	}
-	
+
 	// Node change (migration)
 	if prev.Node != "" && current.Node != "" && prev.Node != current.Node {
 		change := Change{
@@ -203,7 +204,7 @@ func (d *ChangeDetector) detectResourceChanges(prev, current ResourceSnapshot, n
 		}
 		changes = append(changes, change)
 	}
-	
+
 	// CPU change
 	if prev.CPUCores > 0 && current.CPUCores > 0 && prev.CPUCores != current.CPUCores {
 		change := Change{
@@ -219,7 +220,7 @@ func (d *ChangeDetector) detectResourceChanges(prev, current ResourceSnapshot, n
 		}
 		changes = append(changes, change)
 	}
-	
+
 	// Memory change (significant change > 5%)
 	if prev.MemoryBytes > 0 && current.MemoryBytes > 0 {
 		pctChange := float64(current.MemoryBytes-prev.MemoryBytes) / float64(prev.MemoryBytes)
@@ -238,10 +239,10 @@ func (d *ChangeDetector) detectResourceChanges(prev, current ResourceSnapshot, n
 			changes = append(changes, change)
 		}
 	}
-	
+
 	// Backup completed
-	if !prev.LastBackup.IsZero() && !current.LastBackup.IsZero() && 
-	   current.LastBackup.After(prev.LastBackup) {
+	if !prev.LastBackup.IsZero() && !current.LastBackup.IsZero() &&
+		current.LastBackup.After(prev.LastBackup) {
 		change := Change{
 			ID:           generateChangeID(),
 			ResourceID:   current.ID,
@@ -255,7 +256,7 @@ func (d *ChangeDetector) detectResourceChanges(prev, current ResourceSnapshot, n
 		}
 		changes = append(changes, change)
 	}
-	
+
 	return changes
 }
 
@@ -263,7 +264,7 @@ func (d *ChangeDetector) detectResourceChanges(prev, current ResourceSnapshot, n
 func (d *ChangeDetector) GetChangesForResource(resourceID string, limit int) []Change {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	
+
 	var result []Change
 	// Iterate in reverse to get most recent first
 	for i := len(d.changes) - 1; i >= 0 && len(result) < limit; i-- {
@@ -278,7 +279,7 @@ func (d *ChangeDetector) GetChangesForResource(resourceID string, limit int) []C
 func (d *ChangeDetector) GetRecentChanges(limit int, since time.Time) []Change {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	
+
 	var result []Change
 	for i := len(d.changes) - 1; i >= 0 && len(result) < limit; i-- {
 		if d.changes[i].DetectedAt.After(since) {
@@ -294,7 +295,7 @@ func (d *ChangeDetector) GetChangesSummary(since time.Time, maxChanges int) stri
 	if len(changes) == 0 {
 		return ""
 	}
-	
+
 	var result string
 	for _, c := range changes {
 		ago := time.Since(c.DetectedAt)
@@ -316,23 +317,23 @@ func (d *ChangeDetector) saveToDisk() error {
 	if d.dataDir == "" {
 		return nil
 	}
-	
+
 	d.mu.RLock()
 	changes := make([]Change, len(d.changes))
 	copy(changes, d.changes)
 	d.mu.RUnlock()
-	
+
 	path := filepath.Join(d.dataDir, "ai_changes.json")
 	data, err := json.MarshalIndent(changes, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	tmpPath := path + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		return err
 	}
-	
+
 	return os.Rename(tmpPath, path)
 }
 
@@ -341,8 +342,14 @@ func (d *ChangeDetector) loadFromDisk() error {
 	if d.dataDir == "" {
 		return nil
 	}
-	
+
 	path := filepath.Join(d.dataDir, "ai_changes.json")
+	if st, err := os.Stat(path); err == nil {
+		const maxOnDiskBytes = 10 << 20 // 10 MiB safety cap
+		if st.Size() > maxOnDiskBytes {
+			return fmt.Errorf("change history file too large (%d bytes)", st.Size())
+		}
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -350,18 +357,19 @@ func (d *ChangeDetector) loadFromDisk() error {
 		}
 		return err
 	}
-	
+
 	var changes []Change
 	if err := json.Unmarshal(data, &changes); err != nil {
 		return err
 	}
-	
+
 	// Sort by time
 	sort.Slice(changes, func(i, j int) bool {
 		return changes[i].DetectedAt.Before(changes[j].DetectedAt)
 	})
-	
+
 	d.changes = changes
+	d.trimChanges()
 	return nil
 }
 
@@ -371,7 +379,7 @@ var changeCounter int64
 
 func generateChangeID() string {
 	changeCounter++
-	return time.Now().Format("20060102150405") + "-" + string(rune('0'+changeCounter%10))
+	return time.Now().Format("20060102150405") + "-" + intToString(int(changeCounter%1000))
 }
 
 func formatDuration(d time.Duration) string {
@@ -391,7 +399,7 @@ func formatUnit(n int, unit string) string {
 	if n == 1 {
 		return "1 " + unit
 	}
-	return string(rune('0'+n/10)) + string(rune('0'+n%10)) + " " + unit + "s"
+	return intToString(n) + " " + unit + "s"
 }
 
 func formatBytes(bytes int64) string {
@@ -408,7 +416,7 @@ func formatBytes(bytes int64) string {
 	case bytes >= KB:
 		return formatFloat(float64(bytes)/KB) + " KB"
 	default:
-		return string(rune('0'+bytes/10)) + string(rune('0'+bytes%10)) + " B"
+		return intToString(int(bytes)) + " B"
 	}
 }
 

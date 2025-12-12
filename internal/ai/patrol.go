@@ -1659,12 +1659,28 @@ If everything looks healthy, you can say so briefly without any FINDING blocks.`
 	if autoFix {
 		return basePrompt + `
 
-AUTO-FIX MODE ENABLED: You may use the run_command tool to attempt automatic remediation of issues you find. Use caution and only fix issues where you are confident the fix is safe. Always log what you're doing.`
+AUTO-FIX MODE ENABLED: You may use the run_command tool to attempt automatic remediation of issues you find.
+
+Safe operations you can perform autonomously:
+- Restart services (systemctl restart)
+- Clear caches and temp files
+- Rotate/compress logs
+- Trigger garbage collection
+
+Operations requiring extra caution:
+- Deleting files (prefer moving to /tmp first)
+- Installing packages
+- Modifying configurations
+
+Always:
+1. Run a verification command after any fix to confirm success
+2. Log what action was taken and the outcome
+3. Stop and report if the fix doesn't resolve the issue`
 	}
 
 	return basePrompt + `
 
-OBSERVE ONLY MODE: You are in observation mode. Gather data using read-only commands (like checking status, memory usage, disk space) to investigate issues, but DO NOT attempt to fix or modify anything. Present your findings for the user to review and action.`
+OBSERVE ONLY MODE: You are in observation mode. You may use read-only commands to gather diagnostic information (checking status, memory usage, disk space, logs, etc.) but DO NOT modify anything. Present your findings with clear recommendations for the user to review and action manually.`
 }
 
 // buildInfrastructureSummary creates a text summary of infrastructure state for the AI

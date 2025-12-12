@@ -27,23 +27,23 @@ func DefaultPolicy() *CommandPolicy {
 	p := &CommandPolicy{
 		AutoApprove: []string{
 			// System inspection
-			`^ps\s`,
+			`^ps(\s|$)`,
 			`^top\s+-bn`,
-			`^df\s`,
-			`^free\s`,
+			`^df(\s|$)`,
+			`^free(\s|$)`,
 			`^uptime$`,
 			`^hostname$`,
-			`^uname\s`,
+			`^uname(\s|$)`,
 			`^cat\s+/proc/`,
 			`^cat\s+/etc/os-release`,
-			`^lsof\s`,
-			`^netstat\s`,
-			`^ss\s`,
+			`^lsof(\s|$)`,
+			`^netstat(\s|$)`,
+			`^ss(\s|$)`,
 			`^ip\s+(addr|route|link)`,
 			`^ifconfig`,
 			`^w$`,
 			`^who$`,
-			`^last\s`,
+			`^last(\s|$)`,
 
 			// Log reading (read-only)
 			`^cat\s+/var/log/`,
@@ -82,10 +82,10 @@ func DefaultPolicy() *CommandPolicy {
 			`^lsblk`,
 			`^blkid`,
 			`^fdisk\s+-l`,
-			`^du\s`,
-			`^ls\s`,
-			`^stat\s`,
-			`^file\s`,
+			`^du(\s|$)`,
+			`^ls(\s|$)`,
+			`^stat(\s|$)`,
+			`^file(\s|$)`,
 			`^find\s+/.*-size`,  // Find large files
 			`^find\s+/.*-mtime`, // Find by modification time
 			`^find\s+/.*-type`,  // Find by type
@@ -131,6 +131,10 @@ func DefaultPolicy() *CommandPolicy {
 			// Proxmox control
 			`^pct\s+(start|stop|shutdown|reboot|resize|set)\s`,
 			`^qm\s+(start|stop|shutdown|reboot|reset|resize|set)\s`,
+
+			// journalctl maintenance (modifies logs / persistent state)
+			`^journalctl\s+--vacuum`,
+			`^journalctl\s+--rotate`,
 		},
 
 		Blocked: []string{
@@ -207,6 +211,14 @@ const (
 // Evaluate checks a command against the policy
 func (p *CommandPolicy) Evaluate(command string) PolicyDecision {
 	command = strings.TrimSpace(command)
+	// Normalize simple sudo prefix so policy applies consistently.
+	// For complex sudo invocations (sudo flags), keep the command as-is (conservative).
+	if strings.HasPrefix(command, "sudo ") {
+		parts := strings.Fields(command)
+		if len(parts) >= 2 && !strings.HasPrefix(parts[1], "-") {
+			command = strings.Join(parts[1:], " ")
+		}
+	}
 
 	// Check blocked first (highest priority)
 	for _, re := range p.blockedRe {

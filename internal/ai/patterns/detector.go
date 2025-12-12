@@ -4,6 +4,7 @@ package patterns
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -18,37 +19,37 @@ import (
 type EventType string
 
 const (
-	EventHighMemory    EventType = "high_memory"    // Memory exceeded threshold
-	EventHighCPU       EventType = "high_cpu"       // CPU exceeded threshold
-	EventDiskFull      EventType = "disk_full"      // Disk space critical
-	EventOOM           EventType = "oom"            // Out of memory kill
-	EventRestart       EventType = "restart"        // Resource restarted
-	EventUnresponsive  EventType = "unresponsive"   // Resource became unresponsive
-	EventBackupFailed  EventType = "backup_failed"  // Backup job failed
+	EventHighMemory   EventType = "high_memory"   // Memory exceeded threshold
+	EventHighCPU      EventType = "high_cpu"      // CPU exceeded threshold
+	EventDiskFull     EventType = "disk_full"     // Disk space critical
+	EventOOM          EventType = "oom"           // Out of memory kill
+	EventRestart      EventType = "restart"       // Resource restarted
+	EventUnresponsive EventType = "unresponsive"  // Resource became unresponsive
+	EventBackupFailed EventType = "backup_failed" // Backup job failed
 )
 
 // HistoricalEvent represents a recorded event
 type HistoricalEvent struct {
-	ID          string    `json:"id"`
-	ResourceID  string    `json:"resource_id"`
-	EventType   EventType `json:"event_type"`
-	Timestamp   time.Time `json:"timestamp"`
-	Description string    `json:"description,omitempty"`
-	Resolved    bool      `json:"resolved"`
-	ResolvedAt  time.Time `json:"resolved_at,omitempty"`
+	ID          string        `json:"id"`
+	ResourceID  string        `json:"resource_id"`
+	EventType   EventType     `json:"event_type"`
+	Timestamp   time.Time     `json:"timestamp"`
+	Description string        `json:"description,omitempty"`
+	Resolved    bool          `json:"resolved"`
+	ResolvedAt  time.Time     `json:"resolved_at,omitempty"`
 	Duration    time.Duration `json:"duration,omitempty"` // How long it lasted
 }
 
 // Pattern represents a detected recurring pattern
 type Pattern struct {
-	ResourceID     string        `json:"resource_id"`
-	EventType      EventType     `json:"event_type"`
-	Occurrences    int           `json:"occurrences"`      // Number of times event occurred
+	ResourceID      string        `json:"resource_id"`
+	EventType       EventType     `json:"event_type"`
+	Occurrences     int           `json:"occurrences"`      // Number of times event occurred
 	AverageInterval time.Duration `json:"average_interval"` // Average time between occurrences
-	StdDevInterval time.Duration `json:"stddev_interval"`  // Standard deviation
-	LastOccurrence time.Time     `json:"last_occurrence"`
-	NextPredicted  time.Time     `json:"next_predicted"`   // When we expect it to happen again
-	Confidence     float64       `json:"confidence"`       // 0-1, based on consistency
+	StdDevInterval  time.Duration `json:"stddev_interval"`  // Standard deviation
+	LastOccurrence  time.Time     `json:"last_occurrence"`
+	NextPredicted   time.Time     `json:"next_predicted"`             // When we expect it to happen again
+	Confidence      float64       `json:"confidence"`                 // 0-1, based on consistency
 	AverageDuration time.Duration `json:"average_duration,omitempty"` // How long events typically last
 }
 
@@ -68,13 +69,13 @@ type Detector struct {
 	mu       sync.RWMutex
 	events   []HistoricalEvent
 	patterns map[string]*Pattern // resourceID:eventType -> pattern
-	
+
 	// Configuration
 	maxEvents       int
 	minOccurrences  int           // Minimum occurrences to form a pattern
 	patternWindow   time.Duration // How far back to look for patterns
 	predictionLimit time.Duration // How far ahead to predict
-	
+
 	// Persistence
 	dataDir string
 }
@@ -112,7 +113,7 @@ func NewDetector(cfg DetectorConfig) *Detector {
 	if cfg.PredictionLimit <= 0 {
 		cfg.PredictionLimit = 30 * 24 * time.Hour
 	}
-	
+
 	d := &Detector{
 		events:          make([]HistoricalEvent, 0),
 		patterns:        make(map[string]*Pattern),
@@ -122,7 +123,7 @@ func NewDetector(cfg DetectorConfig) *Detector {
 		predictionLimit: cfg.PredictionLimit,
 		dataDir:         cfg.DataDir,
 	}
-	
+
 	// Load existing data
 	if cfg.DataDir != "" {
 		if err := d.loadFromDisk(); err != nil {
@@ -132,7 +133,7 @@ func NewDetector(cfg DetectorConfig) *Detector {
 				Msg("Loaded pattern history from disk")
 		}
 	}
-	
+
 	return d
 }
 
@@ -140,21 +141,26 @@ func NewDetector(cfg DetectorConfig) *Detector {
 func (d *Detector) RecordEvent(event HistoricalEvent) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	
+
 	if event.ID == "" {
 		event.ID = generateEventID()
 	}
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now()
 	}
-	
+
 	d.events = append(d.events, event)
 	d.trimEvents()
-	
+
 	// Recompute pattern for this resource/event type
 	key := patternKey(event.ResourceID, event.EventType)
-	d.patterns[key] = d.computePattern(event.ResourceID, event.EventType)
-	
+	pattern := d.computePattern(event.ResourceID, event.EventType)
+	if pattern == nil {
+		delete(d.patterns, key)
+	} else {
+		d.patterns[key] = pattern
+	}
+
 	// Persist asynchronously
 	go func() {
 		if err := d.saveToDisk(); err != nil {
@@ -169,7 +175,7 @@ func (d *Detector) RecordFromAlert(resourceID string, alertType string, timestam
 	if eventType == "" {
 		return // Not a trackable event type
 	}
-	
+
 	d.RecordEvent(HistoricalEvent{
 		ResourceID:  resourceID,
 		EventType:   eventType,
@@ -182,23 +188,26 @@ func (d *Detector) RecordFromAlert(resourceID string, alertType string, timestam
 func (d *Detector) GetPredictions() []FailurePrediction {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	
+
 	var predictions []FailurePrediction
 	now := time.Now()
-	
+
 	for _, pattern := range d.patterns {
+		if pattern == nil {
+			continue
+		}
 		// Only predict if pattern has sufficient confidence
 		if pattern.Confidence < 0.3 || pattern.Occurrences < d.minOccurrences {
 			continue
 		}
-		
+
 		// Check if prediction is within our limit
 		if pattern.NextPredicted.Before(now) || pattern.NextPredicted.After(now.Add(d.predictionLimit)) {
 			continue
 		}
-		
+
 		daysUntil := pattern.NextPredicted.Sub(now).Hours() / 24
-		
+
 		predictions = append(predictions, FailurePrediction{
 			ResourceID:  pattern.ResourceID,
 			EventType:   pattern.EventType,
@@ -209,12 +218,12 @@ func (d *Detector) GetPredictions() []FailurePrediction {
 			Pattern:     pattern,
 		})
 	}
-	
+
 	// Sort by days until (soonest first)
 	sort.Slice(predictions, func(i, j int) bool {
 		return predictions[i].DaysUntil < predictions[j].DaysUntil
 	})
-	
+
 	return predictions
 }
 
@@ -234,9 +243,12 @@ func (d *Detector) GetPredictionsForResource(resourceID string) []FailurePredict
 func (d *Detector) GetPatterns() map[string]*Pattern {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	
+
 	result := make(map[string]*Pattern)
 	for k, v := range d.patterns {
+		if v == nil {
+			continue
+		}
 		result[k] = v
 	}
 	return result
@@ -245,7 +257,7 @@ func (d *Detector) GetPatterns() map[string]*Pattern {
 // computePattern analyzes events to find patterns for a resource/event type
 func (d *Detector) computePattern(resourceID string, eventType EventType) *Pattern {
 	cutoff := time.Now().Add(-d.patternWindow)
-	
+
 	// Get all events for this resource/type within the window
 	var events []HistoricalEvent
 	for _, e := range d.events {
@@ -253,74 +265,83 @@ func (d *Detector) computePattern(resourceID string, eventType EventType) *Patte
 			events = append(events, e)
 		}
 	}
-	
+
 	if len(events) < d.minOccurrences {
 		return nil
 	}
-	
+
 	// Sort by timestamp
 	sort.Slice(events, func(i, j int) bool {
 		return events[i].Timestamp.Before(events[j].Timestamp)
 	})
-	
+
 	// Calculate intervals between events
 	var intervals []time.Duration
 	var durations []time.Duration
-	
+
 	for i := 1; i < len(events); i++ {
 		interval := events[i].Timestamp.Sub(events[i-1].Timestamp)
 		intervals = append(intervals, interval)
-		
+
 		if events[i-1].Duration > 0 {
 			durations = append(durations, events[i-1].Duration)
 		}
 	}
-	
+
 	if len(intervals) == 0 {
 		return nil
 	}
-	
+
 	// Calculate average and stddev of intervals
 	avgInterval := averageDuration(intervals)
 	stddevInterval := stddevDuration(intervals, avgInterval)
-	
+
 	// Calculate confidence based on consistency
 	// If stddev is low relative to mean, pattern is more reliable
 	consistency := 1.0
 	if avgInterval > 0 {
 		cv := float64(stddevInterval) / float64(avgInterval) // Coefficient of variation
-		consistency = 1.0 - math.Min(cv, 1.0) // Higher consistency = lower CV
+		consistency = 1.0 - math.Min(cv, 1.0)                // Higher consistency = lower CV
 	}
-	
+
 	// Adjust confidence based on number of occurrences
 	occurrenceBonus := math.Min(float64(len(events))/10.0, 0.3)
 	confidence := consistency*0.7 + occurrenceBonus
-	
+
 	// Predict next occurrence
 	lastEvent := events[len(events)-1]
 	nextPredicted := lastEvent.Timestamp.Add(avgInterval)
-	
+
 	// Calculate average duration if available
 	var avgDuration time.Duration
 	if len(durations) > 0 {
 		avgDuration = averageDuration(durations)
 	}
-	
+
 	return &Pattern{
-		ResourceID:       resourceID,
-		EventType:        eventType,
-		Occurrences:      len(events),
-		AverageInterval:  avgInterval,
-		StdDevInterval:   stddevInterval,
-		LastOccurrence:   lastEvent.Timestamp,
-		NextPredicted:    nextPredicted,
-		Confidence:       confidence,
-		AverageDuration:  avgDuration,
+		ResourceID:      resourceID,
+		EventType:       eventType,
+		Occurrences:     len(events),
+		AverageInterval: avgInterval,
+		StdDevInterval:  stddevInterval,
+		LastOccurrence:  lastEvent.Timestamp,
+		NextPredicted:   nextPredicted,
+		Confidence:      confidence,
+		AverageDuration: avgDuration,
 	}
 }
 
 // trimEvents removes old events beyond maxEvents
 func (d *Detector) trimEvents() {
+	cutoff := time.Now().Add(-d.patternWindow)
+	kept := d.events[:0]
+	for _, e := range d.events {
+		if e.Timestamp.After(cutoff) {
+			kept = append(kept, e)
+		}
+	}
+	d.events = kept
+
 	if len(d.events) > d.maxEvents {
 		d.events = d.events[len(d.events)-d.maxEvents:]
 	}
@@ -331,7 +352,7 @@ func (d *Detector) saveToDisk() error {
 	if d.dataDir == "" {
 		return nil
 	}
-	
+
 	d.mu.RLock()
 	data := struct {
 		Events   []HistoricalEvent   `json:"events"`
@@ -341,18 +362,18 @@ func (d *Detector) saveToDisk() error {
 		Patterns: d.patterns,
 	}
 	d.mu.RUnlock()
-	
+
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	path := filepath.Join(d.dataDir, "ai_patterns.json")
 	tmpPath := path + ".tmp"
 	if err := os.WriteFile(tmpPath, jsonData, 0600); err != nil {
 		return err
 	}
-	
+
 	return os.Rename(tmpPath, path)
 }
 
@@ -361,8 +382,14 @@ func (d *Detector) loadFromDisk() error {
 	if d.dataDir == "" {
 		return nil
 	}
-	
+
 	path := filepath.Join(d.dataDir, "ai_patterns.json")
+	if st, err := os.Stat(path); err == nil {
+		const maxOnDiskBytes = 10 << 20 // 10 MiB safety cap
+		if st.Size() > maxOnDiskBytes {
+			return fmt.Errorf("pattern history file too large (%d bytes)", st.Size())
+		}
+	}
 	jsonData, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -370,19 +397,37 @@ func (d *Detector) loadFromDisk() error {
 		}
 		return err
 	}
-	
+
 	var data struct {
 		Events   []HistoricalEvent   `json:"events"`
 		Patterns map[string]*Pattern `json:"patterns"`
 	}
-	
+
 	if err := json.Unmarshal(jsonData, &data); err != nil {
 		return err
 	}
-	
+
 	d.events = data.Events
-	d.patterns = data.Patterns
-	
+	d.patterns = make(map[string]*Pattern, len(data.Patterns))
+	for k, v := range data.Patterns {
+		if v == nil {
+			continue
+		}
+		d.patterns[k] = v
+	}
+
+	d.trimEvents()
+	cutoff := time.Now().Add(-d.patternWindow)
+	for k, v := range d.patterns {
+		if v == nil {
+			delete(d.patterns, k)
+			continue
+		}
+		if v.Occurrences < d.minOccurrences || v.LastOccurrence.Before(cutoff) {
+			delete(d.patterns, k)
+		}
+	}
+
 	return nil
 }
 
@@ -394,15 +439,15 @@ func (d *Detector) FormatForContext(resourceID string) string {
 	} else {
 		predictions = d.GetPredictions()
 	}
-	
+
 	if len(predictions) == 0 {
 		return ""
 	}
-	
+
 	var result string
 	result = "\n## ⏰ Failure Predictions\n"
 	result += "Based on historical patterns:\n"
-	
+
 	for _, p := range predictions {
 		if len(result) > 2000 { // Limit context size
 			result += "\n... and more\n"
@@ -410,7 +455,7 @@ func (d *Detector) FormatForContext(resourceID string) string {
 		}
 		result += "- " + p.Basis + "\n"
 	}
-	
+
 	return result
 }
 
@@ -488,7 +533,7 @@ func formatPatternBasis(p *Pattern) string {
 	daysInterval := p.AverageInterval.Hours() / 24
 	daysSinceLast := time.Since(p.LastOccurrence).Hours() / 24
 	daysUntilNext := p.NextPredicted.Sub(time.Now()).Hours() / 24
-	
+
 	eventName := string(p.EventType)
 	switch p.EventType {
 	case EventHighMemory:
@@ -506,13 +551,13 @@ func formatPatternBasis(p *Pattern) string {
 	case EventBackupFailed:
 		eventName = "backup failures"
 	}
-	
+
 	if daysUntilNext < 0 {
-		return eventName + " typically occurs every ~" + formatDays(daysInterval) + 
+		return eventName + " typically occurs every ~" + formatDays(daysInterval) +
 			" (last: " + formatDays(daysSinceLast) + " ago, overdue)"
 	}
-	
-	return eventName + " typically occurs every ~" + formatDays(daysInterval) + 
+
+	return eventName + " typically occurs every ~" + formatDays(daysInterval) +
 		" (next expected in ~" + formatDays(daysUntilNext) + ")"
 }
 

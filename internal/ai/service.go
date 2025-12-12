@@ -2,12 +2,12 @@ package ai
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
-	"path/filepath"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -48,6 +48,23 @@ type Service struct {
 
 	// Alert-triggered analysis - token-efficient real-time AI insights
 	alertTriggeredAnalyzer *AlertTriggeredAnalyzer
+
+	limits executionLimits
+
+	modelsCache modelsCache
+}
+
+type executionLimits struct {
+	chatSlots   chan struct{}
+	patrolSlots chan struct{}
+}
+
+type modelsCache struct {
+	mu     sync.RWMutex
+	at     time.Time
+	key    string
+	models []providers.ModelInfo
+	ttl    time.Duration
 }
 
 // NewService creates a new AI service
@@ -72,7 +89,65 @@ func NewService(persistence *config.ConfigPersistence, agentServer *agentexec.Se
 		policy:         agentexec.DefaultPolicy(),
 		knowledgeStore: knowledgeStore,
 		costStore:      costStore,
+		limits: executionLimits{
+			chatSlots:   make(chan struct{}, 4),
+			patrolSlots: make(chan struct{}, 1),
+		},
+		modelsCache: modelsCache{
+			ttl: 5 * time.Minute,
+		},
 	}
+}
+
+func (s *Service) acquireExecutionSlot(ctx context.Context, useCase string) (func(), error) {
+	normalized := strings.TrimSpace(strings.ToLower(useCase))
+	if normalized == "" {
+		normalized = "chat"
+	}
+
+	var slots chan struct{}
+	if normalized == "patrol" {
+		slots = s.limits.patrolSlots
+	} else {
+		slots = s.limits.chatSlots
+	}
+
+	select {
+	case slots <- struct{}{}:
+		return func() { <-slots }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(5 * time.Second):
+		return nil, fmt.Errorf("AI is busy - too many concurrent requests")
+	}
+}
+
+func (s *Service) enforceBudget(useCase string) error {
+	s.mu.RLock()
+	cfg := s.cfg
+	store := s.costStore
+	s.mu.RUnlock()
+
+	if cfg == nil || cfg.CostBudgetUSD30d <= 0 || store == nil {
+		return nil
+	}
+
+	summary := store.GetSummary(30)
+	if !summary.Totals.PricingKnown {
+		// We can't reliably enforce without pricing. Keep tracking and allow.
+		return nil
+	}
+
+	if summary.Totals.EstimatedUSD >= cfg.CostBudgetUSD30d {
+		normalized := strings.TrimSpace(strings.ToLower(useCase))
+		if normalized == "" {
+			normalized = "chat"
+		}
+		return fmt.Errorf("AI cost budget exceeded (%.2f/%.2f USD over %d days) - disable AI or raise budget to continue",
+			summary.Totals.EstimatedUSD, cfg.CostBudgetUSD30d, summary.EffectiveDays)
+	}
+
+	return nil
 }
 
 // SetStateProvider sets the state provider for infrastructure context
@@ -502,6 +577,66 @@ func formatPolicyBlockedToolResult(command, reason string) string {
 	return "POLICY_BLOCKED: " + string(b)
 }
 
+func parseApprovalNeededMarker(content string) (ApprovalNeededData, bool) {
+	const prefix = "APPROVAL_REQUIRED:"
+	if !strings.HasPrefix(content, prefix) {
+		return ApprovalNeededData{}, false
+	}
+	trimmed := strings.TrimSpace(strings.TrimPrefix(content, prefix))
+	if trimmed == "" {
+		return ApprovalNeededData{}, false
+	}
+
+	var payload struct {
+		Type    string `json:"type"`
+		Command string `json:"command"`
+		ToolID  string `json:"tool_id"`
+		Reason  string `json:"reason"`
+	}
+	if err := json.Unmarshal([]byte(trimmed), &payload); err != nil {
+		return ApprovalNeededData{}, false
+	}
+	if payload.Type != "approval_required" || payload.Command == "" {
+		return ApprovalNeededData{}, false
+	}
+
+	return ApprovalNeededData{
+		Command: payload.Command,
+		ToolID:  payload.ToolID,
+	}, true
+}
+
+func approvalNeededFromToolCall(req ExecuteRequest, tc providers.ToolCall, result string) (ApprovalNeededData, bool) {
+	if !strings.HasPrefix(result, "APPROVAL_REQUIRED:") {
+		return ApprovalNeededData{}, false
+	}
+	if tc.Name != "run_command" {
+		return ApprovalNeededData{}, false
+	}
+
+	cmd, _ := tc.Input["command"].(string)
+	runOnHost, _ := tc.Input["run_on_host"].(bool)
+	targetHost, _ := tc.Input["target_host"].(string)
+
+	if targetHost == "" {
+		if node, ok := req.Context["node"].(string); ok && node != "" {
+			targetHost = node
+		} else if node, ok := req.Context["hostname"].(string); ok && node != "" {
+			targetHost = node
+		} else if node, ok := req.Context["host_name"].(string); ok && node != "" {
+			targetHost = node
+		}
+	}
+
+	return ApprovalNeededData{
+		Command:    cmd,
+		ToolID:     tc.ID,
+		ToolName:   tc.Name,
+		RunOnHost:  runOnHost,
+		TargetHost: targetHost,
+	}, true
+}
+
 // LoadConfig loads the AI configuration and initializes the provider
 func (s *Service) LoadConfig() error {
 	s.mu.Lock()
@@ -671,232 +806,6 @@ func (s *Service) IsAutonomous() bool {
 	return s.cfg != nil && s.cfg.AutonomousMode
 }
 
-// isDangerousCommand checks if a command is too dangerous to auto-execute
-// These commands ALWAYS require approval, even in autonomous mode
-func isDangerousCommand(cmd string) bool {
-	cmd = strings.TrimSpace(strings.ToLower(cmd))
-	parts := strings.Fields(cmd)
-	if len(parts) == 0 {
-		return false
-	}
-	baseCmd := parts[0]
-	if baseCmd == "sudo" && len(parts) > 1 {
-		baseCmd = parts[1]
-	}
-
-	// Commands that are too dangerous to ever auto-execute
-	dangerousCommands := map[string]bool{
-		// Deletion commands
-		"rm":     true,
-		"rmdir":  true,
-		"unlink": true,
-		"shred":  true,
-		// Disk/filesystem destructive operations
-		"dd":       true,
-		"mkfs":     true,
-		"fdisk":    true,
-		"parted":   true,
-		"wipefs":   true,
-		"sgdisk":   true,
-		"gdisk":    true,
-		"zpool":    true, // Allow reads but not modifications
-		"zfs":      true, // Allow reads but not modifications
-		"lvremove": true,
-		"vgremove": true,
-		"pvremove": true,
-		// System state changes
-		"reboot":    true,
-		"shutdown":  true,
-		"poweroff":  true,
-		"halt":      true,
-		"init":      true,
-		"systemctl": true, // could stop critical services
-		"service":   true,
-		// User/permission changes
-		"chmod":   true,
-		"chown":   true,
-		"useradd": true,
-		"userdel": true,
-		"passwd":  true,
-		// Package management
-		"apt":     true,
-		"apt-get": true,
-		"dpkg":    true,
-		"yum":     true,
-		"dnf":     true,
-		"pacman":  true,
-		"pip":     true,
-		"npm":     true,
-		// Proxmox destructive
-		"vzdump":    true,
-		"vzrestore": true,
-		"pveam":     true,
-		// Network changes
-		"iptables":     true,
-		"nft":          true,
-		"firewall-cmd": true,
-	}
-
-	if dangerousCommands[baseCmd] {
-		// Special case: allow read-only apt/apt-get operations
-		if baseCmd == "apt" || baseCmd == "apt-get" {
-			// First, check if it's a dry-run/simulate command (safe even for upgrade/install)
-			for _, part := range parts {
-				if part == "--dry-run" || part == "-s" || part == "--simulate" || part == "--just-print" {
-					return false // Dry-run is always safe
-				}
-			}
-			// Check for inherently read-only operations
-			safeAptOps := []string{"update", "list", "show", "search", "policy", "madison", "depends", "rdepends", "changelog"}
-			for _, safeOp := range safeAptOps {
-				if len(parts) > 1 && parts[1] == safeOp {
-					return false // Safe read-only operation
-				}
-				// Also handle sudo apt <op>
-				if len(parts) > 2 && parts[0] == "sudo" && parts[2] == safeOp {
-					return false
-				}
-			}
-		}
-		// Special case: allow read-only systemctl operations
-		if baseCmd == "systemctl" {
-			safeSystemctlOps := []string{"status", "show", "list-units", "list-unit-files", "is-active", "is-enabled", "is-failed", "cat"}
-			for _, safeOp := range safeSystemctlOps {
-				if len(parts) > 1 && parts[1] == safeOp {
-					return false
-				}
-				if len(parts) > 2 && parts[0] == "sudo" && parts[2] == safeOp {
-					return false
-				}
-			}
-		}
-		// Special case: allow read-only dpkg operations
-		if baseCmd == "dpkg" {
-			safeDpkgOps := []string{"-l", "--list", "-L", "--listfiles", "-s", "--status", "-S", "--search", "-p", "--print-avail", "--get-selections"}
-			for _, safeOp := range safeDpkgOps {
-				if len(parts) > 1 && parts[1] == safeOp {
-					return false
-				}
-				if len(parts) > 2 && parts[0] == "sudo" && parts[2] == safeOp {
-					return false
-				}
-			}
-		}
-		return true
-	}
-
-	// Detect dangerous patterns in the full command
-	dangerousPatterns := []string{
-		"rm -rf", "rm -fr", "rm -r",
-		"> /dev/", "| tee /",
-		"mkfs.", "dd if=", "dd of=",
-		":(){ :|:& };:", // fork bomb
-		"chmod -R 777", "chmod 777",
-		"drop database", "drop table",
-		"truncate ",
-	}
-	for _, pattern := range dangerousPatterns {
-		if strings.Contains(cmd, pattern) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// isReadOnlyCommand checks if a command is read-only (doesn't modify state)
-// Read-only commands can be executed without approval even in non-autonomous mode
-func isReadOnlyCommand(cmd string) bool {
-	cmd = strings.TrimSpace(cmd)
-	// Get the base command (first word, ignoring sudo)
-	parts := strings.Fields(cmd)
-	if len(parts) == 0 {
-		return false
-	}
-	baseCmd := parts[0]
-	if baseCmd == "sudo" && len(parts) > 1 {
-		baseCmd = parts[1]
-	}
-
-	// List of read-only commands that are safe to auto-execute
-	readOnlyCommands := map[string]bool{
-		// File/disk inspection
-		"ls": true, "ll": true, "dir": true,
-		"cat": true, "head": true, "tail": true, "less": true, "more": true,
-		"df": true, "du": true, "stat": true, "file": true,
-		"find": true, "locate": true, "which": true, "whereis": true,
-		"wc": true, "diff": true, "cmp": true,
-		// Process inspection
-		"ps": true, "top": true, "htop": true, "pgrep": true,
-		"lsof": true, "fuser": true,
-		// System info
-		"uname": true, "hostname": true, "uptime": true, "whoami": true, "id": true,
-		"free": true, "vmstat": true, "iostat": true, "sar": true,
-		"lscpu": true, "lsmem": true, "lsblk": true, "lspci": true, "lsusb": true,
-		"dmesg": true, "journalctl": true,
-		// Network inspection
-		"ip": true, "ifconfig": true, "netstat": true, "ss": true,
-		"ping": true, "traceroute": true, "tracepath": true, "mtr": true,
-		"dig": true, "nslookup": true, "host": true,
-		"curl": true, "wget": true, // typically read-only when not writing files
-		// Docker inspection
-		"docker": true, // we'll check subcommands below
-		// Package info (not install/remove)
-		"dpkg": true, "rpm": true, "apt-cache": true,
-		// Text processing (read-only)
-		"grep": true, "egrep": true, "fgrep": true, "rg": true,
-		"awk": true, "sed": true, // can be used read-only
-		"sort": true, "uniq": true, "cut": true, "tr": true,
-		"jq": true, "yq": true,
-		// Proxmox inspection
-		"pct": true, "qm": true, "pvesh": true, "pvecm": true,
-		"zpool": true, "zfs": true,
-	}
-
-	if !readOnlyCommands[baseCmd] {
-		return false
-	}
-
-	// Special handling for commands with dangerous subcommands
-	cmdLower := strings.ToLower(cmd)
-
-	// Docker: only allow inspection subcommands
-	if baseCmd == "docker" {
-		dangerousDockerCmds := []string{
-			"docker rm", "docker rmi", "docker kill", "docker stop", "docker start",
-			"docker restart", "docker prune", "docker pull", "docker push",
-			"docker exec", "docker run", "docker build", "docker compose",
-			"docker volume rm", "docker network rm", "docker system prune",
-			"docker image prune", "docker container prune", "docker builder prune",
-		}
-		for _, dangerous := range dangerousDockerCmds {
-			if strings.Contains(cmdLower, dangerous) {
-				return false
-			}
-		}
-		return true
-	}
-
-	// Proxmox: only allow list/status subcommands
-	if baseCmd == "pct" || baseCmd == "qm" {
-		safeSubcmds := []string{"list", "status", "config", "pending", "snapshot"}
-		for _, safe := range safeSubcmds {
-			if strings.Contains(cmdLower, " "+safe) {
-				return true
-			}
-		}
-		// If no safe subcommand found, assume dangerous
-		return len(parts) == 1 // bare "pct" or "qm" is safe (shows help)
-	}
-
-	// journalctl with --vacuum is not read-only
-	if baseCmd == "journalctl" && strings.Contains(cmdLower, "vacuum") {
-		return false
-	}
-
-	return true
-}
-
 // ConversationMessage represents a message in conversation history
 type ConversationMessage struct {
 	Role    string `json:"role"` // "user" or "assistant"
@@ -918,11 +827,12 @@ type ExecuteRequest struct {
 
 // ExecuteResponse represents the AI's response
 type ExecuteResponse struct {
-	Content      string          `json:"content"`
-	Model        string          `json:"model"`
-	InputTokens  int             `json:"input_tokens"`
-	OutputTokens int             `json:"output_tokens"`
-	ToolCalls    []ToolExecution `json:"tool_calls,omitempty"` // Commands that were executed
+	Content          string               `json:"content"`
+	Model            string               `json:"model"`
+	InputTokens      int                  `json:"input_tokens"`
+	OutputTokens     int                  `json:"output_tokens"`
+	ToolCalls        []ToolExecution      `json:"tool_calls,omitempty"`        // Commands that were executed
+	PendingApprovals []ApprovalNeededData `json:"pending_approvals,omitempty"` // Commands that require approval (non-streaming)
 }
 
 // ToolExecution represents a tool that was executed during the AI conversation
@@ -988,7 +898,7 @@ type ToolEndData struct {
 type ApprovalNeededData struct {
 	Command    string `json:"command"`
 	ToolID     string `json:"tool_id"`   // ID to reference when approving
-	ToolName   string `json:"tool_name"` // "run_command", "read_file", etc.
+	ToolName   string `json:"tool_name"` // "run_command"
 	RunOnHost  bool   `json:"run_on_host"`
 	TargetHost string `json:"target_host,omitempty"` // Explicit host to route to
 }
@@ -996,6 +906,16 @@ type ApprovalNeededData struct {
 // Execute sends a prompt to the AI and returns the response
 // If tools are available and the AI requests them, it executes them in a loop
 func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteResponse, error) {
+	release, err := s.acquireExecutionSlot(ctx, req.UseCase)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	if err := s.enforceBudget(req.UseCase); err != nil {
+		return nil, err
+	}
+
 	s.mu.RLock()
 	defaultProvider := s.provider
 	agentServer := s.agentServer
@@ -1078,6 +998,10 @@ Always execute the commands rather than telling the user how to do it.`
 	// Agentic loop - keep going while AI requests tools
 	maxIterations := 10 // Safety limit
 	for i := 0; i < maxIterations; i++ {
+		if err := s.enforceBudget(req.UseCase); err != nil {
+			return nil, err
+		}
+
 		resp, err := provider.Chat(ctx, providers.ChatRequest{
 			Messages:  messages,
 			Model:     s.getModelForRequest(req),
@@ -1127,9 +1051,15 @@ Always execute the commands rather than telling the user how to do it.`
 		})
 
 		// Execute each tool call and add results
+		var pendingApprovals []ApprovalNeededData
 		for _, tc := range resp.ToolCalls {
 			result, execution := s.executeTool(ctx, req, tc)
 			toolExecutions = append(toolExecutions, execution)
+
+			if approval, ok := approvalNeededFromToolCall(req, tc, result); ok {
+				pendingApprovals = append(pendingApprovals, approval)
+				continue
+			}
 
 			// Add tool result to messages
 			messages = append(messages, providers.Message{
@@ -1140,6 +1070,20 @@ Always execute the commands rather than telling the user how to do it.`
 					IsError:   !execution.Success,
 				},
 			})
+
+		}
+
+		// Stop the agentic loop when approvals are required.
+		// The caller can execute approvals via /api/ai/run-command and continue.
+		if len(pendingApprovals) > 0 {
+			return &ExecuteResponse{
+				Content:          finalContent,
+				Model:            model,
+				InputTokens:      totalInputTokens,
+				OutputTokens:     totalOutputTokens,
+				ToolCalls:        toolExecutions,
+				PendingApprovals: pendingApprovals,
+			}, nil
 		}
 	}
 
@@ -1155,6 +1099,16 @@ Always execute the commands rather than telling the user how to do it.`
 // ExecuteStream sends a prompt to the AI and streams events via callback
 // This allows the UI to show real-time progress during tool execution
 func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callback StreamCallback) (*ExecuteResponse, error) {
+	release, err := s.acquireExecutionSlot(ctx, req.UseCase)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	if err := s.enforceBudget(req.UseCase); err != nil {
+		return nil, err
+	}
+
 	s.mu.RLock()
 	defaultProvider := s.provider
 	agentServer := s.agentServer
@@ -1267,6 +1221,11 @@ Always execute the commands rather than telling the user how to do it.`
 			callback(StreamEvent{Type: "processing", Data: fmt.Sprintf("Analyzing results (iteration %d)...", iteration)})
 		}
 
+		if err := s.enforceBudget(req.UseCase); err != nil {
+			callback(StreamEvent{Type: "error", Data: err.Error()})
+			return nil, err
+		}
+
 		resp, err := provider.Chat(ctx, providers.ChatRequest{
 			Messages:  messages,
 			Model:     s.getModelForRequest(req),
@@ -1371,24 +1330,49 @@ Always execute the commands rather than telling the user how to do it.`
 				}
 
 				isAuto := s.IsAutonomous()
-				isReadOnly := isReadOnlyCommand(cmd)
-				isDangerous := isDangerousCommand(cmd)
+				policyDecision := s.policy.Evaluate(cmd)
 				log.Debug().
 					Bool("autonomous", isAuto).
-					Bool("read_only", isReadOnly).
-					Bool("dangerous", isDangerous).
+					Str("policy_decision", string(policyDecision)).
 					Str("command", cmd).
 					Str("target_host", targetHost).
-					Msg("Checking command approval")
+					Msg("Checking command policy/approval")
 
-				// In autonomous mode, NO commands need approval - full trust
-				// In non-autonomous mode:
-				//   - Dangerous commands always need approval
-				//   - Non-read-only commands need approval
-				if !isAuto && (isDangerous || !isReadOnly) {
+				// Always block commands blocked by policy (even in autonomous mode).
+				if policyDecision == agentexec.PolicyBlock {
+					result := formatPolicyBlockedToolResult(cmd, "This command is blocked by security policy")
+					execution := ToolExecution{
+						Name:    tc.Name,
+						Input:   toolInput,
+						Output:  result,
+						Success: false,
+					}
+					toolExecutions = append(toolExecutions, execution)
+
+					callback(StreamEvent{
+						Type: "tool_start",
+						Data: ToolStartData{Name: tc.Name, Input: toolInput},
+					})
+					callback(StreamEvent{
+						Type: "tool_end",
+						Data: ToolEndData{Name: tc.Name, Input: toolInput, Output: result, Success: false},
+					})
+
+					messages = append(messages, providers.Message{
+						Role: "user",
+						ToolResult: &providers.ToolResult{
+							ToolUseID: tc.ID,
+							Content:   result,
+							IsError:   true,
+						},
+					})
+					continue
+				}
+
+				// If policy requires approval and we're not in autonomous mode, request approval.
+				if !isAuto && policyDecision == agentexec.PolicyRequireApproval {
 					needsApproval = true
 					anyNeedsApproval = true
-					// Send approval needed event
 					callback(StreamEvent{
 						Type: "approval_needed",
 						Data: ApprovalNeededData{
@@ -1433,7 +1417,7 @@ Always execute the commands rather than telling the user how to do it.`
 					Type: "tool_end",
 					Data: ToolEndData{Name: tc.Name, Input: toolInput, Output: result, Success: execution.Success},
 				})
-				
+
 				// Log to remediation log for operational memory
 				// Only log run_command since that's the main remediation action
 				if tc.Name == "run_command" {
@@ -1504,9 +1488,6 @@ func (s *Service) getToolInputDisplay(tc providers.ToolCall) string {
 			return fmt.Sprintf("[host] %s", cmd)
 		}
 		return cmd
-	case "read_file":
-		path, _ := tc.Input["path"].(string)
-		return path
 	case "fetch_url":
 		url, _ := tc.Input["url"].(string)
 		return url
@@ -1525,16 +1506,16 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 	s.mu.RLock()
 	patrol := s.patrolService
 	s.mu.RUnlock()
-	
+
 	if patrol == nil {
 		return
 	}
-	
+
 	remLog := patrol.GetRemediationLog()
 	if remLog == nil {
 		return
 	}
-	
+
 	// Determine outcome
 	outcome := OutcomeUnknown
 	if success {
@@ -1542,13 +1523,13 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 	} else {
 		outcome = OutcomeFailed
 	}
-	
+
 	// Extract problem from the original prompt (first 200 chars as summary)
 	problem := req.Prompt
 	if len(problem) > 200 {
 		problem = problem[:200] + "..."
 	}
-	
+
 	// Get resource name from context if available
 	resourceName := ""
 	if req.Context != nil {
@@ -1556,14 +1537,14 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 			resourceName = name
 		}
 	}
-	
+
 	// Truncate output for storage
 	truncatedOutput := output
 	const maxOutputLen = 1000
 	if len(truncatedOutput) > maxOutputLen {
 		truncatedOutput = truncatedOutput[:maxOutputLen] + "..."
 	}
-	
+
 	remLog.Log(RemediationRecord{
 		ResourceID:   req.TargetID,
 		ResourceType: req.TargetType,
@@ -1575,7 +1556,7 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 		Outcome:      outcome,
 		Automatic:    req.UseCase == "patrol", // Patrol runs are automatic
 	})
-	
+
 	log.Debug().
 		Str("resource_id", req.TargetID).
 		Str("command", command).
@@ -1618,46 +1599,6 @@ func (s *Service) getTools() []providers.Tool {
 					},
 				},
 				"required": []string{"command"},
-			},
-		},
-		{
-			Name:        "read_file",
-			Description: "Read the contents of a file on the target. Use this to examine configuration files or logs.",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"path": map[string]interface{}{
-						"type":        "string",
-						"description": "Absolute path to the file (e.g., '/etc/nginx/nginx.conf')",
-					},
-				},
-				"required": []string{"path"},
-			},
-		},
-		{
-			Name:        "write_file",
-			Description: "Write content to a file on the target. Use this to create or modify configuration files, scripts, or other text files. Creates parent directories if needed.",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"path": map[string]interface{}{
-						"type":        "string",
-						"description": "Absolute path to the file (e.g., '/etc/myapp/config.yaml')",
-					},
-					"content": map[string]interface{}{
-						"type":        "string",
-						"description": "The content to write to the file",
-					},
-					"mode": map[string]interface{}{
-						"type":        "string",
-						"description": "Optional file permissions in octal (e.g., '0644' for rw-r--r--, '0755' for executable). Defaults to '0644'.",
-					},
-					"append": map[string]interface{}{
-						"type":        "boolean",
-						"description": "If true, append to the file instead of overwriting. Defaults to false.",
-					},
-				},
-				"required": []string{"path", "content"},
 			},
 		},
 		{
@@ -1753,18 +1694,18 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			return execution.Output, execution
 		}
 
-		// Check security policy (skip if autonomous mode is enabled)
-		if !s.IsAutonomous() {
-			decision := s.policy.Evaluate(command)
-			if decision == agentexec.PolicyBlock {
-				execution.Output = formatPolicyBlockedToolResult(command, "This command is blocked by security policy")
-				return execution.Output, execution
-			}
-			if decision == agentexec.PolicyRequireApproval {
-				execution.Output = formatApprovalNeededToolResult(command, tc.ID, "Security policy requires approval")
-				execution.Success = true // Not an error, just needs approval
-				return execution.Output, execution
-			}
+		// Enforce security policy.
+		// - Blocked commands are ALWAYS blocked (even in autonomous mode).
+		// - Approval-required commands only require approval when not in autonomous mode.
+		decision := s.policy.Evaluate(command)
+		if decision == agentexec.PolicyBlock {
+			execution.Output = formatPolicyBlockedToolResult(command, "This command is blocked by security policy")
+			return execution.Output, execution
+		}
+		if decision == agentexec.PolicyRequireApproval && !s.IsAutonomous() {
+			execution.Output = formatApprovalNeededToolResult(command, tc.ID, "Security policy requires approval")
+			execution.Success = true // Not an error, just needs approval
+			return execution.Output, execution
 		}
 
 		// Build execution request with proper targeting
@@ -1814,122 +1755,6 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		result, err := s.executeOnAgent(ctx, execReq, command)
 		if err != nil {
 			execution.Output = fmt.Sprintf("Error executing command: %s", err)
-			return execution.Output, execution
-		}
-
-		execution.Output = result
-		execution.Success = true
-		return result, execution
-
-	case "read_file":
-		path, _ := tc.Input["path"].(string)
-		execution.Input = path
-
-		if path == "" {
-			execution.Output = "Error: path is required"
-			return execution.Output, execution
-		}
-
-		// Use cat command to read file (simple approach)
-		command := fmt.Sprintf("cat %q 2>&1 | head -c 65536", path)
-		result, err := s.executeOnAgent(ctx, req, command)
-		if err != nil {
-			execution.Output = fmt.Sprintf("Error reading file: %s", err)
-			return execution.Output, execution
-		}
-
-		execution.Output = result
-		execution.Success = true
-		return result, execution
-
-	case "write_file":
-		path, _ := tc.Input["path"].(string)
-		content, _ := tc.Input["content"].(string)
-		mode, _ := tc.Input["mode"].(string)
-		appendMode, _ := tc.Input["append"].(bool)
-		execution.Input = path
-
-		if path == "" {
-			execution.Output = "Error: path is required"
-			return execution.Output, execution
-		}
-		if content == "" {
-			execution.Output = "Error: content is required"
-			return execution.Output, execution
-		}
-
-		// Size limit: 1MB max to prevent filling disk
-		const maxFileSize = 1024 * 1024 // 1MB
-		if len(content) > maxFileSize {
-			execution.Output = fmt.Sprintf("Error: content too large (%d bytes). Maximum allowed is %d bytes (1MB)", len(content), maxFileSize)
-			return execution.Output, execution
-		}
-
-		// Path blocklist: prevent writes to critical system files
-		blockedPaths := []string{
-			"/etc/passwd", "/etc/shadow", "/etc/group", "/etc/gshadow",
-			"/etc/sudoers", "/etc/ssh/sshd_config",
-			"/boot/", "/lib/", "/lib64/", "/usr/lib/",
-			"/bin/", "/sbin/", "/usr/bin/", "/usr/sbin/",
-			"/proc/", "/sys/", "/dev/",
-		}
-		cleanPath := filepath.Clean(path)
-		for _, blocked := range blockedPaths {
-			if cleanPath == blocked || strings.HasPrefix(cleanPath, blocked) {
-				execution.Output = fmt.Sprintf("Error: writing to %s is blocked for safety. This is a critical system path.", path)
-				return execution.Output, execution
-			}
-		}
-
-		// Default mode if not specified
-		if mode == "" {
-			mode = "0644"
-		}
-
-		// Build the write command using base64 to safely handle any content
-		// This avoids issues with special characters, quotes, newlines, etc.
-		encoded := base64.StdEncoding.EncodeToString([]byte(content))
-
-		var command string
-		if appendMode {
-			// Append mode: decode and append to file (no backup needed for append)
-			command = fmt.Sprintf("echo %q | base64 -d >> %q && echo 'Content appended to %s (%d bytes)'", encoded, path, path, len(content))
-		} else {
-			// Overwrite mode with safety features:
-			// 1. Create parent directory if needed
-			// 2. Backup existing file if it exists (atomic - only if backup succeeds)
-			// 3. Write to temp file first
-			// 4. Atomic move temp file to target
-			// 5. Set permissions
-			dir := filepath.Dir(path)
-			tempFile := path + ".pulse-tmp"
-			backupFile := path + ".bak"
-
-			// Build a safe multi-step command:
-			// - mkdir -p for parent dir
-			// - if file exists, copy to .bak
-			// - write content to temp file
-			// - mv temp file to target (atomic)
-			// - chmod to set permissions
-			command = fmt.Sprintf(
-				"mkdir -p %q && "+
-					"([ -f %q ] && cp %q %q 2>/dev/null || true) && "+
-					"echo %q | base64 -d > %q && "+
-					"mv %q %q && "+
-					"chmod %s %q && "+
-					"echo 'Written %d bytes to %s (backup: %s.bak if existed)'",
-				dir,
-				path, path, backupFile,
-				encoded, tempFile,
-				tempFile, path,
-				mode, path,
-				len(content), path, path,
-			)
-		}
-
-		result, err := s.executeOnAgent(ctx, req, command)
-		if err != nil {
-			execution.Output = fmt.Sprintf("Error writing file: %s", err)
 			return execution.Output, execution
 		}
 
@@ -2076,13 +1901,27 @@ func (s *Service) DeleteGuestNote(guestID, noteID string) error {
 
 // fetchURL fetches content from a URL with size limits and timeout
 func (s *Service) fetchURL(ctx context.Context, urlStr string) (string, error) {
+	parsedURL, err := parseAndValidateFetchURL(ctx, urlStr)
+	if err != nil {
+		return "", err
+	}
+
 	// Create HTTP client with timeout
 	client := &http.Client{
 		Timeout: 30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 3 {
+				return fmt.Errorf("too many redirects")
+			}
+			if _, err := parseAndValidateFetchURL(ctx, req.URL.String()); err != nil {
+				return err
+			}
+			return nil
+		},
 	}
 
 	// Create request with context
-	req, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", parsedURL.String(), nil)
 	if err != nil {
 		return "", fmt.Errorf("invalid URL: %w", err)
 	}
@@ -2116,6 +1955,78 @@ func (s *Service) fetchURL(ctx context.Context, urlStr string) (string, error) {
 	}
 
 	return result, nil
+}
+
+func parseAndValidateFetchURL(ctx context.Context, urlStr string) (*url.URL, error) {
+	clean := strings.TrimSpace(urlStr)
+	if clean == "" {
+		return nil, fmt.Errorf("url is required")
+	}
+
+	parsed, err := url.ParseRequestURI(clean)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, fmt.Errorf("only http/https URLs are allowed")
+	}
+	if parsed.User != nil {
+		return nil, fmt.Errorf("URLs with embedded credentials are not allowed")
+	}
+	if parsed.Fragment != "" {
+		return nil, fmt.Errorf("URL fragments are not allowed")
+	}
+
+	host := parsed.Hostname()
+	if host == "" {
+		return nil, fmt.Errorf("URL must include a host")
+	}
+
+	if isBlockedFetchHost(host) {
+		return nil, fmt.Errorf("URL host is blocked")
+	}
+
+	if ip := net.ParseIP(host); ip != nil {
+		if isBlockedFetchIP(ip) {
+			return nil, fmt.Errorf("URL IP is blocked")
+		}
+		return parsed, nil
+	}
+
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		// DNS failures are surfaced directly to the caller.
+		return nil, fmt.Errorf("failed to resolve host: %w", err)
+	}
+	for _, addr := range addrs {
+		if isBlockedFetchIP(addr.IP) {
+			return nil, fmt.Errorf("URL host resolves to a blocked address")
+		}
+	}
+
+	return parsed, nil
+}
+
+func isBlockedFetchHost(host string) bool {
+	h := strings.TrimSpace(strings.ToLower(host))
+	if h == "localhost" || h == "localhost." {
+		return true
+	}
+	return false
+}
+
+func isBlockedFetchIP(ip net.IP) bool {
+	if ip == nil {
+		return true
+	}
+	if ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+	// Block multicast and other non-unicast targets.
+	if !ip.IsGlobalUnicast() && !ip.IsPrivate() {
+		return true
+	}
+	return false
 }
 
 // sanitizeError cleans up error messages to remove internal networking details
@@ -2342,17 +2253,31 @@ func (s *Service) buildSystemPrompt(req ExecuteRequest) string {
 - Only show the conclusion, not every command run
 - If something fails, briefly state what and why
 
-## When Performing Actions
-- Just do it. Don't ask "Would you like me to..."
-- Report the result, not the intent
-- If destructive (delete data, stop services), execute but clearly state what was done
+## Command Approval System
+Pulse has a command approval policy that protects against accidental damage:
+- **Safe commands** (read-only: ls, df, cat, ps, etc.) execute immediately
+- **Potentially destructive commands** (rm, service restart, apt install, etc.) require approval unless autonomous mode is enabled
+- **Blocked commands** are never executed
+- When approval is required, the user will see the command and can approve or reject it
+
+When you need to run a potentially destructive command:
+1. Execute it normally - Pulse will handle the approval flow
+2. If a command is blocked or needs approval, you'll get feedback
+3. Continue with other work while waiting for approval, or explain what the command will do
+
+Do NOT say things like:
+- "I need your permission to..."
+- "Would you like me to run...?"
+- "This is destructive, are you sure?"
+
+Instead, just execute the command. Pulse's approval system will handle user confirmation for risky operations.
 
 ## Response Format
 BAD: "I'll check that for you. Let me run some commands..."
 GOOD: State findings directly.
 
-BAD: "Would you like me to..."
-GOOD: Do it, then report the result.
+BAD: "Would you like me to run rm -rf...?"
+GOOD: Execute the command. User will approve/reject via Pulse.
 
 BAD: Tables, headers, bullet-heavy summaries
 GOOD: Plain prose, 2-4 sentences.
@@ -2361,7 +2286,7 @@ GOOD: Plain prose, 2-4 sentences.
 When the user asks you to DO something (install, fix, update, configure), ACT IMMEDIATELY:
 - Don't extensively investigate before acting. Run 1-2 diagnostic commands max, then DO the thing.
 - Don't explain what you're about to do - just do it.
-- Don't ask for confirmation. The user asked you to do it, so do it.
+- If the command needs approval, Pulse will queue it. You don't need to ask separately.
 - If the first approach fails, try the next most obvious approach. Don't stop to report.
 - Complete the task END TO END. If asked to "install and run X", you're not done until X is running.
 
@@ -2369,7 +2294,7 @@ INVESTIGATION ANTI-PATTERNS TO AVOID:
 - Running 10+ diagnostic commands before taking action
 - Explaining each step before doing it
 - Stopping to report partial progress
-- Asking "would you like me to proceed?" after the user already asked you to do it
+- Asking "would you like me to proceed?" (Pulse handles approval automatically)
 - Checking version, checking config, checking service, checking ports, checking this, checking that... JUST ACT.
 
 GOOD PATTERN for "install X and make sure it's running":
@@ -2382,6 +2307,7 @@ BAD PATTERN:
 1. Check current version... 2. Check if installed... 3. Check service status... 4. Check config file... 
 5. Check another config... 6. Try to enable something... 7. Check if it worked... 8. Read a script...
 9. Check yet another file... [user: "do it"] 10. Still investigating... [user: "DO IT"]
+
 
 ## Using Context Data
 Pulse provides real metrics in "Current Metrics and State". Use this data directly - don't ask users to check things you already know.
@@ -2503,7 +2429,7 @@ This is a 3-command job. Don't over-investigate.`
 		} else if req.TargetID != "" {
 			prompt += fmt.Sprintf("\n\n## Current Focus\nYou are analyzing %s '%s'", req.TargetType, req.TargetID)
 		}
-		
+
 		// Add past remediation history for this resource
 		prompt += s.buildRemediationContext(req.TargetID, req.Prompt)
 	}
@@ -2721,13 +2647,28 @@ func (s *Service) TestConnection(ctx context.Context) error {
 // ListModels fetches available models from ALL configured AI providers
 // Returns a unified list with models prefixed by provider name
 func (s *Service) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
+	models, _, err := s.ListModelsWithCache(ctx)
+	return models, err
+}
+
+func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInfo, bool, error) {
 	cfg, err := s.persistence.LoadAIConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load AI config: %w", err)
+		return nil, false, fmt.Errorf("failed to load AI config: %w", err)
 	}
 	if cfg == nil {
-		return nil, fmt.Errorf("AI not configured")
+		return nil, false, fmt.Errorf("AI not configured")
 	}
+
+	cacheKey := buildModelsCacheKey(cfg)
+	s.modelsCache.mu.RLock()
+	if s.modelsCache.key == cacheKey && s.modelsCache.ttl > 0 && time.Since(s.modelsCache.at) < s.modelsCache.ttl && len(s.modelsCache.models) > 0 {
+		out := make([]providers.ModelInfo, len(s.modelsCache.models))
+		copy(out, s.modelsCache.models)
+		s.modelsCache.mu.RUnlock()
+		return out, true, nil
+	}
+	s.modelsCache.mu.RUnlock()
 
 	var allModels []providers.ModelInfo
 
@@ -2764,7 +2705,33 @@ func (s *Service) ListModels(ctx context.Context) ([]providers.ModelInfo, error)
 		}
 	}
 
-	return allModels, nil
+	s.modelsCache.mu.Lock()
+	s.modelsCache.key = cacheKey
+	s.modelsCache.at = time.Now()
+	s.modelsCache.models = make([]providers.ModelInfo, len(allModels))
+	copy(s.modelsCache.models, allModels)
+	s.modelsCache.mu.Unlock()
+
+	return allModels, false, nil
+}
+
+func buildModelsCacheKey(cfg *config.AIConfig) string {
+	if cfg == nil {
+		return "nil"
+	}
+
+	var b strings.Builder
+	b.WriteString("providers=")
+	b.WriteString(strings.Join(cfg.GetConfiguredProviders(), ","))
+	b.WriteString("|auth=")
+	b.WriteString(string(cfg.AuthMethod))
+
+	b.WriteString("|openai_base=")
+	b.WriteString(cfg.OpenAIBaseURL)
+	b.WriteString("|ollama_base=")
+	b.WriteString(cfg.OllamaBaseURL)
+
+	return b.String()
 }
 
 // providerDisplayName returns a user-friendly name for a provider
@@ -2793,18 +2760,18 @@ func (s *Service) buildRemediationContext(resourceID, currentProblem string) str
 	s.mu.RLock()
 	patrol := s.patrolService
 	s.mu.RUnlock()
-	
+
 	if patrol == nil {
 		return ""
 	}
-	
+
 	remLog := patrol.GetRemediationLog()
 	if remLog == nil {
 		return ""
 	}
-	
+
 	var context string
-	
+
 	// Get similar past remediations based on the current problem
 	if currentProblem != "" {
 		successful := remLog.GetSuccessfulRemediations(currentProblem, 3)
@@ -2812,14 +2779,14 @@ func (s *Service) buildRemediationContext(resourceID, currentProblem string) str
 			context += "\n\n## Past Successful Fixes for Similar Issues\n"
 			context += "These actions worked for similar problems before:\n"
 			for _, rec := range successful {
-				context += fmt.Sprintf("- **%s**: `%s` (%s)\n", 
-					truncateString(rec.Problem, 60), 
+				context += fmt.Sprintf("- **%s**: `%s` (%s)\n",
+					truncateString(rec.Problem, 60),
 					truncateString(rec.Action, 80),
 					rec.Outcome)
 			}
 		}
 	}
-	
+
 	// Get history for this specific resource
 	if resourceID != "" {
 		history := remLog.GetForResource(resourceID, 5)
@@ -2836,7 +2803,7 @@ func (s *Service) buildRemediationContext(resourceID, currentProblem string) str
 			}
 		}
 	}
-	
+
 	return context
 }
 

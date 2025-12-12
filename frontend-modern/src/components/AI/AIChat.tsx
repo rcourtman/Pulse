@@ -1,5 +1,6 @@
 import { Component, Show, createSignal, For, createEffect, createMemo, onMount, Switch, Match } from 'solid-js';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { AIAPI } from '@/api/ai';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
@@ -63,12 +64,41 @@ marked.setOptions({
   gfm: true, // GitHub Flavored Markdown
 });
 
-// Helper to render markdown safely
+let domPurifyConfigured = false;
+const configureDOMPurify = () => {
+  if (domPurifyConfigured) return;
+  domPurifyConfigured = true;
+
+  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    const element = node as Element | null;
+    if (!element || element.tagName !== 'A') return;
+    element.setAttribute('target', '_blank');
+    element.setAttribute('rel', 'noopener noreferrer');
+  });
+};
+
+// Helper to render markdown safely with XSS protection
+// LLM output should NEVER be trusted - always sanitize before rendering as HTML
 const renderMarkdown = (content: string): string => {
   try {
-    return marked.parse(content) as string;
+    configureDOMPurify();
+    const rawHtml = marked.parse(content) as string;
+    // Sanitize to prevent XSS from malicious LLM output or injected content
+    return DOMPurify.sanitize(rawHtml, {
+      // Allow common formatting tags but block scripts, iframes, etc.
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'b', 'i', 'u', 'code', 'pre', 'blockquote',
+        'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'hr', 'table',
+        'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
+      ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
+      // Force all links to open in new tab and prevent opener attacks
+      ADD_ATTR: ['target', 'rel'],
+    });
   } catch {
-    return content;
+    // If parsing fails, escape HTML entities as fallback
+    return content.replace(/[&<>"']/g, (char) => {
+      const entities: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+      return entities[char] || char;
+    });
   }
 };
 

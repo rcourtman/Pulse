@@ -2,6 +2,7 @@ package memory
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -308,6 +309,12 @@ func (r *RemediationLog) loadFromDisk() error {
 	}
 
 	path := filepath.Join(r.dataDir, "ai_remediations.json")
+	if st, err := os.Stat(path); err == nil {
+		const maxOnDiskBytes = 10 << 20 // 10 MiB safety cap
+		if st.Size() > maxOnDiskBytes {
+			return fmt.Errorf("remediation history file too large (%d bytes)", st.Size())
+		}
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -327,6 +334,7 @@ func (r *RemediationLog) loadFromDisk() error {
 	})
 
 	r.records = records
+	r.trimRecords()
 	return nil
 }
 
@@ -351,7 +359,7 @@ func extractKeywords(text string) []string {
 	// In production, this could use NLP or embeddings
 	var keywords []string
 	var current string
-	
+
 	for _, c := range text {
 		if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' {
 			current += string(c)
@@ -365,7 +373,7 @@ func extractKeywords(text string) []string {
 	if len(current) > 3 {
 		keywords = append(keywords, current)
 	}
-	
+
 	return keywords
 }
 
@@ -374,7 +382,7 @@ func countMatches(a, b []string) int {
 	for _, s := range b {
 		bSet[s] = true
 	}
-	
+
 	count := 0
 	for _, s := range a {
 		if bSet[s] {

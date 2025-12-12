@@ -5,9 +5,11 @@ package correlation
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,13 +20,13 @@ import (
 type EventType string
 
 const (
-	EventAlert     EventType = "alert"      // Alert triggered
-	EventRestart   EventType = "restart"    // Resource restarted
-	EventHighCPU   EventType = "high_cpu"   // CPU spike
-	EventHighMem   EventType = "high_mem"   // Memory spike
-	EventDiskFull  EventType = "disk_full"  // Disk space critical
-	EventOffline   EventType = "offline"    // Resource went offline
-	EventMigration EventType = "migration"  // Resource migrated
+	EventAlert     EventType = "alert"     // Alert triggered
+	EventRestart   EventType = "restart"   // Resource restarted
+	EventHighCPU   EventType = "high_cpu"  // CPU spike
+	EventHighMem   EventType = "high_mem"  // Memory spike
+	EventDiskFull  EventType = "disk_full" // Disk space critical
+	EventOffline   EventType = "offline"   // Resource went offline
+	EventMigration EventType = "migration" // Resource migrated
 )
 
 // Event represents a tracked event for correlation analysis
@@ -40,18 +42,18 @@ type Event struct {
 
 // Correlation represents a detected relationship between two resources
 type Correlation struct {
-	SourceID     string    `json:"source_id"`      // Resource that triggers
-	SourceName   string    `json:"source_name"`
-	SourceType   string    `json:"source_type"`
-	TargetID     string    `json:"target_id"`      // Resource that follows
-	TargetName   string    `json:"target_name"`
-	TargetType   string    `json:"target_type"`
-	EventPattern string    `json:"event_pattern"`  // e.g., "high_mem -> restart"
-	Occurrences  int       `json:"occurrences"`    // Number of times observed
-	AvgDelay     time.Duration `json:"avg_delay"`  // Average time between events
-	Confidence   float64   `json:"confidence"`     // 0-1 confidence level
-	LastSeen     time.Time `json:"last_seen"`
-	Description  string    `json:"description"`
+	SourceID     string        `json:"source_id"` // Resource that triggers
+	SourceName   string        `json:"source_name"`
+	SourceType   string        `json:"source_type"`
+	TargetID     string        `json:"target_id"` // Resource that follows
+	TargetName   string        `json:"target_name"`
+	TargetType   string        `json:"target_type"`
+	EventPattern string        `json:"event_pattern"` // e.g., "high_mem -> restart"
+	Occurrences  int           `json:"occurrences"`   // Number of times observed
+	AvgDelay     time.Duration `json:"avg_delay"`     // Average time between events
+	Confidence   float64       `json:"confidence"`    // 0-1 confidence level
+	LastSeen     time.Time     `json:"last_seen"`
+	Description  string        `json:"description"`
 }
 
 // Detector tracks events and detects correlations between resources
@@ -59,13 +61,13 @@ type Detector struct {
 	mu           sync.RWMutex
 	events       []Event
 	correlations map[string]*Correlation // key: sourceID:targetID:pattern
-	
+
 	// Configuration
-	maxEvents       int
+	maxEvents         int
 	correlationWindow time.Duration // How long after source event to look for target
-	minOccurrences  int              // Minimum co-occurrences to form correlation
-	retentionWindow time.Duration    // How long to keep events
-	
+	minOccurrences    int           // Minimum co-occurrences to form correlation
+	retentionWindow   time.Duration // How long to keep events
+
 	// Persistence
 	dataDir string
 }
@@ -103,7 +105,7 @@ func NewDetector(cfg Config) *Detector {
 	if cfg.RetentionWindow <= 0 {
 		cfg.RetentionWindow = 30 * 24 * time.Hour
 	}
-	
+
 	d := &Detector{
 		events:            make([]Event, 0),
 		correlations:      make(map[string]*Correlation),
@@ -113,7 +115,7 @@ func NewDetector(cfg Config) *Detector {
 		retentionWindow:   cfg.RetentionWindow,
 		dataDir:           cfg.DataDir,
 	}
-	
+
 	// Load existing data
 	if cfg.DataDir != "" {
 		if err := d.loadFromDisk(); err != nil {
@@ -123,7 +125,7 @@ func NewDetector(cfg Config) *Detector {
 				Msg("Loaded correlation data from disk")
 		}
 	}
-	
+
 	return d
 }
 
@@ -131,20 +133,20 @@ func NewDetector(cfg Config) *Detector {
 func (d *Detector) RecordEvent(event Event) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	
+
 	if event.ID == "" {
 		event.ID = generateEventID()
 	}
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now()
 	}
-	
+
 	d.events = append(d.events, event)
 	d.trimEvents()
-	
+
 	// Check for correlations with recent events on OTHER resources
 	d.detectCorrelations(event)
-	
+
 	// Persist asynchronously
 	go func() {
 		if err := d.saveToDisk(); err != nil {
@@ -156,7 +158,7 @@ func (d *Detector) RecordEvent(event Event) {
 // detectCorrelations looks for patterns where this event follows a recent event on another resource
 func (d *Detector) detectCorrelations(newEvent Event) {
 	cutoff := newEvent.Timestamp.Add(-d.correlationWindow)
-	
+
 	for _, oldEvent := range d.events {
 		// Skip same resource
 		if oldEvent.ResourceID == newEvent.ResourceID {
@@ -166,12 +168,12 @@ func (d *Detector) detectCorrelations(newEvent Event) {
 		if oldEvent.Timestamp.Before(cutoff) || oldEvent.Timestamp.After(newEvent.Timestamp) {
 			continue
 		}
-		
+
 		// Found a potential correlation: oldEvent -> newEvent
 		key := correlationKey(oldEvent.ResourceID, newEvent.ResourceID, oldEvent.EventType, newEvent.EventType)
 		pattern := string(oldEvent.EventType) + " -> " + string(newEvent.EventType)
 		delay := newEvent.Timestamp.Sub(oldEvent.Timestamp)
-		
+
 		if existing, ok := d.correlations[key]; ok {
 			// Update existing correlation
 			existing.Occurrences++
@@ -222,9 +224,14 @@ func (d *Detector) formatCorrelationDescription(c *Correlation) string {
 	if targetName == "" {
 		targetName = c.TargetID
 	}
-	
+
 	delayStr := formatDuration(c.AvgDelay)
-	return "When " + sourceName + " experiences " + string(c.EventPattern[:len(c.EventPattern)/2]) + 
+	sourceEvent := c.EventPattern
+	if parts := strings.Split(c.EventPattern, " -> "); len(parts) == 2 {
+		sourceEvent = parts[0]
+	}
+
+	return "When " + sourceName + " experiences " + sourceEvent +
 		", " + targetName + " often follows within " + delayStr
 }
 
@@ -232,19 +239,19 @@ func (d *Detector) formatCorrelationDescription(c *Correlation) string {
 func (d *Detector) GetCorrelations() []*Correlation {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	
+
 	var result []*Correlation
 	for _, c := range d.correlations {
 		if c.Occurrences >= d.minOccurrences && c.Confidence >= 0.3 {
 			result = append(result, c)
 		}
 	}
-	
+
 	// Sort by confidence descending
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].Confidence > result[j].Confidence
 	})
-	
+
 	return result
 }
 
@@ -252,14 +259,14 @@ func (d *Detector) GetCorrelations() []*Correlation {
 func (d *Detector) GetCorrelationsForResource(resourceID string) []*Correlation {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	
+
 	var result []*Correlation
 	for _, c := range d.correlations {
 		if (c.SourceID == resourceID || c.TargetID == resourceID) && c.Occurrences >= d.minOccurrences {
 			result = append(result, c)
 		}
 	}
-	
+
 	return result
 }
 
@@ -268,14 +275,14 @@ func (d *Detector) GetCorrelationsForResource(resourceID string) []*Correlation 
 func (d *Detector) GetDependencies(resourceID string) []string {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	
+
 	deps := make(map[string]bool)
 	for _, c := range d.correlations {
 		if c.SourceID == resourceID && c.Occurrences >= d.minOccurrences {
 			deps[c.TargetID] = true
 		}
 	}
-	
+
 	result := make([]string, 0, len(deps))
 	for dep := range deps {
 		result = append(result, dep)
@@ -288,14 +295,14 @@ func (d *Detector) GetDependencies(resourceID string) []string {
 func (d *Detector) GetDependsOn(resourceID string) []string {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	
+
 	deps := make(map[string]bool)
 	for _, c := range d.correlations {
 		if c.TargetID == resourceID && c.Occurrences >= d.minOccurrences {
 			deps[c.SourceID] = true
 		}
 	}
-	
+
 	result := make([]string, 0, len(deps))
 	for dep := range deps {
 		result = append(result, dep)
@@ -307,13 +314,17 @@ func (d *Detector) GetDependsOn(resourceID string) []string {
 func (d *Detector) PredictCascade(resourceID string, eventType EventType) []CascadePrediction {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	
+
 	var predictions []CascadePrediction
-	
+
 	for _, c := range d.correlations {
 		if c.SourceID == resourceID && c.Occurrences >= d.minOccurrences {
-			// Check if the event pattern starts with the given event type
-			if len(c.EventPattern) > 0 && EventType(c.EventPattern[:len(string(eventType))]) == eventType {
+			// Check if the correlation's source event matches the given event type.
+			sourceEvent := c.EventPattern
+			if parts := strings.Split(c.EventPattern, " -> "); len(parts) == 2 {
+				sourceEvent = parts[0]
+			}
+			if EventType(sourceEvent) == eventType {
 				predictions = append(predictions, CascadePrediction{
 					ResourceID:   c.TargetID,
 					ResourceName: c.TargetName,
@@ -324,12 +335,12 @@ func (d *Detector) PredictCascade(resourceID string, eventType EventType) []Casc
 			}
 		}
 	}
-	
+
 	// Sort by confidence
 	sort.Slice(predictions, func(i, j int) bool {
 		return predictions[i].Confidence > predictions[j].Confidence
 	})
-	
+
 	return predictions
 }
 
@@ -350,15 +361,15 @@ func (d *Detector) FormatForContext(resourceID string) string {
 	} else {
 		correlations = d.GetCorrelations()
 	}
-	
+
 	if len(correlations) == 0 {
 		return ""
 	}
-	
+
 	var result string
 	result = "\n## 🔗 Resource Correlations\n"
 	result += "Observed relationships between resources:\n"
-	
+
 	for i, c := range correlations {
 		if i >= 10 { // Limit to 10 correlations
 			result += "\n... and more\n"
@@ -370,7 +381,7 @@ func (d *Detector) FormatForContext(resourceID string) string {
 			result += "- " + c.EventPattern + " (" + formatConfidence(c.Confidence) + " confidence)\n"
 		}
 	}
-	
+
 	return result
 }
 
@@ -380,7 +391,7 @@ func (d *Detector) trimEvents() {
 	if len(d.events) > d.maxEvents {
 		d.events = d.events[len(d.events)-d.maxEvents:]
 	}
-	
+
 	// Remove events older than retention window
 	cutoff := time.Now().Add(-d.retentionWindow)
 	kept := make([]Event, 0, len(d.events))
@@ -397,7 +408,7 @@ func (d *Detector) saveToDisk() error {
 	if d.dataDir == "" {
 		return nil
 	}
-	
+
 	d.mu.RLock()
 	data := struct {
 		Events       []Event                 `json:"events"`
@@ -407,18 +418,18 @@ func (d *Detector) saveToDisk() error {
 		Correlations: d.correlations,
 	}
 	d.mu.RUnlock()
-	
+
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	path := filepath.Join(d.dataDir, "ai_correlations.json")
 	tmpPath := path + ".tmp"
 	if err := os.WriteFile(tmpPath, jsonData, 0600); err != nil {
 		return err
 	}
-	
+
 	return os.Rename(tmpPath, path)
 }
 
@@ -427,8 +438,14 @@ func (d *Detector) loadFromDisk() error {
 	if d.dataDir == "" {
 		return nil
 	}
-	
+
 	path := filepath.Join(d.dataDir, "ai_correlations.json")
+	if st, err := os.Stat(path); err == nil {
+		const maxOnDiskBytes = 10 << 20 // 10 MiB safety cap
+		if st.Size() > maxOnDiskBytes {
+			return fmt.Errorf("correlation history file too large (%d bytes)", st.Size())
+		}
+	}
 	jsonData, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -436,19 +453,30 @@ func (d *Detector) loadFromDisk() error {
 		}
 		return err
 	}
-	
+
 	var data struct {
 		Events       []Event                 `json:"events"`
 		Correlations map[string]*Correlation `json:"correlations"`
 	}
-	
+
 	if err := json.Unmarshal(jsonData, &data); err != nil {
 		return err
 	}
-	
+
 	d.events = data.Events
 	d.correlations = data.Correlations
-	
+	if d.correlations == nil {
+		d.correlations = make(map[string]*Correlation)
+	}
+
+	d.trimEvents()
+	cutoff := time.Now().Add(-d.retentionWindow)
+	for k, v := range d.correlations {
+		if v == nil || v.LastSeen.Before(cutoff) {
+			delete(d.correlations, k)
+		}
+	}
+
 	return nil
 }
 
