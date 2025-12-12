@@ -5924,6 +5924,14 @@ func (m *Manager) ClearAlertHistory() error {
 	return m.historyManager.ClearAllHistory()
 }
 
+// OnAlertHistory registers a callback to be called when alerts are added to history.
+// This enables external systems like pattern detection to track alerts.
+func (m *Manager) OnAlertHistory(cb AlertCallback) {
+	if m.historyManager != nil {
+		m.historyManager.OnAlert(cb)
+	}
+}
+
 // checkNodeOffline creates an alert for offline nodes after confirmation
 func (m *Manager) checkNodeOffline(node models.Node) {
 	alertID := fmt.Sprintf("node-offline-%s", node.ID)

@@ -27,6 +27,10 @@ type HistoryEntry struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
+// AlertCallback is called when an alert is added to history
+// This enables external systems to track alerts (e.g., pattern detection)
+type AlertCallback func(alert Alert)
+
 // HistoryManager manages persistent alert history
 type HistoryManager struct {
 	mu           sync.RWMutex
@@ -38,6 +42,7 @@ type HistoryManager struct {
 	saveInterval time.Duration
 	stopChan     chan struct{}
 	saveTicker   *time.Ticker
+	callbacks    []AlertCallback // Called when alerts are added
 }
 
 // NewHistoryManager creates a new history manager
@@ -74,10 +79,16 @@ func NewHistoryManager(dataDir string) *HistoryManager {
 	return hm
 }
 
+// OnAlert registers a callback to be called when alerts are added
+func (hm *HistoryManager) OnAlert(cb AlertCallback) {
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+	hm.callbacks = append(hm.callbacks, cb)
+}
+
 // AddAlert adds an alert to history
 func (hm *HistoryManager) AddAlert(alert Alert) {
 	hm.mu.Lock()
-	defer hm.mu.Unlock()
 
 	entry := HistoryEntry{
 		Alert:     *alert.Clone(),
@@ -85,7 +96,15 @@ func (hm *HistoryManager) AddAlert(alert Alert) {
 	}
 
 	hm.history = append(hm.history, entry)
+	callbacks := hm.callbacks
+	hm.mu.Unlock()
+	
 	log.Debug().Str("alertID", alert.ID).Msg("Added alert to history")
+	
+	// Call callbacks outside the lock
+	for _, cb := range callbacks {
+		cb(alert)
+	}
 }
 
 // GetHistory returns alert history within the specified time range
