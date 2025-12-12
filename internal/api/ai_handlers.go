@@ -96,6 +96,11 @@ func (h *AISettingsHandler) SetMetricsHistoryProvider(provider ai.MetricsHistory
 	h.aiService.SetMetricsHistoryProvider(provider)
 }
 
+// SetBaselineStore sets the baseline store for anomaly detection
+func (h *AISettingsHandler) SetBaselineStore(store *ai.BaselineStore) {
+	h.aiService.SetBaselineStore(store)
+}
+
 // StopPatrol stops the background AI patrol service
 func (h *AISettingsHandler) StopPatrol() {
 	h.aiService.StopPatrol()
