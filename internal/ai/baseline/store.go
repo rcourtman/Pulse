@@ -278,6 +278,50 @@ func (s *Store) ResourceCount() int {
 	return len(s.baselines)
 }
 
+// FlatBaseline is a flattened representation of a single metric baseline for API responses
+type FlatBaseline struct {
+	ResourceID string    `json:"resource_id"`
+	Metric     string    `json:"metric"`
+	Mean       float64   `json:"mean"`
+	StdDev     float64   `json:"std_dev"`
+	Min        float64   `json:"min"`
+	Max        float64   `json:"max"`
+	Samples    int       `json:"samples"`
+	LastUpdate time.Time `json:"last_update"`
+}
+
+// GetAllBaselines returns all baselines as a flat map for API access
+func (s *Store) GetAllBaselines() map[string]*FlatBaseline {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	result := make(map[string]*FlatBaseline)
+	for resourceID, rb := range s.baselines {
+		for metric, mb := range rb.Metrics {
+			key := resourceID + ":" + metric
+			fb := &FlatBaseline{
+				ResourceID: resourceID,
+				Metric:     metric,
+				Mean:       mb.Mean,
+				StdDev:     mb.StdDev,
+				Samples:    mb.SampleCount,
+				LastUpdate: rb.LastUpdated,
+			}
+			// Set min/max from percentiles if available
+			if mb.Percentiles != nil {
+				if p5, ok := mb.Percentiles[5]; ok {
+					fb.Min = p5
+				}
+				if p95, ok := mb.Percentiles[95]; ok {
+					fb.Max = p95
+				}
+			}
+			result[key] = fb
+		}
+	}
+	return result
+}
+
 // Save persists baselines to disk
 func (s *Store) Save() error {
 	if s.dataDir == "" {

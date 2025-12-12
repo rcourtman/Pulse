@@ -1130,6 +1130,13 @@ func (r *Router) setupRoutes() {
 	}))
 	r.mux.HandleFunc("/api/ai/patrol/suppressions/", RequireAuth(r.config, r.aiSettingsHandler.HandleDeleteSuppressionRule))
 	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, r.aiSettingsHandler.HandleGetDismissedFindings))
+	
+	// AI Intelligence endpoints - expose learned patterns, correlations, and predictions
+	r.mux.HandleFunc("/api/ai/intelligence/patterns", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatterns))
+	r.mux.HandleFunc("/api/ai/intelligence/predictions", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPredictions))
+	r.mux.HandleFunc("/api/ai/intelligence/correlations", RequireAuth(r.config, r.aiSettingsHandler.HandleGetCorrelations))
+	r.mux.HandleFunc("/api/ai/intelligence/changes", RequireAuth(r.config, r.aiSettingsHandler.HandleGetRecentChanges))
+	r.mux.HandleFunc("/api/ai/intelligence/baselines", RequireAuth(r.config, r.aiSettingsHandler.HandleGetBaselines))
 
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
