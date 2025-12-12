@@ -1,6 +1,7 @@
 import type { Component } from 'solid-js';
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import { useColumnVisibility, type ColumnDef } from '@/hooks/useColumnVisibility';
 import type {
   KubernetesCluster,
   KubernetesDeployment,
@@ -11,6 +12,7 @@ import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import { formatRelativeTime, formatBytes } from '@/utils/format';
 import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES, type StatusIndicator } from '@/utils/status';
 
@@ -125,12 +127,27 @@ const formatAge = (timestamp?: number | string | null): string => {
   return formatRelativeTime(ts);
 };
 
+// Column definitions for the pods table
+const POD_COLUMNS: ColumnDef[] = [
+  { id: 'name', label: 'Pod', priority: 'essential', toggleable: false },
+  { id: 'namespace', label: 'Namespace', priority: 'essential', toggleable: true },
+  { id: 'cluster', label: 'Cluster', priority: 'primary', toggleable: true },
+  { id: 'status', label: 'Status', priority: 'essential', toggleable: false },
+  { id: 'ready', label: 'Ready', priority: 'primary', toggleable: true },
+  { id: 'restarts', label: 'Restarts', priority: 'primary', toggleable: true },
+  { id: 'image', label: 'Image', priority: 'secondary', toggleable: true },
+  { id: 'age', label: 'Age', priority: 'primary', toggleable: true },
+];
+
 export const KubernetesClusters: Component<KubernetesClustersProps> = (props) => {
   const [search, setSearch] = createSignal('');
   const [viewMode, setViewMode] = createSignal<ViewMode>('clusters');
   const [statusFilter, setStatusFilter] = createSignal<StatusFilter>('all');
   const [showHidden, setShowHidden] = createSignal(false);
   const [namespaceFilter, setNamespaceFilter] = createSignal<string>('all');
+
+  // Column visibility for pods table
+  const podColumns = useColumnVisibility('k8s-pod-columns', POD_COLUMNS);
 
   // Sorting state with persistence
   type SortKey = 'name' | 'status' | 'namespace' | 'cluster' | 'age' | 'restarts' | 'ready' | 'replicas';
@@ -207,8 +224,10 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
     const term = search().trim().toLowerCase();
     const clusters = props.clusters ?? [];
     const status = statusFilter();
+    const key = sortKey();
+    const dir = sortDirection();
 
-    return clusters
+    const filtered = clusters
       .filter((cluster) => showHidden() || !cluster.hidden)
       .filter((cluster) => {
         if (status === 'all') return true;
@@ -230,15 +249,27 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
           .join(' ')
           .toLowerCase();
         return haystack.includes(term);
-      })
-      .sort((a, b) => getClusterDisplayName(a).localeCompare(getClusterDisplayName(b)));
+      });
+
+    // Sort clusters
+    return filtered.sort((a, b) => {
+      let cmp = 0;
+      switch (key) {
+        case 'name': cmp = getClusterDisplayName(a).localeCompare(getClusterDisplayName(b)); break;
+        case 'status': cmp = (normalize(a.status) === 'online' ? 0 : 1) - (normalize(b.status) === 'online' ? 0 : 1); break;
+        default: cmp = getClusterDisplayName(a).localeCompare(getClusterDisplayName(b));
+      }
+      return dir === 'desc' ? -cmp : cmp;
+    });
   });
 
   const filteredNodes = createMemo(() => {
     const term = search().trim().toLowerCase();
     const status = statusFilter();
+    const key = sortKey();
+    const dir = sortDirection();
 
-    return allNodes()
+    const filtered = allNodes()
       .filter(({ node }) => {
         if (status === 'all') return true;
         const isHealthy = node.ready && !node.unschedulable;
@@ -259,6 +290,18 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
           .toLowerCase();
         return haystack.includes(term);
       });
+
+    // Sort nodes
+    return filtered.sort((a, b) => {
+      let cmp = 0;
+      switch (key) {
+        case 'name': cmp = (a.node.name ?? '').localeCompare(b.node.name ?? ''); break;
+        case 'cluster': cmp = getClusterDisplayName(a.cluster).localeCompare(getClusterDisplayName(b.cluster)); break;
+        case 'status': cmp = (a.node.ready ? 0 : 1) - (b.node.ready ? 0 : 1); break;
+        default: cmp = (a.node.name ?? '').localeCompare(b.node.name ?? '');
+      }
+      return dir === 'desc' ? -cmp : cmp;
+    });
   });
 
   const filteredPods = createMemo(() => {
@@ -535,6 +578,17 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
               Show hidden
             </label>
 
+            {/* Column Picker - only show for pods view */}
+            <Show when={viewMode() === 'pods'}>
+              <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" />
+              <ColumnPicker
+                columns={podColumns.availableToggles()}
+                isHidden={podColumns.isHiddenByUser}
+                onToggle={podColumns.toggle}
+                onReset={podColumns.resetToDefaults}
+              />
+            </Show>
+
             {/* Reset Button */}
             <Show when={hasActiveFilters()}>
               <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" />
@@ -576,8 +630,8 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
               <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead class="bg-gray-50 dark:bg-gray-900/40">
                   <tr>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cluster</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('name')}>Cluster{sortIndicator('name')}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('status')}>Status{sortIndicator('status')}</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nodes</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pods</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Deployments</th>
@@ -663,9 +717,9 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
               <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead class="bg-gray-50 dark:bg-gray-900/40">
                   <tr>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Node</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cluster</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('name')}>Node{sortIndicator('name')}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('cluster')}>Cluster{sortIndicator('cluster')}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('status')}>Status{sortIndicator('status')}</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Roles</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">CPU</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Memory</th>
@@ -733,18 +787,30 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
 
           {/* Pods View */}
           <Show when={viewMode() === 'pods'}>
-            <ScrollableTable minWidth="1100px" persistKey="kubernetes-pods-table">
+            <ScrollableTable minWidth="800px" persistKey="kubernetes-pods-table">
               <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead class="bg-gray-50 dark:bg-gray-900/40">
                   <tr>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('name')}>Pod{sortIndicator('name')}</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('namespace')}>Namespace{sortIndicator('namespace')}</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('cluster')}>Cluster{sortIndicator('cluster')}</th>
+                    <Show when={podColumns.isColumnVisible('namespace')}>
+                      <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('namespace')}>Namespace{sortIndicator('namespace')}</th>
+                    </Show>
+                    <Show when={podColumns.isColumnVisible('cluster')}>
+                      <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('cluster')}>Cluster{sortIndicator('cluster')}</th>
+                    </Show>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('status')}>Status{sortIndicator('status')}</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('ready')}>Ready{sortIndicator('ready')}</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('restarts')}>Restarts{sortIndicator('restarts')}</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Image</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('age')}>Age{sortIndicator('age')}</th>
+                    <Show when={podColumns.isColumnVisible('ready')}>
+                      <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('ready')}>Ready{sortIndicator('ready')}</th>
+                    </Show>
+                    <Show when={podColumns.isColumnVisible('restarts')}>
+                      <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('restarts')}>Restarts{sortIndicator('restarts')}</th>
+                    </Show>
+                    <Show when={podColumns.isColumnVisible('image')}>
+                      <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Image</th>
+                    </Show>
+                    <Show when={podColumns.isColumnVisible('age')}>
+                      <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200" onClick={() => toggleSort('age')}>Age{sortIndicator('age')}</th>
+                    </Show>
                   </tr>
                 </thead>
                 <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -764,37 +830,49 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                               {pod.nodeName || 'unscheduled'}
                             </div>
                           </td>
-                          <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-                            <span class="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono">
-                              {pod.namespace}
-                            </span>
-                          </td>
-                          <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-                            {getClusterDisplayName(cluster)}
-                          </td>
+                          <Show when={podColumns.isColumnVisible('namespace')}>
+                            <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                              <span class="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono">
+                                {pod.namespace}
+                              </span>
+                            </td>
+                          </Show>
+                          <Show when={podColumns.isColumnVisible('cluster')}>
+                            <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                              {getClusterDisplayName(cluster)}
+                            </td>
+                          </Show>
                           <td class="px-4 py-3 text-sm">
                             <span class={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusBadge().class}`}>
                               {statusBadge().label}
                             </span>
                           </td>
-                          <td class="px-4 py-3 text-sm">
-                            <span class={readyContainers() === containers().length ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}>
-                              {readyContainers()}/{containers().length}
-                            </span>
-                          </td>
-                          <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-                            <Show when={(pod.restarts ?? 0) > 0} fallback={<span class="text-gray-400">0</span>}>
-                              <span class="text-amber-600 dark:text-amber-400 font-medium">{pod.restarts}</span>
-                            </Show>
-                          </td>
-                          <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-                            <span class="font-mono text-xs truncate max-w-[150px] block" title={(pod.containers ?? [])[0]?.image}>
-                              {getPrimaryImage(pod)}
-                            </span>
-                          </td>
-                          <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                            {formatAge(pod.createdAt)}
-                          </td>
+                          <Show when={podColumns.isColumnVisible('ready')}>
+                            <td class="px-4 py-3 text-sm">
+                              <span class={readyContainers() === containers().length ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}>
+                                {readyContainers()}/{containers().length}
+                              </span>
+                            </td>
+                          </Show>
+                          <Show when={podColumns.isColumnVisible('restarts')}>
+                            <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                              <Show when={(pod.restarts ?? 0) > 0} fallback={<span class="text-gray-400">0</span>}>
+                                <span class="text-amber-600 dark:text-amber-400 font-medium">{pod.restarts}</span>
+                              </Show>
+                            </td>
+                          </Show>
+                          <Show when={podColumns.isColumnVisible('image')}>
+                            <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                              <span class="font-mono text-xs truncate max-w-[150px] block" title={(pod.containers ?? [])[0]?.image}>
+                                {getPrimaryImage(pod)}
+                              </span>
+                            </td>
+                          </Show>
+                          <Show when={podColumns.isColumnVisible('age')}>
+                            <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                              {formatAge(pod.createdAt)}
+                            </td>
+                          </Show>
                         </tr>
                       );
                     }}
