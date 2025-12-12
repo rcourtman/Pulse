@@ -1418,6 +1418,20 @@ func (r *Router) StartPatrol(ctx context.Context) {
 				if adapter != nil {
 					r.aiSettingsHandler.SetMetricsHistoryProvider(adapter)
 				}
+				
+				// Initialize baseline store for anomaly detection
+				// Uses config dir for persistence
+				baselineCfg := ai.DefaultBaselineConfig()
+				if r.persistence != nil {
+					baselineCfg.DataDir = r.persistence.DataDir()
+				}
+				baselineStore := ai.NewBaselineStore(baselineCfg)
+				if baselineStore != nil {
+					r.aiSettingsHandler.SetBaselineStore(baselineStore)
+					
+					// Start background baseline learning loop
+					go r.startBaselineLearning(ctx, baselineStore, metricsHistory)
+				}
 			}
 		}
 
@@ -1430,6 +1444,117 @@ func (r *Router) StopPatrol() {
 	if r.aiSettingsHandler != nil {
 		r.aiSettingsHandler.StopPatrol()
 	}
+}
+
+// startBaselineLearning runs a background loop that learns baselines from metrics history
+// This enables anomaly detection by understanding what "normal" looks like for each resource
+func (r *Router) startBaselineLearning(ctx context.Context, store *ai.BaselineStore, metricsHistory *monitoring.MetricsHistory) {
+	if store == nil || metricsHistory == nil {
+		return
+	}
+	
+	// Learn every hour
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+	
+	// Run initial learning after a short delay (allow metrics to accumulate)
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(5 * time.Minute):
+		r.learnBaselines(store, metricsHistory)
+	}
+	
+	log.Info().Msg("Baseline learning loop started")
+	
+	for {
+		select {
+		case <-ctx.Done():
+			// Save baselines before exit
+			if err := store.Save(); err != nil {
+				log.Warn().Err(err).Msg("Failed to save baselines on shutdown")
+			}
+			log.Info().Msg("Baseline learning loop stopped")
+			return
+		case <-ticker.C:
+			r.learnBaselines(store, metricsHistory)
+		}
+	}
+}
+
+// learnBaselines updates baselines for all resources from metrics history
+func (r *Router) learnBaselines(store *ai.BaselineStore, metricsHistory *monitoring.MetricsHistory) {
+	if r.monitor == nil {
+		return
+	}
+	
+	state := r.monitor.GetState()
+	learningWindow := 7 * 24 * time.Hour // Learn from 7 days of data
+	var learned int
+	
+	// Learn baselines for nodes
+	for _, node := range state.Nodes {
+		for _, metric := range []string{"cpu", "memory"} {
+			points := metricsHistory.GetNodeMetrics(node.ID, metric, learningWindow)
+			if len(points) > 0 {
+				baselinePoints := make([]ai.BaselineMetricPoint, len(points))
+				for i, p := range points {
+					baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+				}
+				if err := store.Learn(node.ID, "node", metric, baselinePoints); err == nil {
+					learned++
+				}
+			}
+		}
+	}
+	
+	// Learn baselines for VMs
+	for _, vm := range state.VMs {
+		if vm.Template {
+			continue
+		}
+		for _, metric := range []string{"cpu", "memory", "disk"} {
+			points := metricsHistory.GetGuestMetrics(vm.ID, metric, learningWindow)
+			if len(points) > 0 {
+				baselinePoints := make([]ai.BaselineMetricPoint, len(points))
+				for i, p := range points {
+					baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+				}
+				if err := store.Learn(vm.ID, "vm", metric, baselinePoints); err == nil {
+					learned++
+				}
+			}
+		}
+	}
+	
+	// Learn baselines for containers
+	for _, ct := range state.Containers {
+		if ct.Template {
+			continue
+		}
+		for _, metric := range []string{"cpu", "memory", "disk"} {
+			points := metricsHistory.GetGuestMetrics(ct.ID, metric, learningWindow)
+			if len(points) > 0 {
+				baselinePoints := make([]ai.BaselineMetricPoint, len(points))
+				for i, p := range points {
+					baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+				}
+				if err := store.Learn(ct.ID, "container", metric, baselinePoints); err == nil {
+					learned++
+				}
+			}
+		}
+	}
+	
+	// Save after learning
+	if err := store.Save(); err != nil {
+		log.Warn().Err(err).Msg("Failed to save baselines")
+	}
+	
+	log.Debug().
+		Int("baselines_updated", learned).
+		Int("resources", store.ResourceCount()).
+		Msg("Baseline learning complete")
 }
 
 // GetAlertTriggeredAnalyzer returns the alert-triggered analyzer for wiring into the monitor's alert callback

@@ -175,6 +175,17 @@ func (s *Service) SetMetricsHistoryProvider(provider MetricsHistoryProvider) {
 	}
 }
 
+// SetBaselineStore sets the baseline store for anomaly detection
+func (s *Service) SetBaselineStore(store *BaselineStore) {
+	s.mu.RLock()
+	patrol := s.patrolService
+	s.mu.RUnlock()
+
+	if patrol != nil {
+		patrol.SetBaselineStore(store)
+	}
+}
+
 // StartPatrol starts the background patrol service
 func (s *Service) StartPatrol(ctx context.Context) {
 	s.mu.RLock()
