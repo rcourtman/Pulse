@@ -140,6 +140,8 @@ type AISettingsResponse struct {
 	OllamaBaseURL       string   `json:"ollama_base_url"`           // Ollama server URL
 	OpenAIBaseURL       string   `json:"openai_base_url,omitempty"` // Custom OpenAI base URL
 	ConfiguredProviders []string `json:"configured_providers"`      // List of provider names with credentials
+	// Cost controls
+	CostBudgetUSD30d float64 `json:"cost_budget_usd_30d,omitempty"`
 }
 
 // AISettingsUpdateRequest is the request body for PUT /api/settings/ai
@@ -169,6 +171,8 @@ type AISettingsUpdateRequest struct {
 	ClearOpenAIKey    *bool `json:"clear_openai_key,omitempty"`    // Clear OpenAI API key
 	ClearDeepSeekKey  *bool `json:"clear_deepseek_key,omitempty"`  // Clear DeepSeek API key
 	ClearOllamaURL    *bool `json:"clear_ollama_url,omitempty"`    // Clear Ollama URL
+	// Cost controls
+	CostBudgetUSD30d *float64 `json:"cost_budget_usd_30d,omitempty"`
 }
 
 // HandleGetAISettings returns the current AI settings (GET /api/settings/ai)
@@ -221,6 +225,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		OllamaBaseURL:       settings.GetBaseURLForProvider(config.AIProviderOllama),
 		OpenAIBaseURL:       settings.OpenAIBaseURL,
 		ConfiguredProviders: settings.GetConfiguredProviders(),
+		CostBudgetUSD30d:    settings.CostBudgetUSD30d,
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -362,6 +367,14 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 			http.Error(w, "Invalid patrol_schedule_preset. Must be '15min', '1hr', '6hr', '12hr', 'daily', or 'disabled'", http.StatusBadRequest)
 			return
 		}
+	}
+
+	if req.CostBudgetUSD30d != nil {
+		if *req.CostBudgetUSD30d < 0 {
+			http.Error(w, "cost_budget_usd_30d cannot be negative", http.StatusBadRequest)
+			return
+		}
+		settings.CostBudgetUSD30d = *req.CostBudgetUSD30d
 	}
 
 	// Handle alert-triggered analysis toggle
@@ -2432,6 +2445,29 @@ func (h *AISettingsHandler) HandleGetAICostSummary(w http.ResponseWriter, r *htt
 
 	if err := utils.WriteJSONResponse(w, summary); err != nil {
 		log.Error().Err(err).Msg("Failed to write AI cost summary response")
+	}
+}
+
+// HandleResetAICostHistory deletes retained AI usage events (POST /api/ai/cost/reset).
+func (h *AISettingsHandler) HandleResetAICostHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.aiService == nil {
+		http.Error(w, "AI service unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	if err := h.aiService.ClearCostHistory(); err != nil {
+		log.Error().Err(err).Msg("Failed to clear AI cost history")
+		http.Error(w, "Failed to clear AI cost history", http.StatusInternalServerError)
+		return
+	}
+
+	if err := utils.WriteJSONResponse(w, map[string]any{"ok": true}); err != nil {
+		log.Error().Err(err).Msg("Failed to write clear cost history response")
 	}
 }
 

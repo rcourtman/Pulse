@@ -93,6 +93,16 @@ func (s *Store) Record(event UsageEvent) {
 	s.mu.Unlock()
 }
 
+// Clear removes all retained usage events and persists the empty history.
+func (s *Store) Clear() error {
+	s.mu.Lock()
+	s.events = s.events[:0]
+	s.trimLocked(time.Now())
+	s.scheduleSaveLocked()
+	s.mu.Unlock()
+	return s.Flush()
+}
+
 // GetSummary returns a rollup of usage over the last N days.
 func (s *Store) GetSummary(days int) Summary {
 	if days <= 0 {

@@ -153,6 +153,27 @@ func TestSummaryTruncationReflectsRetentionWindow(t *testing.T) {
 	}
 }
 
+func TestClearEmptiesUsageHistory(t *testing.T) {
+	store := NewStore(30)
+	store.Record(UsageEvent{
+		Timestamp:    time.Now(),
+		Provider:     "openai",
+		RequestModel: "openai:gpt-4o",
+		InputTokens:  10,
+		OutputTokens: 10,
+		UseCase:      "chat",
+	})
+	if len(store.GetSummary(30).ProviderModels) == 0 {
+		t.Fatalf("expected usage to be recorded before clear")
+	}
+	if err := store.Clear(); err != nil {
+		t.Fatalf("clear failed: %v", err)
+	}
+	if got := store.GetSummary(30); len(got.ProviderModels) != 0 || got.Totals.TotalTokens != 0 {
+		t.Fatalf("expected empty summary after clear, got %+v", got)
+	}
+}
+
 func TestEstimateUSDKnownAndUnknownModels(t *testing.T) {
 	usd, ok, _ := EstimateUSD("openai", "gpt-4o", 1_000_000, 2_000_000)
 	if !ok {
