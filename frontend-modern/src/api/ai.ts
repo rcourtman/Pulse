@@ -9,6 +9,13 @@ import type {
   AIStreamEvent,
   AICostSummary,
 } from '@/types/ai';
+import type {
+  PatternsResponse,
+  PredictionsResponse,
+  CorrelationsResponse,
+  ChangesResponse,
+  BaselinesResponse,
+} from '@/types/aiIntelligence';
 
 export class AIAPI {
   private static baseUrl = '/api';
@@ -61,6 +68,40 @@ export class AIAPI {
   static async exportCostHistory(days = 30, format: 'json' | 'csv' = 'csv'): Promise<Response> {
     return apiFetch(`${this.baseUrl}/ai/cost/export?days=${days}&format=${format}`, { method: 'GET' });
   }
+
+  // ============================================
+  // AI Intelligence API - Patterns, Predictions, Correlations
+  // ============================================
+
+  // Get detected failure patterns
+  static async getPatterns(resourceId?: string): Promise<PatternsResponse> {
+    const params = resourceId ? `?resource_id=${encodeURIComponent(resourceId)}` : '';
+    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/patterns${params}`) as Promise<PatternsResponse>;
+  }
+
+  // Get failure predictions
+  static async getPredictions(resourceId?: string): Promise<PredictionsResponse> {
+    const params = resourceId ? `?resource_id=${encodeURIComponent(resourceId)}` : '';
+    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/predictions${params}`) as Promise<PredictionsResponse>;
+  }
+
+  // Get resource correlations
+  static async getCorrelations(resourceId?: string): Promise<CorrelationsResponse> {
+    const params = resourceId ? `?resource_id=${encodeURIComponent(resourceId)}` : '';
+    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/correlations${params}`) as Promise<CorrelationsResponse>;
+  }
+
+  // Get recent infrastructure changes
+  static async getRecentChanges(hours = 24): Promise<ChangesResponse> {
+    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/changes?hours=${hours}`) as Promise<ChangesResponse>;
+  }
+
+  // Get learned baselines
+  static async getBaselines(resourceId?: string): Promise<BaselinesResponse> {
+    const params = resourceId ? `?resource_id=${encodeURIComponent(resourceId)}` : '';
+    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/baselines${params}`) as Promise<BaselinesResponse>;
+  }
+
 
   // Start OAuth flow for Claude Pro/Max subscription
   // Returns the authorization URL to redirect the user to
