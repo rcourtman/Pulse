@@ -65,6 +65,12 @@ export const AICostDashboard: Component = () => {
     return data.provider_models.some((pm) => pm.pricing_known);
   });
 
+  const unpricedProviderModels = createMemo(() => {
+    const data = summary();
+    if (!data) return [];
+    return (data.provider_models ?? []).filter((pm) => !pm.pricing_known && (pm.total_tokens ?? 0) > 0);
+  });
+
   const estimatedTotalUSD = createMemo(() => {
     const data = summary();
     if (!data || !anyPricingKnown()) return null;
@@ -412,6 +418,25 @@ export const AICostDashboard: Component = () => {
 
               <div class="text-xs text-gray-500 dark:text-gray-400">
                 USD is an estimate based on public list prices. It may differ from billing.
+                <Show when={unpricedProviderModels().length > 0}>
+                  <span class="ml-2">
+                    Estimated spend is partial. Pricing is unknown for{' '}
+                    {unpricedProviderModels()
+                      .slice(0, 6)
+                      .map(
+                        (pm) =>
+                          `${PROVIDER_NAMES[pm.provider as keyof typeof PROVIDER_NAMES] || pm.provider}/${pm.model}`,
+                      )
+                      .join(', ')}
+                    <Show when={unpricedProviderModels().length > 6}>
+                      <span> (+{unpricedProviderModels().length - 6} more)</span>
+                    </Show>
+                    .
+                  </span>
+                </Show>
+                <Show when={summary()?.pricing_as_of}>
+                  <span class="ml-2">Prices as of {summary()?.pricing_as_of}.</span>
+                </Show>
               </div>
 
               <div class="flex items-center justify-between gap-3">

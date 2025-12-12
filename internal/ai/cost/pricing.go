@@ -31,6 +31,11 @@ type modelPrice struct {
 
 const pricingAsOf = "2025-12"
 
+// PricingAsOf indicates the effective date of the pricing table used for estimation.
+func PricingAsOf() string {
+	return pricingAsOf
+}
+
 // NOTE: Keep this table small and conservative.
 // The goal is quick estimation and relative comparisons, not exact billing.
 var providerPrices = map[string][]modelPrice{

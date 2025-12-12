@@ -220,6 +220,7 @@ export interface AICostSummary {
   retention_days: number;
   effective_days: number;
   truncated: boolean;
+  pricing_as_of?: string;
   provider_models: AICostProviderModelSummary[];
   use_cases: AICostUseCaseSummary[];
   targets: AICostTargetSummary[];

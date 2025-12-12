@@ -138,6 +138,7 @@ func (s *Service) GetCostSummary(days int) cost.Summary {
 			RetentionDays:  cost.DefaultMaxDays,
 			EffectiveDays:  effectiveDays,
 			Truncated:      truncated,
+			PricingAsOf:    cost.PricingAsOf(),
 			ProviderModels: []cost.ProviderModelSummary{},
 			UseCases:       []cost.UseCaseSummary{},
 			DailyTotals:    []cost.DailySummary{},

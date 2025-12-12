@@ -2441,6 +2441,7 @@ func (h *AISettingsHandler) HandleGetAICostSummary(w http.ResponseWriter, r *htt
 	} else {
 		summary = cost.Summary{
 			Days:           days,
+			PricingAsOf:    cost.PricingAsOf(),
 			ProviderModels: []cost.ProviderModelSummary{},
 			DailyTotals:    []cost.DailySummary{},
 			Totals:         cost.ProviderModelSummary{Provider: "all"},
