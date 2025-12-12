@@ -19,6 +19,7 @@ func newTestMonitor(t *testing.T) *Monitor {
 		alertManager:        alerts.NewManager(),
 		removedDockerHosts:  make(map[string]time.Time),
 		rateTracker:         NewRateTracker(),
+		metricsHistory:      NewMetricsHistory(1000, 24*time.Hour),
 		dockerTokenBindings: make(map[string]string),
 		dockerMetadataStore: config.NewDockerMetadataStore(t.TempDir()),
 	}

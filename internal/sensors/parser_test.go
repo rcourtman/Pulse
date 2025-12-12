@@ -146,12 +146,12 @@ func TestParse_NVMe(t *testing.T) {
 		t.Errorf("len(NVMe) = %d, want 2", len(data.NVMe))
 	}
 
-	if data.NVMe["nvme-pci-0100"] != 38.85 {
-		t.Errorf("nvme-pci-0100 = %v, want 38.85", data.NVMe["nvme-pci-0100"])
+	if data.NVMe["nvme0"] != 38.85 {
+		t.Errorf("nvme0 = %v, want 38.85", data.NVMe["nvme0"])
 	}
 
-	if data.NVMe["nvme-pci-0200"] != 42.0 {
-		t.Errorf("nvme-pci-0200 = %v, want 42.0", data.NVMe["nvme-pci-0200"])
+	if data.NVMe["nvme1"] != 42.0 {
+		t.Errorf("nvme1 = %v, want 42.0", data.NVMe["nvme1"])
 	}
 }
 
@@ -221,6 +221,10 @@ func TestParse_Combined(t *testing.T) {
 
 	if len(data.NVMe) != 1 {
 		t.Errorf("len(NVMe) = %d, want 1", len(data.NVMe))
+	}
+
+	if data.NVMe["nvme0"] != 40.0 {
+		t.Errorf("nvme0 = %v, want 40.0", data.NVMe["nvme0"])
 	}
 
 	if len(data.GPU) != 1 {

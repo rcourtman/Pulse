@@ -124,6 +124,7 @@ export interface AIExecuteRequest {
   history?: AIConversationMessage[]; // Previous conversation messages
   finding_id?: string; // If fixing a patrol finding, the ID to resolve on success
   model?: string; // Override model for this request (user selection in chat)
+  use_case?: 'chat' | 'patrol'; // Optional server-side routing/model selection
 }
 
 // Tool execution info
@@ -140,6 +141,7 @@ export interface AIExecuteResponse {
   input_tokens: number;
   output_tokens: number;
   tool_calls?: AIToolExecution[]; // Commands that were executed
+  pending_approvals?: AIStreamApprovalNeededData[]; // Non-streaming approvals
 }
 
 // Streaming event types

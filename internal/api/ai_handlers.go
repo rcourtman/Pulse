@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
@@ -142,13 +143,13 @@ type AISettingsResponse struct {
 	Provider       string `json:"provider"`    // DEPRECATED: legacy single provider
 	APIKeySet      bool   `json:"api_key_set"` // DEPRECATED: true if legacy API key is configured
 	Model          string `json:"model"`
-	ChatModel      string `json:"chat_model,omitempty"`   // Model for interactive chat (empty = use default)
-	PatrolModel    string `json:"patrol_model,omitempty"` // Model for patrol (empty = use default)
+	ChatModel      string `json:"chat_model,omitempty"`     // Model for interactive chat (empty = use default)
+	PatrolModel    string `json:"patrol_model,omitempty"`   // Model for patrol (empty = use default)
 	AutoFixModel   string `json:"auto_fix_model,omitempty"` // Model for auto-fix (empty = use patrol model)
-	BaseURL        string `json:"base_url,omitempty"`     // DEPRECATED: legacy base URL
-	Configured     bool   `json:"configured"`             // true if AI is ready to use
-	AutonomousMode bool   `json:"autonomous_mode"`        // true if AI can execute without approval
-	CustomContext  string `json:"custom_context"`         // user-provided infrastructure context
+	BaseURL        string `json:"base_url,omitempty"`       // DEPRECATED: legacy base URL
+	Configured     bool   `json:"configured"`               // true if AI is ready to use
+	AutonomousMode bool   `json:"autonomous_mode"`          // true if AI can execute without approval
+	CustomContext  string `json:"custom_context"`           // user-provided infrastructure context
 	// OAuth fields for Claude Pro/Max subscription authentication
 	AuthMethod     string `json:"auth_method"`     // "api_key" or "oauth"
 	OAuthConnected bool   `json:"oauth_connected"` // true if OAuth tokens are configured
@@ -176,10 +177,10 @@ type AISettingsUpdateRequest struct {
 	Provider       *string `json:"provider,omitempty"` // DEPRECATED: use model selection instead
 	APIKey         *string `json:"api_key,omitempty"`  // DEPRECATED: use per-provider keys
 	Model          *string `json:"model,omitempty"`
-	ChatModel      *string `json:"chat_model,omitempty"`   // Model for interactive chat
-	PatrolModel    *string `json:"patrol_model,omitempty"` // Model for background patrol
+	ChatModel      *string `json:"chat_model,omitempty"`     // Model for interactive chat
+	PatrolModel    *string `json:"patrol_model,omitempty"`   // Model for background patrol
 	AutoFixModel   *string `json:"auto_fix_model,omitempty"` // Model for auto-fix remediation
-	BaseURL        *string `json:"base_url,omitempty"`     // DEPRECATED: use per-provider URLs
+	BaseURL        *string `json:"base_url,omitempty"`       // DEPRECATED: use per-provider URLs
 	AutonomousMode *bool   `json:"autonomous_mode,omitempty"`
 	CustomContext  *string `json:"custom_context,omitempty"` // user-provided infrastructure context
 	AuthMethod     *string `json:"auth_method,omitempty"`    // "api_key" or "oauth"
@@ -650,7 +651,7 @@ func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Requ
 		Cached bool        `json:"cached"`
 	}
 
-	models, err := h.aiService.ListModels(ctx)
+	models, cached, err := h.aiService.ListModelsWithCache(ctx)
 	if err != nil {
 		// Return error but don't fail the request - frontend can show a fallback
 		resp := Response{
@@ -675,6 +676,7 @@ func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Requ
 
 	resp := Response{
 		Models: responseModels,
+		Cached: cached,
 	}
 
 	if err := utils.WriteJSONResponse(w, resp); err != nil {
@@ -695,15 +697,19 @@ type AIExecuteRequest struct {
 	TargetID   string                  `json:"target_id,omitempty"`
 	Context    map[string]interface{}  `json:"context,omitempty"` // Current metrics, state, etc.
 	History    []AIConversationMessage `json:"history,omitempty"` // Previous conversation messages
+	FindingID  string                  `json:"finding_id,omitempty"`
+	Model      string                  `json:"model,omitempty"`
+	UseCase    string                  `json:"use_case,omitempty"` // "chat" or "patrol"
 }
 
 // AIExecuteResponse is the response from POST /api/ai/execute
 type AIExecuteResponse struct {
-	Content      string             `json:"content"`
-	Model        string             `json:"model"`
-	InputTokens  int                `json:"input_tokens"`
-	OutputTokens int                `json:"output_tokens"`
-	ToolCalls    []ai.ToolExecution `json:"tool_calls,omitempty"` // Commands that were executed
+	Content          string                  `json:"content"`
+	Model            string                  `json:"model"`
+	InputTokens      int                     `json:"input_tokens"`
+	OutputTokens     int                     `json:"output_tokens"`
+	ToolCalls        []ai.ToolExecution      `json:"tool_calls,omitempty"`        // Commands that were executed
+	PendingApprovals []ai.ApprovalNeededData `json:"pending_approvals,omitempty"` // Commands that require approval (non-streaming)
 }
 
 // HandleExecute executes an AI prompt (POST /api/ai/execute)
@@ -741,11 +747,29 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 
+	// Convert history from API type to service type
+	var history []ai.ConversationMessage
+	for _, msg := range req.History {
+		history = append(history, ai.ConversationMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		})
+	}
+
+	useCase := strings.TrimSpace(req.UseCase)
+	if useCase == "" {
+		useCase = "chat"
+	}
+
 	resp, err := h.aiService.Execute(ctx, ai.ExecuteRequest{
 		Prompt:     req.Prompt,
 		TargetType: req.TargetType,
 		TargetID:   req.TargetID,
 		Context:    req.Context,
+		History:    history,
+		FindingID:  req.FindingID,
+		Model:      req.Model,
+		UseCase:    useCase,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("AI execution failed")
@@ -754,11 +778,12 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 	}
 
 	response := AIExecuteResponse{
-		Content:      resp.Content,
-		Model:        resp.Model,
-		InputTokens:  resp.InputTokens,
-		OutputTokens: resp.OutputTokens,
-		ToolCalls:    resp.ToolCalls,
+		Content:          resp.Content,
+		Model:            resp.Model,
+		InputTokens:      resp.InputTokens,
+		OutputTokens:     resp.OutputTokens,
+		ToolCalls:        resp.ToolCalls,
+		PendingApprovals: resp.PendingApprovals,
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -815,7 +840,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	}
 
 	log.Info().
-		Str("prompt", req.Prompt).
+		Int("prompt_len", len(req.Prompt)).
 		Str("target_type", req.TargetType).
 		Str("target_id", req.TargetID).
 		Msg("AI streaming request started")
@@ -859,7 +884,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	// NOTE: We don't check r.Context().Done() because Vite proxy may close
 	// the request context prematurely. We detect real disconnection via write failures.
 	heartbeatDone := make(chan struct{})
-	var clientDisconnected bool
+	var clientDisconnected atomic.Bool
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
@@ -872,7 +897,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 				_, err := w.Write([]byte(": heartbeat\n\n"))
 				if err != nil {
 					log.Debug().Err(err).Msg("Heartbeat write failed, stopping heartbeat (AI continues)")
-					clientDisconnected = true
+					clientDisconnected.Store(true)
 					// Don't cancel the AI request - let it complete with its own timeout
 					// The SSE connection may have issues but the AI work can still finish
 					return
@@ -888,14 +913,14 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 
 	// Helper to safely write SSE events, tracking if client disconnected
 	safeWrite := func(data []byte) bool {
-		if clientDisconnected {
+		if clientDisconnected.Load() {
 			return false
 		}
 		_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		_, err := w.Write(data)
 		if err != nil {
 			log.Debug().Err(err).Msg("Failed to write SSE event (client may have disconnected)")
-			clientDisconnected = true
+			clientDisconnected.Store(true)
 			return false
 		}
 		flusher.Flush()
@@ -934,9 +959,14 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 		})
 	}
 
+	useCase := strings.TrimSpace(req.UseCase)
+	if useCase == "" {
+		useCase = "chat"
+	}
+
 	// Ensure we always send a final 'done' event
 	defer func() {
-		if !clientDisconnected {
+		if !clientDisconnected.Load() {
 			doneEvent := ai.StreamEvent{Type: "done"}
 			data, _ := json.Marshal(doneEvent)
 			safeWrite([]byte("data: " + string(data) + "\n\n"))
@@ -951,6 +981,9 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 		TargetID:   req.TargetID,
 		Context:    req.Context,
 		History:    history,
+		FindingID:  req.FindingID,
+		Model:      req.Model,
+		UseCase:    useCase,
 	}, callback)
 
 	if err != nil {
@@ -1018,7 +1051,7 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	log.Debug().Str("body", string(bodyBytes)).Msg("run-command request body")
+	log.Debug().Int("body_len", len(bodyBytes)).Msg("run-command request received")
 
 	var req AIRunCommandRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
@@ -1454,7 +1487,7 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 
 	// Heartbeat routine
 	heartbeatDone := make(chan struct{})
-	var clientDisconnected bool
+	var clientDisconnected atomic.Bool
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
@@ -1464,7 +1497,7 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 				_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Second))
 				_, err := w.Write([]byte(": heartbeat\n\n"))
 				if err != nil {
-					clientDisconnected = true
+					clientDisconnected.Store(true)
 					return
 				}
 				flusher.Flush()
@@ -1476,13 +1509,13 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 	defer close(heartbeatDone)
 
 	safeWrite := func(data []byte) bool {
-		if clientDisconnected {
+		if clientDisconnected.Load() {
 			return false
 		}
 		_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		_, err := w.Write(data)
 		if err != nil {
-			clientDisconnected = true
+			clientDisconnected.Store(true)
 			return false
 		}
 		flusher.Flush()
@@ -1518,7 +1551,7 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 
 	// Execute with streaming
 	defer func() {
-		if !clientDisconnected {
+		if !clientDisconnected.Load() {
 			doneEvent := ai.StreamEvent{Type: "done"}
 			data, _ := json.Marshal(doneEvent)
 			safeWrite([]byte("data: " + string(data) + "\n\n"))
