@@ -236,23 +236,36 @@ These actions worked for similar problems before:
 
 ## Next Steps
 
-### Phase 5: Predictive Intelligence (PLANNED)
+### ✅ Phase 5: Predictive Intelligence (COMPLETE)
 
-**Goal**: Warn users before problems occur.
+**Implemented in `internal/ai/patterns/` package:**
 
-1. **Capacity Forecasting** *(Partially done)*
-   - Extrapolate growth trends ✅
-   - "Storage will be full in X days at current rate" ✅
-   - Account for patterns (e.g., weekly backup spikes)
+- `detector.go` - Pattern detector for failure prediction
 
-2. **Failure Prediction**
-   - Resources that fail periodically (e.g., OOM every 2 weeks)
-   - Predict next occurrence
-   - "This container typically OOMs every ~10 days, last was 8 days ago"
+**Features:**
+1. **Capacity Forecasting** ✅
+   - Extrapolate growth trends
+   - "Storage will be full in X days at current rate"
 
-3. **Correlation-Based Alerts**
-   - "When VM A memory exceeds 80%, VM B usually crashes within 2 hours"
-   - Learn these from historical data
+2. **Failure Prediction** ✅
+   - Track historical events (high memory, OOM, restarts, etc.)
+   - Detect recurring patterns with interval analysis
+   - Calculate confidence based on pattern consistency
+   - Predict next occurrence time
+   - Persists to `ai_patterns.json`
+
+3. **Alert History Integration** ✅
+   - Callback system in `alerts.HistoryManager`
+   - Every alert is recorded as a historical event
+   - Pattern detector learns from production alerts
+
+**Example AI context now includes:**
+```markdown
+## ⏰ Failure Predictions
+Based on historical patterns:
+- high memory usage typically occurs every ~7 days (next expected in ~3 days)
+- OOM events typically occurs every ~14 days (last: 12 days ago, overdue)
+```
 
 ### Phase 6: Multi-Resource Correlation (PLANNED)
 
