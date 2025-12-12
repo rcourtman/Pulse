@@ -30,20 +30,26 @@ function breakpointIndex(bp: Breakpoint): number {
  *
  * @param storageKey - localStorage key for persisting user preferences
  * @param columns - Array of column definitions
+ * @param defaultHidden - Optional array of column IDs to hide by default (only used if no user preference exists)
  */
 export function useColumnVisibility(
   storageKey: string,
-  columns: ColumnDef[]
+  columns: ColumnDef[],
+  defaultHidden: string[] = []
 ) {
   const { breakpoint } = useBreakpoint();
 
   // Get list of toggleable column IDs
   const toggleableIds = columns.filter(c => c.toggleable).map(c => c.id);
 
+  // Check if user has any saved preference
+  const hasUserPreference = typeof window !== 'undefined' && window.localStorage.getItem(storageKey) !== null;
+
   // Persist hidden columns to localStorage
+  // Use defaultHidden only if no user preference exists yet
   const [hiddenColumns, setHiddenColumns] = usePersistentSignal<string[]>(
     storageKey,
-    [],
+    hasUserPreference ? [] : defaultHidden,
     {
       serialize: (arr) => JSON.stringify(arr),
       deserialize: (str) => {
@@ -90,9 +96,9 @@ export function useColumnVisibility(
     }
   };
 
-  // Reset to defaults (show all)
+  // Reset to defaults (restore default hidden columns)
   const resetToDefaults = () => {
-    setHiddenColumns([]);
+    setHiddenColumns(defaultHidden);
   };
 
   // Compute visible columns based on breakpoint and user preferences

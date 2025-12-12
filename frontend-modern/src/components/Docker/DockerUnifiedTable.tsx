@@ -128,7 +128,7 @@ interface DockerColumnDef extends ColumnConfig {
 export const DOCKER_COLUMNS: DockerColumnDef[] = [
   { id: 'resource', label: 'Resource', priority: 'essential', minWidth: 'auto', flex: 1, sortKey: 'resource' },
   { id: 'type', label: 'Type', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'type' },
-  { id: 'image', label: 'Image / Stack', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'image' },
+  { id: 'image', label: 'Image / Stack', priority: 'essential', minWidth: '80px', maxWidth: '200px', sortKey: 'image' },
   { id: 'status', label: 'Status', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'status' },
   // Metric columns - need fixed width to match progress bar max-width (140px + padding)
   // Note: Disk column removed - Docker API rarely provides this data
@@ -1289,7 +1289,10 @@ const DockerContainerRow: Component<{
         );
       case 'image':
         return (
-          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+          <div
+            class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 truncate max-w-[200px]"
+            title={container.image || undefined}
+          >
             {container.image || '—'}
           </div>
         );
@@ -1403,7 +1406,7 @@ const DockerContainerRow: Component<{
                 "min-width": column.id === 'cpu' || column.id === 'memory' ? '140px' : undefined,
                 // Force resource column to respect truncation for very long names (issue #789)
                 "max-width": column.id === 'resource' ? '0' : undefined,
-                "width": column.id === 'resource' ? '40%' : undefined,
+                "width": column.id === 'resource' ? '25%' : undefined,
               }}
             >
               {renderCell(column)}
@@ -2173,7 +2176,10 @@ const DockerServiceRow: Component<{
         );
       case 'image':
         return (
-          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+          <div
+            class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 truncate max-w-[200px]"
+            title={service.image || undefined}
+          >
             {service.image || '—'}
           </div>
         );
@@ -2230,7 +2236,7 @@ const DockerServiceRow: Component<{
                 "min-width": column.id === 'cpu' || column.id === 'memory' ? '140px' : undefined,
                 // Force resource column to respect truncation for very long names (issue #789)
                 "max-width": column.id === 'resource' ? '0' : undefined,
-                "width": column.id === 'resource' ? '40%' : undefined,
+                "width": column.id === 'resource' ? '25%' : undefined,
               }}
             >
               {renderCell(column)}

@@ -278,9 +278,11 @@ export function Dashboard(props: DashboardProps) {
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
 
   // Column visibility management
+  // OS and IP columns are hidden by default since they require guest agent and may show dashes
   const columnVisibility = useColumnVisibility(
     STORAGE_KEYS.DASHBOARD_HIDDEN_COLUMNS,
-    GUEST_COLUMNS as GuestColumnDef[]
+    GUEST_COLUMNS as GuestColumnDef[],
+    ['os', 'ip']  // Default hidden columns for cleaner first-run experience
   );
   const visibleColumns = columnVisibility.visibleColumns;
   const visibleColumnIds = createMemo(() => visibleColumns().map(c => c.id));

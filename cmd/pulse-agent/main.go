@@ -166,13 +166,25 @@ func main() {
 
 		dockerAgent, err = dockeragent.New(dockerCfg)
 		if err != nil {
-			logger.Fatal().Err(err).Msg("Failed to initialize docker agent")
-		}
+			// Docker isn't available yet - start retry loop in background
+			logger.Warn().Err(err).Msg("Docker not available, will retry with exponential backoff")
 
-		g.Go(func() error {
-			logger.Info().Msg("Docker agent module started")
-			return dockerAgent.Run(ctx)
-		})
+			g.Go(func() error {
+				agent := initDockerWithRetry(ctx, dockerCfg, &logger)
+				if agent != nil {
+					dockerAgent = agent
+					logger.Info().Msg("Docker agent module started (after retry)")
+					return agent.Run(ctx)
+				}
+				// Docker never became available, continue without it
+				return nil
+			})
+		} else {
+			g.Go(func() error {
+				logger.Info().Msg("Docker agent module started")
+				return dockerAgent.Run(ctx)
+			})
+		}
 	}
 
 	// Mark as ready after all agents started
@@ -415,4 +427,60 @@ func defaultLogLevel(envValue string) string {
 		return "info"
 	}
 	return envValue
+}
+
+// initDockerWithRetry attempts to initialize the Docker agent with exponential backoff.
+// It returns the agent when Docker becomes available, or nil if the context is cancelled.
+// Retry intervals: 5s, 10s, 20s, 40s, 80s, 160s, then cap at 5 minutes.
+func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *zerolog.Logger) *dockeragent.Agent {
+	const (
+		initialDelay = 5 * time.Second
+		maxDelay     = 5 * time.Minute
+		multiplier   = 2.0
+	)
+
+	delay := initialDelay
+	attempt := 0
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info().Msg("Docker retry cancelled, context done")
+			return nil
+		default:
+		}
+
+		attempt++
+		logger.Info().
+			Int("attempt", attempt).
+			Str("next_retry", delay.String()).
+			Msg("Waiting to retry Docker connection")
+
+		select {
+		case <-ctx.Done():
+			logger.Info().Msg("Docker retry cancelled during wait")
+			return nil
+		case <-time.After(delay):
+		}
+
+		agent, err := dockeragent.New(cfg)
+		if err == nil {
+			logger.Info().
+				Int("attempts", attempt).
+				Msg("Successfully connected to Docker after retry")
+			return agent
+		}
+
+		logger.Warn().
+			Err(err).
+			Int("attempt", attempt).
+			Str("next_retry", (time.Duration(float64(delay) * multiplier)).String()).
+			Msg("Docker still not available, will retry")
+
+		// Calculate next delay with exponential backoff, capped at maxDelay
+		delay = time.Duration(float64(delay) * multiplier)
+		if delay > maxDelay {
+			delay = maxDelay
+		}
+	}
 }

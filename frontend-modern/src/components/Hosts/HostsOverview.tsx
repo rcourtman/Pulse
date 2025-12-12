@@ -89,7 +89,7 @@ function HostNetworkInfoCell(props: { networkInterfaces: NetworkInterface[] }) {
   return (
     <>
       <span
-        class="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 cursor-help"
+        class="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
@@ -220,7 +220,7 @@ function HostTemperatureCell(props: { sensors: Record<string, number> | null | u
   return (
     <>
       <span
-        class={`inline-flex items-center text-xs whitespace-nowrap ${textColorClass()} ${hasSensors() ? 'cursor-help' : ''}`}
+        class={`inline-flex items-center text-xs whitespace-nowrap ${textColorClass()}`}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
@@ -342,7 +342,7 @@ function HostRAIDStatusCell(props: HostRAIDStatusCellProps) {
   return (
     <>
       <span
-        class={`inline-flex items-center gap-1 text-xs whitespace-nowrap ${status().color} ${hasArrays() ? 'cursor-help' : ''}`}
+        class={`inline-flex items-center gap-1 text-xs whitespace-nowrap ${status().color}`}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
