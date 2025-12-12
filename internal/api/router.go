@@ -1458,6 +1458,18 @@ func (r *Router) StartPatrol(ctx context.Context) {
 		if remediationLog != nil {
 			r.aiSettingsHandler.SetRemediationLog(remediationLog)
 		}
+		
+		// Initialize pattern detector for failure prediction
+		patternDetector := ai.NewPatternDetector(ai.PatternDetectorConfig{
+			MaxEvents:       5000,
+			MinOccurrences:  3,
+			PatternWindow:   90 * 24 * time.Hour,
+			PredictionLimit: 30 * 24 * time.Hour,
+			DataDir:         dataDir,
+		})
+		if patternDetector != nil {
+			r.aiSettingsHandler.SetPatternDetector(patternDetector)
+		}
 
 		r.aiSettingsHandler.StartPatrol(ctx)
 	}

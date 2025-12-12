@@ -115,6 +115,11 @@ func (h *AISettingsHandler) SetRemediationLog(remLog *ai.RemediationLog) {
 	h.aiService.SetRemediationLog(remLog)
 }
 
+// SetPatternDetector sets the pattern detector for failure prediction
+func (h *AISettingsHandler) SetPatternDetector(detector *ai.PatternDetector) {
+	h.aiService.SetPatternDetector(detector)
+}
+
 // StopPatrol stops the background AI patrol service
 func (h *AISettingsHandler) StopPatrol() {
 	h.aiService.StopPatrol()
