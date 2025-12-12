@@ -214,6 +214,7 @@ type PatrolService struct {
 	baselineStore     *baseline.Store  // For anomaly detection via learned baselines
 	changeDetector    *ChangeDetector  // For tracking infrastructure changes
 	remediationLog    *RemediationLog  // For tracking remediation actions
+	patternDetector   *PatternDetector // For failure prediction from historical patterns
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds PatrolThresholds
@@ -381,6 +382,21 @@ func (p *PatrolService) GetRemediationLog() *RemediationLog {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.remediationLog
+}
+
+// SetPatternDetector sets the pattern detector for failure prediction
+func (p *PatrolService) SetPatternDetector(detector *PatternDetector) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.patternDetector = detector
+	log.Info().Msg("AI Patrol: Pattern detector set for failure prediction")
+}
+
+// GetPatternDetector returns the pattern detector
+func (p *PatrolService) GetPatternDetector() *PatternDetector {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.patternDetector
 }
 
 // GetConfig returns the current patrol configuration
@@ -1780,6 +1796,18 @@ func (p *PatrolService) buildEnrichedContext(state models.StateSnapshot) string 
 		
 		if len(newChanges) > 0 {
 			log.Debug().Int("new_changes", len(newChanges)).Msg("AI Patrol: Detected infrastructure changes")
+		}
+	}
+	
+	// Append failure predictions if pattern detector is available
+	p.mu.RLock()
+	patternDetector := p.patternDetector
+	p.mu.RUnlock()
+	
+	if patternDetector != nil {
+		predictionsContext := patternDetector.FormatForContext("")
+		if predictionsContext != "" {
+			formatted += predictionsContext
 		}
 	}
 

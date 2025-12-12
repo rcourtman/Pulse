@@ -241,6 +241,17 @@ func (s *Service) SetRemediationLog(remLog *RemediationLog) {
 	}
 }
 
+// SetPatternDetector sets the pattern detector for failure prediction
+func (s *Service) SetPatternDetector(detector *PatternDetector) {
+	s.mu.RLock()
+	patrol := s.patrolService
+	s.mu.RUnlock()
+
+	if patrol != nil {
+		patrol.SetPatternDetector(detector)
+	}
+}
+
 // StartPatrol starts the background patrol service
 func (s *Service) StartPatrol(ctx context.Context) {
 	s.mu.RLock()
