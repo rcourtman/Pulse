@@ -490,3 +490,71 @@ func extractContainerOSType(config map[string]interface{}) string {
 	}
 	return ostype
 }
+
+// extractContainerOSTemplate extracts the ostemplate value from container config.
+// This is the template used to create the container, which may be an LXC template
+// or an OCI image reference (Proxmox VE 9.1+).
+func extractContainerOSTemplate(config map[string]interface{}) string {
+	if len(config) == 0 {
+		return ""
+	}
+
+	// Try common field names for the template
+	for _, key := range []string{"ostemplate", "template"} {
+		if raw, ok := config[key]; ok {
+			if value := strings.TrimSpace(fmt.Sprint(raw)); value != "" {
+				return value
+			}
+		}
+	}
+
+	return ""
+}
+
+// isOCITemplate returns true if the ostemplate string indicates an OCI container image.
+// Proxmox VE 9.1+ supports pulling OCI images from registries like Docker Hub.
+// OCI templates typically have formats like:
+//   - "oci:docker.io/library/alpine:latest"
+//   - "docker:alpine:latest"
+//   - "local:vztmpl/oci-alpine-latest.tar.gz" (pulled OCI image stored locally)
+func isOCITemplate(template string) bool {
+	if template == "" {
+		return false
+	}
+
+	template = strings.ToLower(strings.TrimSpace(template))
+
+	// Explicit OCI prefix
+	if strings.HasPrefix(template, "oci:") {
+		return true
+	}
+
+	// Docker Hub shorthand (docker:image:tag)
+	if strings.HasPrefix(template, "docker:") {
+		return true
+	}
+
+	// Check for common OCI registry URLs
+	ociRegistries := []string{
+		"docker.io/",
+		"ghcr.io/",
+		"gcr.io/",
+		"quay.io/",
+		"registry.hub.docker.com/",
+		"mcr.microsoft.com/",
+		"public.ecr.aws/",
+	}
+	for _, registry := range ociRegistries {
+		if strings.Contains(template, registry) {
+			return true
+		}
+	}
+
+	// Check for locally stored OCI images (typically have "oci" in the filename)
+	// e.g., "local:vztmpl/oci-alpine-3.18.tar.xz"
+	if strings.Contains(template, "/oci-") || strings.Contains(template, "/oci_") {
+		return true
+	}
+
+	return false
+}
