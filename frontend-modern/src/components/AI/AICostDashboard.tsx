@@ -88,6 +88,17 @@ export const AICostDashboard: Component = () => {
             <button
               type="button"
               disabled={loading()}
+              onClick={() => handleRangeClick(1)}
+              class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${days() === 1
+                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+            >
+              1d
+            </button>
+            <button
+              type="button"
+              disabled={loading()}
               onClick={() => handleRangeClick(7)}
               class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${days() === 7
                 ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
