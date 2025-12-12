@@ -120,17 +120,33 @@ func (b *Builder) BuildForInfrastructure(state models.StateSnapshot) *Infrastruc
 		ctx.VMs = append(ctx.VMs, resourceCtx)
 	}
 
-	// Process containers
+	// Process containers (LXC and OCI)
 	for _, ct := range state.Containers {
 		if ct.Template {
 			continue
 		}
 		trends := b.computeGuestTrends(ct.ID)
+		
+		// Determine container type - OCI containers are treated specially
+		containerType := "container"
+		if ct.IsOCI {
+			containerType = "oci_container"
+		}
+		
 		resourceCtx := FormatGuestForContext(
-			ct.ID, ct.Name, ct.Node, "container", ct.Status,
+			ct.ID, ct.Name, ct.Node, containerType, ct.Status,
 			ct.CPU, ct.Memory.Usage, ct.Disk.Usage,
 			ct.Uptime, ct.LastBackup, trends,
 		)
+		
+		// Add OCI image info for AI context
+		if ct.IsOCI && ct.OSTemplate != "" {
+			if resourceCtx.Metadata == nil {
+				resourceCtx.Metadata = make(map[string]interface{})
+			}
+			resourceCtx.Metadata["oci_image"] = ct.OSTemplate
+		}
+		
 		b.enrichWithNotes(&resourceCtx)
 		b.enrichWithAnomalies(&resourceCtx)
 		ctx.Containers = append(ctx.Containers, resourceCtx)

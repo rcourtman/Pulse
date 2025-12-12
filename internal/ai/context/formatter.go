@@ -212,7 +212,7 @@ func FormatInfrastructureContext(ctx *InfrastructureContext) string {
 	}
 
 	if len(ctx.Containers) > 0 {
-		sb.WriteString("## LXC Containers\n")
+		sb.WriteString("## LXC/OCI Containers\n")
 		for _, r := range ctx.Containers {
 			sb.WriteString(FormatResourceContext(r))
 		}
@@ -312,6 +312,8 @@ func formatResourceType(t string) string {
 		return "VM"
 	case "container":
 		return "Container"
+	case "oci_container":
+		return "OCI Container"
 	case "storage":
 		return "Storage"
 	case "docker_host":

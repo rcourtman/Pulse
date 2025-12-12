@@ -113,7 +113,7 @@ type ResourceTrends struct {
 // ResourceContext contains all context for a single resource
 type ResourceContext struct {
 	ResourceID   string
-	ResourceType string // "node", "vm", "container", "storage", "docker_host"
+	ResourceType string // "node", "vm", "container", "oci_container", "storage", "docker_host"
 	ResourceName string
 	Node         string // Parent node (for guests)
 
@@ -137,6 +137,9 @@ type ResourceContext struct {
 	PastIssues      []string  // Summary of past findings
 	LastRemediation string    // What was done last time
 	RecentChanges   []Change  // Recent configuration changes
+
+	// Additional metadata (e.g., OCI image for OCI containers)
+	Metadata map[string]interface{}
 }
 
 // InfrastructureContext contains summarized context for the entire infrastructure
