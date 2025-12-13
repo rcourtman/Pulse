@@ -265,10 +265,16 @@ export const UnifiedAgents: Component = () => {
             version?: string;
             lastSeen?: number;
             isLegacy?: boolean;
+            linkedNodeId?: string;
         }>();
 
-        // Process Host Agents
+        // Process Host Agents (skip those linked to PVE nodes - they're shown merged with the node)
         hosts.forEach(h => {
+            // Skip hosts that are linked to a PVE node - they'll appear in the Dashboard merged with the node
+            if (h.linkedNodeId) {
+                return;
+            }
+
             const key = h.hostname || h.id;
             unified.set(key, {
                 id: h.id,
