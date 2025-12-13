@@ -12,7 +12,6 @@ import {
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError, showWarning } from '@/utils/toast';
-import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 import {
   apiFetch,
@@ -64,11 +63,9 @@ import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
-import type { APITokenRecord } from '@/api/security';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
-import { showTokenReveal } from '@/stores/tokenReveal';
 import { updateStore } from '@/stores/updates';
 
 const COMMON_DISCOVERY_SUBNETS = [
@@ -279,20 +276,6 @@ interface AlertsDiagnostic {
   missingCooldown: boolean;
   missingGroupingWindow: boolean;
   notes?: string[];
-}
-
-interface ProxyRegisterNode {
-  name: string;
-  sshReady: boolean;
-  error?: string;
-}
-
-interface DockerMigrationResult {
-  token: string;
-  installCommand: string;
-  systemdServiceSnippet: string;
-  pulseURL: string;
-  record: APITokenRecord;
 }
 
 interface DiagnosticsData {
@@ -827,14 +810,6 @@ const Settings: Component<SettingsProps> = (props) => {
   // Diagnostics
   const [diagnosticsData, setDiagnosticsData] = createSignal<DiagnosticsData | null>(null);
   const [_runningDiagnostics, setRunningDiagnostics] = createSignal(false);
-  const [proxyActionLoading, setProxyActionLoading] = createSignal<'register-nodes' | null>(null);
-  const [_proxyRegisterSummary, setProxyRegisterSummary] = createSignal<ProxyRegisterNode[] | null>(
-    null,
-  );
-  const [dockerActionLoading, setDockerActionLoading] = createSignal<string | null>(null);
-  const [_dockerMigrationResults, setDockerMigrationResults] = createSignal<
-    Record<string, DockerMigrationResult>
-  >({});
 
   // Security
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatusInfo | null>(null);
@@ -882,75 +857,6 @@ const Settings: Component<SettingsProps> = (props) => {
     return new Date(timestamp).toLocaleString();
   };
 
-  const formatIsoDateTime = (iso?: string) => {
-    if (!iso) {
-      return '';
-    }
-    const timestamp = Date.parse(iso);
-    if (Number.isNaN(timestamp)) {
-      return '';
-    }
-    return new Date(timestamp).toLocaleString();
-  };
-
-  const formatIsoRelativeTime = (iso?: string) => {
-    if (!iso) {
-      return '';
-    }
-    const timestamp = Date.parse(iso);
-    if (Number.isNaN(timestamp)) {
-      return '';
-    }
-    return formatRelativeTime(timestamp);
-  };
-
-  const controlPlaneStatusLabel = (status?: string) => {
-    switch (status) {
-      case 'healthy':
-        return 'Healthy';
-      case 'stale':
-        return 'Behind';
-      case 'offline':
-        return 'Offline';
-      case 'pending':
-      default:
-        return 'Pending';
-    }
-  };
-
-  const controlPlaneStatusClass = (status?: string) => {
-    switch (status) {
-      case 'healthy':
-        return 'bg-green-500';
-      case 'stale':
-        return 'bg-yellow-500';
-      case 'offline':
-        return 'bg-red-500';
-      default:
-        return 'bg-gray-500';
-    }
-  };
-
-  const formatUptime = (seconds: number) => {
-    if (!seconds || seconds <= 0) {
-      return 'Unknown';
-    }
-
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-
-    if (days > 0) {
-      return `${days}d ${hours}h`;
-    }
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    }
-    if (minutes > 0) {
-      return `${minutes}m`;
-    }
-    return `${Math.floor(seconds)}s`;
-  };
 
   const normalizeHostKey = (value?: string | null) => {
     if (!value) {
@@ -1048,15 +954,7 @@ const Settings: Component<SettingsProps> = (props) => {
     return { httpMap, socketStatus, socketCooldowns: cooldowns };
   });
 
-  const proxyNodeChecksSupported = createMemo(() => {
-    const caps = diagnosticsData()?.temperatureProxy?.proxyCapabilities;
-    if (!caps || caps.length === 0) {
-      return true;
-    }
-    return caps.some(
-      (cap) => typeof cap === 'string' && cap.trim().toLowerCase() === 'admin',
-    );
-  });
+
 
   const runDiagnostics = async () => {
     setRunningDiagnostics(true);
@@ -1116,119 +1014,6 @@ const Settings: Component<SettingsProps> = (props) => {
       window.clearInterval(intervalId);
     });
   });
-
-  const handleRegisterProxyNodes = async () => {
-    if (proxyActionLoading()) return;
-    setProxyActionLoading('register-nodes');
-    try {
-      const response = await apiFetch('/api/diagnostics/temperature-proxy/register-nodes', {
-        method: 'POST',
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok || !data || data.success !== true) {
-        const message =
-          (data && typeof data.error === 'string' && data.error) ||
-          (data && typeof data.message === 'string' && data.message) ||
-          'Failed to query proxy nodes';
-        if (response.status === 403) {
-          showWarning(message);
-        } else {
-          showError(message);
-        }
-        return;
-      }
-
-      const nodes = Array.isArray(data.nodes)
-        ? (data.nodes as Array<Record<string, unknown>>).map((node) => ({
-          name: typeof node.name === 'string' ? node.name : 'unknown',
-          sshReady: Boolean(node.ssh_ready),
-          error: typeof node.error === 'string' ? node.error : undefined,
-        }))
-        : [];
-
-      setProxyRegisterSummary(nodes);
-      showSuccess('Queried proxy node registration state');
-      await runDiagnostics();
-    } catch (err) {
-      logger.error('Failed to query proxy node registration state', err);
-      showError('Failed to query proxy nodes');
-    } finally {
-      setProxyActionLoading(null);
-    }
-  };
-
-  const handleDockerPrepareToken = async (hostId: string) => {
-    if (dockerActionLoading()) return;
-    setDockerActionLoading(hostId);
-    try {
-      const response = await apiFetch('/api/diagnostics/docker/prepare-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hostId }),
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok || !data || data.success !== true) {
-        const message =
-          data && typeof data.message === 'string'
-            ? data.message
-            : 'Failed to prepare Docker token';
-        showError(message);
-        return;
-      }
-
-      const recordPayload = data.record as APITokenRecord | undefined;
-      if (!recordPayload || typeof recordPayload.id !== 'string') {
-        showError('Server did not return a valid token record');
-        return;
-      }
-      const tokenRecord: APITokenRecord = {
-        id: recordPayload.id,
-        name: recordPayload.name,
-        prefix: recordPayload.prefix,
-        suffix: recordPayload.suffix,
-        createdAt: recordPayload.createdAt,
-        lastUsedAt: recordPayload.lastUsedAt,
-      };
-
-      const migrationResult: DockerMigrationResult = {
-        token: data.token as string,
-        installCommand: data.installCommand as string,
-        systemdServiceSnippet: data.systemdServiceSnippet as string,
-        pulseURL: data.pulseURL as string,
-        record: tokenRecord,
-      };
-
-      setDockerMigrationResults((prev) => ({
-        ...prev,
-        [hostId]: migrationResult,
-      }));
-
-      showTokenReveal({
-        token: migrationResult.token,
-        record: tokenRecord,
-        source: 'docker',
-        note: 'Copy this token into the install command shown in Diagnostics.',
-      });
-
-      const hostName = data.host && typeof data.host.name === 'string' ? data.host.name : hostId;
-      showSuccess(`Generated dedicated token for ${hostName}`);
-      await runDiagnostics();
-    } catch (err) {
-      logger.error('Failed to prepare Docker token', err);
-      showError('Failed to prepare Docker token');
-    } finally {
-      setDockerActionLoading(null);
-    }
-  };
-
-  const handleCopy = async (text: string, successMessage: string) => {
-    const success = await copyToClipboard(text);
-    if (success) {
-      showSuccess(successMessage);
-    } else {
-      showError('Failed to copy to clipboard');
-    }
-  };
 
   const tabGroups: {
     id: 'platforms' | 'operations' | 'system' | 'security';
