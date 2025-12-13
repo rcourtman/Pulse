@@ -57,5 +57,24 @@ export function getPulseWebSocketUrl(path = '/ws'): string {
   }
 
   const protocol = origin.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${origin.host}${normalizedPath}`;
+  let url = `${protocol}//${origin.host}${normalizedPath}`;
+
+  // Add API token as query parameter if available (WebSocket doesn't support headers)
+  // Import dynamically to avoid circular dependencies
+  try {
+    const storage = typeof window !== 'undefined' ? window.sessionStorage : null;
+    if (storage) {
+      const stored = storage.getItem('pulse_auth');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.type === 'token' && parsed.value) {
+          url += `?token=${encodeURIComponent(parsed.value)}`;
+        }
+      }
+    }
+  } catch {
+    // Ignore storage errors
+  }
+
+  return url;
 }
