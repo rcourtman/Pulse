@@ -92,11 +92,11 @@ export const SecurityWarning: Component = () => {
     return 'text-red-600 dark:text-red-400';
   };
 
-  const getScoreEmoji = (score: number, max: number) => {
+  const getScoreIcon = (score: number, max: number) => {
     const percentage = (score / max) * 100;
-    if (percentage >= 80) return '🛡️';
-    if (percentage >= 60) return '⚠️';
-    return '🚨';
+    if (percentage >= 80) return 'shield';
+    if (percentage >= 60) return 'warning';
+    return 'alert';
   };
 
   // Show more aggressively if public access detected
@@ -120,16 +120,17 @@ export const SecurityWarning: Component = () => {
   return (
     <Portal>
       <div
-        class={`fixed top-0 left-0 right-0 z-50 border-b shadow-sm ${
-          status()!.publicAccess && !status()!.hasAuthentication
+        class={`fixed top-0 left-0 right-0 z-50 border-b shadow-sm ${status()!.publicAccess && !status()!.hasAuthentication
             ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
             : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
-        }`}
+          }`}
       >
         <div class="max-w-7xl mx-auto px-4 py-3">
           <div class="flex items-start justify-between">
             <div class="flex items-start space-x-3">
-              <span class="text-2xl">{getScoreEmoji(status()!.score, status()!.maxScore)}</span>
+              <span class={`text-2xl ${getScoreIcon(status()!.score, status()!.maxScore) === 'shield' ? 'text-green-600' : getScoreIcon(status()!.score, status()!.maxScore) === 'warning' ? 'text-yellow-600' : 'text-red-600'}`}>
+                {getScoreIcon(status()!.score, status()!.maxScore) === 'shield' ? '✓' : getScoreIcon(status()!.score, status()!.maxScore) === 'warning' ? '!' : '!!'}
+              </span>
               <div>
                 <div class="flex items-center gap-3">
                   <SectionHeader
@@ -157,7 +158,7 @@ export const SecurityWarning: Component = () => {
                 <p class="text-sm text-gray-700 dark:text-gray-300 mt-1">
                   {status()!.publicAccess ? (
                     <span class="font-semibold text-red-700 dark:text-red-300">
-                      ⚠️ PUBLIC NETWORK ACCESS DETECTED - Your Proxmox credentials are exposed to
+                      WARNING: PUBLIC NETWORK ACCESS DETECTED - Your Proxmox credentials are exposed to
                       the internet!
                     </span>
                   ) : (
@@ -172,13 +173,13 @@ export const SecurityWarning: Component = () => {
                         <span
                           class={status()!.credentialsEncrypted ? 'text-green-600' : 'text-red-600'}
                         >
-                          {status()!.credentialsEncrypted ? '✅' : '❌'}
+                          {status()!.credentialsEncrypted ? 'Yes' : 'No'}
                         </span>
                         <span>Credentials encrypted at rest</span>
                       </div>
                       <div class="flex items-center gap-2">
                         <span class={status()!.exportProtected ? 'text-green-600' : 'text-red-600'}>
-                          {status()!.exportProtected ? '✅' : '❌'}
+                          {status()!.exportProtected ? 'Yes' : 'No'}
                         </span>
                         <span>Export requires authentication</span>
                       </div>
@@ -186,19 +187,19 @@ export const SecurityWarning: Component = () => {
                         <span
                           class={status()!.hasAuthentication ? 'text-green-600' : 'text-red-600'}
                         >
-                          {status()!.hasAuthentication ? '✅' : '❌'}
+                          {status()!.hasAuthentication ? 'Yes' : 'No'}
                         </span>
                         <span>Authentication enabled</span>
                       </div>
                       <div class="flex items-center gap-2">
                         <span class={status()!.hasHTTPS ? 'text-green-600' : 'text-red-600'}>
-                          {status()!.hasHTTPS ? '✅' : '❌'}
+                          {status()!.hasHTTPS ? 'Yes' : 'No'}
                         </span>
                         <span>HTTPS connection</span>
                       </div>
                       <div class="flex items-center gap-2">
                         <span class={status()!.hasAuditLogging ? 'text-green-600' : 'text-red-600'}>
-                          {status()!.hasAuditLogging ? '✅' : '❌'}
+                          {status()!.hasAuditLogging ? 'Yes' : 'No'}
                         </span>
                         <span>Audit logging enabled</span>
                       </div>
