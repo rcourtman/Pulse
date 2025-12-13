@@ -442,8 +442,20 @@ export const AISettings: Component = () => {
           />
           <Toggle
             checked={form.enabled}
-            onChange={(event) => {
-              setForm('enabled', event.currentTarget.checked);
+            onChange={async (event) => {
+              const newValue = event.currentTarget.checked;
+              setForm('enabled', newValue);
+              // Auto-save the enabled toggle immediately
+              try {
+                const updated = await AIAPI.updateSettings({ enabled: newValue });
+                setSettings(updated);
+                notificationStore.success(newValue ? 'AI Assistant enabled' : 'AI Assistant disabled');
+              } catch (error) {
+                // Revert on failure
+                setForm('enabled', !newValue);
+                logger.error('[AISettings] Failed to toggle AI:', error);
+                notificationStore.error('Failed to update AI setting');
+              }
             }}
             disabled={loading() || saving()}
             containerClass="items-center gap-2"
