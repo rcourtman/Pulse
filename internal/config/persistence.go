@@ -1036,7 +1036,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 					log.Error().
 						Str("corruptedFile", c.nodesFile).
 						Str("backupFile", backupFile).
-						Msg("⚠️  CRITICAL: Both nodes.enc and backup are corrupted/unreadable. Encryption key may have been regenerated. Manual recovery required. Starting with empty config.")
+						Msg("CRITICAL: Both nodes.enc and backup are corrupted/unreadable. Encryption key may have been regenerated. Manual recovery required. Starting with empty config.")
 
 					// Move corrupted file with timestamp for forensics
 					corruptedFile := fmt.Sprintf("%s.corrupted-%s", c.nodesFile, time.Now().Format("20060102-150405"))
@@ -1058,7 +1058,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 				// CRITICAL: Don't delete the corrupted file - leave it for manual recovery
 				log.Error().
 					Str("corruptedFile", c.nodesFile).
-					Msg("⚠️  CRITICAL: nodes.enc is corrupted and no backup exists. Encryption key may have been regenerated. Manual recovery required. Starting with empty config.")
+					Msg("CRITICAL: nodes.enc is corrupted and no backup exists. Encryption key may have been regenerated. Manual recovery required. Starting with empty config.")
 
 				// Move corrupted file with timestamp for forensics
 				corruptedFile := fmt.Sprintf("%s.corrupted-%s", c.nodesFile, time.Now().Format("20060102-150405"))
