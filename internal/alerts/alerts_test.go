@@ -14740,7 +14740,6 @@ func TestLoadActiveAlerts(t *testing.T) {
 
 	t.Run("skips old alerts", func(t *testing.T) {
 		m := newTestManager(t)
-		m.ClearActiveAlerts()
 
 		// Create an old alert (>24 hours)
 		startTime := time.Now().Add(-25 * time.Hour)
@@ -14761,8 +14760,10 @@ func TestLoadActiveAlerts(t *testing.T) {
 		// Save to disk
 		_ = m.SaveActiveAlerts()
 
-		// Clear and reload
-		m.ClearActiveAlerts()
+		// Clear in-memory map only (don't use ClearActiveAlerts which triggers async save)
+		m.mu.Lock()
+		m.activeAlerts = make(map[string]*Alert)
+		m.mu.Unlock()
 
 		err := m.LoadActiveAlerts()
 		if err != nil {
@@ -14780,7 +14781,6 @@ func TestLoadActiveAlerts(t *testing.T) {
 
 	t.Run("skips old acknowledged alerts", func(t *testing.T) {
 		m := newTestManager(t)
-		m.ClearActiveAlerts()
 
 		// Create an alert acknowledged >1 hour ago
 		startTime := time.Now().Add(-30 * time.Minute)
@@ -14805,8 +14805,10 @@ func TestLoadActiveAlerts(t *testing.T) {
 		// Save to disk
 		_ = m.SaveActiveAlerts()
 
-		// Clear and reload
-		m.ClearActiveAlerts()
+		// Clear in-memory map only (don't use ClearActiveAlerts which triggers async save)
+		m.mu.Lock()
+		m.activeAlerts = make(map[string]*Alert)
+		m.mu.Unlock()
 
 		err := m.LoadActiveAlerts()
 		if err != nil {
@@ -14824,7 +14826,6 @@ func TestLoadActiveAlerts(t *testing.T) {
 
 	t.Run("restores acknowledgment state", func(t *testing.T) {
 		m := newTestManager(t)
-		m.ClearActiveAlerts()
 
 		// Create an acknowledged alert
 		startTime := time.Now().Add(-10 * time.Minute)
@@ -14849,8 +14850,11 @@ func TestLoadActiveAlerts(t *testing.T) {
 		// Save to disk
 		_ = m.SaveActiveAlerts()
 
-		// Clear and reload
-		m.ClearActiveAlerts()
+		// Clear in-memory maps only (don't use ClearActiveAlerts which triggers async save)
+		m.mu.Lock()
+		m.activeAlerts = make(map[string]*Alert)
+		m.ackState = make(map[string]ackRecord)
+		m.mu.Unlock()
 
 		err := m.LoadActiveAlerts()
 		if err != nil {
