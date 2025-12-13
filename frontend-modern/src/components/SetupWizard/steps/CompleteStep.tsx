@@ -178,6 +178,10 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
         if (success) {
             setCopied('install');
             setTimeout(() => setCopied(null), 2000);
+
+            // Auto-generate a new token for the next host
+            // This ensures each copy gets a unique token without user intervention
+            generateNewToken();
         }
     };
 
@@ -354,7 +358,7 @@ Keep these credentials secure!
                     </button>
                 </div>
                 <p class="text-white/70 text-xs mb-2">
-                    Run on the host you want to monitor. <span class="text-amber-300">Use a different token for each host</span> - click "New Token" after each install.
+                    Copy and run on each host. <span class="text-green-300">A new token is generated automatically after each copy.</span>
                 </p>
 
                 <div class="bg-black/40 rounded-lg p-2.5 font-mono text-[10px] mb-2 relative group">
