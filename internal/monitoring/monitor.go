@@ -2147,8 +2147,41 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		host.TokenLastUsedAt = previous.TokenLastUsedAt
 	}
 
+	// Link host agent to matching PVE node/VM/container by hostname
+	// This prevents duplication when users install agents on PVE cluster nodes
+	linkedNodeID, linkedVMID, linkedContainerID := m.findLinkedProxmoxEntity(hostname)
+	if linkedNodeID != "" {
+		host.LinkedNodeID = linkedNodeID
+		log.Info().
+			Str("hostId", identifier).
+			Str("hostname", hostname).
+			Str("linkedNodeId", linkedNodeID).
+			Msg("Linked host agent to PVE node")
+	}
+	if linkedVMID != "" {
+		host.LinkedVMID = linkedVMID
+		log.Info().
+			Str("hostId", identifier).
+			Str("hostname", hostname).
+			Str("linkedVmId", linkedVMID).
+			Msg("Linked host agent to VM")
+	}
+	if linkedContainerID != "" {
+		host.LinkedContainerID = linkedContainerID
+		log.Info().
+			Str("hostId", identifier).
+			Str("hostname", hostname).
+			Str("linkedContainerId", linkedContainerID).
+			Msg("Linked host agent to container")
+	}
+
 	m.state.UpsertHost(host)
 	m.state.SetConnectionHealth(hostConnectionPrefix+host.ID, true)
+
+	// Update the linked PVE node to point back to this host agent
+	if host.LinkedNodeID != "" {
+		m.linkNodeToHostAgent(host.LinkedNodeID, host.ID)
+	}
 
 	// If host reports Ceph data, also update the global CephClusters state
 	if report.Ceph != nil {
@@ -2168,6 +2201,65 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 
 	return host, nil
+}
+
+// findLinkedProxmoxEntity searches for a PVE node, VM, or container with a matching hostname.
+// Returns the IDs of matched entities (empty string if no match).
+func (m *Monitor) findLinkedProxmoxEntity(hostname string) (nodeID, vmID, containerID string) {
+	if hostname == "" {
+		return "", "", ""
+	}
+
+	// Normalize hostname for comparison (lowercase, strip domain)
+	normalizedHostname := strings.ToLower(hostname)
+	shortHostname := normalizedHostname
+	if idx := strings.Index(normalizedHostname, "."); idx > 0 {
+		shortHostname = normalizedHostname[:idx]
+	}
+
+	matchHostname := func(name string) bool {
+		normalized := strings.ToLower(name)
+		if normalized == normalizedHostname || normalized == shortHostname {
+			return true
+		}
+		// Also check short version of the candidate
+		if idx := strings.Index(normalized, "."); idx > 0 {
+			if normalized[:idx] == shortHostname {
+				return true
+			}
+		}
+		return false
+	}
+
+	state := m.GetState()
+
+	// Check PVE nodes first
+	for _, node := range state.Nodes {
+		if matchHostname(node.Name) {
+			return node.ID, "", ""
+		}
+	}
+
+	// Check VMs
+	for _, vm := range state.VMs {
+		if matchHostname(vm.Name) {
+			return "", vm.ID, ""
+		}
+	}
+
+	// Check containers
+	for _, ct := range state.Containers {
+		if matchHostname(ct.Name) {
+			return "", "", ct.ID
+		}
+	}
+
+	return "", "", ""
+}
+
+// linkNodeToHostAgent updates a PVE node to link to its host agent.
+func (m *Monitor) linkNodeToHostAgent(nodeID, hostAgentID string) {
+	m.state.LinkNodeToHostAgent(nodeID, hostAgentID)
 }
 
 const (
