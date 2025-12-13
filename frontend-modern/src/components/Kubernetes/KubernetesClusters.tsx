@@ -1,6 +1,7 @@
 import type { Component } from 'solid-js';
 import { For, Show, createMemo, createSignal, createEffect } from 'solid-js';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useColumnVisibility, type ColumnDef } from '@/hooks/useColumnVisibility';
 import type {
   KubernetesCluster,
@@ -141,6 +142,8 @@ const POD_COLUMNS: ColumnDef[] = [
 
 export const KubernetesClusters: Component<KubernetesClustersProps> = (props) => {
   const [search, setSearch] = createSignal('');
+  // PERFORMANCE: Debounce search term to prevent jank during rapid typing
+  const debouncedSearch = useDebouncedValue(() => search(), 200);
   const [viewMode, setViewMode] = createSignal<ViewMode>('clusters');
   const [statusFilter, setStatusFilter] = createSignal<StatusFilter>('all');
   const [showHidden, setShowHidden] = createSignal(false);
@@ -251,7 +254,8 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
   });
 
   const visibleClusters = createMemo(() => {
-    const term = search().trim().toLowerCase();
+    // PERFORMANCE: Use debounced search term
+    const term = debouncedSearch().trim().toLowerCase();
     const clusters = props.clusters ?? [];
     const status = statusFilter();
     const key = sortKey();
@@ -294,7 +298,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
   });
 
   const filteredNodes = createMemo(() => {
-    const term = search().trim().toLowerCase();
+    const term = debouncedSearch().trim().toLowerCase();
     const status = statusFilter();
     const key = sortKey();
     const dir = sortDirection();
@@ -335,7 +339,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
   });
 
   const filteredPods = createMemo(() => {
-    const term = search().trim().toLowerCase();
+    const term = debouncedSearch().trim().toLowerCase();
     const status = statusFilter();
     const ns = namespaceFilter();
     const key = sortKey();
@@ -382,7 +386,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
   });
 
   const filteredDeployments = createMemo(() => {
-    const term = search().trim().toLowerCase();
+    const term = debouncedSearch().trim().toLowerCase();
     const status = statusFilter();
     const ns = namespaceFilter();
     const key = sortKey();
