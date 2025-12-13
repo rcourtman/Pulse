@@ -246,13 +246,13 @@ export function useResourcesAsLegacy() {
     // by id in the WebSocket store (stable identities, fine-grained updates).
     // Only synthesize legacy types from unified resources when it looks like the backend
     // isn't providing that legacy field (e.g., resources include the type but legacy array is empty).
-    const hasVmResources = createMemo(() => resources().some((r) => r.type === 'vm'));
-    const hasNodeResources = createMemo(() => resources().some((r) => r.type === 'node'));
+    const hasVmResources = createMemo(() => (resources() || []).some((r) => r.type === 'vm'));
+    const hasNodeResources = createMemo(() => (resources() || []).some((r) => r.type === 'node'));
     const hasContainerResources = createMemo(() =>
-        resources().some((r) => r.type === 'container' || r.type === 'oci-container'),
+        (resources() || []).some((r) => r.type === 'container' || r.type === 'oci-container'),
     );
-    const hasHostResources = createMemo(() => resources().some((r) => r.type === 'host'));
-    const hasDockerHostResources = createMemo(() => resources().some((r) => r.type === 'docker-host'));
+    const hasHostResources = createMemo(() => (resources() || []).some((r) => r.type === 'host'));
+    const hasDockerHostResources = createMemo(() => (resources() || []).some((r) => r.type === 'docker-host'));
 
     // Convert resources to legacy VM format
     // Falls back to legacy state.vms array when unified resources aren't yet populated
