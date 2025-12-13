@@ -68,9 +68,13 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
     };
 
     return (
-        <div class="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex flex-col">
+        <div
+            class="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex flex-col"
+            role="main"
+            aria-label="Pulse Setup Wizard"
+        >
             {/* Background decoration */}
-            <div class="fixed inset-0 overflow-hidden pointer-events-none">
+            <div class="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
                 <div class="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/20 rounded-full blur-3xl" />
                 <div class="absolute top-1/2 -left-40 w-80 h-80 bg-indigo-500/20 rounded-full blur-3xl" />
                 <div class="absolute -bottom-40 right-1/3 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl" />
@@ -78,7 +82,7 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
 
             {/* Step indicator - only show after welcome */}
             <Show when={currentStep() !== 'welcome' && currentStep() !== 'complete'}>
-                <div class="relative z-10 pt-8 px-4">
+                <div class="relative z-10 pt-8 px-4" role="navigation" aria-label="Setup progress">
                     <StepIndicator
                         steps={['Security', 'Connect', 'Features']}
                         currentStep={currentStepIndex() - 1}
@@ -88,7 +92,7 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
 
             {/* Main content */}
             <div class="flex-1 flex items-center justify-center p-4 relative z-10">
-                <div class="w-full max-w-2xl">
+                <div class="w-full max-w-2xl" role="region" aria-live="polite">
                     <Show when={currentStep() === 'welcome'}>
                         <WelcomeStep
                             onNext={nextStep}
