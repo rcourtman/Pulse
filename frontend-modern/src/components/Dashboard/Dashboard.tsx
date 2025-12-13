@@ -361,27 +361,34 @@ export function Dashboard(props: DashboardProps) {
     return map;
   });
 
-  const resolveParentNode = (guest: VM | Container): Node | undefined => {
-    if (!guest) return undefined;
+  // PERFORMANCE: Pre-compute guest-to-parent-node mapping for faster lookups
+  // This avoids repeated node lookups for each guest during render
+  const guestParentNodeMap = createMemo(() => {
     const nodes = nodeByInstance();
+    const mapping = new Map<string, Node>();
 
-    if (guest.id) {
-      const lastDash = guest.id.lastIndexOf('-');
-      if (lastDash > 0) {
-        const nodeId = guest.id.slice(0, lastDash);
-        if (nodes[nodeId]) {
-          return nodes[nodeId];
+    allGuests().forEach((guest) => {
+      // Try guest.id-based lookup first
+      if (guest.id) {
+        const lastDash = guest.id.lastIndexOf('-');
+        if (lastDash > 0) {
+          const nodeId = guest.id.slice(0, lastDash);
+          if (nodes[nodeId]) {
+            mapping.set(guest.id, nodes[nodeId]);
+            return;
+          }
         }
       }
-    }
+      // Fallback to composite key
+      const compositeKey = `${guest.instance}-${guest.node}`;
+      if (nodes[compositeKey]) {
+        mapping.set(guest.id || `${guest.instance}-${guest.vmid}`, nodes[compositeKey]);
+      }
+    });
 
-    const compositeKey = `${guest.instance}-${guest.node}`;
-    if (nodes[compositeKey]) {
-      return nodes[compositeKey];
-    }
+    return mapping;
+  });
 
-    return undefined;
-  };
   // Sort handler
   const handleSort = (key: keyof (VM | Container)) => {
     if (sortKey() === key) {
@@ -432,6 +439,65 @@ export function Dashboard(props: DashboardProps) {
 
     return null;
   };
+
+  // PERFORMANCE: Memoized sort comparator to avoid duplicating sorting logic
+  // This comparator is reused by both flat and grouped modes in groupedGuests
+  const guestSortComparator = createMemo(() => {
+    const key = sortKey();
+    const dir = sortDirection();
+
+    if (!key) {
+      return null;
+    }
+
+    return (a: VM | Container, b: VM | Container): number => {
+      let aVal: string | number | boolean | null | undefined = a[key] as
+        | string
+        | number
+        | boolean
+        | null
+        | undefined;
+      let bVal: string | number | boolean | null | undefined = b[key] as
+        | string
+        | number
+        | boolean
+        | null
+        | undefined;
+
+      // Special handling for percentage-based columns
+      if (key === 'cpu') {
+        aVal = a.cpu * 100;
+        bVal = b.cpu * 100;
+      } else if (key === 'memory') {
+        aVal = a.memory ? a.memory.usage || 0 : 0;
+        bVal = b.memory ? b.memory.usage || 0 : 0;
+      } else if (key === 'disk') {
+        aVal = getDiskUsagePercent(a);
+        bVal = getDiskUsagePercent(b);
+      }
+
+      // Handle null/undefined/empty values - put at end for both asc and desc
+      const aIsEmpty = aVal === null || aVal === undefined || aVal === '';
+      const bIsEmpty = bVal === null || bVal === undefined || bVal === '';
+
+      if (aIsEmpty && bIsEmpty) return 0;
+      if (aIsEmpty) return 1;
+      if (bIsEmpty) return -1;
+
+      // Type-specific comparison
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        const comparison = aVal < bVal ? -1 : 1;
+        return dir === 'asc' ? comparison : -comparison;
+      } else {
+        const aStr = String(aVal).toLowerCase();
+        const bStr = String(bVal).toLowerCase();
+
+        if (aStr === bStr) return 0;
+        const comparison = aStr < bStr ? -1 : 1;
+        return dir === 'asc' ? comparison : -comparison;
+      }
+    };
+  });
 
   // Handle keyboard shortcuts
   let searchInputRef: HTMLInputElement | undefined;
@@ -662,61 +728,10 @@ export function Dashboard(props: DashboardProps) {
     // If flat mode, return all guests in a single group
     if (groupingMode() === 'flat') {
       const groups: Record<string, (VM | Container)[]> = { '': guests };
-      // Sort the flat list
-      const key = sortKey();
-      const dir = sortDirection();
-      if (key) {
-        groups[''] = groups[''].sort((a, b) => {
-          let aVal: string | number | boolean | null | undefined = a[key] as
-            | string
-            | number
-            | boolean
-            | null
-            | undefined;
-          let bVal: string | number | boolean | null | undefined = b[key] as
-            | string
-            | number
-            | boolean
-            | null
-            | undefined;
-
-          // Special handling for percentage-based columns
-          if (key === 'cpu') {
-            // CPU is displayed as percentage
-            aVal = a.cpu * 100;
-            bVal = b.cpu * 100;
-          } else if (key === 'memory') {
-            // Memory is displayed as percentage (use pre-calculated usage)
-            aVal = a.memory ? a.memory.usage || 0 : 0;
-            bVal = b.memory ? b.memory.usage || 0 : 0;
-          } else if (key === 'disk') {
-            aVal = getDiskUsagePercent(a);
-            bVal = getDiskUsagePercent(b);
-          }
-
-          // Handle null/undefined/empty values - put at end for both asc and desc
-          const aIsEmpty = aVal === null || aVal === undefined || aVal === '';
-          const bIsEmpty = bVal === null || bVal === undefined || bVal === '';
-
-          if (aIsEmpty && bIsEmpty) return 0;
-          if (aIsEmpty) return 1;
-          if (bIsEmpty) return -1;
-
-          // Type-specific value preparation
-          if (typeof aVal === 'number' && typeof bVal === 'number') {
-            // Numeric comparison
-            const comparison = aVal < bVal ? -1 : 1;
-            return dir === 'asc' ? comparison : -comparison;
-          } else {
-            // String comparison (case-insensitive)
-            const aStr = String(aVal).toLowerCase();
-            const bStr = String(bVal).toLowerCase();
-
-            if (aStr === bStr) return 0;
-            const comparison = aStr < bStr ? -1 : 1;
-            return dir === 'asc' ? comparison : -comparison;
-          }
-        });
+      // PERFORMANCE: Use memoized sort comparator (eliminates ~50 lines of duplicate code)
+      const comparator = guestSortComparator();
+      if (comparator) {
+        groups[''] = groups[''].sort(comparator);
       }
       return groups;
     }
@@ -733,62 +748,11 @@ export function Dashboard(props: DashboardProps) {
       groups[nodeId].push(guest);
     });
 
-    // Sort within each node group
-    const key = sortKey();
-    const dir = sortDirection();
-    if (key) {
+    // PERFORMANCE: Use memoized sort comparator (eliminates ~50 lines of duplicate code)
+    const comparator = guestSortComparator();
+    if (comparator) {
       Object.keys(groups).forEach((node) => {
-        groups[node] = groups[node].sort((a, b) => {
-          let aVal: string | number | boolean | null | undefined = a[key] as
-            | string
-            | number
-            | boolean
-            | null
-            | undefined;
-          let bVal: string | number | boolean | null | undefined = b[key] as
-            | string
-            | number
-            | boolean
-            | null
-            | undefined;
-
-          // Special handling for percentage-based columns
-          if (key === 'cpu') {
-            // CPU is displayed as percentage
-            aVal = a.cpu * 100;
-            bVal = b.cpu * 100;
-          } else if (key === 'memory') {
-            // Memory is displayed as percentage (use pre-calculated usage)
-            aVal = a.memory ? a.memory.usage || 0 : 0;
-            bVal = b.memory ? b.memory.usage || 0 : 0;
-          } else if (key === 'disk') {
-            aVal = getDiskUsagePercent(a);
-            bVal = getDiskUsagePercent(b);
-          }
-
-          // Handle null/undefined/empty values - put at end for both asc and desc
-          const aIsEmpty = aVal === null || aVal === undefined || aVal === '';
-          const bIsEmpty = bVal === null || bVal === undefined || bVal === '';
-
-          if (aIsEmpty && bIsEmpty) return 0;
-          if (aIsEmpty) return 1;
-          if (bIsEmpty) return -1;
-
-          // Type-specific value preparation
-          if (typeof aVal === 'number' && typeof bVal === 'number') {
-            // Numeric comparison
-            const comparison = aVal < bVal ? -1 : 1;
-            return dir === 'asc' ? comparison : -comparison;
-          } else {
-            // String comparison (case-insensitive)
-            const aStr = String(aVal).toLowerCase();
-            const bStr = String(bVal).toLowerCase();
-
-            if (aStr === bStr) return 0;
-            const comparison = aStr < bStr ? -1 : 1;
-            return dir === 'asc' ? comparison : -comparison;
-          }
-        });
+        groups[node] = groups[node].sort(comparator);
       });
     }
 
@@ -1122,7 +1086,7 @@ export function Dashboard(props: DashboardProps) {
                             onClick={() => isSortable && handleSort(sortKeyForCol!)}
                             title={col.icon ? col.label : undefined}
                           >
-                              <div class={`flex items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`} style={{ "min-height": "14px" }}>
+                            <div class={`flex items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`} style={{ "min-height": "14px" }}>
                               {col.icon ? (
                                 <span class="flex items-center">{col.icon}</span>
                               ) : (
@@ -1160,7 +1124,8 @@ export function Dashboard(props: DashboardProps) {
                               const metadata =
                                 guestMetadata()[guestId] ||
                                 guestMetadata()[`${guest.node}-${guest.vmid}`];
-                              const parentNode = node ?? resolveParentNode(guest);
+                              // PERFORMANCE: Use pre-computed parent node map instead of resolveParentNode
+                              const parentNode = node ?? guestParentNodeMap().get(guestId);
                               const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
 
                               // Get adjacent guest IDs for merged AI context borders
