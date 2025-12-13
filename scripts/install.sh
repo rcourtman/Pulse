@@ -135,21 +135,56 @@ done
 
 # --- Uninstall Logic ---
 if [[ "$UNINSTALL" == "true" ]]; then
-    log_info "Uninstalling ${AGENT_NAME}..."
+    log_info "Uninstalling ${AGENT_NAME} and cleaning up legacy agents..."
 
-    # Systemd
+    # Kill any running agent processes first
+    pkill -f "pulse-agent" 2>/dev/null || true
+    pkill -f "pulse-host-agent" 2>/dev/null || true
+    pkill -f "pulse-docker-agent" 2>/dev/null || true
+    sleep 1
+
+    # Systemd - unified agent
     if command -v systemctl >/dev/null 2>&1; then
         systemctl stop "${AGENT_NAME}" 2>/dev/null || true
         systemctl disable "${AGENT_NAME}" 2>/dev/null || true
         rm -f "/etc/systemd/system/${AGENT_NAME}.service"
+        
+        # Legacy agents cleanup
+        systemctl stop pulse-host-agent 2>/dev/null || true
+        systemctl disable pulse-host-agent 2>/dev/null || true
+        rm -f /etc/systemd/system/pulse-host-agent.service
+        
+        systemctl stop pulse-docker-agent 2>/dev/null || true
+        systemctl disable pulse-docker-agent 2>/dev/null || true
+        rm -f /etc/systemd/system/pulse-docker-agent.service
+        
         systemctl daemon-reload 2>/dev/null || true
     fi
 
+    # Remove legacy binaries
+    rm -f /usr/local/bin/pulse-host-agent
+    rm -f /usr/local/bin/pulse-docker-agent
+
+    # Remove agent state directory (contains agent ID, proxmox registration state, etc.)
+    rm -rf /var/lib/pulse-agent
+
+    # Remove log files
+    rm -f /var/log/pulse-agent.log
+    rm -f /var/log/pulse-host-agent.log
+    rm -f /var/log/pulse-docker-agent.log
+
     # Launchd (macOS)
     if [[ "$(uname -s)" == "Darwin" ]]; then
+        # Unified agent
         PLIST="/Library/LaunchDaemons/com.pulse.agent.plist"
         launchctl unload "$PLIST" 2>/dev/null || true
         rm -f "$PLIST"
+        
+        # Legacy agents
+        launchctl unload /Library/LaunchDaemons/com.pulse.host-agent.plist 2>/dev/null || true
+        rm -f /Library/LaunchDaemons/com.pulse.host-agent.plist
+        launchctl unload /Library/LaunchDaemons/com.pulse.docker-agent.plist 2>/dev/null || true
+        rm -f /Library/LaunchDaemons/com.pulse.docker-agent.plist
     fi
 
     # Synology DSM (handles both DSM 7+ systemd and DSM 6.x upstart)
