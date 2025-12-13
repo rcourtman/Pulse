@@ -12,8 +12,8 @@ const (
 	BcryptCost = 12
 
 	// MinPasswordLength is the minimum required password length
-	// Set to 12 to match the encryption requirement for config backups
-	MinPasswordLength = 12
+	// Set to 1 to allow users to choose their own password security
+	MinPasswordLength = 1
 )
 
 // HashPassword generates a bcrypt hash from a plain text password
