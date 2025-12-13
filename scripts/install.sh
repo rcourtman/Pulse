@@ -205,19 +205,37 @@ if [[ "$UNINSTALL" == "true" ]]; then
 
     # Unraid
     if [[ -f /etc/unraid-version ]] || [[ -d /boot/config/plugins/pulse-agent ]]; then
-        log_info "Removing Unraid installation..."
-        # Stop running agent
+        log_info "Removing Unraid installation (including legacy agents)..."
+        # Stop running agents (unified + legacy)
         pkill -f "pulse-agent" 2>/dev/null || true
-        # Remove from /boot/config/go
+        pkill -f "pulse-host-agent" 2>/dev/null || true
+        pkill -f "pulse-docker-agent" 2>/dev/null || true
+        sleep 1
+        
+        # Remove from /boot/config/go - all pulse-related entries
         GO_SCRIPT="/boot/config/go"
         if [[ -f "$GO_SCRIPT" ]]; then
+            # Remove unified agent entries
             sed -i '/# Pulse Agent/,/^$/d' "$GO_SCRIPT" 2>/dev/null || true
             sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
+            # Remove legacy agent entries
+            sed -i '/# Pulse Host Agent/,/^$/d' "$GO_SCRIPT" 2>/dev/null || true
+            sed -i '/# Pulse Docker Agent/,/^$/d' "$GO_SCRIPT" 2>/dev/null || true
+            sed -i '/pulse-host-agent/d' "$GO_SCRIPT" 2>/dev/null || true
+            sed -i '/pulse-docker-agent/d' "$GO_SCRIPT" 2>/dev/null || true
         fi
-        # Remove installation directory
+        
+        # Remove installation directories
         rm -rf /boot/config/plugins/pulse-agent
-        # Remove symlink
+        rm -rf /boot/config/pulse  # Legacy pulse directory
+        
+        # Remove binaries from RAM disk
         rm -f "${INSTALL_DIR}/${BINARY_NAME}"
+        rm -f /usr/local/bin/pulse-host-agent
+        rm -f /usr/local/bin/pulse-docker-agent
+        
+        # Remove log directory
+        rm -rf /var/log/pulse
     fi
 
     # TrueNAS SCALE
