@@ -283,6 +283,12 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 				}
 			}
 		}
+		// Check query parameter (for WebSocket connections that can't send headers)
+		if queryToken := r.URL.Query().Get("token"); queryToken != "" {
+			if validateToken(queryToken) {
+				return true
+			}
+		}
 	}
 
 	// Check session cookie (for WebSocket and UI)
