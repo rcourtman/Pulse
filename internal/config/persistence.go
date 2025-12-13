@@ -845,6 +845,15 @@ type SystemSettings struct {
 	SSHPort                      int             `json:"sshPort,omitempty"`                    // Default SSH port for temperature monitoring (0 = use 22)
 	WebhookAllowedPrivateCIDRs   string          `json:"webhookAllowedPrivateCIDRs,omitempty"` // Comma-separated list of private CIDR ranges allowed for webhooks (e.g., "192.168.1.0/24,10.0.0.0/8")
 	HideLocalLogin               bool            `json:"hideLocalLogin"`                       // Hide local login form (username/password)
+
+	// Metrics retention configuration (in hours)
+	// These control how long historical metrics are stored at each aggregation tier.
+	// Longer retention enables trend analysis but increases storage usage.
+	MetricsRetentionRawHours    int `json:"metricsRetentionRawHours,omitempty"`    // Raw data (~5s intervals), default: 2 hours
+	MetricsRetentionMinuteHours int `json:"metricsRetentionMinuteHours,omitempty"` // Minute averages, default: 24 hours
+	MetricsRetentionHourlyDays  int `json:"metricsRetentionHourlyDays,omitempty"`  // Hourly averages, default: 7 days
+	MetricsRetentionDailyDays   int `json:"metricsRetentionDailyDays,omitempty"`   // Daily averages, default: 90 days
+
 	// APIToken removed - now handled via .env file only
 }
 

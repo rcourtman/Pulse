@@ -95,7 +95,6 @@ type Config struct {
 	PMGPollingInterval              time.Duration `envconfig:"PMG_POLLING_INTERVAL"` // PMG polling interval (60s default)
 	ConcurrentPolling               bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
 	ConnectionTimeout               time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"45s"` // Increased for slow storage operations
-	MetricsRetentionDays            int           `envconfig:"METRICS_RETENTION_DAYS" default:"7"`
 	BackupPollingCycles             int           `envconfig:"BACKUP_POLLING_CYCLES" default:"10"`
 	BackupPollingInterval           time.Duration `envconfig:"BACKUP_POLLING_INTERVAL"`
 	EnableBackupPolling             bool          `envconfig:"ENABLE_BACKUP_POLLING" default:"true"`
@@ -111,6 +110,14 @@ type Config struct {
 	GuestMetadataMaxConcurrent      int           `envconfig:"GUEST_METADATA_MAX_CONCURRENT" default:"4" json:"guestMetadataMaxConcurrent"`
 	DNSCacheTimeout                 time.Duration `envconfig:"DNS_CACHE_TIMEOUT" default:"5m" json:"dnsCacheTimeout"`
 	SSHPort                         int           `envconfig:"SSH_PORT" default:"22" json:"sshPort"` // Default SSH port for temperature monitoring
+
+	// Metrics retention settings (tiered storage)
+	// These control how long historical metrics are retained at each aggregation level.
+	MetricsRetentionRawHours    int `json:"metricsRetentionRawHours"`    // Raw data (~5s intervals), default: 2 hours
+	MetricsRetentionMinuteHours int `json:"metricsRetentionMinuteHours"` // Minute averages, default: 24 hours
+	MetricsRetentionHourlyDays  int `json:"metricsRetentionHourlyDays"`  // Hourly averages, default: 7 days
+	MetricsRetentionDailyDays   int `json:"metricsRetentionDailyDays"`   // Daily averages, default: 90 days
+
 
 	// Logging settings
 	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
@@ -547,7 +554,6 @@ func Load() (*Config, error) {
 		AppRoot:                         detectAppRoot(),
 		ConcurrentPolling:               true,
 		ConnectionTimeout:               60 * time.Second,
-		MetricsRetentionDays:            7,
 		BackupPollingCycles:             10,
 		BackupPollingInterval:           0,
 		EnableBackupPolling:             true,
@@ -576,6 +582,11 @@ func Load() (*Config, error) {
 		TemperatureMonitoringEnabled:    true,
 		EnvOverrides:                    make(map[string]bool),
 		OIDC:                            NewOIDCConfig(),
+		// Metrics retention defaults (tiered)
+		MetricsRetentionRawHours:    2,  // 2 hours of raw ~5s data
+		MetricsRetentionMinuteHours: 24, // 24 hours of minute averages
+		MetricsRetentionHourlyDays:  7,  // 7 days of hourly averages
+		MetricsRetentionDailyDays:   90, // 90 days of daily averages
 	}
 
 	cfg.Discovery = DefaultDiscoveryConfig()
@@ -671,11 +682,27 @@ func Load() (*Config, error) {
 			}
 			// Load HideLocalLogin
 			cfg.HideLocalLogin = systemSettings.HideLocalLogin
+
+			// Load metrics retention settings (only override if explicitly set)
+			if systemSettings.MetricsRetentionRawHours > 0 {
+				cfg.MetricsRetentionRawHours = systemSettings.MetricsRetentionRawHours
+			}
+			if systemSettings.MetricsRetentionMinuteHours > 0 {
+				cfg.MetricsRetentionMinuteHours = systemSettings.MetricsRetentionMinuteHours
+			}
+			if systemSettings.MetricsRetentionHourlyDays > 0 {
+				cfg.MetricsRetentionHourlyDays = systemSettings.MetricsRetentionHourlyDays
+			}
+			if systemSettings.MetricsRetentionDailyDays > 0 {
+				cfg.MetricsRetentionDailyDays = systemSettings.MetricsRetentionDailyDays
+			}
+
 			// APIToken no longer loaded from system.json - only from .env
 			log.Info().
 				Str("updateChannel", cfg.UpdateChannel).
 				Str("logLevel", cfg.LogLevel).
 				Dur("dnsCacheTimeout", cfg.DNSCacheTimeout).
+				Int("metricsRetentionDailyDays", cfg.MetricsRetentionDailyDays).
 				Msg("Loaded system configuration")
 		} else {
 			// No system.json exists - create default one
