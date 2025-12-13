@@ -157,3 +157,4 @@ tmp_*.sh
 # Local agent directories
 scripts/agent/
 docs/internal/
+.agent/
