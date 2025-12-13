@@ -1,11 +1,15 @@
 // Properly typed TypeScript interfaces for Pulse API
 
+import type { Resource } from './resource';
+
 export interface State {
   nodes: Node[];
   vms: VM[];
   containers: Container[];
   dockerHosts: DockerHost[];
   removedDockerHosts?: RemovedDockerHost[];
+  kubernetesClusters?: KubernetesCluster[];
+  removedKubernetesClusters?: RemovedKubernetesCluster[];
   hosts: Host[];
   replicationJobs: ReplicationJob[];
   storage: Storage[];
@@ -25,6 +29,8 @@ export interface State {
   recentlyResolved: ResolvedAlert[];
   lastUpdate: string;
   temperatureMonitoringEnabled?: boolean;
+  // Unified resources (new data model - eventually replaces legacy arrays above)
+  resources?: Resource[];
 }
 
 export interface RemovedDockerHost {
@@ -32,6 +38,95 @@ export interface RemovedDockerHost {
   hostname?: string;
   displayName?: string;
   removedAt: number;
+}
+
+export interface KubernetesCluster {
+  id: string;
+  agentId: string;
+  name?: string;
+  displayName?: string;
+  customDisplayName?: string;
+  server?: string;
+  context?: string;
+  version?: string;
+  status: string;
+  lastSeen: number;
+  intervalSeconds: number;
+  agentVersion?: string;
+  tokenId?: string;
+  tokenName?: string;
+  tokenHint?: string;
+  tokenLastUsedAt?: number;
+  hidden?: boolean;
+  pendingUninstall?: boolean;
+  nodes?: KubernetesNode[];
+  pods?: KubernetesPod[];
+  deployments?: KubernetesDeployment[];
+}
+
+export interface RemovedKubernetesCluster {
+  id: string;
+  name?: string;
+  displayName?: string;
+  removedAt: number;
+}
+
+export interface KubernetesNode {
+  uid: string;
+  name: string;
+  ready: boolean;
+  unschedulable?: boolean;
+  kubeletVersion?: string;
+  containerRuntimeVersion?: string;
+  osImage?: string;
+  kernelVersion?: string;
+  architecture?: string;
+  capacityCpuCores?: number;
+  capacityMemoryBytes?: number;
+  capacityPods?: number;
+  allocatableCpuCores?: number;
+  allocatableMemoryBytes?: number;
+  allocatablePods?: number;
+  roles?: string[];
+}
+
+export interface KubernetesPodContainer {
+  name: string;
+  image?: string;
+  ready: boolean;
+  restartCount?: number;
+  state?: string;
+  reason?: string;
+  message?: string;
+}
+
+export interface KubernetesPod {
+  uid: string;
+  name: string;
+  namespace: string;
+  nodeName?: string;
+  phase?: string;
+  reason?: string;
+  message?: string;
+  qosClass?: string;
+  createdAt?: number;
+  startTime?: number;
+  restarts?: number;
+  labels?: Record<string, string>;
+  ownerKind?: string;
+  ownerName?: string;
+  containers?: KubernetesPodContainer[];
+}
+
+export interface KubernetesDeployment {
+  uid: string;
+  name: string;
+  namespace: string;
+  desiredReplicas?: number;
+  updatedReplicas?: number;
+  readyReplicas?: number;
+  availableReplicas?: number;
+  labels?: Record<string, string>;
 }
 
 export interface Node {
@@ -126,6 +221,9 @@ export interface Container {
   tags: string[] | string | null;
   lock: string;
   lastSeen: string;
+  // OCI container support (Proxmox VE 9.1+)
+  isOci?: boolean; // True if this is an OCI container
+  osTemplate?: string; // Template or OCI image used (e.g., "oci:docker.io/library/alpine:latest")
 }
 
 export interface DockerHost {
@@ -329,6 +427,7 @@ export interface Host {
   loadAverage?: number[];
   memory: Memory;
   disks?: Disk[];
+  diskIO?: HostDiskIO[];
   networkInterfaces?: HostNetworkInterface[];
   sensors?: HostSensorSummary;
   raid?: HostRAIDArray[];
@@ -382,6 +481,17 @@ export interface HostRAIDDevice {
   device: string;
   state: string;
   slot: number;
+}
+
+export interface HostDiskIO {
+  device: string;
+  readBytes?: number;
+  writeBytes?: number;
+  readOps?: number;
+  writeOps?: number;
+  readTimeMs?: number;
+  writeTimeMs?: number;
+  ioTimeMs?: number;
 }
 
 export interface HostLookupResponse {

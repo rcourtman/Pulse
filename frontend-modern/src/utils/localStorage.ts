@@ -108,4 +108,13 @@ export const STORAGE_KEYS = {
 
   // Metrics display
   METRICS_VIEW_MODE: 'metricsViewMode', // 'bars' | 'sparklines'
+  METRICS_TIME_RANGE: 'metricsTimeRange', // '15m' | '1h' | '4h' | '24h'
+
+  // Column visibility
+  DASHBOARD_HIDDEN_COLUMNS: 'dashboardHiddenColumns',
+  HOSTS_HIDDEN_COLUMNS: 'hostsHiddenColumns',
+  DOCKER_HIDDEN_COLUMNS: 'dockerHiddenColumns',
+
+  // Resources search
+  RESOURCES_SEARCH_HISTORY: 'resourcesSearchHistory',
 } as const;

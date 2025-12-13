@@ -20,18 +20,22 @@ import (
 
 // ConfigPersistence handles saving and loading configuration
 type ConfigPersistence struct {
-	mu            sync.RWMutex
-	tx            *importTransaction
-	configDir     string
-	alertFile     string
-	emailFile     string
-	webhookFile   string
-	appriseFile   string
-	nodesFile     string
-	systemFile    string
-	oidcFile      string
-	apiTokensFile string
-	crypto        *crypto.CryptoManager
+	mu                 sync.RWMutex
+	tx                 *importTransaction
+	configDir          string
+	alertFile          string
+	emailFile          string
+	webhookFile        string
+	appriseFile        string
+	nodesFile          string
+	systemFile         string
+	oidcFile           string
+	apiTokensFile      string
+	aiFile             string
+	aiFindingsFile     string
+	aiPatrolRunsFile   string
+	aiUsageHistoryFile string
+	crypto             *crypto.CryptoManager
 }
 
 // NewConfigPersistence creates a new config persistence manager.
@@ -64,16 +68,20 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 	}
 
 	cp := &ConfigPersistence{
-		configDir:     configDir,
-		alertFile:     filepath.Join(configDir, "alerts.json"),
-		emailFile:     filepath.Join(configDir, "email.enc"),
-		webhookFile:   filepath.Join(configDir, "webhooks.enc"),
-		appriseFile:   filepath.Join(configDir, "apprise.enc"),
-		nodesFile:     filepath.Join(configDir, "nodes.enc"),
-		systemFile:    filepath.Join(configDir, "system.json"),
-		oidcFile:      filepath.Join(configDir, "oidc.enc"),
-		apiTokensFile: filepath.Join(configDir, "api_tokens.json"),
-		crypto:        cryptoMgr,
+		configDir:          configDir,
+		alertFile:          filepath.Join(configDir, "alerts.json"),
+		emailFile:          filepath.Join(configDir, "email.enc"),
+		webhookFile:        filepath.Join(configDir, "webhooks.enc"),
+		appriseFile:        filepath.Join(configDir, "apprise.enc"),
+		nodesFile:          filepath.Join(configDir, "nodes.enc"),
+		systemFile:         filepath.Join(configDir, "system.json"),
+		oidcFile:           filepath.Join(configDir, "oidc.enc"),
+		apiTokensFile:      filepath.Join(configDir, "api_tokens.json"),
+		aiFile:             filepath.Join(configDir, "ai.enc"),
+		aiFindingsFile:     filepath.Join(configDir, "ai_findings.json"),
+		aiPatrolRunsFile:   filepath.Join(configDir, "ai_patrol_runs.json"),
+		aiUsageHistoryFile: filepath.Join(configDir, "ai_usage_history.json"),
+		crypto:             cryptoMgr,
 	}
 
 	log.Debug().
@@ -84,6 +92,11 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		Msg("Config persistence initialized")
 
 	return cp, nil
+}
+
+// DataDir returns the configuration directory path
+func (c *ConfigPersistence) DataDir() string {
+	return c.configDir
 }
 
 // EnsureConfigDir ensures the configuration directory exists
@@ -832,6 +845,15 @@ type SystemSettings struct {
 	SSHPort                      int             `json:"sshPort,omitempty"`                    // Default SSH port for temperature monitoring (0 = use 22)
 	WebhookAllowedPrivateCIDRs   string          `json:"webhookAllowedPrivateCIDRs,omitempty"` // Comma-separated list of private CIDR ranges allowed for webhooks (e.g., "192.168.1.0/24,10.0.0.0/8")
 	HideLocalLogin               bool            `json:"hideLocalLogin"`                       // Hide local login form (username/password)
+
+	// Metrics retention configuration (in hours)
+	// These control how long historical metrics are stored at each aggregation tier.
+	// Longer retention enables trend analysis but increases storage usage.
+	MetricsRetentionRawHours    int `json:"metricsRetentionRawHours,omitempty"`    // Raw data (~5s intervals), default: 2 hours
+	MetricsRetentionMinuteHours int `json:"metricsRetentionMinuteHours,omitempty"` // Minute averages, default: 24 hours
+	MetricsRetentionHourlyDays  int `json:"metricsRetentionHourlyDays,omitempty"`  // Hourly averages, default: 7 days
+	MetricsRetentionDailyDays   int `json:"metricsRetentionDailyDays,omitempty"`   // Daily averages, default: 90 days
+
 	// APIToken removed - now handled via .env file only
 }
 
@@ -1291,6 +1313,372 @@ func (c *ConfigPersistence) LoadOIDCConfig() (*OIDCConfig, error) {
 	return &settings, nil
 }
 
+// SaveAIConfig stores AI settings, encrypting them when a crypto manager is available.
+func (c *ConfigPersistence) SaveAIConfig(settings AIConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(settings)
+	if err != nil {
+		return err
+	}
+
+	if c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(data)
+		if err != nil {
+			return err
+		}
+		data = encrypted
+	}
+
+	if err := c.writeConfigFileLocked(c.aiFile, data, 0600); err != nil {
+		return err
+	}
+
+	log.Info().Str("file", c.aiFile).Bool("enabled", settings.Enabled).Msg("AI configuration saved")
+	return nil
+}
+
+// LoadAIConfig retrieves the persisted AI settings. It returns default config when no configuration exists yet.
+func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := os.ReadFile(c.aiFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Return default config if file doesn't exist
+			return NewDefaultAIConfig(), nil
+		}
+		return nil, err
+	}
+
+	if c.crypto != nil {
+		decrypted, err := c.crypto.Decrypt(data)
+		if err != nil {
+			return nil, err
+		}
+		data = decrypted
+	}
+
+	// Start with defaults so new fields get proper values
+	settings := NewDefaultAIConfig()
+	if err := json.Unmarshal(data, settings); err != nil {
+		return nil, err
+	}
+
+	// Migration: Ensure patrol settings have sensible defaults for existing configs
+	// PatrolIntervalMinutes=0 means it was never set - use default
+	if settings.PatrolIntervalMinutes <= 0 {
+		settings.PatrolIntervalMinutes = 15
+	}
+
+	log.Info().Str("file", c.aiFile).Bool("enabled", settings.Enabled).Bool("patrol_enabled", settings.PatrolEnabled).Msg("AI configuration loaded")
+	return settings, nil
+}
+
+// AIFindingsData represents persisted AI findings with metadata
+type AIFindingsData struct {
+	// Version for future migrations
+	Version int `json:"version"`
+	// LastSaved for debugging/diagnostics
+	LastSaved time.Time `json:"last_saved"`
+	// Findings is a map of finding ID to finding data
+	Findings map[string]*AIFindingRecord `json:"findings"`
+}
+
+// AIFindingRecord is a persisted finding with full history
+type AIFindingRecord struct {
+	ID             string     `json:"id"`
+	Severity       string     `json:"severity"`
+	Category       string     `json:"category"`
+	ResourceID     string     `json:"resource_id"`
+	ResourceName   string     `json:"resource_name"`
+	ResourceType   string     `json:"resource_type"`
+	Node           string     `json:"node,omitempty"`
+	Title          string     `json:"title"`
+	Description    string     `json:"description"`
+	Recommendation string     `json:"recommendation,omitempty"`
+	Evidence       string     `json:"evidence,omitempty"`
+	DetectedAt     time.Time  `json:"detected_at"`
+	LastSeenAt     time.Time  `json:"last_seen_at"`
+	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
+	AutoResolved   bool       `json:"auto_resolved"`
+	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty"`
+	SnoozedUntil   *time.Time `json:"snoozed_until,omitempty"`
+	AlertID        string     `json:"alert_id,omitempty"`
+}
+
+// SaveAIFindings persists AI findings to disk
+func (c *ConfigPersistence) SaveAIFindings(findings map[string]*AIFindingRecord) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	data := AIFindingsData{
+		Version:   1,
+		LastSaved: time.Now(),
+		Findings:  findings,
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	if err := c.writeConfigFileLocked(c.aiFindingsFile, jsonData, 0600); err != nil {
+		return err
+	}
+
+	log.Debug().
+		Str("file", c.aiFindingsFile).
+		Int("count", len(findings)).
+		Msg("AI findings saved")
+	return nil
+}
+
+// LoadAIFindings loads AI findings from disk
+func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := os.ReadFile(c.aiFindingsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Return empty data if file doesn't exist
+			return &AIFindingsData{
+				Version:  1,
+				Findings: make(map[string]*AIFindingRecord),
+			}, nil
+		}
+		return nil, err
+	}
+
+	var findingsData AIFindingsData
+	if err := json.Unmarshal(data, &findingsData); err != nil {
+		log.Error().Err(err).Str("file", c.aiFindingsFile).Msg("Failed to parse AI findings file")
+		// Return empty data on parse error rather than failing
+		return &AIFindingsData{
+			Version:  1,
+			Findings: make(map[string]*AIFindingRecord),
+		}, nil
+	}
+
+	if findingsData.Findings == nil {
+		findingsData.Findings = make(map[string]*AIFindingRecord)
+	}
+
+	log.Info().
+		Str("file", c.aiFindingsFile).
+		Int("count", len(findingsData.Findings)).
+		Time("last_saved", findingsData.LastSaved).
+		Msg("AI findings loaded")
+	return &findingsData, nil
+}
+
+// PatrolRunHistoryData represents persisted patrol run history with metadata
+type PatrolRunHistoryData struct {
+	Version   int               `json:"version"`
+	LastSaved time.Time         `json:"last_saved"`
+	Runs      []PatrolRunRecord `json:"runs"`
+}
+
+// PatrolRunRecord represents a single patrol check run
+type PatrolRunRecord struct {
+	ID               string    `json:"id"`
+	StartedAt        time.Time `json:"started_at"`
+	CompletedAt      time.Time `json:"completed_at"`
+	DurationMs       int64     `json:"duration_ms"`
+	Type             string    `json:"type"` // "quick" or "deep"
+	ResourcesChecked int       `json:"resources_checked"`
+	// Breakdown by resource type
+	NodesChecked   int `json:"nodes_checked"`
+	GuestsChecked  int `json:"guests_checked"`
+	DockerChecked  int `json:"docker_checked"`
+	StorageChecked int `json:"storage_checked"`
+	HostsChecked   int `json:"hosts_checked"`
+	PBSChecked     int `json:"pbs_checked"`
+	// Findings from this run
+	NewFindings      int      `json:"new_findings"`
+	ExistingFindings int      `json:"existing_findings"`
+	ResolvedFindings int      `json:"resolved_findings"`
+	FindingsSummary  string   `json:"findings_summary"`
+	FindingIDs       []string `json:"finding_ids,omitempty"`
+	ErrorCount       int      `json:"error_count"`
+	Status           string   `json:"status"` // "healthy", "issues_found", "critical", "error"
+	// AI Analysis details
+	AIAnalysis   string `json:"ai_analysis,omitempty"`   // The AI's raw response/analysis
+	InputTokens  int    `json:"input_tokens,omitempty"`  // Tokens sent to AI
+	OutputTokens int    `json:"output_tokens,omitempty"` // Tokens received from AI
+}
+
+// AIUsageHistoryData represents persisted AI usage history with metadata
+type AIUsageHistoryData struct {
+	Version   int                  `json:"version"`
+	LastSaved time.Time            `json:"last_saved"`
+	Events    []AIUsageEventRecord `json:"events"`
+}
+
+// AIUsageEventRecord is a persisted usage event for an AI provider call.
+// This intentionally excludes prompt/response content for privacy.
+type AIUsageEventRecord struct {
+	Timestamp     time.Time `json:"timestamp"`
+	Provider      string    `json:"provider"`
+	RequestModel  string    `json:"request_model"`
+	ResponseModel string    `json:"response_model,omitempty"`
+	UseCase       string    `json:"use_case,omitempty"` // "chat" or "patrol"
+	InputTokens   int       `json:"input_tokens,omitempty"`
+	OutputTokens  int       `json:"output_tokens,omitempty"`
+	TargetType    string    `json:"target_type,omitempty"`
+	TargetID      string    `json:"target_id,omitempty"`
+	FindingID     string    `json:"finding_id,omitempty"`
+}
+
+// SaveAIUsageHistory persists AI usage events to disk.
+func (c *ConfigPersistence) SaveAIUsageHistory(events []AIUsageEventRecord) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	data := AIUsageHistoryData{
+		Version:   1,
+		LastSaved: time.Now(),
+		Events:    events,
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	if err := c.writeConfigFileLocked(c.aiUsageHistoryFile, jsonData, 0600); err != nil {
+		return err
+	}
+
+	log.Debug().
+		Str("file", c.aiUsageHistoryFile).
+		Int("count", len(events)).
+		Msg("AI usage history saved")
+	return nil
+}
+
+// LoadAIUsageHistory loads AI usage events from disk.
+func (c *ConfigPersistence) LoadAIUsageHistory() (*AIUsageHistoryData, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := os.ReadFile(c.aiUsageHistoryFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &AIUsageHistoryData{
+				Version: 1,
+				Events:  make([]AIUsageEventRecord, 0),
+			}, nil
+		}
+		return nil, err
+	}
+
+	var usageData AIUsageHistoryData
+	if err := json.Unmarshal(data, &usageData); err != nil {
+		log.Error().Err(err).Str("file", c.aiUsageHistoryFile).Msg("Failed to parse AI usage history file")
+		return &AIUsageHistoryData{
+			Version: 1,
+			Events:  make([]AIUsageEventRecord, 0),
+		}, nil
+	}
+
+	if usageData.Events == nil {
+		usageData.Events = make([]AIUsageEventRecord, 0)
+	}
+
+	log.Info().
+		Str("file", c.aiUsageHistoryFile).
+		Int("count", len(usageData.Events)).
+		Time("last_saved", usageData.LastSaved).
+		Msg("AI usage history loaded")
+	return &usageData, nil
+}
+
+// SavePatrolRunHistory persists patrol run history to disk
+func (c *ConfigPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	data := PatrolRunHistoryData{
+		Version:   1,
+		LastSaved: time.Now(),
+		Runs:      runs,
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	if err := c.writeConfigFileLocked(c.aiPatrolRunsFile, jsonData, 0600); err != nil {
+		return err
+	}
+
+	log.Debug().
+		Str("file", c.aiPatrolRunsFile).
+		Int("count", len(runs)).
+		Msg("Patrol run history saved")
+	return nil
+}
+
+// LoadPatrolRunHistory loads patrol run history from disk
+func (c *ConfigPersistence) LoadPatrolRunHistory() (*PatrolRunHistoryData, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := os.ReadFile(c.aiPatrolRunsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Return empty data if file doesn't exist
+			return &PatrolRunHistoryData{
+				Version: 1,
+				Runs:    make([]PatrolRunRecord, 0),
+			}, nil
+		}
+		return nil, err
+	}
+
+	var historyData PatrolRunHistoryData
+	if err := json.Unmarshal(data, &historyData); err != nil {
+		log.Error().Err(err).Str("file", c.aiPatrolRunsFile).Msg("Failed to parse patrol run history file")
+		// Return empty data on parse error rather than failing
+		return &PatrolRunHistoryData{
+			Version: 1,
+			Runs:    make([]PatrolRunRecord, 0),
+		}, nil
+	}
+
+	if historyData.Runs == nil {
+		historyData.Runs = make([]PatrolRunRecord, 0)
+	}
+
+	log.Info().
+		Str("file", c.aiPatrolRunsFile).
+		Int("count", len(historyData.Runs)).
+		Time("last_saved", historyData.LastSaved).
+		Msg("Patrol run history loaded")
+	return &historyData, nil
+}
+
 // LoadSystemSettings loads system settings from file
 func (c *ConfigPersistence) LoadSystemSettings() (*SystemSettings, error) {
 	c.mu.RLock()
@@ -1439,4 +1827,61 @@ func (c *ConfigPersistence) cleanupOldBackups(pattern string) {
 			log.Debug().Str("file", files[i].path).Msg("Deleted old backup")
 		}
 	}
+}
+
+// LoadGuestMetadata loads all guest metadata from disk (for AI context)
+func (c *ConfigPersistence) LoadGuestMetadata() (map[string]*GuestMetadata, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	filePath := filepath.Join(c.configDir, "guest_metadata.json")
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return make(map[string]*GuestMetadata), nil
+		}
+		return nil, err
+	}
+
+	var metadata map[string]*GuestMetadata
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return nil, err
+	}
+
+	return metadata, nil
+}
+
+// LoadDockerMetadata loads all docker metadata from disk (for AI context)
+func (c *ConfigPersistence) LoadDockerMetadata() (map[string]*DockerMetadata, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	filePath := filepath.Join(c.configDir, "docker_metadata.json")
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return make(map[string]*DockerMetadata), nil
+		}
+		return nil, err
+	}
+
+	// Try versioned format first
+	var fileData struct {
+		Containers map[string]*DockerMetadata `json:"containers,omitempty"`
+	}
+	if err := json.Unmarshal(data, &fileData); err != nil {
+		return nil, err
+	}
+
+	if fileData.Containers != nil {
+		return fileData.Containers, nil
+	}
+
+	// Fall back to legacy format (direct map)
+	var metadata map[string]*DockerMetadata
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return nil, err
+	}
+
+	return metadata, nil
 }

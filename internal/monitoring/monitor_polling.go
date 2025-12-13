@@ -842,6 +842,26 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 	// Update state with all VMs
 	m.state.UpdateVMsForInstance(instanceName, allVMs)
 
+	// Record guest metrics history for running VMs (enables sparkline/trends view)
+	now := time.Now()
+	for _, vm := range allVMs {
+		if vm.Status == "running" {
+			m.metricsHistory.AddGuestMetric(vm.ID, "cpu", vm.CPU*100, now)
+			m.metricsHistory.AddGuestMetric(vm.ID, "memory", vm.Memory.Usage, now)
+			if vm.Disk.Usage >= 0 {
+				m.metricsHistory.AddGuestMetric(vm.ID, "disk", vm.Disk.Usage, now)
+			}
+			// Also write to persistent store
+			if m.metricsStore != nil {
+				m.metricsStore.Write("vm", vm.ID, "cpu", vm.CPU*100, now)
+				m.metricsStore.Write("vm", vm.ID, "memory", vm.Memory.Usage, now)
+				if vm.Disk.Usage >= 0 {
+					m.metricsStore.Write("vm", vm.ID, "disk", vm.Disk.Usage, now)
+				}
+			}
+		}
+	}
+
 	duration := time.Since(startTime)
 	log.Info().
 		Str("instance", instanceName).
@@ -871,6 +891,22 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 	for _, node := range nodes {
 		if nodeEffectiveStatus[node.Node] == "online" {
 			onlineNodes++
+		}
+	}
+
+	// Seed OCI classification from previous state so we never "downgrade" to LXC
+	// if container config fetching intermittently fails (permissions or transient API errors).
+	prevState := m.GetState()
+	prevContainerIsOCI := make(map[int]bool)
+	for _, ct := range prevState.Containers {
+		if ct.Instance != instanceName {
+			continue
+		}
+		if ct.VMID <= 0 {
+			continue
+		}
+		if ct.Type == "oci" || ct.IsOCI {
+			prevContainerIsOCI[ct.VMID] = true
 		}
 	}
 
@@ -1006,6 +1042,11 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 					Tags:       tags,
 				}
 
+				if prevContainerIsOCI[modelContainer.VMID] {
+					modelContainer.IsOCI = true
+					modelContainer.Type = "oci"
+				}
+
 				if override, ok := rootUsageOverrides[int(container.VMID)]; ok {
 					overrideUsed := clampToInt64(override.Used)
 					overrideTotal := clampToInt64(override.Total)
@@ -1108,6 +1149,26 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 
 	// Update state with all containers
 	m.state.UpdateContainersForInstance(instanceName, allContainers)
+
+	// Record guest metrics history for running containers (enables sparkline/trends view)
+	now := time.Now()
+	for _, ct := range allContainers {
+		if ct.Status == "running" {
+			m.metricsHistory.AddGuestMetric(ct.ID, "cpu", ct.CPU*100, now)
+			m.metricsHistory.AddGuestMetric(ct.ID, "memory", ct.Memory.Usage, now)
+			if ct.Disk.Usage >= 0 {
+				m.metricsHistory.AddGuestMetric(ct.ID, "disk", ct.Disk.Usage, now)
+			}
+			// Also write to persistent store
+			if m.metricsStore != nil {
+				m.metricsStore.Write("container", ct.ID, "cpu", ct.CPU*100, now)
+				m.metricsStore.Write("container", ct.ID, "memory", ct.Memory.Usage, now)
+				if ct.Disk.Usage >= 0 {
+					m.metricsStore.Write("container", ct.ID, "disk", ct.Disk.Usage, now)
+				}
+			}
+		}
+	}
 
 	duration := time.Since(startTime)
 	log.Info().
@@ -1694,7 +1755,7 @@ func (m *Monitor) pollPVENode(
 		GuestURL:    guestURL,
 		Status:      effectiveStatus,
 		Type:        "node",
-		CPU:         safeFloat(node.CPU), // Already in percentage
+		CPU:         safeFloat(node.CPU), // Proxmox returns 0-1 ratio (e.g., 0.15 = 15%)
 		Memory: models.Memory{
 			Total: int64(node.MaxMem),
 			Used:  int64(node.Mem),
@@ -2086,48 +2147,103 @@ func (m *Monitor) pollPVENode(
 	if instanceCfg.TemperatureMonitoringEnabled != nil {
 		tempMonitoringEnabled = *instanceCfg.TemperatureMonitoringEnabled
 	}
-	if effectiveStatus == "online" && m.tempCollector != nil && tempMonitoringEnabled {
-		tempCtx, tempCancel := context.WithTimeout(ctx, 30*time.Second) // Increased to accommodate SSH operations via proxy
-		defer tempCancel()
+	if effectiveStatus == "online" && tempMonitoringEnabled {
+		// First, check if there's a matching host agent with temperature data.
+		// Host agent temperatures are preferred because they don't require SSH access.
+		hostAgentTemp := m.getHostAgentTemperature(node.Node)
+		if hostAgentTemp != nil {
+			log.Debug().
+				Str("node", node.Node).
+				Float64("cpuPackage", hostAgentTemp.CPUPackage).
+				Float64("cpuMax", hostAgentTemp.CPUMax).
+				Int("nvmeCount", len(hostAgentTemp.NVMe)).
+				Msg("Using temperature data from host agent")
+		}
 
-		// Determine SSH hostname to use (most robust approach):
-		// Prefer the resolved host for this node, with cluster overrides when available.
-		sshHost := modelNode.Host
-		foundNodeEndpoint := false
+		// If no host agent temp or we need additional data (SMART), try SSH/proxy collection
+		var proxyTemp *models.Temperature
+		var err error
+		if m.tempCollector != nil {
+			// Temperature collection is best-effort - use a short timeout to avoid blocking node polling
+			// Use context.Background() so the timeout is truly independent of the parent polling context
+			// If SSH is slow or unresponsive, we'll preserve previous temperature data
+			tempCtx, tempCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer tempCancel()
 
-		if modelNode.IsClusterMember && instanceCfg.IsCluster {
-			// Try to find specific endpoint configuration for this node
-			if len(instanceCfg.ClusterEndpoints) > 0 {
-				hasFingerprint := instanceCfg.Fingerprint != ""
-				for _, ep := range instanceCfg.ClusterEndpoints {
-					if strings.EqualFold(ep.NodeName, node.Node) {
-						if effective := clusterEndpointEffectiveURL(ep, instanceCfg.VerifySSL, hasFingerprint); effective != "" {
-							sshHost = effective
-							foundNodeEndpoint = true
+			// Determine SSH hostname to use (most robust approach):
+			// Prefer the resolved host for this node, with cluster overrides when available.
+			sshHost := modelNode.Host
+			foundNodeEndpoint := false
+
+			if modelNode.IsClusterMember && instanceCfg.IsCluster {
+				// Try to find specific endpoint configuration for this node
+				if len(instanceCfg.ClusterEndpoints) > 0 {
+					hasFingerprint := instanceCfg.Fingerprint != ""
+					for _, ep := range instanceCfg.ClusterEndpoints {
+						if strings.EqualFold(ep.NodeName, node.Node) {
+							if effective := clusterEndpointEffectiveURL(ep, instanceCfg.VerifySSL, hasFingerprint); effective != "" {
+								sshHost = effective
+								foundNodeEndpoint = true
+							}
+							break
 						}
-						break
 					}
+				}
+
+				// If no specific endpoint found, fall back to node name
+				if !foundNodeEndpoint {
+					sshHost = node.Node
+					log.Debug().
+						Str("node", node.Node).
+						Str("instance", instanceCfg.Name).
+						Msg("Node endpoint not found in cluster metadata - falling back to node name for temperature collection")
 				}
 			}
 
-			// If no specific endpoint found, fall back to node name
-			if !foundNodeEndpoint {
+			if strings.TrimSpace(sshHost) == "" {
 				sshHost = node.Node
+			}
+
+			// Skip SSH/proxy collection if we already have host agent data and no proxy is configured
+			// (proxy might provide additional SMART data that host agent doesn't have)
+			skipProxyCollection := hostAgentTemp != nil &&
+				strings.TrimSpace(instanceCfg.TemperatureProxyURL) == "" &&
+				!m.HasSocketTemperatureProxy()
+
+			if !skipProxyCollection {
+				// Use HTTP proxy if configured for this instance, otherwise fall back to socket/SSH
+				proxyTemp, err = m.tempCollector.CollectTemperatureWithProxy(tempCtx, sshHost, node.Node, instanceCfg.TemperatureProxyURL, instanceCfg.TemperatureProxyToken)
+				if err != nil && hostAgentTemp == nil {
+					log.Debug().
+						Str("node", node.Node).
+						Str("sshHost", sshHost).
+						Bool("isCluster", modelNode.IsClusterMember).
+						Int("endpointCount", len(instanceCfg.ClusterEndpoints)).
+						Msg("Temperature collection failed - check SSH access")
+				}
+			}
+
+			// Debug: log proxy temp details before merge
+			if proxyTemp != nil {
 				log.Debug().
 					Str("node", node.Node).
-					Str("instance", instanceCfg.Name).
-					Msg("Node endpoint not found in cluster metadata - falling back to node name for temperature collection")
+					Bool("proxyTempAvailable", proxyTemp.Available).
+					Bool("proxyHasSMART", proxyTemp.HasSMART).
+					Int("proxySMARTCount", len(proxyTemp.SMART)).
+					Bool("proxyHasNVMe", proxyTemp.HasNVMe).
+					Int("proxyNVMeCount", len(proxyTemp.NVMe)).
+					Msg("Proxy temperature data before merge")
+			} else {
+				log.Debug().
+					Str("node", node.Node).
+					Msg("Proxy temperature data is nil")
 			}
 		}
 
-		if strings.TrimSpace(sshHost) == "" {
-			sshHost = node.Node
-		}
+		// Merge host agent and proxy temperatures
+		temp := mergeTemperatureData(hostAgentTemp, proxyTemp)
 
-		// Use HTTP proxy if configured for this instance, otherwise fall back to socket/SSH
-		temp, err := m.tempCollector.CollectTemperatureWithProxy(tempCtx, sshHost, node.Node, instanceCfg.TemperatureProxyURL, instanceCfg.TemperatureProxyToken)
-
-		if err == nil && temp != nil && temp.Available {
+		if temp != nil && temp.Available {
 			// Get the current CPU temperature (prefer package, fall back to max)
 			currentTemp := temp.CPUPackage
 			if currentTemp == 0 && temp.CPUMax > 0 {
@@ -2171,28 +2287,53 @@ func (m *Monitor) pollPVENode(
 			}
 
 			modelNode.Temperature = temp
+
+			// Determine source for logging
+			tempSource := "proxy/ssh"
+			if hostAgentTemp != nil && proxyTemp == nil {
+				tempSource = "host-agent"
+			} else if hostAgentTemp != nil && proxyTemp != nil {
+				tempSource = "host-agent+proxy"
+			}
+
 			log.Debug().
 				Str("node", node.Node).
-				Str("sshHost", sshHost).
+				Str("source", tempSource).
 				Float64("cpuPackage", temp.CPUPackage).
 				Float64("cpuMax", temp.CPUMax).
 				Float64("cpuMin", temp.CPUMin).
 				Float64("cpuMaxRecord", temp.CPUMaxRecord).
 				Int("nvmeCount", len(temp.NVMe)).
 				Msg("Collected temperature data")
-		} else if err != nil {
-			log.Debug().
-				Str("node", node.Node).
-				Str("sshHost", sshHost).
-				Bool("isCluster", modelNode.IsClusterMember).
-				Int("endpointCount", len(instanceCfg.ClusterEndpoints)).
-				Msg("Temperature collection failed - check SSH access")
-		} else if temp != nil {
-			log.Debug().
-				Str("node", node.Node).
-				Str("sshHost", sshHost).
-				Bool("available", temp.Available).
-				Msg("Temperature data unavailable after collection")
+		} else {
+			// Temperature data returned but not available (temp != nil && !temp.Available)
+			// OR no temperature data from any source - preserve previous temperature if available
+			// This prevents the temperature column from flickering when collection temporarily fails
+			var prevTemp *models.Temperature
+			for _, prevNode := range prevInstanceNodes {
+				if prevNode.ID == modelNode.ID && prevNode.Temperature != nil && prevNode.Temperature.Available {
+					prevTemp = prevNode.Temperature
+					break
+				}
+			}
+
+			if prevTemp != nil {
+				// Clone the previous temperature to avoid modifying historical data
+				preserved := *prevTemp
+				preserved.LastUpdate = prevTemp.LastUpdate // Keep original update time to indicate staleness
+				modelNode.Temperature = &preserved
+				log.Debug().
+					Str("node", node.Node).
+					Bool("isCluster", modelNode.IsClusterMember).
+					Float64("cpuPackage", preserved.CPUPackage).
+					Time("lastUpdate", preserved.LastUpdate).
+					Msg("Preserved previous temperature data (current collection failed or unavailable)")
+			} else {
+				log.Debug().
+					Str("node", node.Node).
+					Bool("isCluster", modelNode.IsClusterMember).
+					Msg("No temperature data available (collection failed, no previous data to preserve)")
+			}
 		}
 	}
 

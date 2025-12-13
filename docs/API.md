@@ -112,23 +112,6 @@ Triggers a test alert to all configured channels.
 
 ---
 
----
-## 🖥️ Host Agent
-
-### Submit Report
-`POST /api/agents/host/report`
-Used by the Pulse Host Agent to push system metrics.
-
-### Lookup Agent
-`POST /api/agents/host/lookup`
-Check if a host agent is already registered.
-
-### Delete Host
-`DELETE /api/agents/host/<id>`
-Remove a host agent from monitoring.
-
----
-
 ## ⚙️ System Settings
 
 ### Get Settings
@@ -157,15 +140,55 @@ Initiate OIDC login flow.
 
 ---
 
-## 🐳 Docker Agent
+## 🤖 Pulse AI *(New in 5.0)*
 
-### Submit Report
-`POST /api/agents/docker/report`
-Used by the Pulse Docker Agent to push container metrics.
+### Get AI Settings
+`GET /api/settings/ai`
+Returns current AI configuration (providers, models, patrol status).
 
-### Download Agent
-`GET /download/pulse-docker-agent`
-Downloads the binary for the current platform.
+### Update AI Settings
+`PUT /api/settings/ai`
+Configure AI providers, API keys, and preferences.
+
+### Chat
+`POST /api/ai/chat`
+Send a message to the AI assistant.
+```json
+{ "message": "What VMs are using the most CPU?", "context": ["vm-100", "vm-101"] }
+```
+
+### Patrol Status
+`GET /api/ai/patrol/status`
+Get current patrol status and recent findings.
+
+### Patrol Findings
+`GET /api/ai/patrol/findings`
+List all patrol findings with severity and recommendations.
+
+### Cost Tracking
+`GET /api/ai/cost?period=30d`
+Get AI usage statistics and costs.
+
+---
+
+## 🤖 Agent Endpoints
+
+### Unified Agent (Recommended)
+`GET /download/pulse-agent`
+Downloads the unified agent binary for the current platform.
+
+The unified agent combines host, Docker, and Kubernetes monitoring. Use `--enable-docker` or `--enable-kubernetes` to enable additional metrics.
+
+See [UNIFIED_AGENT.md](UNIFIED_AGENT.md) for installation instructions.
+
+### Legacy Agents (Deprecated)
+`GET /download/pulse-host-agent` - *Deprecated, use pulse-agent*
+`GET /download/pulse-docker-agent` - *Deprecated, use pulse-agent --enable-docker*
+
+### Submit Reports
+`POST /api/agents/host/report` - Host metrics
+`POST /api/agents/docker/report` - Docker container metrics
+`POST /api/agents/kubernetes/report` - Kubernetes cluster metrics
 
 ---
 

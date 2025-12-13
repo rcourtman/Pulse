@@ -445,3 +445,152 @@ func extractContainerRootDeviceFromConfig(config map[string]interface{}) string 
 	device := strings.TrimSpace(parts[0])
 	return device
 }
+
+// lxcOSTypeDisplayNames maps Proxmox LXC ostype values to human-readable OS names.
+// See: https://pve.proxmox.com/wiki/Manual:_pct.conf
+var lxcOSTypeDisplayNames = map[string]string{
+	"alpine":    "Alpine Linux",
+	"archlinux": "Arch Linux",
+	"centos":    "CentOS",
+	"debian":    "Debian",
+	"devuan":    "Devuan",
+	"fedora":    "Fedora",
+	"gentoo":    "Gentoo",
+	"nixos":     "NixOS",
+	"opensuse":  "openSUSE",
+	"ubuntu":    "Ubuntu",
+	"unmanaged": "Unmanaged",
+}
+
+// extractContainerOSType extracts and normalizes the ostype from container config.
+// Returns a human-readable OS name (e.g., "Ubuntu", "Debian", "Alpine Linux").
+func extractContainerOSType(config map[string]interface{}) string {
+	if len(config) == 0 {
+		return ""
+	}
+
+	raw, ok := config["ostype"]
+	if !ok {
+		return ""
+	}
+
+	ostype := strings.TrimSpace(strings.ToLower(fmt.Sprint(raw)))
+	if ostype == "" {
+		return ""
+	}
+
+	// Return display name if known, otherwise capitalize the ostype
+	if displayName, found := lxcOSTypeDisplayNames[ostype]; found {
+		return displayName
+	}
+
+	// Fallback: capitalize first letter
+	if len(ostype) > 0 {
+		return strings.ToUpper(ostype[:1]) + ostype[1:]
+	}
+	return ostype
+}
+
+// extractContainerOSTemplate extracts the ostemplate value from container config.
+// This is the template used to create the container, which may be an LXC template
+// or an OCI image reference (Proxmox VE 9.1+).
+func extractContainerOSTemplate(config map[string]interface{}) string {
+	if len(config) == 0 {
+		return ""
+	}
+
+	// Try common field names for the template
+	for _, key := range []string{"ostemplate", "template"} {
+		if raw, ok := config[key]; ok {
+			if value := strings.TrimSpace(fmt.Sprint(raw)); value != "" {
+				return value
+			}
+		}
+	}
+
+	return ""
+}
+
+// isOCITemplate returns true if the ostemplate string indicates an OCI container image.
+// Proxmox VE 9.1+ supports pulling OCI images from registries like Docker Hub.
+// OCI templates typically have formats like:
+//   - "oci:docker.io/library/alpine:latest"
+//   - "docker:alpine:latest"
+//   - "local:vztmpl/oci-alpine-latest.tar.gz" (pulled OCI image stored locally)
+func isOCITemplate(template string) bool {
+	if template == "" {
+		return false
+	}
+
+	template = strings.ToLower(strings.TrimSpace(template))
+
+	// Explicit OCI prefix
+	if strings.HasPrefix(template, "oci:") {
+		return true
+	}
+
+	// Docker Hub shorthand (docker:image:tag)
+	if strings.HasPrefix(template, "docker:") {
+		return true
+	}
+
+	// Check for common OCI registry URLs
+	ociRegistries := []string{
+		"docker.io/",
+		"ghcr.io/",
+		"gcr.io/",
+		"quay.io/",
+		"registry.hub.docker.com/",
+		"mcr.microsoft.com/",
+		"public.ecr.aws/",
+	}
+	for _, registry := range ociRegistries {
+		if strings.Contains(template, registry) {
+			return true
+		}
+	}
+
+	// Check for locally stored OCI images (typically have "oci" in the filename)
+	// e.g., "local:vztmpl/oci-alpine-3.18.tar.xz"
+	if strings.Contains(template, "/oci-") || strings.Contains(template, "/oci_") {
+		return true
+	}
+
+	return false
+}
+
+// isOCIContainerByConfig detects OCI containers by examining their configuration.
+// Proxmox VE 9.1+ OCI containers have specific config markers:
+//   - "entrypoint" field is set (only OCI containers have this)
+//   - "ostype" is often "unmanaged" for OCI containers
+//   - "cmode" is often "console" for OCI containers
+//
+// This is useful because Proxmox doesn't persist the ostemplate after container creation.
+func isOCIContainerByConfig(config map[string]interface{}) bool {
+	if len(config) == 0 {
+		return false
+	}
+
+	// Primary indicator: OCI containers have an "entrypoint" field
+	// Traditional LXC containers don't have this field
+	if _, hasEntrypoint := config["entrypoint"]; hasEntrypoint {
+		return true
+	}
+
+	// Secondary check: "unmanaged" ostype with console cmode is a strong hint
+	// (though not definitive as users could manually configure this)
+	ostype, _ := config["ostype"].(string)
+	cmode, _ := config["cmode"].(string)
+	if ostype == "unmanaged" && cmode == "console" {
+		// Check for other OCI indicators like lxc.signal.halt: SIGTERM
+		// (which is set by Proxmox for OCI containers)
+		if lxc, ok := config["lxc"]; ok {
+			lxcStr := fmt.Sprint(lxc)
+			if strings.Contains(lxcStr, "lxc.signal.halt") {
+				return true
+			}
+		}
+	}
+
+	return false
+}

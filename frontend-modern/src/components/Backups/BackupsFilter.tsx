@@ -23,6 +23,9 @@ interface BackupsFilterProps {
   onReset?: () => void;
   statusFilter?: () => 'all' | 'verified' | 'unverified';
   setStatusFilter?: (value: 'all' | 'verified' | 'unverified') => void;
+  // Time format toggle
+  useRelativeTime?: () => boolean;
+  setUseRelativeTime?: (value: boolean) => void;
 }
 
 export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
@@ -504,6 +507,25 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
 
           <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
 
+          {/* Time Format Toggle */}
+          <Show when={props.useRelativeTime && props.setUseRelativeTime}>
+            <button
+              type="button"
+              onClick={() => props.setUseRelativeTime!(!props.useRelativeTime!())}
+              title={props.useRelativeTime!() ? 'Switch to absolute time' : 'Switch to relative time'}
+              class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg transition-all ${props.useRelativeTime!()
+                  ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+            >
+              <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span class="hidden sm:inline">{props.useRelativeTime!() ? 'Relative' : 'Absolute'}</span>
+            </button>
+            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+          </Show>
+
           {/* Reset Button */}
           <button
             onClick={() => {
@@ -518,14 +540,14 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
             }}
             title="Reset all filters"
             class={`flex items-center justify-center px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${props.search().trim() !== '' ||
-                props.viewMode() !== 'all' ||
-                props.groupBy() !== 'date' ||
-                props.sortKey() !== 'backupTime' ||
-                props.sortDirection() !== 'desc' ||
-                (props.typeFilter && props.typeFilter() !== 'all') ||
-                (props.statusFilter && props.statusFilter() !== 'all')
-                ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70'
-                : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+              props.viewMode() !== 'all' ||
+              props.groupBy() !== 'date' ||
+              props.sortKey() !== 'backupTime' ||
+              props.sortDirection() !== 'desc' ||
+              (props.typeFilter && props.typeFilter() !== 'all') ||
+              (props.statusFilter && props.statusFilter() !== 'all')
+              ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70'
+              : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
           >
             <svg

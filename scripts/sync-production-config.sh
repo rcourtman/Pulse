@@ -22,6 +22,29 @@ echo ""
 HAVE_PROD_KEY=false
 
 # CRITICAL: Always sync production encryption key to dev when it exists
+# First, check if the key is missing but a backup exists - auto-restore it
+if [ ! -f "$PROD_DIR/.encryption.key" ]; then
+    # Look for backup keys in production directory
+    BACKUP_KEY=$(find "$PROD_DIR" -maxdepth 1 -name '.encryption.key.bak*' -type f 2>/dev/null | head -1)
+    if [ -n "$BACKUP_KEY" ] && [ -f "$BACKUP_KEY" ]; then
+        echo ""
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        echo "!! ENCRYPTION KEY WAS MISSING - AUTO-RESTORING FROM BACKUP !!"
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        echo "!! Backup used: $BACKUP_KEY"
+        echo "!! "
+        echo "!! To find out what deleted the key, run:"
+        echo "!!   sudo journalctl -u encryption-key-watcher -n 100"
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        echo ""
+        cp -f "$BACKUP_KEY" "$PROD_DIR/.encryption.key"
+        chmod 600 "$PROD_DIR/.encryption.key"
+        # Ensure proper ownership (may need root, so try but don't fail)
+        chown pulse:pulse "$PROD_DIR/.encryption.key" 2>/dev/null || true
+        echo "✓ Restored encryption key from backup"
+    fi
+fi
+
 if [ -f "$PROD_DIR/.encryption.key" ]; then
     if [ ! -f "$DEV_DIR/.encryption.key" ]; then
         cp -f "$PROD_DIR/.encryption.key" "$DEV_DIR/.encryption.key"

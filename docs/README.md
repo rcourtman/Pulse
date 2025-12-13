@@ -26,6 +26,14 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 
 - **[Security Policy](../SECURITY.md)** – The core security model (Encryption, Auth, API Scopes).
 
+## ✨ New in 5.0
+
+- **[Pulse AI](AI.md)** – Intelligent monitoring assistant with chat, patrol mode, and auto-fix.
+- **[Metrics History](METRICS_HISTORY.md)** – Persistent metrics storage with configurable retention.
+- **[Mail Gateway](MAIL_GATEWAY.md)** – Proxmox Mail Gateway (PMG) monitoring.
+- **[Auto Updates](AUTO_UPDATE.md)** – One-click updates for supported deployments.
+- **[Kubernetes](KUBERNETES.md)** – Complete K8s cluster monitoring via agents.
+
 ## 📡 Monitoring & Agents
 
 - **[Unified Agent](UNIFIED_AGENT.md)** – Single binary for Host and Docker monitoring.

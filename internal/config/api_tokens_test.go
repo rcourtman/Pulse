@@ -167,6 +167,8 @@ func TestIsKnownScope(t *testing.T) {
 		{name: "monitoring:write", scope: ScopeMonitoringWrite, expected: true},
 		{name: "docker:report", scope: ScopeDockerReport, expected: true},
 		{name: "docker:manage", scope: ScopeDockerManage, expected: true},
+		{name: "kubernetes:report", scope: ScopeKubernetesReport, expected: true},
+		{name: "kubernetes:manage", scope: ScopeKubernetesManage, expected: true},
 		{name: "host-agent:report", scope: ScopeHostReport, expected: true},
 		{name: "host-agent:manage", scope: ScopeHostManage, expected: true},
 		{name: "settings:read", scope: ScopeSettingsRead, expected: true},

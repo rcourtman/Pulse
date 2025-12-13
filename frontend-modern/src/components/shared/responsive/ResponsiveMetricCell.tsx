@@ -78,7 +78,9 @@ export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props
   const isRunning = () => props.isRunning !== false; // Default to true if not specified
 
   const defaultFallback = (
-    <span class="text-xs text-gray-400 dark:text-gray-500">—</span>
+    <div class="h-4 flex items-center justify-center">
+      <span class="text-xs text-gray-400 dark:text-gray-500">—</span>
+    </div>
   );
 
   return (
@@ -148,7 +150,9 @@ export const DualMetricCell: Component<{
   const isRunning = () => props.isRunning !== false;
 
   const defaultFallback = (
-    <span class="text-xs text-gray-400 dark:text-gray-500">—</span>
+    <div class="h-4 flex items-center justify-center">
+      <span class="text-xs text-gray-400 dark:text-gray-500">—</span>
+    </div>
   );
 
   const defaultMobileContent = (

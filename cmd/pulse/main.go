@@ -141,8 +141,15 @@ func runServer() {
 	}
 
 	// Set state getter for WebSocket hub
+	// IMPORTANT: Return StateFrontend (not StateSnapshot) to match broadcast format.
+	// StateSnapshot uses time.Time fields while StateFrontend uses Unix timestamps,
+	// and includes frontend-specific field transformations. Without this conversion,
+	// nodes/hosts would be missing on initial page load but appear after broadcasts.
 	wsHub.SetStateGetter(func() interface{} {
-		return reloadableMonitor.GetState()
+		// GetMonitor().GetState() returns models.StateSnapshot
+		state := reloadableMonitor.GetMonitor().GetState()
+		// Convert to frontend format, matching what BroadcastState does
+		return state.ToFrontend()
 	})
 
 	// Wire up Prometheus metrics for alert lifecycle
@@ -172,15 +179,29 @@ func runServer() {
 		return nil
 	}
 	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), wsHub, reloadFunc, Version)
+	
+	// Inject resource store into monitor for WebSocket broadcasts
+	// This must be done after router creation since resourceHandlers is created in NewRouter
+	router.SetMonitor(reloadableMonitor.GetMonitor())
+
+	// Start AI patrol service for background infrastructure monitoring
+	router.StartPatrol(ctx)
+
+	// Wire alert-triggered AI analysis (token-efficient real-time insights when alerts fire)
+	router.WireAlertTriggeredAI()
 
 	// Create HTTP server with unified configuration
 	// In production, serve everything (frontend + API) on the frontend port
+	// NOTE: We use ReadHeaderTimeout instead of ReadTimeout to avoid affecting
+	// WebSocket connections. ReadTimeout sets a deadline on the underlying connection
+	// that persists even after WebSocket upgrade, causing premature disconnections.
+	// ReadHeaderTimeout only applies during header reading, not the full request body.
 	srv := &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", cfg.BackendHost, cfg.FrontendPort),
-		Handler:      router.Handler(),
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 60 * time.Second, // Increased from 15s to 60s to support large JSON responses (e.g., mock data)
-		IdleTimeout:  60 * time.Second,
+		Addr:              fmt.Sprintf("%s:%d", cfg.BackendHost, cfg.FrontendPort),
+		Handler:           router.Handler(),
+		ReadHeaderTimeout: 15 * time.Second,
+		WriteTimeout:      0, // Disabled to support SSE/streaming - each handler manages its own deadline
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Start config watcher for .env file changes

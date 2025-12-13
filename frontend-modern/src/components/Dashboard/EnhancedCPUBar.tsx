@@ -2,7 +2,7 @@ import { Show, createMemo, createSignal } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { formatPercent } from '@/utils/format';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
-import { getMetricHistory } from '@/stores/metricsHistory';
+import { getMetricHistoryForRange, getMetricsVersion } from '@/stores/metricsHistory';
 import { Sparkline } from '@/components/shared/Sparkline';
 
 interface EnhancedCPUBarProps {
@@ -35,21 +35,25 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
         setShowTooltip(false);
     };
 
-    const { viewMode } = useMetricsViewMode();
+    const { viewMode, timeRange } = useMetricsViewMode();
 
     // Get metric history for sparkline
+    // Depends on metricsVersion to re-fetch when data is seeded (e.g., on time range change)
     const metricHistory = createMemo(() => {
+        // Subscribe to version changes so we re-read when new data is seeded
+        getMetricsVersion();
         if (viewMode() !== 'sparklines' || !props.resourceId) return [];
-        return getMetricHistory(props.resourceId);
+        return getMetricHistoryForRange(props.resourceId, timeRange());
     });
 
     return (
         <Show
             when={viewMode() === 'sparklines' && props.resourceId}
             fallback={
+                // Progress bar mode - full width, flex centered like stacked bars
                 <div ref={containerRef} class="metric-text w-full h-4 flex items-center justify-center">
                     <div
-                        class="relative w-full max-w-[140px] h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded cursor-help"
+                        class="relative w-full h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded"
                         onMouseEnter={handleMouseEnter}
                         onMouseLeave={handleMouseLeave}
                     >
@@ -112,19 +116,14 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
                 </div>
             }
         >
-            {/* Sparkline mode */}
-            <div class="metric-text w-full h-6 flex items-center gap-1.5">
-                <div class="flex-1 min-w-0">
-                    <Sparkline
-                        data={metricHistory()}
-                        metric="cpu"
-                        width={0}
-                        height={24}
-                    />
-                </div>
-                <span class="text-[10px] font-medium text-gray-800 dark:text-gray-100 whitespace-nowrap flex-shrink-0 min-w-[35px]">
-                    {formatPercent(props.usage)}
-                </span>
+            {/* Sparkline mode - full width, flex centered like stacked bars */}
+            <div class="metric-text w-full h-4 flex items-center justify-center min-w-0 overflow-hidden">
+                <Sparkline
+                    data={metricHistory()}
+                    metric="cpu"
+                    width={0}
+                    height={16}
+                />
             </div>
         </Show>
     );

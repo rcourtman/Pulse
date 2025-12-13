@@ -12,7 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ceph"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mdadm"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
@@ -35,6 +37,10 @@ type Config struct {
 	RunOnce            bool
 	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
+
+	// Proxmox integration
+	EnableProxmox bool   // If true, creates Proxmox API token and registers node on startup
+	ProxmoxType   string // "pve", "pbs", or "" for auto-detect
 }
 
 // Agent is responsible for collecting host metrics and shipping them to Pulse.
@@ -54,9 +60,11 @@ type Agent struct {
 	machineID       string
 	agentID         string
 	agentVersion    string
+	updatedFrom     string // Previous version if recently auto-updated (reported once)
 	interval        time.Duration
 	trimmedPulseURL string
 	reportBuffer    *buffer.Queue[agentshost.Report]
+	commandClient   *CommandClient
 }
 
 const defaultInterval = 30 * time.Second
@@ -168,7 +176,16 @@ func New(cfg Config) (*Agent, error) {
 
 	const bufferCapacity = 60
 
-	return &Agent{
+	// Check if agent was recently auto-updated (only reported once per restart)
+	updatedFrom := agentupdate.GetUpdatedFromVersion()
+	if updatedFrom != "" {
+		logger.Info().
+			Str("previousVersion", updatedFrom).
+			Str("currentVersion", agentVersion).
+			Msg("Agent was auto-updated")
+	}
+
+	agent := &Agent{
 		cfg:             cfg,
 		logger:          logger,
 		httpClient:      client,
@@ -183,16 +200,36 @@ func New(cfg Config) (*Agent, error) {
 		machineID:       machineID,
 		agentID:         agentID,
 		agentVersion:    agentVersion,
+		updatedFrom:     updatedFrom,
 		interval:        cfg.Interval,
 		trimmedPulseURL: pulseURL,
 		reportBuffer:    buffer.New[agentshost.Report](bufferCapacity),
-	}, nil
+	}
+
+	// Create command client for AI command execution
+	agent.commandClient = NewCommandClient(cfg, agentID, hostname, platform, agentVersion)
+
+	return agent, nil
 }
 
 // Run executes the agent until the context is cancelled.
 func (a *Agent) Run(ctx context.Context) error {
 	if a.cfg.RunOnce {
 		return a.runOnce(ctx)
+	}
+
+	// Proxmox setup (if enabled)
+	if a.cfg.EnableProxmox {
+		a.runProxmoxSetup(ctx)
+	}
+
+	// Start command client in background for AI command execution
+	if a.commandClient != nil {
+		go func() {
+			if err := a.commandClient.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				a.logger.Error().Err(err).Msg("Command client stopped with error")
+			}
+		}()
 	}
 
 	ticker := time.NewTicker(a.interval)
@@ -282,6 +319,9 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	// Collect RAID array data (best effort - don't fail if unavailable)
 	raidData := a.collectRAIDArrays(collectCtx)
 
+	// Collect Ceph cluster data (best effort - only on Ceph nodes)
+	cephData := a.collectCephStatus(collectCtx)
+
 	report := agentshost.Report{
 		Agent: agentshost.AgentInfo{
 			ID:              a.agentID,
@@ -289,6 +329,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			Type:            a.cfg.AgentType,
 			IntervalSeconds: int(a.interval / time.Second),
 			Hostname:        a.hostname,
+			UpdatedFrom:     a.updatedFrom,
 		},
 		Host: agentshost.HostInfo{
 			ID:            a.machineID,
@@ -310,9 +351,11 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			Memory:          snapshot.Memory,
 		},
 		Disks:     append([]agentshost.Disk(nil), snapshot.Disks...),
+		DiskIO:    append([]agentshost.DiskIO(nil), snapshot.DiskIO...),
 		Network:   append([]agentshost.NetworkInterface(nil), snapshot.Network...),
 		Sensors:   sensorData,
 		RAID:      raidData,
+		Ceph:      cephData,
 		Tags:      append([]string(nil), a.cfg.Tags...),
 		Timestamp: time.Now().UTC(),
 	}
@@ -442,4 +485,161 @@ func (a *Agent) collectRAIDArrays(ctx context.Context) []agentshost.RAIDArray {
 	}
 
 	return arrays
+}
+
+// collectCephStatus attempts to collect Ceph cluster status.
+// Returns nil if Ceph is not available or not configured on this host.
+func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
+	// Only collect on Linux
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+
+	status, err := ceph.Collect(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to collect Ceph status")
+		return nil
+	}
+	if status == nil {
+		return nil
+	}
+
+	// Convert internal ceph types to agent report types
+	result := &agentshost.CephCluster{
+		FSID: status.FSID,
+		Health: agentshost.CephHealth{
+			Status: status.Health.Status,
+			Checks: make(map[string]agentshost.CephCheck),
+		},
+		MonMap: agentshost.CephMonitorMap{
+			Epoch:   status.MonMap.Epoch,
+			NumMons: status.MonMap.NumMons,
+		},
+		MgrMap: agentshost.CephManagerMap{
+			Available: status.MgrMap.Available,
+			NumMgrs:   status.MgrMap.NumMgrs,
+			ActiveMgr: status.MgrMap.ActiveMgr,
+			Standbys:  status.MgrMap.Standbys,
+		},
+		OSDMap: agentshost.CephOSDMap{
+			Epoch:   status.OSDMap.Epoch,
+			NumOSDs: status.OSDMap.NumOSDs,
+			NumUp:   status.OSDMap.NumUp,
+			NumIn:   status.OSDMap.NumIn,
+			NumDown: status.OSDMap.NumDown,
+			NumOut:  status.OSDMap.NumOut,
+		},
+		PGMap: agentshost.CephPGMap{
+			NumPGs:           status.PGMap.NumPGs,
+			BytesTotal:       status.PGMap.BytesTotal,
+			BytesUsed:        status.PGMap.BytesUsed,
+			BytesAvailable:   status.PGMap.BytesAvailable,
+			DataBytes:        status.PGMap.DataBytes,
+			UsagePercent:     status.PGMap.UsagePercent,
+			DegradedRatio:    status.PGMap.DegradedRatio,
+			MisplacedRatio:   status.PGMap.MisplacedRatio,
+			ReadBytesPerSec:  status.PGMap.ReadBytesPerSec,
+			WriteBytesPerSec: status.PGMap.WriteBytesPerSec,
+			ReadOpsPerSec:    status.PGMap.ReadOpsPerSec,
+			WriteOpsPerSec:   status.PGMap.WriteOpsPerSec,
+		},
+		CollectedAt: status.CollectedAt.Format(time.RFC3339),
+	}
+
+	// Convert monitors
+	for _, mon := range status.MonMap.Monitors {
+		result.MonMap.Monitors = append(result.MonMap.Monitors, agentshost.CephMonitor{
+			Name:   mon.Name,
+			Rank:   mon.Rank,
+			Addr:   mon.Addr,
+			Status: mon.Status,
+		})
+	}
+
+	// Convert health checks
+	for name, check := range status.Health.Checks {
+		result.Health.Checks[name] = agentshost.CephCheck{
+			Severity: check.Severity,
+			Message:  check.Message,
+			Detail:   check.Detail,
+		}
+	}
+
+	// Convert health summary
+	for _, s := range status.Health.Summary {
+		result.Health.Summary = append(result.Health.Summary, agentshost.CephHealthSummary{
+			Severity: s.Severity,
+			Message:  s.Message,
+		})
+	}
+
+	// Convert pools
+	for _, pool := range status.Pools {
+		result.Pools = append(result.Pools, agentshost.CephPool{
+			ID:             pool.ID,
+			Name:           pool.Name,
+			BytesUsed:      pool.BytesUsed,
+			BytesAvailable: pool.BytesAvailable,
+			Objects:        pool.Objects,
+			PercentUsed:    pool.PercentUsed,
+		})
+	}
+
+	// Convert services
+	for _, svc := range status.Services {
+		result.Services = append(result.Services, agentshost.CephService{
+			Type:    svc.Type,
+			Running: svc.Running,
+			Total:   svc.Total,
+			Daemons: svc.Daemons,
+		})
+	}
+
+	a.logger.Debug().
+		Str("fsid", result.FSID).
+		Str("health", result.Health.Status).
+		Int("osds", result.OSDMap.NumOSDs).
+		Int("pools", len(result.Pools)).
+		Msg("Collected Ceph cluster status")
+
+	return result
+}
+
+// runProxmoxSetup performs one-time Proxmox API token setup and node registration.
+func (a *Agent) runProxmoxSetup(ctx context.Context) {
+	a.logger.Info().Msg("Proxmox mode enabled, checking setup...")
+
+	setup := NewProxmoxSetup(
+		a.logger,
+		a.httpClient,
+		a.trimmedPulseURL,
+		a.cfg.APIToken,
+		a.cfg.ProxmoxType,
+		a.hostname,
+		a.cfg.InsecureSkipVerify,
+	)
+
+	result, err := setup.Run(ctx)
+	if err != nil {
+		a.logger.Error().Err(err).Msg("Proxmox setup failed")
+		return
+	}
+
+	if result == nil {
+		// Already registered
+		return
+	}
+
+	if result.Registered {
+		a.logger.Info().
+			Str("type", result.ProxmoxType).
+			Str("host", result.NodeHost).
+			Str("token_id", result.TokenID).
+			Msg("Proxmox node registered successfully")
+	} else {
+		a.logger.Warn().
+			Str("type", result.ProxmoxType).
+			Str("host", result.NodeHost).
+			Msg("Proxmox token created but registration failed (node may need manual configuration)")
+	}
 }

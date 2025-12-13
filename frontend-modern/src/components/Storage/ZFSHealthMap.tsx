@@ -46,7 +46,7 @@ export const ZFSHealthMap: Component<ZFSHealthMapProps> = (props) => {
             <For each={devices()}>
                 {(device) => (
                     <div
-                        class={`w-2.5 h-3 rounded-sm cursor-help transition-colors duration-200 ${getDeviceColor(device)} ${isResilvering(device) ? 'animate-pulse' : ''}`}
+                        class={`w-2.5 h-3 rounded-sm transition-colors duration-200 ${getDeviceColor(device)} ${isResilvering(device) ? 'animate-pulse' : ''}`}
                         onMouseEnter={(e) => handleMouseEnter(e, device)}
                         onMouseLeave={handleMouseLeave}
                     />
@@ -72,8 +72,8 @@ export const ZFSHealthMap: Component<ZFSHealthMapProps> = (props) => {
                             </div>
                             <div class="flex items-center gap-2 border-t border-gray-700/50 pt-1">
                                 <span class={`font-semibold ${hoveredDevice()?.state === 'ONLINE' ? 'text-green-400' :
-                                        hoveredDevice()?.state === 'DEGRADED' ? 'text-yellow-400' :
-                                            'text-red-400'
+                                    hoveredDevice()?.state === 'DEGRADED' ? 'text-yellow-400' :
+                                        'text-red-400'
                                     }`}>
                                     {hoveredDevice()?.state}
                                 </span>

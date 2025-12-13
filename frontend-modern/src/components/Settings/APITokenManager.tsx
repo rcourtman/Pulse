@@ -802,7 +802,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       </Show>
 
       <Card tone="muted" padding="sm" class="text-xs text-gray-600 dark:text-gray-400">
-        💡 Separate tokens per integration • Rotate regularly •{' '}
+        Separate tokens per integration • Rotate regularly •{' '}
         <a
           class="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
           href={SCOPES_DOC_URL}

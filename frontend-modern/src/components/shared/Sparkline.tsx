@@ -41,7 +41,7 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     }
     return props.width || 120;
   };
-  const height = () => props.height || 24;
+  const height = () => props.height || 16;
 
   // Default thresholds based on metric type
   const getDefaultThresholds = () => {
@@ -95,12 +95,30 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     const dpr = window.devicePixelRatio || 1;
     canvas.width = w * dpr;
     canvas.height = h * dpr;
+    // Always set explicit width style to prevent canvas from expanding beyond container
+    // When width=0, we use the calculated container width
     canvas.style.width = `${w}px`;
     canvas.style.height = `${h}px`;
     ctx.scale(dpr, dpr);
 
     // Clear canvas
     ctx.clearRect(0, 0, w, h);
+
+    // Detect dark mode for reference line color
+    const isDark = document.documentElement.classList.contains('dark');
+
+    // Draw subtle reference lines at 25%, 50%, 75% to help understand scale
+    // These provide visual anchors so users can distinguish 17% from 70%
+    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    [0.25, 0.5, 0.75].forEach(pct => {
+      const y = h - (pct * h);
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    });
 
     if (!data || data.length === 0) {
       // No data - show empty state
@@ -138,34 +156,10 @@ export const Sparkline: Component<SparklineProps> = (props) => {
       points.push({ x, y });
     });
 
-    // Draw threshold reference lines
-    const t = thresholds();
-    ctx.strokeStyle = '#94a3b8'; // gray-400
-    ctx.lineWidth = 0.5;
-    ctx.globalAlpha = 0.3;
-    ctx.setLineDash([2, 2]);
-
-    // Warning threshold line
-    const warningY = h - ((t.warning - minValue) / (maxValue - minValue)) * h;
-    ctx.beginPath();
-    ctx.moveTo(0, warningY);
-    ctx.lineTo(w, warningY);
-    ctx.stroke();
-
-    // Critical threshold line
-    const criticalY = h - ((t.critical - minValue) / (maxValue - minValue)) * h;
-    ctx.beginPath();
-    ctx.moveTo(0, criticalY);
-    ctx.lineTo(w, criticalY);
-    ctx.stroke();
-
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
-
     // Draw gradient fill
     const gradient = ctx.createLinearGradient(0, 0, 0, h);
-    gradient.addColorStop(0, `${color}40`); // 25% opacity at top
-    gradient.addColorStop(1, `${color}10`); // 6% opacity at bottom
+    gradient.addColorStop(0, `${color}5A`); // 35% opacity at top
+    gradient.addColorStop(1, `${color}1F`); // 12% opacity at bottom
 
     ctx.fillStyle = gradient;
     ctx.beginPath();
@@ -189,19 +183,15 @@ export const Sparkline: Component<SparklineProps> = (props) => {
       }
     });
     ctx.stroke();
-
-    // Draw current value dot with opacity
-    if (points.length > 0) {
-      const lastPoint = points[points.length - 1];
-      ctx.fillStyle = colorWithOpacity;
-      ctx.beginPath();
-      ctx.arc(lastPoint.x, lastPoint.y, 2, 0, Math.PI * 2);
-      ctx.fill();
-    }
   };
 
   // Redraw when data or dimensions change
   createEffect(() => {
+    void props.data;
+    void props.metric;
+    void width();
+    void height();
+
     // Unregister previous draw callback if it exists
     if (unregister) {
       unregister();
@@ -249,22 +239,21 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     setHoveredPoint(null);
   };
 
-  // Format timestamp for tooltip
+  // Format timestamp for tooltip (24-hour clock)
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   };
 
   return (
     <>
-      <div class="relative block w-full">
+      <div class="relative block w-full overflow-hidden" style={{ height: `${height()}px`, 'max-width': '100%' }}>
         <canvas
           ref={canvasRef}
-          class="block cursor-crosshair transition-opacity duration-150"
+          class="block cursor-crosshair"
           style={{
-            width: `${width()}px`,
             height: `${height()}px`,
-            opacity: hoveredPoint() ? '1' : '0.7',
+            'max-width': '100%',
           }}
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}

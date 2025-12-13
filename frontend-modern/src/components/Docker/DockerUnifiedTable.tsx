@@ -9,6 +9,8 @@ import { DockerMetadataAPI } from '@/api/dockerMetadata';
 import { resolveHostRuntime } from './runtimeDisplay';
 import { showSuccess, showError } from '@/utils/toast';
 import { logger } from '@/utils/logger';
+import { aiChatStore } from '@/stores/aiChat';
+import { AIAPI } from '@/api/ai';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
@@ -126,7 +128,7 @@ interface DockerColumnDef extends ColumnConfig {
 export const DOCKER_COLUMNS: DockerColumnDef[] = [
   { id: 'resource', label: 'Resource', priority: 'essential', minWidth: 'auto', flex: 1, sortKey: 'resource' },
   { id: 'type', label: 'Type', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'type' },
-  { id: 'image', label: 'Image / Stack', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'image' },
+  { id: 'image', label: 'Image / Stack', priority: 'essential', minWidth: '80px', maxWidth: '200px', sortKey: 'image' },
   { id: 'status', label: 'Status', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'status' },
   // Metric columns - need fixed width to match progress bar max-width (140px + padding)
   // Note: Disk column removed - Docker API rarely provides this data
@@ -790,6 +792,87 @@ const DockerContainerRow: Component<{
   });
   let urlInputRef: HTMLInputElement | undefined;
 
+  // Annotations and AI state
+  const [aiEnabled, setAiEnabled] = createSignal(false);
+  // Check if this container is in AI context
+  const isInAIContext = createMemo(() => aiChatStore.enabled && aiChatStore.hasContextItem(resourceId()));
+  const [annotations, setAnnotations] = createSignal<string[]>([]);
+  const [newAnnotation, setNewAnnotation] = createSignal('');
+  const [saving, setSaving] = createSignal(false);
+
+  // Check if AI is enabled and load annotations on mount
+  createEffect(() => {
+    AIAPI.getSettings()
+      .then((settings) => setAiEnabled(settings.enabled && settings.configured))
+      .catch((err) => logger.debug('[DockerContainer] AI settings check failed:', err));
+
+    // Load existing annotations
+    DockerMetadataAPI.getMetadata(resourceId())
+      .then((meta) => {
+        if (meta.notes && Array.isArray(meta.notes)) setAnnotations(meta.notes);
+      })
+      .catch((err) => logger.debug('[DockerContainer] Failed to load annotations:', err));
+  });
+
+  const saveAnnotations = async (newAnnotations: string[]) => {
+    setSaving(true);
+    try {
+      await DockerMetadataAPI.updateMetadata(resourceId(), { notes: newAnnotations });
+      logger.debug('[DockerContainer] Annotations saved');
+    } catch (err) {
+      logger.error('[DockerContainer] Failed to save annotations:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addAnnotation = () => {
+    const text = newAnnotation().trim();
+    if (!text) return;
+    const updated = [...annotations(), text];
+    setAnnotations(updated);
+    setNewAnnotation('');
+    saveAnnotations(updated);
+  };
+
+  const removeAnnotation = (index: number) => {
+    const updated = annotations().filter((_, i) => i !== index);
+    setAnnotations(updated);
+    saveAnnotations(updated);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      addAnnotation();
+    }
+  };
+
+  const buildContainerContext = () => {
+    const ctx: Record<string, unknown> = {
+      name: container.name,
+      type: 'Docker Container',
+      host: host.hostname,
+      status: container.status || container.state,
+      image: container.image,
+    };
+    if (container.cpuPercent !== undefined) ctx.cpu_usage = formatPercent(container.cpuPercent);
+    if (container.memoryUsageBytes !== undefined) ctx.memory_used = formatBytes(container.memoryUsageBytes);
+    if (container.memoryLimitBytes !== undefined) ctx.memory_limit = formatBytes(container.memoryLimitBytes);
+    if (container.memoryPercent !== undefined) ctx.memory_usage = formatPercent(container.memoryPercent);
+    if (container.uptimeSeconds) ctx.uptime = formatUptime(container.uptimeSeconds);
+    if (container.ports?.length) ctx.ports = container.ports.map(p => p.publicPort ? `${p.publicPort}:${p.privatePort}/${p.protocol}` : `${p.privatePort}/${p.protocol}`);
+    if (annotations().length > 0) ctx.user_notes = annotations().join('; ');
+    return ctx;
+  };
+
+  const handleAskAI = () => {
+    aiChatStore.openForTarget('container', resourceId(), {
+      containerName: container.name,
+      ...buildContainerContext(),
+    });
+  };
+
   const writableLayerBytes = createMemo(() => container.writableLayerBytes ?? 0);
   const rootFilesystemBytes = createMemo(() => container.rootFilesystemBytes ?? 0);
   const hasDiskStats = createMemo(() => writableLayerBytes() > 0 || rootFilesystemBytes() > 0);
@@ -887,10 +970,28 @@ const DockerContainerRow: Component<{
   });
 
   const toggle = (event: MouseEvent) => {
-    if (!hasDrawerContent()) return;
     const target = event.target as HTMLElement;
     if (target.closest('a, button, input, [data-prevent-toggle]')) return;
-    // Toggle: if this row is currently expanded, close it; otherwise open it (closing any other)
+
+    // If AI is enabled, toggle AI context instead of expanding drawer
+    if (aiChatStore.enabled) {
+      if (aiChatStore.hasContextItem(resourceId())) {
+        aiChatStore.removeContextItem(resourceId());
+      } else {
+        aiChatStore.addContextItem('docker', resourceId(), container.name, {
+          containerName: container.name,
+          ...buildContainerContext(),
+        });
+        // Auto-open the sidebar when first item is selected
+        if (!aiChatStore.isOpen) {
+          aiChatStore.open();
+        }
+      }
+      return;
+    }
+
+    // Standard drawer toggle when AI is not enabled
+    if (!hasDrawerContent()) return;
     setCurrentlyExpandedRowId(prev => prev === rowId ? null : rowId);
   };
 
@@ -1094,13 +1195,10 @@ const DockerContainerRow: Component<{
                 <Show
                   when={isEditingUrl()}
                   fallback={
-                    <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5 flex-1 min-w-0 group/name">
                       <span
-                        class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none truncate"
-                        style="cursor: text;"
-                        title={`${containerTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
-                        onClick={startEditingUrl}
-                        data-resource-name-editable
+                        class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none truncate"
+                        title={containerTitle()}
                       >
                         {container.name || container.id}
                       </span>
@@ -1130,6 +1228,17 @@ const DockerContainerRow: Component<{
                           </svg>
                         </a>
                       </Show>
+                      {/* Edit URL button - shows on hover */}
+                      <button
+                        type="button"
+                        onClick={startEditingUrl}
+                        class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
+                        title={customUrl() ? 'Edit URL' : 'Add URL'}
+                      >
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
                       <Show when={props.showHostContext}>
                         <span
                           class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300 flex-shrink-0 max-w-[120px]"
@@ -1137,6 +1246,14 @@ const DockerContainerRow: Component<{
                         >
                           <StatusDot variant={hostStatus().variant} title={hostStatus().label} ariaLabel={hostStatus().label} size="xs" />
                           <span class="truncate">{hostDisplayName()}</span>
+                        </span>
+                      </Show>
+                      {/* AI context indicator - shows when container is selected for AI */}
+                      <Show when={isInAIContext()}>
+                        <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                          </svg>
                         </span>
                       </Show>
                     </div>
@@ -1172,7 +1289,10 @@ const DockerContainerRow: Component<{
         );
       case 'image':
         return (
-          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+          <div
+            class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 truncate max-w-[200px]"
+            title={container.image || undefined}
+          >
             {container.image || '—'}
           </div>
         );
@@ -1222,6 +1342,7 @@ const DockerContainerRow: Component<{
                 balloon={0}
                 swapUsed={0}
                 swapTotal={0}
+                resourceId={metricsKey}
               />
             </div>
           </div>
@@ -1273,7 +1394,7 @@ const DockerContainerRow: Component<{
   return (
     <>
       <tr
-        class={`transition-all duration-200 ${hasDrawerContent() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isRunning() ? 'opacity-60' : ''}`}
+        class={`transition-all duration-200 ${aiChatStore.enabled || hasDrawerContent() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isRunning() ? 'opacity-60' : ''} ${isInAIContext() ? 'ai-context-row' : ''}`}
         onClick={toggle}
         aria-expanded={expanded()}
       >
@@ -1295,337 +1416,403 @@ const DockerContainerRow: Component<{
         <tr>
           <td colspan={DOCKER_COLUMNS.length} class="p-0">
             <div class="w-0 min-w-full bg-gray-50 dark:bg-gray-900/50 px-4 py-3 overflow-hidden">
-              <div class="flex flex-wrap justify-start gap-3">
-                <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full">
+                <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                     Summary
                   </div>
-              <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                <div class="flex items-center justify-between gap-2">
-                  <span class="font-medium text-gray-700 dark:text-gray-200">Runtime</span>
-                  <span
-                    class={`inline-flex items-center gap-2 rounded-full px-2 py-0.5 text-[10px] font-semibold ${runtimeInfo.badgeClass}`}
-                    title={runtimeInfo.raw || runtimeInfo.label}
-                  >
-                    {runtimeInfo.label}
-                    <Show when={runtimeVersion()}>
-                      {(version) => (
-                        <span class="text-[10px] text-gray-500 dark:text-gray-400">{version()}</span>
+                  <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="font-medium text-gray-700 dark:text-gray-200">Runtime</span>
+                      <span
+                        class={`inline-flex items-center gap-2 rounded-full px-2 py-0.5 text-[10px] font-semibold ${runtimeInfo.badgeClass}`}
+                        title={runtimeInfo.raw || runtimeInfo.label}
+                      >
+                        {runtimeInfo.label}
+                        <Show when={runtimeVersion()}>
+                          {(version) => (
+                            <span class="text-[10px] text-gray-500 dark:text-gray-400">{version()}</span>
+                          )}
+                        </Show>
+                      </span>
+                    </div>
+                    <div class="flex items-start justify-between gap-2">
+                      <span class="font-medium text-gray-700 dark:text-gray-200">Image</span>
+                      <span class="flex-1 truncate text-right text-gray-600 dark:text-gray-300" title={container.image}>
+                        {container.image || '—'}
+                      </span>
+                    </div>
+                    <Show when={podName()}>
+                      {(name) => (
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="font-medium text-gray-700 dark:text-gray-200">Pod</span>
+                          <span class="text-right text-gray-600 dark:text-gray-300">
+                            {name()}
+                            <Show when={isPodInfra()}>
+                              <span class="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                                infra
+                              </span>
+                            </Show>
+                          </span>
+                        </div>
                       )}
                     </Show>
-                  </span>
-                </div>
-                <div class="flex items-start justify-between gap-2">
-                  <span class="font-medium text-gray-700 dark:text-gray-200">Image</span>
-                  <span class="flex-1 truncate text-right text-gray-600 dark:text-gray-300" title={container.image}>
-                    {container.image || '—'}
-                  </span>
-                </div>
-                <Show when={podName()}>
-                  {(name) => (
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="font-medium text-gray-700 dark:text-gray-200">Pod</span>
-                      <span class="text-right text-gray-600 dark:text-gray-300">
-                        {name()}
-                        <Show when={isPodInfra()}>
-                          <span class="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
-                            infra
+                    <Show when={podmanMetadata()?.composeProject}>
+                      {(project) => (
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="font-medium text-gray-700 dark:text-gray-200">Compose Project</span>
+                          <span class="text-right text-gray-600 dark:text-gray-300">{project()}</span>
+                        </div>
+                      )}
+                    </Show>
+                    <Show when={podmanMetadata()?.composeService}>
+                      {(service) => (
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="font-medium text-gray-700 dark:text-gray-200">Compose Service</span>
+                          <span class="text-right text-gray-600 dark:text-gray-300">{service()}</span>
+                        </div>
+                      )}
+                    </Show>
+                    <Show when={podmanMetadata()?.autoUpdatePolicy}>
+                      {(policy) => (
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="font-medium text-gray-700 dark:text-gray-200">Auto Update</span>
+                          <span class="text-right text-gray-600 dark:text-gray-300">
+                            {policy()}
+                            <Show when={podmanMetadata()?.autoUpdateRestart}>
+                              {(restart) => (
+                                <span class="ml-2 text-[10px] text-gray-500 dark:text-gray-400">restart: {restart()}</span>
+                              )}
+                            </Show>
                           </span>
-                        </Show>
-                      </span>
-                    </div>
-                  )}
-                </Show>
-                <Show when={podmanMetadata()?.composeProject}>
-                  {(project) => (
+                        </div>
+                      )}
+                    </Show>
+                    <Show when={podmanMetadata()?.userNamespace}>
+                      {(userns) => (
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="font-medium text-gray-700 dark:text-gray-200">User Namespace</span>
+                          <span class="text-right text-gray-600 dark:text-gray-300">{userns()}</span>
+                        </div>
+                      )}
+                    </Show>
                     <div class="flex items-center justify-between gap-2">
-                      <span class="font-medium text-gray-700 dark:text-gray-200">Compose Project</span>
-                      <span class="text-right text-gray-600 dark:text-gray-300">{project()}</span>
+                      <span class="font-medium text-gray-700 dark:text-gray-200">State</span>
+                      <span class="text-right text-gray-600 dark:text-gray-300">{statusLabel()}</span>
                     </div>
-                  )}
-                </Show>
-                <Show when={podmanMetadata()?.composeService}>
-                  {(service) => (
                     <div class="flex items-center justify-between gap-2">
-                      <span class="font-medium text-gray-700 dark:text-gray-200">Compose Service</span>
-                      <span class="text-right text-gray-600 dark:text-gray-300">{service()}</span>
+                      <span class="font-medium text-gray-700 dark:text-gray-200">Restarts</span>
+                      <span class="text-right text-gray-600 dark:text-gray-300">{restarts()}</span>
                     </div>
-                  )}
-                </Show>
-                <Show when={podmanMetadata()?.autoUpdatePolicy}>
-                  {(policy) => (
+                    <Show when={createdRelative()}>
+                      {(created) => (
+                        <div class="flex flex-col gap-0.5">
+                          <span class="font-medium text-gray-700 dark:text-gray-200">Created</span>
+                          <div class="text-right text-gray-600 dark:text-gray-300">
+                            {created()}
+                            <Show when={createdAbsolute()}>
+                              {(abs) => (
+                                <div class="text-[10px] text-gray-500 dark:text-gray-400">{abs()}</div>
+                              )}
+                            </Show>
+                          </div>
+                        </div>
+                      )}
+                    </Show>
+                    <Show when={startedRelative()}>
+                      {(started) => (
+                        <div class="flex flex-col gap-0.5">
+                          <span class="font-medium text-gray-700 dark:text-gray-200">Started</span>
+                          <div class="text-right text-gray-600 dark:text-gray-300">
+                            {started()}
+                            <Show when={startedAbsolute()}>
+                              {(abs) => (
+                                <div class="text-[10px] text-gray-500 dark:text-gray-400">{abs()}</div>
+                              )}
+                            </Show>
+                          </div>
+                        </div>
+                      )}
+                    </Show>
                     <div class="flex items-center justify-between gap-2">
-                      <span class="font-medium text-gray-700 dark:text-gray-200">Auto Update</span>
-                      <span class="text-right text-gray-600 dark:text-gray-300">
-                        {policy()}
-                        <Show when={podmanMetadata()?.autoUpdateRestart}>
-                          {(restart) => (
-                            <span class="ml-2 text-[10px] text-gray-500 dark:text-gray-400">restart: {restart()}</span>
-                          )}
-                        </Show>
-                      </span>
+                      <span class="font-medium text-gray-700 dark:text-gray-200">Uptime</span>
+                      <span class="text-right text-gray-600 dark:text-gray-300">{uptime()}</span>
                     </div>
-                  )}
-                </Show>
-                <Show when={podmanMetadata()?.userNamespace}>
-                  {(userns) => (
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="font-medium text-gray-700 dark:text-gray-200">User Namespace</span>
-                      <span class="text-right text-gray-600 dark:text-gray-300">{userns()}</span>
+                  </div>
+                  <Show when={runtimeInfo.id === 'podman'}>
+                    <div class="mt-3 rounded border border-dashed border-purple-200 px-2 py-1 text-[10px] text-purple-700 dark:border-purple-700/60 dark:text-purple-200">
+                      Podman hosts report container metrics, but Swarm services and tasks are unavailable. Runtime annotations and compose metadata appear below when present.
                     </div>
-                  )}
-                </Show>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="font-medium text-gray-700 dark:text-gray-200">State</span>
-                  <span class="text-right text-gray-600 dark:text-gray-300">{statusLabel()}</span>
+                  </Show>
                 </div>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="font-medium text-gray-700 dark:text-gray-200">Restarts</span>
-                  <span class="text-right text-gray-600 dark:text-gray-300">{restarts()}</span>
-                </div>
-                <Show when={createdRelative()}>
-                  {(created) => (
-                    <div class="flex flex-col gap-0.5">
-                      <span class="font-medium text-gray-700 dark:text-gray-200">Created</span>
-                      <div class="text-right text-gray-600 dark:text-gray-300">
-                        {created()}
-                        <Show when={createdAbsolute()}>
-                          {(abs) => (
-                            <div class="text-[10px] text-gray-500 dark:text-gray-400">{abs()}</div>
-                          )}
-                        </Show>
-                      </div>
+                <Show when={container.ports && container.ports.length > 0}>
+                  <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                      Ports
                     </div>
-                  )}
-                </Show>
-                <Show when={startedRelative()}>
-                  {(started) => (
-                    <div class="flex flex-col gap-0.5">
-                      <span class="font-medium text-gray-700 dark:text-gray-200">Started</span>
-                      <div class="text-right text-gray-600 dark:text-gray-300">
-                        {started()}
-                        <Show when={startedAbsolute()}>
-                          {(abs) => (
-                            <div class="text-[10px] text-gray-500 dark:text-gray-400">{abs()}</div>
-                          )}
-                        </Show>
-                      </div>
-                    </div>
-                  )}
-                </Show>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="font-medium text-gray-700 dark:text-gray-200">Uptime</span>
-                  <span class="text-right text-gray-600 dark:text-gray-300">{uptime()}</span>
-                </div>
-              </div>
-              <Show when={runtimeInfo.id === 'podman'}>
-                <div class="mt-3 rounded border border-dashed border-purple-200 px-2 py-1 text-[10px] text-purple-700 dark:border-purple-700/60 dark:text-purple-200">
-                  Podman hosts report container metrics, but Swarm services and tasks are unavailable. Runtime annotations and compose metadata appear below when present.
-                </div>
-              </Show>
-            </div>
-            <Show when={container.ports && container.ports.length > 0}>
-              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                  Ports
-                </div>
-                <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
-                  {container.ports!.map((port) => {
-                    const label = port.publicPort
-                      ? `${port.publicPort}:${port.privatePort}/${port.protocol}`
-                      : `${port.privatePort}/${port.protocol}`;
-                    return (
-                      <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                        {label}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            </Show>
-
-            <Show when={container.networks && container.networks.length > 0}>
-              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                  Networks
-                </div>
-                <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                  {container.networks!.map((network) => (
-                    <div class="rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700/70">
-                      <div class="font-medium text-gray-700 dark:text-gray-200">{network.name}</div>
-                      <div class="mt-0.5 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
-                        <Show when={network.ipv4}>
+                    <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
+                      {container.ports!.map((port) => {
+                        const label = port.publicPort
+                          ? `${port.publicPort}:${port.privatePort}/${port.protocol}`
+                          : `${port.privatePort}/${port.protocol}`;
+                        return (
                           <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                            {network.ipv4}
+                            {label}
                           </span>
-                        </Show>
-                        <Show when={network.ipv6}>
-                          <span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
-                            {network.ipv6}
-                          </span>
-                        </Show>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </Show>
-
-            <Show when={hasPodmanMetadata()}>
-              <div class="min-w-[220px] flex-1 rounded border border-purple-200 bg-white/70 p-2 shadow-sm dark:border-purple-700/60 dark:bg-purple-950/20">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-purple-700 dark:text-purple-200">
-                  Podman Metadata
-                </div>
-                <div class="mt-1 space-y-2 text-[11px] text-gray-600 dark:text-gray-300">
-                  <For each={podmanMetadataSections()}>
-                    {(section) => (
-                      <div class="space-y-1 border-b border-purple-100 pb-1 last:border-b-0 last:pb-0 dark:border-purple-800/30">
-                        <div class="text-[10px] font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-300">
-                          {section.title}
-                        </div>
-                        <div class="space-y-1">
-                          <For each={section.items}>
-                            {(item) => (
-                              <div class="flex items-start justify-between gap-2">
-                                <span class="font-medium text-gray-700 dark:text-gray-200">{item.label}</span>
-                                <span
-                                  class="max-w-[220px] break-all text-right text-gray-600 dark:text-gray-300"
-                                  title={item.value || '—'}
-                                >
-                                  {item.value || '—'}
-                                </span>
-                              </div>
-                            )}
-                          </For>
-                        </div>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </div>
-            </Show>
-
-            <Show when={hasBlockIo()}>
-              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                  Block I/O
-                </div>
-                <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                  <div class="flex items-center justify-between">
-                    <span>Read</span>
-                    <div class="text-right">
-                      <div class="font-semibold text-gray-900 dark:text-gray-100">
-                        {formatBytes(blockIoReadBytes())}
-                      </div>
-                      <Show when={blockIoReadRateLabel()}>
-                        <div class="text-[10px] text-gray-500 dark:text-gray-400">
-                          {blockIoReadRateLabel()}
-                        </div>
-                      </Show>
+                        );
+                      })}
                     </div>
                   </div>
-                  <div class="flex items-center justify-between">
-                    <span>Write</span>
-                    <div class="text-right">
-                      <div class="font-semibold text-gray-900 dark:text-gray-100">
-                        {formatBytes(blockIoWriteBytes())}
-                      </div>
-                      <Show when={blockIoWriteRateLabel()}>
-                        <div class="text-[10px] text-gray-500 dark:text-gray-400">
-                          {blockIoWriteRateLabel()}
-                        </div>
-                      </Show>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Show>
+                </Show>
 
-            <Show when={hasMounts()}>
-              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                  Mounts
-                </div>
-                <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                  <For each={mounts()}>
-                    {(mount) => {
-                      const destination = mount.destination || mount.source || mount.name || 'mount';
-                      const rw = mount.rw === false ? 'read-only' : 'read-write';
-                      return (
+                <Show when={container.networks && container.networks.length > 0}>
+                  <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                      Networks
+                    </div>
+                    <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                      {container.networks!.map((network) => (
                         <div class="rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700/70">
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="truncate font-medium text-gray-700 dark:text-gray-200" title={destination}>
-                              {destination}
-                            </span>
-                            <Show when={mount.type}>
-                              <span class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                {mount.type}
+                          <div class="font-medium text-gray-700 dark:text-gray-200">{network.name}</div>
+                          <div class="mt-0.5 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                            <Show when={network.ipv4}>
+                              <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                {network.ipv4}
+                              </span>
+                            </Show>
+                            <Show when={network.ipv6}>
+                              <span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                                {network.ipv6}
                               </span>
                             </Show>
                           </div>
-                          <Show when={mount.source}>
-                            <div class="mt-1 truncate text-[11px] text-gray-600 dark:text-gray-300" title={mount.source}>
-                              {mount.source}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </Show>
+
+                <Show when={hasPodmanMetadata()}>
+                  <div class="rounded border border-purple-200 bg-white/70 p-3 shadow-sm dark:border-purple-700/60 dark:bg-purple-950/20">
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-purple-700 dark:text-purple-200">
+                      Podman Metadata
+                    </div>
+                    <div class="mt-1 space-y-2 text-[11px] text-gray-600 dark:text-gray-300">
+                      <For each={podmanMetadataSections()}>
+                        {(section) => (
+                          <div class="space-y-1 border-b border-purple-100 pb-1 last:border-b-0 last:pb-0 dark:border-purple-800/30">
+                            <div class="text-[10px] font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-300">
+                              {section.title}
+                            </div>
+                            <div class="space-y-1">
+                              <For each={section.items}>
+                                {(item) => (
+                                  <div class="flex items-start justify-between gap-2">
+                                    <span class="font-medium text-gray-700 dark:text-gray-200">{item.label}</span>
+                                    <span
+                                      class="max-w-[220px] break-all text-right text-gray-600 dark:text-gray-300"
+                                      title={item.value || '—'}
+                                    >
+                                      {item.value || '—'}
+                                    </span>
+                                  </div>
+                                )}
+                              </For>
+                            </div>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
+
+                <Show when={hasBlockIo()}>
+                  <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                      Block I/O
+                    </div>
+                    <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                      <div class="flex items-center justify-between">
+                        <span>Read</span>
+                        <div class="text-right">
+                          <div class="font-semibold text-gray-900 dark:text-gray-100">
+                            {formatBytes(blockIoReadBytes())}
+                          </div>
+                          <Show when={blockIoReadRateLabel()}>
+                            <div class="text-[10px] text-gray-500 dark:text-gray-400">
+                              {blockIoReadRateLabel()}
                             </div>
                           </Show>
-                          <div class="mt-1 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
-                            <span
-                              class={`rounded px-1.5 py-0.5 ${mount.rw === false
-                                ? 'bg-gray-200 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200'
-                                : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                                }`}
-                            >
-                              {rw}
-                            </span>
-                            <Show when={mount.mode}>
-                              <span class="rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200">
-                                mode: {mount.mode}
-                              </span>
-                            </Show>
-                            <Show when={mount.driver}>
-                              <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                                {mount.driver}
-                              </span>
-                            </Show>
-                            <Show when={mount.name}>
-                              <span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
-                                {mount.name}
-                              </span>
-                            </Show>
-                            <Show when={mount.propagation}>
-                              <span class="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600 dark:bg-gray-800/40 dark:text-gray-300">
-                                {mount.propagation}
-                              </span>
-                            </Show>
-                          </div>
                         </div>
-                      );
-                    }}
-                  </For>
-                </div>
-              </div>
-            </Show>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <span>Write</span>
+                        <div class="text-right">
+                          <div class="font-semibold text-gray-900 dark:text-gray-100">
+                            {formatBytes(blockIoWriteBytes())}
+                          </div>
+                          <Show when={blockIoWriteRateLabel()}>
+                            <div class="text-[10px] text-gray-500 dark:text-gray-400">
+                              {blockIoWriteRateLabel()}
+                            </div>
+                          </Show>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Show>
 
-            <Show when={container.labels && Object.keys(container.labels).length > 0}>
-              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                  Labels
-                </div>
-                <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
-                  {Object.entries(container.labels!).map(([key, value]) => {
-                    const fullLabel = value ? `${key}: ${value}` : key;
-                    return (
-                      <span
-                        class="max-w-full truncate rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200"
-                        title={fullLabel}
+                <Show when={hasMounts()}>
+                  <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                      Mounts
+                    </div>
+                    <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                      <For each={mounts()}>
+                        {(mount) => {
+                          const destination = mount.destination || mount.source || mount.name || 'mount';
+                          const rw = mount.rw === false ? 'read-only' : 'read-write';
+                          return (
+                            <div class="rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700/70">
+                              <div class="flex items-center justify-between gap-2">
+                                <span class="truncate font-medium text-gray-700 dark:text-gray-200" title={destination}>
+                                  {destination}
+                                </span>
+                                <Show when={mount.type}>
+                                  <span class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                    {mount.type}
+                                  </span>
+                                </Show>
+                              </div>
+                              <Show when={mount.source}>
+                                <div class="mt-1 truncate text-[11px] text-gray-600 dark:text-gray-300" title={mount.source}>
+                                  {mount.source}
+                                </div>
+                              </Show>
+                              <div class="mt-1 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                                <span
+                                  class={`rounded px-1.5 py-0.5 ${mount.rw === false
+                                    ? 'bg-gray-200 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200'
+                                    : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                    }`}
+                                >
+                                  {rw}
+                                </span>
+                                <Show when={mount.mode}>
+                                  <span class="rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200">
+                                    mode: {mount.mode}
+                                  </span>
+                                </Show>
+                                <Show when={mount.driver}>
+                                  <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                    {mount.driver}
+                                  </span>
+                                </Show>
+                                <Show when={mount.name}>
+                                  <span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                                    {mount.name}
+                                  </span>
+                                </Show>
+                                <Show when={mount.propagation}>
+                                  <span class="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600 dark:bg-gray-800/40 dark:text-gray-300">
+                                    {mount.propagation}
+                                  </span>
+                                </Show>
+                              </div>
+                            </div>
+                          );
+                        }}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
+
+                <Show when={container.labels && Object.keys(container.labels).length > 0}>
+                  <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                      Labels
+                    </div>
+                    <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
+                      {Object.entries(container.labels!).map(([key, value]) => {
+                        const fullLabel = value ? `${key}: ${value}` : key;
+                        return (
+                          <span
+                            class="max-w-full truncate rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200"
+                            title={fullLabel}
+                          >
+                            {key}
+                            <Show when={value}>: {value}</Show>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </Show>
+
+                {/* Annotations & Ask AI row */}
+                <Show when={aiEnabled()}>
+                  <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 w-full space-y-2">
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[10px] font-medium text-gray-500 dark:text-gray-400">AI Context</span>
+                      <Show when={saving()}>
+                        <span class="text-[9px] text-gray-400">saving...</span>
+                      </Show>
+                    </div>
+
+                    {/* Existing annotations */}
+                    <Show when={annotations().length > 0}>
+                      <div class="flex flex-wrap gap-1.5">
+                        <For each={annotations()}>
+                          {(annotation, index) => (
+                            <span class="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-md bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200">
+                              <span class="max-w-[300px] truncate">{annotation}</span>
+                              <button
+                                type="button"
+                                onClick={() => removeAnnotation(index())}
+                                class="ml-0.5 p-0.5 rounded hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
+                                title="Remove"
+                              >
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </span>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
+
+                    {/* Add new annotation */}
+                    <div class="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newAnnotation()}
+                        onInput={(e) => setNewAnnotation(e.currentTarget.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Add context for AI (press Enter)..."
+                        class="flex-1 px-2 py-1.5 text-[11px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={addAnnotation}
+                        disabled={!newAnnotation().trim()}
+                        class="px-2 py-1.5 text-[11px] rounded border border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                       >
-                        {key}
-                        <Show when={value}>: {value}</Show>
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
+                        Add
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAskAI}
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[11px] font-medium shadow-sm hover:from-purple-600 hover:to-pink-600 transition-all"
+                        title={`Ask AI about ${container.name}`}
+                      >
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611l-2.576.43a18.003 18.003 0 01-5.118 0l-2.576-.43c-1.717-.293-2.299-2.379-1.067-3.611L5 14.5" />
+                        </svg>
+                        Ask AI
+                      </button>
+                    </div>
+                  </div>
                 </Show>
               </div>
             </div>
@@ -1663,6 +1850,23 @@ const DockerServiceRow: Component<{
 
   const hasTasks = () => tasks.length > 0;
 
+  // Check if this service is in AI context
+  const isInAIContext = createMemo(() => aiChatStore.enabled && aiChatStore.hasContextItem(resourceId()));
+
+  // Build context for AI
+  const buildServiceContext = () => {
+    const ctx: Record<string, unknown> = {
+      name: service.name,
+      type: 'Docker Swarm Service',
+      host: host.hostname,
+      image: service.image,
+      mode: service.mode,
+      replicas: `${service.runningTasks ?? 0}/${service.desiredTasks ?? 0}`,
+    };
+    if (service.stack) ctx.stack = service.stack;
+    return ctx;
+  };
+
   // Update custom URL when prop changes, but only if we're not currently editing
   createEffect(() => {
     if (currentlyEditingDockerResourceId() !== resourceId()) {
@@ -1688,10 +1892,28 @@ const DockerServiceRow: Component<{
   });
 
   const toggle = (event: MouseEvent) => {
-    if (!hasTasks()) return;
     const target = event.target as HTMLElement;
     if (target.closest('a, button, input, [data-prevent-toggle]')) return;
-    // Toggle: if this row is currently expanded, close it; otherwise open it (closing any other)
+
+    // If AI is enabled, toggle AI context instead of expanding drawer
+    if (aiChatStore.enabled) {
+      if (aiChatStore.hasContextItem(resourceId())) {
+        aiChatStore.removeContextItem(resourceId());
+      } else {
+        aiChatStore.addContextItem('docker', resourceId(), service.name, {
+          serviceName: service.name,
+          ...buildServiceContext(),
+        });
+        // Auto-open the sidebar when first item is selected
+        if (!aiChatStore.isOpen) {
+          aiChatStore.open();
+        }
+      }
+      return;
+    }
+
+    // Standard drawer toggle when AI is not enabled
+    if (!hasTasks()) return;
     setCurrentlyExpandedRowId(prev => prev === rowId ? null : rowId);
   };
 
@@ -1864,13 +2086,10 @@ const DockerServiceRow: Component<{
                 <Show
                   when={isEditingUrl()}
                   fallback={
-                    <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5 flex-1 min-w-0 group/name">
                       <span
-                        class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none"
-                        style="cursor: text;"
-                        title={`${serviceTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
-                        onClick={startEditingUrl}
-                        data-resource-name-editable
+                        class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none"
+                        title={serviceTitle()}
                       >
                         {service.name || service.id || 'Service'}
                       </span>
@@ -1888,6 +2107,17 @@ const DockerServiceRow: Component<{
                           </svg>
                         </a>
                       </Show>
+                      {/* Edit URL button - shows on hover */}
+                      <button
+                        type="button"
+                        onClick={startEditingUrl}
+                        class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
+                        title={customUrl() ? 'Edit URL' : 'Add URL'}
+                      >
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
                       <Show when={service.stack && !isEditingUrl()}>
                         <span class="text-[10px] text-gray-500 dark:text-gray-400 truncate" title={`Stack: ${service.stack}`}>
                           Stack: {service.stack}
@@ -1900,6 +2130,14 @@ const DockerServiceRow: Component<{
                         >
                           <StatusDot variant={hostStatus().variant} title={hostStatus().label} ariaLabel={hostStatus().label} size="xs" />
                           <span class="max-w-[160px] truncate">{hostDisplayName()}</span>
+                        </span>
+                      </Show>
+                      {/* AI context indicator - shows when service is selected for AI */}
+                      <Show when={isInAIContext()}>
+                        <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                          </svg>
                         </span>
                       </Show>
                     </div>
@@ -1935,7 +2173,10 @@ const DockerServiceRow: Component<{
         );
       case 'image':
         return (
-          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+          <div
+            class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 truncate max-w-[200px]"
+            title={service.image || undefined}
+          >
             {service.image || '—'}
           </div>
         );
@@ -1980,7 +2221,7 @@ const DockerServiceRow: Component<{
   return (
     <>
       <tr
-        class={`transition-all duration-200 ${hasTasks() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isHealthy() ? 'opacity-60' : ''}`}
+        class={`transition-all duration-200 ${aiChatStore.enabled || hasTasks() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isHealthy() ? 'opacity-60' : ''} ${isInAIContext() ? 'ai-context-row' : ''}`}
         onClick={toggle}
         aria-expanded={expanded()}
       >
@@ -2002,8 +2243,8 @@ const DockerServiceRow: Component<{
         <tr>
           <td colspan={DOCKER_COLUMNS.length} class="p-0">
             <div class="w-0 min-w-full bg-gray-50 dark:bg-gray-900/60 px-4 py-3 overflow-hidden">
-              <div class="flex flex-wrap justify-start gap-3">
-                <div class="min-w-[320px] flex-1 rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <div class="space-y-3">
+                <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                   <div class="flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                     <span>Tasks</span>
                     <span class="text-[10px] font-normal text-gray-500 dark:text-gray-400">
@@ -2012,111 +2253,111 @@ const DockerServiceRow: Component<{
                   </div>
                   <div class="mt-2 overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800/60 text-xs">
-                  <thead class="bg-gray-100 dark:bg-gray-900/40 text-[10px] uppercase tracking-wide text-gray-600 dark:text-gray-200">
-                    <tr>
-                      <th class="py-1 pr-2 text-left font-medium">Task</th>
-                      <th class="py-1 px-2 text-left font-medium w-[80px]">Type</th>
-                      <th class="py-1 px-2 text-left font-medium">Node</th>
-                      <th class="py-1 px-2 text-left font-medium">State</th>
-                      <th class="py-1 px-2 text-left font-medium w-[120px]">CPU</th>
-                      <th class="py-1 px-2 text-left font-medium w-[140px]">Memory</th>
-                      <th class="py-1 px-2 text-left font-medium">Updated</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-100 dark:divide-gray-800/50">
-                    <For each={tasks}>
-                      {(task) => {
-                        const container = findContainerForTask(host.containers || [], task);
-                        const cpu = container?.cpuPercent ?? 0;
-                        const mem = container?.memoryPercent ?? 0;
-                        const updated = ensureMs(task.updatedAt ?? task.createdAt ?? task.startedAt);
-                        const taskLabel = () => {
-                          if (task.containerName) return task.containerName;
-                          if (task.containerId) return task.containerId.slice(0, 12);
-                          if (task.slot !== undefined) return `slot-${task.slot}`;
-                          return task.id ?? 'Task';
-                        };
-                        const taskTitle = () => {
-                          const label = taskLabel();
-                          if (task.containerId && task.containerId !== label) {
-                            return `${label} \u2014 ${task.containerId}`;
-                          }
-                          if (task.id && task.id !== label) {
-                            return `${label} \u2014 ${task.id}`;
-                          }
-                          return label;
-                        };
-                        const state = toLower(task.currentState ?? task.desiredState ?? 'unknown');
-                        const taskMetricsKey = container?.id ? buildMetricKey('dockerContainer', container.id) : undefined;
-                        const stateClass = () => {
-                          if (state === 'running') {
-                            return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
-                          }
-                          if (state === 'failed' || state === 'error') {
-                            return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
-                          }
-                          return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
-                        };
-                        return (
-                          <tr class="hover:bg-gray-100 dark:hover:bg-gray-800/40">
-                            <td class="py-1 pr-2">
-                              <div class="flex items-center gap-1 text-sm text-gray-900 dark:text-gray-100">
-                                <span class="truncate font-medium" title={taskTitle()}>
-                                  {taskLabel()}
-                                </span>
-                              </div>
-                            </td>
-                            <td class="py-1 px-2">
-                              <span
-                                class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
-                                  'task',
-                                )}`}
-                              >
-                                Task
-                              </span>
-                            </td>
-                            <td class="py-1 px-2 text-gray-600 dark:text-gray-400">
-                              {task.nodeName || task.nodeId || '—'}
-                            </td>
-                            <td class="py-1 px-2">
-                              <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${stateClass()}`}>
-                                {task.currentState || task.desiredState || 'Unknown'}
-                              </span>
-                            </td>
-                            <td class="py-1 px-2 w-[120px]">
-                              <Show when={cpu > 0} fallback={<span class="text-gray-400">—</span>}>
-                                <MetricBar
-                                  value={Math.min(100, cpu)}
-                                  label={formatPercent(cpu)}
-                                  type="cpu"
-                                  resourceId={taskMetricsKey}
-                                />
-                              </Show>
-                            </td>
-                            <td class="py-1 px-2 w-[140px]">
-                              <Show when={mem > 0} fallback={<span class="text-gray-400">—</span>}>
-                                <MetricBar
-                                  value={Math.min(100, mem)}
-                                  label={formatPercent(mem)}
-                                  type="memory"
-                                  resourceId={taskMetricsKey}
-                                />
-                              </Show>
-                            </td>
-                            <td class="py-1 px-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                              <Show when={updated} fallback="—">
-                                {(timestamp) => (
-                                  <span title={new Date(timestamp()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}>
-                                    {formatRelativeTime(timestamp())}
+                      <thead class="bg-gray-100 dark:bg-gray-900/40 text-[10px] uppercase tracking-wide text-gray-600 dark:text-gray-200">
+                        <tr>
+                          <th class="py-1 pr-2 text-left font-medium">Task</th>
+                          <th class="py-1 px-2 text-left font-medium w-[80px]">Type</th>
+                          <th class="py-1 px-2 text-left font-medium">Node</th>
+                          <th class="py-1 px-2 text-left font-medium">State</th>
+                          <th class="py-1 px-2 text-left font-medium w-[120px]">CPU</th>
+                          <th class="py-1 px-2 text-left font-medium w-[140px]">Memory</th>
+                          <th class="py-1 px-2 text-left font-medium">Updated</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-100 dark:divide-gray-800/50">
+                        <For each={tasks}>
+                          {(task) => {
+                            const container = findContainerForTask(host.containers || [], task);
+                            const cpu = container?.cpuPercent ?? 0;
+                            const mem = container?.memoryPercent ?? 0;
+                            const updated = ensureMs(task.updatedAt ?? task.createdAt ?? task.startedAt);
+                            const taskLabel = () => {
+                              if (task.containerName) return task.containerName;
+                              if (task.containerId) return task.containerId.slice(0, 12);
+                              if (task.slot !== undefined) return `slot-${task.slot}`;
+                              return task.id ?? 'Task';
+                            };
+                            const taskTitle = () => {
+                              const label = taskLabel();
+                              if (task.containerId && task.containerId !== label) {
+                                return `${label} \u2014 ${task.containerId}`;
+                              }
+                              if (task.id && task.id !== label) {
+                                return `${label} \u2014 ${task.id}`;
+                              }
+                              return label;
+                            };
+                            const state = toLower(task.currentState ?? task.desiredState ?? 'unknown');
+                            const taskMetricsKey = container?.id ? buildMetricKey('dockerContainer', container.id) : undefined;
+                            const stateClass = () => {
+                              if (state === 'running') {
+                                return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+                              }
+                              if (state === 'failed' || state === 'error') {
+                                return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+                              }
+                              return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+                            };
+                            return (
+                              <tr class="hover:bg-gray-100 dark:hover:bg-gray-800/40">
+                                <td class="py-1 pr-2">
+                                  <div class="flex items-center gap-1 text-sm text-gray-900 dark:text-gray-100">
+                                    <span class="truncate font-medium" title={taskTitle()}>
+                                      {taskLabel()}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td class="py-1 px-2">
+                                  <span
+                                    class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
+                                      'task',
+                                    )}`}
+                                  >
+                                    Task
                                   </span>
-                                )}
-                              </Show>
-                            </td>
-                          </tr>
-                        );
-                      }}
-                    </For>
-                  </tbody>
+                                </td>
+                                <td class="py-1 px-2 text-gray-600 dark:text-gray-400">
+                                  {task.nodeName || task.nodeId || '—'}
+                                </td>
+                                <td class="py-1 px-2">
+                                  <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${stateClass()}`}>
+                                    {task.currentState || task.desiredState || 'Unknown'}
+                                  </span>
+                                </td>
+                                <td class="py-1 px-2 w-[120px]">
+                                  <Show when={cpu > 0} fallback={<span class="text-gray-400">—</span>}>
+                                    <MetricBar
+                                      value={Math.min(100, cpu)}
+                                      label={formatPercent(cpu)}
+                                      type="cpu"
+                                      resourceId={taskMetricsKey}
+                                    />
+                                  </Show>
+                                </td>
+                                <td class="py-1 px-2 w-[140px]">
+                                  <Show when={mem > 0} fallback={<span class="text-gray-400">—</span>}>
+                                    <MetricBar
+                                      value={Math.min(100, mem)}
+                                      label={formatPercent(mem)}
+                                      type="memory"
+                                      resourceId={taskMetricsKey}
+                                    />
+                                  </Show>
+                                </td>
+                                <td class="py-1 px-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                                  <Show when={updated} fallback="—">
+                                    {(timestamp) => (
+                                      <span title={new Date(timestamp()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}>
+                                        {formatRelativeTime(timestamp())}
+                                      </span>
+                                    )}
+                                  </Show>
+                                </td>
+                              </tr>
+                            );
+                          }}
+                        </For>
+                      </tbody>
                     </table>
                   </div>
                 </div>

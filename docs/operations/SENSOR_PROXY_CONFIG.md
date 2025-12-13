@@ -1,5 +1,9 @@
 # ⚙️ Sensor Proxy Configuration
 
+> **⚠️ Deprecated:** The sensor-proxy is deprecated in favor of the unified Pulse agent.
+> For new installations, use `install.sh --enable-proxmox` instead.
+> See [TEMPERATURE_MONITORING.md](/docs/security/TEMPERATURE_MONITORING.md).
+
 Safe configuration management using the CLI (v4.31.1+).
 
 ## 📂 Files

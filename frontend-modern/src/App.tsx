@@ -35,14 +35,21 @@ import { createTooltipSystem } from './components/shared/Tooltip';
 import type { State } from '@/types/api';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { startMetricsSampler } from './stores/metricsSampler';
+import { seedFromBackend } from './stores/metricsHistory';
+import { getMetricsViewMode } from './stores/metricsViewMode';
 import BoxesIcon from 'lucide-solid/icons/boxes';
 import MonitorIcon from 'lucide-solid/icons/monitor';
 import BellIcon from 'lucide-solid/icons/bell';
 import SettingsIcon from 'lucide-solid/icons/settings';
+import NetworkIcon from 'lucide-solid/icons/network';
 import { TokenRevealDialog } from './components/TokenRevealDialog';
 import { useAlertsActivation } from './stores/alertsActivation';
 import { UpdateProgressModal } from './components/UpdateProgressModal';
 import type { UpdateStatus } from './api/updates';
+import { AIChat } from './components/AI/AIChat';
+import { AIStatusIndicator } from './components/AI/AIStatusIndicator';
+import { aiChatStore } from './stores/aiChat';
+import { useResourcesAsLegacy } from './hooks/useResources';
 
 const Dashboard = lazy(() =>
   import('./components/Dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
@@ -51,6 +58,7 @@ const StorageComponent = lazy(() => import('./components/Storage/Storage'));
 const Backups = lazy(() => import('./components/Backups/Backups'));
 const Replication = lazy(() => import('./components/Replication/Replication'));
 const MailGateway = lazy(() => import('./components/PMG/MailGateway'));
+const CephPage = lazy(() => import('./pages/Ceph'));
 const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
 );
@@ -58,11 +66,17 @@ const SettingsPage = lazy(() => import('./components/Settings/Settings'));
 const DockerHosts = lazy(() =>
   import('./components/Docker/DockerHosts').then((module) => ({ default: module.DockerHosts })),
 );
+const KubernetesClusters = lazy(() =>
+  import('./components/Kubernetes/KubernetesClusters').then((module) => ({
+    default: module.KubernetesClusters,
+  })),
+);
 const HostsOverview = lazy(() =>
   import('./components/Hosts/HostsOverview').then((module) => ({
     default: module.HostsOverview,
   })),
 );
+
 
 // Enhanced store type with proper typing
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
@@ -87,26 +101,29 @@ export const useDarkMode = () => {
   return context;
 };
 
-// Docker route component that properly uses activeAlerts from useWebSocket
+// Docker route component - uses unified resources via useResourcesAsLegacy hook
 function DockerRoute() {
   const wsContext = useContext(WebSocketContext);
   if (!wsContext) {
     return <div>Loading...</div>;
   }
-  const { state, activeAlerts } = wsContext;
-  const hosts = createMemo(() => state.dockerHosts ?? []);
-  return <DockerHosts hosts={hosts()} activeAlerts={activeAlerts} />;
+  const { activeAlerts } = wsContext;
+  const { asDockerHosts } = useResourcesAsLegacy();
+
+  return <DockerHosts hosts={asDockerHosts() as any} activeAlerts={activeAlerts} />;
 }
 
+// Hosts route component - HostsOverview uses useResourcesAsLegacy directly for proper reactivity
 function HostsRoute() {
+  return <HostsOverview />;
+}
+
+function KubernetesRoute() {
   const wsContext = useContext(WebSocketContext);
   if (!wsContext) {
     return <div>Loading...</div>;
   }
-  const { state } = wsContext;
-  return (
-    <HostsOverview hosts={state.hosts ?? []} connectionHealth={state.connectionHealth ?? {}} />
-  );
+  return <KubernetesClusters clusters={wsContext.state.kubernetesClusters ?? []} />;
 }
 
 // Helper to detect if an update is actively in progress (not just checking for updates)
@@ -211,6 +228,13 @@ function App() {
   // Start metrics sampler for sparklines
   onMount(() => {
     startMetricsSampler();
+
+    // If user already has sparklines mode enabled, seed historical data immediately
+    if (getMetricsViewMode() === 'sparklines') {
+      seedFromBackend('1h').catch(() => {
+        // Errors are already logged in seedFromBackend
+      });
+    }
   });
 
   let hasPreloadedRoutes = false;
@@ -226,6 +250,7 @@ function App() {
       () => import('./components/Replication/Replication'),
       () => import('./components/PMG/MailGateway'),
       () => import('./components/Hosts/HostsOverview'),
+
       () => import('./pages/Alerts'),
       () => import('./components/Settings/Settings'),
       () => import('./components/Docker/DockerHosts'),
@@ -251,23 +276,23 @@ function App() {
     pmg: [],
     replicationJobs: [],
     metrics: [],
-  pveBackups: {
-    backupTasks: [],
-    storageBackups: [],
-    guestSnapshots: [],
-  },
-  pbsBackups: [],
-  pmgBackups: [],
-  backups: {
-    pve: {
+    pveBackups: {
       backupTasks: [],
       storageBackups: [],
       guestSnapshots: [],
     },
-    pbs: [],
-    pmg: [],
-  },
-  performance: {
+    pbsBackups: [],
+    pmgBackups: [],
+    backups: {
+      pve: {
+        backupTasks: [],
+        storageBackups: [],
+        guestSnapshots: [],
+      },
+      pbs: [],
+      pmg: [],
+    },
+    performance: {
       apiCallDuration: {},
       lastPollDuration: 0,
       pollingStartTime: '',
@@ -498,9 +523,9 @@ function App() {
 
       // Detect legacy DISABLE_AUTH flag (now ignored) so we can surface a warning
       if (securityData.deprecatedDisableAuth === true) {
-          logger.warn(
-            '[App] Legacy DISABLE_AUTH flag detected; authentication remains enabled. Remove the flag and restart Pulse to silence this warning.',
-          );
+        logger.warn(
+          '[App] Legacy DISABLE_AUTH flag detected; authentication remains enabled. Remove the flag and restart Pulse to silence this warning.',
+        );
       }
 
       const authConfigured = securityData.hasAuthentication || false;
@@ -713,9 +738,14 @@ function App() {
   // Pass through the store directly (only when initialized)
   const enhancedStore = () => wsStore();
 
-  const DashboardView = () => (
-    <Dashboard vms={state().vms} containers={state().containers} nodes={state().nodes} />
-  );
+  // Dashboard view - uses unified resources via useResourcesAsLegacy hook
+  const DashboardView = () => {
+    const { asVMs, asContainers, asNodes } = useResourcesAsLegacy();
+
+    return (
+      <Dashboard vms={asVMs() as any} containers={asContainers() as any} nodes={asNodes() as any} />
+    );
+  };
 
   const SettingsRoute = () => (
     <SettingsPage darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
@@ -723,42 +753,120 @@ function App() {
 
   // Root layout component for Router
   const RootLayout = (props: { children?: JSX.Element }) => {
+    // Check AI settings on mount and setup keyboard shortcut
+    onMount(() => {
+      // Only check AI settings if already authenticated (not on login screen)
+      // Otherwise, the 401 response triggers a redirect loop
+      if (!needsAuth()) {
+        import('./api/ai').then(({ AIAPI }) => {
+          AIAPI.getSettings()
+            .then((settings) => {
+              aiChatStore.setEnabled(settings.enabled && settings.configured);
+            })
+            .catch(() => {
+              aiChatStore.setEnabled(false);
+            });
+        });
+      }
+
+      // Keyboard shortcut: Cmd/Ctrl+K to toggle AI
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+          e.preventDefault();
+          if (aiChatStore.enabled) {
+            aiChatStore.toggle();
+          }
+        }
+        // Escape to close
+        if (e.key === 'Escape' && aiChatStore.isOpen) {
+          aiChatStore.close();
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+      onCleanup(() => {
+        document.removeEventListener('keydown', handleKeyDown);
+      });
+    });
+
     return (
       <Show
         when={!isLoading()}
         fallback={
-          <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+          <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
             <div class="text-gray-600 dark:text-gray-400">Loading...</div>
           </div>
         }
       >
-        <Show when={!needsAuth()} fallback={<Login onLogin={handleLogin} />}>
+        <Show when={!needsAuth()} fallback={<Login onLogin={handleLogin} hasAuth={hasAuth()} />}>
           <ErrorBoundary>
-            <Show when={enhancedStore()} fallback={<div>Initializing...</div>}>
+            <Show when={enhancedStore()} fallback={
+              <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+                <div class="text-gray-600 dark:text-gray-400">Initializing...</div>
+              </div>
+            }>
               <WebSocketContext.Provider value={enhancedStore()!}>
                 <DarkModeContext.Provider value={darkMode}>
                   <SecurityWarning />
                   <DemoBanner />
                   <UpdateBanner />
                   <GlobalUpdateProgressWatcher />
-                  <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans py-4 sm:py-6">
-                    <AppLayout
-                      connected={connected}
-                      reconnecting={reconnecting}
-                      dataUpdated={dataUpdated}
-                      lastUpdateText={lastUpdateText}
-                      versionInfo={versionInfo}
-                      hasAuth={hasAuth}
-                      needsAuth={needsAuth}
-                      proxyAuthInfo={proxyAuthInfo}
-                      handleLogout={handleLogout}
-                      state={state}
-                    >
-                      {props.children}
-                    </AppLayout>
+                  {/* Main layout container - flexbox to allow AI panel to push content */}
+                  <div class="flex h-screen overflow-hidden">
+                    {/* Main content area - shrinks when AI panel is open, scrolls independently */}
+                    <div class={`flex-1 min-w-0 overflow-y-auto bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans py-4 sm:py-6 transition-all duration-300`}>
+                      <AppLayout
+                        connected={connected}
+                        reconnecting={reconnecting}
+                        dataUpdated={dataUpdated}
+                        lastUpdateText={lastUpdateText}
+                        versionInfo={versionInfo}
+                        hasAuth={hasAuth}
+                        needsAuth={needsAuth}
+                        proxyAuthInfo={proxyAuthInfo}
+                        handleLogout={handleLogout}
+                        state={state}
+                      >
+                        {props.children}
+                      </AppLayout>
+                    </div>
+                    {/* AI Panel - slides in from right, pushes content */}
+                    <AIChat onClose={() => aiChatStore.close()} />
                   </div>
                   <ToastContainer />
                   <TokenRevealDialog />
+                  {/* Fixed AI Assistant Button - always visible on the side when AI is enabled */}
+                  <Show when={aiChatStore.enabled !== false && !aiChatStore.isOpen}>
+                    {/* This component only shows when chat is closed */}
+                    <button
+                      type="button"
+                      onClick={() => aiChatStore.toggle()}
+                      class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1.5 pl-2 pr-1.5 py-3 rounded-l-xl bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 group"
+                      title={aiChatStore.context.context?.name ? `AI Assistant - ${aiChatStore.context.context.name}` : 'AI Assistant (⌘K)'}
+                      aria-label="Expand AI Assistant"
+                    >
+                      {/* Double chevron left - expand */}
+                      <svg
+                        class="h-4 w-4 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        stroke-width="2"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M11 19l-7-7 7-7M18 19l-7-7 7-7"
+                        />
+                      </svg>
+                      {/* Context indicator - shows count when items are in context */}
+                      <Show when={aiChatStore.contextItems.length > 0}>
+                        <span class="min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold bg-green-500 text-white rounded-full">
+                          {aiChatStore.contextItems.length}
+                        </span>
+                      </Show>
+                    </button>
+                  </Show>
                   <TooltipRoot />
                 </DarkModeContext.Provider>
               </WebSocketContext.Provider>
@@ -776,13 +884,16 @@ function App() {
       <Route path="/proxmox" component={() => <Navigate href="/proxmox/overview" />} />
       <Route path="/proxmox/overview" component={DashboardView} />
       <Route path="/proxmox/storage" component={StorageComponent} />
+      <Route path="/proxmox/ceph" component={CephPage} />
       <Route path="/proxmox/replication" component={Replication} />
       <Route path="/proxmox/mail" component={MailGateway} />
       <Route path="/proxmox/backups" component={Backups} />
       <Route path="/storage" component={() => <Navigate href="/proxmox/storage" />} />
       <Route path="/backups" component={() => <Navigate href="/proxmox/backups" />} />
       <Route path="/docker" component={DockerRoute} />
+      <Route path="/kubernetes" component={KubernetesRoute} />
       <Route path="/hosts" component={HostsRoute} />
+
       <Route path="/servers" component={() => <Navigate href="/hosts" />} />
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path="/settings/*" component={SettingsRoute} />
@@ -797,13 +908,12 @@ function ConnectionStatusBadge(props: {
 }) {
   return (
     <div
-      class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out px-1.5 ${
-        props.connected()
-          ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3'
-          : props.reconnecting()
-            ? 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1'
-            : 'disconnected bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 min-w-6 h-6 group-hover:px-3'
-      } ${props.class ?? ''}`}
+      class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out px-1.5 ${props.connected()
+        ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3'
+        : props.reconnecting()
+          ? 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1'
+          : 'disconnected bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 min-w-6 h-6 group-hover:px-3'
+        } ${props.class ?? ''}`}
     >
       <Show when={props.reconnecting()}>
         <svg class="animate-spin h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24">
@@ -829,11 +939,10 @@ function ConnectionStatusBadge(props: {
         <span class="h-2.5 w-2.5 rounded-full bg-gray-600 dark:bg-gray-400 flex-shrink-0"></span>
       </Show>
       <span
-        class={`whitespace-nowrap overflow-hidden transition-all duration-500 ${
-          props.connected() || (!props.connected() && !props.reconnecting())
-            ? 'max-w-0 group-hover:max-w-[100px] group-hover:ml-2 group-hover:mr-1 opacity-0 group-hover:opacity-100'
-            : 'max-w-[100px] ml-1 opacity-100'
-        }`}
+        class={`whitespace-nowrap overflow-hidden transition-all duration-500 ${props.connected() || (!props.connected() && !props.reconnecting())
+          ? 'max-w-0 group-hover:max-w-[100px] group-hover:ml-2 group-hover:mr-1 opacity-0 group-hover:opacity-100'
+          : 'max-w-[100px] ml-1 opacity-100'
+          }`}
       >
         {props.connected()
           ? 'Connected'
@@ -904,6 +1013,7 @@ function AppLayout(props: {
     const path = location.pathname;
     if (path.startsWith('/proxmox')) return 'proxmox';
     if (path.startsWith('/docker')) return 'docker';
+    if (path.startsWith('/kubernetes')) return 'kubernetes';
     if (path.startsWith('/hosts')) return 'hosts';
     if (path.startsWith('/servers')) return 'hosts'; // Legacy redirect
     if (path.startsWith('/alerts')) return 'alerts';
@@ -911,6 +1021,7 @@ function AppLayout(props: {
     return 'proxmox';
   };
   const hasDockerHosts = createMemo(() => (props.state().dockerHosts?.length ?? 0) > 0);
+  const hasKubernetesClusters = createMemo(() => (props.state().kubernetesClusters?.length ?? 0) > 0);
   const hasHosts = createMemo(() => (props.state().hosts?.length ?? 0) > 0);
   const hasProxmoxHosts = createMemo(
     () =>
@@ -922,6 +1033,12 @@ function AppLayout(props: {
   createEffect(() => {
     if (hasDockerHosts()) {
       markPlatformSeen('docker');
+    }
+  });
+
+  createEffect(() => {
+    if (hasKubernetesClusters()) {
+      markPlatformSeen('kubernetes');
     }
   });
 
@@ -938,7 +1055,7 @@ function AppLayout(props: {
   });
 
   const platformTabs = createMemo(() => {
-    return [
+    const allPlatforms = [
       {
         id: 'proxmox' as const,
         label: 'Proxmox',
@@ -950,6 +1067,7 @@ function AppLayout(props: {
         icon: (
           <ProxmoxIcon class="w-4 h-4 shrink-0" />
         ),
+        alwaysShow: true, // Proxmox is the default, always show
       },
       {
         id: 'docker' as const,
@@ -962,6 +1080,20 @@ function AppLayout(props: {
         icon: (
           <BoxesIcon class="w-4 h-4 shrink-0" />
         ),
+        alwaysShow: true, // Docker is commonly used, keep visible
+      },
+      {
+        id: 'kubernetes' as const,
+        label: 'Kubernetes',
+        route: '/kubernetes',
+        settingsRoute: '/settings/agents',
+        tooltip: 'Monitor Kubernetes clusters and workloads',
+        enabled: hasKubernetesClusters(),
+        live: hasKubernetesClusters(),
+        icon: (
+          <NetworkIcon class="w-4 h-4 shrink-0" />
+        ),
+        alwaysShow: false, // Only show when clusters exist
       },
       {
         id: 'hosts' as const,
@@ -974,8 +1106,12 @@ function AppLayout(props: {
         icon: (
           <MonitorIcon class="w-4 h-4 shrink-0" />
         ),
+        alwaysShow: true, // Hosts is commonly used, keep visible
       },
     ];
+
+    // Filter out platforms that should be hidden when not configured
+    return allPlatforms.filter(p => p.alwaysShow || p.enabled);
   });
 
   const utilityTabs = createMemo(() => {
@@ -1074,6 +1210,8 @@ function AppLayout(props: {
         <div class="header-controls flex items-center gap-2 justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end">
           <Show when={props.hasAuth() && !props.needsAuth()}>
             <div class="flex items-center gap-2">
+              {/* AI Patrol Status Indicator */}
+              <AIStatusIndicator />
               <Show when={props.proxyAuthInfo()?.username}>
                 <span class="text-xs px-2 py-1 text-gray-600 dark:text-gray-400">
                   {props.proxyAuthInfo()?.username}
@@ -1168,12 +1306,12 @@ function AppLayout(props: {
                 const baseClasses =
                   'tab relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
 
-              const className = () => {
-                if (isActive()) {
-                  return `${baseClasses} bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
-                }
-                return `${baseClasses} text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
-              };
+                const className = () => {
+                  if (isActive()) {
+                    return `${baseClasses} bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
+                  }
+                  return `${baseClasses} text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
+                };
 
                 return (
                   <div

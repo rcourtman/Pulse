@@ -216,6 +216,191 @@ export class MonitoringAPI {
     }
   }
 
+  static async deleteKubernetesCluster(clusterId: string): Promise<DeleteKubernetesClusterResponse> {
+    const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}`;
+
+    const response = await apiFetch(url, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return {};
+      }
+
+      let message = `Failed with status ${response.status}`;
+      try {
+        const text = await response.text();
+        if (text?.trim()) {
+          message = text.trim();
+          try {
+            const parsed = JSON.parse(text);
+            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+              message = parsed.error.trim();
+            }
+          } catch (_jsonErr) {
+            // ignore parse errors
+          }
+        }
+      } catch (_err) {
+        // ignore read error
+      }
+
+      throw new Error(message);
+    }
+
+    if (response.status === 204) {
+      return {};
+    }
+
+    const text = await response.text();
+    if (!text?.trim()) {
+      return {};
+    }
+
+    try {
+      return JSON.parse(text) as DeleteKubernetesClusterResponse;
+    } catch (err) {
+      throw new Error((err as Error).message || 'Failed to parse delete kubernetes cluster response');
+    }
+  }
+
+  static async unhideKubernetesCluster(clusterId: string): Promise<void> {
+    const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}/unhide`;
+
+    const response = await apiFetch(url, {
+      method: 'PUT',
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return;
+      }
+
+      let message = `Failed with status ${response.status}`;
+      try {
+        const text = await response.text();
+        if (text?.trim()) {
+          message = text.trim();
+          try {
+            const parsed = JSON.parse(text);
+            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+              message = parsed.error.trim();
+            }
+          } catch (_jsonErr) {
+            // ignore parse errors
+          }
+        }
+      } catch (_err) {
+        // ignore read error
+      }
+
+      throw new Error(message);
+    }
+  }
+
+  static async markKubernetesClusterPendingUninstall(clusterId: string): Promise<void> {
+    const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}/pending-uninstall`;
+
+    const response = await apiFetch(url, {
+      method: 'PUT',
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return;
+      }
+
+      let message = `Failed with status ${response.status}`;
+      try {
+        const text = await response.text();
+        if (text?.trim()) {
+          message = text.trim();
+          try {
+            const parsed = JSON.parse(text);
+            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+              message = parsed.error.trim();
+            }
+          } catch (_jsonErr) {
+            // ignore parse errors
+          }
+        }
+      } catch (_err) {
+        // ignore read error
+      }
+
+      throw new Error(message);
+    }
+  }
+
+  static async setKubernetesClusterDisplayName(clusterId: string, displayName: string): Promise<void> {
+    const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}/display-name`;
+
+    const response = await apiFetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ displayName }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Kubernetes cluster not found');
+      }
+
+      let message = `Failed with status ${response.status}`;
+      try {
+        const text = await response.text();
+        if (text?.trim()) {
+          message = text.trim();
+          try {
+            const parsed = JSON.parse(text);
+            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+              message = parsed.error.trim();
+            }
+          } catch (_jsonErr) {
+            // ignore parse errors
+          }
+        }
+      } catch (_err) {
+        // ignore read error
+      }
+
+      throw new Error(message);
+    }
+  }
+
+  static async allowKubernetesClusterReenroll(clusterId: string): Promise<void> {
+    const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}/allow-reenroll`;
+
+    const response = await apiFetch(url, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      let message = `Failed with status ${response.status}`;
+      try {
+        const text = await response.text();
+        if (text?.trim()) {
+          message = text.trim();
+          try {
+            const parsed = JSON.parse(text);
+            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+              message = parsed.error.trim();
+            }
+          } catch (_err) {
+            // ignore parse error
+          }
+        }
+      } catch (_err) {
+        // ignore read error
+      }
+
+      throw new Error(message);
+    }
+  }
+
   static async deleteHostAgent(hostId: string): Promise<void> {
     if (!hostId) {
       throw new Error('Host ID is required to remove a host agent.');
@@ -312,4 +497,10 @@ export interface DeleteDockerHostResponse {
   hostId?: string;
   message?: string;
   command?: DockerHostCommand;
+}
+
+export interface DeleteKubernetesClusterResponse {
+  success?: boolean;
+  clusterId?: string;
+  message?: string;
 }

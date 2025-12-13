@@ -343,8 +343,8 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 			return nil, fmt.Errorf("failed to create client for %s: %w", selectedEndpoint, err)
 		}
 
-		// Quick connectivity test
-		testCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		// Connectivity test - 5 seconds to allow for TLS handshake (~3s typical)
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		testNodes, testErr := testClient.GetNodes(testCtx)
 		cancel()
 
@@ -489,10 +489,12 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 			cc.lastHealthCheck[ep] = now
 			cc.mu.Unlock()
 
-			// Try to create a client and test connection with shorter timeout
+			// Try to create a client and test connection
+			// Note: 5-second timeout needed because TLS handshake to Proxmox API
+			// typically takes ~3 seconds on local networks
 			cfg := cc.config
 			cfg.Host = ep
-			cfg.Timeout = 2 * time.Second // Use shorter timeout for recovery attempts
+			cfg.Timeout = 5 * time.Second
 
 			testClient, err := NewClient(cfg)
 			if err != nil {
@@ -504,8 +506,8 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 				return
 			}
 
-			// Try a simple API call with short timeout
-			testCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			// Try a simple API call
+			testCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			_, err = testClient.GetNodes(testCtx)
 			cancel()
 
@@ -630,6 +632,8 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		// Error 400 with "ds" parameter error means Proxmox 9.x doesn't support RRD data source filtering
 		// JSON unmarshal errors are data format issues, not connectivity problems
 		// Context deadline/timeout errors on storage endpoints mean storage issues, not node unreachability
+		// PBS (Proxmox Backup Server) errors are upstream storage issues, not node connectivity problems
+		// RRD data timeouts are secondary data fetch failures, not node unreachability
 		if isVMSpecificError(errStr) ||
 			strings.Contains(errStr, "595") ||
 			(strings.Contains(errStr, "500") && strings.Contains(errStr, "hostname lookup")) ||
@@ -641,7 +645,14 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 			(strings.Contains(errStr, "storage '") && strings.Contains(errStr, "is not available on node")) ||
 			strings.Contains(errStr, "unexpected response format") ||
 			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/storage")) ||
-			(strings.Contains(errStr, "Client.Timeout exceeded") && strings.Contains(errStr, "/storage")) {
+			(strings.Contains(errStr, "Client.Timeout exceeded") && strings.Contains(errStr, "/storage")) ||
+			// PBS storage errors - Proxmox can't reach PBS, but node is still reachable
+			(strings.Contains(errStr, "500") && strings.Contains(errStr, "pbs-") && strings.Contains(errStr, "error fetching datastores")) ||
+			(strings.Contains(errStr, "500") && strings.Contains(errStr, "Can't connect to") && strings.Contains(errStr, ":8007")) ||
+			// RRD data timeouts - secondary metric fetch failures, node is still working
+			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/rrddata")) ||
+			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/lxc/") && strings.Contains(errStr, "rrd")) ||
+			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/qemu/") && strings.Contains(errStr, "rrd")) {
 			// This is likely a node-specific failure, not an endpoint failure
 			// Return the error but don't mark the endpoint as unhealthy
 			log.Debug().
