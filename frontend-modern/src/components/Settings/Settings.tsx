@@ -13,7 +13,6 @@ import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError, showWarning } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
-import { getPulsePort, getPulseWebSocketUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
 import {
   apiFetch,
@@ -1103,7 +1102,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (typeof window === 'undefined') {
       return;
     }
-    const shouldPoll = currentTab() === 'proxmox' || currentTab() === 'diagnostics';
+    const shouldPoll = currentTab() === 'proxmox';
     if (!shouldPoll) {
       return;
     }
@@ -5386,568 +5385,568 @@ const Settings: Component<SettingsProps> = (props) => {
               <Show when={activeTab() === 'diagnostics'}>
                 <DiagnosticsPanel />
               </Show>
+            </div>
           </div>
-      </div>
-    </Card >
+        </Card >
       </div >
 
-  {/* Delete Node Modal */ }
-  < Show when = { showDeleteNodeModal() } >
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <Card padding="lg" class="w-full max-w-lg space-y-5">
-        <SectionHeader title={`Remove ${nodePendingDeleteLabel()}`} size="md" class="mb-1" />
-        <div class="space-y-3 text-sm text-gray-600 dark:text-gray-300">
-          <p>
-            Removing this {nodePendingDeleteTypeLabel().toLowerCase()} also scrubs the Pulse
-            footprint on the host — the proxy service, SSH key, API token, and bind mount are
-            all cleaned up automatically.
-          </p>
-          <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm leading-relaxed dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
-            <p class="font-medium text-blue-900 dark:text-blue-100">What happens next</p>
-            <ul class="mt-2 list-disc space-y-1 pl-4 text-blue-800 dark:text-blue-200 text-sm">
-              <li>Pulse removes the node entry and clears related alerts.</li>
-              <li>
-                {nodePendingDeleteHost() ? (
-                  <>
-                    The host <span class="font-semibold">{nodePendingDeleteHost()}</span> loses
-                    the proxy service, SSH key, and API token.
-                  </>
-                ) : (
-                  'The host loses the proxy service, SSH key, and API token.'
-                )}
-              </li>
-              <li>
-                If the host comes back later, rerunning the setup script reinstalls everything
-                with a fresh key.
-              </li>
-              <Show when={nodePendingDeleteType() === 'pbs'}>
-                <li>
-                  Backup user tokens on the PBS are removed, so jobs referencing them will no
-                  longer authenticate until the node is re-added.
-                </li>
-              </Show>
-              <Show when={nodePendingDeleteType() === 'pmg'}>
-                <li>
-                  Mail gateway tokens are removed as part of the cleanup; re-enroll to restore
-                  outbound telemetry.
-                </li>
-              </Show>
-            </ul>
-          </div>
-        </div>
-
-        <div class="flex items-center justify-end gap-3 pt-2">
-          <button
-            type="button"
-            onClick={cancelDeleteNode}
-            class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-            disabled={deleteNodeLoading()}
-          >
-            Keep node
-          </button>
-          <button
-            type="button"
-            onClick={deleteNode}
-            disabled={deleteNodeLoading()}
-            class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-red-500 dark:hover:bg-red-400"
-          >
-            {deleteNodeLoading() ? 'Removing…' : 'Remove node'}
-          </button>
-        </div>
-      </Card>
-    </div>
-      </Show >
-
-  {/* Node Modal - Use separate modals for PVE and PBS to ensure clean state */ }
-  < Show when = { isNodeModalVisible('pve') } >
-    <NodeModal
-      isOpen={true}
-      resetKey={modalResetKey()}
-      onClose={() => {
-        setShowNodeModal(false);
-        setEditingNode(null);
-        // Increment resetKey to force form reset on next open
-        setModalResetKey((prev) => prev + 1);
-      }}
-      nodeType="pve"
-      editingNode={editingNode()?.type === 'pve' ? (editingNode() ?? undefined) : undefined}
-      securityStatus={securityStatus() ?? undefined}
-      temperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled(
-        editingNode()?.type === 'pve' ? editingNode() : null,
-      )}
-      temperatureMonitoringLocked={temperatureMonitoringLocked()}
-      savingTemperatureSetting={savingTemperatureSetting()}
-      onToggleTemperatureMonitoring={
-        editingNode()?.id
-          ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
-          : handleTemperatureMonitoringChange
-      }
-      onSave={async (nodeData) => {
-        try {
-          if (editingNode() && editingNode()!.id) {
-            // Update existing node (only if it has a valid ID)
-            await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
-
-            // Update local state
-            setNodes(
-              nodes().map((n) =>
-                n.id === editingNode()!.id
-                  ? {
-                    ...n,
-                    ...nodeData,
-                    // Update hasPassword/hasToken based on whether credentials were provided
-                    hasPassword: nodeData.password ? true : n.hasPassword,
-                    hasToken: nodeData.tokenValue ? true : n.hasToken,
-                    status: 'pending',
-                  }
-                  : n,
-              ),
-            );
-            showSuccess('Node updated successfully');
-          } else {
-            // Add new node
-            await NodesAPI.addNode(nodeData as NodeConfig);
-
-            // Reload nodes to get the new ID
-            const nodesList = await NodesAPI.getNodes();
-            const nodesWithStatus = nodesList.map((node) => ({
-              ...node,
-              // Use the hasPassword/hasToken from the API if available, otherwise check local fields
-              hasPassword: node.hasPassword ?? !!node.password,
-              hasToken: node.hasToken ?? !!node.tokenValue,
-              status: node.status || ('pending' as const),
-            }));
-            setNodes(nodesWithStatus);
-            showSuccess('Node added successfully');
-          }
-
-          setShowNodeModal(false);
-          setEditingNode(null);
-        } catch (error) {
-          showError(error instanceof Error ? error.message : 'Operation failed');
-        }
-      }}
-    />
-      </Show >
-
-  {/* PBS Node Modal - Separate instance to prevent contamination */ }
-  < Show when = { isNodeModalVisible('pbs') } >
-    <NodeModal
-      isOpen={true}
-      resetKey={modalResetKey()}
-      onClose={() => {
-        setShowNodeModal(false);
-        setEditingNode(null);
-        // Increment resetKey to force form reset on next open
-        setModalResetKey((prev) => prev + 1);
-      }}
-      nodeType="pbs"
-      editingNode={editingNode()?.type === 'pbs' ? (editingNode() ?? undefined) : undefined}
-      securityStatus={securityStatus() ?? undefined}
-      temperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled(
-        editingNode()?.type === 'pbs' ? editingNode() : null,
-      )}
-      temperatureMonitoringLocked={temperatureMonitoringLocked()}
-      savingTemperatureSetting={savingTemperatureSetting()}
-      onToggleTemperatureMonitoring={
-        editingNode()?.id
-          ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
-          : handleTemperatureMonitoringChange
-      }
-      onSave={async (nodeData) => {
-        try {
-          if (editingNode() && editingNode()!.id) {
-            // Update existing node (only if it has a valid ID)
-            await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
-
-            // Update local state
-            setNodes(
-              nodes().map((n) =>
-                n.id === editingNode()!.id
-                  ? {
-                    ...n,
-                    ...nodeData,
-                    hasPassword: nodeData.password ? true : n.hasPassword,
-                    hasToken: nodeData.tokenValue ? true : n.hasToken,
-                    status: 'pending',
-                  }
-                  : n,
-              ),
-            );
-            showSuccess('Node updated successfully');
-          } else {
-            // Add new node
-            await NodesAPI.addNode(nodeData as NodeConfig);
-
-            // Reload the nodes list to get the latest state
-            const nodesList = await NodesAPI.getNodes();
-            const nodesWithStatus = nodesList.map((node) => ({
-              ...node,
-              // Use the hasPassword/hasToken from the API if available, otherwise check local fields
-              hasPassword: node.hasPassword ?? !!node.password,
-              hasToken: node.hasToken ?? !!node.tokenValue,
-              status: node.status || ('pending' as const),
-            }));
-            setNodes(nodesWithStatus);
-            showSuccess('Node added successfully');
-          }
-
-          setShowNodeModal(false);
-          setEditingNode(null);
-        } catch (error) {
-          showError(error instanceof Error ? error.message : 'Operation failed');
-        }
-      }}
-    />
-      </Show >
-
-  {/* PMG Node Modal */ }
-  < Show when = { isNodeModalVisible('pmg') } >
-    <NodeModal
-      isOpen={true}
-      resetKey={modalResetKey()}
-      onClose={() => {
-        setShowNodeModal(false);
-        setEditingNode(null);
-        setModalResetKey((prev) => prev + 1);
-      }}
-      nodeType="pmg"
-      editingNode={editingNode()?.type === 'pmg' ? (editingNode() ?? undefined) : undefined}
-      securityStatus={securityStatus() ?? undefined}
-      temperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled(
-        editingNode()?.type === 'pmg' ? editingNode() : null,
-      )}
-      temperatureMonitoringLocked={temperatureMonitoringLocked()}
-      savingTemperatureSetting={savingTemperatureSetting()}
-      onToggleTemperatureMonitoring={
-        editingNode()?.id
-          ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
-          : handleTemperatureMonitoringChange
-      }
-      onSave={async (nodeData) => {
-        try {
-          if (editingNode() && editingNode()!.id) {
-            await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
-            setNodes(
-              nodes().map((n) =>
-                n.id === editingNode()!.id
-                  ? {
-                    ...n,
-                    ...nodeData,
-                    hasPassword: nodeData.password ? true : n.hasPassword,
-                    hasToken: nodeData.tokenValue ? true : n.hasToken,
-                    status: 'pending',
-                  }
-                  : n,
-              ),
-            );
-            showSuccess('Node updated successfully');
-          } else {
-            await NodesAPI.addNode(nodeData as NodeConfig);
-            const nodesList = await NodesAPI.getNodes();
-            const nodesWithStatus = nodesList.map((node) => ({
-              ...node,
-              hasPassword: node.hasPassword ?? !!node.password,
-              hasToken: node.hasToken ?? !!node.tokenValue,
-              status: node.status || ('pending' as const),
-            }));
-            setNodes(nodesWithStatus);
-            showSuccess('Node added successfully');
-          }
-
-          setShowNodeModal(false);
-          setEditingNode(null);
-        } catch (error) {
-          showError(error instanceof Error ? error.message : 'Operation failed');
-        }
-      }}
-    />
-      </Show >
-  {/* Export Dialog */ }
-  < Show when = { showExportDialog() } >
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <Card padding="lg" class="max-w-md w-full">
-        <SectionHeader title="Export configuration" size="md" class="mb-4" />
-
-        <div class="space-y-4">
-          {/* Password Choice Section - Only show if auth is enabled */}
-          <Show when={securityStatus()?.hasAuthentication}>
-            <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-              <div class="space-y-3">
-                <label class="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={!useCustomPassphrase()}
-                    onChange={() => {
-                      setUseCustomPassphrase(false);
-                      setExportPassphrase('');
-                    }}
-                    class="mt-1 text-blue-600 focus:ring-blue-500"
-                  />
-                  <div class="flex-1">
-                    <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Use your login password
-                    </div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      Use the same password you use to log into Pulse (recommended)
-                    </div>
-                  </div>
-                </label>
-
-                <label class="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={useCustomPassphrase()}
-                    onChange={() => setUseCustomPassphrase(true)}
-                    class="mt-1 text-blue-600 focus:ring-blue-500"
-                  />
-                  <div class="flex-1">
-                    <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Use a custom passphrase
-                    </div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      Create a different passphrase for this backup
-                    </div>
-                  </div>
-                </label>
+      {/* Delete Node Modal */}
+      < Show when={showDeleteNodeModal()} >
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <Card padding="lg" class="w-full max-w-lg space-y-5">
+            <SectionHeader title={`Remove ${nodePendingDeleteLabel()}`} size="md" class="mb-1" />
+            <div class="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+              <p>
+                Removing this {nodePendingDeleteTypeLabel().toLowerCase()} also scrubs the Pulse
+                footprint on the host — the proxy service, SSH key, API token, and bind mount are
+                all cleaned up automatically.
+              </p>
+              <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm leading-relaxed dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
+                <p class="font-medium text-blue-900 dark:text-blue-100">What happens next</p>
+                <ul class="mt-2 list-disc space-y-1 pl-4 text-blue-800 dark:text-blue-200 text-sm">
+                  <li>Pulse removes the node entry and clears related alerts.</li>
+                  <li>
+                    {nodePendingDeleteHost() ? (
+                      <>
+                        The host <span class="font-semibold">{nodePendingDeleteHost()}</span> loses
+                        the proxy service, SSH key, and API token.
+                      </>
+                    ) : (
+                      'The host loses the proxy service, SSH key, and API token.'
+                    )}
+                  </li>
+                  <li>
+                    If the host comes back later, rerunning the setup script reinstalls everything
+                    with a fresh key.
+                  </li>
+                  <Show when={nodePendingDeleteType() === 'pbs'}>
+                    <li>
+                      Backup user tokens on the PBS are removed, so jobs referencing them will no
+                      longer authenticate until the node is re-added.
+                    </li>
+                  </Show>
+                  <Show when={nodePendingDeleteType() === 'pmg'}>
+                    <li>
+                      Mail gateway tokens are removed as part of the cleanup; re-enroll to restore
+                      outbound telemetry.
+                    </li>
+                  </Show>
+                </ul>
               </div>
             </div>
-          </Show>
 
-          {/* Show password input based on selection */}
-          <div class={formField}>
-            <label class={labelClass()}>
-              {securityStatus()?.hasAuthentication
-                ? useCustomPassphrase()
-                  ? 'Custom Passphrase'
-                  : 'Enter Your Login Password'
-                : 'Encryption Passphrase'}
-            </label>
-            <input
-              type="password"
-              value={exportPassphrase()}
-              onInput={(e) => setExportPassphrase(e.currentTarget.value)}
-              placeholder={
-                securityStatus()?.hasAuthentication
-                  ? useCustomPassphrase()
-                    ? 'Enter a strong passphrase'
-                    : 'Enter your Pulse login password'
-                  : 'Enter a strong passphrase for encryption'
-              }
-              class={controlClass()}
-            />
-            <Show when={!securityStatus()?.hasAuthentication || useCustomPassphrase()}>
-              <p class={`${formHelpText} mt-1`}>
-                You'll need this passphrase to restore the backup.
-              </p>
-            </Show>
-            <Show when={securityStatus()?.hasAuthentication && !useCustomPassphrase()}>
-              <p class={`${formHelpText} mt-1`}>
-                You'll use this same password when restoring the backup
-              </p>
-            </Show>
-          </div>
-
-          <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-            <div class="flex gap-2">
-              <svg
-                class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            <div class="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={cancelDeleteNode}
+                class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                disabled={deleteNodeLoading()}
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                Keep node
+              </button>
+              <button
+                type="button"
+                onClick={deleteNode}
+                disabled={deleteNodeLoading()}
+                class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-red-500 dark:hover:bg-red-400"
+              >
+                {deleteNodeLoading() ? 'Removing…' : 'Remove node'}
+              </button>
+            </div>
+          </Card>
+        </div>
+      </Show >
+
+      {/* Node Modal - Use separate modals for PVE and PBS to ensure clean state */}
+      < Show when={isNodeModalVisible('pve')} >
+        <NodeModal
+          isOpen={true}
+          resetKey={modalResetKey()}
+          onClose={() => {
+            setShowNodeModal(false);
+            setEditingNode(null);
+            // Increment resetKey to force form reset on next open
+            setModalResetKey((prev) => prev + 1);
+          }}
+          nodeType="pve"
+          editingNode={editingNode()?.type === 'pve' ? (editingNode() ?? undefined) : undefined}
+          securityStatus={securityStatus() ?? undefined}
+          temperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled(
+            editingNode()?.type === 'pve' ? editingNode() : null,
+          )}
+          temperatureMonitoringLocked={temperatureMonitoringLocked()}
+          savingTemperatureSetting={savingTemperatureSetting()}
+          onToggleTemperatureMonitoring={
+            editingNode()?.id
+              ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
+              : handleTemperatureMonitoringChange
+          }
+          onSave={async (nodeData) => {
+            try {
+              if (editingNode() && editingNode()!.id) {
+                // Update existing node (only if it has a valid ID)
+                await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
+
+                // Update local state
+                setNodes(
+                  nodes().map((n) =>
+                    n.id === editingNode()!.id
+                      ? {
+                        ...n,
+                        ...nodeData,
+                        // Update hasPassword/hasToken based on whether credentials were provided
+                        hasPassword: nodeData.password ? true : n.hasPassword,
+                        hasToken: nodeData.tokenValue ? true : n.hasToken,
+                        status: 'pending',
+                      }
+                      : n,
+                  ),
+                );
+                showSuccess('Node updated successfully');
+              } else {
+                // Add new node
+                await NodesAPI.addNode(nodeData as NodeConfig);
+
+                // Reload nodes to get the new ID
+                const nodesList = await NodesAPI.getNodes();
+                const nodesWithStatus = nodesList.map((node) => ({
+                  ...node,
+                  // Use the hasPassword/hasToken from the API if available, otherwise check local fields
+                  hasPassword: node.hasPassword ?? !!node.password,
+                  hasToken: node.hasToken ?? !!node.tokenValue,
+                  status: node.status || ('pending' as const),
+                }));
+                setNodes(nodesWithStatus);
+                showSuccess('Node added successfully');
+              }
+
+              setShowNodeModal(false);
+              setEditingNode(null);
+            } catch (error) {
+              showError(error instanceof Error ? error.message : 'Operation failed');
+            }
+          }}
+        />
+      </Show >
+
+      {/* PBS Node Modal - Separate instance to prevent contamination */}
+      < Show when={isNodeModalVisible('pbs')} >
+        <NodeModal
+          isOpen={true}
+          resetKey={modalResetKey()}
+          onClose={() => {
+            setShowNodeModal(false);
+            setEditingNode(null);
+            // Increment resetKey to force form reset on next open
+            setModalResetKey((prev) => prev + 1);
+          }}
+          nodeType="pbs"
+          editingNode={editingNode()?.type === 'pbs' ? (editingNode() ?? undefined) : undefined}
+          securityStatus={securityStatus() ?? undefined}
+          temperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled(
+            editingNode()?.type === 'pbs' ? editingNode() : null,
+          )}
+          temperatureMonitoringLocked={temperatureMonitoringLocked()}
+          savingTemperatureSetting={savingTemperatureSetting()}
+          onToggleTemperatureMonitoring={
+            editingNode()?.id
+              ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
+              : handleTemperatureMonitoringChange
+          }
+          onSave={async (nodeData) => {
+            try {
+              if (editingNode() && editingNode()!.id) {
+                // Update existing node (only if it has a valid ID)
+                await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
+
+                // Update local state
+                setNodes(
+                  nodes().map((n) =>
+                    n.id === editingNode()!.id
+                      ? {
+                        ...n,
+                        ...nodeData,
+                        hasPassword: nodeData.password ? true : n.hasPassword,
+                        hasToken: nodeData.tokenValue ? true : n.hasToken,
+                        status: 'pending',
+                      }
+                      : n,
+                  ),
+                );
+                showSuccess('Node updated successfully');
+              } else {
+                // Add new node
+                await NodesAPI.addNode(nodeData as NodeConfig);
+
+                // Reload the nodes list to get the latest state
+                const nodesList = await NodesAPI.getNodes();
+                const nodesWithStatus = nodesList.map((node) => ({
+                  ...node,
+                  // Use the hasPassword/hasToken from the API if available, otherwise check local fields
+                  hasPassword: node.hasPassword ?? !!node.password,
+                  hasToken: node.hasToken ?? !!node.tokenValue,
+                  status: node.status || ('pending' as const),
+                }));
+                setNodes(nodesWithStatus);
+                showSuccess('Node added successfully');
+              }
+
+              setShowNodeModal(false);
+              setEditingNode(null);
+            } catch (error) {
+              showError(error instanceof Error ? error.message : 'Operation failed');
+            }
+          }}
+        />
+      </Show >
+
+      {/* PMG Node Modal */}
+      < Show when={isNodeModalVisible('pmg')} >
+        <NodeModal
+          isOpen={true}
+          resetKey={modalResetKey()}
+          onClose={() => {
+            setShowNodeModal(false);
+            setEditingNode(null);
+            setModalResetKey((prev) => prev + 1);
+          }}
+          nodeType="pmg"
+          editingNode={editingNode()?.type === 'pmg' ? (editingNode() ?? undefined) : undefined}
+          securityStatus={securityStatus() ?? undefined}
+          temperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled(
+            editingNode()?.type === 'pmg' ? editingNode() : null,
+          )}
+          temperatureMonitoringLocked={temperatureMonitoringLocked()}
+          savingTemperatureSetting={savingTemperatureSetting()}
+          onToggleTemperatureMonitoring={
+            editingNode()?.id
+              ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
+              : handleTemperatureMonitoringChange
+          }
+          onSave={async (nodeData) => {
+            try {
+              if (editingNode() && editingNode()!.id) {
+                await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
+                setNodes(
+                  nodes().map((n) =>
+                    n.id === editingNode()!.id
+                      ? {
+                        ...n,
+                        ...nodeData,
+                        hasPassword: nodeData.password ? true : n.hasPassword,
+                        hasToken: nodeData.tokenValue ? true : n.hasToken,
+                        status: 'pending',
+                      }
+                      : n,
+                  ),
+                );
+                showSuccess('Node updated successfully');
+              } else {
+                await NodesAPI.addNode(nodeData as NodeConfig);
+                const nodesList = await NodesAPI.getNodes();
+                const nodesWithStatus = nodesList.map((node) => ({
+                  ...node,
+                  hasPassword: node.hasPassword ?? !!node.password,
+                  hasToken: node.hasToken ?? !!node.tokenValue,
+                  status: node.status || ('pending' as const),
+                }));
+                setNodes(nodesWithStatus);
+                showSuccess('Node added successfully');
+              }
+
+              setShowNodeModal(false);
+              setEditingNode(null);
+            } catch (error) {
+              showError(error instanceof Error ? error.message : 'Operation failed');
+            }
+          }}
+        />
+      </Show >
+      {/* Export Dialog */}
+      < Show when={showExportDialog()} >
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card padding="lg" class="max-w-md w-full">
+            <SectionHeader title="Export configuration" size="md" class="mb-4" />
+
+            <div class="space-y-4">
+              {/* Password Choice Section - Only show if auth is enabled */}
+              <Show when={securityStatus()?.hasAuthentication}>
+                <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <div class="space-y-3">
+                    <label class="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={!useCustomPassphrase()}
+                        onChange={() => {
+                          setUseCustomPassphrase(false);
+                          setExportPassphrase('');
+                        }}
+                        class="mt-1 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div class="flex-1">
+                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Use your login password
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          Use the same password you use to log into Pulse (recommended)
+                        </div>
+                      </div>
+                    </label>
+
+                    <label class="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={useCustomPassphrase()}
+                        onChange={() => setUseCustomPassphrase(true)}
+                        class="mt-1 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div class="flex-1">
+                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Use a custom passphrase
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          Create a different passphrase for this backup
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </Show>
+
+              {/* Show password input based on selection */}
+              <div class={formField}>
+                <label class={labelClass()}>
+                  {securityStatus()?.hasAuthentication
+                    ? useCustomPassphrase()
+                      ? 'Custom Passphrase'
+                      : 'Enter Your Login Password'
+                    : 'Encryption Passphrase'}
+                </label>
+                <input
+                  type="password"
+                  value={exportPassphrase()}
+                  onInput={(e) => setExportPassphrase(e.currentTarget.value)}
+                  placeholder={
+                    securityStatus()?.hasAuthentication
+                      ? useCustomPassphrase()
+                        ? 'Enter a strong passphrase'
+                        : 'Enter your Pulse login password'
+                      : 'Enter a strong passphrase for encryption'
+                  }
+                  class={controlClass()}
                 />
-              </svg>
-              <div class="text-xs text-amber-700 dark:text-amber-300">
-                <strong>Important:</strong> The backup contains node credentials but NOT
-                authentication settings. Each Pulse instance should configure its own login
-                credentials for security. Remember your{' '}
-                {useCustomPassphrase() || !securityStatus()?.hasAuthentication
-                  ? 'passphrase'
-                  : 'password'}{' '}
-                for restoring.
+                <Show when={!securityStatus()?.hasAuthentication || useCustomPassphrase()}>
+                  <p class={`${formHelpText} mt-1`}>
+                    You'll need this passphrase to restore the backup.
+                  </p>
+                </Show>
+                <Show when={securityStatus()?.hasAuthentication && !useCustomPassphrase()}>
+                  <p class={`${formHelpText} mt-1`}>
+                    You'll use this same password when restoring the backup
+                  </p>
+                </Show>
+              </div>
+
+              <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                <div class="flex gap-2">
+                  <svg
+                    class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                  <div class="text-xs text-amber-700 dark:text-amber-300">
+                    <strong>Important:</strong> The backup contains node credentials but NOT
+                    authentication settings. Each Pulse instance should configure its own login
+                    credentials for security. Remember your{' '}
+                    {useCustomPassphrase() || !securityStatus()?.hasAuthentication
+                      ? 'passphrase'
+                      : 'password'}{' '}
+                    for restoring.
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExportDialog(false);
+                    setExportPassphrase('');
+                    setUseCustomPassphrase(false);
+                  }}
+                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  disabled={
+                    !exportPassphrase() || (useCustomPassphrase() && exportPassphrase().length < 12)
+                  }
+                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Export
+                </button>
               </div>
             </div>
-          </div>
-
-          <div class="flex justify-end space-x-3">
-            <button
-              type="button"
-              onClick={() => {
-                setShowExportDialog(false);
-                setExportPassphrase('');
-                setUseCustomPassphrase(false);
-              }}
-              class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleExport}
-              disabled={
-                !exportPassphrase() || (useCustomPassphrase() && exportPassphrase().length < 12)
-              }
-              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Export
-            </button>
-          </div>
+          </Card>
         </div>
-      </Card>
-    </div>
       </Show >
 
-  {/* API Token Modal */ }
-  < Show when = { showApiTokenModal() } >
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <Card padding="lg" class="max-w-md w-full">
-        <SectionHeader title="API token required" size="md" class="mb-4" />
+      {/* API Token Modal */}
+      < Show when={showApiTokenModal()} >
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card padding="lg" class="max-w-md w-full">
+            <SectionHeader title="API token required" size="md" class="mb-4" />
 
-        <div class="space-y-4">
-          <p class="text-sm text-gray-600 dark:text-gray-400">
-            This Pulse instance requires an API token for export/import operations. Please enter
-            the API token configured on the server.
-          </p>
+            <div class="space-y-4">
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                This Pulse instance requires an API token for export/import operations. Please enter
+                the API token configured on the server.
+              </p>
 
-          <div class={formField}>
-            <label class={labelClass()}>API Token</label>
-            <input
-              type="password"
-              value={apiTokenInput()}
-              onInput={(e) => setApiTokenInput(e.currentTarget.value)}
-              placeholder="Enter API token"
-              class={controlClass()}
-            />
-          </div>
+              <div class={formField}>
+                <label class={labelClass()}>API Token</label>
+                <input
+                  type="password"
+                  value={apiTokenInput()}
+                  onInput={(e) => setApiTokenInput(e.currentTarget.value)}
+                  placeholder="Enter API token"
+                  class={controlClass()}
+                />
+              </div>
 
-          <div class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded p-2">
-            <p class="font-semibold mb-1">The API token is set as an environment variable:</p>
-            <code class="block">API_TOKENS=token-for-export,token-for-automation</code>
-          </div>
+              <div class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded p-2">
+                <p class="font-semibold mb-1">The API token is set as an environment variable:</p>
+                <code class="block">API_TOKENS=token-for-export,token-for-automation</code>
+              </div>
+            </div>
+
+            <div class="flex justify-end space-x-2 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowApiTokenModal(false);
+                  setApiTokenInput('');
+                }}
+                class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (apiTokenInput()) {
+                    const tokenValue = apiTokenInput()!;
+                    setApiClientToken(tokenValue);
+                    const source = apiTokenModalSource();
+                    setShowApiTokenModal(false);
+                    setApiTokenInput('');
+                    setApiTokenModalSource(null);
+                    // Retry the operation that triggered the modal
+                    if (source === 'export') {
+                      handleExport();
+                    } else if (source === 'import') {
+                      handleImport();
+                    }
+                  } else {
+                    showError('Please enter the API token');
+                  }
+                }}
+                disabled={!apiTokenInput()}
+                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Authenticate
+              </button>
+            </div>
+          </Card>
         </div>
-
-        <div class="flex justify-end space-x-2 mt-6">
-          <button
-            type="button"
-            onClick={() => {
-              setShowApiTokenModal(false);
-              setApiTokenInput('');
-            }}
-            class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (apiTokenInput()) {
-                const tokenValue = apiTokenInput()!;
-                setApiClientToken(tokenValue);
-                const source = apiTokenModalSource();
-                setShowApiTokenModal(false);
-                setApiTokenInput('');
-                setApiTokenModalSource(null);
-                // Retry the operation that triggered the modal
-                if (source === 'export') {
-                  handleExport();
-                } else if (source === 'import') {
-                  handleImport();
-                }
-              } else {
-                showError('Please enter the API token');
-              }
-            }}
-            disabled={!apiTokenInput()}
-            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Authenticate
-          </button>
-        </div>
-      </Card>
-    </div>
       </Show >
 
-  {/* Import Dialog */ }
-  < Show when = { showImportDialog() } >
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <Card padding="lg" class="max-w-md w-full">
-        <SectionHeader title="Import configuration" size="md" class="mb-4" />
+      {/* Import Dialog */}
+      < Show when={showImportDialog()} >
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card padding="lg" class="max-w-md w-full">
+            <SectionHeader title="Import configuration" size="md" class="mb-4" />
 
-        <div class="space-y-4">
-          <div class={formField}>
-            <label class={labelClass()}>Configuration File</label>
-            <input
-              type="file"
-              accept=".json"
-              onChange={(e) => {
-                const file = e.currentTarget.files?.[0];
-                if (file) setImportFile(file);
-              }}
-              class={controlClass('cursor-pointer')}
-            />
-          </div>
+            <div class="space-y-4">
+              <div class={formField}>
+                <label class={labelClass()}>Configuration File</label>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={(e) => {
+                    const file = e.currentTarget.files?.[0];
+                    if (file) setImportFile(file);
+                  }}
+                  class={controlClass('cursor-pointer')}
+                />
+              </div>
 
-          <div class={formField}>
-            <label class={labelClass()}>Backup Password</label>
-            <input
-              type="password"
-              value={importPassphrase()}
-              onInput={(e) => setImportPassphrase(e.currentTarget.value)}
-              placeholder="Enter the password used when creating this backup"
-              class={controlClass()}
-            />
-            <p class={`${formHelpText} mt-1`}>
-              This is usually your Pulse login password, unless you used a custom passphrase
-            </p>
-          </div>
+              <div class={formField}>
+                <label class={labelClass()}>Backup Password</label>
+                <input
+                  type="password"
+                  value={importPassphrase()}
+                  onInput={(e) => setImportPassphrase(e.currentTarget.value)}
+                  placeholder="Enter the password used when creating this backup"
+                  class={controlClass()}
+                />
+                <p class={`${formHelpText} mt-1`}>
+                  This is usually your Pulse login password, unless you used a custom passphrase
+                </p>
+              </div>
 
-          <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded p-3">
-            <p class="text-xs text-yellow-700 dark:text-yellow-300">
-              <strong>Warning:</strong> Importing will replace all current configuration. This
-              action cannot be undone.
-            </p>
-          </div>
+              <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded p-3">
+                <p class="text-xs text-yellow-700 dark:text-yellow-300">
+                  <strong>Warning:</strong> Importing will replace all current configuration. This
+                  action cannot be undone.
+                </p>
+              </div>
 
-          <div class="flex justify-end space-x-3">
-            <button
-              type="button"
-              onClick={() => {
-                setShowImportDialog(false);
-                setImportPassphrase('');
-                setImportFile(null);
-              }}
-              class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleImport}
-              disabled={!importPassphrase() || !importFile()}
-              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Import
-            </button>
-          </div>
+              <div class="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowImportDialog(false);
+                    setImportPassphrase('');
+                    setImportFile(null);
+                  }}
+                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleImport}
+                  disabled={!importPassphrase() || !importFile()}
+                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Import
+                </button>
+              </div>
+            </div>
+          </Card>
         </div>
-      </Card>
-    </div>
       </Show >
 
-  <ChangePasswordModal
-    isOpen={showPasswordModal()}
-    onClose={() => {
-      setShowPasswordModal(false);
-      // Refresh security status after password change
-      loadSecurityStatus();
-    }}
-  />
+      <ChangePasswordModal
+        isOpen={showPasswordModal()}
+        onClose={() => {
+          setShowPasswordModal(false);
+          // Refresh security status after password change
+          loadSecurityStatus();
+        }}
+      />
     </>
   );
 };
