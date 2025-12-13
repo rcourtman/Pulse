@@ -1,19 +1,17 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { WelcomeStep } from './steps/WelcomeStep';
 import { SecurityStep } from './steps/SecurityStep';
-import { ConnectStep } from './steps/ConnectStep';
-import { FeaturesStep } from './steps/FeaturesStep';
 import { CompleteStep } from './steps/CompleteStep';
 import { StepIndicator } from './StepIndicator';
 
-export type WizardStep = 'welcome' | 'security' | 'connect' | 'features' | 'complete';
+export type WizardStep = 'welcome' | 'security' | 'complete';
 
 export interface WizardState {
     // Security
     username: string;
     password: string;
     apiToken: string;
-    // Node
+    // Node (for display in complete step)
     nodeAdded: boolean;
     nodeName: string;
     // Features
@@ -41,7 +39,7 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
     const [bootstrapToken, setBootstrapToken] = createSignal(props.bootstrapToken || '');
     const [isUnlocked, setIsUnlocked] = createSignal(props.isUnlocked || false);
 
-    const steps: WizardStep[] = ['welcome', 'security', 'connect', 'features', 'complete'];
+    const steps: WizardStep[] = ['welcome', 'security', 'complete'];
 
     const currentStepIndex = () => steps.indexOf(currentStep());
 
@@ -63,10 +61,6 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
         setWizardState(prev => ({ ...prev, ...updates }));
     };
 
-    const skipToComplete = () => {
-        setCurrentStep('complete');
-    };
-
     return (
         <div
             class="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex flex-col"
@@ -80,12 +74,12 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
                 <div class="absolute -bottom-40 right-1/3 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl" />
             </div>
 
-            {/* Step indicator - only show after welcome */}
-            <Show when={currentStep() !== 'welcome' && currentStep() !== 'complete'}>
+            {/* Step indicator - only show during security step */}
+            <Show when={currentStep() === 'security'}>
                 <div class="relative z-10 pt-8 px-4" role="navigation" aria-label="Setup progress">
                     <StepIndicator
-                        steps={['Security', 'Connect', 'Features']}
-                        currentStep={currentStepIndex() - 1}
+                        steps={['Welcome', 'Security', 'Done']}
+                        currentStep={1}
                     />
                 </div>
             </Show>
@@ -108,25 +102,6 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
                             state={wizardState()}
                             updateState={updateState}
                             bootstrapToken={bootstrapToken()}
-                            onNext={nextStep}
-                            onBack={prevStep}
-                        />
-                    </Show>
-
-                    <Show when={currentStep() === 'connect'}>
-                        <ConnectStep
-                            state={wizardState()}
-                            updateState={updateState}
-                            onNext={nextStep}
-                            onBack={prevStep}
-                            onSkip={skipToComplete}
-                        />
-                    </Show>
-
-                    <Show when={currentStep() === 'features'}>
-                        <FeaturesStep
-                            state={wizardState()}
-                            updateState={updateState}
                             onNext={nextStep}
                             onBack={prevStep}
                         />

@@ -35,8 +35,8 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
 
     const handleSetup = async () => {
         if (useCustomPassword()) {
-            if (!password() || password().length < 12) {
-                showError('Password must be at least 12 characters');
+            if (!password()) {
+                showError('Please enter a password');
                 return;
             }
             if (password() !== confirmPassword()) {
@@ -115,21 +115,21 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                             type="button"
                             onClick={() => setUseCustomPassword(false)}
                             class={`py-3 px-4 rounded-xl text-sm font-medium transition-all ${!useCustomPassword()
-                                    ? 'bg-blue-500 text-white'
-                                    : 'bg-white/10 text-white/70 hover:bg-white/20'
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-white/10 text-white/70 hover:bg-white/20'
                                 }`}
                         >
-                            🔐 Generate Secure
+                            Generate Secure
                         </button>
                         <button
                             type="button"
                             onClick={() => setUseCustomPassword(true)}
                             class={`py-3 px-4 rounded-xl text-sm font-medium transition-all ${useCustomPassword()
-                                    ? 'bg-blue-500 text-white'
-                                    : 'bg-white/10 text-white/70 hover:bg-white/20'
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-white/10 text-white/70 hover:bg-white/20'
                                 }`}
                         >
-                            ✏️ Custom Password
+                            Custom Password
                         </button>
                     </div>
 
@@ -140,7 +140,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                                 value={password()}
                                 onInput={(e) => setPassword(e.currentTarget.value)}
                                 class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="Password (min 12 characters)"
+                                placeholder="Password"
                             />
                             <input
                                 type="password"
