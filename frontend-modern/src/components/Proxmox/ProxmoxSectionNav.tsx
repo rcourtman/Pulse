@@ -51,14 +51,18 @@ export const ProxmoxSectionNav: Component<ProxmoxSectionNavProps> = (props) => {
   const navigate = useNavigate();
   const { state } = useWebSocket();
 
-  // Only show Mail Gateway tab if PMG instances are configured
-  // Only show Ceph tab if Ceph clusters are detected (from agent or Proxmox API)
+  // Only show tabs if the corresponding feature has data:
+  // - Mail Gateway: requires PMG instances
+  // - Ceph: requires Ceph clusters (from agent or Proxmox API)
+  // - Replication: requires replication jobs
   const sections = createMemo(() => {
     const hasPMG = state.pmg && state.pmg.length > 0;
     const hasCeph = state.cephClusters && state.cephClusters.length > 0;
+    const hasReplication = state.replicationJobs && state.replicationJobs.length > 0;
     return allSections.filter((section) =>
       (section.id !== 'mail' || hasPMG) &&
-      (section.id !== 'ceph' || hasCeph)
+      (section.id !== 'ceph' || hasCeph) &&
+      (section.id !== 'replication' || hasReplication)
     );
   });
 
