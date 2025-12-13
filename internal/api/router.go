@@ -216,6 +216,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/storage-charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorageCharts)))
 	r.mux.HandleFunc("/api/charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleCharts)))
 	r.mux.HandleFunc("/api/metrics-store/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsStoreStats)))
+	r.mux.HandleFunc("/api/metrics-store/history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsHistory)))
 	r.mux.HandleFunc("/api/diagnostics", RequireAuth(r.config, r.handleDiagnostics))
 	r.mux.HandleFunc("/api/diagnostics/temperature-proxy/register-nodes", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsRegisterProxyNodes)))
 	r.mux.HandleFunc("/api/diagnostics/docker/prepare-token", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsDockerPrepareToken)))
@@ -3469,6 +3470,147 @@ func (r *Router) handleMetricsStoreStats(w http.ResponseWriter, req *http.Reques
 		"lastRetention": stats.LastRetention,
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to encode metrics store stats")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+// handleMetricsHistory returns historical metrics from the persistent SQLite store
+// Query params:
+//   - resourceType: "node", "guest", "storage", "docker", "dockerHost" (required)
+//   - resourceId: the resource identifier (required)
+//   - metric: "cpu", "memory", "disk", etc. (optional, omit for all metrics)
+//   - range: time range like "1h", "24h", "7d", "30d", "90d" (optional, default "24h")
+func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	store := r.monitor.GetMetricsStore()
+	if store == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Persistent metrics store not available",
+		})
+		return
+	}
+
+	query := req.URL.Query()
+	resourceType := query.Get("resourceType")
+	resourceID := query.Get("resourceId")
+	metricType := query.Get("metric")
+	timeRange := query.Get("range")
+
+	if resourceType == "" || resourceID == "" {
+		http.Error(w, "resourceType and resourceId are required", http.StatusBadRequest)
+		return
+	}
+
+	// Parse time range
+	var duration time.Duration
+	switch timeRange {
+	case "1h":
+		duration = time.Hour
+	case "6h":
+		duration = 6 * time.Hour
+	case "12h":
+		duration = 12 * time.Hour
+	case "24h", "1d", "":
+		duration = 24 * time.Hour
+	case "7d":
+		duration = 7 * 24 * time.Hour
+	case "30d":
+		duration = 30 * 24 * time.Hour
+	case "90d":
+		duration = 90 * 24 * time.Hour
+	default:
+		// Try parsing as duration
+		var err error
+		duration, err = time.ParseDuration(timeRange)
+		if err != nil {
+			duration = 24 * time.Hour // Default to 24 hours
+		}
+	}
+
+	end := time.Now()
+	start := end.Add(-duration)
+
+	var response interface{}
+
+	if metricType != "" {
+		// Query single metric type
+		points, err := store.Query(resourceType, resourceID, metricType, start, end)
+		if err != nil {
+			log.Error().Err(err).
+				Str("resourceType", resourceType).
+				Str("resourceId", resourceID).
+				Str("metric", metricType).
+				Msg("Failed to query metrics history")
+			http.Error(w, "Failed to query metrics", http.StatusInternalServerError)
+			return
+		}
+
+		// Convert to frontend format (timestamps in milliseconds)
+		apiPoints := make([]map[string]interface{}, len(points))
+		for i, p := range points {
+			apiPoints[i] = map[string]interface{}{
+				"timestamp": p.Timestamp.UnixMilli(),
+				"value":     p.Value,
+				"min":       p.Min,
+				"max":       p.Max,
+			}
+		}
+
+		response = map[string]interface{}{
+			"resourceType": resourceType,
+			"resourceId":   resourceID,
+			"metric":       metricType,
+			"range":        timeRange,
+			"start":        start.UnixMilli(),
+			"end":          end.UnixMilli(),
+			"points":       apiPoints,
+		}
+	} else {
+		// Query all metrics for this resource
+		metricsMap, err := store.QueryAll(resourceType, resourceID, start, end)
+		if err != nil {
+			log.Error().Err(err).
+				Str("resourceType", resourceType).
+				Str("resourceId", resourceID).
+				Msg("Failed to query all metrics history")
+			http.Error(w, "Failed to query metrics", http.StatusInternalServerError)
+			return
+		}
+
+		// Convert to frontend format
+		apiData := make(map[string][]map[string]interface{})
+		for metric, points := range metricsMap {
+			apiPoints := make([]map[string]interface{}, len(points))
+			for i, p := range points {
+				apiPoints[i] = map[string]interface{}{
+					"timestamp": p.Timestamp.UnixMilli(),
+					"value":     p.Value,
+					"min":       p.Min,
+					"max":       p.Max,
+				}
+			}
+			apiData[metric] = apiPoints
+		}
+
+		response = map[string]interface{}{
+			"resourceType": resourceType,
+			"resourceId":   resourceID,
+			"range":        timeRange,
+			"start":        start.UnixMilli(),
+			"end":          end.UnixMilli(),
+			"metrics":      apiData,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Error().Err(err).Msg("Failed to encode metrics history response")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }
