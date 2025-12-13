@@ -1,4 +1,4 @@
-import { Component, createSignal, Show, onMount } from 'solid-js';
+import { Component, createSignal, Show } from 'solid-js';
 import { WelcomeStep } from './steps/WelcomeStep';
 import { SecurityStep } from './steps/SecurityStep';
 import { ConnectStep } from './steps/ConnectStep';

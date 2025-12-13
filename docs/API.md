@@ -140,6 +140,37 @@ Initiate OIDC login flow.
 
 ---
 
+## 🤖 Pulse AI *(New in 5.0)*
+
+### Get AI Settings
+`GET /api/settings/ai`
+Returns current AI configuration (providers, models, patrol status).
+
+### Update AI Settings
+`PUT /api/settings/ai`
+Configure AI providers, API keys, and preferences.
+
+### Chat
+`POST /api/ai/chat`
+Send a message to the AI assistant.
+```json
+{ "message": "What VMs are using the most CPU?", "context": ["vm-100", "vm-101"] }
+```
+
+### Patrol Status
+`GET /api/ai/patrol/status`
+Get current patrol status and recent findings.
+
+### Patrol Findings
+`GET /api/ai/patrol/findings`
+List all patrol findings with severity and recommendations.
+
+### Cost Tracking
+`GET /api/ai/cost?period=30d`
+Get AI usage statistics and costs.
+
+---
+
 ## 🤖 Agent Endpoints
 
 ### Unified Agent (Recommended)
