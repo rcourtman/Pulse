@@ -15,7 +15,7 @@
 
 ## 🚀 Overview
 
-Pulse is a modern, unified dashboard for your **Proxmox** and **Docker** estate. It consolidates metrics, logs, and alerts from Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, and standalone Docker hosts into a single, beautiful interface.
+Pulse is a modern, unified dashboard for monitoring your **infrastructure** across Proxmox, Docker, and Kubernetes. It consolidates metrics, alerts, and AI-powered insights from all your systems into a single, beautiful interface.
 
 Designed for homelabs, sysadmins, and MSPs who need a "single pane of glass" without the complexity of enterprise monitoring stacks.
 
@@ -23,13 +23,30 @@ Designed for homelabs, sysadmins, and MSPs who need a "single pane of glass" wit
 
 ## ✨ Features
 
-- **Unified Monitoring**: View health and metrics for PVE, PBS, PMG, and Docker containers in one place.
-- **Smart Alerts**: Get notified via Discord, Slack, Telegram, Email, and more when things go wrong (e.g., "VM down", "Storage full").
-- **Auto-Discovery**: Automatically finds Proxmox nodes on your network.
-- **Secure by Design**: Credentials encrypted at rest, no external dependencies, and strict API scoping.
-- **Backup Explorer**: Visualize backup jobs and storage usage across your entire infrastructure.
-- **Privacy Focused**: No telemetry, no phone-home, all data stays on your server.
-- **Lightweight**: Built with Go and React, running as a single binary or container.
+### Core Monitoring
+- **Unified Monitoring**: View health and metrics for PVE, PBS, PMG, Docker, and Kubernetes in one place
+- **Smart Alerts**: Get notified via Discord, Slack, Telegram, Email, and more
+- **Auto-Discovery**: Automatically finds Proxmox nodes on your network
+- **Metrics History**: Persistent storage with configurable retention
+- **Backup Explorer**: Visualize backup jobs and storage usage
+
+### Pulse AI *(New in 5.0)*
+- **Chat Assistant**: Ask questions about your infrastructure in natural language
+- **Patrol Mode**: Automated health checks with proactive issue detection
+- **Auto-Fix**: Automatically resolve common issues with AI-guided remediation
+- **Predictive Intelligence**: Forecast problems before they happen
+
+### Multi-Platform
+- **Proxmox VE/PBS/PMG**: Full monitoring and management
+- **Kubernetes**: Complete K8s cluster monitoring via agents
+- **Docker/Podman**: Container and Swarm service monitoring
+- **OCI Containers**: Proxmox 9.1+ native container support
+
+### Security & Operations
+- **Secure by Design**: Credentials encrypted at rest, strict API scoping
+- **One-Click Updates**: Easy upgrades for supported deployments
+- **OIDC/SSO**: Enterprise authentication support
+- **Privacy Focused**: No telemetry, all data stays on your server
 
 ## ⚡ Quick Start
 
