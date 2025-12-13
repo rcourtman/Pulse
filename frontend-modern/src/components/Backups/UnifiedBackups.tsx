@@ -13,6 +13,7 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import type { BackupType, GuestType, UnifiedBackup } from '@/types/backups';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { logger } from '@/utils/logger';
 
 type BackupSortKey = keyof Pick<
@@ -165,6 +166,137 @@ const UnifiedBackups: Component = () => {
     return useRelativeTime() ? formatRelativeTime(timestamp) : formatAbsoluteTime(timestamp);
   };
 
+  const normalizePBSNamespace = (namespace: string | null | undefined) => {
+    const trimmed = (namespace ?? '').trim();
+    if (!trimmed || trimmed === '/') return 'root';
+    if (trimmed.startsWith('/')) return `root${trimmed}`;
+    return trimmed;
+  };
+
+  // PERFORMANCE: Parse search term once and share between filteredData and chartData
+  // This eliminates duplicate string parsing and filter stack creation
+  interface ParsedSearchFilters {
+    isEmpty: boolean;
+    isPbsNamespaceFilter: boolean;
+    pbsFilter?: { instanceName: string; datastoreName: string; namespace: string };
+    advancedFilters: string[];
+    textSearches: string[];
+    filterStack: ReturnType<typeof parseFilterStack> | null;
+  }
+
+  // PERFORMANCE: Debounce search term to prevent jank during rapid typing
+  const debouncedSearchTerm = useDebouncedValue(() => searchTerm(), 200);
+
+  const parsedSearchFilters = createMemo<ParsedSearchFilters>(() => {
+    const search = debouncedSearchTerm().toLowerCase();
+
+    if (!search) {
+      return { isEmpty: true, isPbsNamespaceFilter: false, advancedFilters: [], textSearches: [], filterStack: null };
+    }
+
+    // Check for special PBS namespace filter format
+    if (search.startsWith('pbs:')) {
+      const parts = search.split(':');
+      if (parts.length >= 4) {
+        const [, instanceName, datastoreName, ...namespaceParts] = parts;
+        const namespace = namespaceParts.join(':');
+        return {
+          isEmpty: false,
+          isPbsNamespaceFilter: true,
+          pbsFilter: { instanceName, datastoreName, namespace },
+          advancedFilters: [],
+          textSearches: [],
+          filterStack: null,
+        };
+      }
+    }
+
+    // Split by commas and separate filters from text searches
+    const searchParts = search.split(',').map((t) => t.trim()).filter((t) => t);
+    const advancedFilters: string[] = [];
+    const textSearches: string[] = [];
+
+    searchParts.forEach((part) => {
+      if (part.includes('>') || part.includes('<') || part.includes(':')) {
+        advancedFilters.push(part);
+      } else {
+        textSearches.push(part.toLowerCase());
+      }
+    });
+
+    // Pre-parse the filter stack if there are advanced filters
+    let filterStack: ReturnType<typeof parseFilterStack> | null = null;
+    if (advancedFilters.length > 0) {
+      const filterString = advancedFilters.join(' AND ');
+      filterStack = parseFilterStack(filterString);
+      if (filterStack.filters.length === 0) {
+        filterStack = null;
+      }
+    }
+
+    return {
+      isEmpty: false,
+      isPbsNamespaceFilter: false,
+      advancedFilters,
+      textSearches,
+      filterStack,
+    };
+  });
+
+  // PERFORMANCE: Helper function to apply parsed search filters to data
+  // Used by both filteredData and chartData to avoid code duplication
+  const applySearchFilters = (data: UnifiedBackup[]): UnifiedBackup[] => {
+    const parsed = parsedSearchFilters();
+
+    if (parsed.isEmpty) {
+      return data;
+    }
+
+    // Apply PBS namespace filter
+    if (parsed.isPbsNamespaceFilter && parsed.pbsFilter) {
+      const { instanceName, datastoreName, namespace } = parsed.pbsFilter;
+      return data.filter((item) => {
+        if (item.backupType !== 'remote') return false;
+        if (item.node !== instanceName) return false;
+        if (item.datastore !== datastoreName) return false;
+        const itemNamespace = normalizePBSNamespace(item.namespace);
+        const searchNamespace = normalizePBSNamespace(namespace);
+        return itemNamespace === searchNamespace;
+      });
+    }
+
+    let result = data;
+
+    // Apply advanced filters
+    if (parsed.filterStack) {
+      result = result.filter((item) => evaluateFilterStack(item, parsed.filterStack!));
+    }
+
+    // Apply text search
+    if (parsed.textSearches.length > 0) {
+      result = result.filter((item) =>
+        parsed.textSearches.some((term) => {
+          const searchFields = [
+            item.vmid?.toString(),
+            item.name,
+            item.node,
+            item.backupName,
+            item.description,
+            item.storage,
+            item.datastore,
+            item.namespace,
+          ]
+            .filter(Boolean)
+            .map((field) => field!.toString().toLowerCase());
+
+          return searchFields.some((field) => field.includes(term));
+        }),
+      );
+    }
+
+    return result;
+  };
+
   // Check if we have any backup data yet
   const isLoading = createMemo(() => !connected() || !initialDataReceived());
 
@@ -242,7 +374,7 @@ const UnifiedBackups: Component = () => {
         backup.files &&
         Array.isArray(backup.files) &&
         backup.files.some((file) => {
-          if (typeof file === 'string') return false;
+          if (typeof file === 'string') return file.includes('.enc');
           const fileObj = file as Record<string, unknown>;
           return (
             fileObj.crypt ||
@@ -429,7 +561,6 @@ const UnifiedBackups: Component = () => {
   // Apply filters
   const filteredData = createMemo(() => {
     let data = normalizedData();
-    const search = searchTerm().toLowerCase();
     const type = typeFilter();
     const backupType = backupTypeFilter();
     const status = statusFilter();
@@ -451,81 +582,8 @@ const UnifiedBackups: Component = () => {
       }
     }
 
-    // Search filter - with advanced filtering support like Dashboard
-    if (search) {
-      // Check for special PBS namespace filter format first
-      if (search.startsWith('pbs:')) {
-        const parts = search.split(':');
-        if (parts.length >= 4) {
-          // Format: pbs:instanceName:datastoreName:namespace
-          const [, instanceName, datastoreName, ...namespaceParts] = parts;
-          const namespace = namespaceParts.join(':'); // Handle namespaces with colons
-
-          data = data.filter((item) => {
-            // Only PBS backups
-            if (item.backupType !== 'remote') return false;
-            // Match instance
-            if (item.node !== instanceName) return false;
-            // Match datastore
-            if (item.datastore !== datastoreName) return false;
-            // Match namespace (root namespace is represented as '/' or empty)
-            const itemNamespace = item.namespace || '/';
-            const searchNamespace = namespace || '/';
-            return itemNamespace === searchNamespace;
-          });
-        }
-      } else {
-        // Split by commas first
-        const searchParts = search
-          .split(',')
-          .map((t) => t.trim())
-          .filter((t) => t);
-
-        // Separate filters from text searches
-        const filters: string[] = [];
-        const textSearches: string[] = [];
-
-        searchParts.forEach((part) => {
-          if (part.includes('>') || part.includes('<') || part.includes(':')) {
-            filters.push(part);
-          } else {
-            textSearches.push(part.toLowerCase());
-          }
-        });
-
-        // Apply filters if any
-        if (filters.length > 0) {
-          // Join filters with AND operator
-          const filterString = filters.join(' AND ');
-          const stack = parseFilterStack(filterString);
-          if (stack.filters.length > 0) {
-            data = data.filter((item) => evaluateFilterStack(item, stack));
-          }
-        }
-
-        // Apply text search if any
-        if (textSearches.length > 0) {
-          data = data.filter((item) =>
-            textSearches.some((term) => {
-              const searchFields = [
-                item.vmid?.toString(),
-                item.name,
-                item.node,
-                item.backupName,
-                item.description,
-                item.storage,
-                item.datastore,
-                item.namespace,
-              ]
-                .filter(Boolean)
-                .map((field) => field!.toString().toLowerCase());
-
-              return searchFields.some((field) => field.includes(term));
-            }),
-          );
-        }
-      }
-    }
+    // PERFORMANCE: Use shared search filter helper (eliminates ~70 lines of duplicate code)
+    data = applySearchFilters(data);
 
     // Type filter
     if (type !== 'all') {
@@ -966,85 +1024,11 @@ const UnifiedBackups: Component = () => {
     // Use filtered data but WITHOUT date range filter for the chart
     // The chart should show the time range, and filters should affect what's counted
     let dataForChart = normalizedData();
-    const search = searchTerm().toLowerCase();
     const type = typeFilter();
     const backupType = backupTypeFilter();
 
-    // Apply search filter - with advanced filtering support like the table
-    if (search) {
-      // Check for special PBS namespace filter first
-      if (search.startsWith('pbs:')) {
-        const parts = search.split(':');
-        if (parts.length >= 4) {
-          // Format: pbs:instanceName:datastoreName:namespace
-          const [, instanceName, datastoreName, ...namespaceParts] = parts;
-          const namespace = namespaceParts.join(':'); // Handle namespaces with colons
-
-          dataForChart = dataForChart.filter((item) => {
-            // Only PBS backups
-            if (item.backupType !== 'remote') return false;
-            // Match instance
-            if (item.node !== instanceName) return false;
-            // Match datastore
-            if (item.datastore !== datastoreName) return false;
-            // Match namespace (root namespace is represented as '/' or empty)
-            const itemNamespace = item.namespace || '/';
-            const searchNamespace = namespace || '/';
-            return itemNamespace === searchNamespace;
-          });
-        }
-      } else {
-        // Split by commas first
-        const searchParts = search
-          .split(',')
-          .map((t) => t.trim())
-          .filter((t) => t);
-
-        // Separate filters from text searches
-        const filters: string[] = [];
-        const textSearches: string[] = [];
-
-        searchParts.forEach((part) => {
-          if (part.includes('>') || part.includes('<') || part.includes(':')) {
-            filters.push(part);
-          } else {
-            textSearches.push(part.toLowerCase());
-          }
-        });
-
-        // Apply filters if any
-        if (filters.length > 0) {
-          // Join filters with AND operator
-          const filterString = filters.join(' AND ');
-          const stack = parseFilterStack(filterString);
-          if (stack.filters.length > 0) {
-            dataForChart = dataForChart.filter((item) => evaluateFilterStack(item, stack));
-          }
-        }
-
-        // Apply text search if any
-        if (textSearches.length > 0) {
-          dataForChart = dataForChart.filter((item) =>
-            textSearches.some((term) => {
-              const searchFields = [
-                item.vmid?.toString(),
-                item.name,
-                item.node,
-                item.backupName,
-                item.description,
-                item.storage,
-                item.datastore,
-                item.namespace,
-              ]
-                .filter(Boolean)
-                .map((field) => field!.toString().toLowerCase());
-
-              return searchFields.some((field) => field.includes(term));
-            }),
-          );
-        }
-      }
-    }
+    // PERFORMANCE: Use shared search filter helper (eliminates ~75 lines of duplicate code)
+    dataForChart = applySearchFilters(dataForChart);
 
     // Apply type filter
     if (type !== 'all') {
