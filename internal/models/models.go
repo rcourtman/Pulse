@@ -87,6 +87,9 @@ type Node struct {
 	ConnectionHealth             string       `json:"connectionHealth"`
 	IsClusterMember              bool         `json:"isClusterMember"` // True if part of a cluster
 	ClusterName                  string       `json:"clusterName"`     // Name of cluster (empty if standalone)
+
+	// Linking: When a host agent is running on this PVE node, link them together
+	LinkedHostAgentID string `json:"linkedHostAgentId,omitempty"` // ID of the host agent running on this node
 }
 
 // VM represents a virtual machine
@@ -184,6 +187,11 @@ type Host struct {
 	TokenLastUsedAt   *time.Time             `json:"tokenLastUsedAt,omitempty"`
 	Tags              []string               `json:"tags,omitempty"`
 	IsLegacy          bool                   `json:"isLegacy,omitempty"`
+
+	// Linking: When this host agent is running on a known PVE node/VM/container
+	LinkedNodeID     string `json:"linkedNodeId,omitempty"`     // ID of the PVE node this agent is running on
+	LinkedVMID       string `json:"linkedVmId,omitempty"`       // ID of the VM this agent is running inside
+	LinkedContainerID string `json:"linkedContainerId,omitempty"` // ID of the container this agent is running inside
 }
 
 // HostNetworkInterface describes a host network adapter summary.
@@ -1260,15 +1268,47 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	defer s.mu.Unlock()
 
 	// Create a map of existing nodes, excluding those from this instance
+	// Also preserve LinkedHostAgentID for nodes that are being updated
+	existingNodeLinks := make(map[string]string) // nodeID -> linkedHostAgentID
 	nodeMap := make(map[string]Node)
 	for _, node := range s.Nodes {
 		if node.Instance != instanceName {
 			nodeMap[node.ID] = node
+		} else if node.LinkedHostAgentID != "" {
+			// Preserve the link for nodes from this instance
+			existingNodeLinks[node.ID] = node.LinkedHostAgentID
+		}
+	}
+
+	// Build hostname-to-hostAgentID map for linking new nodes to existing host agents
+	hostAgentByHostname := make(map[string]string) // lowercase hostname -> hostAgentID
+	for _, host := range s.Hosts {
+		if host.ID != "" {
+			hostAgentByHostname[strings.ToLower(host.Hostname)] = host.ID
+			// Also index by short hostname
+			if idx := strings.Index(host.Hostname, "."); idx > 0 {
+				hostAgentByHostname[strings.ToLower(host.Hostname[:idx])] = host.ID
+			}
 		}
 	}
 
 	// Add or update nodes from this instance
 	for _, node := range nodes {
+		// Preserve existing link if we had one
+		if existingLink, ok := existingNodeLinks[node.ID]; ok {
+			node.LinkedHostAgentID = existingLink
+		}
+		// If no existing link, try to match by hostname
+		if node.LinkedHostAgentID == "" {
+			nodeName := strings.ToLower(node.Name)
+			if hostID, ok := hostAgentByHostname[nodeName]; ok {
+				node.LinkedHostAgentID = hostID
+			} else if idx := strings.Index(nodeName, "."); idx > 0 {
+				if hostID, ok := hostAgentByHostname[nodeName[:idx]]; ok {
+					node.LinkedHostAgentID = hostID
+				}
+			}
+		}
 		nodeMap[node.ID] = node
 	}
 
@@ -1928,6 +1968,22 @@ func (s *State) ClearAllHosts() int {
 	s.Hosts = nil
 	s.LastUpdate = time.Now()
 	return count
+}
+
+// LinkNodeToHostAgent updates a PVE node to link to its host agent.
+// This is called when a host agent registers and matches a known PVE node by hostname.
+func (s *State) LinkNodeToHostAgent(nodeID, hostAgentID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, node := range s.Nodes {
+		if node.ID == nodeID {
+			s.Nodes[i].LinkedHostAgentID = hostAgentID
+			s.LastUpdate = time.Now()
+			return true
+		}
+	}
+	return false
 }
 
 // UpsertCephCluster inserts or updates a Ceph cluster in the state.
