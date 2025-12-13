@@ -342,7 +342,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           description: m.description,
         })));
       }
-    } catch (e) {
+    } catch (_e) {
       // Silently fail - models will just not be selectable
     }
   });
