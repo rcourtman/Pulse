@@ -331,11 +331,54 @@ fi
 
 chmod +x "$TMP_BIN"
 
+# --- Upgrade Detection ---
+# Check if pulse-agent is already installed and handle upgrade gracefully
+EXISTING_VERSION=""
+UPGRADE_MODE=false
+
+if [[ -x "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
+    EXISTING_VERSION=$("${INSTALL_DIR}/${BINARY_NAME}" --version 2>/dev/null | head -1 || echo "unknown")
+    NEW_VERSION=$("$TMP_BIN" --version 2>/dev/null | head -1 || echo "unknown")
+    
+    if [[ -n "$EXISTING_VERSION" && "$EXISTING_VERSION" != "unknown" ]]; then
+        UPGRADE_MODE=true
+        log_info "Existing installation detected: $EXISTING_VERSION"
+        log_info "Upgrading to: $NEW_VERSION"
+        
+        # Stop the existing agent service gracefully
+        if command -v systemctl >/dev/null 2>&1; then
+            if systemctl is-active --quiet "${AGENT_NAME}" 2>/dev/null; then
+                log_info "Stopping existing ${AGENT_NAME} service..."
+                systemctl stop "${AGENT_NAME}" 2>/dev/null || true
+                sleep 2
+            fi
+        elif command -v rc-service >/dev/null 2>&1; then
+            if rc-service "${AGENT_NAME}" status >/dev/null 2>&1; then
+                log_info "Stopping existing ${AGENT_NAME} service..."
+                rc-service "${AGENT_NAME}" stop 2>/dev/null || true
+                sleep 2
+            fi
+        fi
+        
+        # Also kill any running process in case it was started manually
+        pkill -f "^${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+        sleep 1
+    fi
+elif command -v systemctl >/dev/null 2>&1 && systemctl is-enabled --quiet "${AGENT_NAME}" 2>/dev/null; then
+    # Service exists but binary is missing - reinstall scenario
+    log_info "Agent service exists but binary is missing. Reinstalling..."
+    systemctl stop "${AGENT_NAME}" 2>/dev/null || true
+fi
+
 # Install Binary
 log_info "Installing binary to ${INSTALL_DIR}/${BINARY_NAME}..."
 mkdir -p "$INSTALL_DIR"
 mv "$TMP_BIN" "${INSTALL_DIR}/${BINARY_NAME}"
 chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
+
+if [[ "$UPGRADE_MODE" == "true" ]]; then
+    log_info "Binary upgraded successfully. Updating service configuration..."
+fi
 
 # --- Legacy Cleanup ---
 # Remove old agents if they exist to prevent conflicts
@@ -385,6 +428,13 @@ if [[ "$OS" == "darwin" ]]; then
 fi
 
 # --- Service Installation ---
+
+# If Proxmox mode is enabled, clear the state file to ensure fresh registration
+# This allows re-installation to re-create the Proxmox API token
+if [[ "$ENABLE_PROXMOX" == "true" ]]; then
+    log_info "Clearing Proxmox state for fresh registration..."
+    rm -f /var/lib/pulse-agent/proxmox-registered 2>/dev/null || true
+fi
 
 # 1. macOS (Launchd)
 if [[ "$OS" == "darwin" ]]; then
@@ -451,7 +501,11 @@ EOF
     chmod 644 "$PLIST"
     launchctl unload "$PLIST" 2>/dev/null || true
     launchctl load -w "$PLIST"
-    log_info "Service started."
+    if [[ "$UPGRADE_MODE" == "true" ]]; then
+        log_info "Upgrade complete! Agent restarted with new configuration."
+    else
+        log_info "Installation complete! Agent service started."
+    fi
     exit 0
 fi
 
@@ -509,7 +563,11 @@ EOF
         initctl start "${AGENT_NAME}"
     fi
 
-    log_info "Service started."
+    if [[ "$UPGRADE_MODE" == "true" ]]; then
+        log_info "Upgrade complete! Agent restarted with new configuration."
+    else
+        log_info "Installation complete! Agent service started."
+    fi
     exit 0
 fi
 
@@ -846,7 +904,11 @@ INITEOF
     rc-service "${AGENT_NAME}" stop 2>/dev/null || true
     rc-update add "${AGENT_NAME}" default 2>/dev/null || true
     rc-service "${AGENT_NAME}" start
-    log_info "Service started."
+    if [[ "$UPGRADE_MODE" == "true" ]]; then
+        log_info "Upgrade complete! Agent restarted with new configuration."
+    else
+        log_info "Installation complete! Agent service started."
+    fi
     exit 0
 fi
 
@@ -878,7 +940,11 @@ EOF
     systemctl daemon-reload
     systemctl enable "${AGENT_NAME}"
     systemctl restart "${AGENT_NAME}"
-    log_info "Service started."
+    if [[ "$UPGRADE_MODE" == "true" ]]; then
+        log_info "Upgrade complete! Agent restarted with new configuration."
+    else
+        log_info "Installation complete! Agent service started."
+    fi
     exit 0
 fi
 
