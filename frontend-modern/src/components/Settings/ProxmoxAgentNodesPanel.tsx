@@ -54,7 +54,7 @@ interface ProxmoxAgentNodesPanelProps {
 
   // Temperature monitoring
   temperatureMonitoringEnabled: Accessor<boolean>;
-  temperatureTransports?: Accessor<TemperatureTransportInfo[]>;
+  temperatureTransports?: Accessor<TemperatureTransportInfo | null>;
 
   // Discovery settings
   discoveryEnabled: Accessor<boolean>;
@@ -70,9 +70,9 @@ interface ProxmoxAgentNodesPanelProps {
   handleDiscoveryEnabledChange: (enabled: boolean) => Promise<boolean>;
   triggerDiscoveryScan: (opts: { quiet: boolean }) => Promise<void>;
   loadDiscoveredNodes: () => Promise<void>;
-  testNodeConnection: (node: NodeConfig) => Promise<void>;
+  testNodeConnection: (nodeId: string) => void;
   requestDeleteNode: (node: NodeConfig) => void;
-  refreshClusterNodes?: (clusterId: string, sampleNodeId: string) => Promise<void>;
+  refreshClusterNodes?: (nodeId: string) => void;
 
   // Modal controls
   setEditingNode: Setter<NodeConfigWithStatus | null>;
@@ -163,7 +163,7 @@ export const ProxmoxAgentNodesPanel: Component<ProxmoxAgentNodesPanelProps> = (p
       }, 50);
     } else {
       // PVE and PBS pre-fill the node object
-      const baseNode: NodeConfigWithStatus = {
+      const baseNode = {
         id: '',
         type: props.agentType,
         name: server.hostname || `${props.agentType}-${server.ip}`,
@@ -172,8 +172,8 @@ export const ProxmoxAgentNodesPanel: Component<ProxmoxAgentNodesPanelProps> = (p
         tokenName: '',
         tokenValue: '',
         verifySSL: false,
-        status: 'pending',
-      };
+        status: 'pending' as const,
+      } as NodeConfigWithStatus;
 
       if (props.agentType === 'pve') {
         Object.assign(baseNode, {
@@ -207,14 +207,14 @@ export const ProxmoxAgentNodesPanel: Component<ProxmoxAgentNodesPanelProps> = (p
           stateNodes={props.stateNodes ?? []}
           stateHosts={props.stateHosts ?? []}
           globalTemperatureMonitoringEnabled={props.temperatureMonitoringEnabled()}
-          temperatureTransports={props.temperatureTransports?.() ?? []}
+          temperatureTransports={props.temperatureTransports?.() ?? null}
           onTestConnection={props.testNodeConnection}
           onEdit={(node) => {
             props.setEditingNode(node as NodeConfigWithStatus);
             props.setCurrentNodeType('pve');
             props.setShowNodeModal(true);
           }}
-          onDelete={props.requestDeleteNode}
+          onDelete={(node) => props.requestDeleteNode(node)}
           onRefreshCluster={props.refreshClusterNodes}
         />
       );
@@ -230,7 +230,7 @@ export const ProxmoxAgentNodesPanel: Component<ProxmoxAgentNodesPanelProps> = (p
             props.setCurrentNodeType('pbs');
             props.setShowNodeModal(true);
           }}
-          onDelete={props.requestDeleteNode}
+          onDelete={(node) => props.requestDeleteNode(node)}
         />
       );
     } else {
@@ -246,7 +246,7 @@ export const ProxmoxAgentNodesPanel: Component<ProxmoxAgentNodesPanelProps> = (p
             props.setModalResetKey((prev) => prev + 1);
             props.setShowNodeModal(true);
           }}
-          onDelete={props.requestDeleteNode}
+          onDelete={(node) => props.requestDeleteNode(node)}
         />
       );
     }
