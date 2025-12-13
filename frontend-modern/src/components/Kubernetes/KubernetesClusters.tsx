@@ -441,14 +441,6 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
 
   return (
     <div class="space-y-4">
-      {/* Header */}
-      <div class="flex flex-col gap-1">
-        <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">Kubernetes</h1>
-        <p class="text-sm text-gray-600 dark:text-gray-400">
-          Cluster health from the unified agent Kubernetes module.
-        </p>
-      </div>
-
       {/* Filter Bar */}
       <Card padding="sm">
         <div class="flex flex-col gap-3">

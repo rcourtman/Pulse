@@ -340,8 +340,7 @@ export function createWebSocketStore(url: string) {
 	        ) {
 	          // Update state properties individually, but batch the whole payload to
 	          // reduce reactive recomputations and UI thrash on large updates.
-	          if (message.data) {
-	            batch(() => {
+	          if (message.data) batch(() => {
 	            // Mark that we've received usable data (initial payload or raw update)
 	            if (!initialDataReceived()) {
 	              setInitialDataReceived(true);
@@ -648,8 +647,7 @@ export function createWebSocketStore(url: string) {
               // Updated recentlyResolved
             }
 	            setState('lastUpdate', message.data.lastUpdate || new Date().toISOString());
-	            });
-	          }
+	          });
 	          logger.debug('message', {
 	            type: message.type,
 	            hasData: !!message.data,

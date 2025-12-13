@@ -1,4 +1,4 @@
-import type { Component } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
 import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { useNavigate } from '@solidjs/router';
@@ -26,7 +26,7 @@ import { logger } from '@/utils/logger';
 export interface HostColumnDef {
   id: string;
   label: string;
-  icon?: string;
+  icon?: JSX.Element;
   priority: ColumnPriority;
   toggleable?: boolean;
   width?: string;
@@ -43,13 +43,13 @@ export const HOST_COLUMNS: HostColumnDef[] = [
   { id: 'disk', label: 'Disk', priority: 'essential', width: '140px', sortKey: 'disk' },
 
   // Secondary - visible on md+, toggleable
-  { id: 'temp', label: 'Temp', icon: '<svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>', priority: 'secondary', width: '50px', toggleable: true },
-  { id: 'uptime', label: 'Uptime', icon: '<svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>', priority: 'secondary', width: '65px', toggleable: true, sortKey: 'uptime' },
+  { id: 'temp', label: 'Temp', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>, priority: 'secondary', width: '50px', toggleable: true },
+  { id: 'uptime', label: 'Uptime', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>, priority: 'secondary', width: '65px', toggleable: true, sortKey: 'uptime' },
   { id: 'agent', label: 'Agent', priority: 'secondary', width: '60px', toggleable: true },
 
   // Supplementary - visible on lg+, toggleable
   // Note: CPU count and load average removed - they're shown in the EnhancedCPUBar tooltip
-  { id: 'ip', label: 'IP', icon: '<svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>', priority: 'supplementary', width: '50px', toggleable: true },
+  { id: 'ip', label: 'IP', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>, priority: 'supplementary', width: '50px', toggleable: true },
 
   // Detailed - visible on xl+, toggleable
   { id: 'arch', label: 'Arch', priority: 'detailed', width: '55px', toggleable: true },
@@ -468,11 +468,7 @@ function HostRAIDStatusCell(props: HostRAIDStatusCellProps) {
 }
 
 type SortKey = 'name' | 'platform' | 'cpu' | 'memory' | 'disk' | 'uptime';
-
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-interface HostsOverviewProps { }
-
-export const HostsOverview: Component<HostsOverviewProps> = () => {
+export const HostsOverview: Component = () => {
   const navigate = useNavigate();
   const wsContext = useWebSocket();
   const [search, setSearch] = createSignal('');
@@ -821,13 +817,13 @@ export const HostsOverview: Component<HostsOverviewProps> = () => {
                           {/* Secondary columns */}
                           <Show when={isColVisible('temp')}>
                             <th class={thClass} title="Temperature">
-                              <span class="inline-flex items-center justify-center" innerHTML={HOST_COLUMNS.find(c => c.id === 'temp')?.icon} />
+                              <span class="inline-flex items-center justify-center">{HOST_COLUMNS.find(c => c.id === 'temp')?.icon}</span>
                             </th>
                           </Show>
                           <Show when={isColVisible('uptime')}>
                             <th class={thClass} onClick={() => handleSort('uptime')} title="Uptime">
                               <span class="inline-flex items-center justify-center gap-1">
-                                <span innerHTML={HOST_COLUMNS.find(c => c.id === 'uptime')?.icon} />
+                                <span>{HOST_COLUMNS.find(c => c.id === 'uptime')?.icon}</span>
                                 {renderSortIndicator('uptime')}
                               </span>
                             </th>
@@ -839,7 +835,7 @@ export const HostsOverview: Component<HostsOverviewProps> = () => {
                           {/* Supplementary columns */}
                           <Show when={isColVisible('ip')}>
                             <th class={thClass} title="IP Address">
-                              <span class="inline-flex items-center justify-center" innerHTML={HOST_COLUMNS.find(c => c.id === 'ip')?.icon} />
+                              <span class="inline-flex items-center justify-center">{HOST_COLUMNS.find(c => c.id === 'ip')?.icon}</span>
                             </th>
                           </Show>
 

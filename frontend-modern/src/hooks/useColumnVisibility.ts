@@ -1,11 +1,12 @@
 import { createMemo, Accessor } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { usePersistentSignal } from './usePersistentSignal';
 import { useBreakpoint, type ColumnPriority, PRIORITY_BREAKPOINTS, type Breakpoint } from './useBreakpoint';
 
 export interface ColumnDef {
   id: string;
   label: string;
-  icon?: string;     // SVG icon markup for compact column headers
+  icon?: JSX.Element; // Optional icon for compact column headers
   priority: ColumnPriority;
   toggleable?: boolean;
   width?: string;      // Fixed width for consistent column sizing
