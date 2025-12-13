@@ -31,6 +31,7 @@ import { AISettings } from './AISettings';
 import { AICostDashboard } from '@/components/AI/AICostDashboard';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
+import { DiagnosticsPanel } from './DiagnosticsPanel';
 import {
   PveNodesTable,
   PbsNodesTable,
@@ -5383,2647 +5384,570 @@ const Settings: Component<SettingsProps> = (props) => {
 
               {/* Diagnostics Tab */}
               <Show when={activeTab() === 'diagnostics'}>
-                <div class="space-y-6">
-                  <div>
-                    <SectionHeader title="System diagnostics" size="md" class="mb-4" />
-
-                    <div class="space-y-4">
-                      {/* Live Connection Diagnostics */}
-                      <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                          Connection Diagnostics
-                        </h4>
-                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                          Test all configured node connections and view detailed status
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void runDiagnostics();
-                          }}
-                          disabled={runningDiagnostics()}
-                          class="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {runningDiagnostics() ? 'Running...' : 'Run Diagnostics'}
-                        </button>
-
-                        <Show when={diagnosticsData()}>
-                          <div class="mt-4 space-y-3">
-                            {/* System Info */}
-                            <Card padding="sm">
-                              <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
-                                System
-                              </h5>
-                              <div class="text-xs space-y-1 text-gray-600 dark:text-gray-400">
-                                <div>Version: {diagnosticsData()?.version || 'Unknown'}</div>
-                                <div>Runtime: {diagnosticsData()?.runtime || 'Unknown'}</div>
-                                <div>Uptime: {formatUptime(diagnosticsData()?.uptime || 0)}</div>
-                                <div>
-                                  OS / Arch:{' '}
-                                  {diagnosticsData()?.system?.os
-                                    ? `${diagnosticsData()?.system?.os} / ${diagnosticsData()?.system?.arch || 'Unknown'}`
-                                    : 'Unknown'}
-                                </div>
-                                <div>
-                                  Go runtime: {diagnosticsData()?.system?.goVersion || 'Unknown'}
-                                </div>
-                                <div>
-                                  CPU cores: {diagnosticsData()?.system?.numCPU ?? 'Unknown'}
-                                </div>
-                                <div>
-                                  Goroutines: {diagnosticsData()?.system?.numGoroutine ?? 'Unknown'}
-                                </div>
-                                <div>Memory: {diagnosticsData()?.system?.memoryMB ?? 0} MB</div>
-                              </div>
-                            </Card>
-
-                            <Show when={diagnosticsData()?.discovery}>
-                              {(discovery) => {
-                                const lastScanAbsolute = () =>
-                                  formatIsoDateTime(discovery().lastScanStartedAt) || 'Never';
-                                const lastScanRelative = () =>
-                                  formatIsoRelativeTime(discovery().lastScanStartedAt);
-                                const lastResultAbsolute = () =>
-                                  formatIsoDateTime(discovery().lastResultTimestamp) || 'Never';
-                                const lastResultRelative = () =>
-                                  formatIsoRelativeTime(discovery().lastResultTimestamp);
-                                const blocklist = () => discovery().subnetBlocklist || [];
-                                const allowlist = () => discovery().subnetAllowlist || [];
-                                return (
-                                  <Card padding="sm">
-                                    <div class="flex items-start justify-between gap-3">
-                                      <div>
-                                        <h5 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                          Network discovery
-                                        </h5>
-                                        <p class="text-xs text-gray-600 dark:text-gray-400">
-                                          Active scan configuration and recent discovery results.
-                                        </p>
-                                      </div>
-                                      <span
-                                        class="rounded-full px-2 py-1 text-[0.65rem] font-medium uppercase tracking-wide"
-                                        classList={{
-                                          'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300':
-                                            discovery().enabled,
-                                          'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300':
-                                            !discovery().enabled,
-                                        }}
-                                      >
-                                        {discovery().enabled ? 'Enabled' : 'Disabled'}
-                                      </span>
-                                    </div>
-
-                                    <div class="mt-3 grid gap-1 text-xs text-gray-600 dark:text-gray-400">
-                                      <div>
-                                        Configured subnet:{' '}
-                                        <code class="rounded bg-gray-100 px-1.5 py-0.5 text-[0.7rem] font-mono dark:bg-gray-700 dark:text-gray-200">
-                                          {discovery().configuredSubnet || 'auto'}
-                                        </code>
-                                      </div>
-                                      <Show
-                                        when={
-                                          discovery().activeSubnet &&
-                                          discovery().activeSubnet !== discovery().configuredSubnet
-                                        }
-                                      >
-                                        <div>
-                                          Active subnet:{' '}
-                                          <code class="rounded bg-blue-50 px-1.5 py-0.5 text-[0.7rem] font-mono text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
-                                            {discovery().activeSubnet}
-                                          </code>
-                                        </div>
-                                      </Show>
-                                      <Show when={discovery().environmentOverride}>
-                                        <div>
-                                          Environment override:{' '}
-                                          <span class="font-medium text-gray-700 dark:text-gray-300">
-                                            {discovery().environmentOverride}
-                                          </span>
-                                        </div>
-                                      </Show>
-                                      <div>
-                                        Scan interval:{' '}
-                                        <span class="font-medium text-gray-700 dark:text-gray-300">
-                                          {discovery().scanInterval || 'default'}
-                                        </span>
-                                        <Show when={discovery().scanning}>
-                                          <span class="ml-2 inline-flex items-center gap-1 text-[0.65rem] text-blue-600 dark:text-blue-300">
-                                            <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
-                                            scanning
-                                          </span>
-                                        </Show>
-                                      </div>
-                                    </div>
-
-                                    <div class="mt-4 space-y-3">
-                                      <div>
-                                        <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                          Blocked subnets
-                                        </div>
-                                        <Show
-                                          when={blocklist().length > 0}
-                                          fallback={
-                                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                              None
-                                            </div>
-                                          }
-                                        >
-                                          <div class="mt-1 flex flex-wrap gap-2">
-                                            <For each={blocklist()}>
-                                              {(cidr) => (
-                                                <span class="rounded bg-gray-100 px-2 py-1 text-[0.7rem] font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-200">
-                                                  {cidr}
-                                                </span>
-                                              )}
-                                            </For>
-                                          </div>
-                                        </Show>
-                                      </div>
-
-                                      <Show when={allowlist().length > 0}>
-                                        <div>
-                                          <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                            Allowlist overrides
-                                          </div>
-                                          <div class="mt-1 flex flex-wrap gap-2">
-                                            <For each={allowlist()}>
-                                              {(cidr) => (
-                                                <span class="rounded bg-blue-50 px-2 py-1 text-[0.7rem] font-mono text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
-                                                  {cidr}
-                                                </span>
-                                              )}
-                                            </For>
-                                          </div>
-                                        </div>
-                                      </Show>
-                                    </div>
-
-                                    <div class="mt-4 grid gap-1 text-[0.7rem] text-gray-500 dark:text-gray-400">
-                                      <div>
-                                        Last scan:{' '}
-                                        <span class="text-gray-700 dark:text-gray-300">
-                                          {lastScanAbsolute()}
-                                        </span>
-                                        <Show when={lastScanRelative()}>
-                                          {(relative) => (
-                                            <span class="ml-2 text-[0.65rem] text-gray-400 dark:text-gray-500">
-                                              ({relative()})
-                                            </span>
-                                          )}
-                                        </Show>
-                                      </div>
-                                      <div>
-                                        Last result:{' '}
-                                        <span class="text-gray-700 dark:text-gray-300">
-                                          {lastResultAbsolute()}
-                                        </span>
-                                        <Show when={lastResultRelative()}>
-                                          {(relative) => (
-                                            <span class="ml-2 text-[0.65rem] text-gray-400 dark:text-gray-500">
-                                              ({relative()})
-                                            </span>
-                                          )}
-                                        </Show>
-                                      </div>
-                                      <div>
-                                        Servers found:{' '}
-                                        <span class="text-gray-700 dark:text-gray-300">
-                                          {discovery().lastResultServers ?? 0}
-                                        </span>
-                                        <span class="ml-3">
-                                          Errors:{' '}
-                                          <span class="text-gray-700 dark:text-gray-300">
-                                            {discovery().lastResultErrors ?? 0}
-                                          </span>
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </Card>
-                                );
-                              }}
-                            </Show>
-
-                            {/* Temperature proxy guidance */}
-                            <Show when={diagnosticsData()?.temperatureProxy}>
-                              {(temp) => (
-                                <Card padding="sm">
-                                  <div class="flex items-center justify-between gap-3 mb-2">
-                                    <h5 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                      Temperature proxy
-                                    </h5>
-                                    <a
-                                      href="https://github.com/rcourtman/Pulse/blob/main/docs/TEMPERATURE_MONITORING.md#transport-decision-matrix"
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      class="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200 underline-offset-2 hover:underline"
-                                    >
-                                      Setup guide
-                                    </a>
-                                  </div>
-                                  <div class="text-xs space-y-1 text-gray-600 dark:text-gray-400">
-                                    <div class="flex items-center justify-between">
-                                      <span>Proxy socket</span>
-                                      <span
-                                        class={`px-2 py-0.5 rounded text-white text-xs ${temp().socketFound ? 'bg-green-500' : 'bg-red-500'
-                                          }`}
-                                      >
-                                        {temp().socketFound ? 'Detected' : 'Missing'}
-                                      </span>
-                                    </div>
-                                    <div class="flex items-center justify-between">
-                                      <span>Daemon</span>
-                                      <span
-                                        class={`px-2 py-0.5 rounded text-white text-xs ${temp().proxyReachable ? 'bg-green-500' : 'bg-yellow-500'
-                                          }`}
-                                      >
-                                        {temp().proxyReachable ? 'Responding' : 'No response'}
-                                      </span>
-                                    </div>
-                                    <Show when={temp().socketPath}>
-                                      <div>Socket path: {temp().socketPath}</div>
-                                    </Show>
-                                    <Show when={temp().socketPermissions}>
-                                      <div>Permissions: {temp().socketPermissions}</div>
-                                    </Show>
-                                    <Show when={temp().socketOwner || temp().socketGroup}>
-                                      <div>
-                                        Owner:{' '}
-                                        {[temp().socketOwner, temp().socketGroup]
-                                          .filter(Boolean)
-                                          .join(' / ') || 'Unknown'}
-                                      </div>
-                                    </Show>
-                                    <Show when={temp().proxyVersion}>
-                                      <div>Proxy version: {temp().proxyVersion}</div>
-                                    </Show>
-                                    <Show when={temp().proxySshDirectory}>
-                                      <div>SSH directory: {temp().proxySshDirectory}</div>
-                                    </Show>
-                                    <Show when={temp().proxyPublicKeySha256}>
-                                      <div>Key fingerprint: {temp().proxyPublicKeySha256}</div>
-                                    </Show>
-                                    <Show when={typeof temp().legacySshKeyCount === 'number'}>
-                                      <div>Legacy SSH keys: {temp().legacySshKeyCount ?? 0}</div>
-                                    </Show>
-                                    <Show when={temp().legacySSHDetected}>
-                                      <div class="text-red-500">
-                                        Legacy SSH temperature collection detected
-                                      </div>
-                                    </Show>
-                                  </div>
-                                  <Show
-                                    when={
-                                      temp().controlPlaneStates &&
-                                      (temp().controlPlaneStates as TemperatureProxyControlPlaneState[]).length > 0
-                                    }
-                                  >
-                                    <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
-                                      <div class="flex items-center justify-between">
-                                        <div class="font-semibold text-gray-700 dark:text-gray-200">
-                                          Control plane sync
-                                        </div>
-                                        <span
-                                          class={`px-2 py-0.5 rounded text-white text-xs ${temp().controlPlaneEnabled ? 'bg-green-500' : 'bg-gray-500'
-                                            }`}
-                                        >
-                                          {temp().controlPlaneEnabled ? 'Enabled' : 'Disabled'}
-                                        </span>
-                                      </div>
-                                      <For each={temp().controlPlaneStates || []}>
-                                        {(state) => (
-                                          <div class="rounded border border-gray-200 dark:border-gray-700 px-2 py-1.5 space-y-1">
-                                            <div class="flex items-center justify-between">
-                                              <div class="font-medium text-gray-700 dark:text-gray-200">
-                                                {state.instance || 'Proxy'}
-                                              </div>
-                                              <span
-                                                class={`px-2 py-0.5 rounded text-white text-xs ${controlPlaneStatusClass(
-                                                  state.status,
-                                                )}`}
-                                              >
-                                                {controlPlaneStatusLabel(state.status)}
-                                              </span>
-                                            </div>
-                                            <Show when={state.lastSync}>
-                                              <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                                Last sync: {formatIsoRelativeTime(state.lastSync)}
-                                              </div>
-                                            </Show>
-                                            <Show when={typeof state.secondsBehind === 'number' && (state.secondsBehind || 0) > 0}>
-                                              <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                                Behind by ~{formatUptime(state.secondsBehind || 0)}
-                                              </div>
-                                            </Show>
-                                            <Show when={state.refreshIntervalSeconds}>
-                                              <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                                Target interval: {formatUptime(state.refreshIntervalSeconds || 0)}
-                                              </div>
-                                            </Show>
-                                          </div>
-                                        )}
-                                      </For>
-                                    </div>
-                                  </Show>
-                                  <Show
-                                    when={
-                                      temp().httpProxies && (temp().httpProxies as TemperatureProxyHTTPStatus[]).length > 0
-                                    }
-                                  >
-                                    <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
-                                      <div class="font-semibold text-gray-700 dark:text-gray-200">
-                                        HTTPS proxies
-                                      </div>
-                                      <For each={temp().httpProxies || []}>
-                                        {(proxy) => (
-                                          <div class="rounded border border-gray-200 dark:border-gray-700 px-2 py-1.5 space-y-1">
-                                            <div class="flex items-center justify-between">
-                                              <div>
-                                                <div class="font-medium text-gray-700 dark:text-gray-200">
-                                                  {proxy.node || 'Proxy'}
-                                                </div>
-                                                <Show when={proxy.url}>
-                                                  <div class="text-[0.65rem] text-gray-500 dark:text-gray-400 break-all">
-                                                    {proxy.url}
-                                                  </div>
-                                                </Show>
-                                              </div>
-                                              <span
-                                                class={`px-2 py-0.5 rounded text-white text-xs ${proxy.reachable ? 'bg-green-500' : 'bg-red-500'
-                                                  }`}
-                                              >
-                                                {proxy.reachable ? 'Healthy' : 'Error'}
-                                              </span>
-                                            </div>
-                                            <Show when={!proxy.reachable && proxy.error}>
-                                              <div class="text-[0.65rem] text-red-500">
-                                                {proxy.error}
-                                              </div>
-                                            </Show>
-                                          </div>
-                                        )}
-                                      </For>
-                                    </div>
-                                    <div class="mt-2 text-[0.65rem] text-blue-700 dark:text-blue-300">
-                                      Learn more:{" "}
-                                      <a
-                                        href="https://github.com/rcourtman/Pulse/blob/main/docs/TEMPERATURE_MONITORING.md"
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        class="underline hover:text-blue-500"
-                                      >
-                                        Temperature Monitoring docs
-                                      </a>
-                                    </div>
-                                  </Show>
-                                  <Show
-                                    when={
-                                      temp().socketHostCooldowns &&
-                                      (temp().socketHostCooldowns as TemperatureProxySocketHost[]).length > 0
-                                    }
-                                  >
-                                    <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
-                                      <div class="font-semibold text-gray-700 dark:text-gray-200">
-                                        Socket cooldowns
-                                      </div>
-                                      <For each={temp().socketHostCooldowns || []}>
-                                        {(entry) => (
-                                          <div class="rounded border border-amber-200 dark:border-amber-700 px-2 py-1.5 space-y-1">
-                                            <div class="flex items-center justify-between">
-                                              <div>
-                                                <div class="font-medium text-gray-700 dark:text-gray-200">
-                                                  {entry.node || entry.host || 'Host'}
-                                                </div>
-                                                <Show when={entry.cooldownUntil}>
-                                                  <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                                    Until {entry.cooldownUntil}
-                                                  </div>
-                                                </Show>
-                                              </div>
-                                              <span class="px-2 py-0.5 rounded text-white text-xs bg-amber-500">
-                                                Cooling
-                                              </span>
-                                            </div>
-                                            <Show when={typeof entry.secondsRemaining === 'number'}>
-                                              <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                                Retrying in ~{formatUptime(entry.secondsRemaining || 0)}
-                                              </div>
-                                            </Show>
-                                            <Show when={entry.lastError}>
-                                              <div class="text-[0.65rem] text-red-500">
-                                                {entry.lastError}
-                                              </div>
-                                            </Show>
-                                          </div>
-                                        )}
-                                      </For>
-                                    </div>
-                                  </Show>
-                                  <Show
-                                    when={proxyNodeChecksSupported()}
-                                    fallback={
-                                      <div class="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                                        Check proxy nodes is only available when the proxy socket
-                                        grants admin access. For best results, install the Pulse agent
-                                        on each Proxmox node (Settings → Agents).
-                                      </div>
-                                    }
-                                  >
-                                    <div class="mt-3 flex flex-wrap gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          if (!proxyActionLoading()) {
-                                            void handleRegisterProxyNodes();
-                                          }
-                                        }}
-                                        disabled={proxyActionLoading() !== null}
-                                        class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                      >
-                                        {proxyActionLoading() === 'register-nodes'
-                                          ? 'Checking nodes...'
-                                          : 'Check proxy nodes'}
-                                      </button>
-                                    </div>
-                                    <Show when={hostProxyStatus()}>
-                                      {(status) => (
-                                        <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
-                                          <div class="flex items-center justify-between">
-                                            <div class="font-semibold text-gray-700 dark:text-gray-200">
-                                              Pulse host proxy
-                                            </div>
-                                            <button
-                                              type="button"
-                                              class="text-xs rounded bg-blue-600 text-white px-2 py-1 hover:bg-blue-700 disabled:opacity-50"
-                                              onClick={() => void refreshHostProxyStatus(true)}
-                                            >
-                                              Refresh
-                                            </button>
-                                          </div>
-                                          <div class="grid grid-cols-2 gap-y-1">
-                                            <div>Requested</div>
-                                            <div>{status().summary?.requested ? 'Yes' : 'No'}</div>
-                                            <div>Installed</div>
-                                            <div>{status().summary?.installed ? 'Yes' : 'No'}</div>
-                                            <div>Host socket</div>
-                                            <div>{status().hostSocketPresent ? 'Present' : 'Missing'}</div>
-                                            <div>Container socket</div>
-                                            <div>{status().containerSocketPresent ? 'Present' : 'Missing'}</div>
-                                          </div>
-                                          <Show when={status().reinstallCommand}>
-                                            <div class="flex flex-wrap gap-2">
-                                              <button
-                                                type="button"
-                                                class="rounded bg-blue-600 text-white px-2 py-1 hover:bg-blue-700"
-                                                onClick={() => {
-                                                  const command = status().reinstallCommand;
-                                                  if (command) {
-                                                    void copyToClipboard(command);
-                                                    showSuccess(
-                                                      'Host proxy command copied',
-                                                      undefined,
-                                                      2000,
-                                                    );
-                                                  }
-                                                }}
-                                              >
-                                                Copy reinstall command
-                                              </button>
-                                              <Show when={status().installerURL}>
-                                                {(url) => (
-                                                  <a
-                                                    href={url()}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    class="rounded border border-gray-300 px-2 py-1 text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-800"
-                                                  >
-                                                    Download installer script
-                                                  </a>
-                                                )}
-                                              </Show>
-                                            </div>
-                                          </Show>
-                                          <Show when={status().summary?.lastUpdated}>
-                                            <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                              Summary updated {status().summary?.lastUpdated}
-                                            </div>
-                                          </Show>
-                                        </div>
-                                      )}
-                                    </Show>
-                                  </Show>
-                                  <Show
-                                    when={
-                                      proxyRegisterSummary() && proxyRegisterSummary()!.length > 0
-                                    }
-                                  >
-                                    <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                                      <div>Proxy node connectivity:</div>
-                                      <ul class="list-disc pl-4 space-y-0.5">
-                                        <For each={proxyRegisterSummary() || []}>
-                                          {(node) => (
-                                            <li>
-                                              <span
-                                                class={
-                                                  node.sshReady
-                                                    ? 'text-green-600 dark:text-green-400'
-                                                    : 'text-red-600 dark:text-red-400'
-                                                }
-                                              >
-                                                {node.name}:{' '}
-                                                {node.sshReady ? 'reachable' : 'unreachable'}
-                                              </span>
-                                              <Show when={node.error}>
-                                                <span class="ml-1 text-gray-500 dark:text-gray-400">
-                                                  ({node.error})
-                                                </span>
-                                              </Show>
-                                            </li>
-                                          )}
-                                        </For>
-                                      </ul>
-                                    </div>
-                                  </Show>
-                                  <Show when={temp().notes && temp().notes!.length > 0}>
-                                    <ul class="mt-3 text-xs text-gray-600 dark:text-gray-400 list-disc pl-4 space-y-1">
-                                      <For each={temp().notes || []}>
-                                        {(note) => <li>{note}</li>}
-                                      </For>
-                                    </ul>
-                                  </Show>
-                                </Card>
-                              )}
-                            </Show>
-
-                            {/* API token adoption */}
-                            <Show when={diagnosticsData()?.apiTokens}>
-                              {(apiDiag) => (
-                                <Card padding="sm">
-                                  <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
-                                    API tokens
-                                  </h5>
-                                  <div class="text-xs space-y-2 text-gray-600 dark:text-gray-400">
-                                    <div class="flex flex-wrap gap-2">
-                                      <span
-                                        class={`px-2 py-0.5 rounded text-xs ${apiDiag().enabled
-                                          ? 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
-                                          : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
-                                          }`}
-                                      >
-                                        {apiDiag().enabled
-                                          ? 'Token auth enabled'
-                                          : 'Token auth disabled'}
-                                      </span>
-                                      <Show when={apiDiag().hasEnvTokens}>
-                                        <span class="px-2 py-0.5 rounded text-xs bg-orange-100 text-orange-700 dark:bg-orange-700/40 dark:text-orange-100">
-                                          Env override detected
-                                        </span>
-                                      </Show>
-                                      <Show when={apiDiag().hasLegacyToken}>
-                                        <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700 dark:bg-red-700/40 dark:text-red-100">
-                                          Legacy token present
-                                        </span>
-                                      </Show>
-                                    </div>
-                                    <div class="grid grid-cols-2 gap-2">
-                                      <div>Configured tokens: {apiDiag().tokenCount}</div>
-                                      <div>
-                                        Rotation needed:{' '}
-                                        {apiDiag().recommendTokenRotation ? 'Yes' : 'No'}
-                                      </div>
-                                      <div>
-                                        Docker hosts on shared token:{' '}
-                                        {apiDiag().legacyDockerHostCount ?? 0}
-                                      </div>
-                                      <div>Unused tokens: {apiDiag().unusedTokenCount ?? 0}</div>
-                                    </div>
-                                  </div>
-                                  <Show when={apiDiag().tokens && apiDiag().tokens!.length > 0}>
-                                    <div class="mt-3 border border-gray-200 dark:border-gray-700 rounded-md divide-y divide-gray-200 dark:divide-gray-700">
-                                      <For each={apiDiag().tokens || []}>
-                                        {(token) => (
-                                          <div class="p-2 text-xs text-gray-600 dark:text-gray-400 flex flex-wrap justify-between gap-2">
-                                            <div class="flex-1 min-w-[140px]">
-                                              <div class="font-medium text-gray-700 dark:text-gray-200">
-                                                {token.name || 'Unnamed token'}
-                                              </div>
-                                              <div class="text-2xs text-gray-500 dark:text-gray-400">
-                                                {token.hint || 'No hint available'}
-                                                <Show when={token.source}>
-                                                  <span class="ml-2 uppercase tracking-wide">
-                                                    ({token.source})
-                                                  </span>
-                                                </Show>
-                                              </div>
-                                            </div>
-                                            <div class="text-right min-w-[160px]">
-                                              <div>
-                                                Created:{' '}
-                                                {token.createdAt
-                                                  ? new Date(token.createdAt).toLocaleString()
-                                                  : 'Unknown'}
-                                              </div>
-                                              <div>
-                                                Last used:{' '}
-                                                {token.lastUsedAt
-                                                  ? formatRelativeTime(
-                                                    new Date(token.lastUsedAt).getTime(),
-                                                  )
-                                                  : 'Never'}
-                                              </div>
-                                            </div>
-                                          </div>
-                                        )}
-                                      </For>
-                                    </div>
-                                  </Show>
-                                  <Show when={apiDiag().usage && apiDiag().usage!.length > 0}>
-                                    <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                                      <div class="font-semibold text-gray-700 dark:text-gray-200">
-                                        Token usage
-                                      </div>
-                                      <ul class="list-disc pl-4 space-y-1">
-                                        <For each={apiDiag().usage || []}>
-                                          {(usage) => (
-                                            <li>
-                                              {usage.tokenId}: {usage.hostCount}{' '}
-                                              {usage.hostCount === 1 ? 'host' : 'hosts'}
-                                              <Show when={usage.hosts && usage.hosts!.length > 0}>
-                                                <span class="ml-1 text-gray-500 dark:text-gray-400">
-                                                  ({usage.hosts!.join(', ')})
-                                                </span>
-                                              </Show>
-                                            </li>
-                                          )}
-                                        </For>
-                                      </ul>
-                                    </div>
-                                  </Show>
-                                  <Show when={apiDiag().notes && apiDiag().notes!.length > 0}>
-                                    <ul class="mt-3 text-xs text-gray-600 dark:text-gray-400 list-disc pl-4 space-y-1">
-                                      <For each={apiDiag().notes || []}>
-                                        {(note) => <li>{note}</li>}
-                                      </For>
-                                    </ul>
-                                  </Show>
-                                </Card>
-                              )}
-                            </Show>
-
-                            {/* Docker agent adoption */}
-                            <Show when={diagnosticsData()?.dockerAgents}>
-                              {(dockerDiag) => (
-                                <Card padding="sm">
-                                  <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
-                                    Docker agents
-                                  </h5>
-                                  <Show when={dockerDiag().hostsTotal > 0}>
-                                    <div class="text-xs text-gray-600 dark:text-gray-400 grid grid-cols-2 gap-2">
-                                      <div>Total hosts: {dockerDiag().hostsTotal}</div>
-                                      <div>Online: {dockerDiag().hostsOnline}</div>
-                                      <div>
-                                        With dedicated tokens: {dockerDiag().hostsWithTokenBinding}
-                                      </div>
-                                      <div>
-                                        Attention required: {dockerDiag().hostsNeedingAttention}
-                                      </div>
-                                      <div>
-                                        Missing version: {dockerDiag().hostsWithoutVersion ?? 0}
-                                      </div>
-                                      <div>
-                                        Outdated agents: {dockerDiag().hostsOutdatedVersion ?? 0}
-                                      </div>
-                                      <div>
-                                        Stale commands: {dockerDiag().hostsWithStaleCommand ?? 0}
-                                      </div>
-                                      <div>
-                                        Pending uninstall: {dockerDiag().hostsPendingUninstall ?? 0}
-                                      </div>
-                                    </div>
-                                    <Show when={dockerDiag().recommendedAgentVersion}>
-                                      <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                        Recommended agent version:{' '}
-                                        {dockerDiag().recommendedAgentVersion}
-                                      </div>
-                                    </Show>
-                                  </Show>
-                                  <Show
-                                    when={
-                                      dockerDiag().attention && dockerDiag().attention!.length > 0
-                                    }
-                                  >
-                                    <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 divide-y divide-gray-200 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded-md">
-                                      <For each={dockerDiag().attention || []}>
-                                        {(entry) => (
-                                          <div class="p-2 space-y-1">
-                                            <div class="flex items-center justify-between">
-                                              <span class="font-medium text-gray-700 dark:text-gray-200">
-                                                {entry.name}
-                                              </span>
-                                              <span
-                                                class={`px-2 py-0.5 rounded text-xs ${entry.status === 'online'
-                                                  ? 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
-                                                  : 'bg-red-100 text-red-700 dark:bg-red-700/40 dark:text-red-100'
-                                                  }`}
-                                              >
-                                                {entry.status || 'unknown'}
-                                              </span>
-                                            </div>
-                                            <div class="text-2xs text-gray-500 dark:text-gray-400 space-x-2">
-                                              <Show when={entry.agentVersion}>
-                                                <span>Agent {entry.agentVersion}</span>
-                                              </Show>
-                                              <Show when={entry.tokenHint}>
-                                                <span>Token {entry.tokenHint}</span>
-                                              </Show>
-                                              <Show when={entry.lastSeen}>
-                                                <span>
-                                                  Seen{' '}
-                                                  {formatRelativeTime(
-                                                    new Date(entry.lastSeen!).getTime(),
-                                                  )}
-                                                </span>
-                                              </Show>
-                                            </div>
-                                            <ul class="list-disc pl-4 space-y-1 text-gray-600 dark:text-gray-400">
-                                              <For each={entry.issues}>
-                                                {(issue) => <li>{issue}</li>}
-                                              </For>
-                                            </ul>
-                                            <div class="mt-2 flex flex-wrap gap-2">
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  if (dockerActionLoading() !== entry.hostId) {
-                                                    void handleDockerPrepareToken(entry.hostId);
-                                                  }
-                                                }}
-                                                disabled={dockerActionLoading() === entry.hostId}
-                                                class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                              >
-                                                {dockerActionLoading() === entry.hostId
-                                                  ? 'Preparing token...'
-                                                  : 'Generate dedicated token'}
-                                              </button>
-                                            </div>
-                                            <Show when={dockerMigrationResults()[entry.hostId]}>
-                                              <div class="mt-3 w-full space-y-2 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded p-3 text-xs text-gray-700 dark:text-gray-200">
-                                                {(() => {
-                                                  const migration =
-                                                    dockerMigrationResults()[entry.hostId]!;
-                                                  return (
-                                                    <>
-                                                      <div class="font-semibold text-gray-800 dark:text-gray-100">
-                                                        Install command
-                                                      </div>
-                                                      <pre class="whitespace-pre-wrap break-all bg-gray-900/80 text-gray-100 rounded p-2 text-[11px]">
-                                                        {migration.installCommand}
-                                                      </pre>
-                                                      <button
-                                                        type="button"
-                                                        class="px-2 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-800 transition-colors"
-                                                        onClick={() =>
-                                                          void handleCopy(
-                                                            migration.installCommand,
-                                                            'Install command copied',
-                                                          )
-                                                        }
-                                                      >
-                                                        Copy install command
-                                                      </button>
-                                                      <div class="font-semibold text-gray-800 dark:text-gray-100 mt-2">
-                                                        Systemd snippet
-                                                      </div>
-                                                      <pre class="whitespace-pre-wrap break-all bg-gray-900/80 text-gray-100 rounded p-2 text-[11px]">
-                                                        {migration.systemdServiceSnippet}
-                                                      </pre>
-                                                      <button
-                                                        type="button"
-                                                        class="px-2 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-800 transition-colors"
-                                                        onClick={() =>
-                                                          void handleCopy(
-                                                            migration.systemdServiceSnippet,
-                                                            'Service snippet copied',
-                                                          )
-                                                        }
-                                                      >
-                                                        Copy service snippet
-                                                      </button>
-                                                      <div class="text-gray-600 dark:text-gray-400">
-                                                        Target URL: {migration.pulseURL}
-                                                      </div>
-                                                    </>
-                                                  );
-                                                })()}
-                                              </div>
-                                            </Show>
-                                          </div>
-                                        )}
-                                      </For>
-                                    </div>
-                                  </Show>
-                                  <Show when={dockerDiag().notes && dockerDiag().notes!.length > 0}>
-                                    <ul class="mt-3 text-xs text-gray-600 dark:text-gray-400 list-disc pl-4 space-y-1">
-                                      <For each={dockerDiag().notes || []}>
-                                        {(note) => <li>{note}</li>}
-                                      </For>
-                                    </ul>
-                                  </Show>
-                                </Card>
-                              )}
-                            </Show>
-
-                            {/* Alerts configuration */}
-                            <Show when={diagnosticsData()?.alerts}>
-                              {(alerts) => (
-                                <Card padding="sm">
-                                  <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
-                                    Alerts configuration
-                                  </h5>
-                                  <div class="text-xs text-gray-600 dark:text-gray-400 space-y-2">
-                                    <div class="flex flex-wrap gap-2">
-                                      <span
-                                        class={`px-2 py-0.5 rounded text-xs ${alerts().legacyThresholdsDetected
-                                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
-                                          : 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
-                                          }`}
-                                      >
-                                        Legacy thresholds{' '}
-                                        {alerts().legacyThresholdsDetected
-                                          ? 'detected'
-                                          : 'migrated'}
-                                      </span>
-                                      <span
-                                        class={`px-2 py-0.5 rounded text-xs ${alerts().missingCooldown
-                                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
-                                          : 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
-                                          }`}
-                                      >
-                                        Cooldown{' '}
-                                        {alerts().missingCooldown ? 'missing' : 'configured'}
-                                      </span>
-                                      <span
-                                        class={`px-2 py-0.5 rounded text-xs ${alerts().missingGroupingWindow
-                                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
-                                          : 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
-                                          }`}
-                                      >
-                                        Grouping window{' '}
-                                        {alerts().missingGroupingWindow ? 'disabled' : 'enabled'}
-                                      </span>
-                                    </div>
-                                    <Show
-                                      when={
-                                        alerts().legacyThresholdSources &&
-                                        alerts().legacyThresholdSources!.length > 0
-                                      }
-                                    >
-                                      <div>
-                                        Legacy sources:{' '}
-                                        {alerts().legacyThresholdSources!.join(', ')}
-                                      </div>
-                                    </Show>
-                                    <Show
-                                      when={
-                                        alerts().legacyScheduleSettings &&
-                                        alerts().legacyScheduleSettings!.length > 0
-                                      }
-                                    >
-                                      <div>
-                                        Legacy schedule settings:{' '}
-                                        {alerts().legacyScheduleSettings!.join(', ')}
-                                      </div>
-                                    </Show>
-                                  </div>
-                                  <Show when={alerts().notes && alerts().notes!.length > 0}>
-                                    <ul class="mt-3 text-xs text-gray-600 dark:text-gray-400 list-disc pl-4 space-y-1">
-                                      <For each={alerts().notes || []}>
-                                        {(note) => <li>{note}</li>}
-                                      </For>
-                                    </ul>
-                                  </Show>
-                                </Card>
-                              )}
-                            </Show>
-
-                            {/* Nodes Status */}
-                            <Show
-                              when={diagnosticsData()?.nodes && diagnosticsData()!.nodes.length > 0}
-                            >
-                              <Card padding="sm">
-                                <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
-                                  PVE Nodes
-                                </h5>
-                                <For each={diagnosticsData()?.nodes || []}>
-                                  {(node) => (
-                                    <div class="text-xs border-t dark:border-gray-700 pt-2 mt-2 first:border-0 first:pt-0 first:mt-0">
-                                      <div class="flex justify-between items-center mb-1">
-                                        <span class="font-medium text-gray-700 dark:text-gray-300">
-                                          {node.name}
-                                        </span>
-                                        <span
-                                          class={`px-2 py-0.5 rounded text-white text-xs ${node.connected ? 'bg-green-500' : 'bg-red-500'
-                                            }`}
-                                        >
-                                          {node.connected ? 'Connected' : 'Failed'}
-                                        </span>
-                                      </div>
-                                      <div class="text-gray-600 dark:text-gray-400">
-                                        <div>Host: {node.host}</div>
-                                        <div>Auth: {node.authMethod?.replace('_', ' ')}</div>
-                                        <Show when={node.error}>
-                                          <div class="text-red-500 mt-1 break-words">
-                                            {node.error}
-                                          </div>
-                                        </Show>
-                                      </div>
-                                    </div>
-                                  )}
-                                </For>
-                              </Card>
-                            </Show>
-
-                            {/* PBS Status */}
-                            <Show
-                              when={diagnosticsData()?.pbs && diagnosticsData()!.pbs.length > 0}
-                            >
-                              <Card padding="sm">
-                                <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
-                                  PBS Instances
-                                </h5>
-                                <For each={diagnosticsData()?.pbs || []}>
-                                  {(pbs) => (
-                                    <div class="text-xs border-t dark:border-gray-700 pt-2 mt-2 first:border-0 first:pt-0 first:mt-0">
-                                      <div class="flex justify-between items-center mb-1">
-                                        <span class="font-medium text-gray-700 dark:text-gray-300">
-                                          {pbs.name}
-                                        </span>
-                                        <span
-                                          class={`px-2 py-0.5 rounded text-white text-xs ${pbs.connected ? 'bg-green-500' : 'bg-red-500'
-                                            }`}
-                                        >
-                                          {pbs.connected ? 'Connected' : 'Failed'}
-                                        </span>
-                                      </div>
-                                      <Show when={pbs.error}>
-                                        <div class="text-red-500 break-words">{pbs.error}</div>
-                                      </Show>
-                                    </div>
-                                  )}
-                                </For>
-                              </Card>
-                            </Show>
-                          </div>
-                        </Show>
-                      </div>
-                      {/* System Information */}
-                      <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                          System Information
-                        </h4>
-                        <div class="space-y-2 text-sm">
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">Version:</span>
-                            <span class="font-medium">2.0.0</span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">Backend:</span>
-                            <span class="font-medium">Go 1.21</span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">Frontend:</span>
-                            <span class="font-medium">SolidJS + TypeScript</span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">WebSocket Status:</span>
-                            <span
-                              class={`font-medium ${connected() ? 'text-green-600' : 'text-red-600'}`}
-                            >
-                              {connected() ? 'Connected' : 'Disconnected'}
-                            </span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">Server Port:</span>
-                            <span class="font-medium">
-                              {getPulsePort()}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Connection Status */}
-                      <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                          Connection Status
-                        </h4>
-                        <div class="space-y-2 text-sm">
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">PVE Nodes:</span>
-                            <span class="font-medium">{pveNodes().length}</span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">PBS Nodes:</span>
-                            <span class="font-medium">{pbsNodes().length}</span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">Total VMs:</span>
-                            <span class="font-medium">{state.vms?.length || 0}</span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">Total Containers:</span>
-                            <span class="font-medium">{state.containers?.length || 0}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Export Diagnostics */}
-                      <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                          Export Diagnostics
-                        </h4>
-                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                          Export system diagnostics data for troubleshooting
-                        </p>
-
-                        {/* Helper function to sanitize sensitive data */}
-                        {(() => {
-                          const sanitizeForGitHub = (data: Record<string, unknown>) => {
-                            // Deep clone the data
-                            const sanitized = JSON.parse(JSON.stringify(data)) as Record<
-                              string,
-                              unknown
-                            >;
-
-                            const connectionKeyMap = new Map<string, string>();
-                            const instanceKeyMap = new Map<string, string>();
-
-                            const getSanitizedInstance = (instance: string) => {
-                              if (!instance) return instance;
-                              if (instanceKeyMap.has(instance)) {
-                                return instanceKeyMap.get(instance)!;
-                              }
-                              const suffixMatch = instance.match(/\.(lan|local|home|internal)$/);
-                              const suffix = suffixMatch ? suffixMatch[0] : '';
-                              const label = `instance-REDACTED${suffix}`;
-                              instanceKeyMap.set(instance, label);
-                              return label;
-                            };
-
-                            // Sanitize IP addresses (keep first octet for network type identification)
-                            const sanitizeIP = (ip: string) => {
-                              if (!ip) return ip;
-                              const parts = ip.split('.');
-                              if (parts.length === 4) {
-                                return `${parts[0]}.xxx.xxx.xxx`;
-                              }
-                              return 'xxx.xxx.xxx.xxx';
-                            };
-
-                            // Sanitize hostname but keep domain suffix for context
-                            const sanitizeHostname = (hostname: string) => {
-                              if (!hostname) return hostname;
-                              // Keep common suffixes like .lan, .local, .home
-                              const suffixMatch = hostname.match(/\.(lan|local|home|internal)$/);
-                              const suffix = suffixMatch ? suffixMatch[0] : '';
-                              return `node-REDACTED${suffix}`;
-                            };
-                            const sanitizeOptionalHostname = (value?: string) =>
-                              value && value.trim() ? sanitizeHostname(value) : undefined;
-
-                            const sanitizeText = (text: string | undefined) => {
-                              if (!text) return text;
-                              return text
-                                .replace(/https?:\/\/[^"'\s]+/g, 'https://REDACTED')
-                                .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, 'xxx.xxx.xxx.xxx');
-                            };
-
-                            const sanitizeNotesArray = (notes: unknown) => {
-                              if (!Array.isArray(notes)) return notes;
-                              return notes.map((note) => {
-                                if (typeof note !== 'string') return note;
-                                const sanitizedNote = sanitizeText(note);
-                                return sanitizedNote ?? note;
-                              });
-                            };
-
-                            const sanitizeNodeSnapshots = (
-                              snapshots: Array<Record<string, unknown>>,
-                            ) =>
-                              snapshots.map((snapshot, index: number) => {
-                                const sanitizedSnapshot = { ...snapshot };
-                                const originalNode =
-                                  typeof sanitizedSnapshot.node === 'string'
-                                    ? (sanitizedSnapshot.node as string)
-                                    : '';
-                                if (originalNode) {
-                                  sanitizedSnapshot.node =
-                                    connectionKeyMap.get(originalNode) ||
-                                    sanitizeHostname(originalNode);
-                                }
-
-                                const originalInstance =
-                                  typeof sanitizedSnapshot.instance === 'string'
-                                    ? (sanitizedSnapshot.instance as string)
-                                    : '';
-                                if (originalInstance) {
-                                  sanitizedSnapshot.instance =
-                                    getSanitizedInstance(originalInstance);
-                                }
-
-                                if (
-                                  typeof sanitizedSnapshot.id === 'string' &&
-                                  sanitizedSnapshot.id
-                                ) {
-                                  sanitizedSnapshot.id = `node-snapshot-${index}`;
-                                }
-
-                                return sanitizedSnapshot;
-                              });
-
-                            const sanitizeGuestSnapshots = (
-                              snapshots: Array<Record<string, unknown>>,
-                            ) =>
-                              snapshots.map((snapshot, index: number) => {
-                                const sanitizedSnapshot = { ...snapshot };
-                                const originalNode =
-                                  typeof sanitizedSnapshot.node === 'string'
-                                    ? (sanitizedSnapshot.node as string)
-                                    : '';
-                                if (originalNode) {
-                                  sanitizedSnapshot.node =
-                                    connectionKeyMap.get(originalNode) ||
-                                    sanitizeHostname(originalNode);
-                                }
-
-                                const originalInstance =
-                                  typeof sanitizedSnapshot.instance === 'string'
-                                    ? (sanitizedSnapshot.instance as string)
-                                    : '';
-                                if (originalInstance) {
-                                  sanitizedSnapshot.instance =
-                                    getSanitizedInstance(originalInstance);
-                                }
-
-                                if (typeof sanitizedSnapshot.name === 'string') {
-                                  sanitizedSnapshot.name = 'vm-REDACTED';
-                                }
-
-                                if (typeof sanitizedSnapshot.vmid === 'number') {
-                                  sanitizedSnapshot.vmid = index + 1;
-                                } else if (typeof sanitizedSnapshot.vmid === 'string') {
-                                  sanitizedSnapshot.vmid = `vm-${index + 1}`;
-                                }
-
-                                if (Array.isArray(sanitizedSnapshot.notes)) {
-                                  sanitizedSnapshot.notes = sanitizeNotesArray(
-                                    sanitizedSnapshot.notes,
-                                  );
-                                }
-
-                                return sanitizedSnapshot;
-                              });
-
-                            // Sanitize nodes
-                            if (sanitized.nodes) {
-                              sanitized.nodes = (
-                                sanitized.nodes as Array<Record<string, unknown>>
-                              ).map((node, index: number) => {
-                                const nodeType =
-                                  typeof node.type === 'string' ? (node.type as string) : 'node';
-                                const nodeName =
-                                  typeof node.name === 'string' ? (node.name as string) : '';
-                                const nodeHost =
-                                  typeof node.host === 'string' ? (node.host as string) : '';
-                                const tokenName =
-                                  typeof node.tokenName === 'string'
-                                    ? (node.tokenName as string)
-                                    : undefined;
-                                const clusterName =
-                                  typeof node.clusterName === 'string'
-                                    ? (node.clusterName as string)
-                                    : undefined;
-                                const clusterEndpoints = Array.isArray(node.clusterEndpoints)
-                                  ? (node.clusterEndpoints as Array<Record<string, unknown>>).map(
-                                    (ep, epIndex: number) => ({
-                                      ...ep,
-                                      NodeName: `node-${epIndex + 1}`,
-                                      Host: `node-${epIndex + 1}`,
-                                      IP: sanitizeIP(typeof ep.IP === 'string' ? ep.IP : ''),
-                                    }),
-                                  )
-                                  : node.clusterEndpoints;
-
-                                const sanitizedId = `${nodeType}-${index}`;
-                                connectionKeyMap.set(nodeName, sanitizedId);
-
-                                // Sanitize nested physical disks data if present
-                                const physicalDisks = node.physicalDisks as
-                                  | Record<string, unknown>
-                                  | undefined;
-                                if (physicalDisks && Array.isArray(physicalDisks.nodeResults)) {
-                                  physicalDisks.nodeResults = (
-                                    physicalDisks.nodeResults as Array<Record<string, unknown>>
-                                  ).map((result) => ({
-                                    ...result,
-                                    nodeName: sanitizeHostname(
-                                      typeof result.nodeName === 'string' ? result.nodeName : '',
-                                    ),
-                                    apiResponse:
-                                      sanitizeText(
-                                        typeof result.apiResponse === 'string'
-                                          ? result.apiResponse
-                                          : undefined,
-                                      ) ?? result.apiResponse,
-                                    error:
-                                      sanitizeText(
-                                        typeof result.error === 'string' ? result.error : undefined,
-                                      ) ?? result.error,
-                                  }));
-                                }
-
-                                // Sanitize nested VM disk check data if present
-                                const vmDiskCheck = node.vmDiskCheck as
-                                  | Record<string, unknown>
-                                  | undefined;
-                                if (vmDiskCheck) {
-                                  if (typeof vmDiskCheck.testVMName === 'string') {
-                                    vmDiskCheck.testVMName = 'vm-REDACTED';
-                                  }
-                                  if (typeof vmDiskCheck.testResult === 'string') {
-                                    vmDiskCheck.testResult = sanitizeText(vmDiskCheck.testResult);
-                                  }
-                                  if (Array.isArray(vmDiskCheck.problematicVMs)) {
-                                    vmDiskCheck.problematicVMs = (
-                                      vmDiskCheck.problematicVMs as Array<Record<string, unknown>>
-                                    ).map((problem) => ({
-                                      ...problem,
-                                      name: 'vm-REDACTED',
-                                      issue:
-                                        sanitizeText(
-                                          typeof problem.issue === 'string'
-                                            ? problem.issue
-                                            : undefined,
-                                        ) ?? problem.issue,
-                                    }));
-                                  }
-                                  if (Array.isArray(vmDiskCheck.recommendations)) {
-                                    vmDiskCheck.recommendations = (
-                                      vmDiskCheck.recommendations as Array<string>
-                                    ).map((rec) => sanitizeText(rec) ?? rec);
-                                  }
-                                }
-
-                                return {
-                                  ...node,
-                                  id: sanitizedId,
-                                  name: sanitizeHostname(nodeName),
-                                  host: nodeHost
-                                    ? nodeHost.replace(/https?:\/\/[^:\/]+/, 'https://REDACTED')
-                                    : nodeHost,
-                                  tokenName: tokenName ? 'token-REDACTED' : tokenName,
-                                  clusterName: clusterName ? 'cluster-REDACTED' : clusterName,
-                                  clusterEndpoints,
-                                  physicalDisks,
-                                  vmDiskCheck,
-                                };
-                              });
-                            }
-
-                            if (Array.isArray(sanitized.nodeSnapshots)) {
-                              sanitized.nodeSnapshots = sanitizeNodeSnapshots(
-                                sanitized.nodeSnapshots as Array<Record<string, unknown>>,
-                              );
-                            }
-
-                            if (Array.isArray(sanitized.guestSnapshots)) {
-                              sanitized.guestSnapshots = sanitizeGuestSnapshots(
-                                sanitized.guestSnapshots as Array<Record<string, unknown>>,
-                              );
-                            }
-
-                            if (
-                              sanitized.temperatureProxy &&
-                              typeof sanitized.temperatureProxy === 'object'
-                            ) {
-                              const proxyDiag = sanitized.temperatureProxy as Record<
-                                string,
-                                unknown
-                              >;
-                              if (typeof proxyDiag.socketPath === 'string') {
-                                proxyDiag.socketPath = proxyDiag.socketPath.includes(
-                                  'pulse-sensor-proxy',
-                                )
-                                  ? '/mnt/pulse-proxy/pulse-sensor-proxy.sock'
-                                  : 'proxy-socket';
-                              }
-                              if (Array.isArray(proxyDiag.notes)) {
-                                proxyDiag.notes = sanitizeNotesArray(proxyDiag.notes);
-                              }
-                              if (Array.isArray(proxyDiag.httpProxies)) {
-                                proxyDiag.httpProxies = (
-                                  proxyDiag.httpProxies as Array<Record<string, unknown>>
-                                ).map((entry, index: number) => {
-                                  const sanitizedEntry: TemperatureProxyHTTPStatus = {
-                                    node: sanitizeHostname(
-                                      typeof entry.node === 'string'
-                                        ? (entry.node as string)
-                                        : `http-proxy-${index + 1}`,
-                                    ),
-                                    reachable: Boolean(entry.reachable),
-                                  };
-                                  if (typeof entry.url === 'string') {
-                                    sanitizedEntry.url =
-                                      sanitizeText(entry.url as string) ?? (entry.url as string);
-                                  }
-                                  if (typeof entry.error === 'string') {
-                                    sanitizedEntry.error =
-                                      sanitizeText(entry.error as string) ?? (entry.error as string);
-                                  }
-                                  return sanitizedEntry;
-                                });
-                              }
-                              if (Array.isArray(proxyDiag.socketHostCooldowns)) {
-                                proxyDiag.socketHostCooldowns = (
-                                  proxyDiag.socketHostCooldowns as Array<Record<string, unknown>>
-                                ).map((entry) => {
-                                  const originalNode =
-                                    typeof entry.node === 'string' ? (entry.node as string) : undefined;
-                                  const originalHost =
-                                    typeof entry.host === 'string' ? (entry.host as string) : undefined;
-                                  return {
-                                    node: sanitizeOptionalHostname(originalNode),
-                                    host: sanitizeOptionalHostname(originalHost),
-                                    cooldownUntil:
-                                      typeof entry.cooldownUntil === 'string'
-                                        ? (entry.cooldownUntil as string)
-                                        : undefined,
-                                    secondsRemaining:
-                                      typeof entry.secondsRemaining === 'number'
-                                        ? (entry.secondsRemaining as number)
-                                        : undefined,
-                                    lastError:
-                                      typeof entry.lastError === 'string'
-                                        ? sanitizeText(entry.lastError as string) ?? (entry.lastError as string)
-                                        : undefined,
-                                  };
-                                });
-                              }
-                            }
-
-                            if (sanitized.apiTokens && typeof sanitized.apiTokens === 'object') {
-                              const apiTokens = sanitized.apiTokens as Record<string, unknown>;
-                              const tokenIdMap = new Map<string, string>();
-                              if (Array.isArray(apiTokens.tokens)) {
-                                apiTokens.tokens = (
-                                  apiTokens.tokens as Array<Record<string, unknown>>
-                                ).map((token, tokenIndex: number) => {
-                                  const sanitizedToken = { ...token } as Record<string, unknown>;
-                                  const originalId =
-                                    typeof token.id === 'string' ? (token.id as string) : '';
-                                  const sanitizedId = `token-${tokenIndex + 1}`;
-                                  if (originalId) {
-                                    tokenIdMap.set(originalId, sanitizedId);
-                                  }
-                                  sanitizedToken.id = sanitizedId;
-                                  sanitizedToken.name = sanitizedId;
-                                  if (typeof sanitizedToken.hint === 'string') {
-                                    sanitizedToken.hint = 'token-REDACTED';
-                                  }
-                                  return sanitizedToken;
-                                });
-                              }
-                              if (Array.isArray(apiTokens.usage)) {
-                                apiTokens.usage = (
-                                  apiTokens.usage as Array<Record<string, unknown>>
-                                ).map((usage, usageIndex: number) => {
-                                  const sanitizedUsage = { ...usage } as Record<string, unknown>;
-                                  const originalTokenId =
-                                    typeof usage.tokenId === 'string'
-                                      ? (usage.tokenId as string)
-                                      : '';
-                                  const mappedId =
-                                    tokenIdMap.get(originalTokenId) ?? `token-${usageIndex + 1}`;
-                                  sanitizedUsage.tokenId = mappedId;
-                                  if (Array.isArray(sanitizedUsage.hosts)) {
-                                    sanitizedUsage.hosts = (
-                                      sanitizedUsage.hosts as Array<string>
-                                    ).map((host, hostIndex) =>
-                                      sanitizeHostname(
-                                        typeof host === 'string' ? host : `host-${hostIndex + 1}`,
-                                      ),
-                                    );
-                                  }
-                                  return sanitizedUsage;
-                                });
-                              }
-                              if (Array.isArray(apiTokens.notes)) {
-                                apiTokens.notes = sanitizeNotesArray(apiTokens.notes);
-                              }
-                            }
-
-                            if (
-                              sanitized.dockerAgents &&
-                              typeof sanitized.dockerAgents === 'object'
-                            ) {
-                              const dockerDiag = sanitized.dockerAgents as Record<string, unknown>;
-                              if (Array.isArray(dockerDiag.attention)) {
-                                dockerDiag.attention = (
-                                  dockerDiag.attention as Array<Record<string, unknown>>
-                                ).map((entry, index: number) => {
-                                  const sanitizedEntry = { ...entry };
-                                  sanitizedEntry.hostId = `docker-host-${index + 1}`;
-                                  sanitizedEntry.name = `docker-host-${index + 1}`;
-                                  if (typeof sanitizedEntry.tokenHint === 'string') {
-                                    sanitizedEntry.tokenHint = 'token-REDACTED';
-                                  }
-                                  if (Array.isArray(sanitizedEntry.issues)) {
-                                    sanitizedEntry.issues = sanitizeNotesArray(
-                                      sanitizedEntry.issues,
-                                    );
-                                  }
-                                  return sanitizedEntry;
-                                });
-                              }
-                              if (Array.isArray(dockerDiag.notes)) {
-                                dockerDiag.notes = sanitizeNotesArray(dockerDiag.notes);
-                              }
-                            }
-
-                            if (sanitized.alerts && typeof sanitized.alerts === 'object') {
-                              const alerts = sanitized.alerts as Record<string, unknown>;
-                              if (Array.isArray(alerts.legacyThresholdSources)) {
-                                alerts.legacyThresholdSources = (
-                                  alerts.legacyThresholdSources as string[]
-                                ).map((source) => sanitizeText(source) ?? source);
-                              }
-                              if (Array.isArray(alerts.legacyScheduleSettings)) {
-                                alerts.legacyScheduleSettings = (
-                                  alerts.legacyScheduleSettings as string[]
-                                ).map((setting) => sanitizeText(setting) ?? setting);
-                              }
-                              if (Array.isArray(alerts.notes)) {
-                                alerts.notes = sanitizeNotesArray(alerts.notes);
-                              }
-                            }
-
-                            // Sanitize backend diagnostics (if present)
-                            if (
-                              sanitized.backendDiagnostics &&
-                              typeof sanitized.backendDiagnostics === 'object'
-                            ) {
-                              const backend = sanitized.backendDiagnostics as Record<
-                                string,
-                                unknown
-                              >;
-
-                              if (Array.isArray(backend.nodeSnapshots)) {
-                                backend.nodeSnapshots = sanitizeNodeSnapshots(
-                                  backend.nodeSnapshots as Array<Record<string, unknown>>,
-                                );
-                              }
-
-                              if (Array.isArray(backend.guestSnapshots)) {
-                                backend.guestSnapshots = sanitizeGuestSnapshots(
-                                  backend.guestSnapshots as Array<Record<string, unknown>>,
-                                );
-                              }
-
-                              if (Array.isArray(backend.nodes)) {
-                                backend.nodes = backend.nodes.map((rawNode, index: number) => {
-                                  const node = rawNode as Record<string, unknown>;
-                                  const originalName =
-                                    typeof node.name === 'string' ? node.name : '';
-                                  const sanitizedId = `diagnostic-node-${index}`;
-                                  connectionKeyMap.set(originalName, sanitizedId);
-
-                                  const vmDiskCheck = node.vmDiskCheck as
-                                    | Record<string, unknown>
-                                    | undefined;
-                                  const physicalDisks = node.physicalDisks as
-                                    | Record<string, unknown>
-                                    | undefined;
-
-                                  if (vmDiskCheck) {
-                                    if (typeof vmDiskCheck.testVMName === 'string') {
-                                      vmDiskCheck.testVMName = 'vm-REDACTED';
-                                    }
-                                    if (typeof vmDiskCheck.testResult === 'string') {
-                                      const sanitizedResult = sanitizeText(
-                                        vmDiskCheck.testResult as string,
-                                      );
-                                      vmDiskCheck.testResult =
-                                        sanitizedResult ?? vmDiskCheck.testResult;
-                                    }
-                                    if (Array.isArray(vmDiskCheck.problematicVMs)) {
-                                      vmDiskCheck.problematicVMs = (
-                                        vmDiskCheck.problematicVMs as Array<Record<string, unknown>>
-                                      ).map((problem) => {
-                                        const issueText = sanitizeText(
-                                          typeof problem.issue === 'string'
-                                            ? problem.issue
-                                            : undefined,
-                                        );
-                                        return {
-                                          ...problem,
-                                          name: 'vm-REDACTED',
-                                          issue: issueText ?? problem.issue,
-                                        };
-                                      });
-                                    }
-                                    if (Array.isArray(vmDiskCheck.recommendations)) {
-                                      vmDiskCheck.recommendations = (
-                                        vmDiskCheck.recommendations as Array<string>
-                                      ).map((rec) => sanitizeText(rec) ?? rec);
-                                    }
-                                  }
-
-                                  if (physicalDisks) {
-                                    if (typeof physicalDisks.testResult === 'string') {
-                                      const sanitizedResult = sanitizeText(
-                                        physicalDisks.testResult as string,
-                                      );
-                                      physicalDisks.testResult =
-                                        sanitizedResult ?? physicalDisks.testResult;
-                                    }
-                                    if (Array.isArray(physicalDisks.nodeResults)) {
-                                      physicalDisks.nodeResults = (
-                                        physicalDisks.nodeResults as Array<Record<string, unknown>>
-                                      ).map((result) => ({
-                                        ...result,
-                                        nodeName: sanitizeHostname(
-                                          typeof result.nodeName === 'string'
-                                            ? result.nodeName
-                                            : '',
-                                        ),
-                                        apiResponse:
-                                          sanitizeText(
-                                            typeof result.apiResponse === 'string'
-                                              ? result.apiResponse
-                                              : undefined,
-                                          ) ?? result.apiResponse,
-                                        error:
-                                          sanitizeText(
-                                            typeof result.error === 'string'
-                                              ? result.error
-                                              : undefined,
-                                          ) ?? result.error,
-                                      }));
-                                    }
-                                  }
-
-                                  return {
-                                    ...node,
-                                    id: sanitizedId,
-                                    name: sanitizeHostname(originalName),
-                                    host:
-                                      typeof node.host === 'string'
-                                        ? (node.host as string).replace(
-                                          /https?:\/\/[^:\/]+/,
-                                          'https://REDACTED',
-                                        )
-                                        : node.host,
-                                    error:
-                                      sanitizeText(
-                                        typeof node.error === 'string' ? node.error : undefined,
-                                      ) ?? node.error,
-                                    vmDiskCheck,
-                                    physicalDisks,
-                                  };
-                                });
-                              }
-
-                              if (Array.isArray(backend.pbs)) {
-                                backend.pbs = backend.pbs.map((rawPbs, index: number) => {
-                                  const pbsNode = rawPbs as Record<string, unknown>;
-                                  const originalName =
-                                    typeof pbsNode.name === 'string' ? pbsNode.name : '';
-                                  const sanitizedId = `diagnostic-pbs-${index}`;
-                                  connectionKeyMap.set(originalName, sanitizedId);
-
-                                  return {
-                                    ...pbsNode,
-                                    id: sanitizedId,
-                                    name: sanitizeHostname(originalName),
-                                    host:
-                                      typeof pbsNode.host === 'string'
-                                        ? (pbsNode.host as string).replace(
-                                          /https?:\/\/[^:\/]+/,
-                                          'https://REDACTED',
-                                        )
-                                        : pbsNode.host,
-                                    error:
-                                      sanitizeText(
-                                        typeof pbsNode.error === 'string'
-                                          ? pbsNode.error
-                                          : undefined,
-                                      ) ?? pbsNode.error,
-                                  };
-                                });
-                              }
-                            }
-
-                            // Sanitize storage
-                            if (sanitized.storage) {
-                              sanitized.storage = (
-                                sanitized.storage as Array<Record<string, unknown>>
-                              ).map((s, index: number) => {
-                                const storageNode = typeof s.node === 'string' ? s.node : '';
-                                return {
-                                  ...s,
-                                  id: `storage-${index}`,
-                                  node: sanitizeHostname(storageNode),
-                                  name: `storage-${index}`,
-                                };
-                              });
-                            }
-
-                            // Sanitize backups
-                            const backups = sanitized.backups as
-                              | Record<string, unknown>
-                              | undefined;
-                            if (backups) {
-                              // Sanitize PVE backup tasks
-                              if (Array.isArray(backups.pveBackupTasks)) {
-                                backups.pveBackupTasks = (
-                                  backups.pveBackupTasks as Array<Record<string, unknown>>
-                                ).map((b, index: number) => {
-                                  const backupNode = typeof b.node === 'string' ? b.node : '';
-                                  const backupVmid =
-                                    typeof b.vmid === 'number' ? b.vmid : undefined;
-                                  return {
-                                    ...b,
-                                    node: sanitizeHostname(backupNode),
-                                    storage: `storage-${index}`,
-                                    vmid:
-                                      backupVmid !== undefined ? `vm-${backupVmid}` : backupVmid,
-                                  };
-                                });
-                              }
-
-                              // Sanitize PVE storage backups
-                              if (Array.isArray(backups.pveStorageBackups)) {
-                                backups.pveStorageBackups = (
-                                  backups.pveStorageBackups as Array<Record<string, unknown>>
-                                ).map((b, index: number) => {
-                                  const backupNode = typeof b.node === 'string' ? b.node : '';
-                                  const backupVmid =
-                                    typeof b.vmid === 'number' ? b.vmid : undefined;
-                                  const volid = typeof b.volid === 'string' ? b.volid : undefined;
-                                  return {
-                                    ...b,
-                                    node: sanitizeHostname(backupNode),
-                                    storage: `storage-${index}`,
-                                    vmid:
-                                      backupVmid !== undefined ? `vm-${backupVmid}` : backupVmid,
-                                    volid: volid ? 'vol-REDACTED' : volid,
-                                  };
-                                });
-                              }
-
-                              // Sanitize PBS backups
-                              if (Array.isArray(backups.pbsBackups)) {
-                                backups.pbsBackups = (
-                                  backups.pbsBackups as Array<Record<string, unknown>>
-                                ).map((b, index: number) => {
-                                  const backupId =
-                                    typeof b.backupId === 'string' ? b.backupId : undefined;
-                                  const vmName =
-                                    typeof b.vmName === 'string' ? b.vmName : undefined;
-                                  return {
-                                    ...b,
-                                    datastore: `datastore-${index}`,
-                                    backupId: backupId ? `backup-${index}` : backupId,
-                                    vmName: vmName ? 'vm-REDACTED' : vmName,
-                                  };
-                                });
-                              }
-                            }
-
-                            // Sanitize active alerts
-                            const activeAlerts = sanitized.activeAlerts as
-                              | Array<Record<string, unknown>>
-                              | undefined;
-                            if (activeAlerts) {
-                              sanitized.activeAlerts = activeAlerts.map((alert) => {
-                                const alertNode = typeof alert.node === 'string' ? alert.node : '';
-                                const details =
-                                  typeof alert.details === 'string' ? alert.details : undefined;
-                                return {
-                                  ...alert,
-                                  node: sanitizeHostname(alertNode),
-                                  details: details
-                                    ? details.replace(
-                                      /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/g,
-                                      'xxx.xxx.xxx.xxx',
-                                    )
-                                    : details,
-                                };
-                              });
-                            }
-
-                            // Sanitize websocket URL
-                            const websocketInfo = sanitized.websocket as
-                              | Record<string, unknown>
-                              | undefined;
-                            if (websocketInfo && typeof websocketInfo.url === 'string') {
-                              websocketInfo.url = websocketInfo.url.replace(
-                                /\/\/[^\/]+/,
-                                '//REDACTED',
-                              );
-                            }
-
-                            if (
-                              sanitized.connectionHealth &&
-                              typeof sanitized.connectionHealth === 'object'
-                            ) {
-                              const newConnectionHealth: Record<string, unknown> = {};
-                              let index = 1;
-                              Object.entries(
-                                sanitized.connectionHealth as Record<string, unknown>,
-                              ).forEach(([key, value]) => {
-                                const mappedKey = connectionKeyMap.get(key) || `resource-${index}`;
-                                newConnectionHealth[mappedKey] = value;
-                                index += 1;
-                              });
-                              sanitized.connectionHealth = newConnectionHealth;
-                            }
-
-                            // Add sanitization notice
-                            sanitized._notice =
-                              'This diagnostic data has been sanitized for sharing on GitHub. IP addresses, hostnames, and tokens have been redacted.';
-
-                            return sanitized;
-                          };
-
-                          const exportDiagnostics = (sanitize: boolean) => {
-                            let diagnostics: Record<string, unknown> = {
-                              timestamp: new Date().toISOString(),
-                              version: '2.1.0',
-                              pulseVersion: state.stats?.version || 'unknown',
-                              environment: {
-                                userAgent: navigator.userAgent,
-                                platform: navigator.platform,
-                                language: navigator.language,
-                                screenResolution: `${window.screen.width}x${window.screen.height}`,
-                                windowSize: `${window.innerWidth}x${window.innerHeight}`,
-                                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                              },
-                              websocket: {
-                                connected: connected(),
-                                url: getPulseWebSocketUrl(),
-                              },
-                              // Include backend diagnostics if available
-                              backendDiagnostics: diagnosticsData() || null,
-                              nodes:
-                                nodes()?.map((n) => ({
-                                  ...n,
-                                  status:
-                                    state.nodes?.find((sn) => sn.id === n.id)?.status || 'unknown',
-                                  online:
-                                    state.nodes?.find((sn) => sn.id === n.id)?.status === 'online',
-                                })) || [],
-                              state: {
-                                nodesCount: state.nodes?.length || 0,
-                                nodesOnline:
-                                  state.nodes?.filter((n) => n.status === 'online').length || 0,
-                                nodesOffline:
-                                  state.nodes?.filter((n) => n.status !== 'online').length || 0,
-                                vmsCount: state.vms?.length || 0,
-                                containersCount: state.containers?.length || 0,
-                                storageCount: state.storage?.length || 0,
-                                physicalDisksCount: state.physicalDisks?.length || 0,
-                                pbsCount: state.pbs?.length || 0,
-                                pbsBackupsCount: pbsBackupsState()?.length || 0,
-                                pveBackups: {
-                                  backupTasksCount: pveBackupsState()?.backupTasks?.length || 0,
-                                  storageBackupsCount:
-                                    pveBackupsState()?.storageBackups?.length || 0,
-                                  guestSnapshotsCount:
-                                    pveBackupsState()?.guestSnapshots?.length || 0,
-                                },
-                              },
-                              // Node status details
-                              nodeStatus:
-                                state.nodes?.map((n) => ({
-                                  id: n.id,
-                                  name: n.name,
-                                  status: n.status,
-                                  online: n.status === 'online',
-                                  cpu: n.cpu,
-                                  memory: n.memory,
-                                  uptime: n.uptime,
-                                  version: n.pveVersion ?? n.kernelVersion,
-                                })) || [],
-                              storage:
-                                state.storage?.map((s) => ({
-                                  id: s.id,
-                                  node: s.node,
-                                  name: s.name,
-                                  type: s.type,
-                                  status: s.status,
-                                  enabled: s.enabled,
-                                  content: s.content,
-                                  shared: s.shared,
-                                  used: s.used,
-                                  total: s.total,
-                                  zfsPool: s.zfsPool
-                                    ? {
-                                      state: s.zfsPool.state,
-                                      readErrors: s.zfsPool.readErrors,
-                                      writeErrors: s.zfsPool.writeErrors,
-                                      checksumErrors: s.zfsPool.checksumErrors,
-                                      deviceCount: s.zfsPool.devices?.length || 0,
-                                    }
-                                    : undefined,
-                                  hasBackups:
-                                    (pveBackupsState()?.storageBackups ?? []).filter(
-                                      (b) => b.storage === s.name,
-                                    ).length > 0,
-                                })) || [],
-                              // Physical disks - critical for troubleshooting
-                              physicalDisks:
-                                state.physicalDisks?.map((d) => ({
-                                  node: d.node,
-                                  device: d.device || d.devPath,
-                                  model: d.model,
-                                  size: d.size,
-                                  type: d.type,
-                                  health: d.health,
-                                  wearout: d.wearout,
-                                  rpm: d.rpm,
-                                  smart: d.smart ?? null,
-                                })) || [],
-                              backups: {
-                                pveBackupTasks: pveBackupsState()?.backupTasks?.slice(0, 10) || [],
-                                pveStorageBackups:
-                                  pveBackupsState()?.storageBackups?.slice(0, 10) || [],
-                                pbsBackups: pbsBackupsState()?.slice(0, 10) || [],
-                              },
-                              connectionHealth: state.connectionHealth || {},
-                              performance: {
-                                lastPollDuration: state.performance?.lastPollDuration || 0,
-                                totalApiCalls: state.performance?.totalApiCalls || 0,
-                                failedApiCalls: state.performance?.failedApiCalls || 0,
-                                apiCallDuration: state.performance?.apiCallDuration || {},
-                              },
-                              activeAlerts: state.activeAlerts?.slice(0, 20) || [],
-                              settings: {},
-                            };
-
-                            if (sanitize) {
-                              diagnostics = sanitizeForGitHub(diagnostics);
-
-                              // Rebuild nodeStatus from sanitized nodes to avoid leaking real names
-                              // Both arrays are built in the same order, so we can match by index
-                              if (
-                                Array.isArray(diagnostics.nodes) &&
-                                Array.isArray(diagnostics.nodeStatus)
-                              ) {
-                                const sanitizedNodes = diagnostics.nodes as Array<
-                                  Record<string, unknown>
-                                >;
-                                const originalNodeStatus = diagnostics.nodeStatus as Array<
-                                  Record<string, unknown>
-                                >;
-
-                                diagnostics.nodeStatus = sanitizedNodes.map(
-                                  (sanitizedNode, index) => {
-                                    // Get corresponding runtime data using same index
-                                    const originalStatus = originalNodeStatus[index];
-
-                                    // Use sanitized node name/id but preserve runtime metrics
-                                    return {
-                                      id: sanitizedNode.id,
-                                      name: sanitizedNode.name, // Already sanitized
-                                      status: originalStatus?.status || 'unknown',
-                                      online: originalStatus?.online || false,
-                                      cpu: originalStatus?.cpu,
-                                      memory: originalStatus?.memory,
-                                      uptime: originalStatus?.uptime,
-                                      version: originalStatus?.version,
-                                    };
-                                  },
-                                );
-                              }
-
-                              // Sanitize storage entries that have nodes arrays or instance fields
-                              if (Array.isArray(diagnostics.storage)) {
-                                diagnostics.storage = (
-                                  diagnostics.storage as Array<Record<string, unknown>>
-                                ).map((storageItem, index) => {
-                                  const sanitizedItem = { ...storageItem };
-
-                                  // Sanitize storage name field (original Proxmox storage name)
-                                  // This field often contains node names (e.g., "pbs-delly")
-                                  if (
-                                    typeof sanitizedItem.storage === 'string' &&
-                                    sanitizedItem.storage
-                                  ) {
-                                    sanitizedItem.storage = `storage-${index}`;
-                                  }
-
-                                  // Sanitize nodes array if present (cluster storage has this)
-                                  if (Array.isArray(sanitizedItem.nodes)) {
-                                    sanitizedItem.nodes = (
-                                      sanitizedItem.nodes as Array<string>
-                                    ).map(() => 'node-REDACTED');
-                                  }
-
-                                  // Sanitize nodeIds array if present
-                                  if (Array.isArray(sanitizedItem.nodeIds)) {
-                                    sanitizedItem.nodeIds = (
-                                      sanitizedItem.nodeIds as Array<string>
-                                    ).map(() => 'node-REDACTED');
-                                  }
-
-                                  // Sanitize instance field if present
-                                  if (
-                                    typeof sanitizedItem.instance === 'string' &&
-                                    sanitizedItem.instance
-                                  ) {
-                                    const instanceMatch = (sanitizedItem.instance as string).match(
-                                      /\.(lan|local|home|internal)$/,
-                                    );
-                                    const suffix = instanceMatch ? instanceMatch[0] : '';
-                                    sanitizedItem.instance = `instance-REDACTED${suffix}`;
-                                  }
-
-                                  return sanitizedItem;
-                                });
-                              }
-
-                              // Sanitize activeAlerts resourceName field
-                              if (Array.isArray(diagnostics.activeAlerts)) {
-                                diagnostics.activeAlerts = (
-                                  diagnostics.activeAlerts as Array<Record<string, unknown>>
-                                ).map((alert, index) => {
-                                  const sanitizedAlert = { ...alert };
-
-                                  // Sanitize resourceName if present
-                                  if (
-                                    typeof sanitizedAlert.resourceName === 'string' &&
-                                    sanitizedAlert.resourceName
-                                  ) {
-                                    const hostnameMatch = (
-                                      sanitizedAlert.resourceName as string
-                                    ).match(/\.(lan|local|home|internal)$/);
-                                    const suffix = hostnameMatch ? hostnameMatch[0] : '';
-                                    sanitizedAlert.resourceName = `resource-REDACTED${suffix}`;
-                                  }
-
-                                  // Sanitize node field if present
-                                  if (
-                                    typeof sanitizedAlert.node === 'string' &&
-                                    sanitizedAlert.node
-                                  ) {
-                                    sanitizedAlert.node = 'node-REDACTED';
-                                  }
-
-                                  // Sanitize instance field if present
-                                  if (
-                                    typeof sanitizedAlert.instance === 'string' &&
-                                    sanitizedAlert.instance
-                                  ) {
-                                    const instanceMatch = (sanitizedAlert.instance as string).match(
-                                      /\.(lan|local|home|internal)$/,
-                                    );
-                                    const suffix = instanceMatch ? instanceMatch[0] : '';
-                                    sanitizedAlert.instance = `instance-REDACTED${suffix}`;
-                                  }
-
-                                  // Sanitize resourceId (e.g., "delly.lan-delly" → "alert-resource-0")
-                                  if (
-                                    typeof sanitizedAlert.resourceId === 'string' &&
-                                    sanitizedAlert.resourceId
-                                  ) {
-                                    sanitizedAlert.resourceId = `alert-resource-${index}`;
-                                  }
-
-                                  // Sanitize id field (e.g., "delly.lan-delly-temperature" → "alert-0-temperature")
-                                  if (typeof sanitizedAlert.id === 'string' && sanitizedAlert.id) {
-                                    // Extract the alert type from the end (e.g., "temperature")
-                                    const idParts = (sanitizedAlert.id as string).split('-');
-                                    const alertType = idParts[idParts.length - 1];
-                                    sanitizedAlert.id = `alert-${index}-${alertType}`;
-                                  }
-
-                                  return sanitizedAlert;
-                                });
-                              }
-                            }
-
-                            const blob = new Blob([JSON.stringify(diagnostics, null, 2)], {
-                              type: 'application/json',
-                            });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            const type = sanitize ? 'sanitized' : 'full';
-                            a.download = `pulse-diagnostics-${type}-${new Date().toISOString().split('T')[0]}.json`;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            URL.revokeObjectURL(url);
-                          };
-
-                          return (
-                            <div class="space-y-3">
-                              <Show when={!diagnosticsData()}>
-                                <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded p-2">
-                                  Run diagnostics first for more comprehensive export data
-                                </div>
-                              </Show>
-                              <div class="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => exportDiagnostics(false)}
-                                  class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                                >
-                                  Export Full
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => exportDiagnostics(true)}
-                                  class="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                                >
-                                  Export for GitHub
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })()}
-
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
-                          <strong>Export Full:</strong> Complete data for private troubleshooting
-                          <br />
-                          <strong>Export for GitHub:</strong> Sanitized data safe for public sharing
-                        </p>
-                      </div>
+                <DiagnosticsPanel />
+              </Show>
+          </div>
+      </div>
+    </Card >
+      </div >
+
+  {/* Delete Node Modal */ }
+  < Show when = { showDeleteNodeModal() } >
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <Card padding="lg" class="w-full max-w-lg space-y-5">
+        <SectionHeader title={`Remove ${nodePendingDeleteLabel()}`} size="md" class="mb-1" />
+        <div class="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+          <p>
+            Removing this {nodePendingDeleteTypeLabel().toLowerCase()} also scrubs the Pulse
+            footprint on the host — the proxy service, SSH key, API token, and bind mount are
+            all cleaned up automatically.
+          </p>
+          <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm leading-relaxed dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
+            <p class="font-medium text-blue-900 dark:text-blue-100">What happens next</p>
+            <ul class="mt-2 list-disc space-y-1 pl-4 text-blue-800 dark:text-blue-200 text-sm">
+              <li>Pulse removes the node entry and clears related alerts.</li>
+              <li>
+                {nodePendingDeleteHost() ? (
+                  <>
+                    The host <span class="font-semibold">{nodePendingDeleteHost()}</span> loses
+                    the proxy service, SSH key, and API token.
+                  </>
+                ) : (
+                  'The host loses the proxy service, SSH key, and API token.'
+                )}
+              </li>
+              <li>
+                If the host comes back later, rerunning the setup script reinstalls everything
+                with a fresh key.
+              </li>
+              <Show when={nodePendingDeleteType() === 'pbs'}>
+                <li>
+                  Backup user tokens on the PBS are removed, so jobs referencing them will no
+                  longer authenticate until the node is re-added.
+                </li>
+              </Show>
+              <Show when={nodePendingDeleteType() === 'pmg'}>
+                <li>
+                  Mail gateway tokens are removed as part of the cleanup; re-enroll to restore
+                  outbound telemetry.
+                </li>
+              </Show>
+            </ul>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={cancelDeleteNode}
+            class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+            disabled={deleteNodeLoading()}
+          >
+            Keep node
+          </button>
+          <button
+            type="button"
+            onClick={deleteNode}
+            disabled={deleteNodeLoading()}
+            class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-red-500 dark:hover:bg-red-400"
+          >
+            {deleteNodeLoading() ? 'Removing…' : 'Remove node'}
+          </button>
+        </div>
+      </Card>
+    </div>
+      </Show >
+
+  {/* Node Modal - Use separate modals for PVE and PBS to ensure clean state */ }
+  < Show when = { isNodeModalVisible('pve') } >
+    <NodeModal
+      isOpen={true}
+      resetKey={modalResetKey()}
+      onClose={() => {
+        setShowNodeModal(false);
+        setEditingNode(null);
+        // Increment resetKey to force form reset on next open
+        setModalResetKey((prev) => prev + 1);
+      }}
+      nodeType="pve"
+      editingNode={editingNode()?.type === 'pve' ? (editingNode() ?? undefined) : undefined}
+      securityStatus={securityStatus() ?? undefined}
+      temperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled(
+        editingNode()?.type === 'pve' ? editingNode() : null,
+      )}
+      temperatureMonitoringLocked={temperatureMonitoringLocked()}
+      savingTemperatureSetting={savingTemperatureSetting()}
+      onToggleTemperatureMonitoring={
+        editingNode()?.id
+          ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
+          : handleTemperatureMonitoringChange
+      }
+      onSave={async (nodeData) => {
+        try {
+          if (editingNode() && editingNode()!.id) {
+            // Update existing node (only if it has a valid ID)
+            await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
+
+            // Update local state
+            setNodes(
+              nodes().map((n) =>
+                n.id === editingNode()!.id
+                  ? {
+                    ...n,
+                    ...nodeData,
+                    // Update hasPassword/hasToken based on whether credentials were provided
+                    hasPassword: nodeData.password ? true : n.hasPassword,
+                    hasToken: nodeData.tokenValue ? true : n.hasToken,
+                    status: 'pending',
+                  }
+                  : n,
+              ),
+            );
+            showSuccess('Node updated successfully');
+          } else {
+            // Add new node
+            await NodesAPI.addNode(nodeData as NodeConfig);
+
+            // Reload nodes to get the new ID
+            const nodesList = await NodesAPI.getNodes();
+            const nodesWithStatus = nodesList.map((node) => ({
+              ...node,
+              // Use the hasPassword/hasToken from the API if available, otherwise check local fields
+              hasPassword: node.hasPassword ?? !!node.password,
+              hasToken: node.hasToken ?? !!node.tokenValue,
+              status: node.status || ('pending' as const),
+            }));
+            setNodes(nodesWithStatus);
+            showSuccess('Node added successfully');
+          }
+
+          setShowNodeModal(false);
+          setEditingNode(null);
+        } catch (error) {
+          showError(error instanceof Error ? error.message : 'Operation failed');
+        }
+      }}
+    />
+      </Show >
+
+  {/* PBS Node Modal - Separate instance to prevent contamination */ }
+  < Show when = { isNodeModalVisible('pbs') } >
+    <NodeModal
+      isOpen={true}
+      resetKey={modalResetKey()}
+      onClose={() => {
+        setShowNodeModal(false);
+        setEditingNode(null);
+        // Increment resetKey to force form reset on next open
+        setModalResetKey((prev) => prev + 1);
+      }}
+      nodeType="pbs"
+      editingNode={editingNode()?.type === 'pbs' ? (editingNode() ?? undefined) : undefined}
+      securityStatus={securityStatus() ?? undefined}
+      temperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled(
+        editingNode()?.type === 'pbs' ? editingNode() : null,
+      )}
+      temperatureMonitoringLocked={temperatureMonitoringLocked()}
+      savingTemperatureSetting={savingTemperatureSetting()}
+      onToggleTemperatureMonitoring={
+        editingNode()?.id
+          ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
+          : handleTemperatureMonitoringChange
+      }
+      onSave={async (nodeData) => {
+        try {
+          if (editingNode() && editingNode()!.id) {
+            // Update existing node (only if it has a valid ID)
+            await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
+
+            // Update local state
+            setNodes(
+              nodes().map((n) =>
+                n.id === editingNode()!.id
+                  ? {
+                    ...n,
+                    ...nodeData,
+                    hasPassword: nodeData.password ? true : n.hasPassword,
+                    hasToken: nodeData.tokenValue ? true : n.hasToken,
+                    status: 'pending',
+                  }
+                  : n,
+              ),
+            );
+            showSuccess('Node updated successfully');
+          } else {
+            // Add new node
+            await NodesAPI.addNode(nodeData as NodeConfig);
+
+            // Reload the nodes list to get the latest state
+            const nodesList = await NodesAPI.getNodes();
+            const nodesWithStatus = nodesList.map((node) => ({
+              ...node,
+              // Use the hasPassword/hasToken from the API if available, otherwise check local fields
+              hasPassword: node.hasPassword ?? !!node.password,
+              hasToken: node.hasToken ?? !!node.tokenValue,
+              status: node.status || ('pending' as const),
+            }));
+            setNodes(nodesWithStatus);
+            showSuccess('Node added successfully');
+          }
+
+          setShowNodeModal(false);
+          setEditingNode(null);
+        } catch (error) {
+          showError(error instanceof Error ? error.message : 'Operation failed');
+        }
+      }}
+    />
+      </Show >
+
+  {/* PMG Node Modal */ }
+  < Show when = { isNodeModalVisible('pmg') } >
+    <NodeModal
+      isOpen={true}
+      resetKey={modalResetKey()}
+      onClose={() => {
+        setShowNodeModal(false);
+        setEditingNode(null);
+        setModalResetKey((prev) => prev + 1);
+      }}
+      nodeType="pmg"
+      editingNode={editingNode()?.type === 'pmg' ? (editingNode() ?? undefined) : undefined}
+      securityStatus={securityStatus() ?? undefined}
+      temperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled(
+        editingNode()?.type === 'pmg' ? editingNode() : null,
+      )}
+      temperatureMonitoringLocked={temperatureMonitoringLocked()}
+      savingTemperatureSetting={savingTemperatureSetting()}
+      onToggleTemperatureMonitoring={
+        editingNode()?.id
+          ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
+          : handleTemperatureMonitoringChange
+      }
+      onSave={async (nodeData) => {
+        try {
+          if (editingNode() && editingNode()!.id) {
+            await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
+            setNodes(
+              nodes().map((n) =>
+                n.id === editingNode()!.id
+                  ? {
+                    ...n,
+                    ...nodeData,
+                    hasPassword: nodeData.password ? true : n.hasPassword,
+                    hasToken: nodeData.tokenValue ? true : n.hasToken,
+                    status: 'pending',
+                  }
+                  : n,
+              ),
+            );
+            showSuccess('Node updated successfully');
+          } else {
+            await NodesAPI.addNode(nodeData as NodeConfig);
+            const nodesList = await NodesAPI.getNodes();
+            const nodesWithStatus = nodesList.map((node) => ({
+              ...node,
+              hasPassword: node.hasPassword ?? !!node.password,
+              hasToken: node.hasToken ?? !!node.tokenValue,
+              status: node.status || ('pending' as const),
+            }));
+            setNodes(nodesWithStatus);
+            showSuccess('Node added successfully');
+          }
+
+          setShowNodeModal(false);
+          setEditingNode(null);
+        } catch (error) {
+          showError(error instanceof Error ? error.message : 'Operation failed');
+        }
+      }}
+    />
+      </Show >
+  {/* Export Dialog */ }
+  < Show when = { showExportDialog() } >
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <Card padding="lg" class="max-w-md w-full">
+        <SectionHeader title="Export configuration" size="md" class="mb-4" />
+
+        <div class="space-y-4">
+          {/* Password Choice Section - Only show if auth is enabled */}
+          <Show when={securityStatus()?.hasAuthentication}>
+            <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              <div class="space-y-3">
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={!useCustomPassphrase()}
+                    onChange={() => {
+                      setUseCustomPassphrase(false);
+                      setExportPassphrase('');
+                    }}
+                    class="mt-1 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div class="flex-1">
+                    <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Use your login password
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Use the same password you use to log into Pulse (recommended)
                     </div>
                   </div>
-                </div>
-              </Show>
+                </label>
+
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={useCustomPassphrase()}
+                    onChange={() => setUseCustomPassphrase(true)}
+                    class="mt-1 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div class="flex-1">
+                    <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Use a custom passphrase
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Create a different passphrase for this backup
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </Show>
+
+          {/* Show password input based on selection */}
+          <div class={formField}>
+            <label class={labelClass()}>
+              {securityStatus()?.hasAuthentication
+                ? useCustomPassphrase()
+                  ? 'Custom Passphrase'
+                  : 'Enter Your Login Password'
+                : 'Encryption Passphrase'}
+            </label>
+            <input
+              type="password"
+              value={exportPassphrase()}
+              onInput={(e) => setExportPassphrase(e.currentTarget.value)}
+              placeholder={
+                securityStatus()?.hasAuthentication
+                  ? useCustomPassphrase()
+                    ? 'Enter a strong passphrase'
+                    : 'Enter your Pulse login password'
+                  : 'Enter a strong passphrase for encryption'
+              }
+              class={controlClass()}
+            />
+            <Show when={!securityStatus()?.hasAuthentication || useCustomPassphrase()}>
+              <p class={`${formHelpText} mt-1`}>
+                You'll need this passphrase to restore the backup.
+              </p>
+            </Show>
+            <Show when={securityStatus()?.hasAuthentication && !useCustomPassphrase()}>
+              <p class={`${formHelpText} mt-1`}>
+                You'll use this same password when restoring the backup
+              </p>
+            </Show>
+          </div>
+
+          <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+            <div class="flex gap-2">
+              <svg
+                class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+              <div class="text-xs text-amber-700 dark:text-amber-300">
+                <strong>Important:</strong> The backup contains node credentials but NOT
+                authentication settings. Each Pulse instance should configure its own login
+                credentials for security. Remember your{' '}
+                {useCustomPassphrase() || !securityStatus()?.hasAuthentication
+                  ? 'passphrase'
+                  : 'password'}{' '}
+                for restoring.
+              </div>
             </div>
           </div>
-        </Card>
-      </div>
 
-      {/* Delete Node Modal */}
-      <Show when={showDeleteNodeModal()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <Card padding="lg" class="w-full max-w-lg space-y-5">
-            <SectionHeader title={`Remove ${nodePendingDeleteLabel()}`} size="md" class="mb-1" />
-            <div class="space-y-3 text-sm text-gray-600 dark:text-gray-300">
-              <p>
-                Removing this {nodePendingDeleteTypeLabel().toLowerCase()} also scrubs the Pulse
-                footprint on the host — the proxy service, SSH key, API token, and bind mount are
-                all cleaned up automatically.
-              </p>
-              <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm leading-relaxed dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
-                <p class="font-medium text-blue-900 dark:text-blue-100">What happens next</p>
-                <ul class="mt-2 list-disc space-y-1 pl-4 text-blue-800 dark:text-blue-200 text-sm">
-                  <li>Pulse removes the node entry and clears related alerts.</li>
-                  <li>
-                    {nodePendingDeleteHost() ? (
-                      <>
-                        The host <span class="font-semibold">{nodePendingDeleteHost()}</span> loses
-                        the proxy service, SSH key, and API token.
-                      </>
-                    ) : (
-                      'The host loses the proxy service, SSH key, and API token.'
-                    )}
-                  </li>
-                  <li>
-                    If the host comes back later, rerunning the setup script reinstalls everything
-                    with a fresh key.
-                  </li>
-                  <Show when={nodePendingDeleteType() === 'pbs'}>
-                    <li>
-                      Backup user tokens on the PBS are removed, so jobs referencing them will no
-                      longer authenticate until the node is re-added.
-                    </li>
-                  </Show>
-                  <Show when={nodePendingDeleteType() === 'pmg'}>
-                    <li>
-                      Mail gateway tokens are removed as part of the cleanup; re-enroll to restore
-                      outbound telemetry.
-                    </li>
-                  </Show>
-                </ul>
-              </div>
-            </div>
-
-            <div class="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={cancelDeleteNode}
-                class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-                disabled={deleteNodeLoading()}
-              >
-                Keep node
-              </button>
-              <button
-                type="button"
-                onClick={deleteNode}
-                disabled={deleteNodeLoading()}
-                class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-red-500 dark:hover:bg-red-400"
-              >
-                {deleteNodeLoading() ? 'Removing…' : 'Remove node'}
-              </button>
-            </div>
-          </Card>
-        </div>
-      </Show>
-
-      {/* Node Modal - Use separate modals for PVE and PBS to ensure clean state */}
-      <Show when={isNodeModalVisible('pve')}>
-        <NodeModal
-          isOpen={true}
-          resetKey={modalResetKey()}
-          onClose={() => {
-            setShowNodeModal(false);
-            setEditingNode(null);
-            // Increment resetKey to force form reset on next open
-            setModalResetKey((prev) => prev + 1);
-          }}
-          nodeType="pve"
-          editingNode={editingNode()?.type === 'pve' ? (editingNode() ?? undefined) : undefined}
-          securityStatus={securityStatus() ?? undefined}
-          temperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled(
-            editingNode()?.type === 'pve' ? editingNode() : null,
-          )}
-          temperatureMonitoringLocked={temperatureMonitoringLocked()}
-          savingTemperatureSetting={savingTemperatureSetting()}
-          onToggleTemperatureMonitoring={
-            editingNode()?.id
-              ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
-              : handleTemperatureMonitoringChange
-          }
-          onSave={async (nodeData) => {
-            try {
-              if (editingNode() && editingNode()!.id) {
-                // Update existing node (only if it has a valid ID)
-                await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
-
-                // Update local state
-                setNodes(
-                  nodes().map((n) =>
-                    n.id === editingNode()!.id
-                      ? {
-                        ...n,
-                        ...nodeData,
-                        // Update hasPassword/hasToken based on whether credentials were provided
-                        hasPassword: nodeData.password ? true : n.hasPassword,
-                        hasToken: nodeData.tokenValue ? true : n.hasToken,
-                        status: 'pending',
-                      }
-                      : n,
-                  ),
-                );
-                showSuccess('Node updated successfully');
-              } else {
-                // Add new node
-                await NodesAPI.addNode(nodeData as NodeConfig);
-
-                // Reload nodes to get the new ID
-                const nodesList = await NodesAPI.getNodes();
-                const nodesWithStatus = nodesList.map((node) => ({
-                  ...node,
-                  // Use the hasPassword/hasToken from the API if available, otherwise check local fields
-                  hasPassword: node.hasPassword ?? !!node.password,
-                  hasToken: node.hasToken ?? !!node.tokenValue,
-                  status: node.status || ('pending' as const),
-                }));
-                setNodes(nodesWithStatus);
-                showSuccess('Node added successfully');
+          <div class="flex justify-end space-x-3">
+            <button
+              type="button"
+              onClick={() => {
+                setShowExportDialog(false);
+                setExportPassphrase('');
+                setUseCustomPassphrase(false);
+              }}
+              class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={
+                !exportPassphrase() || (useCustomPassphrase() && exportPassphrase().length < 12)
               }
+              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Export
+            </button>
+          </div>
+        </div>
+      </Card>
+    </div>
+      </Show >
 
-              setShowNodeModal(false);
-              setEditingNode(null);
-            } catch (error) {
-              showError(error instanceof Error ? error.message : 'Operation failed');
-            }
-          }}
-        />
-      </Show>
+  {/* API Token Modal */ }
+  < Show when = { showApiTokenModal() } >
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <Card padding="lg" class="max-w-md w-full">
+        <SectionHeader title="API token required" size="md" class="mb-4" />
 
-      {/* PBS Node Modal - Separate instance to prevent contamination */}
-      <Show when={isNodeModalVisible('pbs')}>
-        <NodeModal
-          isOpen={true}
-          resetKey={modalResetKey()}
-          onClose={() => {
-            setShowNodeModal(false);
-            setEditingNode(null);
-            // Increment resetKey to force form reset on next open
-            setModalResetKey((prev) => prev + 1);
-          }}
-          nodeType="pbs"
-          editingNode={editingNode()?.type === 'pbs' ? (editingNode() ?? undefined) : undefined}
-          securityStatus={securityStatus() ?? undefined}
-          temperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled(
-            editingNode()?.type === 'pbs' ? editingNode() : null,
-          )}
-          temperatureMonitoringLocked={temperatureMonitoringLocked()}
-          savingTemperatureSetting={savingTemperatureSetting()}
-          onToggleTemperatureMonitoring={
-            editingNode()?.id
-              ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
-              : handleTemperatureMonitoringChange
-          }
-          onSave={async (nodeData) => {
-            try {
-              if (editingNode() && editingNode()!.id) {
-                // Update existing node (only if it has a valid ID)
-                await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
+        <div class="space-y-4">
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            This Pulse instance requires an API token for export/import operations. Please enter
+            the API token configured on the server.
+          </p>
 
-                // Update local state
-                setNodes(
-                  nodes().map((n) =>
-                    n.id === editingNode()!.id
-                      ? {
-                        ...n,
-                        ...nodeData,
-                        hasPassword: nodeData.password ? true : n.hasPassword,
-                        hasToken: nodeData.tokenValue ? true : n.hasToken,
-                        status: 'pending',
-                      }
-                      : n,
-                  ),
-                );
-                showSuccess('Node updated successfully');
+          <div class={formField}>
+            <label class={labelClass()}>API Token</label>
+            <input
+              type="password"
+              value={apiTokenInput()}
+              onInput={(e) => setApiTokenInput(e.currentTarget.value)}
+              placeholder="Enter API token"
+              class={controlClass()}
+            />
+          </div>
+
+          <div class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded p-2">
+            <p class="font-semibold mb-1">The API token is set as an environment variable:</p>
+            <code class="block">API_TOKENS=token-for-export,token-for-automation</code>
+          </div>
+        </div>
+
+        <div class="flex justify-end space-x-2 mt-6">
+          <button
+            type="button"
+            onClick={() => {
+              setShowApiTokenModal(false);
+              setApiTokenInput('');
+            }}
+            class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (apiTokenInput()) {
+                const tokenValue = apiTokenInput()!;
+                setApiClientToken(tokenValue);
+                const source = apiTokenModalSource();
+                setShowApiTokenModal(false);
+                setApiTokenInput('');
+                setApiTokenModalSource(null);
+                // Retry the operation that triggered the modal
+                if (source === 'export') {
+                  handleExport();
+                } else if (source === 'import') {
+                  handleImport();
+                }
               } else {
-                // Add new node
-                await NodesAPI.addNode(nodeData as NodeConfig);
-
-                // Reload the nodes list to get the latest state
-                const nodesList = await NodesAPI.getNodes();
-                const nodesWithStatus = nodesList.map((node) => ({
-                  ...node,
-                  // Use the hasPassword/hasToken from the API if available, otherwise check local fields
-                  hasPassword: node.hasPassword ?? !!node.password,
-                  hasToken: node.hasToken ?? !!node.tokenValue,
-                  status: node.status || ('pending' as const),
-                }));
-                setNodes(nodesWithStatus);
-                showSuccess('Node added successfully');
+                showError('Please enter the API token');
               }
-
-              setShowNodeModal(false);
-              setEditingNode(null);
-            } catch (error) {
-              showError(error instanceof Error ? error.message : 'Operation failed');
-            }
-          }}
-        />
-      </Show>
-
-      {/* PMG Node Modal */}
-      <Show when={isNodeModalVisible('pmg')}>
-        <NodeModal
-          isOpen={true}
-          resetKey={modalResetKey()}
-          onClose={() => {
-            setShowNodeModal(false);
-            setEditingNode(null);
-            setModalResetKey((prev) => prev + 1);
-          }}
-          nodeType="pmg"
-          editingNode={editingNode()?.type === 'pmg' ? (editingNode() ?? undefined) : undefined}
-          securityStatus={securityStatus() ?? undefined}
-          temperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled(
-            editingNode()?.type === 'pmg' ? editingNode() : null,
-          )}
-          temperatureMonitoringLocked={temperatureMonitoringLocked()}
-          savingTemperatureSetting={savingTemperatureSetting()}
-          onToggleTemperatureMonitoring={
-            editingNode()?.id
-              ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
-              : handleTemperatureMonitoringChange
-          }
-          onSave={async (nodeData) => {
-            try {
-              if (editingNode() && editingNode()!.id) {
-                await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
-                setNodes(
-                  nodes().map((n) =>
-                    n.id === editingNode()!.id
-                      ? {
-                        ...n,
-                        ...nodeData,
-                        hasPassword: nodeData.password ? true : n.hasPassword,
-                        hasToken: nodeData.tokenValue ? true : n.hasToken,
-                        status: 'pending',
-                      }
-                      : n,
-                  ),
-                );
-                showSuccess('Node updated successfully');
-              } else {
-                await NodesAPI.addNode(nodeData as NodeConfig);
-                const nodesList = await NodesAPI.getNodes();
-                const nodesWithStatus = nodesList.map((node) => ({
-                  ...node,
-                  hasPassword: node.hasPassword ?? !!node.password,
-                  hasToken: node.hasToken ?? !!node.tokenValue,
-                  status: node.status || ('pending' as const),
-                }));
-                setNodes(nodesWithStatus);
-                showSuccess('Node added successfully');
-              }
-
-              setShowNodeModal(false);
-              setEditingNode(null);
-            } catch (error) {
-              showError(error instanceof Error ? error.message : 'Operation failed');
-            }
-          }}
-        />
-      </Show>
-      {/* Export Dialog */}
-      <Show when={showExportDialog()}>
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <Card padding="lg" class="max-w-md w-full">
-            <SectionHeader title="Export configuration" size="md" class="mb-4" />
-
-            <div class="space-y-4">
-              {/* Password Choice Section - Only show if auth is enabled */}
-              <Show when={securityStatus()?.hasAuthentication}>
-                <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <div class="space-y-3">
-                    <label class="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="radio"
-                        checked={!useCustomPassphrase()}
-                        onChange={() => {
-                          setUseCustomPassphrase(false);
-                          setExportPassphrase('');
-                        }}
-                        class="mt-1 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div class="flex-1">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Use your login password
-                        </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          Use the same password you use to log into Pulse (recommended)
-                        </div>
-                      </div>
-                    </label>
-
-                    <label class="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="radio"
-                        checked={useCustomPassphrase()}
-                        onChange={() => setUseCustomPassphrase(true)}
-                        class="mt-1 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div class="flex-1">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Use a custom passphrase
-                        </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          Create a different passphrase for this backup
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-              </Show>
-
-              {/* Show password input based on selection */}
-              <div class={formField}>
-                <label class={labelClass()}>
-                  {securityStatus()?.hasAuthentication
-                    ? useCustomPassphrase()
-                      ? 'Custom Passphrase'
-                      : 'Enter Your Login Password'
-                    : 'Encryption Passphrase'}
-                </label>
-                <input
-                  type="password"
-                  value={exportPassphrase()}
-                  onInput={(e) => setExportPassphrase(e.currentTarget.value)}
-                  placeholder={
-                    securityStatus()?.hasAuthentication
-                      ? useCustomPassphrase()
-                        ? 'Enter a strong passphrase'
-                        : 'Enter your Pulse login password'
-                      : 'Enter a strong passphrase for encryption'
-                  }
-                  class={controlClass()}
-                />
-                <Show when={!securityStatus()?.hasAuthentication || useCustomPassphrase()}>
-                  <p class={`${formHelpText} mt-1`}>
-                    You'll need this passphrase to restore the backup.
-                  </p>
-                </Show>
-                <Show when={securityStatus()?.hasAuthentication && !useCustomPassphrase()}>
-                  <p class={`${formHelpText} mt-1`}>
-                    You'll use this same password when restoring the backup
-                  </p>
-                </Show>
-              </div>
-
-              <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                <div class="flex gap-2">
-                  <svg
-                    class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
-                  </svg>
-                  <div class="text-xs text-amber-700 dark:text-amber-300">
-                    <strong>Important:</strong> The backup contains node credentials but NOT
-                    authentication settings. Each Pulse instance should configure its own login
-                    credentials for security. Remember your{' '}
-                    {useCustomPassphrase() || !securityStatus()?.hasAuthentication
-                      ? 'passphrase'
-                      : 'password'}{' '}
-                    for restoring.
-                  </div>
-                </div>
-              </div>
-
-              <div class="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowExportDialog(false);
-                    setExportPassphrase('');
-                    setUseCustomPassphrase(false);
-                  }}
-                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExport}
-                  disabled={
-                    !exportPassphrase() || (useCustomPassphrase() && exportPassphrase().length < 12)
-                  }
-                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Export
-                </button>
-              </div>
-            </div>
-          </Card>
+            }}
+            disabled={!apiTokenInput()}
+            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Authenticate
+          </button>
         </div>
-      </Show>
+      </Card>
+    </div>
+      </Show >
 
-      {/* API Token Modal */}
-      <Show when={showApiTokenModal()}>
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <Card padding="lg" class="max-w-md w-full">
-            <SectionHeader title="API token required" size="md" class="mb-4" />
+  {/* Import Dialog */ }
+  < Show when = { showImportDialog() } >
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <Card padding="lg" class="max-w-md w-full">
+        <SectionHeader title="Import configuration" size="md" class="mb-4" />
 
-            <div class="space-y-4">
-              <p class="text-sm text-gray-600 dark:text-gray-400">
-                This Pulse instance requires an API token for export/import operations. Please enter
-                the API token configured on the server.
-              </p>
+        <div class="space-y-4">
+          <div class={formField}>
+            <label class={labelClass()}>Configuration File</label>
+            <input
+              type="file"
+              accept=".json"
+              onChange={(e) => {
+                const file = e.currentTarget.files?.[0];
+                if (file) setImportFile(file);
+              }}
+              class={controlClass('cursor-pointer')}
+            />
+          </div>
 
-              <div class={formField}>
-                <label class={labelClass()}>API Token</label>
-                <input
-                  type="password"
-                  value={apiTokenInput()}
-                  onInput={(e) => setApiTokenInput(e.currentTarget.value)}
-                  placeholder="Enter API token"
-                  class={controlClass()}
-                />
-              </div>
+          <div class={formField}>
+            <label class={labelClass()}>Backup Password</label>
+            <input
+              type="password"
+              value={importPassphrase()}
+              onInput={(e) => setImportPassphrase(e.currentTarget.value)}
+              placeholder="Enter the password used when creating this backup"
+              class={controlClass()}
+            />
+            <p class={`${formHelpText} mt-1`}>
+              This is usually your Pulse login password, unless you used a custom passphrase
+            </p>
+          </div>
 
-              <div class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded p-2">
-                <p class="font-semibold mb-1">The API token is set as an environment variable:</p>
-                <code class="block">API_TOKENS=token-for-export,token-for-automation</code>
-              </div>
-            </div>
+          <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded p-3">
+            <p class="text-xs text-yellow-700 dark:text-yellow-300">
+              <strong>Warning:</strong> Importing will replace all current configuration. This
+              action cannot be undone.
+            </p>
+          </div>
 
-            <div class="flex justify-end space-x-2 mt-6">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowApiTokenModal(false);
-                  setApiTokenInput('');
-                }}
-                class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (apiTokenInput()) {
-                    const tokenValue = apiTokenInput()!;
-                    setApiClientToken(tokenValue);
-                    const source = apiTokenModalSource();
-                    setShowApiTokenModal(false);
-                    setApiTokenInput('');
-                    setApiTokenModalSource(null);
-                    // Retry the operation that triggered the modal
-                    if (source === 'export') {
-                      handleExport();
-                    } else if (source === 'import') {
-                      handleImport();
-                    }
-                  } else {
-                    showError('Please enter the API token');
-                  }
-                }}
-                disabled={!apiTokenInput()}
-                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Authenticate
-              </button>
-            </div>
-          </Card>
+          <div class="flex justify-end space-x-3">
+            <button
+              type="button"
+              onClick={() => {
+                setShowImportDialog(false);
+                setImportPassphrase('');
+                setImportFile(null);
+              }}
+              class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleImport}
+              disabled={!importPassphrase() || !importFile()}
+              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Import
+            </button>
+          </div>
         </div>
-      </Show>
+      </Card>
+    </div>
+      </Show >
 
-      {/* Import Dialog */}
-      <Show when={showImportDialog()}>
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <Card padding="lg" class="max-w-md w-full">
-            <SectionHeader title="Import configuration" size="md" class="mb-4" />
-
-            <div class="space-y-4">
-              <div class={formField}>
-                <label class={labelClass()}>Configuration File</label>
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={(e) => {
-                    const file = e.currentTarget.files?.[0];
-                    if (file) setImportFile(file);
-                  }}
-                  class={controlClass('cursor-pointer')}
-                />
-              </div>
-
-              <div class={formField}>
-                <label class={labelClass()}>Backup Password</label>
-                <input
-                  type="password"
-                  value={importPassphrase()}
-                  onInput={(e) => setImportPassphrase(e.currentTarget.value)}
-                  placeholder="Enter the password used when creating this backup"
-                  class={controlClass()}
-                />
-                <p class={`${formHelpText} mt-1`}>
-                  This is usually your Pulse login password, unless you used a custom passphrase
-                </p>
-              </div>
-
-              <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded p-3">
-                <p class="text-xs text-yellow-700 dark:text-yellow-300">
-                  <strong>Warning:</strong> Importing will replace all current configuration. This
-                  action cannot be undone.
-                </p>
-              </div>
-
-              <div class="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowImportDialog(false);
-                    setImportPassphrase('');
-                    setImportFile(null);
-                  }}
-                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleImport}
-                  disabled={!importPassphrase() || !importFile()}
-                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Import
-                </button>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </Show>
-
-      <ChangePasswordModal
-        isOpen={showPasswordModal()}
-        onClose={() => {
-          setShowPasswordModal(false);
-          // Refresh security status after password change
-          loadSecurityStatus();
-        }}
-      />
+  <ChangePasswordModal
+    isOpen={showPasswordModal()}
+    onClose={() => {
+      setShowPasswordModal(false);
+      // Refresh security status after password change
+      loadSecurityStatus();
+    }}
+  />
     </>
   );
 };
