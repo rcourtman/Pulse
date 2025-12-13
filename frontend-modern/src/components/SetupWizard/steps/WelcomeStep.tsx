@@ -1,5 +1,6 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { showError, showSuccess } from '@/utils/toast';
+import { logger } from '@/utils/logger';
 
 interface WelcomeStepProps {
     onNext: () => void;
@@ -30,7 +31,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                 }
             }
         } catch (error) {
-            console.error('Failed to fetch bootstrap info:', error);
+            logger.error('Failed to fetch bootstrap info:', error);
         }
     };
 
