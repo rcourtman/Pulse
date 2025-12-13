@@ -1564,16 +1564,81 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 		Msg("Logged remediation action to operational memory")
 }
 
-// hasAgentForTarget checks if we have an agent connection for the given target
+// hasAgentForTarget checks if we have an agent connection for the given target.
+// This uses the same routing logic as command execution to determine if the target
+// can be reached, including cluster peer routing for Proxmox clusters.
 func (s *Service) hasAgentForTarget(req ExecuteRequest) bool {
 	if s.agentServer == nil {
 		return false
 	}
 
-	// For now, just check if any agent is connected
-	// TODO: Map target to specific agent based on hostname/node
 	agents := s.agentServer.GetConnectedAgents()
-	return len(agents) > 0
+	if len(agents) == 0 {
+		return false
+	}
+
+	// For host targets with no specific context, any agent will do
+	if req.TargetType == "host" && len(req.Context) == 0 {
+		return true
+	}
+
+	// Try to determine the target node from the request context
+	// This mirrors the logic in routeToAgent
+	targetNode := ""
+
+	// Check context fields for the target node
+	hostFields := []string{"node", "host", "guest_node", "hostname", "host_name", "target_host"}
+	for _, field := range hostFields {
+		if value, ok := req.Context[field].(string); ok && value != "" {
+			targetNode = strings.ToLower(value)
+			break
+		}
+	}
+
+	// If no target node found in context, try the ResourceProvider
+	if targetNode == "" {
+		s.mu.RLock()
+		rp := s.resourceProvider
+		s.mu.RUnlock()
+
+		if rp != nil {
+			resourceName := ""
+			if name, ok := req.Context["containerName"].(string); ok && name != "" {
+				resourceName = name
+			} else if name, ok := req.Context["name"].(string); ok && name != "" {
+				resourceName = name
+			} else if name, ok := req.Context["guestName"].(string); ok && name != "" {
+				resourceName = name
+			}
+
+			if resourceName != "" {
+				if host := rp.FindContainerHost(resourceName); host != "" {
+					targetNode = strings.ToLower(host)
+				}
+			}
+		}
+	}
+
+	// If we still don't have a target node, check for single agent scenario
+	if targetNode == "" {
+		// For unknown targets, we need at least one agent
+		// The actual routing will determine which one to use
+		return len(agents) >= 1
+	}
+
+	// Check if we have a direct agent match or a cluster peer
+	for _, agent := range agents {
+		if strings.EqualFold(agent.Hostname, targetNode) {
+			return true
+		}
+	}
+
+	// Try cluster peer routing (for Proxmox clusters)
+	if peerAgentID := s.findClusterPeerAgent(targetNode, agents); peerAgentID != "" {
+		return true
+	}
+
+	return false
 }
 
 // getTools returns the available tools for AI
