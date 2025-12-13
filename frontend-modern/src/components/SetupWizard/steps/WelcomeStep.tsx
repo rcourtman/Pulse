@@ -99,22 +99,6 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                 </p>
             </div>
 
-            {/* Feature highlights */}
-            <div class="grid grid-cols-3 gap-4 mb-8">
-                <div class="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
-                    <div class="text-2xl mb-2">🖥️</div>
-                    <div class="text-sm text-white/80">Proxmox</div>
-                </div>
-                <div class="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
-                    <div class="text-2xl mb-2">🐳</div>
-                    <div class="text-sm text-white/80">Docker</div>
-                </div>
-                <div class="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
-                    <div class="text-2xl mb-2">☸️</div>
-                    <div class="text-sm text-white/80">Kubernetes</div>
-                </div>
-            </div>
-
             {/* Bootstrap token unlock */}
             <Show when={!props.isUnlocked}>
                 <div class="bg-white/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20 text-left">
