@@ -16,6 +16,7 @@ import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 
 type StorageSortKey = 'name' | 'node' | 'type' | 'status' | 'usage' | 'free' | 'total';
@@ -59,6 +60,9 @@ const Storage: Component = () => {
         raw === 'all' || raw === 'available' || raw === 'offline' ? raw : 'all',
     },
   );
+
+  // PERFORMANCE: Debounce search term to prevent jank during rapid typing
+  const debouncedSearchTerm = useDebouncedValue(() => searchTerm(), 200);
 
   // Create a mapping from node instance ID to node object
   const nodeByInstance = createMemo(() => {
@@ -338,8 +342,8 @@ const Storage: Component = () => {
       });
     }
 
-    // Apply search filter
-    let search = searchTerm().toLowerCase().trim();
+    // Apply search filter - PERFORMANCE: Use debounced search term
+    let search = debouncedSearchTerm().toLowerCase().trim();
     if (search) {
       const nodePattern = /node:([a-z0-9_.:-]+)/i;
       const nodeMatch = search.match(nodePattern);
