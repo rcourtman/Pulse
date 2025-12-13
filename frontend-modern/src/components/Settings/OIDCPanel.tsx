@@ -221,8 +221,34 @@ export const OIDCPanel: Component<Props> = (props) => {
           />
           <Toggle
             checked={form.enabled}
-            onChange={(event) => {
-              setForm('enabled', event.currentTarget.checked);
+            onChange={async (event) => {
+              const newValue = event.currentTarget.checked;
+              setForm('enabled', newValue);
+
+              // Auto-save when DISABLING (safe operation)
+              // When ENABLING, require full form save to ensure issuerUrl and clientId are set
+              if (!newValue && config()?.enabled) {
+                try {
+                  const { apiFetch } = await import('@/utils/apiClient');
+                  const response = await apiFetch('/api/security/oidc', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: false }),
+                  });
+                  if (!response.ok) throw new Error('Failed to disable OIDC');
+                  const updated = (await response.json()) as OIDCConfigResponse;
+                  setConfig(updated);
+                  notificationStore.success('OIDC disabled');
+                  props.onConfigUpdated?.(updated);
+                } catch (error) {
+                  setForm('enabled', true); // Revert
+                  logger.error('[OIDCPanel] Failed to disable OIDC:', error);
+                  notificationStore.error('Failed to disable OIDC');
+                }
+              } else if (newValue && !config()?.enabled) {
+                // Show hint that save is required
+                notificationStore.info('Configure issuer URL and client ID, then click Save', 3000);
+              }
             }}
             disabled={isEnvLocked() || loading() || saving()}
             containerClass="items-center gap-2"
