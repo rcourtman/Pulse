@@ -1037,29 +1037,45 @@ export const AISettings: Component = () => {
                   />
                 </div>
 
-                {/* Auto-Fix Warning & Acknowledgement */}
+                {/* Auto-Fix Warning & Acknowledgement - Simplified inline flow */}
                 <Show when={!form.patrolAutoFix}>
-                  <div class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
-                    <div class="flex gap-2">
-                      <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      <div class="text-xs text-amber-800 dark:text-amber-200">
-                        <p class="font-semibold mb-1">Before enabling Auto-Fix Mode:</p>
-                        <ul class="list-disc pl-4 space-y-0.5 mb-2">
-                          <li>AI will execute commands <strong>without asking for approval</strong></li>
-                          <li>Actions may be <strong>irreversible</strong> (e.g., restarting services, clearing caches)</li>
-                          <li>Recommended to test in non-production environments first</li>
-                        </ul>
-                        <label class="flex items-center gap-2 cursor-pointer mt-2 pt-2 border-t border-amber-200 dark:border-amber-700">
-                          <input
-                            type="checkbox"
-                            checked={autoFixAcknowledged()}
-                            onChange={(e) => setAutoFixAcknowledged(e.currentTarget.checked)}
-                            class="w-4 h-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
-                          />
-                          <span class="font-medium">I understand the risks and want to enable Auto-Fix</span>
-                        </label>
+                  <div class="mt-3 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-200 dark:border-amber-800 rounded-xl">
+                    <div class="flex items-start gap-3">
+                      <div class="p-2 bg-amber-100 dark:bg-amber-800 rounded-lg flex-shrink-0">
+                        <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-2">Enable Auto-Fix Mode?</p>
+                        <div class="text-xs text-amber-700 dark:text-amber-300 space-y-1 mb-3">
+                          <div class="flex items-center gap-2">
+                            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3" /></svg>
+                            <span>AI executes remediation commands <strong>without approval</strong></span>
+                          </div>
+                          <div class="flex items-center gap-2">
+                            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3" /></svg>
+                            <span>Actions may be <strong>irreversible</strong> (restarts, cache clears, etc.)</span>
+                          </div>
+                          <div class="flex items-center gap-2">
+                            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3" /></svg>
+                            <span>Test in staging/dev environments first</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAutoFixAcknowledged(true);
+                            setForm('patrolAutoFix', true);
+                          }}
+                          disabled={saving()}
+                          class="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          I understand, enable Auto-Fix
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1122,36 +1138,67 @@ export const AISettings: Component = () => {
               </div>
             </div>
 
-            {/* AI Cost Controls */}
-            <div class={`${formField} p-4 rounded-lg border bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800`}>
-              <div class="mb-2">
-                <label class={`${labelClass()} flex items-center gap-2`}>
-                  AI Cost Controls
-                </label>
-                <p class="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
-                  This budget is a cross-provider estimate for Pulse usage. Provider dashboards remain the source of truth for billing.
-                </p>
+            {/* AI Cost Controls - Prominent positioning */}
+            <div class={`${formField} p-4 rounded-lg border bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-emerald-200 dark:border-emerald-800`}>
+              <div class="flex items-center gap-3 mb-3">
+                <div class="p-2 bg-emerald-100 dark:bg-emerald-800 rounded-lg">
+                  <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div class="flex-1">
+                  <label class={`${labelClass()} flex items-center gap-2`}>
+                    AI Cost Controls
+                    <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-800 text-emerald-700 dark:text-emerald-300 rounded">RECOMMENDED</span>
+                  </label>
+                  <p class="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
+                    Set a budget alert for cross-provider cost tracking
+                  </p>
+                </div>
               </div>
 
-              <div>
-                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Budget alert (USD per 30 days)
-                </label>
-                <input
-                  type="number"
-                  class={controlClass()}
-                  value={form.costBudgetUSD30d}
-                  onInput={(e) => setForm('costBudgetUSD30d', e.currentTarget.value)}
-                  min={0}
-                  step={1}
-                  placeholder="0 (disabled)"
-                  disabled={saving()}
-                  style={{ width: '180px' }}
-                />
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Set to 0 to disable. Cost dashboard pro-rates for shorter ranges.
-                </p>
+              <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div class="flex-shrink-0">
+                  <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    30-day budget (USD)
+                  </label>
+                  <div class="relative">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-sm">$</span>
+                    <input
+                      type="number"
+                      class="w-32 pl-7 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      value={form.costBudgetUSD30d}
+                      onInput={(e) => setForm('costBudgetUSD30d', e.currentTarget.value)}
+                      min={0}
+                      step={1}
+                      placeholder="0"
+                      disabled={saving()}
+                    />
+                  </div>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <Show when={parseFloat(form.costBudgetUSD30d) > 0}>
+                    <div class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                      <div class="flex items-center justify-between">
+                        <span>Daily equivalent</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100">${(parseFloat(form.costBudgetUSD30d) / 30).toFixed(2)}/day</span>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <span>Weekly equivalent</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100">${(parseFloat(form.costBudgetUSD30d) / 4.3).toFixed(2)}/week</span>
+                      </div>
+                    </div>
+                  </Show>
+                  <Show when={!form.costBudgetUSD30d || parseFloat(form.costBudgetUSD30d) === 0}>
+                    <div class="p-2 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded text-xs text-amber-700 dark:text-amber-300">
+                      💡 Set a budget to get proactive alerts before overspending
+                    </div>
+                  </Show>
+                </div>
               </div>
+              <p class="text-[10px] text-emerald-600 dark:text-emerald-400 mt-2">
+                This is a cross-provider estimate. Provider dashboards are the source of truth for billing.
+              </p>
             </div>
 
 
