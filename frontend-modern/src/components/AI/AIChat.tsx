@@ -1156,8 +1156,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
                             </Match>
                             <Match when={evt.type === 'content' && evt.content}>
                               {/* Content chunk - rendered as markdown */}
+                              {/* DOMPurify sanitizes LLM output in renderMarkdown before HTML rendering. */}
                               <div
                                 class="text-sm prose prose-sm dark:prose-invert max-w-none prose-pre:bg-gray-800 prose-pre:text-gray-100 prose-code:text-purple-600 dark:prose-code:text-purple-400 prose-code:before:content-none prose-code:after:content-none"
+                                // eslint-disable-next-line solid/no-innerhtml -- HTML is sanitized via DOMPurify in renderMarkdown
                                 innerHTML={renderMarkdown(evt.content!)}
                               />
                             </Match>
@@ -1191,6 +1193,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   <Show when={message.content && (!message.streamEvents || message.streamEvents.length === 0)}>
                     <div
                       class="text-sm prose prose-sm dark:prose-invert max-w-none prose-pre:bg-gray-800 prose-pre:text-gray-100 prose-code:text-purple-600 dark:prose-code:text-purple-400 prose-code:before:content-none prose-code:after:content-none"
+                      // eslint-disable-next-line solid/no-innerhtml -- HTML is sanitized via DOMPurify in renderMarkdown
                       innerHTML={renderMarkdown(message.content)}
                     />
                   </Show>

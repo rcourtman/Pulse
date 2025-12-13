@@ -210,7 +210,7 @@ export class AIAPI {
     let lastEventTime = Date.now();
 
     try {
-      while (true) {
+      for (;;) {
         if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
           console.warn('[AI] Alert investigation stream timeout');
           break;
@@ -305,7 +305,7 @@ export class AIAPI {
     logger.debug('[AI SSE] Starting to read stream');
 
     try {
-      while (true) {
+      for (;;) {
         // Check for stream timeout
         if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
           logger.warn('[AI SSE] Stream timeout', { seconds: STREAM_TIMEOUT_MS / 1000 });
@@ -397,7 +397,7 @@ export class AIAPI {
             if (data.type === 'complete') receivedComplete = true;
             if (data.type === 'done') receivedDone = true;
           }
-        } catch (e) {
+        } catch {
           logger.warn('[AI SSE] Could not parse remaining buffer', { preview: buffer.substring(0, 100) });
         }
       }

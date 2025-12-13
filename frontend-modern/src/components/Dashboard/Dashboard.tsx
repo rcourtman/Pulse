@@ -1122,9 +1122,9 @@ export function Dashboard(props: DashboardProps) {
                             onClick={() => isSortable && handleSort(sortKeyForCol!)}
                             title={col.icon ? col.label : undefined}
                           >
-                            <div class={`flex items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`} style={{ "min-height": "14px" }}>
+                              <div class={`flex items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`} style={{ "min-height": "14px" }}>
                               {col.icon ? (
-                                <span class="flex items-center" innerHTML={col.icon} />
+                                <span class="flex items-center">{col.icon}</span>
                               ) : (
                                 col.label
                               )}
