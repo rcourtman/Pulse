@@ -533,6 +533,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               {node!.isClusterMember ? node!.clusterName : 'Standalone'}
                             </span>
                           </Show>
+                          <Show when={isPVEItem && node!.linkedHostAgentId}>
+                            <span
+                              class="text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                              title="Pulse host agent installed for enhanced metrics"
+                            >
+                              +Agent
+                            </span>
+                          </Show>
                           <Show when={isPBSItem}>
                             <span class="text-[9px] px-1 py-0 rounded font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
                               PBS

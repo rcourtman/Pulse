@@ -44,11 +44,20 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
       <Show when={props.node.isClusterMember !== undefined}>
         <span
           class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${props.node.isClusterMember
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-              : 'bg-slate-200 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300'
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+            : 'bg-slate-200 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300'
             }`}
         >
           {props.node.isClusterMember ? props.node.clusterName : 'Standalone'}
+        </span>
+      </Show>
+
+      <Show when={props.node.linkedHostAgentId}>
+        <span
+          class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
+          title="Pulse host agent is installed on this node for enhanced metrics (temperatures, detailed disks, RAID status)"
+        >
+          + Host Agent
         </span>
       </Show>
     </div>
