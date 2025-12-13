@@ -2830,15 +2830,34 @@ func New(cfg *config.Config) (*Monitor, error) {
 	guestAgentVersionTimeout := parseDurationEnv("GUEST_AGENT_VERSION_TIMEOUT", defaultGuestAgentVersionTimeout)
 	guestAgentRetries := parseIntEnv("GUEST_AGENT_RETRIES", defaultGuestAgentRetries)
 
-	// Initialize persistent metrics store (SQLite)
+	// Initialize persistent metrics store (SQLite) with configurable retention
 	var metricsStore *metrics.Store
 	metricsStoreConfig := metrics.DefaultConfig(cfg.DataPath)
+	// Override retention settings from config (allows tier-based pricing in future)
+	if cfg.MetricsRetentionRawHours > 0 {
+		metricsStoreConfig.RetentionRaw = time.Duration(cfg.MetricsRetentionRawHours) * time.Hour
+	}
+	if cfg.MetricsRetentionMinuteHours > 0 {
+		metricsStoreConfig.RetentionMinute = time.Duration(cfg.MetricsRetentionMinuteHours) * time.Hour
+	}
+	if cfg.MetricsRetentionHourlyDays > 0 {
+		metricsStoreConfig.RetentionHourly = time.Duration(cfg.MetricsRetentionHourlyDays) * 24 * time.Hour
+	}
+	if cfg.MetricsRetentionDailyDays > 0 {
+		metricsStoreConfig.RetentionDaily = time.Duration(cfg.MetricsRetentionDailyDays) * 24 * time.Hour
+	}
 	ms, err := metrics.NewStore(metricsStoreConfig)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize persistent metrics store - continuing with in-memory only")
 	} else {
 		metricsStore = ms
-		log.Info().Str("path", metricsStoreConfig.DBPath).Msg("Persistent metrics store initialized")
+		log.Info().
+			Str("path", metricsStoreConfig.DBPath).
+			Dur("retentionRaw", metricsStoreConfig.RetentionRaw).
+			Dur("retentionMinute", metricsStoreConfig.RetentionMinute).
+			Dur("retentionHourly", metricsStoreConfig.RetentionHourly).
+			Dur("retentionDaily", metricsStoreConfig.RetentionDaily).
+			Msg("Persistent metrics store initialized with configurable retention")
 	}
 
 	m := &Monitor{
