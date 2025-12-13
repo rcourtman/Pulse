@@ -1877,7 +1877,7 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			return execution.Output, execution
 		}
 
-		execution.Output = fmt.Sprintf("✅ Successfully set URL for %s '%s' to: %s\nThe URL is now visible in the Pulse dashboard as a clickable link.", resourceType, resourceID, url)
+		execution.Output = fmt.Sprintf("Successfully set URL for %s '%s' to: %s\nThe URL is now visible in the Pulse dashboard as a clickable link.", resourceType, resourceID, url)
 		execution.Success = true
 		return execution.Output, execution
 
@@ -1918,7 +1918,7 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			return execution.Output, execution
 		}
 
-		execution.Output = fmt.Sprintf("✅ Finding resolved! The AI Insight has been marked as fixed.\nID: %s\nResolution: %s", findingID, resolutionNote)
+		execution.Output = fmt.Sprintf("Finding resolved! The AI Insight has been marked as fixed.\nID: %s\nResolution: %s", findingID, resolutionNote)
 		execution.Success = true
 		return execution.Output, execution
 

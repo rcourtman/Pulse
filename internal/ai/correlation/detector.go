@@ -367,7 +367,7 @@ func (d *Detector) FormatForContext(resourceID string) string {
 	}
 
 	var result string
-	result = "\n## 🔗 Resource Correlations\n"
+	result = "\n## Resource Correlations\n"
 	result += "Observed relationships between resources:\n"
 
 	for i, c := range correlations {

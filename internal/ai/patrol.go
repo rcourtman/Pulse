@@ -2053,9 +2053,9 @@ func (p *PatrolService) buildPatrolPrompt(summary string) string {
 %s
 
 Analyze the above and report any findings using the structured format. Focus on:
-- Resources showing high utilization or concerning trends (look for ↑ growing indicators)
-- Predictions showing resources approaching capacity (look for ⏰ predictions)
-- Anomalies flagged as unusual (look for ⚠️ anomalies)
+- Resources showing high utilization or concerning trends (look for "rising" indicators)
+- Predictions showing resources approaching capacity
+- Anomalies flagged as unusual in the "ANOMALIES" section
 - Patterns that might indicate problems over time (compare 24h vs 7d trends)
 - Missing backups or stale backup schedules  
 - Unbalanced resource distribution

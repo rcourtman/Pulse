@@ -63,7 +63,7 @@ func FormatResourceContext(ctx ResourceContext) string {
 
 	// Anomalies (high value - what's unusual)
 	if len(ctx.Anomalies) > 0 {
-		sb.WriteString("**⚠️ Anomalies**: ")
+		sb.WriteString("**ANOMALIES**: ")
 		var anomalyDescs []string
 		for _, a := range ctx.Anomalies {
 			anomalyDescs = append(anomalyDescs, a.Description)
@@ -74,7 +74,7 @@ func FormatResourceContext(ctx ResourceContext) string {
 
 	// Predictions (proactive value)
 	if len(ctx.Predictions) > 0 {
-		sb.WriteString("**⏰ Predictions**: ")
+		sb.WriteString("**Predictions**: ")
 		var predDescs []string
 		for _, p := range ctx.Predictions {
 			predDescs = append(predDescs, fmt.Sprintf("%s in ~%.0f days", p.Event, p.DaysUntil))
@@ -118,14 +118,14 @@ func formatTrendLine(metric string, trend Trend) string {
 	switch trend.Direction {
 	case TrendGrowing:
 		rate := formatRate(trend.RatePerDay)
-		directionStr = fmt.Sprintf("↑ %s", rate)
+		directionStr = fmt.Sprintf("(rising %s)", rate)
 	case TrendDeclining:
 		rate := formatRate(-trend.RatePerDay) // Make positive for display
-		directionStr = fmt.Sprintf("↓ %s", rate)
+		directionStr = fmt.Sprintf("(falling %s)", rate)
 	case TrendVolatile:
-		directionStr = "⚡ volatile"
+		directionStr = "(volatile)"
 	case TrendStable:
-		directionStr = "→ stable"
+		directionStr = "(stable)"
 	default:
 		return ""
 	}
@@ -168,7 +168,7 @@ func FormatInfrastructureContext(ctx *InfrastructureContext) string {
 
 	// Global anomalies first (high priority)
 	if len(ctx.Anomalies) > 0 {
-		sb.WriteString("## ⚠️ Current Anomalies\n")
+		sb.WriteString("## Current Anomalies\n")
 		for _, a := range ctx.Anomalies {
 			sb.WriteString(fmt.Sprintf("- **%s**: %s\n", a.Metric, a.Description))
 		}
@@ -177,7 +177,7 @@ func FormatInfrastructureContext(ctx *InfrastructureContext) string {
 
 	// Predictions (proactive insights)
 	if len(ctx.Predictions) > 0 {
-		sb.WriteString("## ⏰ Predictions\n")
+		sb.WriteString("## Predictions\n")
 		for _, p := range ctx.Predictions {
 			sb.WriteString(fmt.Sprintf("- **%s** on %s: %s (%.0f days, %.0f%% confidence)\n",
 				p.Event, p.ResourceID, p.Basis, p.DaysUntil, p.Confidence*100))
@@ -187,7 +187,7 @@ func FormatInfrastructureContext(ctx *InfrastructureContext) string {
 
 	// Recent changes (what's different)
 	if len(ctx.Changes) > 0 {
-		sb.WriteString("## 🔄 Recent Changes\n")
+		sb.WriteString("## Recent Changes\n")
 		for _, c := range ctx.Changes {
 			sb.WriteString(fmt.Sprintf("- %s: %s\n", c.ResourceName, c.Description))
 		}
@@ -287,7 +287,7 @@ func FormatCompactSummary(ctx *InfrastructureContext) string {
 				earliest = p
 			}
 		}
-		sb.WriteString(fmt.Sprintf("⏰ Nearest: %s in %.0f days\n", earliest.Event, earliest.DaysUntil))
+		sb.WriteString(fmt.Sprintf("Nearest prediction: %s in %.0f days\n", earliest.Event, earliest.DaysUntil))
 	}
 
 	return sb.String()
