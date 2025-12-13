@@ -2,8 +2,8 @@ import { Component, createSignal, Show, onMount, lazy, Suspense } from 'solid-js
 import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
-const FirstRunSetup = lazy(() =>
-  import('./FirstRunSetup').then((m) => ({ default: m.FirstRunSetup })),
+const SetupWizard = lazy(() =>
+  import('./SetupWizard').then((m) => ({ default: m.SetupWizard })),
 );
 
 interface LoginProps {
@@ -339,9 +339,8 @@ export const Login: Component<LoginProps> = (props) => {
             </div>
           }
         >
-          <FirstRunSetup
-            force={legacyDisableAuth()}
-            showLegacyBanner={legacyDisableAuth()}
+          <SetupWizard
+            onComplete={() => window.location.reload()}
           />
         </Suspense>
       </Show>

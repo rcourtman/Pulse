@@ -30,6 +30,7 @@ import { DiagnosticsPanel } from './DiagnosticsPanel';
 import { GeneralSettingsPanel } from './GeneralSettingsPanel';
 import { NetworkSettingsPanel } from './NetworkSettingsPanel';
 import { UpdatesSettingsPanel } from './UpdatesSettingsPanel';
+import { UpdateConfirmationModal } from '@/components/UpdateConfirmationModal';
 import { BackupsSettingsPanel } from './BackupsSettingsPanel';
 import { SecurityAuthPanel } from './SecurityAuthPanel';
 import { APIAccessPanel } from './APIAccessPanel';
@@ -764,6 +765,10 @@ const Settings: Component<SettingsProps> = (props) => {
   const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(false);
   const [autoUpdateCheckInterval, setAutoUpdateCheckInterval] = createSignal(24);
   const [autoUpdateTime, setAutoUpdateTime] = createSignal('03:00');
+  // Update installation state
+  const [updatePlan, setUpdatePlan] = createSignal<import('@/api/updates').UpdatePlan | null>(null);
+  const [isInstallingUpdate, setIsInstallingUpdate] = createSignal(false);
+  const [showUpdateConfirmation, setShowUpdateConfirmation] = createSignal(false);
   const [backupPollingEnabled, setBackupPollingEnabled] = createSignal(true);
   const [backupPollingInterval, setBackupPollingInterval] = createSignal(0);
   const [backupPollingCustomMinutes, setBackupPollingCustomMinutes] = createSignal(60);
@@ -1832,7 +1837,23 @@ const Settings: Component<SettingsProps> = (props) => {
         const version = await UpdatesAPI.getVersion();
         setVersionInfo(version);
         // Also set it in the store so it's available globally
-        updateStore.checkForUpdates(); // This will load version info too
+        await updateStore.checkForUpdates(); // This will load version info too
+
+        // Fetch update info and plan from store
+        const storeInfo = updateStore.updateInfo();
+        if (storeInfo) {
+          setUpdateInfo(storeInfo);
+          // Fetch update plan if update is available
+          if (storeInfo.available && storeInfo.latestVersion) {
+            try {
+              const plan = await UpdatesAPI.getUpdatePlan(storeInfo.latestVersion);
+              setUpdatePlan(plan);
+            } catch (planError) {
+              logger.warn('Failed to fetch update plan on load', planError);
+            }
+          }
+        }
+
         // Only use version.channel as fallback if user hasn't configured a preference
         // The user's saved updateChannel preference should take priority
         // Check the signal value since systemSettings is scoped to the previous try block
@@ -2028,6 +2049,19 @@ const Settings: Component<SettingsProps> = (props) => {
       const info = updateStore.updateInfo();
       setUpdateInfo(info);
 
+      // Fetch update plan if update is available
+      if (info?.available && info.latestVersion) {
+        try {
+          const plan = await UpdatesAPI.getUpdatePlan(info.latestVersion);
+          setUpdatePlan(plan);
+        } catch (planError) {
+          logger.warn('Failed to fetch update plan', planError);
+          setUpdatePlan(null);
+        }
+      } else {
+        setUpdatePlan(null);
+      }
+
       // If update was dismissed, clear it so user can see it again
       if (info?.available && updateStore.isDismissed()) {
         updateStore.clearDismissed();
@@ -2041,6 +2075,28 @@ const Settings: Component<SettingsProps> = (props) => {
       logger.error('Update check error', error);
     } finally {
       setCheckingForUpdates(false);
+    }
+  };
+
+  // Handle install update from settings panel
+  const handleInstallUpdate = () => {
+    setShowUpdateConfirmation(true);
+  };
+
+  const handleConfirmUpdate = async () => {
+    const info = updateInfo();
+    if (!info?.downloadUrl) return;
+
+    setIsInstallingUpdate(true);
+    try {
+      await UpdatesAPI.applyUpdate(info.downloadUrl);
+      // Close confirmation - GlobalUpdateProgressWatcher will auto-open the progress modal
+      setShowUpdateConfirmation(false);
+    } catch (error) {
+      logger.error('Failed to start update', error);
+      showError('Failed to start update. Please try again.');
+    } finally {
+      setIsInstallingUpdate(false);
     }
   };
 
@@ -3463,6 +3519,9 @@ const Settings: Component<SettingsProps> = (props) => {
                   setAutoUpdateTime={setAutoUpdateTime}
                   checkForUpdates={checkForUpdates}
                   setHasUnsavedChanges={setHasUnsavedChanges}
+                  updatePlan={updatePlan}
+                  onInstallUpdate={handleInstallUpdate}
+                  isInstalling={isInstallingUpdate}
                 />
               </Show>
 
@@ -3826,6 +3885,22 @@ const Settings: Component<SettingsProps> = (props) => {
           }}
         />
       </Show >
+
+      {/* Update Confirmation Modal */}
+      <UpdateConfirmationModal
+        isOpen={showUpdateConfirmation()}
+        onClose={() => setShowUpdateConfirmation(false)}
+        onConfirm={handleConfirmUpdate}
+        currentVersion={versionInfo()?.version || 'Unknown'}
+        latestVersion={updateInfo()?.latestVersion || ''}
+        plan={updatePlan() || {
+          canAutoUpdate: false,
+          requiresRoot: false,
+          rollbackSupport: false,
+        }}
+        isApplying={isInstallingUpdate()}
+      />
+
       {/* Export Dialog */}
       < Show when={showExportDialog()} >
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

@@ -239,30 +239,54 @@ export const BackupsSettingsPanel: Component<BackupsSettingsPanelProps> = (props
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Export Section */}
-            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-              <div class="flex items-start gap-3">
-                <div class="flex-shrink-0 w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+            <div class="group border border-gray-200 dark:border-gray-700 rounded-xl p-5 bg-gradient-to-br from-blue-50/50 to-indigo-50/30 dark:from-blue-900/10 dark:to-indigo-900/10 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200">
+              <div class="flex items-start gap-4">
+                <div class="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                  {/* Archive/Download Box Icon */}
                   <svg
-                    class="w-5 h-5 text-blue-600 dark:text-blue-400"
+                    class="w-6 h-6 text-white"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
+                    stroke-width="2"
                   >
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"
+                      d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
                     />
                   </svg>
                 </div>
-                <div class="flex-1">
-                  <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
+                <div class="flex-1 min-w-0">
+                  <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
                     Export Configuration
                   </h4>
-                  <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                    Download an encrypted backup of all nodes and settings
+                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    Create an encrypted backup package
                   </p>
+
+                  {/* Feature list */}
+                  <ul class="space-y-1 mb-4">
+                    <li class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                      <svg class="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                      </svg>
+                      <span>All node connections & credentials</span>
+                    </li>
+                    <li class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                      <svg class="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                      </svg>
+                      <span>Alert thresholds & overrides</span>
+                    </li>
+                    <li class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                      <svg class="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                      </svg>
+                      <span>AES-256 encryption</span>
+                    </li>
+                  </ul>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -270,7 +294,7 @@ export const BackupsSettingsPanel: Component<BackupsSettingsPanelProps> = (props
                       props.setUseCustomPassphrase(!props.securityStatus()?.hasAuthentication);
                       props.setShowExportDialog(true);
                     }}
-                    class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
+                    class="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
@@ -280,41 +304,65 @@ export const BackupsSettingsPanel: Component<BackupsSettingsPanelProps> = (props
                         d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                       />
                     </svg>
-                    Export Backup
+                    Create Backup
                   </button>
                 </div>
               </div>
             </div>
 
             {/* Import Section */}
-            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-              <div class="flex items-start gap-3">
-                <div class="flex-shrink-0 w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+            <div class="group border border-gray-200 dark:border-gray-700 rounded-xl p-5 bg-gradient-to-br from-gray-50/50 to-slate-50/30 dark:from-gray-800/30 dark:to-slate-800/20 hover:border-gray-400 dark:hover:border-gray-600 transition-all duration-200">
+              <div class="flex items-start gap-4">
+                <div class="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-gray-500 to-slate-600 rounded-xl flex items-center justify-center shadow-lg shadow-gray-500/20">
+                  {/* Upload/Restore Icon */}
                   <svg
-                    class="w-5 h-5 text-gray-600 dark:text-gray-400"
+                    class="w-6 h-6 text-white"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
+                    stroke-width="2"
                   >
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
                     />
                   </svg>
                 </div>
-                <div class="flex-1">
-                  <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
+                <div class="flex-1 min-w-0">
+                  <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
                     Restore Configuration
                   </h4>
-                  <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                    Upload a backup file to restore nodes and settings
+                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    Import from an encrypted backup file
                   </p>
+
+                  {/* Feature list */}
+                  <ul class="space-y-1 mb-4">
+                    <li class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                      <svg class="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                      </svg>
+                      <span>Merge or replace existing config</span>
+                    </li>
+                    <li class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                      <svg class="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                      </svg>
+                      <span>Validates backup before applying</span>
+                    </li>
+                    <li class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                      <svg class="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                      </svg>
+                      <span>Requires original passphrase</span>
+                    </li>
+                  </ul>
+
                   <button
                     type="button"
                     onClick={() => props.setShowImportDialog(true)}
-                    class="px-3 py-1.5 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors inline-flex items-center gap-2"
+                    class="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-gray-600 to-slate-600 text-white text-sm font-medium rounded-lg hover:from-gray-700 hover:to-slate-700 transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
@@ -331,28 +379,46 @@ export const BackupsSettingsPanel: Component<BackupsSettingsPanelProps> = (props
             </div>
           </div>
 
-          {/* Important Notes */}
-          <div class="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-            <div class="flex gap-2">
-              <svg
-                class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+          {/* Security Tips */}
+          <div class="mt-6 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/10 rounded-xl border border-amber-200 dark:border-amber-800/50">
+            <div class="flex gap-3">
+              {/* Shield Icon */}
+              <div class="flex-shrink-0 w-10 h-10 bg-amber-100 dark:bg-amber-900/40 rounded-lg flex items-center justify-center">
+                <svg
+                  class="w-5 h-5 text-amber-600 dark:text-amber-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                   stroke-width="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-              <div class="text-xs text-amber-700 dark:text-amber-300">
-                <p class="font-medium mb-1">Important Notes</p>
-                <ul class="space-y-0.5 text-amber-600 dark:text-amber-400">
-                  <li>• Backups contain encrypted credentials and sensitive data</li>
-                  <li>• Use a strong passphrase to protect your backup</li>
-                  <li>• Store backup files securely and never share the passphrase</li>
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                  />
+                </svg>
+              </div>
+              <div class="flex-1">
+                <p class="text-sm font-medium text-amber-800 dark:text-amber-200 mb-2">Security Tips</p>
+                <ul class="space-y-2">
+                  <li class="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
+                    <svg class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                    </svg>
+                    <span>Backups contain encrypted credentials and sensitive data</span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
+                    <svg class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clip-rule="evenodd" />
+                    </svg>
+                    <span>Use a strong passphrase (12+ characters, mix of letters, numbers, symbols)</span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
+                    <svg class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 00-2-2V7a5 5 0 00-5-5zm3 7V7a3 3 0 10-6 0v2h6z" />
+                    </svg>
+                    <span>Store backup files securely and never share the passphrase</span>
+                  </li>
                 </ul>
               </div>
             </div>
