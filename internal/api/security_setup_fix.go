@@ -290,6 +290,18 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		}
 		log.Info().Msg("Runtime config updated with new security settings - active immediately")
 
+		// Clear any agents that connected during the brief unauthenticated setup window.
+		// This prevents stale/unauthorized agent data from appearing in the wizard.
+		if r.monitor != nil {
+			hostCleared, dockerCleared := r.monitor.ClearUnauthenticatedAgents()
+			if hostCleared > 0 || dockerCleared > 0 {
+				log.Info().
+					Int("hosts", hostCleared).
+					Int("dockerHosts", dockerCleared).
+					Msg("Cleared agents that connected before security was configured")
+			}
+		}
+
 		// Save system settings to system.json
 		systemSettings := config.DefaultSystemSettings()
 		systemSettings.ConnectionTimeout = 10    // Default seconds
