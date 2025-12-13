@@ -28,7 +28,7 @@ export const ConnectStep: Component<ConnectStepProps> = (props) => {
 
     // Manual form fields
     const [host, setHost] = createSignal('');
-    const [port, setPort] = createSignal('8006');
+    const [port, _setPort] = createSignal('8006');
     const [tokenId, setTokenId] = createSignal('');
     const [tokenSecret, setTokenSecret] = createSignal('');
 
@@ -69,7 +69,7 @@ export const ConnectStep: Component<ConnectStepProps> = (props) => {
             if (discoveredNodes().length === 0) {
                 showSuccess('Scan complete - no nodes found. Try manual setup.');
             }
-        } catch (error) {
+        } catch (_error) {
             showError('Discovery failed. Try manual setup.');
         } finally {
             setIsScanning(false);

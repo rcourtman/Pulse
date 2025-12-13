@@ -58,7 +58,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
             props.setIsUnlocked(true);
             showSuccess('Token verified!');
             props.onNext();
-        } catch (error) {
+        } catch (_error) {
             showError('Invalid bootstrap token. Please check and try again.');
         } finally {
             setIsValidating(false);

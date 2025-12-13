@@ -40,9 +40,9 @@ export const FeaturesStep: Component<FeaturesStepProps> = (props) => {
         setIsSaving(true);
 
         try {
-            // Save feature preferences
+            // Only save auto-update setting through SystemConfig
+            // AI settings are configured separately via Settings → AI
             await SettingsAPI.updateSystemSettings({
-                aiEnabled: aiEnabled(),
                 autoUpdateEnabled: autoUpdates(),
             });
 
@@ -53,7 +53,7 @@ export const FeaturesStep: Component<FeaturesStepProps> = (props) => {
 
             showSuccess('Preferences saved!');
             props.onNext();
-        } catch (error) {
+        } catch (_error) {
             // Continue anyway - settings can be changed later
             props.onNext();
         } finally {
@@ -73,8 +73,8 @@ export const FeaturesStep: Component<FeaturesStepProps> = (props) => {
                     <button
                         onClick={() => feature.setEnabled(!feature.enabled())}
                         class={`w-full p-4 rounded-xl border transition-all text-left flex items-start gap-4 ${feature.enabled()
-                                ? 'bg-blue-500/20 border-blue-400/40'
-                                : 'bg-white/5 border-white/10 hover:bg-white/10'
+                            ? 'bg-blue-500/20 border-blue-400/40'
+                            : 'bg-white/5 border-white/10 hover:bg-white/10'
                             }`}
                     >
                         <div class="text-3xl">{feature.icon}</div>
