@@ -1055,7 +1055,7 @@ function AppLayout(props: {
   });
 
   const platformTabs = createMemo(() => {
-    return [
+    const allPlatforms = [
       {
         id: 'proxmox' as const,
         label: 'Proxmox',
@@ -1067,6 +1067,7 @@ function AppLayout(props: {
         icon: (
           <ProxmoxIcon class="w-4 h-4 shrink-0" />
         ),
+        alwaysShow: true, // Proxmox is the default, always show
       },
       {
         id: 'docker' as const,
@@ -1079,6 +1080,7 @@ function AppLayout(props: {
         icon: (
           <BoxesIcon class="w-4 h-4 shrink-0" />
         ),
+        alwaysShow: true, // Docker is commonly used, keep visible
       },
       {
         id: 'kubernetes' as const,
@@ -1086,11 +1088,12 @@ function AppLayout(props: {
         route: '/kubernetes',
         settingsRoute: '/settings/agents',
         tooltip: 'Monitor Kubernetes clusters and workloads',
-        enabled: hasKubernetesClusters() || !!seenPlatforms()['kubernetes'],
+        enabled: hasKubernetesClusters(),
         live: hasKubernetesClusters(),
         icon: (
           <NetworkIcon class="w-4 h-4 shrink-0" />
         ),
+        alwaysShow: false, // Only show when clusters exist
       },
       {
         id: 'hosts' as const,
@@ -1103,8 +1106,12 @@ function AppLayout(props: {
         icon: (
           <MonitorIcon class="w-4 h-4 shrink-0" />
         ),
+        alwaysShow: true, // Hosts is commonly used, keep visible
       },
     ];
+
+    // Filter out platforms that should be hidden when not configured
+    return allPlatforms.filter(p => p.alwaysShow || p.enabled);
   });
 
   const utilityTabs = createMemo(() => {
