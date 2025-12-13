@@ -334,17 +334,17 @@ export function createWebSocketStore(url: string) {
       try {
         const message: WSMessage = data;
 
-	        if (
-	          message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE ||
-	          message.type === WEBSOCKET.MESSAGE_TYPES.RAW_DATA
-	        ) {
-	          // Update state properties individually, but batch the whole payload to
-	          // reduce reactive recomputations and UI thrash on large updates.
-	          if (message.data) batch(() => {
-	            // Mark that we've received usable data (initial payload or raw update)
-	            if (!initialDataReceived()) {
-	              setInitialDataReceived(true);
-	            }
+        if (
+          message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE ||
+          message.type === WEBSOCKET.MESSAGE_TYPES.RAW_DATA
+        ) {
+          // Update state properties individually, but batch the whole payload to
+          // reduce reactive recomputations and UI thrash on large updates.
+          if (message.data) batch(() => {
+            // Mark that we've received usable data (initial payload or raw update)
+            if (!initialDataReceived()) {
+              setInitialDataReceived(true);
+            }
 
             // Only update if we have actual data, don't overwrite with empty arrays
             if (message.data.nodes !== undefined) {
@@ -443,14 +443,25 @@ export function createWebSocketStore(url: string) {
                 if (incomingHosts.length === 0) {
                   consecutiveEmptyDockerUpdates += 1;
 
+                  // Check if all existing docker hosts are stale (>60s since lastSeen)
+                  // If so, they're probably really gone - apply the empty update immediately
+                  const now = Date.now();
+                  const staleThresholdMs = 60_000; // 60 seconds
+                  const existingDockerHosts = state.dockerHosts || [];
+                  const allStale = existingDockerHosts.length === 0 || existingDockerHosts.every(
+                    (h) => !h.lastSeen || (now - h.lastSeen) > staleThresholdMs
+                  );
+
                   shouldApplyDockerHosts =
                     !hasReceivedNonEmptyDockerHosts ||
+                    allStale ||
                     consecutiveEmptyDockerUpdates >= 3 ||
                     message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE;
 
                   if (shouldApplyDockerHosts) {
                     logger.debug('[WebSocket] Updating dockerHosts', {
                       count: incomingHosts.length,
+                      reason: allStale ? 'allStale' : 'threshold',
                     });
                     processedDockerHosts = mergeDockerHostRevocations(incomingHosts);
                   } else {
@@ -486,14 +497,25 @@ export function createWebSocketStore(url: string) {
                 if (incomingHosts.length === 0) {
                   consecutiveEmptyHostUpdates += 1;
 
+                  // Check if all existing hosts are stale (>60s since lastSeen)
+                  // If so, they're probably really gone - apply the empty update immediately
+                  const now = Date.now();
+                  const staleThresholdMs = 60_000; // 60 seconds
+                  const existingHosts = state.hosts || [];
+                  const allHostsStale = existingHosts.length === 0 || existingHosts.every(
+                    (h) => !h.lastSeen || (now - h.lastSeen) > staleThresholdMs
+                  );
+
                   shouldApplyHosts =
                     !hasReceivedNonEmptyHosts ||
+                    allHostsStale ||
                     consecutiveEmptyHostUpdates >= 3 ||
                     message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE;
 
                   if (shouldApplyHosts) {
                     logger.debug('[WebSocket] Updating hosts', {
                       count: incomingHosts.length,
+                      reason: allHostsStale ? 'allStale' : 'threshold',
                     });
                     processedHosts = mergeHostRevocations(incomingHosts);
                   } else {
@@ -646,11 +668,11 @@ export function createWebSocketStore(url: string) {
 
               // Updated recentlyResolved
             }
-	            setState('lastUpdate', message.data.lastUpdate || new Date().toISOString());
-	          });
-	          logger.debug('message', {
-	            type: message.type,
-	            hasData: !!message.data,
+            setState('lastUpdate', message.data.lastUpdate || new Date().toISOString());
+          });
+          logger.debug('message', {
+            type: message.type,
+            hasData: !!message.data,
             nodeCount: message.data?.nodes?.length || 0,
             vmCount: message.data?.vms?.length || 0,
             containerCount: message.data?.containers?.length || 0,
