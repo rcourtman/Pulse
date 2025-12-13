@@ -2179,7 +2179,7 @@ function OverviewTab(props: {
       if (runHistory && runHistory.length > 0 && runHistory[0].status !== 'healthy') {
         setShowRunHistory(true);
       }
-    } catch (e) {
+    } catch (_e) {
       // AI patrol may not be enabled - silently fail
     }
   };
@@ -2678,7 +2678,7 @@ function OverviewTab(props: {
                                           await dismissFinding(finding.id, 'not_an_issue');
                                           showSuccess('Dismissed - AI will not raise this again');
                                           fetchAiData();
-                                        } catch (err) {
+                                        } catch (_err) {
                                           showError('Failed to dismiss finding');
                                         }
                                       }}
@@ -2695,7 +2695,7 @@ function OverviewTab(props: {
                                           await dismissFinding(finding.id, 'expected_behavior', note || undefined);
                                           showSuccess('Dismissed - AI will not raise this again');
                                           fetchAiData();
-                                        } catch (err) {
+                                        } catch (_err) {
                                           showError('Failed to dismiss finding');
                                         }
                                       }}
@@ -2711,7 +2711,7 @@ function OverviewTab(props: {
                                           await dismissFinding(finding.id, 'will_fix_later');
                                           showSuccess('Acknowledged - AI will check again later');
                                           fetchAiData();
-                                        } catch (err) {
+                                        } catch (_err) {
                                           showError('Failed to dismiss finding');
                                         }
                                       }}
@@ -2729,7 +2729,7 @@ function OverviewTab(props: {
                                               await suppressFinding(finding.id);
                                               showSuccess('Suppressed - AI will never raise this again');
                                               fetchAiData();
-                                            } catch (err) {
+                                            } catch (_err) {
                                               showError('Failed to suppress finding');
                                             }
                                           }
@@ -2831,7 +2831,7 @@ function OverviewTab(props: {
                         setNewRuleCategory('');
                         setNewRuleDescription('');
                         fetchAiData();
-                      } catch (err) {
+                      } catch (_err) {
                         showError('Failed to create rule');
                       }
                     }}
@@ -2889,7 +2889,7 @@ function OverviewTab(props: {
                             await deleteSuppressionRule(rule.id);
                             showSuccess('Rule deleted');
                             fetchAiData();
-                          } catch (err) {
+                          } catch (_err) {
                             showError('Failed to delete rule');
                           }
                         }}
