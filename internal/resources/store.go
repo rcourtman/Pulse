@@ -739,7 +739,10 @@ func (q *ResourceQuery) Execute() []Resource {
 		}
 	}
 
-	// TODO: Implement sorting
+	// Apply sorting if specified
+	if q.sortBy != "" {
+		sortResources(results, q.sortBy, q.sortDesc)
+	}
 
 	// Apply pagination
 	if q.offset > 0 {
@@ -829,6 +832,71 @@ func (q *ResourceQuery) matches(r *Resource) bool {
 	}
 
 	return true
+}
+
+// sortResources sorts a slice of resources by the given field.
+// Supported fields: name, type, status, cpu, memory, disk, last_seen
+func sortResources(resources []Resource, field string, desc bool) {
+	if len(resources) < 2 {
+		return
+	}
+
+	// Simple bubble sort for consistency (stable sort)
+	// For production, could use sort.Slice with a compare function
+	for i := 0; i < len(resources)-1; i++ {
+		for j := i + 1; j < len(resources); j++ {
+			shouldSwap := false
+
+			switch strings.ToLower(field) {
+			case "name":
+				if desc {
+					shouldSwap = resources[i].EffectiveDisplayName() < resources[j].EffectiveDisplayName()
+				} else {
+					shouldSwap = resources[i].EffectiveDisplayName() > resources[j].EffectiveDisplayName()
+				}
+			case "type":
+				if desc {
+					shouldSwap = string(resources[i].Type) < string(resources[j].Type)
+				} else {
+					shouldSwap = string(resources[i].Type) > string(resources[j].Type)
+				}
+			case "status":
+				if desc {
+					shouldSwap = string(resources[i].Status) < string(resources[j].Status)
+				} else {
+					shouldSwap = string(resources[i].Status) > string(resources[j].Status)
+				}
+			case "cpu":
+				if desc {
+					shouldSwap = resources[i].CPUPercent() < resources[j].CPUPercent()
+				} else {
+					shouldSwap = resources[i].CPUPercent() > resources[j].CPUPercent()
+				}
+			case "memory", "mem":
+				if desc {
+					shouldSwap = resources[i].MemoryPercent() < resources[j].MemoryPercent()
+				} else {
+					shouldSwap = resources[i].MemoryPercent() > resources[j].MemoryPercent()
+				}
+			case "disk":
+				if desc {
+					shouldSwap = resources[i].DiskPercent() < resources[j].DiskPercent()
+				} else {
+					shouldSwap = resources[i].DiskPercent() > resources[j].DiskPercent()
+				}
+			case "last_seen", "lastseen":
+				if desc {
+					shouldSwap = resources[i].LastSeen.Before(resources[j].LastSeen)
+				} else {
+					shouldSwap = resources[i].LastSeen.After(resources[j].LastSeen)
+				}
+			}
+
+			if shouldSwap {
+				resources[i], resources[j] = resources[j], resources[i]
+			}
+		}
+	}
 }
 
 // ============================================================================
