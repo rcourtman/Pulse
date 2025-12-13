@@ -35,15 +35,15 @@ interface NodeModalProps {
 }
 
 type TemperatureTransportDetail = {
-	tone: 'info' | 'success' | 'warning' | 'danger';
-	message: string;
-	disable?: boolean;
+  tone: 'info' | 'success' | 'warning' | 'danger';
+  message: string;
+  disable?: boolean;
 };
 
 interface ProxyInstallResponse {
-	command: string;
-	pulseURL: string;
-	node?: string;
+  command: string;
+  pulseURL: string;
+  node?: string;
 }
 
 const deriveNameFromHost = (host: string): string => {
@@ -280,11 +280,11 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     const pmgConfig =
       node.type === 'pmg'
         ? (node as NodeConfig & {
-            monitorMailStats?: boolean;
-            monitorQueues?: boolean;
-            monitorQuarantine?: boolean;
-            monitorDomainStats?: boolean;
-          })
+          monitorMailStats?: boolean;
+          monitorQueues?: boolean;
+          monitorQuarantine?: boolean;
+          monitorDomainStats?: boolean;
+        })
         : undefined;
 
     const formSource: ReturnType<typeof getCleanFormData> = {
@@ -776,11 +776,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <button
                                   type="button"
                                   onClick={() => updateField('setupMode', 'agent')}
-                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
-                                    formData().setupMode === 'agent'
-                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
-                                  }`}
+                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'agent'
+                                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                    }`}
                                 >
                                   Agent Install
                                   <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 rounded">
@@ -790,22 +789,20 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <button
                                   type="button"
                                   onClick={() => updateField('setupMode', 'auto')}
-                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
-                                    formData().setupMode === 'auto'
-                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
-                                  }`}
+                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'auto'
+                                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                    }`}
                                 >
                                   API Only
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => updateField('setupMode', 'manual')}
-                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
-                                    formData().setupMode === 'manual'
-                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
-                                  }`}
+                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'manual'
+                                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                    }`}
                                 >
                                   Manual
                                 </button>
@@ -1007,7 +1004,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         <code class="text-blue-400">
                                           {formData().host
                                             ? 'Click the button above to copy the setup command'
-                                            : '⚠️ Please enter the Host URL above first'}
+                                            : 'Please enter the Host URL above first'}
                                         </code>
                                       }
                                     >
@@ -1153,7 +1150,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     </li>
                                   </ul>
                                   <p class="text-xs text-green-600 dark:text-green-400 mt-2 font-semibold">
-                                    ✨ Fully automatic - no manual token copying needed!
+                                    Fully automatic - no manual token copying needed!
                                   </p>
                                 </div>
                               </Show>
@@ -1252,7 +1249,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       </code>
                                     </div>
                                     <p class="text-amber-600 dark:text-amber-400 text-xs mt-1">
-                                      ⚠️ Copy the token value immediately - it won't be shown again!
+                                      Important: Copy the token value immediately - it won't be shown again!
                                     </p>
                                   </div>
 
@@ -1337,7 +1334,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       </code>
                                     </div>
                                     <p class="text-gray-600 dark:text-gray-400 text-xs mt-1">
-                                      ℹ️ PVEAuditor gives read-only API access. PulseMonitor adds
+                                      Note: PVEAuditor gives read-only API access. PulseMonitor adds
                                       Sys.Audit plus either VM.Monitor (PVE 8) or VM.GuestAgent.Audit
                                       (PVE 9+) for disk and guest metrics. PVEDatastoreAdmin on
                                       /storage adds backup visibility.
@@ -1374,11 +1371,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <button
                                   type="button"
                                   onClick={() => updateField('setupMode', 'agent')}
-                                  class={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
-                                    formData().setupMode === 'agent'
-                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
-                                  }`}
+                                  class={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'agent'
+                                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                    }`}
                                 >
                                   Agent Install
                                   <span class="text-[10px] px-1.5 py-0.5 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 rounded">Recommended</span>
@@ -1386,22 +1382,20 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <button
                                   type="button"
                                   onClick={() => updateField('setupMode', 'auto')}
-                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
-                                    formData().setupMode === 'auto'
-                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
-                                  }`}
+                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'auto'
+                                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                    }`}
                                 >
                                   API Only
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => updateField('setupMode', 'manual')}
-                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
-                                    formData().setupMode === 'manual'
-                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
-                                  }`}
+                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'manual'
+                                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                    }`}
                                 >
                                   Manual Setup
                                 </button>
@@ -1931,30 +1925,30 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     </ul>
                                   </div>
                                 </div>
+                              </Show>
+                            </div>
+                          </Show>
+                          <Show when={props.nodeType === 'pmg'}>
+                            <div class="space-y-3 text-xs text-gray-700 dark:text-gray-200">
+                              <p>
+                                Generate a dedicated API token in <strong>Configuration → API Tokens</strong> on your
+                                Mail Gateway. We recommend creating a service user such as <code class="font-mono">pulse-monitor@pmg</code>
+                                with <em>Auditor</em> privileges.
+                              </p>
+                              <ol class="list-decimal ml-4 space-y-1">
+                                <li>Click <em>Add</em> and choose the service user (or create one if needed).</li>
+                                <li>Enable <em>Privilege Separation</em> and assign the <em>Auditor</em> role.</li>
+                                <li>Copy the generated Token ID (e.g. <code class="font-mono">pulse-monitor@pmg!pulse-edge</code>) and the secret value into the fields below.</li>
+                              </ol>
+                              <p class="text-xs text-gray-500 dark:text-gray-400">
+                                Pulse only requires read-only access. Avoid granting administrator permissions to the token.
+                              </p>
+                            </div>
                           </Show>
                         </div>
-                      </Show>
-                      <Show when={props.nodeType === 'pmg'}>
-                        <div class="space-y-3 text-xs text-gray-700 dark:text-gray-200">
-                          <p>
-                            Generate a dedicated API token in <strong>Configuration → API Tokens</strong> on your
-                            Mail Gateway. We recommend creating a service user such as <code class="font-mono">pulse-monitor@pmg</code>
-                            with <em>Auditor</em> privileges.
-                          </p>
-                          <ol class="list-decimal ml-4 space-y-1">
-                            <li>Click <em>Add</em> and choose the service user (or create one if needed).</li>
-                            <li>Enable <em>Privilege Separation</em> and assign the <em>Auditor</em> role.</li>
-                            <li>Copy the generated Token ID (e.g. <code class="font-mono">pulse-monitor@pmg!pulse-edge</code>) and the secret value into the fields below.</li>
-                          </ol>
-                          <p class="text-xs text-gray-500 dark:text-gray-400">
-                            Pulse only requires read-only access. Avoid granting administrator permissions to the token.
-                          </p>
-                        </div>
-                      </Show>
-                    </div>
 
-                    {/* Token Input Fields */}
-                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        {/* Token Input Fields */}
+                        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                           <div class={formField}>
                             <label class={labelClass()}>
                               Token ID <span class="text-red-500">*</span>
@@ -2261,13 +2255,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                     return null;
                   })()}
                   <div
-                    class={`mx-6 p-3 rounded-lg text-sm ${
-                      testResult()?.status === 'success'
-                        ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
-                        : testResult()?.status === 'warning'
-                          ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
-                          : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
-                    }`}
+                    class={`mx-6 p-3 rounded-lg text-sm ${testResult()?.status === 'success'
+                      ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
+                      : testResult()?.status === 'warning'
+                        ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
+                        : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+                      }`}
                   >
                     <div class="flex items-start gap-2">
                       <Show when={testResult()?.status === 'success'}>
