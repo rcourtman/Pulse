@@ -338,7 +338,8 @@ Keep these credentials secure!
                         <button
                             onClick={generateNewToken}
                             disabled={generatingToken()}
-                            class="text-xs text-blue-300 hover:text-blue-200 flex items-center gap-1 disabled:opacity-50"
+                            class="text-xs text-white/50 hover:text-white/70 flex items-center gap-1 disabled:opacity-50"
+                            title="Generate a different token if needed for security isolation"
                         >
                             {generatingToken() ? (
                                 <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -350,12 +351,12 @@ Keep these credentials secure!
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                 </svg>
                             )}
-                            New Token
+                            Different Token
                         </button>
                     </Show>
                 </div>
                 <p class="text-white/70 text-xs mb-2">
-                    Run on any host you want to monitor. Each copy uses a unique token.
+                    Run this command on any host you want to monitor. Use the same command on multiple servers.
                 </p>
 
                 <div class="bg-black/40 rounded-lg p-2.5 font-mono text-[10px] mb-2 relative group">
