@@ -181,6 +181,28 @@ class ApiClient {
     return false;
   }
 
+  // Ensure CSRF token is available by making a GET request if needed
+  // The backend issues CSRF cookies on GET requests to /api/* endpoints
+  private async ensureCSRFToken(): Promise<string | null> {
+    try {
+      // Make a simple GET request to trigger CSRF cookie issuance
+      const response = await fetch('/api/health', {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      // The response should have set the pulse_csrf cookie
+      if (response.ok) {
+        // Small delay to ensure cookie is set
+        await new Promise(resolve => setTimeout(resolve, 10));
+        return this.loadCSRFToken();
+      }
+    } catch (err) {
+      logger.warn('Failed to fetch CSRF token', err);
+    }
+    return null;
+  }
+
   // Main fetch wrapper that adds authentication
   async fetch(url: string, options: FetchOptions = {}): Promise<Response> {
     const { skipAuth = false, headers = {}, ...fetchOptions } = options;
@@ -206,7 +228,12 @@ class ApiClient {
     // Add CSRF token for state-changing requests
     const method = (fetchOptions.method || 'GET').toUpperCase();
     if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
-      const token = this.loadCSRFToken();
+      // Try to get CSRF token, or fetch one if missing
+      let token = this.loadCSRFToken();
+      if (!token) {
+        // No CSRF token available - try to get one by making a GET request
+        token = await this.ensureCSRFToken();
+      }
       if (token) {
         finalHeaders['X-CSRF-Token'] = token;
       }
@@ -222,8 +249,10 @@ class ApiClient {
     const response = await fetch(url, finalOptions);
 
     // If we get a 401 on an API call (not during initial auth check), redirect to login
-    // Skip redirect for specific auth-check endpoints to avoid loops
-    if (response.status === 401 && !url.includes('/api/security/status') && !url.includes('/api/state')) {
+    // Skip redirect for specific auth-check endpoints and background data fetching to avoid loops
+    const skipRedirectUrls = ['/api/security/status', '/api/state', '/api/settings/ai', '/api/charts', '/api/resources'];
+    const shouldSkipRedirect = skipRedirectUrls.some(path => url.includes(path));
+    if (response.status === 401 && !shouldSkipRedirect) {
       logger.warn('Authentication expired - redirecting to login');
       // Clear auth and redirect to login
       if (typeof window !== 'undefined') {
@@ -234,13 +263,15 @@ class ApiClient {
       return response;
     }
 
-    // Handle CSRF token failures
+    // Handle CSRF token failures - the 403 response should have set a new CSRF cookie
     if (response.status === 403) {
-      const csrfHeader = response.headers.get('X-CSRF-Token');
-      let refreshedToken: string | null = null;
-      if (csrfHeader) {
-        refreshedToken = csrfHeader;
-      } else {
+      // First try the response header (backend sends new token in X-CSRF-Token header)
+      let refreshedToken = response.headers.get('X-CSRF-Token');
+
+      // If not in header, reload from cookie (backend also sets pulse_csrf cookie on 403)
+      if (!refreshedToken) {
+        // Force reload from cookie - the 403 response just set it
+        this.csrfToken = null;
         refreshedToken = this.loadCSRFToken();
       }
 

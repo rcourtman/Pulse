@@ -2,12 +2,13 @@ import { Component, createSignal, Show, onMount, lazy, Suspense } from 'solid-js
 import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
-const FirstRunSetup = lazy(() =>
-  import('./FirstRunSetup').then((m) => ({ default: m.FirstRunSetup })),
+const SetupWizard = lazy(() =>
+  import('./SetupWizard').then((m) => ({ default: m.SetupWizard })),
 );
 
 interface LoginProps {
   onLogin: () => void;
+  hasAuth?: boolean; // If true, auth is configured (passed from App.tsx to skip redundant check)
 }
 
 interface SecurityStatus {
@@ -30,7 +31,8 @@ export const Login: Component<LoginProps> = (props) => {
   const [error, setError] = createSignal('');
   const [loading, setLoading] = createSignal(false);
   const [authStatus, setAuthStatus] = createSignal<SecurityStatus | null>(null);
-  const [loadingAuth, setLoadingAuth] = createSignal(true);
+  // If hasAuth is passed from App.tsx, we already know auth status - skip the loading state
+  const [loadingAuth, setLoadingAuth] = createSignal(props.hasAuth === undefined);
   const [oidcLoading, setOidcLoading] = createSignal(false);
   const [oidcError, setOidcError] = createSignal('');
   const [oidcMessage, setOidcMessage] = createSignal('');
@@ -94,6 +96,15 @@ export const Login: Component<LoginProps> = (props) => {
       const newQuery = params.toString();
       const newUrl = `${window.location.pathname}${newQuery ? `?${newQuery}` : ''}`;
       window.history.replaceState({}, document.title, newUrl);
+    }
+
+    // If hasAuth was passed from App.tsx, use it directly without making another API call
+    // This eliminates the flicker between "Checking authentication..." and the login form
+    if (props.hasAuth !== undefined) {
+      logger.debug('[Login] Using hasAuth from App.tsx, skipping redundant auth check');
+      setAuthStatus({ hasAuthentication: props.hasAuth });
+      setLoadingAuth(false);
+      return;
     }
 
     logger.debug('[Login] Starting auth check...');
@@ -328,9 +339,8 @@ export const Login: Component<LoginProps> = (props) => {
             </div>
           }
         >
-          <FirstRunSetup
-            force={legacyDisableAuth()}
-            showLegacyBanner={legacyDisableAuth()}
+          <SetupWizard
+            onComplete={() => window.location.reload()}
           />
         </Suspense>
       </Show>

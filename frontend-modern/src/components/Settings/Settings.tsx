@@ -12,8 +12,6 @@ import {
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError, showWarning } from '@/utils/toast';
-import { copyToClipboard } from '@/utils/clipboard';
-import { getPulsePort, getPulseWebSocketUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
 import {
   apiFetch,
@@ -25,10 +23,18 @@ import {
 import { NodeModal } from './NodeModal';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { UnifiedAgents } from './UnifiedAgents';
-import APITokenManager from './APITokenManager';
 import { OIDCPanel } from './OIDCPanel';
-import { QuickSecuritySetup } from './QuickSecuritySetup';
-import { SecurityPostureSummary } from './SecurityPostureSummary';
+import { AISettings } from './AISettings';
+import { AICostDashboard } from '@/components/AI/AICostDashboard';
+import { DiagnosticsPanel } from './DiagnosticsPanel';
+import { GeneralSettingsPanel } from './GeneralSettingsPanel';
+import { NetworkSettingsPanel } from './NetworkSettingsPanel';
+import { UpdatesSettingsPanel } from './UpdatesSettingsPanel';
+import { UpdateConfirmationModal } from '@/components/UpdateConfirmationModal';
+import { BackupsSettingsPanel } from './BackupsSettingsPanel';
+import { SecurityAuthPanel } from './SecurityAuthPanel';
+import { APIAccessPanel } from './APIAccessPanel';
+import { SecurityOverviewPanel } from './SecurityOverviewPanel';
 import {
   PveNodesTable,
   PbsNodesTable,
@@ -57,24 +63,16 @@ import Monitor from 'lucide-solid/icons/monitor';
 import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Clock from 'lucide-solid/icons/clock';
+import Sparkles from 'lucide-solid/icons/sparkles';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
-import type { APITokenRecord } from '@/api/security';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
-import { showTokenReveal } from '@/stores/tokenReveal';
 import { updateStore } from '@/stores/updates';
 
-const COMMON_DISCOVERY_SUBNETS = [
-  '192.168.1.0/24',
-  '192.168.0.0/24',
-  '10.0.0.0/24',
-  '172.16.0.0/24',
-  '192.168.10.0/24',
-];
 // Type definitions
 interface DiscoveredServer {
   ip: string;
@@ -278,20 +276,6 @@ interface AlertsDiagnostic {
   notes?: string[];
 }
 
-interface ProxyRegisterNode {
-  name: string;
-  sshReady: boolean;
-  error?: string;
-}
-
-interface DockerMigrationResult {
-  token: string;
-  installCommand: string;
-  systemdServiceSnippet: string;
-  pulseURL: string;
-  record: APITokenRecord;
-}
-
 interface DiagnosticsData {
   version: string;
   runtime: string;
@@ -324,6 +308,7 @@ type SettingsTab =
   | 'system-network'
   | 'system-updates'
   | 'system-backups'
+  | 'system-ai'
   | 'api'
   | 'security-overview'
   | 'security-auth'
@@ -369,6 +354,10 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
     title: 'Backup Polling',
     description: 'Control how often Pulse queries Proxmox for backup tasks and snapshots.',
   },
+  'system-ai': {
+    title: 'AI Assistant',
+    description: 'Configure AI-powered infrastructure analysis and remediation suggestions.',
+  },
   api: {
     title: 'API access',
     description:
@@ -407,8 +396,6 @@ const BACKUP_INTERVAL_OPTIONS = [
   { label: '24 hours', value: 24 * 60 * 60 },
 ];
 
-const BACKUP_INTERVAL_MAX_MINUTES = 7 * 24 * 60; // 7 days
-
 const PVE_POLLING_MIN_SECONDS = 10;
 const PVE_POLLING_MAX_SECONDS = 3600;
 const PVE_POLLING_PRESETS = [
@@ -433,7 +420,7 @@ interface SettingsProps {
 }
 
 const Settings: Component<SettingsProps> = (props) => {
-  const { state, connected } = useWebSocket();
+  const { state, connected: _connected } = useWebSocket();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -456,6 +443,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/system-network')) return 'system-network';
     if (path.includes('/settings/system-updates')) return 'system-updates';
     if (path.includes('/settings/system-backups')) return 'system-backups';
+    if (path.includes('/settings/system-ai')) return 'system-ai';
     if (path.includes('/settings/system')) return 'system-general';
     if (path.includes('/settings/api')) return 'api';
     if (path.includes('/settings/security-overview')) return 'security-overview';
@@ -529,9 +517,6 @@ const Settings: Component<SettingsProps> = (props) => {
       title: 'Settings',
       description: 'Manage Pulse configuration.',
     };
-
-  const pveBackupsState = () => state.backups?.pve ?? state.pveBackups;
-  const pbsBackupsState = () => state.backups?.pbs ?? state.pbsBackups;
 
   // Keep tab state in sync with URL and handle /settings redirect without flicker
   createEffect(
@@ -643,7 +628,7 @@ const Settings: Component<SettingsProps> = (props) => {
   const [envOverrides, setEnvOverrides] = createSignal<Record<string, boolean>>({});
   const [temperatureMonitoringEnabled, setTemperatureMonitoringEnabled] = createSignal(true);
   const [savingTemperatureSetting, setSavingTemperatureSetting] = createSignal(false);
-  const [hostProxyStatus, setHostProxyStatus] = createSignal<HostProxyStatusResponse | null>(null);
+  const [_hostProxyStatus, setHostProxyStatus] = createSignal<HostProxyStatusResponse | null>(null);
   const [hideLocalLogin, setHideLocalLogin] = createSignal(false);
   const [savingHideLocalLogin, setSavingHideLocalLogin] = createSignal(false);
 
@@ -780,6 +765,10 @@ const Settings: Component<SettingsProps> = (props) => {
   const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(false);
   const [autoUpdateCheckInterval, setAutoUpdateCheckInterval] = createSignal(24);
   const [autoUpdateTime, setAutoUpdateTime] = createSignal('03:00');
+  // Update installation state
+  const [updatePlan, setUpdatePlan] = createSignal<import('@/api/updates').UpdatePlan | null>(null);
+  const [isInstallingUpdate, setIsInstallingUpdate] = createSignal(false);
+  const [showUpdateConfirmation, setShowUpdateConfirmation] = createSignal(false);
   const [backupPollingEnabled, setBackupPollingEnabled] = createSignal(true);
   const [backupPollingInterval, setBackupPollingInterval] = createSignal(0);
   const [backupPollingCustomMinutes, setBackupPollingCustomMinutes] = createSignal(60);
@@ -817,15 +806,7 @@ const Settings: Component<SettingsProps> = (props) => {
 
   // Diagnostics
   const [diagnosticsData, setDiagnosticsData] = createSignal<DiagnosticsData | null>(null);
-  const [runningDiagnostics, setRunningDiagnostics] = createSignal(false);
-  const [proxyActionLoading, setProxyActionLoading] = createSignal<'register-nodes' | null>(null);
-  const [proxyRegisterSummary, setProxyRegisterSummary] = createSignal<ProxyRegisterNode[] | null>(
-    null,
-  );
-  const [dockerActionLoading, setDockerActionLoading] = createSignal<string | null>(null);
-  const [dockerMigrationResults, setDockerMigrationResults] = createSignal<
-    Record<string, DockerMigrationResult>
-  >({});
+  const [_runningDiagnostics, setRunningDiagnostics] = createSignal(false);
 
   // Security
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatusInfo | null>(null);
@@ -873,75 +854,6 @@ const Settings: Component<SettingsProps> = (props) => {
     return new Date(timestamp).toLocaleString();
   };
 
-  const formatIsoDateTime = (iso?: string) => {
-    if (!iso) {
-      return '';
-    }
-    const timestamp = Date.parse(iso);
-    if (Number.isNaN(timestamp)) {
-      return '';
-    }
-    return new Date(timestamp).toLocaleString();
-  };
-
-  const formatIsoRelativeTime = (iso?: string) => {
-    if (!iso) {
-      return '';
-    }
-    const timestamp = Date.parse(iso);
-    if (Number.isNaN(timestamp)) {
-      return '';
-    }
-    return formatRelativeTime(timestamp);
-  };
-
-  const controlPlaneStatusLabel = (status?: string) => {
-    switch (status) {
-      case 'healthy':
-        return 'Healthy';
-      case 'stale':
-        return 'Behind';
-      case 'offline':
-        return 'Offline';
-      case 'pending':
-      default:
-        return 'Pending';
-    }
-  };
-
-  const controlPlaneStatusClass = (status?: string) => {
-    switch (status) {
-      case 'healthy':
-        return 'bg-green-500';
-      case 'stale':
-        return 'bg-yellow-500';
-      case 'offline':
-        return 'bg-red-500';
-      default:
-        return 'bg-gray-500';
-    }
-  };
-
-  const formatUptime = (seconds: number) => {
-    if (!seconds || seconds <= 0) {
-      return 'Unknown';
-    }
-
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-
-    if (days > 0) {
-      return `${days}d ${hours}h`;
-    }
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    }
-    if (minutes > 0) {
-      return `${minutes}m`;
-    }
-    return `${Math.floor(seconds)}s`;
-  };
 
   const normalizeHostKey = (value?: string | null) => {
     if (!value) {
@@ -1039,15 +951,7 @@ const Settings: Component<SettingsProps> = (props) => {
     return { httpMap, socketStatus, socketCooldowns: cooldowns };
   });
 
-  const proxyNodeChecksSupported = createMemo(() => {
-    const caps = diagnosticsData()?.temperatureProxy?.proxyCapabilities;
-    if (!caps || caps.length === 0) {
-      return true;
-    }
-    return caps.some(
-      (cap) => typeof cap === 'string' && cap.trim().toLowerCase() === 'admin',
-    );
-  });
+
 
   const runDiagnostics = async () => {
     setRunningDiagnostics(true);
@@ -1093,7 +997,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (typeof window === 'undefined') {
       return;
     }
-    const shouldPoll = currentTab() === 'proxmox' || currentTab() === 'diagnostics';
+    const shouldPoll = currentTab() === 'proxmox';
     if (!shouldPoll) {
       return;
     }
@@ -1107,119 +1011,6 @@ const Settings: Component<SettingsProps> = (props) => {
       window.clearInterval(intervalId);
     });
   });
-
-  const handleRegisterProxyNodes = async () => {
-    if (proxyActionLoading()) return;
-    setProxyActionLoading('register-nodes');
-    try {
-      const response = await apiFetch('/api/diagnostics/temperature-proxy/register-nodes', {
-        method: 'POST',
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok || !data || data.success !== true) {
-        const message =
-          (data && typeof data.error === 'string' && data.error) ||
-          (data && typeof data.message === 'string' && data.message) ||
-          'Failed to query proxy nodes';
-        if (response.status === 403) {
-          showWarning(message);
-        } else {
-          showError(message);
-        }
-        return;
-      }
-
-      const nodes = Array.isArray(data.nodes)
-        ? (data.nodes as Array<Record<string, unknown>>).map((node) => ({
-          name: typeof node.name === 'string' ? node.name : 'unknown',
-          sshReady: Boolean(node.ssh_ready),
-          error: typeof node.error === 'string' ? node.error : undefined,
-        }))
-        : [];
-
-      setProxyRegisterSummary(nodes);
-      showSuccess('Queried proxy node registration state');
-      await runDiagnostics();
-    } catch (err) {
-      logger.error('Failed to query proxy node registration state', err);
-      showError('Failed to query proxy nodes');
-    } finally {
-      setProxyActionLoading(null);
-    }
-  };
-
-  const handleDockerPrepareToken = async (hostId: string) => {
-    if (dockerActionLoading()) return;
-    setDockerActionLoading(hostId);
-    try {
-      const response = await apiFetch('/api/diagnostics/docker/prepare-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hostId }),
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok || !data || data.success !== true) {
-        const message =
-          data && typeof data.message === 'string'
-            ? data.message
-            : 'Failed to prepare Docker token';
-        showError(message);
-        return;
-      }
-
-      const recordPayload = data.record as APITokenRecord | undefined;
-      if (!recordPayload || typeof recordPayload.id !== 'string') {
-        showError('Server did not return a valid token record');
-        return;
-      }
-      const tokenRecord: APITokenRecord = {
-        id: recordPayload.id,
-        name: recordPayload.name,
-        prefix: recordPayload.prefix,
-        suffix: recordPayload.suffix,
-        createdAt: recordPayload.createdAt,
-        lastUsedAt: recordPayload.lastUsedAt,
-      };
-
-      const migrationResult: DockerMigrationResult = {
-        token: data.token as string,
-        installCommand: data.installCommand as string,
-        systemdServiceSnippet: data.systemdServiceSnippet as string,
-        pulseURL: data.pulseURL as string,
-        record: tokenRecord,
-      };
-
-      setDockerMigrationResults((prev) => ({
-        ...prev,
-        [hostId]: migrationResult,
-      }));
-
-      showTokenReveal({
-        token: migrationResult.token,
-        record: tokenRecord,
-        source: 'docker',
-        note: 'Copy this token into the install command shown in Diagnostics.',
-      });
-
-      const hostName = data.host && typeof data.host.name === 'string' ? data.host.name : hostId;
-      showSuccess(`Generated dedicated token for ${hostName}`);
-      await runDiagnostics();
-    } catch (err) {
-      logger.error('Failed to prepare Docker token', err);
-      showError('Failed to prepare Docker token');
-    } finally {
-      setDockerActionLoading(null);
-    }
-  };
-
-  const handleCopy = async (text: string, successMessage: string) => {
-    const success = await copyToClipboard(text);
-    if (success) {
-      showSuccess(successMessage);
-    } else {
-      showError('Failed to copy to clipboard');
-    }
-  };
 
   const tabGroups: {
     id: 'platforms' | 'operations' | 'system' | 'security';
@@ -1279,6 +1070,12 @@ const Settings: Component<SettingsProps> = (props) => {
             id: 'system-backups',
             label: 'Backups',
             icon: Clock,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'system-ai',
+            label: 'AI Assistant',
+            icon: Sparkles,
             iconProps: { strokeWidth: 2 },
           },
         ],
@@ -2040,7 +1837,23 @@ const Settings: Component<SettingsProps> = (props) => {
         const version = await UpdatesAPI.getVersion();
         setVersionInfo(version);
         // Also set it in the store so it's available globally
-        updateStore.checkForUpdates(); // This will load version info too
+        await updateStore.checkForUpdates(); // This will load version info too
+
+        // Fetch update info and plan from store
+        const storeInfo = updateStore.updateInfo();
+        if (storeInfo) {
+          setUpdateInfo(storeInfo);
+          // Fetch update plan if update is available
+          if (storeInfo.available && storeInfo.latestVersion) {
+            try {
+              const plan = await UpdatesAPI.getUpdatePlan(storeInfo.latestVersion);
+              setUpdatePlan(plan);
+            } catch (planError) {
+              logger.warn('Failed to fetch update plan on load', planError);
+            }
+          }
+        }
+
         // Only use version.channel as fallback if user hasn't configured a preference
         // The user's saved updateChannel preference should take priority
         // Check the signal value since systemSettings is scoped to the previous try block
@@ -2236,6 +2049,19 @@ const Settings: Component<SettingsProps> = (props) => {
       const info = updateStore.updateInfo();
       setUpdateInfo(info);
 
+      // Fetch update plan if update is available
+      if (info?.available && info.latestVersion) {
+        try {
+          const plan = await UpdatesAPI.getUpdatePlan(info.latestVersion);
+          setUpdatePlan(plan);
+        } catch (planError) {
+          logger.warn('Failed to fetch update plan', planError);
+          setUpdatePlan(null);
+        }
+      } else {
+        setUpdatePlan(null);
+      }
+
       // If update was dismissed, clear it so user can see it again
       if (info?.available && updateStore.isDismissed()) {
         updateStore.clearDismissed();
@@ -2249,6 +2075,28 @@ const Settings: Component<SettingsProps> = (props) => {
       logger.error('Update check error', error);
     } finally {
       setCheckingForUpdates(false);
+    }
+  };
+
+  // Handle install update from settings panel
+  const handleInstallUpdate = () => {
+    setShowUpdateConfirmation(true);
+  };
+
+  const handleConfirmUpdate = async () => {
+    const info = updateInfo();
+    if (!info?.downloadUrl) return;
+
+    setIsInstallingUpdate(true);
+    try {
+      await UpdatesAPI.applyUpdate(info.downloadUrl);
+      // Close confirmation - GlobalUpdateProgressWatcher will auto-open the progress modal
+      setShowUpdateConfirmation(false);
+    } catch (error) {
+      logger.error('Failed to start update', error);
+      showError('Failed to start update. Please try again.');
+    } finally {
+      setIsInstallingUpdate(false);
     }
   };
 
@@ -2696,6 +2544,40 @@ const Settings: Component<SettingsProps> = (props) => {
                   class="mb-6"
                 />
               </Show>
+
+              {/* Recommendation banner for Proxmox tab */}
+              <Show when={activeTab() === 'proxmox'}>
+                <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 mb-6 dark:border-blue-800 dark:bg-blue-900/20">
+                  <div class="flex items-start gap-3">
+                    <svg
+                      class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <div class="flex-1">
+                      <p class="text-sm text-blue-800 dark:text-blue-200">
+                        <strong>Recommended:</strong> Install the Pulse agent on your Proxmox nodes for automatic setup, temperature monitoring, and AI features.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/settings/agents')}
+                        class="mt-2 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200 underline"
+                      >
+                        Go to Agents tab →
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </Show>
+
               {/* PVE Nodes Tab */}
               <Show when={activeTab() === 'proxmox' && selectedAgent() === 'pve'}>
                 <div class="space-y-6 mt-6">
@@ -2811,6 +2693,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             <PveNodesTable
                               nodes={pveNodes()}
                               stateNodes={state.nodes ?? []}
+                              stateHosts={state.hosts ?? []}
                               globalTemperatureMonitoringEnabled={temperatureMonitoringEnabled()}
                               temperatureTransports={temperatureTransportInfo()}
                               onTestConnection={testNodeConnection}
@@ -3571,1749 +3454,147 @@ const Settings: Component<SettingsProps> = (props) => {
 
               {/* System General Tab */}
               <Show when={activeTab() === 'system-general'}>
-                <div class="space-y-6">
-                  <Card
-                    padding="none"
-                    class="overflow-hidden border border-gray-200 dark:border-gray-700"
-                    border={false}
-                  >
-                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                      <div class="flex items-center gap-3">
-                        <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                          <Sliders
-                            class="w-5 h-5 text-blue-600 dark:text-blue-300"
-                            strokeWidth={2}
-                          />
-                        </div>
-                        <SectionHeader
-                          title="General"
-                          description="Appearance and display preferences"
-                          size="sm"
-                          class="flex-1"
-                        />
-                      </div>
-                    </div>
-                    <div class="p-6 space-y-5">
-                      <div class="flex items-center justify-between gap-3">
-                        <div class="text-sm text-gray-600 dark:text-gray-400">
-                          <p class="font-medium text-gray-900 dark:text-gray-100">Dark mode</p>
-                          <p class="text-xs text-gray-500 dark:text-gray-400">
-                            Toggle to match your environment. Pulse remembers this preference on
-                            each browser.
-                          </p>
-                        </div>
-                        <Toggle
-                          checked={props.darkMode()}
-                          onChange={(event) => {
-                            const desired = (event.currentTarget as HTMLInputElement).checked;
-                            if (desired !== props.darkMode()) {
-                              props.toggleDarkMode();
-                            }
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </Card>
-                  <Card
-                    padding="none"
-                    class="overflow-hidden border border-gray-200 dark:border-gray-700"
-                    border={false}
-                  >
-                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                      <div class="flex items-center gap-3">
-                        <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                          <Activity class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
-                        </div>
-                        <SectionHeader
-                          title="Monitoring cadence"
-                          description="Control how frequently Pulse polls Proxmox VE nodes."
-                          size="sm"
-                          class="flex-1"
-                        />
-                      </div>
-                    </div>
-                    <div class="p-6 space-y-5">
-                      <div class="space-y-2">
-                        <p class="text-sm text-gray-600 dark:text-gray-400">
-                          Shorter intervals provide near-real-time updates at the cost of higher API
-                          and CPU usage on each node. Set a longer interval to reduce load on busy
-                          clusters.
-                        </p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">
-                          Current cadence: {pvePollingInterval()} seconds (
-                          {pvePollingInterval() >= 60
-                            ? `${(pvePollingInterval() / 60).toFixed(
-                              pvePollingInterval() % 60 === 0 ? 0 : 1,
-                            )} minute${pvePollingInterval() / 60 === 1 ? '' : 's'}`
-                            : 'under a minute'}
-                          ).
-                        </p>
-                      </div>
-                      <div class="space-y-4">
-                        <div class="grid gap-2 sm:grid-cols-3">
-                          <For each={PVE_POLLING_PRESETS}>
-                            {(option) => (
-                              <button
-                                type="button"
-                                class={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${pvePollingSelection() === option.value
-                                  ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
-                                  : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-200'
-                                  } ${pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                disabled={pvePollingEnvLocked()}
-                                onClick={() => {
-                                  if (pvePollingEnvLocked()) return;
-                                  setPVEPollingSelection(option.value);
-                                  setPVEPollingInterval(option.value);
-                                  setHasUnsavedChanges(true);
-                                }}
-                              >
-                                {option.label}
-                              </button>
-                            )}
-                          </For>
-                          <button
-                            type="button"
-                            class={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${pvePollingSelection() === 'custom'
-                              ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
-                              : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-200'
-                              } ${pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
-                            disabled={pvePollingEnvLocked()}
-                            onClick={() => {
-                              if (pvePollingEnvLocked()) return;
-                              setPVEPollingSelection('custom');
-                              setPVEPollingInterval(pvePollingCustomSeconds());
-                              setHasUnsavedChanges(true);
-                            }}
-                          >
-                            Custom interval
-                          </button>
-                        </div>
-                        <Show when={pvePollingSelection() === 'custom'}>
-                          <div class="space-y-2 rounded-md border border-dashed border-gray-300 p-4 dark:border-gray-600">
-                            <label class="text-xs font-medium text-gray-700 dark:text-gray-200">
-                              Custom polling interval (10–3600 seconds)
-                            </label>
-                            <input
-                              type="number"
-                              min={PVE_POLLING_MIN_SECONDS}
-                              max={PVE_POLLING_MAX_SECONDS}
-                              value={pvePollingCustomSeconds()}
-                              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900/60"
-                              disabled={pvePollingEnvLocked()}
-                              onInput={(e) => {
-                                if (pvePollingEnvLocked()) return;
-                                const parsed = Math.floor(Number(e.currentTarget.value));
-                                if (Number.isNaN(parsed)) {
-                                  return;
-                                }
-                                const clamped = Math.min(
-                                  PVE_POLLING_MAX_SECONDS,
-                                  Math.max(PVE_POLLING_MIN_SECONDS, parsed),
-                                );
-                                setPVEPollingCustomSeconds(clamped);
-                                setPVEPollingInterval(clamped);
-                                setHasUnsavedChanges(true);
-                              }}
-                            />
-                            <p class="text-[0.68rem] text-gray-500 dark:text-gray-400">
-                              Applies to all PVE clusters and standalone nodes.
-                            </p>
-                          </div>
-                        </Show>
-                        <Show when={pvePollingEnvLocked()}>
-                          <div class="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
-                            <svg
-                              class="h-4 w-4 flex-shrink-0"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                            >
-                              <circle cx="12" cy="12" r="10" />
-                              <line x1="12" y1="8" x2="12" y2="12" />
-                              <circle cx="12" cy="16" r="0.5" />
-                            </svg>
-                            <span>Managed via environment variable PVE_POLLING_INTERVAL.</span>
-                          </div>
-                        </Show>
-                      </div>
-                    </div>
-                  </Card>
-                </div>
+                <GeneralSettingsPanel
+                  darkMode={props.darkMode}
+                  toggleDarkMode={props.toggleDarkMode}
+                  pvePollingInterval={pvePollingInterval}
+                  setPVEPollingInterval={setPVEPollingInterval}
+                  pvePollingSelection={pvePollingSelection}
+                  setPVEPollingSelection={setPVEPollingSelection}
+                  pvePollingCustomSeconds={pvePollingCustomSeconds}
+                  setPVEPollingCustomSeconds={setPVEPollingCustomSeconds}
+                  pvePollingEnvLocked={pvePollingEnvLocked}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                />
               </Show>
 
               {/* System Network Tab */}
               <Show when={activeTab() === 'system-network'}>
-                <div class="space-y-6">
-                  <Card
-                    tone="info"
-                    padding="md"
-                    border={false}
-                    class="border border-blue-200 dark:border-blue-800"
-                  >
-                    <div class="flex items-start gap-3">
-                      <svg
-                        class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                      <div class="text-sm text-blue-800 dark:text-blue-200">
-                        <p class="font-medium mb-1">Configuration Priority</p>
-                        <ul class="space-y-1">
-                          <li>
-                            • Some env vars override settings (API_TOKENS, legacy API_TOKEN, PORTS,
-                            AUTH)
-                          </li>
-                          <li>• Changes made here are saved to system.json immediately</li>
-                          <li>• Settings persist unless overridden by env vars</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </Card>
-                  <Card
-                    padding="none"
-                    class="overflow-hidden border border-gray-200 dark:border-gray-700"
-                    border={false}
-                  >
-                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                      <div class="flex items-center gap-3">
-                        <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                          <Network
-                            class="w-5 h-5 text-blue-600 dark:text-blue-300"
-                            strokeWidth={2}
-                          />
-                        </div>
-                        <SectionHeader
-                          title="Network"
-                          description="Discovery, CORS, and embedding settings"
-                          size="sm"
-                          class="flex-1"
-                        />
-                      </div>
-                    </div>
-                    <div class="p-6 space-y-8">
-                      <section class="space-y-5">
-                        <SectionHeader
-                          title="Network discovery"
-                          description="Control how Pulse scans for Proxmox services on your network."
-                          size="sm"
-                          align="left"
-                        />
-                        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div class="text-sm text-gray-600 dark:text-gray-400">
-                            <p class="font-medium text-gray-900 dark:text-gray-100">
-                              Automatic scanning
-                            </p>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">
-                              Enable discovery to surface Proxmox VE, PBS, and PMG endpoints
-                              automatically.
-                            </p>
-                          </div>
-                          <Toggle
-                            checked={discoveryEnabled()}
-                            onChange={async (e: ToggleChangeEvent) => {
-                              if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
-                                e.preventDefault();
-                                return;
-                              }
-                              const success = await handleDiscoveryEnabledChange(
-                                e.currentTarget.checked,
-                              );
-                              if (!success) {
-                                e.currentTarget.checked = discoveryEnabled();
-                              }
-                            }}
-                            disabled={envOverrides().discoveryEnabled || savingDiscoverySettings()}
-                            containerClass="gap-2"
-                            label={
-                              <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                                {discoveryEnabled() ? 'On' : 'Off'}
-                              </span>
-                            }
-                          />
-                        </div>
-
-                        <Show when={discoveryEnabled()}>
-                          <div class="space-y-4 rounded-lg border border-gray-200 bg-white/40 p-3 dark:border-gray-600 dark:bg-gray-800/40">
-                            <fieldset class="space-y-2">
-                              <legend class="text-xs font-medium text-gray-700 dark:text-gray-300">
-                                Scan scope
-                              </legend>
-                              <div class="space-y-2">
-                                <label
-                                  class={`flex items-start gap-3 rounded-lg border p-2 transition-colors ${discoveryMode() === 'auto'
-                                    ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
-                                    : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'
-                                    }`}
-                                >
-                                  <input
-                                    type="radio"
-                                    name="discoveryMode"
-                                    value="auto"
-                                    checked={discoveryMode() === 'auto'}
-                                    onChange={async () => {
-                                      if (discoveryMode() !== 'auto') {
-                                        await handleDiscoveryModeChange('auto');
-                                      }
-                                    }}
-                                    disabled={
-                                      envOverrides().discoverySubnet || savingDiscoverySettings()
-                                    }
-                                    class="mt-1 h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
-                                  />
-                                  <div class="space-y-1">
-                                    <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      Auto (slower, full scan)
-                                    </p>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">
-                                      Scans container, local, and gateway networks. Large networks
-                                      may time out after two minutes.
-                                    </p>
-                                  </div>
-                                </label>
-
-                                <label
-                                  class={`flex items-start gap-3 rounded-lg border p-2 transition-colors ${discoveryMode() === 'custom'
-                                    ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
-                                    : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'
-                                    }`}
-                                >
-                                  <input
-                                    type="radio"
-                                    name="discoveryMode"
-                                    value="custom"
-                                    checked={discoveryMode() === 'custom'}
-                                    onChange={() => {
-                                      if (discoveryMode() !== 'custom') {
-                                        handleDiscoveryModeChange('custom');
-                                      }
-                                    }}
-                                    disabled={
-                                      envOverrides().discoverySubnet || savingDiscoverySettings()
-                                    }
-                                    class="mt-1 h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
-                                  />
-                                  <div class="space-y-1">
-                                    <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      Custom subnet (faster)
-                                    </p>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">
-                                      Limit discovery to one or more CIDR ranges to finish faster on
-                                      large networks.
-                                    </p>
-                                  </div>
-                                </label>
-                                <Show when={discoveryMode() === 'custom'}>
-                                  <div class="flex flex-wrap items-center gap-2 pl-9 pr-2">
-                                    <span class="text-[0.68rem] uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                      Common networks:
-                                    </span>
-                                    <For each={COMMON_DISCOVERY_SUBNETS}>
-                                      {(preset) => {
-                                        const baseValue = currentDraftSubnetValue();
-                                        const currentSelections = parseSubnetList(baseValue);
-                                        const isActive = currentSelections.includes(preset);
-                                        return (
-                                          <button
-                                            type="button"
-                                            class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${isActive
-                                              ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
-                                              : 'border-gray-300 text-gray-700 hover:border-blue-400 hover:bg-blue-50 dark:border-gray-600 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-blue-900/30'
-                                              }`}
-                                            onClick={async () => {
-                                              if (envOverrides().discoverySubnet) {
-                                                return;
-                                              }
-                                              let selections = [...currentSelections];
-                                              if (isActive) {
-                                                selections = selections.filter(
-                                                  (item) => item !== preset,
-                                                );
-                                              } else {
-                                                selections.push(preset);
-                                              }
-
-                                              if (selections.length === 0) {
-                                                setDiscoverySubnetDraft('');
-                                                setLastCustomSubnet('');
-                                                setDiscoverySubnetError(
-                                                  'Enter at least one subnet in CIDR format (e.g., 192.168.1.0/24)',
-                                                );
-                                                return;
-                                              }
-
-                                              const updatedValue = normalizeSubnetList(
-                                                selections.join(', '),
-                                              );
-                                              setDiscoveryMode('custom');
-                                              setDiscoverySubnetDraft(updatedValue);
-                                              setLastCustomSubnet(updatedValue);
-                                              setDiscoverySubnetError(undefined);
-                                              await commitDiscoverySubnet(updatedValue);
-                                            }}
-                                            disabled={envOverrides().discoverySubnet}
-                                            classList={{
-                                              'cursor-not-allowed opacity-60':
-                                                envOverrides().discoverySubnet,
-                                            }}
-                                          >
-                                            {preset}
-                                          </button>
-                                        );
-                                      }}
-                                    </For>
-                                  </div>
-                                </Show>
-                              </div>
-                            </fieldset>
-
-                            <div class="space-y-2">
-                              <div class="flex items-center justify-between gap-2">
-                                <label
-                                  for="discoverySubnetInput"
-                                  class="text-xs font-medium text-gray-700 dark:text-gray-300"
-                                >
-                                  Discovery subnet
-                                </label>
-                                <span
-                                  class="text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-300 cursor-help"
-                                  title="Use CIDR notation (comma-separated for multiple), e.g. 192.168.1.0/24, 10.0.0.0/24. Smaller ranges keep scans quick."
-                                >
-                                  <svg
-                                    class="h-4 w-4"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                  >
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <path d="M12 16v-4"></path>
-                                    <path d="M12 8h.01"></path>
-                                  </svg>
-                                </span>
-                              </div>
-                              <input
-                                id="discoverySubnetInput"
-                                ref={(el) => {
-                                  discoverySubnetInputRef = el;
-                                }}
-                                type="text"
-                                value={discoverySubnetDraft()}
-                                placeholder={
-                                  discoveryMode() === 'auto'
-                                    ? 'auto (scan every network phase)'
-                                    : '192.168.1.0/24, 10.0.0.0/24'
-                                }
-                                class={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${envOverrides().discoverySubnet
-                                  ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-200 cursor-not-allowed opacity-60'
-                                  : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900/70'
-                                  }`}
-                                disabled={envOverrides().discoverySubnet}
-                                onInput={(e) => {
-                                  if (envOverrides().discoverySubnet) {
-                                    return;
-                                  }
-                                  const rawValue = e.currentTarget.value;
-                                  setDiscoverySubnetDraft(rawValue);
-                                  if (discoveryMode() !== 'custom') {
-                                    setDiscoveryMode('custom');
-                                  }
-                                  setLastCustomSubnet(rawValue);
-                                  const trimmed = rawValue.trim();
-                                  if (!trimmed) {
-                                    setDiscoverySubnetError(undefined);
-                                    return;
-                                  }
-                                  if (!isValidCIDR(trimmed)) {
-                                    setDiscoverySubnetError(
-                                      'Use CIDR format such as 192.168.1.0/24 (comma-separated for multiple)',
-                                    );
-                                  } else {
-                                    setDiscoverySubnetError(undefined);
-                                  }
-                                }}
-                                onBlur={async (e) => {
-                                  if (
-                                    envOverrides().discoverySubnet ||
-                                    discoveryMode() !== 'custom'
-                                  ) {
-                                    return;
-                                  }
-                                  const rawValue = e.currentTarget.value;
-                                  setDiscoverySubnetDraft(rawValue);
-                                  const trimmed = rawValue.trim();
-                                  if (!trimmed) {
-                                    setDiscoverySubnetError(
-                                      'Enter at least one subnet in CIDR format (e.g., 192.168.1.0/24)',
-                                    );
-                                    return;
-                                  }
-                                  if (!isValidCIDR(trimmed)) {
-                                    setDiscoverySubnetError(
-                                      'Use CIDR format such as 192.168.1.0/24 (comma-separated for multiple)',
-                                    );
-                                    return;
-                                  }
-                                  setDiscoverySubnetError(undefined);
-                                  await commitDiscoverySubnet(rawValue);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    (e.currentTarget as HTMLInputElement).blur();
-                                  }
-                                }}
-                              />
-                              <Show when={discoverySubnetError()}>
-                                <p class="text-xs text-red-600 dark:text-red-400">
-                                  {discoverySubnetError()}
-                                </p>
-                              </Show>
-                              <Show when={!discoverySubnetError() && discoveryMode() === 'auto'}>
-                                <p class="text-xs text-gray-500 dark:text-gray-400">
-                                  Auto scans every reachable network phase. Large networks may time
-                                  out — switch to custom subnets to narrow the search.
-                                </p>
-                              </Show>
-                              <Show when={!discoverySubnetError() && discoveryMode() === 'custom'}>
-                                <p class="text-xs text-gray-500 dark:text-gray-400">
-                                  Example: 192.168.1.0/24, 10.0.0.0/24 (comma-separated). Smaller
-                                  ranges finish faster and avoid timeouts.
-                                </p>
-                              </Show>
-                            </div>
-                          </div>
-                        </Show>
-
-                        <Show
-                          when={envOverrides().discoveryEnabled || envOverrides().discoverySubnet}
-                        >
-                          <div class="rounded-lg border border-amber-200 bg-amber-100/80 p-3 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
-                            Discovery settings are locked by environment variables. Update the
-                            service configuration and restart Pulse to change them here.
-                          </div>
-                        </Show>
-                      </section>
-
-                      <section class="space-y-3">
-                        <h4 class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          >
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"></path>
-                          </svg>
-                          Network Settings
-                        </h4>
-                        <div class="space-y-2">
-                          <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            CORS Allowed Origins
-                          </label>
-                          <p class="text-xs text-gray-600 dark:text-gray-400">
-                            For reverse proxy setups (* = allow all, empty = same-origin only)
-                          </p>
-                          <div class="relative">
-                            <input
-                              type="text"
-                              value={allowedOrigins()}
-                              onChange={(e) => {
-                                if (!envOverrides().allowedOrigins) {
-                                  setAllowedOrigins(e.currentTarget.value);
-                                  setHasUnsavedChanges(true);
-                                }
-                              }}
-                              disabled={envOverrides().allowedOrigins}
-                              placeholder="* or https://example.com"
-                              class={`w-full px-3 py-1.5 text-sm border rounded-lg ${envOverrides().allowedOrigins
-                                ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75'
-                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
-                                }`}
-                            />
-                            {envOverrides().allowedOrigins && (
-                              <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
-                                <div class="flex items-center gap-1">
-                                  <svg
-                                    class="w-4 h-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      stroke-linecap="round"
-                                      stroke-linejoin="round"
-                                      stroke-width="2"
-                                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                                    />
-                                  </svg>
-                                  <span>Overridden by ALLOWED_ORIGINS environment variable</span>
-                                </div>
-                                <div class="mt-1 text-amber-700 dark:text-amber-300">
-                                  Remove the env var and restart to enable UI configuration
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </section>
-
-                      <section class="space-y-3">
-                        <h4 class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          >
-                            <rect x="3" y="4" width="18" height="14" rx="2"></rect>
-                            <path d="M7 20h10"></path>
-                          </svg>
-                          Embedding
-                        </h4>
-                        <p class="text-xs text-gray-600 dark:text-gray-400">
-                          Allow Pulse to be embedded in iframes (e.g., Homepage dashboard)
-                        </p>
-                        <div class="space-y-3">
-                          <div class="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              id="allowEmbedding"
-                              checked={allowEmbedding()}
-                              onChange={(e) => {
-                                setAllowEmbedding(e.currentTarget.checked);
-                                setHasUnsavedChanges(true);
-                              }}
-                              class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                            />
-                            <label
-                              for="allowEmbedding"
-                              class="text-sm text-gray-700 dark:text-gray-300"
-                            >
-                              Allow iframe embedding
-                            </label>
-                          </div>
-
-                          <Show when={allowEmbedding()}>
-                            <div class="space-y-2">
-                              <label class="text-xs font-medium text-gray-700 dark:text-gray-300">
-                                Allowed Embed Origins (optional)
-                              </label>
-                              <p class="text-xs text-gray-600 dark:text-gray-400">
-                                Comma-separated list of origins that can embed Pulse (leave empty
-                                for same-origin only)
-                              </p>
-                              <input
-                                type="text"
-                                value={allowedEmbedOrigins()}
-                                onChange={(e) => {
-                                  setAllowedEmbedOrigins(e.currentTarget.value);
-                                  setHasUnsavedChanges(true);
-                                }}
-                                placeholder="https://my.domain, https://dashboard.example.com"
-                                class="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                              />
-                              <p class="text-xs text-gray-500 dark:text-gray-400">
-                                Example: If Pulse is at <code>pulse.my.domain</code> and your
-                                dashboard is at <code>my.domain</code>, add{' '}
-                                <code>https://my.domain</code> here.
-                              </p>
-                            </div>
-                          </Show>
-                        </div>
-                      </section>
-
-                      {/* Webhook Security Settings */}
-                      <section class="space-y-3">
-                        <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            class="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width={2}
-                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                            />
-                          </svg>
-                          Webhook Security
-                        </h3>
-                        <div class="space-y-3">
-                          <div>
-                            <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                              Allowed Private IP Ranges for Webhooks
-                            </label>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                              By default, webhooks to private IP addresses are blocked for
-                              security. Enter trusted CIDR ranges to allow webhooks to internal
-                              services (leave empty to block all private IPs).
-                            </p>
-                            <input
-                              type="text"
-                              value={webhookAllowedPrivateCIDRs()}
-                              onChange={(e) => {
-                                setWebhookAllowedPrivateCIDRs(e.currentTarget.value);
-                                setHasUnsavedChanges(true);
-                              }}
-                              placeholder="192.168.1.0/24, 10.0.0.0/8"
-                              class="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                            />
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                              Example: <code>192.168.1.0/24,10.0.0.0/8</code> allows webhooks to
-                              these private networks. Localhost and cloud metadata services
-                              remain blocked.
-                            </p>
-                          </div>
-                        </div>
-                      </section>
-
-                      <Card
-                        tone="warning"
-                        padding="sm"
-                        border={false}
-                        class="border border-amber-200 dark:border-amber-800"
-                      >
-                        <p class="text-xs text-amber-800 dark:text-amber-200 mb-2">
-                          <strong>Port Configuration:</strong> Use{' '}
-                          <code class="font-mono bg-amber-100 dark:bg-amber-800 px-1 rounded">
-                            systemctl edit pulse
-                          </code>
-                        </p>
-                        <p class="text-xs text-amber-700 dark:text-amber-300 font-mono">
-                          [Service]
-                          <br />
-                          Environment="FRONTEND_PORT=8080"
-                          <br />
-                          <span class="text-xs text-amber-600 dark:text-amber-400">
-                            Then restart: sudo systemctl restart pulse
-                          </span>
-                        </p>
-                      </Card>
-                    </div>
-                  </Card>
-                </div>
+                <NetworkSettingsPanel
+                  discoveryEnabled={discoveryEnabled}
+                  discoveryMode={discoveryMode}
+                  discoverySubnetDraft={discoverySubnetDraft}
+                  discoverySubnetError={discoverySubnetError}
+                  savingDiscoverySettings={savingDiscoverySettings}
+                  envOverrides={envOverrides}
+                  allowedOrigins={allowedOrigins}
+                  setAllowedOrigins={setAllowedOrigins}
+                  allowEmbedding={allowEmbedding}
+                  setAllowEmbedding={setAllowEmbedding}
+                  allowedEmbedOrigins={allowedEmbedOrigins}
+                  setAllowedEmbedOrigins={setAllowedEmbedOrigins}
+                  webhookAllowedPrivateCIDRs={webhookAllowedPrivateCIDRs}
+                  setWebhookAllowedPrivateCIDRs={setWebhookAllowedPrivateCIDRs}
+                  handleDiscoveryEnabledChange={handleDiscoveryEnabledChange}
+                  handleDiscoveryModeChange={handleDiscoveryModeChange}
+                  setDiscoveryMode={setDiscoveryMode}
+                  setDiscoverySubnetDraft={setDiscoverySubnetDraft}
+                  setDiscoverySubnetError={setDiscoverySubnetError}
+                  setLastCustomSubnet={setLastCustomSubnet}
+                  commitDiscoverySubnet={commitDiscoverySubnet}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                  parseSubnetList={parseSubnetList}
+                  normalizeSubnetList={normalizeSubnetList}
+                  isValidCIDR={isValidCIDR}
+                  currentDraftSubnetValue={currentDraftSubnetValue}
+                  discoverySubnetInputRef={(el) => {
+                    discoverySubnetInputRef = el;
+                  }}
+                />
               </Show>
 
               {/* System Updates Tab */}
               <Show when={activeTab() === 'system-updates'}>
-                <div class="space-y-6">
-                  <Card
-                    padding="none"
-                    class="overflow-hidden border border-gray-200 dark:border-gray-700"
-                    border={false}
-                  >
-                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                      <div class="flex items-center gap-3">
-                        <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                          <RefreshCw
-                            class="w-5 h-5 text-blue-600 dark:text-blue-300"
-                            strokeWidth={2}
-                          />
-                        </div>
-                        <SectionHeader
-                          title="Updates"
-                          description="Version checking and automatic update configuration"
-                          size="sm"
-                          class="flex-1"
-                        />
-                      </div>
-                    </div>
-                    <div class="p-6 space-y-6">
-                      <section class="space-y-4">
-                        <div class="space-y-4">
-                          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                              <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                Current Version
-                              </label>
-                              <p class="text-xs text-gray-600 dark:text-gray-400">
-                                {versionInfo()?.version || 'Loading...'}
-                                {versionInfo()?.isDevelopment && ' (Development)'}
-                                {versionInfo()?.isDocker && ' - Docker'}
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={checkForUpdates}
-                              disabled={
-                                checkingForUpdates() ||
-                                versionInfo()?.isDocker ||
-                                versionInfo()?.isSourceBuild
-                              }
-                              class={`px-4 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 ${versionInfo()?.isDocker || versionInfo()?.isSourceBuild
-                                ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                : 'bg-blue-600 text-white hover:bg-blue-700'
-                                }`}
-                            >
-                              {checkingForUpdates() ? (
-                                <>
-                                  <div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                                  Checking...
-                                </>
-                              ) : (
-                                <>Check for Updates</>
-                              )}
-                            </button>
-                          </div>
-
-                          <Show when={versionInfo()?.isDocker && !updateInfo()?.available}>
-                            <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                              <p class="text-xs text-blue-800 dark:text-blue-200">
-                                <strong>Docker Installation:</strong> Updates are managed through
-                                Docker. Pull the latest image to update.
-                              </p>
-                            </div>
-                          </Show>
-
-                          <Show when={versionInfo()?.isSourceBuild}>
-                            <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                              <p class="text-xs text-blue-800 dark:text-blue-200">
-                                <strong>Built from source:</strong> Pull the latest code from git
-                                and rebuild to update.
-                              </p>
-                            </div>
-                          </Show>
-
-                          <Show when={Boolean(updateInfo()?.warning)}>
-                            <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
-                              <p class="text-xs text-amber-800 dark:text-amber-200">
-                                {updateInfo()?.warning}
-                              </p>
-                            </div>
-                          </Show>
-
-                          <Show when={updateInfo()?.available}>
-                            <div class="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
-                              <div>
-                                <p class="text-sm font-medium text-green-800 dark:text-green-200">
-                                  Update Available: {updateInfo()?.latestVersion}
-                                </p>
-                                <p class="text-xs text-green-700 dark:text-green-300 mt-1">
-                                  Released:{' '}
-                                  {updateInfo()?.releaseDate
-                                    ? new Date(updateInfo()!.releaseDate).toLocaleDateString()
-                                    : 'Unknown'}
-                                </p>
-                              </div>
-
-                              <div class="p-2 bg-green-100 dark:bg-green-900/40 rounded space-y-2">
-                                <p class="text-xs font-medium text-green-800 dark:text-green-200">
-                                  How to update:
-                                </p>
-                                <Show when={versionInfo()?.deploymentType === 'proxmoxve'}>
-                                  <p class="text-xs text-green-700 dark:text-green-300">
-                                    Type{' '}
-                                    <code class="px-1 py-0.5 bg-green-200 dark:bg-green-800 rounded">
-                                      update
-                                    </code>{' '}
-                                    in the LXC console
-                                  </p>
-                                </Show>
-                                <Show when={versionInfo()?.deploymentType === 'docker'}>
-                                  <div class="text-xs text-green-700 dark:text-green-300 space-y-1">
-                                    <p>Run these commands:</p>
-                                    <code class="block p-1 bg-green-200 dark:bg-green-800 rounded text-xs">
-                                      docker pull rcourtman/pulse:latest
-                                      <br />
-                                      docker restart pulse
-                                    </code>
-                                  </div>
-                                </Show>
-                                <Show
-                                  when={
-                                    versionInfo()?.deploymentType === 'systemd' ||
-                                    versionInfo()?.deploymentType === 'manual'
-                                  }
-                                >
-                                  <div class="text-xs text-green-700 dark:text-green-300 space-y-1">
-                                    <p>
-                                      Click the "Install Update" button below, or download and install manually:
-                                    </p>
-                                    <code class="block p-1 bg-green-200 dark:bg-green-800 rounded text-xs">
-                                      curl -LO https://github.com/rcourtman/Pulse/releases/download/{updateInfo()?.latestVersion}/pulse-{updateInfo()?.latestVersion}-linux-amd64.tar.gz
-                                      <br />
-                                      sudo systemctl stop pulse
-                                      <br />
-                                      sudo tar -xzf pulse-{updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /usr/local/bin pulse
-                                      <br />
-                                      sudo systemctl start pulse
-                                    </code>
-                                  </div>
-                                </Show>
-                                <Show when={versionInfo()?.deploymentType === 'development'}>
-                                  <p class="text-xs text-green-700 dark:text-green-300">
-                                    Pull latest changes and rebuild
-                                  </p>
-                                </Show>
-                                <Show
-                                  when={!versionInfo()?.deploymentType && versionInfo()?.isDocker}
-                                >
-                                  <p class="text-xs text-green-700 dark:text-green-300">
-                                    Pull the latest Pulse Docker image and recreate your container.
-                                  </p>
-                                </Show>
-                              </div>
-
-                              <Show when={updateInfo()?.releaseNotes}>
-                                <details class="mt-1">
-                                  <summary class="text-xs text-green-700 dark:text-green-300 cursor-pointer">
-                                    Release Notes
-                                  </summary>
-                                  <pre class="mt-2 text-xs text-green-600 dark:text-green-400 whitespace-pre-wrap font-mono bg-green-100 dark:bg-green-900/30 p-2 rounded">
-                                    {updateInfo()?.releaseNotes}
-                                  </pre>
-                                </details>
-                              </Show>
-                            </div>
-                          </Show>
-
-                          <div class="border-t border-gray-200 dark:border-gray-600 pt-4 space-y-4">
-                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                              <div>
-                                <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                  Update Channel
-                                </label>
-                                <p class="text-xs text-gray-600 dark:text-gray-400">
-                                  Choose between stable and release candidate versions
-                                </p>
-                              </div>
-                              <select
-                                value={updateChannel()}
-                                onChange={(e) => {
-                                  setUpdateChannel(e.currentTarget.value as 'stable' | 'rc');
-                                  setHasUnsavedChanges(true);
-                                }}
-                                disabled={versionInfo()?.isDocker}
-                                class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 disabled:opacity-50"
-                              >
-                                <option value="stable">Stable</option>
-                                <option value="rc">Release Candidate</option>
-                              </select>
-                            </div>
-
-                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                              <div>
-                                <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                  Update Checks
-                                </label>
-                                <p class="text-xs text-gray-600 dark:text-gray-400">
-                                  Automatically check for updates (installation is manual)
-                                </p>
-                              </div>
-                              <label class="relative inline-flex items-center cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={autoUpdateEnabled()}
-                                  onChange={(e) => {
-                                    setAutoUpdateEnabled(e.currentTarget.checked);
-                                    setHasUnsavedChanges(true);
-                                  }}
-                                  disabled={versionInfo()?.isDocker}
-                                  class="sr-only peer"
-                                />
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
-                              </label>
-                            </div>
-
-                            <Show when={autoUpdateEnabled()}>
-                              <div class="space-y-4 rounded-md border border-gray-200 dark:border-gray-600 p-3">
-                                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                  <div>
-                                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      Check Interval
-                                    </label>
-                                    <p class="text-xs text-gray-600 dark:text-gray-400">
-                                      How often to check for updates
-                                    </p>
-                                  </div>
-                                  <select
-                                    value={autoUpdateCheckInterval()}
-                                    onChange={(e) => {
-                                      setAutoUpdateCheckInterval(parseInt(e.currentTarget.value));
-                                      setHasUnsavedChanges(true);
-                                    }}
-                                    class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
-                                  >
-                                    <option value="6">Every 6 hours</option>
-                                    <option value="12">Every 12 hours</option>
-                                    <option value="24">Daily</option>
-                                    <option value="168">Weekly</option>
-                                  </select>
-                                </div>
-
-                                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                  <div>
-                                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      Check Time
-                                    </label>
-                                    <p class="text-xs text-gray-600 dark:text-gray-400">
-                                      Preferred time to check for updates
-                                    </p>
-                                  </div>
-                                  <input
-                                    type="time"
-                                    value={autoUpdateTime()}
-                                    onChange={(e) => {
-                                      setAutoUpdateTime(e.currentTarget.value);
-                                      setHasUnsavedChanges(true);
-                                    }}
-                                    class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
-                                  />
-                                </div>
-                              </div>
-                            </Show>
-                          </div>
-                        </div>
-                      </section>
-                    </div>
-                  </Card>
-                </div>
+                <UpdatesSettingsPanel
+                  versionInfo={versionInfo}
+                  updateInfo={updateInfo}
+                  checkingForUpdates={checkingForUpdates}
+                  updateChannel={updateChannel}
+                  setUpdateChannel={setUpdateChannel}
+                  autoUpdateEnabled={autoUpdateEnabled}
+                  setAutoUpdateEnabled={setAutoUpdateEnabled}
+                  autoUpdateCheckInterval={autoUpdateCheckInterval}
+                  setAutoUpdateCheckInterval={setAutoUpdateCheckInterval}
+                  autoUpdateTime={autoUpdateTime}
+                  setAutoUpdateTime={setAutoUpdateTime}
+                  checkForUpdates={checkForUpdates}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                  updatePlan={updatePlan}
+                  onInstallUpdate={handleInstallUpdate}
+                  isInstalling={isInstallingUpdate}
+                />
               </Show>
 
               {/* System Backups Tab */}
               <Show when={activeTab() === 'system-backups'}>
+                <BackupsSettingsPanel
+                  backupPollingEnabled={backupPollingEnabled}
+                  setBackupPollingEnabled={setBackupPollingEnabled}
+                  backupPollingInterval={backupPollingInterval}
+                  setBackupPollingInterval={setBackupPollingInterval}
+                  backupPollingCustomMinutes={backupPollingCustomMinutes}
+                  setBackupPollingCustomMinutes={setBackupPollingCustomMinutes}
+                  backupPollingUseCustom={backupPollingUseCustom}
+                  setBackupPollingUseCustom={setBackupPollingUseCustom}
+                  backupPollingEnvLocked={backupPollingEnvLocked}
+                  backupIntervalSelectValue={backupIntervalSelectValue}
+                  backupIntervalSummary={backupIntervalSummary}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                  showExportDialog={showExportDialog}
+                  setShowExportDialog={setShowExportDialog}
+                  showImportDialog={showImportDialog}
+                  setShowImportDialog={setShowImportDialog}
+                  setUseCustomPassphrase={setUseCustomPassphrase}
+                  securityStatus={securityStatus}
+                />
+              </Show>
+
+              {/* AI Assistant Tab */}
+              <Show when={activeTab() === 'system-ai'}>
                 <div class="space-y-6">
-                  <Card
-                    padding="none"
-                    class="overflow-hidden border border-gray-200 dark:border-gray-700"
-                    border={false}
-                  >
-                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                      <div class="flex items-center gap-3">
-                        <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                          <Clock class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
-                        </div>
-                        <SectionHeader
-                          title="Backups"
-                          description="Backup polling and configuration management"
-                          size="sm"
-                          class="flex-1"
-                        />
-                      </div>
-                    </div>
-                    <div class="p-6 space-y-8">
-                      <section class="space-y-3">
-                        <h4 class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                          >
-                            <circle cx="12" cy="12" r="9" stroke-width="2" />
-                            <path
-                              d="M12 7v5l3 3"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            />
-                          </svg>
-                          Backup polling
-                        </h4>
-                        <p class="text-xs text-gray-600 dark:text-gray-400">
-                          Control how often Pulse queries Proxmox backup tasks, datastore contents,
-                          and guest snapshots. Longer intervals reduce disk activity and API load.
-                        </p>
-                        <div class="space-y-3">
-                          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                              <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                Enable backup polling
-                              </p>
-                              <p class="text-xs text-gray-600 dark:text-gray-400">
-                                Required for dashboard backup status, storage snapshots, and
-                                alerting.
-                              </p>
-                            </div>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                class="sr-only peer"
-                                checked={backupPollingEnabled()}
-                                disabled={backupPollingEnvLocked()}
-                                onChange={(e) => {
-                                  setBackupPollingEnabled(e.currentTarget.checked);
-                                  if (!backupPollingEnvLocked()) {
-                                    setHasUnsavedChanges(true);
-                                  }
-                                }}
-                              />
-                              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
-                            </label>
-                          </div>
-
-                          <Show when={backupPollingEnabled()}>
-                            <div class="space-y-3 rounded-md border border-gray-200 dark:border-gray-600 p-3">
-                              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                  <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                    Polling interval
-                                  </label>
-                                  <p class="text-xs text-gray-600 dark:text-gray-400">
-                                    {backupIntervalSummary()}
-                                  </p>
-                                </div>
-                                <select
-                                  value={backupIntervalSelectValue()}
-                                  disabled={backupPollingEnvLocked()}
-                                  onChange={(e) => {
-                                    const value = e.currentTarget.value;
-                                    if (value === 'custom') {
-                                      setBackupPollingUseCustom(true);
-                                      const minutes = Math.max(1, backupPollingCustomMinutes());
-                                      setBackupPollingInterval(minutes * 60);
-                                    } else {
-                                      setBackupPollingUseCustom(false);
-                                      const seconds = parseInt(value, 10);
-                                      if (!Number.isNaN(seconds)) {
-                                        setBackupPollingInterval(seconds);
-                                        if (seconds > 0) {
-                                          setBackupPollingCustomMinutes(
-                                            Math.max(1, Math.round(seconds / 60)),
-                                          );
-                                        }
-                                      }
-                                    }
-                                    if (!backupPollingEnvLocked()) {
-                                      setHasUnsavedChanges(true);
-                                    }
-                                  }}
-                                  class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 disabled:opacity-50"
-                                >
-                                  <For each={BACKUP_INTERVAL_OPTIONS}>
-                                    {(option) => (
-                                      <option value={String(option.value)}>{option.label}</option>
-                                    )}
-                                  </For>
-                                  <option value="custom">Custom interval…</option>
-                                </select>
-                              </div>
-
-                              <Show when={backupIntervalSelectValue() === 'custom'}>
-                                <div class="space-y-2">
-                                  <label class="text-xs font-medium text-gray-700 dark:text-gray-300">
-                                    Custom interval (minutes)
-                                  </label>
-                                  <div class="flex items-center gap-3">
-                                    <input
-                                      type="number"
-                                      min="1"
-                                      max={BACKUP_INTERVAL_MAX_MINUTES}
-                                      value={backupPollingCustomMinutes()}
-                                      disabled={backupPollingEnvLocked()}
-                                      onInput={(e) => {
-                                        const value = Number(e.currentTarget.value);
-                                        if (Number.isNaN(value)) {
-                                          return;
-                                        }
-                                        const clamped = Math.max(
-                                          1,
-                                          Math.min(BACKUP_INTERVAL_MAX_MINUTES, Math.floor(value)),
-                                        );
-                                        setBackupPollingCustomMinutes(clamped);
-                                        setBackupPollingInterval(clamped * 60);
-                                        if (!backupPollingEnvLocked()) {
-                                          setHasUnsavedChanges(true);
-                                        }
-                                      }}
-                                      class="w-24 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 disabled:opacity-50"
-                                    />
-                                    <span class="text-xs text-gray-500 dark:text-gray-400">
-                                      1 – {BACKUP_INTERVAL_MAX_MINUTES} minutes (≈7 days max)
-                                    </span>
-                                  </div>
-                                </div>
-                              </Show>
-                            </div>
-                          </Show>
-
-                          <Show when={backupPollingEnvLocked()}>
-                            <div class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 p-3 text-xs text-amber-700 dark:text-amber-200">
-                              <svg
-                                class="w-4 h-4 flex-shrink-0 mt-0.5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2"
-                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                                />
-                              </svg>
-                              <div>
-                                <p class="font-medium">Environment override detected</p>
-                                <p class="mt-1">
-                                  The <code class="font-mono">ENABLE_BACKUP_POLLING</code> or{' '}
-                                  <code class="font-mono">BACKUP_POLLING_INTERVAL</code> environment
-                                  variables are set. Remove them and restart Pulse to manage backup
-                                  polling here.
-                                </p>
-                              </div>
-                            </div>
-                          </Show>
-                        </div>
-                      </section>
-
-                      <SectionHeader
-                        title="Backup & restore"
-                        description="Backup your node configurations and credentials or restore from a previous backup."
-                        size="md"
-                        class="mb-4"
-                      />
-
-                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Export Section */}
-                        <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                          <div class="flex items-start gap-3">
-                            <div class="flex-shrink-0 w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                              <svg
-                                class="w-5 h-5 text-blue-600 dark:text-blue-400"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2"
-                                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"
-                                />
-                              </svg>
-                            </div>
-                            <div class="flex-1">
-                              <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
-                                Export Configuration
-                              </h4>
-                              <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                                Download an encrypted backup of all nodes and settings
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  // Default to custom passphrase if no auth is configured
-                                  setUseCustomPassphrase(!securityStatus()?.hasAuthentication);
-                                  setShowExportDialog(true);
-                                }}
-                                class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
-                              >
-                                <svg
-                                  class="w-4 h-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                                  />
-                                </svg>
-                                Export Backup
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Import Section */}
-                        <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                          <div class="flex items-start gap-3">
-                            <div class="flex-shrink-0 w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-                              <svg
-                                class="w-5 h-5 text-gray-600 dark:text-gray-400"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2"
-                                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                                />
-                              </svg>
-                            </div>
-                            <div class="flex-1">
-                              <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
-                                Restore Configuration
-                              </h4>
-                              <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                                Upload a backup file to restore nodes and settings
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => setShowImportDialog(true)}
-                                class="px-3 py-1.5 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors inline-flex items-center gap-2"
-                              >
-                                <svg
-                                  class="w-4 h-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                                  />
-                                </svg>
-                                Restore Backup
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div class="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                        <div class="flex gap-2">
-                          <svg
-                            class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                            />
-                          </svg>
-                          <div class="text-xs text-amber-700 dark:text-amber-300">
-                            <p class="font-medium mb-1">Important Notes</p>
-                            <ul class="space-y-0.5 text-amber-600 dark:text-amber-400">
-                              <li>• Backups contain encrypted credentials and sensitive data</li>
-                              <li>• Use a strong passphrase to protect your backup</li>
-                              <li>• Store backup files securely and never share the passphrase</li>
-                            </ul>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
+                  <AISettings />
+                  <AICostDashboard />
                 </div>
               </Show>
 
               {/* API Access */}
               <Show when={activeTab() === 'api'}>
-                <div class="space-y-6">
-                  <Card
-                    padding="none"
-                    class="overflow-hidden border border-gray-200 dark:border-gray-700"
-                    border={false}
-                  >
-                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                      <div class="flex items-center gap-3">
-                        <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                          <BadgeCheck class="w-5 h-5 text-blue-600 dark:text-blue-300" />
-                        </div>
-                        <SectionHeader
-                          title="API Access"
-                          description="Generate scoped tokens for agents and automation"
-                          size="sm"
-                          class="flex-1"
-                        />
-                      </div>
-                    </div>
-                    <div class="p-6 space-y-3">
-                      <p class="text-sm text-gray-600 dark:text-gray-400">
-                        Generate scoped tokens for Docker agents, host agents, and automation
-                        pipelines. Tokens are shown once—store them securely and rotate when
-                        infrastructure changes.
-                      </p>
-                      <a
-                        href="https://github.com/rcourtman/Pulse/blob/main/docs/CONFIGURATION.md#token-scopes"
-                        target="_blank"
-                        rel="noreferrer"
-                        class="inline-flex w-fit items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
-                      >
-                        View scope reference
-                      </a>
-                    </div>
-                  </Card>
-
-                  <APITokenManager
-                    currentTokenHint={securityStatus()?.apiTokenHint}
-                    onTokensChanged={() => {
-                      void loadSecurityStatus();
-                    }}
-                    refreshing={securityStatusLoading()}
-                  />
-                </div>
+                <APIAccessPanel
+                  currentTokenHint={securityStatus()?.apiTokenHint}
+                  onTokensChanged={() => {
+                    void loadSecurityStatus();
+                  }}
+                  refreshing={securityStatusLoading()}
+                />
               </Show>
 
               {/* Security Overview Tab */}
               <Show when={activeTab() === 'security-overview'}>
-                <div class="space-y-6">
-                  <Show when={!securityStatusLoading() && securityStatus()}>
-                    <SecurityPostureSummary status={securityStatus()!} />
-                  </Show>
-
-                  <Show when={!securityStatusLoading() && securityStatus()?.hasProxyAuth}>
-                    <Card
-                      padding="sm"
-                      class="border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20"
-                    >
-                      <div class="flex flex-col gap-2 text-xs text-blue-800 dark:text-blue-200">
-                        <div class="flex items-center gap-2">
-                          <svg
-                            class="w-4 h-4 flex-shrink-0"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                          </svg>
-                          <span class="font-semibold text-blue-900 dark:text-blue-100">
-                            Proxy authentication detected
-                          </span>
-                        </div>
-                        <p>
-                          Requests are validated by an upstream proxy. The current proxied user is
-                          {securityStatus()?.proxyAuthUsername
-                            ? ` ${securityStatus()?.proxyAuthUsername}`
-                            : ' available once a request is received'}
-                          .
-                          {securityStatus()?.proxyAuthIsAdmin ? ' Admin privileges confirmed.' : ''}
-                          <Show when={securityStatus()?.proxyAuthLogoutURL}>
-                            {' '}
-                            <a
-                              class="underline font-medium"
-                              href={securityStatus()?.proxyAuthLogoutURL}
-                            >
-                              Proxy logout
-                            </a>
-                          </Show>
-                        </p>
-                        <p>
-                          Need configuration tips? Review the proxy auth guide in the docs.{' '}
-                          <a
-                            class="underline font-medium"
-                            href="https://github.com/rcourtman/Pulse/blob/main/docs/PROXY_AUTH.md"
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Read proxy auth guide →
-                          </a>
-                        </p>
-                      </div>
-                    </Card>
-                  </Show>
-                </div>
+                <SecurityOverviewPanel
+                  securityStatus={securityStatus}
+                  securityStatusLoading={securityStatusLoading}
+                />
               </Show>
 
               {/* Security Authentication Tab */}
               <Show when={activeTab() === 'security-auth'}>
-                <div class="space-y-6">
-                  {/* Show message when auth is disabled */}
-                  <Show when={!securityStatus()?.hasAuthentication}>
-                    <Card
-                      padding="none"
-                      class="overflow-hidden border border-amber-200 dark:border-amber-800"
-                      border={false}
-                    >
-                      {/* Header */}
-                      <div class="bg-gradient-to-r from-amber-50 to-amber-50 dark:from-amber-900/20 dark:to-amber-900/20 px-6 py-4 border-b border-amber-200 dark:border-amber-700">
-                        <div class="flex items-center gap-3">
-                          <div class="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-lg">
-                            <svg
-                              class="w-5 h-5 text-amber-600 dark:text-amber-400"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                              />
-                            </svg>
-                          </div>
-                          <SectionHeader title="Authentication disabled" size="sm" class="flex-1" />
-                          <Show
-                            when={!authDisabledByEnv()}
-                            fallback={
-                              <span class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-300 text-amber-800 bg-amber-100/60 dark:border-amber-700 dark:text-amber-100 dark:bg-amber-900/40 whitespace-nowrap">
-                                Controlled by DISABLE_AUTH
-                              </span>
-                            }
-                          >
-                            <button
-                              type="button"
-                              onClick={() => setShowQuickSecuritySetup(!showQuickSecuritySetup())}
-                              class="px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-300 text-amber-800 bg-amber-100/50 hover:bg-amber-100 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 dark:hover:bg-amber-900/40 whitespace-nowrap"
-                            >
-                              Setup
-                            </button>
-                          </Show>
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <div class="p-6">
-                        <p class="text-sm text-amber-700 dark:text-amber-300 mb-4">
-                          <Show
-                            when={authDisabledByEnv()}
-                            fallback={
-                              <>
-                                Authentication is currently disabled. Set up password authentication
-                                to protect your Pulse instance.
-                              </>
-                            }
-                          >
-                            Authentication settings are locked by the legacy{' '}
-                            <code class="font-mono text-xs text-amber-800 dark:text-amber-200">
-                              DISABLE_AUTH
-                            </code>{' '}
-                            environment variable. Remove it from your deployment and restart Pulse
-                            before enabling security from this page.
-                          </Show>
-                        </p>
-
-                        <Show when={showQuickSecuritySetup() && !authDisabledByEnv()}>
-                          <QuickSecuritySetup
-                            onConfigured={() => {
-                              setShowQuickSecuritySetup(false);
-                              loadSecurityStatus();
-                            }}
-                          />
-                        </Show>
-                      </div>
-                    </Card>
-                  </Show>
-
-                  {/* Authentication */}
-                  <Show
-                    when={
-                      !securityStatusLoading() &&
-                      (securityStatus()?.hasAuthentication || securityStatus()?.apiTokenConfigured)
-                    }
-                  >
-                    <Card
-                      padding="none"
-                      class="overflow-hidden border border-gray-200 dark:border-gray-700"
-                      border={false}
-                    >
-                      {/* Header */}
-                      <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                        <div class="flex items-center gap-3">
-                          <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                            <Lock
-                              class="w-5 h-5 text-blue-600 dark:text-blue-300"
-                              strokeWidth={2}
-                            />
-                          </div>
-                          <SectionHeader
-                            title="Authentication"
-                            description="Password management and credential rotation"
-                            size="sm"
-                            class="flex-1"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <div class="p-6">
-                        <div class="flex flex-wrap items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setShowPasswordModal(true);
-                            }}
-                            class="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                          >
-                            Change password
-                          </button>
-                          <Show
-                            when={!authDisabledByEnv()}
-                            fallback={
-                              <span class="px-4 py-2 text-sm font-semibold border border-amber-300 text-amber-800 bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 rounded-lg">
-                                Remove DISABLE_AUTH to rotate credentials
-                              </span>
-                            }
-                          >
-                            <button
-                              type="button"
-                              onClick={() => setShowQuickSecurityWizard(!showQuickSecurityWizard())}
-                              class="px-4 py-2 text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                            >
-                              Rotate credentials
-                            </button>
-                          </Show>
-                          <div class="flex-1"></div>
-                          <div class="text-xs text-gray-600 dark:text-gray-400">
-                            <span class="font-medium text-gray-800 dark:text-gray-200">User:</span>{' '}
-                            {securityStatus()?.authUsername || 'Not configured'}
-                          </div>
-                        </div>
-
-                        <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                          <Toggle
-                            label="Hide local login form"
-                            description="Hide the username/password form on the login page. Users will only see SSO options unless ?show_local=true is used."
-                            checked={hideLocalLogin()}
-                            onChange={(e: ToggleChangeEvent) => handleHideLocalLoginChange(e.currentTarget.checked)}
-                            disabled={hideLocalLoginLocked() || savingHideLocalLogin()}
-                            locked={hideLocalLoginLocked()}
-                            lockedMessage="This setting is managed by the PULSE_AUTH_HIDE_LOCAL_LOGIN environment variable"
-                          />
-                        </div>
-
-                        <Show when={!authDisabledByEnv() && showQuickSecurityWizard()}>
-                          <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                            <QuickSecuritySetup
-                              mode="rotate"
-                              defaultUsername={securityStatus()?.authUsername || 'admin'}
-                              onConfigured={() => {
-                                setShowQuickSecurityWizard(false);
-                                loadSecurityStatus();
-                              }}
-                            />
-                          </div>
-                        </Show>
-                      </div>
-                    </Card>
-                  </Show>
-
-                  {/* Show pending restart message if configured but not loaded */}
-                  <Show when={securityStatus()?.configuredButPendingRestart}>
-                    <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
-                      <div class="flex items-start space-x-3">
-                        <div class="flex-shrink-0">
-                          <svg
-                            class="h-6 w-6 text-amber-600 dark:text-amber-400"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                            />
-                          </svg>
-                        </div>
-                        <div class="flex-1">
-                          <h4 class="text-sm font-semibold text-amber-900 dark:text-amber-100">
-                            Security Configured - Restart Required
-                          </h4>
-                          <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                            Security settings have been configured but the service needs to be
-                            restarted to activate them.
-                          </p>
-                          <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                            After restarting, you'll need to log in with your saved credentials.
-                          </p>
-
-                          <div class="mt-4 bg-white dark:bg-gray-800 rounded-lg p-3 border border-amber-200 dark:border-amber-700">
-                            <p class="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                              How to restart Pulse:
-                            </p>
-
-                            <Show when={versionInfo()?.deploymentType === 'proxmoxve'}>
-                              <div class="space-y-2">
-                                <p class="text-xs text-gray-700 dark:text-gray-300">
-                                  Type{' '}
-                                  <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">
-                                    update
-                                  </code>{' '}
-                                  in your ProxmoxVE console
-                                </p>
-                                <p class="text-xs text-gray-600 dark:text-gray-400 italic">
-                                  Or restart manually with:{' '}
-                                  <code class="text-xs">systemctl restart pulse</code>
-                                </p>
-                              </div>
-                            </Show>
-
-                            <Show when={versionInfo()?.deploymentType === 'docker'}>
-                              <div class="space-y-1">
-                                <p class="text-xs text-gray-700 dark:text-gray-300">
-                                  Restart your Docker container:
-                                </p>
-                                <code class="block text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded mt-1">
-                                  docker restart pulse
-                                </code>
-                              </div>
-                            </Show>
-
-                            <Show
-                              when={
-                                versionInfo()?.deploymentType === 'systemd' ||
-                                versionInfo()?.deploymentType === 'manual'
-                              }
-                            >
-                              <div class="space-y-1">
-                                <p class="text-xs text-gray-700 dark:text-gray-300">
-                                  Restart the service:
-                                </p>
-                                <code class="block text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded mt-1">
-                                  sudo systemctl restart pulse
-                                </code>
-                              </div>
-                            </Show>
-
-                            <Show when={versionInfo()?.deploymentType === 'development'}>
-                              <div class="space-y-1">
-                                <p class="text-xs text-gray-700 dark:text-gray-300">
-                                  Restart the development server:
-                                </p>
-                                <code class="block text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded mt-1">
-                                  sudo systemctl restart pulse-hot-dev
-                                </code>
-                              </div>
-                            </Show>
-
-                            <Show when={!versionInfo()?.deploymentType}>
-                              <div class="space-y-1">
-                                <p class="text-xs text-gray-700 dark:text-gray-300">
-                                  Restart Pulse using your deployment method
-                                </p>
-                              </div>
-                            </Show>
-                          </div>
-
-                          <div class="mt-3 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
-                            <p class="text-xs text-green-700 dark:text-green-300">
-                              💡 <strong>Tip:</strong> Make sure you've saved your credentials
-                              before restarting!
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </Show>
-                </div>
+                <SecurityAuthPanel
+                  securityStatus={securityStatus}
+                  securityStatusLoading={securityStatusLoading}
+                  versionInfo={versionInfo}
+                  authDisabledByEnv={authDisabledByEnv}
+                  showQuickSecuritySetup={showQuickSecuritySetup}
+                  setShowQuickSecuritySetup={setShowQuickSecuritySetup}
+                  showQuickSecurityWizard={showQuickSecurityWizard}
+                  setShowQuickSecurityWizard={setShowQuickSecurityWizard}
+                  showPasswordModal={showPasswordModal}
+                  setShowPasswordModal={setShowPasswordModal}
+                  hideLocalLogin={hideLocalLogin}
+                  hideLocalLoginLocked={hideLocalLoginLocked}
+                  savingHideLocalLogin={savingHideLocalLogin}
+                  handleHideLocalLoginChange={handleHideLocalLoginChange}
+                  loadSecurityStatus={loadSecurityStatus}
+                />
               </Show>
 
               {/* Security Single Sign-On Tab */}
@@ -5325,2093 +3606,15 @@ const Settings: Component<SettingsProps> = (props) => {
 
               {/* Diagnostics Tab */}
               <Show when={activeTab() === 'diagnostics'}>
-                <div class="space-y-6">
-                  <div>
-                    <SectionHeader title="System diagnostics" size="md" class="mb-4" />
-
-                    <div class="space-y-4">
-                      {/* Live Connection Diagnostics */}
-                      <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                          Connection Diagnostics
-                        </h4>
-                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                          Test all configured node connections and view detailed status
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void runDiagnostics();
-                          }}
-                          disabled={runningDiagnostics()}
-                          class="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {runningDiagnostics() ? 'Running...' : 'Run Diagnostics'}
-                        </button>
-
-                        <Show when={diagnosticsData()}>
-                          <div class="mt-4 space-y-3">
-                            {/* System Info */}
-                            <Card padding="sm">
-                              <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
-                                System
-                              </h5>
-                              <div class="text-xs space-y-1 text-gray-600 dark:text-gray-400">
-                                <div>Version: {diagnosticsData()?.version || 'Unknown'}</div>
-                                <div>Runtime: {diagnosticsData()?.runtime || 'Unknown'}</div>
-                                <div>Uptime: {formatUptime(diagnosticsData()?.uptime || 0)}</div>
-                                <div>
-                                  OS / Arch:{' '}
-                                  {diagnosticsData()?.system?.os
-                                    ? `${diagnosticsData()?.system?.os} / ${diagnosticsData()?.system?.arch || 'Unknown'}`
-                                    : 'Unknown'}
-                                </div>
-                                <div>
-                                  Go runtime: {diagnosticsData()?.system?.goVersion || 'Unknown'}
-                                </div>
-                                <div>
-                                  CPU cores: {diagnosticsData()?.system?.numCPU ?? 'Unknown'}
-                                </div>
-                                <div>
-                                  Goroutines: {diagnosticsData()?.system?.numGoroutine ?? 'Unknown'}
-                                </div>
-                                <div>Memory: {diagnosticsData()?.system?.memoryMB ?? 0} MB</div>
-                              </div>
-                            </Card>
-
-                            <Show when={diagnosticsData()?.discovery}>
-                              {(discovery) => {
-                                const lastScanAbsolute = () =>
-                                  formatIsoDateTime(discovery().lastScanStartedAt) || 'Never';
-                                const lastScanRelative = () =>
-                                  formatIsoRelativeTime(discovery().lastScanStartedAt);
-                                const lastResultAbsolute = () =>
-                                  formatIsoDateTime(discovery().lastResultTimestamp) || 'Never';
-                                const lastResultRelative = () =>
-                                  formatIsoRelativeTime(discovery().lastResultTimestamp);
-                                const blocklist = () => discovery().subnetBlocklist || [];
-                                const allowlist = () => discovery().subnetAllowlist || [];
-                                return (
-                                  <Card padding="sm">
-                                    <div class="flex items-start justify-between gap-3">
-                                      <div>
-                                        <h5 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                          Network discovery
-                                        </h5>
-                                        <p class="text-xs text-gray-600 dark:text-gray-400">
-                                          Active scan configuration and recent discovery results.
-                                        </p>
-                                      </div>
-                                      <span
-                                        class="rounded-full px-2 py-1 text-[0.65rem] font-medium uppercase tracking-wide"
-                                        classList={{
-                                          'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300':
-                                            discovery().enabled,
-                                          'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300':
-                                            !discovery().enabled,
-                                        }}
-                                      >
-                                        {discovery().enabled ? 'Enabled' : 'Disabled'}
-                                      </span>
-                                    </div>
-
-                                    <div class="mt-3 grid gap-1 text-xs text-gray-600 dark:text-gray-400">
-                                      <div>
-                                        Configured subnet:{' '}
-                                        <code class="rounded bg-gray-100 px-1.5 py-0.5 text-[0.7rem] font-mono dark:bg-gray-700 dark:text-gray-200">
-                                          {discovery().configuredSubnet || 'auto'}
-                                        </code>
-                                      </div>
-                                      <Show
-                                        when={
-                                          discovery().activeSubnet &&
-                                          discovery().activeSubnet !== discovery().configuredSubnet
-                                        }
-                                      >
-                                        <div>
-                                          Active subnet:{' '}
-                                          <code class="rounded bg-blue-50 px-1.5 py-0.5 text-[0.7rem] font-mono text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
-                                            {discovery().activeSubnet}
-                                          </code>
-                                        </div>
-                                      </Show>
-                                      <Show when={discovery().environmentOverride}>
-                                        <div>
-                                          Environment override:{' '}
-                                          <span class="font-medium text-gray-700 dark:text-gray-300">
-                                            {discovery().environmentOverride}
-                                          </span>
-                                        </div>
-                                      </Show>
-                                      <div>
-                                        Scan interval:{' '}
-                                        <span class="font-medium text-gray-700 dark:text-gray-300">
-                                          {discovery().scanInterval || 'default'}
-                                        </span>
-                                        <Show when={discovery().scanning}>
-                                          <span class="ml-2 inline-flex items-center gap-1 text-[0.65rem] text-blue-600 dark:text-blue-300">
-                                            <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
-                                            scanning
-                                          </span>
-                                        </Show>
-                                      </div>
-                                    </div>
-
-                                    <div class="mt-4 space-y-3">
-                                      <div>
-                                        <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                          Blocked subnets
-                                        </div>
-                                        <Show
-                                          when={blocklist().length > 0}
-                                          fallback={
-                                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                              None
-                                            </div>
-                                          }
-                                        >
-                                          <div class="mt-1 flex flex-wrap gap-2">
-                                            <For each={blocklist()}>
-                                              {(cidr) => (
-                                                <span class="rounded bg-gray-100 px-2 py-1 text-[0.7rem] font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-200">
-                                                  {cidr}
-                                                </span>
-                                              )}
-                                            </For>
-                                          </div>
-                                        </Show>
-                                      </div>
-
-                                      <Show when={allowlist().length > 0}>
-                                        <div>
-                                          <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                            Allowlist overrides
-                                          </div>
-                                          <div class="mt-1 flex flex-wrap gap-2">
-                                            <For each={allowlist()}>
-                                              {(cidr) => (
-                                                <span class="rounded bg-blue-50 px-2 py-1 text-[0.7rem] font-mono text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
-                                                  {cidr}
-                                                </span>
-                                              )}
-                                            </For>
-                                          </div>
-                                        </div>
-                                      </Show>
-                                    </div>
-
-                                    <div class="mt-4 grid gap-1 text-[0.7rem] text-gray-500 dark:text-gray-400">
-                                      <div>
-                                        Last scan:{' '}
-                                        <span class="text-gray-700 dark:text-gray-300">
-                                          {lastScanAbsolute()}
-                                        </span>
-                                        <Show when={lastScanRelative()}>
-                                          {(relative) => (
-                                            <span class="ml-2 text-[0.65rem] text-gray-400 dark:text-gray-500">
-                                              ({relative()})
-                                            </span>
-                                          )}
-                                        </Show>
-                                      </div>
-                                      <div>
-                                        Last result:{' '}
-                                        <span class="text-gray-700 dark:text-gray-300">
-                                          {lastResultAbsolute()}
-                                        </span>
-                                        <Show when={lastResultRelative()}>
-                                          {(relative) => (
-                                            <span class="ml-2 text-[0.65rem] text-gray-400 dark:text-gray-500">
-                                              ({relative()})
-                                            </span>
-                                          )}
-                                        </Show>
-                                      </div>
-                                      <div>
-                                        Servers found:{' '}
-                                        <span class="text-gray-700 dark:text-gray-300">
-                                          {discovery().lastResultServers ?? 0}
-                                        </span>
-                                        <span class="ml-3">
-                                          Errors:{' '}
-                                          <span class="text-gray-700 dark:text-gray-300">
-                                            {discovery().lastResultErrors ?? 0}
-                                          </span>
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </Card>
-                                );
-                              }}
-                            </Show>
-
-                            {/* Temperature proxy guidance */}
-                            <Show when={diagnosticsData()?.temperatureProxy}>
-                              {(temp) => (
-                                <Card padding="sm">
-                                  <div class="flex items-center justify-between gap-3 mb-2">
-                                    <h5 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                      Temperature proxy
-                                    </h5>
-                                    <a
-                                      href="https://github.com/rcourtman/Pulse/blob/main/docs/TEMPERATURE_MONITORING.md#transport-decision-matrix"
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      class="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200 underline-offset-2 hover:underline"
-                                    >
-                                      Setup guide
-                                    </a>
-                                  </div>
-                                  <div class="text-xs space-y-1 text-gray-600 dark:text-gray-400">
-                                    <div class="flex items-center justify-between">
-                                      <span>Proxy socket</span>
-                                      <span
-                                        class={`px-2 py-0.5 rounded text-white text-xs ${temp().socketFound ? 'bg-green-500' : 'bg-red-500'
-                                          }`}
-                                      >
-                                        {temp().socketFound ? 'Detected' : 'Missing'}
-                                      </span>
-                                    </div>
-                                    <div class="flex items-center justify-between">
-                                      <span>Daemon</span>
-                                      <span
-                                        class={`px-2 py-0.5 rounded text-white text-xs ${temp().proxyReachable ? 'bg-green-500' : 'bg-yellow-500'
-                                          }`}
-                                      >
-                                        {temp().proxyReachable ? 'Responding' : 'No response'}
-                                      </span>
-                                    </div>
-                                    <Show when={temp().socketPath}>
-                                      <div>Socket path: {temp().socketPath}</div>
-                                    </Show>
-                                    <Show when={temp().socketPermissions}>
-                                      <div>Permissions: {temp().socketPermissions}</div>
-                                    </Show>
-                                    <Show when={temp().socketOwner || temp().socketGroup}>
-                                      <div>
-                                        Owner:{' '}
-                                        {[temp().socketOwner, temp().socketGroup]
-                                          .filter(Boolean)
-                                          .join(' / ') || 'Unknown'}
-                                      </div>
-                                    </Show>
-                                    <Show when={temp().proxyVersion}>
-                                      <div>Proxy version: {temp().proxyVersion}</div>
-                                    </Show>
-                                    <Show when={temp().proxySshDirectory}>
-                                      <div>SSH directory: {temp().proxySshDirectory}</div>
-                                    </Show>
-                                    <Show when={temp().proxyPublicKeySha256}>
-                                      <div>Key fingerprint: {temp().proxyPublicKeySha256}</div>
-                                    </Show>
-                                    <Show when={typeof temp().legacySshKeyCount === 'number'}>
-                                      <div>Legacy SSH keys: {temp().legacySshKeyCount ?? 0}</div>
-                                    </Show>
-                                    <Show when={temp().legacySSHDetected}>
-                                      <div class="text-red-500">
-                                        Legacy SSH temperature collection detected
-                                      </div>
-                                    </Show>
-                                  </div>
-                                  <Show
-                                    when={
-                                      temp().controlPlaneStates &&
-                                      (temp().controlPlaneStates as TemperatureProxyControlPlaneState[]).length > 0
-                                    }
-                                  >
-                                    <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
-                                      <div class="flex items-center justify-between">
-                                        <div class="font-semibold text-gray-700 dark:text-gray-200">
-                                          Control plane sync
-                                        </div>
-                                        <span
-                                          class={`px-2 py-0.5 rounded text-white text-xs ${temp().controlPlaneEnabled ? 'bg-green-500' : 'bg-gray-500'
-                                            }`}
-                                        >
-                                          {temp().controlPlaneEnabled ? 'Enabled' : 'Disabled'}
-                                        </span>
-                                      </div>
-                                      <For each={temp().controlPlaneStates || []}>
-                                        {(state) => (
-                                          <div class="rounded border border-gray-200 dark:border-gray-700 px-2 py-1.5 space-y-1">
-                                            <div class="flex items-center justify-between">
-                                              <div class="font-medium text-gray-700 dark:text-gray-200">
-                                                {state.instance || 'Proxy'}
-                                              </div>
-                                              <span
-                                                class={`px-2 py-0.5 rounded text-white text-xs ${controlPlaneStatusClass(
-                                                  state.status,
-                                                )}`}
-                                              >
-                                                {controlPlaneStatusLabel(state.status)}
-                                              </span>
-                                            </div>
-                                            <Show when={state.lastSync}>
-                                              <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                                Last sync: {formatIsoRelativeTime(state.lastSync)}
-                                              </div>
-                                            </Show>
-                                            <Show when={typeof state.secondsBehind === 'number' && (state.secondsBehind || 0) > 0}>
-                                              <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                                Behind by ~{formatUptime(state.secondsBehind || 0)}
-                                              </div>
-                                            </Show>
-                                            <Show when={state.refreshIntervalSeconds}>
-                                              <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                                Target interval: {formatUptime(state.refreshIntervalSeconds || 0)}
-                                              </div>
-                                            </Show>
-                                          </div>
-                                        )}
-                                      </For>
-                                    </div>
-                                  </Show>
-                                  <Show
-                                    when={
-                                      temp().httpProxies && (temp().httpProxies as TemperatureProxyHTTPStatus[]).length > 0
-                                    }
-                                  >
-                                    <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
-                                      <div class="font-semibold text-gray-700 dark:text-gray-200">
-                                        HTTPS proxies
-                                      </div>
-                                      <For each={temp().httpProxies || []}>
-                                        {(proxy) => (
-                                          <div class="rounded border border-gray-200 dark:border-gray-700 px-2 py-1.5 space-y-1">
-                                            <div class="flex items-center justify-between">
-                                              <div>
-                                                <div class="font-medium text-gray-700 dark:text-gray-200">
-                                                  {proxy.node || 'Proxy'}
-                                                </div>
-                                                <Show when={proxy.url}>
-                                                  <div class="text-[0.65rem] text-gray-500 dark:text-gray-400 break-all">
-                                                    {proxy.url}
-                                                  </div>
-                                                </Show>
-                                              </div>
-                                              <span
-                                                class={`px-2 py-0.5 rounded text-white text-xs ${proxy.reachable ? 'bg-green-500' : 'bg-red-500'
-                                                  }`}
-                                              >
-                                                {proxy.reachable ? 'Healthy' : 'Error'}
-                                              </span>
-                                            </div>
-                                            <Show when={!proxy.reachable && proxy.error}>
-                                              <div class="text-[0.65rem] text-red-500">
-                                                {proxy.error}
-                                              </div>
-                                            </Show>
-                                          </div>
-                                        )}
-                                      </For>
-                                    </div>
-                                    <div class="mt-2 text-[0.65rem] text-blue-700 dark:text-blue-300">
-                                      Learn more:{" "}
-                                      <a
-                                        href="https://github.com/rcourtman/Pulse/blob/main/docs/TEMPERATURE_MONITORING.md"
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        class="underline hover:text-blue-500"
-                                      >
-                                        Temperature Monitoring docs
-                                      </a>
-                                    </div>
-                                  </Show>
-                                  <Show
-                                    when={
-                                      temp().socketHostCooldowns &&
-                                      (temp().socketHostCooldowns as TemperatureProxySocketHost[]).length > 0
-                                    }
-                                  >
-                                    <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
-                                      <div class="font-semibold text-gray-700 dark:text-gray-200">
-                                        Socket cooldowns
-                                      </div>
-                                      <For each={temp().socketHostCooldowns || []}>
-                                        {(entry) => (
-                                          <div class="rounded border border-amber-200 dark:border-amber-700 px-2 py-1.5 space-y-1">
-                                            <div class="flex items-center justify-between">
-                                              <div>
-                                                <div class="font-medium text-gray-700 dark:text-gray-200">
-                                                  {entry.node || entry.host || 'Host'}
-                                                </div>
-                                                <Show when={entry.cooldownUntil}>
-                                                  <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                                    Until {entry.cooldownUntil}
-                                                  </div>
-                                                </Show>
-                                              </div>
-                                              <span class="px-2 py-0.5 rounded text-white text-xs bg-amber-500">
-                                                Cooling
-                                              </span>
-                                            </div>
-                                            <Show when={typeof entry.secondsRemaining === 'number'}>
-                                              <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                                Retrying in ~{formatUptime(entry.secondsRemaining || 0)}
-                                              </div>
-                                            </Show>
-                                            <Show when={entry.lastError}>
-                                              <div class="text-[0.65rem] text-red-500">
-                                                {entry.lastError}
-                                              </div>
-                                            </Show>
-                                          </div>
-                                        )}
-                                      </For>
-                                    </div>
-                                  </Show>
-                                  <Show
-                                    when={proxyNodeChecksSupported()}
-                                    fallback={
-                                      <div class="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                                        Check proxy nodes is only available when the proxy socket
-                                        grants admin access. Run this diagnostic on the Proxmox host
-                                        or reinstall pulse-sensor-proxy in HTTP mode to manage nodes
-                                        remotely.
-                                      </div>
-                                    }
-                                  >
-                                    <div class="mt-3 flex flex-wrap gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          if (!proxyActionLoading()) {
-                                            void handleRegisterProxyNodes();
-                                          }
-                                        }}
-                                        disabled={proxyActionLoading() !== null}
-                                        class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                      >
-                                        {proxyActionLoading() === 'register-nodes'
-                                          ? 'Checking nodes...'
-                                          : 'Check proxy nodes'}
-                                      </button>
-                                    </div>
-                                    <Show when={hostProxyStatus()}>
-                                      {(status) => (
-                                        <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
-                                          <div class="flex items-center justify-between">
-                                            <div class="font-semibold text-gray-700 dark:text-gray-200">
-                                              Pulse host proxy
-                                            </div>
-                                            <button
-                                              type="button"
-                                              class="text-xs rounded bg-blue-600 text-white px-2 py-1 hover:bg-blue-700 disabled:opacity-50"
-                                              onClick={() => void refreshHostProxyStatus(true)}
-                                            >
-                                              Refresh
-                                            </button>
-                                          </div>
-                                          <div class="grid grid-cols-2 gap-y-1">
-                                            <div>Requested</div>
-                                            <div>{status().summary?.requested ? 'Yes' : 'No'}</div>
-                                            <div>Installed</div>
-                                            <div>{status().summary?.installed ? 'Yes' : 'No'}</div>
-                                            <div>Host socket</div>
-                                            <div>{status().hostSocketPresent ? 'Present' : 'Missing'}</div>
-                                            <div>Container socket</div>
-                                            <div>{status().containerSocketPresent ? 'Present' : 'Missing'}</div>
-                                          </div>
-                                          <Show when={status().reinstallCommand}>
-                                            <div class="flex flex-wrap gap-2">
-                                              <button
-                                                type="button"
-                                                class="rounded bg-blue-600 text-white px-2 py-1 hover:bg-blue-700"
-                                                onClick={() => {
-                                                  const command = status().reinstallCommand;
-                                                  if (command) {
-                                                    void copyToClipboard(command);
-                                                    showSuccess(
-                                                      'Host proxy command copied',
-                                                      undefined,
-                                                      2000,
-                                                    );
-                                                  }
-                                                }}
-                                              >
-                                                Copy reinstall command
-                                              </button>
-                                              <Show when={status().installerURL}>
-                                                {(url) => (
-                                                  <a
-                                                    href={url()}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    class="rounded border border-gray-300 px-2 py-1 text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-800"
-                                                  >
-                                                    Download installer script
-                                                  </a>
-                                                )}
-                                              </Show>
-                                            </div>
-                                          </Show>
-                                          <Show when={status().summary?.lastUpdated}>
-                                            <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                              Summary updated {status().summary?.lastUpdated}
-                                            </div>
-                                          </Show>
-                                        </div>
-                                      )}
-                                    </Show>
-                                  </Show>
-                                  <Show
-                                    when={
-                                      proxyRegisterSummary() && proxyRegisterSummary()!.length > 0
-                                    }
-                                  >
-                                    <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                                      <div>Proxy node connectivity:</div>
-                                      <ul class="list-disc pl-4 space-y-0.5">
-                                        <For each={proxyRegisterSummary() || []}>
-                                          {(node) => (
-                                            <li>
-                                              <span
-                                                class={
-                                                  node.sshReady
-                                                    ? 'text-green-600 dark:text-green-400'
-                                                    : 'text-red-600 dark:text-red-400'
-                                                }
-                                              >
-                                                {node.name}:{' '}
-                                                {node.sshReady ? 'reachable' : 'unreachable'}
-                                              </span>
-                                              <Show when={node.error}>
-                                                <span class="ml-1 text-gray-500 dark:text-gray-400">
-                                                  ({node.error})
-                                                </span>
-                                              </Show>
-                                            </li>
-                                          )}
-                                        </For>
-                                      </ul>
-                                    </div>
-                                  </Show>
-                                  <Show when={temp().notes && temp().notes!.length > 0}>
-                                    <ul class="mt-3 text-xs text-gray-600 dark:text-gray-400 list-disc pl-4 space-y-1">
-                                      <For each={temp().notes || []}>
-                                        {(note) => <li>{note}</li>}
-                                      </For>
-                                    </ul>
-                                  </Show>
-                                </Card>
-                              )}
-                            </Show>
-
-                            {/* API token adoption */}
-                            <Show when={diagnosticsData()?.apiTokens}>
-                              {(apiDiag) => (
-                                <Card padding="sm">
-                                  <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
-                                    API tokens
-                                  </h5>
-                                  <div class="text-xs space-y-2 text-gray-600 dark:text-gray-400">
-                                    <div class="flex flex-wrap gap-2">
-                                      <span
-                                        class={`px-2 py-0.5 rounded text-xs ${apiDiag().enabled
-                                          ? 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
-                                          : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
-                                          }`}
-                                      >
-                                        {apiDiag().enabled
-                                          ? 'Token auth enabled'
-                                          : 'Token auth disabled'}
-                                      </span>
-                                      <Show when={apiDiag().hasEnvTokens}>
-                                        <span class="px-2 py-0.5 rounded text-xs bg-orange-100 text-orange-700 dark:bg-orange-700/40 dark:text-orange-100">
-                                          Env override detected
-                                        </span>
-                                      </Show>
-                                      <Show when={apiDiag().hasLegacyToken}>
-                                        <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700 dark:bg-red-700/40 dark:text-red-100">
-                                          Legacy token present
-                                        </span>
-                                      </Show>
-                                    </div>
-                                    <div class="grid grid-cols-2 gap-2">
-                                      <div>Configured tokens: {apiDiag().tokenCount}</div>
-                                      <div>
-                                        Rotation needed:{' '}
-                                        {apiDiag().recommendTokenRotation ? 'Yes' : 'No'}
-                                      </div>
-                                      <div>
-                                        Docker hosts on shared token:{' '}
-                                        {apiDiag().legacyDockerHostCount ?? 0}
-                                      </div>
-                                      <div>Unused tokens: {apiDiag().unusedTokenCount ?? 0}</div>
-                                    </div>
-                                  </div>
-                                  <Show when={apiDiag().tokens && apiDiag().tokens!.length > 0}>
-                                    <div class="mt-3 border border-gray-200 dark:border-gray-700 rounded-md divide-y divide-gray-200 dark:divide-gray-700">
-                                      <For each={apiDiag().tokens || []}>
-                                        {(token) => (
-                                          <div class="p-2 text-xs text-gray-600 dark:text-gray-400 flex flex-wrap justify-between gap-2">
-                                            <div class="flex-1 min-w-[140px]">
-                                              <div class="font-medium text-gray-700 dark:text-gray-200">
-                                                {token.name || 'Unnamed token'}
-                                              </div>
-                                              <div class="text-2xs text-gray-500 dark:text-gray-400">
-                                                {token.hint || 'No hint available'}
-                                                <Show when={token.source}>
-                                                  <span class="ml-2 uppercase tracking-wide">
-                                                    ({token.source})
-                                                  </span>
-                                                </Show>
-                                              </div>
-                                            </div>
-                                            <div class="text-right min-w-[160px]">
-                                              <div>
-                                                Created:{' '}
-                                                {token.createdAt
-                                                  ? new Date(token.createdAt).toLocaleString()
-                                                  : 'Unknown'}
-                                              </div>
-                                              <div>
-                                                Last used:{' '}
-                                                {token.lastUsedAt
-                                                  ? formatRelativeTime(
-                                                    new Date(token.lastUsedAt).getTime(),
-                                                  )
-                                                  : 'Never'}
-                                              </div>
-                                            </div>
-                                          </div>
-                                        )}
-                                      </For>
-                                    </div>
-                                  </Show>
-                                  <Show when={apiDiag().usage && apiDiag().usage!.length > 0}>
-                                    <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                                      <div class="font-semibold text-gray-700 dark:text-gray-200">
-                                        Token usage
-                                      </div>
-                                      <ul class="list-disc pl-4 space-y-1">
-                                        <For each={apiDiag().usage || []}>
-                                          {(usage) => (
-                                            <li>
-                                              {usage.tokenId}: {usage.hostCount}{' '}
-                                              {usage.hostCount === 1 ? 'host' : 'hosts'}
-                                              <Show when={usage.hosts && usage.hosts!.length > 0}>
-                                                <span class="ml-1 text-gray-500 dark:text-gray-400">
-                                                  ({usage.hosts!.join(', ')})
-                                                </span>
-                                              </Show>
-                                            </li>
-                                          )}
-                                        </For>
-                                      </ul>
-                                    </div>
-                                  </Show>
-                                  <Show when={apiDiag().notes && apiDiag().notes!.length > 0}>
-                                    <ul class="mt-3 text-xs text-gray-600 dark:text-gray-400 list-disc pl-4 space-y-1">
-                                      <For each={apiDiag().notes || []}>
-                                        {(note) => <li>{note}</li>}
-                                      </For>
-                                    </ul>
-                                  </Show>
-                                </Card>
-                              )}
-                            </Show>
-
-                            {/* Docker agent adoption */}
-                            <Show when={diagnosticsData()?.dockerAgents}>
-                              {(dockerDiag) => (
-                                <Card padding="sm">
-                                  <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
-                                    Docker agents
-                                  </h5>
-                                  <Show when={dockerDiag().hostsTotal > 0}>
-                                    <div class="text-xs text-gray-600 dark:text-gray-400 grid grid-cols-2 gap-2">
-                                      <div>Total hosts: {dockerDiag().hostsTotal}</div>
-                                      <div>Online: {dockerDiag().hostsOnline}</div>
-                                      <div>
-                                        With dedicated tokens: {dockerDiag().hostsWithTokenBinding}
-                                      </div>
-                                      <div>
-                                        Attention required: {dockerDiag().hostsNeedingAttention}
-                                      </div>
-                                      <div>
-                                        Missing version: {dockerDiag().hostsWithoutVersion ?? 0}
-                                      </div>
-                                      <div>
-                                        Outdated agents: {dockerDiag().hostsOutdatedVersion ?? 0}
-                                      </div>
-                                      <div>
-                                        Stale commands: {dockerDiag().hostsWithStaleCommand ?? 0}
-                                      </div>
-                                      <div>
-                                        Pending uninstall: {dockerDiag().hostsPendingUninstall ?? 0}
-                                      </div>
-                                    </div>
-                                    <Show when={dockerDiag().recommendedAgentVersion}>
-                                      <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                        Recommended agent version:{' '}
-                                        {dockerDiag().recommendedAgentVersion}
-                                      </div>
-                                    </Show>
-                                  </Show>
-                                  <Show
-                                    when={
-                                      dockerDiag().attention && dockerDiag().attention!.length > 0
-                                    }
-                                  >
-                                    <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 divide-y divide-gray-200 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded-md">
-                                      <For each={dockerDiag().attention || []}>
-                                        {(entry) => (
-                                          <div class="p-2 space-y-1">
-                                            <div class="flex items-center justify-between">
-                                              <span class="font-medium text-gray-700 dark:text-gray-200">
-                                                {entry.name}
-                                              </span>
-                                              <span
-                                                class={`px-2 py-0.5 rounded text-xs ${entry.status === 'online'
-                                                  ? 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
-                                                  : 'bg-red-100 text-red-700 dark:bg-red-700/40 dark:text-red-100'
-                                                  }`}
-                                              >
-                                                {entry.status || 'unknown'}
-                                              </span>
-                                            </div>
-                                            <div class="text-2xs text-gray-500 dark:text-gray-400 space-x-2">
-                                              <Show when={entry.agentVersion}>
-                                                <span>Agent {entry.agentVersion}</span>
-                                              </Show>
-                                              <Show when={entry.tokenHint}>
-                                                <span>Token {entry.tokenHint}</span>
-                                              </Show>
-                                              <Show when={entry.lastSeen}>
-                                                <span>
-                                                  Seen{' '}
-                                                  {formatRelativeTime(
-                                                    new Date(entry.lastSeen!).getTime(),
-                                                  )}
-                                                </span>
-                                              </Show>
-                                            </div>
-                                            <ul class="list-disc pl-4 space-y-1 text-gray-600 dark:text-gray-400">
-                                              <For each={entry.issues}>
-                                                {(issue) => <li>{issue}</li>}
-                                              </For>
-                                            </ul>
-                                            <div class="mt-2 flex flex-wrap gap-2">
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  if (dockerActionLoading() !== entry.hostId) {
-                                                    void handleDockerPrepareToken(entry.hostId);
-                                                  }
-                                                }}
-                                                disabled={dockerActionLoading() === entry.hostId}
-                                                class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                              >
-                                                {dockerActionLoading() === entry.hostId
-                                                  ? 'Preparing token...'
-                                                  : 'Generate dedicated token'}
-                                              </button>
-                                            </div>
-                                            <Show when={dockerMigrationResults()[entry.hostId]}>
-                                              <div class="mt-3 w-full space-y-2 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded p-3 text-xs text-gray-700 dark:text-gray-200">
-                                                {(() => {
-                                                  const migration =
-                                                    dockerMigrationResults()[entry.hostId]!;
-                                                  return (
-                                                    <>
-                                                      <div class="font-semibold text-gray-800 dark:text-gray-100">
-                                                        Install command
-                                                      </div>
-                                                      <pre class="whitespace-pre-wrap break-all bg-gray-900/80 text-gray-100 rounded p-2 text-[11px]">
-                                                        {migration.installCommand}
-                                                      </pre>
-                                                      <button
-                                                        type="button"
-                                                        class="px-2 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-800 transition-colors"
-                                                        onClick={() =>
-                                                          void handleCopy(
-                                                            migration.installCommand,
-                                                            'Install command copied',
-                                                          )
-                                                        }
-                                                      >
-                                                        Copy install command
-                                                      </button>
-                                                      <div class="font-semibold text-gray-800 dark:text-gray-100 mt-2">
-                                                        Systemd snippet
-                                                      </div>
-                                                      <pre class="whitespace-pre-wrap break-all bg-gray-900/80 text-gray-100 rounded p-2 text-[11px]">
-                                                        {migration.systemdServiceSnippet}
-                                                      </pre>
-                                                      <button
-                                                        type="button"
-                                                        class="px-2 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-800 transition-colors"
-                                                        onClick={() =>
-                                                          void handleCopy(
-                                                            migration.systemdServiceSnippet,
-                                                            'Service snippet copied',
-                                                          )
-                                                        }
-                                                      >
-                                                        Copy service snippet
-                                                      </button>
-                                                      <div class="text-gray-600 dark:text-gray-400">
-                                                        Target URL: {migration.pulseURL}
-                                                      </div>
-                                                    </>
-                                                  );
-                                                })()}
-                                              </div>
-                                            </Show>
-                                          </div>
-                                        )}
-                                      </For>
-                                    </div>
-                                  </Show>
-                                  <Show when={dockerDiag().notes && dockerDiag().notes!.length > 0}>
-                                    <ul class="mt-3 text-xs text-gray-600 dark:text-gray-400 list-disc pl-4 space-y-1">
-                                      <For each={dockerDiag().notes || []}>
-                                        {(note) => <li>{note}</li>}
-                                      </For>
-                                    </ul>
-                                  </Show>
-                                </Card>
-                              )}
-                            </Show>
-
-                            {/* Alerts configuration */}
-                            <Show when={diagnosticsData()?.alerts}>
-                              {(alerts) => (
-                                <Card padding="sm">
-                                  <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
-                                    Alerts configuration
-                                  </h5>
-                                  <div class="text-xs text-gray-600 dark:text-gray-400 space-y-2">
-                                    <div class="flex flex-wrap gap-2">
-                                      <span
-                                        class={`px-2 py-0.5 rounded text-xs ${alerts().legacyThresholdsDetected
-                                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
-                                          : 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
-                                          }`}
-                                      >
-                                        Legacy thresholds{' '}
-                                        {alerts().legacyThresholdsDetected
-                                          ? 'detected'
-                                          : 'migrated'}
-                                      </span>
-                                      <span
-                                        class={`px-2 py-0.5 rounded text-xs ${alerts().missingCooldown
-                                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
-                                          : 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
-                                          }`}
-                                      >
-                                        Cooldown{' '}
-                                        {alerts().missingCooldown ? 'missing' : 'configured'}
-                                      </span>
-                                      <span
-                                        class={`px-2 py-0.5 rounded text-xs ${alerts().missingGroupingWindow
-                                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
-                                          : 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
-                                          }`}
-                                      >
-                                        Grouping window{' '}
-                                        {alerts().missingGroupingWindow ? 'disabled' : 'enabled'}
-                                      </span>
-                                    </div>
-                                    <Show
-                                      when={
-                                        alerts().legacyThresholdSources &&
-                                        alerts().legacyThresholdSources!.length > 0
-                                      }
-                                    >
-                                      <div>
-                                        Legacy sources:{' '}
-                                        {alerts().legacyThresholdSources!.join(', ')}
-                                      </div>
-                                    </Show>
-                                    <Show
-                                      when={
-                                        alerts().legacyScheduleSettings &&
-                                        alerts().legacyScheduleSettings!.length > 0
-                                      }
-                                    >
-                                      <div>
-                                        Legacy schedule settings:{' '}
-                                        {alerts().legacyScheduleSettings!.join(', ')}
-                                      </div>
-                                    </Show>
-                                  </div>
-                                  <Show when={alerts().notes && alerts().notes!.length > 0}>
-                                    <ul class="mt-3 text-xs text-gray-600 dark:text-gray-400 list-disc pl-4 space-y-1">
-                                      <For each={alerts().notes || []}>
-                                        {(note) => <li>{note}</li>}
-                                      </For>
-                                    </ul>
-                                  </Show>
-                                </Card>
-                              )}
-                            </Show>
-
-                            {/* Nodes Status */}
-                            <Show
-                              when={diagnosticsData()?.nodes && diagnosticsData()!.nodes.length > 0}
-                            >
-                              <Card padding="sm">
-                                <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
-                                  PVE Nodes
-                                </h5>
-                                <For each={diagnosticsData()?.nodes || []}>
-                                  {(node) => (
-                                    <div class="text-xs border-t dark:border-gray-700 pt-2 mt-2 first:border-0 first:pt-0 first:mt-0">
-                                      <div class="flex justify-between items-center mb-1">
-                                        <span class="font-medium text-gray-700 dark:text-gray-300">
-                                          {node.name}
-                                        </span>
-                                        <span
-                                          class={`px-2 py-0.5 rounded text-white text-xs ${node.connected ? 'bg-green-500' : 'bg-red-500'
-                                            }`}
-                                        >
-                                          {node.connected ? 'Connected' : 'Failed'}
-                                        </span>
-                                      </div>
-                                      <div class="text-gray-600 dark:text-gray-400">
-                                        <div>Host: {node.host}</div>
-                                        <div>Auth: {node.authMethod?.replace('_', ' ')}</div>
-                                        <Show when={node.error}>
-                                          <div class="text-red-500 mt-1 break-words">
-                                            {node.error}
-                                          </div>
-                                        </Show>
-                                      </div>
-                                    </div>
-                                  )}
-                                </For>
-                              </Card>
-                            </Show>
-
-                            {/* PBS Status */}
-                            <Show
-                              when={diagnosticsData()?.pbs && diagnosticsData()!.pbs.length > 0}
-                            >
-                              <Card padding="sm">
-                                <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
-                                  PBS Instances
-                                </h5>
-                                <For each={diagnosticsData()?.pbs || []}>
-                                  {(pbs) => (
-                                    <div class="text-xs border-t dark:border-gray-700 pt-2 mt-2 first:border-0 first:pt-0 first:mt-0">
-                                      <div class="flex justify-between items-center mb-1">
-                                        <span class="font-medium text-gray-700 dark:text-gray-300">
-                                          {pbs.name}
-                                        </span>
-                                        <span
-                                          class={`px-2 py-0.5 rounded text-white text-xs ${pbs.connected ? 'bg-green-500' : 'bg-red-500'
-                                            }`}
-                                        >
-                                          {pbs.connected ? 'Connected' : 'Failed'}
-                                        </span>
-                                      </div>
-                                      <Show when={pbs.error}>
-                                        <div class="text-red-500 break-words">{pbs.error}</div>
-                                      </Show>
-                                    </div>
-                                  )}
-                                </For>
-                              </Card>
-                            </Show>
-                          </div>
-                        </Show>
-                      </div>
-                      {/* System Information */}
-                      <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                          System Information
-                        </h4>
-                        <div class="space-y-2 text-sm">
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">Version:</span>
-                            <span class="font-medium">2.0.0</span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">Backend:</span>
-                            <span class="font-medium">Go 1.21</span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">Frontend:</span>
-                            <span class="font-medium">SolidJS + TypeScript</span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">WebSocket Status:</span>
-                            <span
-                              class={`font-medium ${connected() ? 'text-green-600' : 'text-red-600'}`}
-                            >
-                              {connected() ? 'Connected' : 'Disconnected'}
-                            </span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">Server Port:</span>
-                            <span class="font-medium">
-                              {getPulsePort()}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Connection Status */}
-                      <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                          Connection Status
-                        </h4>
-                        <div class="space-y-2 text-sm">
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">PVE Nodes:</span>
-                            <span class="font-medium">{pveNodes().length}</span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">PBS Nodes:</span>
-                            <span class="font-medium">{pbsNodes().length}</span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">Total VMs:</span>
-                            <span class="font-medium">{state.vms?.length || 0}</span>
-                          </div>
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">Total Containers:</span>
-                            <span class="font-medium">{state.containers?.length || 0}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Export Diagnostics */}
-                      <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                          Export Diagnostics
-                        </h4>
-                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                          Export system diagnostics data for troubleshooting
-                        </p>
-
-                        {/* Helper function to sanitize sensitive data */}
-                        {(() => {
-                          const sanitizeForGitHub = (data: Record<string, unknown>) => {
-                            // Deep clone the data
-                            const sanitized = JSON.parse(JSON.stringify(data)) as Record<
-                              string,
-                              unknown
-                            >;
-
-                            const connectionKeyMap = new Map<string, string>();
-                            const instanceKeyMap = new Map<string, string>();
-
-                            const getSanitizedInstance = (instance: string) => {
-                              if (!instance) return instance;
-                              if (instanceKeyMap.has(instance)) {
-                                return instanceKeyMap.get(instance)!;
-                              }
-                              const suffixMatch = instance.match(/\.(lan|local|home|internal)$/);
-                              const suffix = suffixMatch ? suffixMatch[0] : '';
-                              const label = `instance-REDACTED${suffix}`;
-                              instanceKeyMap.set(instance, label);
-                              return label;
-                            };
-
-                            // Sanitize IP addresses (keep first octet for network type identification)
-                            const sanitizeIP = (ip: string) => {
-                              if (!ip) return ip;
-                              const parts = ip.split('.');
-                              if (parts.length === 4) {
-                                return `${parts[0]}.xxx.xxx.xxx`;
-                              }
-                              return 'xxx.xxx.xxx.xxx';
-                            };
-
-                            // Sanitize hostname but keep domain suffix for context
-                            const sanitizeHostname = (hostname: string) => {
-                              if (!hostname) return hostname;
-                              // Keep common suffixes like .lan, .local, .home
-                              const suffixMatch = hostname.match(/\.(lan|local|home|internal)$/);
-                              const suffix = suffixMatch ? suffixMatch[0] : '';
-                              return `node-REDACTED${suffix}`;
-                            };
-                            const sanitizeOptionalHostname = (value?: string) =>
-                              value && value.trim() ? sanitizeHostname(value) : undefined;
-
-                            const sanitizeText = (text: string | undefined) => {
-                              if (!text) return text;
-                              return text
-                                .replace(/https?:\/\/[^"'\s]+/g, 'https://REDACTED')
-                                .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, 'xxx.xxx.xxx.xxx');
-                            };
-
-                            const sanitizeNotesArray = (notes: unknown) => {
-                              if (!Array.isArray(notes)) return notes;
-                              return notes.map((note) => {
-                                if (typeof note !== 'string') return note;
-                                const sanitizedNote = sanitizeText(note);
-                                return sanitizedNote ?? note;
-                              });
-                            };
-
-                            const sanitizeNodeSnapshots = (
-                              snapshots: Array<Record<string, unknown>>,
-                            ) =>
-                              snapshots.map((snapshot, index: number) => {
-                                const sanitizedSnapshot = { ...snapshot };
-                                const originalNode =
-                                  typeof sanitizedSnapshot.node === 'string'
-                                    ? (sanitizedSnapshot.node as string)
-                                    : '';
-                                if (originalNode) {
-                                  sanitizedSnapshot.node =
-                                    connectionKeyMap.get(originalNode) ||
-                                    sanitizeHostname(originalNode);
-                                }
-
-                                const originalInstance =
-                                  typeof sanitizedSnapshot.instance === 'string'
-                                    ? (sanitizedSnapshot.instance as string)
-                                    : '';
-                                if (originalInstance) {
-                                  sanitizedSnapshot.instance =
-                                    getSanitizedInstance(originalInstance);
-                                }
-
-                                if (
-                                  typeof sanitizedSnapshot.id === 'string' &&
-                                  sanitizedSnapshot.id
-                                ) {
-                                  sanitizedSnapshot.id = `node-snapshot-${index}`;
-                                }
-
-                                return sanitizedSnapshot;
-                              });
-
-                            const sanitizeGuestSnapshots = (
-                              snapshots: Array<Record<string, unknown>>,
-                            ) =>
-                              snapshots.map((snapshot, index: number) => {
-                                const sanitizedSnapshot = { ...snapshot };
-                                const originalNode =
-                                  typeof sanitizedSnapshot.node === 'string'
-                                    ? (sanitizedSnapshot.node as string)
-                                    : '';
-                                if (originalNode) {
-                                  sanitizedSnapshot.node =
-                                    connectionKeyMap.get(originalNode) ||
-                                    sanitizeHostname(originalNode);
-                                }
-
-                                const originalInstance =
-                                  typeof sanitizedSnapshot.instance === 'string'
-                                    ? (sanitizedSnapshot.instance as string)
-                                    : '';
-                                if (originalInstance) {
-                                  sanitizedSnapshot.instance =
-                                    getSanitizedInstance(originalInstance);
-                                }
-
-                                if (typeof sanitizedSnapshot.name === 'string') {
-                                  sanitizedSnapshot.name = 'vm-REDACTED';
-                                }
-
-                                if (typeof sanitizedSnapshot.vmid === 'number') {
-                                  sanitizedSnapshot.vmid = index + 1;
-                                } else if (typeof sanitizedSnapshot.vmid === 'string') {
-                                  sanitizedSnapshot.vmid = `vm-${index + 1}`;
-                                }
-
-                                if (Array.isArray(sanitizedSnapshot.notes)) {
-                                  sanitizedSnapshot.notes = sanitizeNotesArray(
-                                    sanitizedSnapshot.notes,
-                                  );
-                                }
-
-                                return sanitizedSnapshot;
-                              });
-
-                            // Sanitize nodes
-                            if (sanitized.nodes) {
-                              sanitized.nodes = (
-                                sanitized.nodes as Array<Record<string, unknown>>
-                              ).map((node, index: number) => {
-                                const nodeType =
-                                  typeof node.type === 'string' ? (node.type as string) : 'node';
-                                const nodeName =
-                                  typeof node.name === 'string' ? (node.name as string) : '';
-                                const nodeHost =
-                                  typeof node.host === 'string' ? (node.host as string) : '';
-                                const tokenName =
-                                  typeof node.tokenName === 'string'
-                                    ? (node.tokenName as string)
-                                    : undefined;
-                                const clusterName =
-                                  typeof node.clusterName === 'string'
-                                    ? (node.clusterName as string)
-                                    : undefined;
-                                const clusterEndpoints = Array.isArray(node.clusterEndpoints)
-                                  ? (node.clusterEndpoints as Array<Record<string, unknown>>).map(
-                                    (ep, epIndex: number) => ({
-                                      ...ep,
-                                      NodeName: `node-${epIndex + 1}`,
-                                      Host: `node-${epIndex + 1}`,
-                                      IP: sanitizeIP(typeof ep.IP === 'string' ? ep.IP : ''),
-                                    }),
-                                  )
-                                  : node.clusterEndpoints;
-
-                                const sanitizedId = `${nodeType}-${index}`;
-                                connectionKeyMap.set(nodeName, sanitizedId);
-
-                                // Sanitize nested physical disks data if present
-                                const physicalDisks = node.physicalDisks as
-                                  | Record<string, unknown>
-                                  | undefined;
-                                if (physicalDisks && Array.isArray(physicalDisks.nodeResults)) {
-                                  physicalDisks.nodeResults = (
-                                    physicalDisks.nodeResults as Array<Record<string, unknown>>
-                                  ).map((result) => ({
-                                    ...result,
-                                    nodeName: sanitizeHostname(
-                                      typeof result.nodeName === 'string' ? result.nodeName : '',
-                                    ),
-                                    apiResponse:
-                                      sanitizeText(
-                                        typeof result.apiResponse === 'string'
-                                          ? result.apiResponse
-                                          : undefined,
-                                      ) ?? result.apiResponse,
-                                    error:
-                                      sanitizeText(
-                                        typeof result.error === 'string' ? result.error : undefined,
-                                      ) ?? result.error,
-                                  }));
-                                }
-
-                                // Sanitize nested VM disk check data if present
-                                const vmDiskCheck = node.vmDiskCheck as
-                                  | Record<string, unknown>
-                                  | undefined;
-                                if (vmDiskCheck) {
-                                  if (typeof vmDiskCheck.testVMName === 'string') {
-                                    vmDiskCheck.testVMName = 'vm-REDACTED';
-                                  }
-                                  if (typeof vmDiskCheck.testResult === 'string') {
-                                    vmDiskCheck.testResult = sanitizeText(vmDiskCheck.testResult);
-                                  }
-                                  if (Array.isArray(vmDiskCheck.problematicVMs)) {
-                                    vmDiskCheck.problematicVMs = (
-                                      vmDiskCheck.problematicVMs as Array<Record<string, unknown>>
-                                    ).map((problem) => ({
-                                      ...problem,
-                                      name: 'vm-REDACTED',
-                                      issue:
-                                        sanitizeText(
-                                          typeof problem.issue === 'string'
-                                            ? problem.issue
-                                            : undefined,
-                                        ) ?? problem.issue,
-                                    }));
-                                  }
-                                  if (Array.isArray(vmDiskCheck.recommendations)) {
-                                    vmDiskCheck.recommendations = (
-                                      vmDiskCheck.recommendations as Array<string>
-                                    ).map((rec) => sanitizeText(rec) ?? rec);
-                                  }
-                                }
-
-                                return {
-                                  ...node,
-                                  id: sanitizedId,
-                                  name: sanitizeHostname(nodeName),
-                                  host: nodeHost
-                                    ? nodeHost.replace(/https?:\/\/[^:\/]+/, 'https://REDACTED')
-                                    : nodeHost,
-                                  tokenName: tokenName ? 'token-REDACTED' : tokenName,
-                                  clusterName: clusterName ? 'cluster-REDACTED' : clusterName,
-                                  clusterEndpoints,
-                                  physicalDisks,
-                                  vmDiskCheck,
-                                };
-                              });
-                            }
-
-                            if (Array.isArray(sanitized.nodeSnapshots)) {
-                              sanitized.nodeSnapshots = sanitizeNodeSnapshots(
-                                sanitized.nodeSnapshots as Array<Record<string, unknown>>,
-                              );
-                            }
-
-                            if (Array.isArray(sanitized.guestSnapshots)) {
-                              sanitized.guestSnapshots = sanitizeGuestSnapshots(
-                                sanitized.guestSnapshots as Array<Record<string, unknown>>,
-                              );
-                            }
-
-                            if (
-                              sanitized.temperatureProxy &&
-                              typeof sanitized.temperatureProxy === 'object'
-                            ) {
-                              const proxyDiag = sanitized.temperatureProxy as Record<
-                                string,
-                                unknown
-                              >;
-                              if (typeof proxyDiag.socketPath === 'string') {
-                                proxyDiag.socketPath = proxyDiag.socketPath.includes(
-                                  'pulse-sensor-proxy',
-                                )
-                                  ? '/mnt/pulse-proxy/pulse-sensor-proxy.sock'
-                                  : 'proxy-socket';
-                              }
-                              if (Array.isArray(proxyDiag.notes)) {
-                                proxyDiag.notes = sanitizeNotesArray(proxyDiag.notes);
-                              }
-                              if (Array.isArray(proxyDiag.httpProxies)) {
-                                proxyDiag.httpProxies = (
-                                  proxyDiag.httpProxies as Array<Record<string, unknown>>
-                                ).map((entry, index: number) => {
-                                  const sanitizedEntry: TemperatureProxyHTTPStatus = {
-                                    node: sanitizeHostname(
-                                      typeof entry.node === 'string'
-                                        ? (entry.node as string)
-                                        : `http-proxy-${index + 1}`,
-                                    ),
-                                    reachable: Boolean(entry.reachable),
-                                  };
-                                  if (typeof entry.url === 'string') {
-                                    sanitizedEntry.url =
-                                      sanitizeText(entry.url as string) ?? (entry.url as string);
-                                  }
-                                  if (typeof entry.error === 'string') {
-                                    sanitizedEntry.error =
-                                      sanitizeText(entry.error as string) ?? (entry.error as string);
-                                  }
-                                  return sanitizedEntry;
-                                });
-                              }
-                              if (Array.isArray(proxyDiag.socketHostCooldowns)) {
-                                proxyDiag.socketHostCooldowns = (
-                                  proxyDiag.socketHostCooldowns as Array<Record<string, unknown>>
-                                ).map((entry) => {
-                                  const originalNode =
-                                    typeof entry.node === 'string' ? (entry.node as string) : undefined;
-                                  const originalHost =
-                                    typeof entry.host === 'string' ? (entry.host as string) : undefined;
-                                  return {
-                                    node: sanitizeOptionalHostname(originalNode),
-                                    host: sanitizeOptionalHostname(originalHost),
-                                    cooldownUntil:
-                                      typeof entry.cooldownUntil === 'string'
-                                        ? (entry.cooldownUntil as string)
-                                        : undefined,
-                                    secondsRemaining:
-                                      typeof entry.secondsRemaining === 'number'
-                                        ? (entry.secondsRemaining as number)
-                                        : undefined,
-                                    lastError:
-                                      typeof entry.lastError === 'string'
-                                        ? sanitizeText(entry.lastError as string) ?? (entry.lastError as string)
-                                        : undefined,
-                                  };
-                                });
-                              }
-                            }
-
-                            if (sanitized.apiTokens && typeof sanitized.apiTokens === 'object') {
-                              const apiTokens = sanitized.apiTokens as Record<string, unknown>;
-                              const tokenIdMap = new Map<string, string>();
-                              if (Array.isArray(apiTokens.tokens)) {
-                                apiTokens.tokens = (
-                                  apiTokens.tokens as Array<Record<string, unknown>>
-                                ).map((token, tokenIndex: number) => {
-                                  const sanitizedToken = { ...token } as Record<string, unknown>;
-                                  const originalId =
-                                    typeof token.id === 'string' ? (token.id as string) : '';
-                                  const sanitizedId = `token-${tokenIndex + 1}`;
-                                  if (originalId) {
-                                    tokenIdMap.set(originalId, sanitizedId);
-                                  }
-                                  sanitizedToken.id = sanitizedId;
-                                  sanitizedToken.name = sanitizedId;
-                                  if (typeof sanitizedToken.hint === 'string') {
-                                    sanitizedToken.hint = 'token-REDACTED';
-                                  }
-                                  return sanitizedToken;
-                                });
-                              }
-                              if (Array.isArray(apiTokens.usage)) {
-                                apiTokens.usage = (
-                                  apiTokens.usage as Array<Record<string, unknown>>
-                                ).map((usage, usageIndex: number) => {
-                                  const sanitizedUsage = { ...usage } as Record<string, unknown>;
-                                  const originalTokenId =
-                                    typeof usage.tokenId === 'string'
-                                      ? (usage.tokenId as string)
-                                      : '';
-                                  const mappedId =
-                                    tokenIdMap.get(originalTokenId) ?? `token-${usageIndex + 1}`;
-                                  sanitizedUsage.tokenId = mappedId;
-                                  if (Array.isArray(sanitizedUsage.hosts)) {
-                                    sanitizedUsage.hosts = (
-                                      sanitizedUsage.hosts as Array<string>
-                                    ).map((host, hostIndex) =>
-                                      sanitizeHostname(
-                                        typeof host === 'string' ? host : `host-${hostIndex + 1}`,
-                                      ),
-                                    );
-                                  }
-                                  return sanitizedUsage;
-                                });
-                              }
-                              if (Array.isArray(apiTokens.notes)) {
-                                apiTokens.notes = sanitizeNotesArray(apiTokens.notes);
-                              }
-                            }
-
-                            if (
-                              sanitized.dockerAgents &&
-                              typeof sanitized.dockerAgents === 'object'
-                            ) {
-                              const dockerDiag = sanitized.dockerAgents as Record<string, unknown>;
-                              if (Array.isArray(dockerDiag.attention)) {
-                                dockerDiag.attention = (
-                                  dockerDiag.attention as Array<Record<string, unknown>>
-                                ).map((entry, index: number) => {
-                                  const sanitizedEntry = { ...entry };
-                                  sanitizedEntry.hostId = `docker-host-${index + 1}`;
-                                  sanitizedEntry.name = `docker-host-${index + 1}`;
-                                  if (typeof sanitizedEntry.tokenHint === 'string') {
-                                    sanitizedEntry.tokenHint = 'token-REDACTED';
-                                  }
-                                  if (Array.isArray(sanitizedEntry.issues)) {
-                                    sanitizedEntry.issues = sanitizeNotesArray(
-                                      sanitizedEntry.issues,
-                                    );
-                                  }
-                                  return sanitizedEntry;
-                                });
-                              }
-                              if (Array.isArray(dockerDiag.notes)) {
-                                dockerDiag.notes = sanitizeNotesArray(dockerDiag.notes);
-                              }
-                            }
-
-                            if (sanitized.alerts && typeof sanitized.alerts === 'object') {
-                              const alerts = sanitized.alerts as Record<string, unknown>;
-                              if (Array.isArray(alerts.legacyThresholdSources)) {
-                                alerts.legacyThresholdSources = (
-                                  alerts.legacyThresholdSources as string[]
-                                ).map((source) => sanitizeText(source) ?? source);
-                              }
-                              if (Array.isArray(alerts.legacyScheduleSettings)) {
-                                alerts.legacyScheduleSettings = (
-                                  alerts.legacyScheduleSettings as string[]
-                                ).map((setting) => sanitizeText(setting) ?? setting);
-                              }
-                              if (Array.isArray(alerts.notes)) {
-                                alerts.notes = sanitizeNotesArray(alerts.notes);
-                              }
-                            }
-
-                            // Sanitize backend diagnostics (if present)
-                            if (
-                              sanitized.backendDiagnostics &&
-                              typeof sanitized.backendDiagnostics === 'object'
-                            ) {
-                              const backend = sanitized.backendDiagnostics as Record<
-                                string,
-                                unknown
-                              >;
-
-                              if (Array.isArray(backend.nodeSnapshots)) {
-                                backend.nodeSnapshots = sanitizeNodeSnapshots(
-                                  backend.nodeSnapshots as Array<Record<string, unknown>>,
-                                );
-                              }
-
-                              if (Array.isArray(backend.guestSnapshots)) {
-                                backend.guestSnapshots = sanitizeGuestSnapshots(
-                                  backend.guestSnapshots as Array<Record<string, unknown>>,
-                                );
-                              }
-
-                              if (Array.isArray(backend.nodes)) {
-                                backend.nodes = backend.nodes.map((rawNode, index: number) => {
-                                  const node = rawNode as Record<string, unknown>;
-                                  const originalName =
-                                    typeof node.name === 'string' ? node.name : '';
-                                  const sanitizedId = `diagnostic-node-${index}`;
-                                  connectionKeyMap.set(originalName, sanitizedId);
-
-                                  const vmDiskCheck = node.vmDiskCheck as
-                                    | Record<string, unknown>
-                                    | undefined;
-                                  const physicalDisks = node.physicalDisks as
-                                    | Record<string, unknown>
-                                    | undefined;
-
-                                  if (vmDiskCheck) {
-                                    if (typeof vmDiskCheck.testVMName === 'string') {
-                                      vmDiskCheck.testVMName = 'vm-REDACTED';
-                                    }
-                                    if (typeof vmDiskCheck.testResult === 'string') {
-                                      const sanitizedResult = sanitizeText(
-                                        vmDiskCheck.testResult as string,
-                                      );
-                                      vmDiskCheck.testResult =
-                                        sanitizedResult ?? vmDiskCheck.testResult;
-                                    }
-                                    if (Array.isArray(vmDiskCheck.problematicVMs)) {
-                                      vmDiskCheck.problematicVMs = (
-                                        vmDiskCheck.problematicVMs as Array<Record<string, unknown>>
-                                      ).map((problem) => {
-                                        const issueText = sanitizeText(
-                                          typeof problem.issue === 'string'
-                                            ? problem.issue
-                                            : undefined,
-                                        );
-                                        return {
-                                          ...problem,
-                                          name: 'vm-REDACTED',
-                                          issue: issueText ?? problem.issue,
-                                        };
-                                      });
-                                    }
-                                    if (Array.isArray(vmDiskCheck.recommendations)) {
-                                      vmDiskCheck.recommendations = (
-                                        vmDiskCheck.recommendations as Array<string>
-                                      ).map((rec) => sanitizeText(rec) ?? rec);
-                                    }
-                                  }
-
-                                  if (physicalDisks) {
-                                    if (typeof physicalDisks.testResult === 'string') {
-                                      const sanitizedResult = sanitizeText(
-                                        physicalDisks.testResult as string,
-                                      );
-                                      physicalDisks.testResult =
-                                        sanitizedResult ?? physicalDisks.testResult;
-                                    }
-                                    if (Array.isArray(physicalDisks.nodeResults)) {
-                                      physicalDisks.nodeResults = (
-                                        physicalDisks.nodeResults as Array<Record<string, unknown>>
-                                      ).map((result) => ({
-                                        ...result,
-                                        nodeName: sanitizeHostname(
-                                          typeof result.nodeName === 'string'
-                                            ? result.nodeName
-                                            : '',
-                                        ),
-                                        apiResponse:
-                                          sanitizeText(
-                                            typeof result.apiResponse === 'string'
-                                              ? result.apiResponse
-                                              : undefined,
-                                          ) ?? result.apiResponse,
-                                        error:
-                                          sanitizeText(
-                                            typeof result.error === 'string'
-                                              ? result.error
-                                              : undefined,
-                                          ) ?? result.error,
-                                      }));
-                                    }
-                                  }
-
-                                  return {
-                                    ...node,
-                                    id: sanitizedId,
-                                    name: sanitizeHostname(originalName),
-                                    host:
-                                      typeof node.host === 'string'
-                                        ? (node.host as string).replace(
-                                          /https?:\/\/[^:\/]+/,
-                                          'https://REDACTED',
-                                        )
-                                        : node.host,
-                                    error:
-                                      sanitizeText(
-                                        typeof node.error === 'string' ? node.error : undefined,
-                                      ) ?? node.error,
-                                    vmDiskCheck,
-                                    physicalDisks,
-                                  };
-                                });
-                              }
-
-                              if (Array.isArray(backend.pbs)) {
-                                backend.pbs = backend.pbs.map((rawPbs, index: number) => {
-                                  const pbsNode = rawPbs as Record<string, unknown>;
-                                  const originalName =
-                                    typeof pbsNode.name === 'string' ? pbsNode.name : '';
-                                  const sanitizedId = `diagnostic-pbs-${index}`;
-                                  connectionKeyMap.set(originalName, sanitizedId);
-
-                                  return {
-                                    ...pbsNode,
-                                    id: sanitizedId,
-                                    name: sanitizeHostname(originalName),
-                                    host:
-                                      typeof pbsNode.host === 'string'
-                                        ? (pbsNode.host as string).replace(
-                                          /https?:\/\/[^:\/]+/,
-                                          'https://REDACTED',
-                                        )
-                                        : pbsNode.host,
-                                    error:
-                                      sanitizeText(
-                                        typeof pbsNode.error === 'string'
-                                          ? pbsNode.error
-                                          : undefined,
-                                      ) ?? pbsNode.error,
-                                  };
-                                });
-                              }
-                            }
-
-                            // Sanitize storage
-                            if (sanitized.storage) {
-                              sanitized.storage = (
-                                sanitized.storage as Array<Record<string, unknown>>
-                              ).map((s, index: number) => {
-                                const storageNode = typeof s.node === 'string' ? s.node : '';
-                                return {
-                                  ...s,
-                                  id: `storage-${index}`,
-                                  node: sanitizeHostname(storageNode),
-                                  name: `storage-${index}`,
-                                };
-                              });
-                            }
-
-                            // Sanitize backups
-                            const backups = sanitized.backups as
-                              | Record<string, unknown>
-                              | undefined;
-                            if (backups) {
-                              // Sanitize PVE backup tasks
-                              if (Array.isArray(backups.pveBackupTasks)) {
-                                backups.pveBackupTasks = (
-                                  backups.pveBackupTasks as Array<Record<string, unknown>>
-                                ).map((b, index: number) => {
-                                  const backupNode = typeof b.node === 'string' ? b.node : '';
-                                  const backupVmid =
-                                    typeof b.vmid === 'number' ? b.vmid : undefined;
-                                  return {
-                                    ...b,
-                                    node: sanitizeHostname(backupNode),
-                                    storage: `storage-${index}`,
-                                    vmid:
-                                      backupVmid !== undefined ? `vm-${backupVmid}` : backupVmid,
-                                  };
-                                });
-                              }
-
-                              // Sanitize PVE storage backups
-                              if (Array.isArray(backups.pveStorageBackups)) {
-                                backups.pveStorageBackups = (
-                                  backups.pveStorageBackups as Array<Record<string, unknown>>
-                                ).map((b, index: number) => {
-                                  const backupNode = typeof b.node === 'string' ? b.node : '';
-                                  const backupVmid =
-                                    typeof b.vmid === 'number' ? b.vmid : undefined;
-                                  const volid = typeof b.volid === 'string' ? b.volid : undefined;
-                                  return {
-                                    ...b,
-                                    node: sanitizeHostname(backupNode),
-                                    storage: `storage-${index}`,
-                                    vmid:
-                                      backupVmid !== undefined ? `vm-${backupVmid}` : backupVmid,
-                                    volid: volid ? 'vol-REDACTED' : volid,
-                                  };
-                                });
-                              }
-
-                              // Sanitize PBS backups
-                              if (Array.isArray(backups.pbsBackups)) {
-                                backups.pbsBackups = (
-                                  backups.pbsBackups as Array<Record<string, unknown>>
-                                ).map((b, index: number) => {
-                                  const backupId =
-                                    typeof b.backupId === 'string' ? b.backupId : undefined;
-                                  const vmName =
-                                    typeof b.vmName === 'string' ? b.vmName : undefined;
-                                  return {
-                                    ...b,
-                                    datastore: `datastore-${index}`,
-                                    backupId: backupId ? `backup-${index}` : backupId,
-                                    vmName: vmName ? 'vm-REDACTED' : vmName,
-                                  };
-                                });
-                              }
-                            }
-
-                            // Sanitize active alerts
-                            const activeAlerts = sanitized.activeAlerts as
-                              | Array<Record<string, unknown>>
-                              | undefined;
-                            if (activeAlerts) {
-                              sanitized.activeAlerts = activeAlerts.map((alert) => {
-                                const alertNode = typeof alert.node === 'string' ? alert.node : '';
-                                const details =
-                                  typeof alert.details === 'string' ? alert.details : undefined;
-                                return {
-                                  ...alert,
-                                  node: sanitizeHostname(alertNode),
-                                  details: details
-                                    ? details.replace(
-                                      /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/g,
-                                      'xxx.xxx.xxx.xxx',
-                                    )
-                                    : details,
-                                };
-                              });
-                            }
-
-                            // Sanitize websocket URL
-                            const websocketInfo = sanitized.websocket as
-                              | Record<string, unknown>
-                              | undefined;
-                            if (websocketInfo && typeof websocketInfo.url === 'string') {
-                              websocketInfo.url = websocketInfo.url.replace(
-                                /\/\/[^\/]+/,
-                                '//REDACTED',
-                              );
-                            }
-
-                            if (
-                              sanitized.connectionHealth &&
-                              typeof sanitized.connectionHealth === 'object'
-                            ) {
-                              const newConnectionHealth: Record<string, unknown> = {};
-                              let index = 1;
-                              Object.entries(
-                                sanitized.connectionHealth as Record<string, unknown>,
-                              ).forEach(([key, value]) => {
-                                const mappedKey = connectionKeyMap.get(key) || `resource-${index}`;
-                                newConnectionHealth[mappedKey] = value;
-                                index += 1;
-                              });
-                              sanitized.connectionHealth = newConnectionHealth;
-                            }
-
-                            // Add sanitization notice
-                            sanitized._notice =
-                              'This diagnostic data has been sanitized for sharing on GitHub. IP addresses, hostnames, and tokens have been redacted.';
-
-                            return sanitized;
-                          };
-
-                          const exportDiagnostics = (sanitize: boolean) => {
-                            let diagnostics: Record<string, unknown> = {
-                              timestamp: new Date().toISOString(),
-                              version: '2.1.0',
-                              pulseVersion: state.stats?.version || 'unknown',
-                              environment: {
-                                userAgent: navigator.userAgent,
-                                platform: navigator.platform,
-                                language: navigator.language,
-                                screenResolution: `${window.screen.width}x${window.screen.height}`,
-                                windowSize: `${window.innerWidth}x${window.innerHeight}`,
-                                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                              },
-                              websocket: {
-                                connected: connected(),
-                                url: getPulseWebSocketUrl(),
-                              },
-                              // Include backend diagnostics if available
-                              backendDiagnostics: diagnosticsData() || null,
-                              nodes:
-                                nodes()?.map((n) => ({
-                                  ...n,
-                                  status:
-                                    state.nodes?.find((sn) => sn.id === n.id)?.status || 'unknown',
-                                  online:
-                                    state.nodes?.find((sn) => sn.id === n.id)?.status === 'online',
-                                })) || [],
-                              state: {
-                                nodesCount: state.nodes?.length || 0,
-                                nodesOnline:
-                                  state.nodes?.filter((n) => n.status === 'online').length || 0,
-                                nodesOffline:
-                                  state.nodes?.filter((n) => n.status !== 'online').length || 0,
-                                vmsCount: state.vms?.length || 0,
-                                containersCount: state.containers?.length || 0,
-                                storageCount: state.storage?.length || 0,
-                                physicalDisksCount: state.physicalDisks?.length || 0,
-                                pbsCount: state.pbs?.length || 0,
-                                pbsBackupsCount: pbsBackupsState()?.length || 0,
-                                pveBackups: {
-                                  backupTasksCount: pveBackupsState()?.backupTasks?.length || 0,
-                                  storageBackupsCount:
-                                    pveBackupsState()?.storageBackups?.length || 0,
-                                  guestSnapshotsCount:
-                                    pveBackupsState()?.guestSnapshots?.length || 0,
-                                },
-                              },
-                              // Node status details
-                              nodeStatus:
-                                state.nodes?.map((n) => ({
-                                  id: n.id,
-                                  name: n.name,
-                                  status: n.status,
-                                  online: n.status === 'online',
-                                  cpu: n.cpu,
-                                  memory: n.memory,
-                                  uptime: n.uptime,
-                                  version: n.pveVersion ?? n.kernelVersion,
-                                })) || [],
-                              storage:
-                                state.storage?.map((s) => ({
-                                  id: s.id,
-                                  node: s.node,
-                                  name: s.name,
-                                  type: s.type,
-                                  status: s.status,
-                                  enabled: s.enabled,
-                                  content: s.content,
-                                  shared: s.shared,
-                                  used: s.used,
-                                  total: s.total,
-                                  zfsPool: s.zfsPool
-                                    ? {
-                                      state: s.zfsPool.state,
-                                      readErrors: s.zfsPool.readErrors,
-                                      writeErrors: s.zfsPool.writeErrors,
-                                      checksumErrors: s.zfsPool.checksumErrors,
-                                      deviceCount: s.zfsPool.devices?.length || 0,
-                                    }
-                                    : undefined,
-                                  hasBackups:
-                                    (pveBackupsState()?.storageBackups ?? []).filter(
-                                      (b) => b.storage === s.name,
-                                    ).length > 0,
-                                })) || [],
-                              // Physical disks - critical for troubleshooting
-                              physicalDisks:
-                                state.physicalDisks?.map((d) => ({
-                                  node: d.node,
-                                  device: d.device || d.devPath,
-                                  model: d.model,
-                                  size: d.size,
-                                  type: d.type,
-                                  health: d.health,
-                                  wearout: d.wearout,
-                                  rpm: d.rpm,
-                                  smart: d.smart ?? null,
-                                })) || [],
-                              backups: {
-                                pveBackupTasks: pveBackupsState()?.backupTasks?.slice(0, 10) || [],
-                                pveStorageBackups:
-                                  pveBackupsState()?.storageBackups?.slice(0, 10) || [],
-                                pbsBackups: pbsBackupsState()?.slice(0, 10) || [],
-                              },
-                              connectionHealth: state.connectionHealth || {},
-                              performance: {
-                                lastPollDuration: state.performance?.lastPollDuration || 0,
-                                totalApiCalls: state.performance?.totalApiCalls || 0,
-                                failedApiCalls: state.performance?.failedApiCalls || 0,
-                                apiCallDuration: state.performance?.apiCallDuration || {},
-                              },
-                              activeAlerts: state.activeAlerts?.slice(0, 20) || [],
-                              settings: {},
-                            };
-
-                            if (sanitize) {
-                              diagnostics = sanitizeForGitHub(diagnostics);
-
-                              // Rebuild nodeStatus from sanitized nodes to avoid leaking real names
-                              // Both arrays are built in the same order, so we can match by index
-                              if (
-                                Array.isArray(diagnostics.nodes) &&
-                                Array.isArray(diagnostics.nodeStatus)
-                              ) {
-                                const sanitizedNodes = diagnostics.nodes as Array<
-                                  Record<string, unknown>
-                                >;
-                                const originalNodeStatus = diagnostics.nodeStatus as Array<
-                                  Record<string, unknown>
-                                >;
-
-                                diagnostics.nodeStatus = sanitizedNodes.map(
-                                  (sanitizedNode, index) => {
-                                    // Get corresponding runtime data using same index
-                                    const originalStatus = originalNodeStatus[index];
-
-                                    // Use sanitized node name/id but preserve runtime metrics
-                                    return {
-                                      id: sanitizedNode.id,
-                                      name: sanitizedNode.name, // Already sanitized
-                                      status: originalStatus?.status || 'unknown',
-                                      online: originalStatus?.online || false,
-                                      cpu: originalStatus?.cpu,
-                                      memory: originalStatus?.memory,
-                                      uptime: originalStatus?.uptime,
-                                      version: originalStatus?.version,
-                                    };
-                                  },
-                                );
-                              }
-
-                              // Sanitize storage entries that have nodes arrays or instance fields
-                              if (Array.isArray(diagnostics.storage)) {
-                                diagnostics.storage = (
-                                  diagnostics.storage as Array<Record<string, unknown>>
-                                ).map((storageItem, index) => {
-                                  const sanitizedItem = { ...storageItem };
-
-                                  // Sanitize storage name field (original Proxmox storage name)
-                                  // This field often contains node names (e.g., "pbs-delly")
-                                  if (
-                                    typeof sanitizedItem.storage === 'string' &&
-                                    sanitizedItem.storage
-                                  ) {
-                                    sanitizedItem.storage = `storage-${index}`;
-                                  }
-
-                                  // Sanitize nodes array if present (cluster storage has this)
-                                  if (Array.isArray(sanitizedItem.nodes)) {
-                                    sanitizedItem.nodes = (
-                                      sanitizedItem.nodes as Array<string>
-                                    ).map(() => 'node-REDACTED');
-                                  }
-
-                                  // Sanitize nodeIds array if present
-                                  if (Array.isArray(sanitizedItem.nodeIds)) {
-                                    sanitizedItem.nodeIds = (
-                                      sanitizedItem.nodeIds as Array<string>
-                                    ).map(() => 'node-REDACTED');
-                                  }
-
-                                  // Sanitize instance field if present
-                                  if (
-                                    typeof sanitizedItem.instance === 'string' &&
-                                    sanitizedItem.instance
-                                  ) {
-                                    const instanceMatch = (sanitizedItem.instance as string).match(
-                                      /\.(lan|local|home|internal)$/,
-                                    );
-                                    const suffix = instanceMatch ? instanceMatch[0] : '';
-                                    sanitizedItem.instance = `instance-REDACTED${suffix}`;
-                                  }
-
-                                  return sanitizedItem;
-                                });
-                              }
-
-                              // Sanitize activeAlerts resourceName field
-                              if (Array.isArray(diagnostics.activeAlerts)) {
-                                diagnostics.activeAlerts = (
-                                  diagnostics.activeAlerts as Array<Record<string, unknown>>
-                                ).map((alert, index) => {
-                                  const sanitizedAlert = { ...alert };
-
-                                  // Sanitize resourceName if present
-                                  if (
-                                    typeof sanitizedAlert.resourceName === 'string' &&
-                                    sanitizedAlert.resourceName
-                                  ) {
-                                    const hostnameMatch = (
-                                      sanitizedAlert.resourceName as string
-                                    ).match(/\.(lan|local|home|internal)$/);
-                                    const suffix = hostnameMatch ? hostnameMatch[0] : '';
-                                    sanitizedAlert.resourceName = `resource-REDACTED${suffix}`;
-                                  }
-
-                                  // Sanitize node field if present
-                                  if (
-                                    typeof sanitizedAlert.node === 'string' &&
-                                    sanitizedAlert.node
-                                  ) {
-                                    sanitizedAlert.node = 'node-REDACTED';
-                                  }
-
-                                  // Sanitize instance field if present
-                                  if (
-                                    typeof sanitizedAlert.instance === 'string' &&
-                                    sanitizedAlert.instance
-                                  ) {
-                                    const instanceMatch = (sanitizedAlert.instance as string).match(
-                                      /\.(lan|local|home|internal)$/,
-                                    );
-                                    const suffix = instanceMatch ? instanceMatch[0] : '';
-                                    sanitizedAlert.instance = `instance-REDACTED${suffix}`;
-                                  }
-
-                                  // Sanitize resourceId (e.g., "delly.lan-delly" → "alert-resource-0")
-                                  if (
-                                    typeof sanitizedAlert.resourceId === 'string' &&
-                                    sanitizedAlert.resourceId
-                                  ) {
-                                    sanitizedAlert.resourceId = `alert-resource-${index}`;
-                                  }
-
-                                  // Sanitize id field (e.g., "delly.lan-delly-temperature" → "alert-0-temperature")
-                                  if (typeof sanitizedAlert.id === 'string' && sanitizedAlert.id) {
-                                    // Extract the alert type from the end (e.g., "temperature")
-                                    const idParts = (sanitizedAlert.id as string).split('-');
-                                    const alertType = idParts[idParts.length - 1];
-                                    sanitizedAlert.id = `alert-${index}-${alertType}`;
-                                  }
-
-                                  return sanitizedAlert;
-                                });
-                              }
-                            }
-
-                            const blob = new Blob([JSON.stringify(diagnostics, null, 2)], {
-                              type: 'application/json',
-                            });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            const type = sanitize ? 'sanitized' : 'full';
-                            a.download = `pulse-diagnostics-${type}-${new Date().toISOString().split('T')[0]}.json`;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            URL.revokeObjectURL(url);
-                          };
-
-                          return (
-                            <div class="space-y-3">
-                              <Show when={!diagnosticsData()}>
-                                <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded p-2">
-                                  💡 Run diagnostics first for more comprehensive export data
-                                </div>
-                              </Show>
-                              <div class="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => exportDiagnostics(false)}
-                                  class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                                >
-                                  Export Full
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => exportDiagnostics(true)}
-                                  class="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                                >
-                                  Export for GitHub
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })()}
-
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
-                          <strong>Export Full:</strong> Complete data for private troubleshooting
-                          <br />
-                          <strong>Export for GitHub:</strong> Sanitized data safe for public sharing
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <DiagnosticsPanel />
               </Show>
             </div>
           </div>
-        </Card>
-      </div>
+        </Card >
+      </div >
 
       {/* Delete Node Modal */}
-      <Show when={showDeleteNodeModal()}>
+      < Show when={showDeleteNodeModal()} >
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <Card padding="lg" class="w-full max-w-lg space-y-5">
             <SectionHeader title={`Remove ${nodePendingDeleteLabel()}`} size="md" class="mb-1" />
@@ -7475,10 +3678,10 @@ const Settings: Component<SettingsProps> = (props) => {
             </div>
           </Card>
         </div>
-      </Show>
+      </Show >
 
       {/* Node Modal - Use separate modals for PVE and PBS to ensure clean state */}
-      <Show when={isNodeModalVisible('pve')}>
+      < Show when={isNodeModalVisible('pve')} >
         <NodeModal
           isOpen={true}
           resetKey={modalResetKey()}
@@ -7547,10 +3750,10 @@ const Settings: Component<SettingsProps> = (props) => {
             }
           }}
         />
-      </Show>
+      </Show >
 
       {/* PBS Node Modal - Separate instance to prevent contamination */}
-      <Show when={isNodeModalVisible('pbs')}>
+      < Show when={isNodeModalVisible('pbs')} >
         <NodeModal
           isOpen={true}
           resetKey={modalResetKey()}
@@ -7618,10 +3821,10 @@ const Settings: Component<SettingsProps> = (props) => {
             }
           }}
         />
-      </Show>
+      </Show >
 
       {/* PMG Node Modal */}
-      <Show when={isNodeModalVisible('pmg')}>
+      < Show when={isNodeModalVisible('pmg')} >
         <NodeModal
           isOpen={true}
           resetKey={modalResetKey()}
@@ -7681,9 +3884,25 @@ const Settings: Component<SettingsProps> = (props) => {
             }
           }}
         />
-      </Show>
+      </Show >
+
+      {/* Update Confirmation Modal */}
+      <UpdateConfirmationModal
+        isOpen={showUpdateConfirmation()}
+        onClose={() => setShowUpdateConfirmation(false)}
+        onConfirm={handleConfirmUpdate}
+        currentVersion={versionInfo()?.version || 'Unknown'}
+        latestVersion={updateInfo()?.latestVersion || ''}
+        plan={updatePlan() || {
+          canAutoUpdate: false,
+          requiresRoot: false,
+          rollbackSupport: false,
+        }}
+        isApplying={isInstallingUpdate()}
+      />
+
       {/* Export Dialog */}
-      <Show when={showExportDialog()}>
+      < Show when={showExportDialog()} >
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <Card padding="lg" class="max-w-md w-full">
             <SectionHeader title="Export configuration" size="md" class="mb-4" />
@@ -7820,10 +4039,10 @@ const Settings: Component<SettingsProps> = (props) => {
             </div>
           </Card>
         </div>
-      </Show>
+      </Show >
 
       {/* API Token Modal */}
-      <Show when={showApiTokenModal()}>
+      < Show when={showApiTokenModal()} >
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <Card padding="lg" class="max-w-md w-full">
             <SectionHeader title="API token required" size="md" class="mb-4" />
@@ -7890,10 +4109,10 @@ const Settings: Component<SettingsProps> = (props) => {
             </div>
           </Card>
         </div>
-      </Show>
+      </Show >
 
       {/* Import Dialog */}
-      <Show when={showImportDialog()}>
+      < Show when={showImportDialog()} >
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <Card padding="lg" class="max-w-md w-full">
             <SectionHeader title="Import configuration" size="md" class="mb-4" />
@@ -7957,7 +4176,7 @@ const Settings: Component<SettingsProps> = (props) => {
             </div>
           </Card>
         </div>
-      </Show>
+      </Show >
 
       <ChangePasswordModal
         isOpen={showPasswordModal()}

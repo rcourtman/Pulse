@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -37,6 +38,7 @@ func Parse(jsonStr string) (*TemperatureData, error) {
 	}
 
 	foundCPUChip := false
+	nvmeTempsByChip := make(map[string]float64)
 
 	// Parse each sensor chip
 	for chipName, chipData := range sensorsData {
@@ -54,8 +56,10 @@ func Parse(jsonStr string) (*TemperatureData, error) {
 		}
 
 		// Handle NVMe temperature sensors
-		if strings.Contains(chipName, "nvme") {
-			parseNVMeTemps(chipName, chipMap, data)
+		if strings.Contains(chipLower, "nvme") {
+			if tempVal, ok := extractNVMeCompositeTemp(chipMap); ok {
+				nvmeTempsByChip[chipName] = tempVal
+			}
 		}
 
 		// Handle GPU temperature sensors
@@ -73,6 +77,23 @@ func Parse(jsonStr string) (*TemperatureData, error) {
 		}
 		// Use max core temp as package temp if not available
 		data.CPUPackage = data.CPUMax
+	}
+
+	if len(nvmeTempsByChip) > 0 {
+		chips := make([]string, 0, len(nvmeTempsByChip))
+		for chip := range nvmeTempsByChip {
+			chips = append(chips, chip)
+		}
+		sort.Strings(chips)
+		for i, chip := range chips {
+			normalizedName := fmt.Sprintf("nvme%d", i)
+			data.NVMe[normalizedName] = nvmeTempsByChip[chip]
+			log.Debug().
+				Str("chip", chip).
+				Str("normalizedName", normalizedName).
+				Float64("temp", nvmeTempsByChip[chip]).
+				Msg("Found NVMe temperature")
+		}
 	}
 
 	data.Available = foundCPUChip || len(data.NVMe) > 0 || len(data.GPU) > 0
@@ -109,6 +130,7 @@ func isCPUChip(chipLower string) bool {
 func parseCPUTemps(chipMap map[string]interface{}, data *TemperatureData) {
 	foundPackageTemp := false
 	var chipletTemps []float64
+	var genericTemp float64 // For chips that only report temp1
 
 	for sensorName, sensorData := range chipMap {
 		sensorMap, ok := sensorData.(map[string]interface{})
@@ -128,6 +150,14 @@ func parseCPUTemps(chipMap map[string]interface{}, data *TemperatureData) {
 				if tempVal > data.CPUMax {
 					data.CPUMax = tempVal
 				}
+			}
+		}
+
+		// Capture generic temp1 for chips like cpu_thermal (RPi, ARM SoCs)
+		// that don't have labeled sensors
+		if sensorNameLower == "temp1" {
+			if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) && tempVal > 0 {
+				genericTemp = tempVal
 			}
 		}
 
@@ -175,9 +205,17 @@ func parseCPUTemps(chipMap map[string]interface{}, data *TemperatureData) {
 			}
 		}
 	}
+
+	// Fallback: use generic temp1 for chips like cpu_thermal (RPi, ARM SoCs)
+	if !foundPackageTemp && data.CPUPackage == 0 && genericTemp > 0 {
+		data.CPUPackage = genericTemp
+		if genericTemp > data.CPUMax {
+			data.CPUMax = genericTemp
+		}
+	}
 }
 
-func parseNVMeTemps(chipName string, chipMap map[string]interface{}, data *TemperatureData) {
+func extractNVMeCompositeTemp(chipMap map[string]interface{}) (float64, bool) {
 	for sensorName, sensorData := range chipMap {
 		sensorMap, ok := sensorData.(map[string]interface{})
 		if !ok {
@@ -186,15 +224,12 @@ func parseNVMeTemps(chipName string, chipMap map[string]interface{}, data *Tempe
 
 		// Look for Composite temperature (main NVMe temp)
 		if strings.Contains(sensorName, "Composite") {
-			if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) {
-				data.NVMe[chipName] = tempVal
-				log.Debug().
-					Str("chip", chipName).
-					Float64("temp", tempVal).
-					Msg("Found NVMe temperature")
+			if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) && tempVal > 0 {
+				return tempVal, true
 			}
 		}
 	}
+	return 0, false
 }
 
 func parseGPUTemps(chipName string, chipMap map[string]interface{}, data *TemperatureData) {

@@ -16,6 +16,7 @@ type GuestMetadata struct {
 	CustomURL   string   `json:"customUrl"`   // Custom URL for the guest
 	Description string   `json:"description"` // Optional description
 	Tags        []string `json:"tags"`        // Optional tags for categorization
+	Notes       []string `json:"notes"`       // User annotations for AI context (e.g., "Runs PBS in Docker")
 	// Last-known identity (persisted even after guest deletion)
 	LastKnownName string `json:"lastKnownName,omitempty"` // Last known guest name
 	LastKnownType string `json:"lastKnownType,omitempty"` // Last known guest type (qemu, lxc)

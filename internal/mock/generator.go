@@ -35,31 +35,40 @@ func titleCase(s string) string {
 }
 
 type MockConfig struct {
-	NodeCount               int
-	VMsPerNode              int
-	LXCsPerNode             int
-	DockerHostCount         int
-	DockerContainersPerHost int
-	GenericHostCount        int
-	RandomMetrics           bool
-	HighLoadNodes           []string // Specific nodes to simulate high load
-	StoppedPercent          float64  // Percentage of guests that should be stopped
+	NodeCount                int
+	VMsPerNode               int
+	LXCsPerNode              int
+	DockerHostCount          int
+	DockerContainersPerHost  int
+	GenericHostCount         int
+	K8sClusterCount          int
+	K8sNodesPerCluster       int
+	K8sPodsPerCluster        int
+	K8sDeploymentsPerCluster int
+	RandomMetrics            bool
+	HighLoadNodes            []string // Specific nodes to simulate high load
+	StoppedPercent           float64  // Percentage of guests that should be stopped
 }
 
 const (
-	dockerConnectionPrefix = "docker-"
-	hostConnectionPrefix   = "host-"
+	dockerConnectionPrefix     = "docker-"
+	kubernetesConnectionPrefix = "kubernetes-"
+	hostConnectionPrefix       = "host-"
 )
 
 var DefaultConfig = MockConfig{
-	NodeCount:               7, // Test the 5-9 node range by default
-	VMsPerNode:              5,
-	LXCsPerNode:             8,
-	DockerHostCount:         3,
-	DockerContainersPerHost: 12,
-	GenericHostCount:        4,
-	RandomMetrics:           true,
-	StoppedPercent:          0.2,
+	NodeCount:                7, // Test the 5-9 node range by default
+	VMsPerNode:               5,
+	LXCsPerNode:              8,
+	DockerHostCount:          3,
+	DockerContainersPerHost:  12,
+	GenericHostCount:         4,
+	K8sClusterCount:          2,
+	K8sNodesPerCluster:       4,
+	K8sPodsPerCluster:        30,
+	K8sDeploymentsPerCluster: 12,
+	RandomMetrics:            true,
+	StoppedPercent:           0.2,
 }
 
 var appNames = []string{
@@ -163,6 +172,77 @@ var hostAgentVersions = []string{
 	"0.2.0-alpha",
 }
 
+var k8sClusterNames = []string{
+	"production",
+	"staging",
+	"development",
+	"edge",
+	"internal",
+	"platform",
+}
+
+var k8sNamespaces = []string{
+	"default",
+	"kube-system",
+	"monitoring",
+	"logging",
+	"ingress-nginx",
+	"cert-manager",
+	"argocd",
+	"apps",
+	"services",
+	"databases",
+	"cache",
+}
+
+var k8sPodPrefixes = []string{
+	"nginx",
+	"redis",
+	"postgres",
+	"mysql",
+	"mongodb",
+	"prometheus",
+	"grafana",
+	"loki",
+	"jaeger",
+	"api",
+	"auth",
+	"worker",
+	"cron",
+	"coredns",
+	"metrics-server",
+	"cert-manager",
+	"ingress-controller",
+	"fluentd",
+}
+
+var k8sVersions = []string{
+	"v1.31.2",
+	"v1.30.4",
+	"v1.29.8",
+}
+
+var k8sImages = []string{
+	"nginx:1.27",
+	"redis:7.4",
+	"postgres:16",
+	"mysql:8.4",
+	"mongo:7.0",
+	"prom/prometheus:v2.54",
+	"grafana/grafana:11.3",
+	"grafana/loki:3.0",
+	"busybox:1.36",
+	"alpine:3.20",
+}
+
+var k8sNodeOS = []string{
+	"Ubuntu 24.04.1 LTS",
+	"Ubuntu 22.04.5 LTS",
+	"Debian GNU/Linux 12 (bookworm)",
+	"Fedora CoreOS 40",
+	"Talos Linux v1.8",
+}
+
 // Common tags used for VMs and containers
 var commonTags = []string{
 	"production", "staging", "development", "testing",
@@ -252,17 +332,19 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 	// rand is automatically seeded in Go 1.20+
 
 	data := models.StateSnapshot{
-		Nodes:            generateNodes(config),
-		DockerHosts:      generateDockerHosts(config),
-		Hosts:            generateHosts(config),
-		VMs:              []models.VM{},
-		Containers:       []models.Container{},
-		PhysicalDisks:    []models.PhysicalDisk{},
-		ReplicationJobs:  []models.ReplicationJob{},
-		LastUpdate:       time.Now(),
-		ConnectionHealth: make(map[string]bool),
-		Stats:            models.Stats{},
-		ActiveAlerts:     []models.Alert{},
+		Nodes:                     generateNodes(config),
+		DockerHosts:               generateDockerHosts(config),
+		KubernetesClusters:        generateKubernetesClusters(config),
+		RemovedKubernetesClusters: []models.RemovedKubernetesCluster{},
+		Hosts:                     generateHosts(config),
+		VMs:                       []models.VM{},
+		Containers:                []models.Container{},
+		PhysicalDisks:             []models.PhysicalDisk{},
+		ReplicationJobs:           []models.ReplicationJob{},
+		LastUpdate:                time.Now(),
+		ConnectionHealth:          make(map[string]bool),
+		Stats:                     models.Stats{},
+		ActiveAlerts:              []models.Alert{},
 	}
 
 	// Generate physical disks for each node
@@ -272,6 +354,10 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 
 	for _, host := range data.DockerHosts {
 		data.ConnectionHealth[dockerConnectionPrefix+host.ID] = host.Status != "offline"
+	}
+
+	for _, cluster := range data.KubernetesClusters {
+		data.ConnectionHealth[kubernetesConnectionPrefix+cluster.ID] = cluster.Status != "offline"
 	}
 
 	for _, host := range data.Hosts {
@@ -1051,6 +1137,342 @@ func generateGuestOSMetadata() (string, string) {
 
 	choice := variants[rand.Intn(len(variants))]
 	return choice.Name, choice.Version
+}
+
+func generateKubernetesClusters(config MockConfig) []models.KubernetesCluster {
+	clusterCount := config.K8sClusterCount
+	if clusterCount <= 0 {
+		return []models.KubernetesCluster{}
+	}
+
+	nodeCount := config.K8sNodesPerCluster
+	if nodeCount <= 0 {
+		nodeCount = 4
+	}
+
+	podCount := config.K8sPodsPerCluster
+	if podCount < 0 {
+		podCount = 0
+	}
+
+	deploymentCount := config.K8sDeploymentsPerCluster
+	if deploymentCount < 0 {
+		deploymentCount = 0
+	}
+
+	now := time.Now()
+	clusters := make([]models.KubernetesCluster, 0, clusterCount)
+
+	for i := 0; i < clusterCount; i++ {
+		name := k8sClusterNames[i%len(k8sClusterNames)]
+		clusterID := fmt.Sprintf("k8s-%s-%d", strings.ToLower(name), i+1)
+		server := fmt.Sprintf("https://%s.k8s.local:6443", strings.ToLower(name))
+		context := fmt.Sprintf("%s-context", strings.ToLower(name))
+
+		nodes := generateKubernetesNodes(clusterID, nodeCount)
+		pods := generateKubernetesPods(clusterID, nodes, podCount)
+		deployments := generateKubernetesDeployments(clusterID, deploymentCount)
+
+		lastSeen := now.Add(-time.Duration(rand.Intn(20)) * time.Second)
+		status := "online"
+
+		// Make the last cluster offline occasionally for UI coverage.
+		if clusterCount > 1 && i == clusterCount-1 && rand.Float64() < 0.55 {
+			status = "offline"
+			lastSeen = now.Add(-time.Duration(5+rand.Intn(20)) * time.Minute)
+		} else if clusterHasIssues(nodes, pods, deployments) {
+			status = "degraded"
+		}
+
+		clusters = append(clusters, models.KubernetesCluster{
+			ID:               clusterID,
+			AgentID:          fmt.Sprintf("%s-agent", clusterID),
+			Name:             name,
+			DisplayName:      titleCase(name),
+			Server:           server,
+			Context:          context,
+			Version:          k8sVersions[rand.Intn(len(k8sVersions))],
+			Status:           status,
+			LastSeen:         lastSeen,
+			IntervalSeconds:  30,
+			AgentVersion:     "0.1.0-mock",
+			Nodes:            nodes,
+			Pods:             pods,
+			Deployments:      deployments,
+			Hidden:           false,
+			PendingUninstall: false,
+		})
+	}
+
+	return clusters
+}
+
+func generateKubernetesNodes(clusterID string, count int) []models.KubernetesNode {
+	if count <= 0 {
+		return []models.KubernetesNode{}
+	}
+
+	nodes := make([]models.KubernetesNode, 0, count)
+	architectures := []string{"amd64", "arm64"}
+	runtimes := []string{"containerd://1.7.21", "containerd://1.7.20", "cri-o://1.30.4"}
+
+	for i := 0; i < count; i++ {
+		name := fmt.Sprintf("%s-node-%d", clusterID, i+1)
+		ready := rand.Float64() > 0.08
+		unschedulable := rand.Float64() < 0.08
+
+		roles := []string{"worker"}
+		if i == 0 {
+			roles = []string{"control-plane"}
+		} else if i == 1 && count > 3 {
+			roles = []string{"worker", "gpu"}
+		}
+
+		cpu := int64(2 + rand.Intn(30))
+		memGiB := int64(8 + rand.Intn(248))
+		pods := int64(110 + rand.Intn(50))
+		capacityMemory := memGiB * 1024 * 1024 * 1024
+		allocCPU := cpu - int64(rand.Intn(2))
+		if allocCPU < 1 {
+			allocCPU = 1
+		}
+		allocMem := capacityMemory - int64(rand.Intn(3))*1024*1024*1024
+		if allocMem < 1 {
+			allocMem = capacityMemory
+		}
+
+		nodes = append(nodes, models.KubernetesNode{
+			UID:                     fmt.Sprintf("%s-%s", name, randomHexString(8)),
+			Name:                    name,
+			Ready:                   ready,
+			Unschedulable:           unschedulable,
+			KubeletVersion:          k8sVersions[rand.Intn(len(k8sVersions))],
+			ContainerRuntimeVersion: runtimes[rand.Intn(len(runtimes))],
+			OSImage:                 k8sNodeOS[rand.Intn(len(k8sNodeOS))],
+			KernelVersion:           dockerKernelVersions[rand.Intn(len(dockerKernelVersions))],
+			Architecture:            architectures[rand.Intn(len(architectures))],
+			CapacityCPU:             cpu,
+			CapacityMemoryBytes:     capacityMemory,
+			CapacityPods:            pods,
+			AllocCPU:                allocCPU,
+			AllocMemoryBytes:        allocMem,
+			AllocPods:               pods - int64(rand.Intn(10)),
+			Roles:                   roles,
+		})
+	}
+
+	// Ensure at least one node issue sometimes.
+	if count > 2 && rand.Float64() < 0.35 {
+		idx := 1 + rand.Intn(count-1)
+		nodes[idx].Ready = false
+	}
+
+	return nodes
+}
+
+func generateKubernetesPods(clusterID string, nodes []models.KubernetesNode, count int) []models.KubernetesPod {
+	if count <= 0 {
+		return []models.KubernetesPod{}
+	}
+
+	now := time.Now()
+	pods := make([]models.KubernetesPod, 0, count)
+
+	for i := 0; i < count; i++ {
+		namespace := k8sNamespaces[rand.Intn(len(k8sNamespaces))]
+		prefix := k8sPodPrefixes[rand.Intn(len(k8sPodPrefixes))]
+		name := fmt.Sprintf("%s-%s-%d", prefix, randomHexString(5), i+1)
+		nodeName := ""
+		if len(nodes) > 0 && rand.Float64() > 0.08 {
+			nodeName = nodes[rand.Intn(len(nodes))].Name
+		}
+
+		createdAt := now.Add(-time.Duration(30+rand.Intn(7200)) * time.Second)
+		startTime := createdAt.Add(time.Duration(10+rand.Intn(120)) * time.Second)
+		qos := []string{"Guaranteed", "Burstable", "BestEffort"}[rand.Intn(3)]
+
+		phase := "Running"
+		reason := ""
+		message := ""
+		containerState := "running"
+		containerReason := ""
+		containerMessage := ""
+		containerReady := true
+		restarts := 0
+
+		roll := rand.Float64()
+		switch {
+		case roll < 0.08:
+			phase = "Pending"
+			reason = "Unschedulable"
+			message = "0/3 nodes available"
+			containerState = "waiting"
+			containerReason = "PodInitializing"
+			containerReady = false
+		case roll < 0.14:
+			phase = "Running"
+			containerState = "waiting"
+			containerReason = "CrashLoopBackOff"
+			containerMessage = "Back-off restarting failed container"
+			containerReady = false
+			restarts = 3 + rand.Intn(20)
+		case roll < 0.18:
+			phase = "Failed"
+			reason = "Error"
+			message = "Pod terminated with non-zero exit code"
+			containerState = "terminated"
+			containerReason = "Error"
+			containerReady = false
+			restarts = 1 + rand.Intn(6)
+		case roll < 0.22:
+			phase = "Unknown"
+			reason = "NodeLost"
+			message = "Node status is unknown"
+			containerState = "unknown"
+			containerReady = false
+		}
+
+		containerCount := 1
+		if rand.Float64() < 0.12 {
+			containerCount = 2
+		}
+
+		containers := make([]models.KubernetesPodContainer, 0, containerCount)
+		for c := 0; c < containerCount; c++ {
+			image := k8sImages[rand.Intn(len(k8sImages))]
+			containers = append(containers, models.KubernetesPodContainer{
+				Name:         fmt.Sprintf("%s-%d", prefix, c+1),
+				Image:        image,
+				Ready:        containerReady,
+				RestartCount: int32(restarts),
+				State:        containerState,
+				Reason:       containerReason,
+				Message:      containerMessage,
+			})
+		}
+
+		ownerKind := []string{"Deployment", "StatefulSet", "DaemonSet", "Job"}[rand.Intn(4)]
+		ownerName := fmt.Sprintf("%s-%s", strings.ToLower(prefix), randomHexString(4))
+
+		labels := map[string]string{
+			"app.kubernetes.io/name":       prefix,
+			"app.kubernetes.io/instance":   ownerName,
+			"app.kubernetes.io/managed-by": "mock",
+		}
+
+		pod := models.KubernetesPod{
+			UID:        fmt.Sprintf("%s-%s", name, randomHexString(10)),
+			Name:       name,
+			Namespace:  namespace,
+			NodeName:   nodeName,
+			Phase:      phase,
+			Reason:     reason,
+			Message:    message,
+			QoSClass:   qos,
+			CreatedAt:  createdAt,
+			StartTime:  &startTime,
+			Restarts:   restarts,
+			Labels:     labels,
+			OwnerKind:  ownerKind,
+			OwnerName:  ownerName,
+			Containers: containers,
+		}
+
+		if phase == "Pending" {
+			pod.StartTime = nil
+		}
+
+		pods = append(pods, pod)
+	}
+
+	return pods
+}
+
+func generateKubernetesDeployments(clusterID string, count int) []models.KubernetesDeployment {
+	if count <= 0 {
+		return []models.KubernetesDeployment{}
+	}
+
+	deployments := make([]models.KubernetesDeployment, 0, count)
+	for i := 0; i < count; i++ {
+		namespace := k8sNamespaces[rand.Intn(len(k8sNamespaces))]
+		prefix := k8sPodPrefixes[rand.Intn(len(k8sPodPrefixes))]
+		name := fmt.Sprintf("%s-%s", prefix, randomHexString(4))
+
+		desired := int32(1 + rand.Intn(6))
+		updated := desired
+		ready := desired
+		available := desired
+
+		// Degrade some deployments for UI coverage.
+		if rand.Float64() < 0.20 && desired > 0 {
+			ready = int32(rand.Intn(int(desired)))
+			available = ready
+			updated = int32(rand.Intn(int(desired) + 1))
+		}
+
+		deployments = append(deployments, models.KubernetesDeployment{
+			UID:               fmt.Sprintf("%s-%s", name, randomHexString(10)),
+			Name:              name,
+			Namespace:         namespace,
+			DesiredReplicas:   desired,
+			UpdatedReplicas:   updated,
+			ReadyReplicas:     ready,
+			AvailableReplicas: available,
+			Labels: map[string]string{
+				"app.kubernetes.io/name": prefix,
+				"cluster":                clusterID,
+			},
+		})
+	}
+
+	return deployments
+}
+
+func clusterHasIssues(nodes []models.KubernetesNode, pods []models.KubernetesPod, deployments []models.KubernetesDeployment) bool {
+	for _, node := range nodes {
+		if !node.Ready || node.Unschedulable {
+			return true
+		}
+	}
+
+	for _, pod := range pods {
+		if !kubernetesPodHealthy(pod) {
+			return true
+		}
+	}
+
+	for _, d := range deployments {
+		if !kubernetesDeploymentHealthy(d) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func kubernetesPodHealthy(pod models.KubernetesPod) bool {
+	if strings.ToLower(strings.TrimSpace(pod.Phase)) != "running" {
+		return false
+	}
+	for _, c := range pod.Containers {
+		if !c.Ready {
+			return false
+		}
+		state := strings.ToLower(strings.TrimSpace(c.State))
+		if state != "" && state != "running" {
+			return false
+		}
+	}
+	return true
+}
+
+func kubernetesDeploymentHealthy(d models.KubernetesDeployment) bool {
+	desired := d.DesiredReplicas
+	if desired <= 0 {
+		return true
+	}
+	return d.ReadyReplicas >= desired && d.AvailableReplicas >= desired && d.UpdatedReplicas >= desired
 }
 
 func generateDockerHosts(config MockConfig) []models.DockerHost {
@@ -3107,6 +3529,7 @@ func generateSnapshots(vms []models.VM, containers []models.Container) []models.
 // UpdateMetrics simulates changing metrics over time
 func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 	updateDockerHosts(data, config)
+	updateKubernetesClusters(data, config)
 	updateHosts(data, config)
 
 	if !config.RandomMetrics {
@@ -3314,6 +3737,74 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 	}
 
 	data.LastUpdate = time.Now()
+}
+
+func updateKubernetesClusters(data *models.StateSnapshot, config MockConfig) {
+	if len(data.KubernetesClusters) == 0 {
+		return
+	}
+
+	now := time.Now()
+
+	for i := range data.KubernetesClusters {
+		cluster := &data.KubernetesClusters[i]
+
+		if cluster.Status != "offline" {
+			cluster.LastSeen = now.Add(-time.Duration(rand.Intn(12)) * time.Second)
+		} else if config.RandomMetrics && rand.Float64() < 0.01 {
+			cluster.Status = "online"
+			cluster.LastSeen = now
+		}
+
+		if config.RandomMetrics {
+			// Small chance to flip a node Ready state.
+			if len(cluster.Nodes) > 0 && rand.Float64() < 0.05 {
+				idx := rand.Intn(len(cluster.Nodes))
+				cluster.Nodes[idx].Ready = !cluster.Nodes[idx].Ready
+			}
+
+			// Small chance to flip a pod into/out of CrashLoopBackOff.
+			if len(cluster.Pods) > 0 && rand.Float64() < 0.07 {
+				idx := rand.Intn(len(cluster.Pods))
+				pod := &cluster.Pods[idx]
+				if kubernetesPodHealthy(*pod) {
+					pod.Phase = "Running"
+					pod.Reason = ""
+					pod.Message = ""
+					pod.Restarts += 1 + rand.Intn(3)
+					for j := range pod.Containers {
+						pod.Containers[j].Ready = false
+						pod.Containers[j].State = "waiting"
+						pod.Containers[j].Reason = "CrashLoopBackOff"
+						pod.Containers[j].Message = "Back-off restarting failed container"
+						pod.Containers[j].RestartCount += int32(1 + rand.Intn(3))
+					}
+				} else {
+					pod.Phase = "Running"
+					pod.Reason = ""
+					pod.Message = ""
+					for j := range pod.Containers {
+						pod.Containers[j].Ready = true
+						pod.Containers[j].State = "running"
+						pod.Containers[j].Reason = ""
+						pod.Containers[j].Message = ""
+					}
+				}
+			}
+		}
+
+		if cluster.Status != "offline" {
+			if clusterHasIssues(cluster.Nodes, cluster.Pods, cluster.Deployments) {
+				cluster.Status = "degraded"
+			} else {
+				cluster.Status = "online"
+			}
+		}
+
+		if data.ConnectionHealth != nil {
+			data.ConnectionHealth[kubernetesConnectionPrefix+cluster.ID] = cluster.Status != "offline"
+		}
+	}
 }
 
 func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {

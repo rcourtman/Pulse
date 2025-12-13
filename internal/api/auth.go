@@ -293,7 +293,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		}
 		// Debug logging for failed session validation
 		log.Debug().
-			Str("session_token", cookie.Value[:8]+"...").
+			Str("session_token", safePrefixForLog(cookie.Value, 8)+"...").
 			Str("path", r.URL.Path).
 			Msg("Session validation failed - token not found or expired")
 	} else if err != nil {
@@ -419,7 +419,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 								log.Debug().
 									Bool("secure", isSecure).
 									Str("same_site", sameSiteName).
-									Str("token", token[:8]+"...").
+									Str("token", safePrefixForLog(token, 8)+"...").
 									Str("remote_addr", r.RemoteAddr).
 									Msg("Setting session cookie after successful login")
 

@@ -15,6 +15,7 @@ import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useMetricsViewMode } from '@/stores/metricsViewMode';
 
 interface NodeSummaryTableProps {
   nodes: Node[];
@@ -34,6 +35,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const { isMobile } = useBreakpoint();
+  const { viewMode } = useMetricsViewMode();
 
   const isTemperatureMonitoringEnabled = (node: Node): boolean => {
     const globalEnabled = props.globalTemperatureMonitoringEnabled ?? true;
@@ -335,55 +337,60 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     return sortDirection() === 'asc' ? '▲' : '▼';
   };
 
-  const thClass = "px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap";
+  const thClassBase = "px-2 py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap";
+  const thClass = `${thClassBase} text-center`;
+
+  // Cell class constants for consistency
+  const tdClass = "px-2 py-1 align-middle";
+  const metricColumnStyle = { width: "200px", "min-width": "200px", "max-width": "200px" } as const;
 
   return (
     <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
       <div class="overflow-x-auto">
-        <table class="w-full border-collapse whitespace-nowrap">
+        <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "800px" }}>
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
               <th
-                class={`${thClass} text-left pl-3`}
+                class={`${thClassBase} text-left pl-3`}
                 onClick={() => handleSort('name')}
               >
                 {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'} {renderSortIndicator('name')}
               </th>
-              <th class={thClass} onClick={() => handleSort('uptime')}>
+              <th class={thClass} style={{ "min-width": '80px' }} onClick={() => handleSort('uptime')}>
                 Uptime {renderSortIndicator('uptime')}
               </th>
-              <th class={thClass} onClick={() => handleSort('cpu')}>
+              <th class={thClass} style={{ width: "200px", "min-width": "200px", "max-width": "200px" }} onClick={() => handleSort('cpu')}>
                 CPU {renderSortIndicator('cpu')}
               </th>
-              <th class={thClass} onClick={() => handleSort('memory')}>
+              <th class={thClass} style={{ width: "200px", "min-width": "200px", "max-width": "200px" }} onClick={() => handleSort('memory')}>
                 Memory {renderSortIndicator('memory')}
               </th>
-              <th class={thClass} onClick={() => handleSort('disk')}>
+              <th class={thClass} style={{ width: "200px", "min-width": "200px", "max-width": "200px" }} onClick={() => handleSort('disk')}>
                 Disk {renderSortIndicator('disk')}
               </th>
               <Show when={hasAnyTemperatureData()}>
-                <th class={thClass} onClick={() => handleSort('temperature')}>
+                <th class={thClass} style={{ "min-width": '60px' }} onClick={() => handleSort('temperature')}>
                   Temp {renderSortIndicator('temperature')}
                 </th>
               </Show>
               <Show when={props.currentTab === 'dashboard'}>
-                <th class={thClass} onClick={() => handleSort('vmCount')}>
+                <th class={thClass} style={{ "min-width": '50px' }} onClick={() => handleSort('vmCount')}>
                   VMs {renderSortIndicator('vmCount')}
                 </th>
-                <th class={thClass} onClick={() => handleSort('containerCount')}>
+                <th class={thClass} style={{ "min-width": '50px' }} onClick={() => handleSort('containerCount')}>
                   CTs {renderSortIndicator('containerCount')}
                 </th>
               </Show>
               <Show when={props.currentTab === 'storage'}>
-                <th class={thClass} onClick={() => handleSort('storageCount')}>
+                <th class={thClass} style={{ "min-width": '70px' }} onClick={() => handleSort('storageCount')}>
                   Storage {renderSortIndicator('storageCount')}
                 </th>
-                <th class={thClass} onClick={() => handleSort('diskCount')}>
+                <th class={thClass} style={{ "min-width": '60px' }} onClick={() => handleSort('diskCount')}>
                   Disks {renderSortIndicator('diskCount')}
                 </th>
               </Show>
               <Show when={props.currentTab === 'backups'}>
-                <th class={thClass} onClick={() => handleSort('backupCount')}>
+                <th class={thClass} style={{ "min-width": '70px' }} onClick={() => handleSort('backupCount')}>
                   Backups {renderSortIndicator('backupCount')}
                 </th>
               </Show>
@@ -475,7 +482,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 return (
                   <tr
                     class={rowClass()}
-                    style={rowStyle()}
+                    style={{ ...rowStyle(), height: '29px', 'max-height': '29px' }}
                     onClick={() => props.onNodeClick(nodeId, isPVEItem ? 'pve' : 'pbs')}
                   >
                     {/* Name */}
@@ -541,7 +548,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* Uptime */}
-                    <td class="px-2 py-1 align-middle">
+                    <td class={tdClass}>
                       <div class="flex justify-center">
                         <span
                           class={`text-xs whitespace-nowrap ${isPVEItem && (node?.uptime ?? 0) < 3600
@@ -559,13 +566,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* CPU */}
-                    <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+                    <td class={tdClass} style={metricColumnStyle}>
                       <Show when={isMobile()}>
-                        <div class="md:hidden flex justify-center">
+                        <div class="md:hidden h-4 flex items-center justify-center">
                           <MetricText value={cpuPercentValue} type="cpu" />
                         </div>
                       </Show>
-                      <div class="hidden md:block">
+                      <div class="hidden md:block h-4">
                         <Show when={isPVEItem} fallback={
                           <ResponsiveMetricCell
                             value={cpuPercentValue}
@@ -587,13 +594,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* Memory */}
-                    <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+                    <td class={tdClass} style={metricColumnStyle}>
                       <Show when={isMobile()}>
-                        <div class="md:hidden flex justify-center">
+                        <div class="md:hidden h-4 flex items-center justify-center">
                           <MetricText value={memoryPercentValue} type="memory" />
                         </div>
                       </Show>
-                      <div class="hidden md:block">
+                      <div class="hidden md:block h-4">
                         <Show when={isPVEItem} fallback={
                           <ResponsiveMetricCell
                             value={memoryPercentValue}
@@ -604,19 +611,33 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             showMobile={false}
                           />
                         }>
-                          <StackedMemoryBar
-                            used={node!.memory?.used || 0}
-                            total={node!.memory?.total || 0}
-                            balloon={node!.memory?.balloon || 0}
-                            swapUsed={node!.memory?.swapUsed || 0}
-                            swapTotal={node!.memory?.swapTotal || 0}
-                          />
+                          <Show
+                            when={viewMode() === 'sparklines'}
+                            fallback={
+                              <StackedMemoryBar
+                                used={node!.memory?.used || 0}
+                                total={node!.memory?.total || 0}
+                                balloon={node!.memory?.balloon || 0}
+                                swapUsed={node!.memory?.swapUsed || 0}
+                                swapTotal={node!.memory?.swapTotal || 0}
+                                resourceId={metricsKey}
+                              />
+                            }
+                          >
+                            <ResponsiveMetricCell
+                              value={memoryPercentValue}
+                              type="memory"
+                              resourceId={metricsKey}
+                              isRunning={online}
+                              showMobile={false}
+                            />
+                          </Show>
                         </Show>
                       </div>
                     </td>
 
                     {/* Disk */}
-                    <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+                    <td class={tdClass} style={metricColumnStyle}>
                       <ResponsiveMetricCell
                         value={diskPercentValue}
                         type="disk"
@@ -629,7 +650,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
                     {/* Temperature */}
                     <Show when={hasAnyTemperatureData()}>
-                      <td class="px-2 py-1 align-middle">
+                      <td class={tdClass}>
                         <div class="flex justify-center">
                           <Show
                             when={
@@ -681,14 +702,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
                     {/* Dashboard tab: VMs and CTs */}
                     <Show when={props.currentTab === 'dashboard'}>
-                      <td class="px-2 py-1 align-middle">
+                      <td class={tdClass}>
                         <div class="flex justify-center">
                           <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
                             {online ? getCountValue(item, 'vmCount') ?? '-' : '-'}
                           </span>
                         </div>
                       </td>
-                      <td class="px-2 py-1 align-middle">
+                      <td class={tdClass}>
                         <div class="flex justify-center">
                           <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
                             {online ? getCountValue(item, 'containerCount') ?? '-' : '-'}
@@ -699,14 +720,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
                     {/* Storage tab: Storage and Disks */}
                     <Show when={props.currentTab === 'storage'}>
-                      <td class="px-2 py-1 align-middle">
+                      <td class={tdClass}>
                         <div class="flex justify-center">
                           <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
                             {online ? getCountValue(item, 'storageCount') ?? '-' : '-'}
                           </span>
                         </div>
                       </td>
-                      <td class="px-2 py-1 align-middle">
+                      <td class={tdClass}>
                         <div class="flex justify-center">
                           <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
                             {online ? getCountValue(item, 'diskCount') ?? '-' : '-'}
@@ -717,7 +738,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
                     {/* Backups tab: Backups */}
                     <Show when={props.currentTab === 'backups'}>
-                      <td class="px-2 py-1 align-middle">
+                      <td class={tdClass}>
                         <div class="flex justify-center">
                           <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
                             {online ? getCountValue(item, 'backupCount') ?? '-' : '-'}

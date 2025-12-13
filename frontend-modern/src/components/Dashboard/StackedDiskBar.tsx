@@ -122,9 +122,14 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
     });
   });
 
+  // Check if we have any disk details to show
+  const hasDisks = createMemo(() => {
+    return props.disks && props.disks.length > 0;
+  });
+
   // Generate tooltip content
   const tooltipContent = createMemo(() => {
-    if (hasMultipleDisks() && props.disks) {
+    if (hasDisks() && props.disks) {
       return props.disks.map((disk, idx) => {
         const percent = disk.total > 0 ? (disk.used / disk.total) * 100 : 0;
         const label = disk.mountpoint || disk.device || `Disk ${idx + 1}`;
@@ -138,6 +143,17 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
               SEGMENT_COLORS[idx % SEGMENT_COLORS.length],
         };
       });
+    }
+    // Fallback for aggregate disk
+    if (props.aggregateDisk && props.aggregateDisk.total > 0) {
+      const percent = (props.aggregateDisk.used / props.aggregateDisk.total) * 100;
+      return [{
+        label: 'Total',
+        used: formatBytes(props.aggregateDisk.used, 0),
+        total: formatBytes(props.aggregateDisk.total, 0),
+        percent: formatPercent(percent),
+        color: getUsageColor(percent),
+      }];
     }
     return [];
   });
@@ -162,7 +178,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
   });
 
   const handleMouseEnter = (e: MouseEvent) => {
-    if (hasMultipleDisks()) {
+    if (tooltipContent().length > 0) {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
       setShowTooltip(true);
@@ -176,7 +192,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
   return (
     <div ref={containerRef} class="metric-text w-full h-4 flex items-center justify-center">
       <div
-        class="relative w-full max-w-[140px] h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded"
+        class="relative w-full h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
@@ -227,8 +243,8 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
         </span>
       </div>
 
-      {/* Tooltip for multi-disk breakdown */}
-      <Show when={showTooltip() && hasMultipleDisks()}>
+      {/* Tooltip for disk breakdown */}
+      <Show when={showTooltip() && tooltipContent().length > 0}>
         <Portal mount={document.body}>
           <div
             class="fixed z-[9999] pointer-events-none"
@@ -240,13 +256,13 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
           >
             <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[140px] border border-gray-700">
               <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
-                Disk Breakdown
+                {hasMultipleDisks() ? 'Disk Breakdown' : 'Disk Usage'}
               </div>
               <For each={tooltipContent()}>
                 {(item, idx) => (
                   <div class="flex justify-between gap-3 py-0.5" classList={{ 'border-t border-gray-700/50': idx() > 0 }}>
                     <span
-                      class="truncate max-w-[80px]"
+                      class="truncate max-w-[100px]"
                       style={{ color: item.color }}
                     >
                       {item.label}

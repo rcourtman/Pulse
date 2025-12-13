@@ -1,5 +1,9 @@
 # 🛡️ Sensor Proxy Hardening
 
+> **⚠️ Deprecated:** The sensor-proxy is deprecated in favor of the unified Pulse agent.
+> For new installations, use `install.sh --enable-proxmox` instead.
+> See [TEMPERATURE_MONITORING.md](/docs/security/TEMPERATURE_MONITORING.md).
+
 The `pulse-sensor-proxy` runs on the host to securely collect temperatures, keeping SSH keys out of containers.
 
 ## 🏗️ Architecture

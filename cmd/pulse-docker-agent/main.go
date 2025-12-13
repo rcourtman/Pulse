@@ -55,6 +55,12 @@ func main() {
 	logger := zerolog.New(os.Stdout).Level(cfg.LogLevel).With().Timestamp().Logger()
 	cfg.Logger = &logger
 
+	// Deprecation warning
+	logger.Warn().Msg("pulse-docker-agent is DEPRECATED and will be removed in a future release")
+	logger.Warn().Msg("Please migrate to the unified 'pulse-agent' with --enable-docker flag")
+	logger.Warn().Msg("Example: pulse-agent --url <URL> --token <TOKEN> --enable-docker")
+	logger.Warn().Msg("")
+
 	agent, err := dockeragent.New(cfg)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to create docker agent")

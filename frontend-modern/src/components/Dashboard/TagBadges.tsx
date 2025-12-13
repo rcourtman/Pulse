@@ -12,7 +12,8 @@ interface TagBadgesProps {
 }
 
 export const TagBadges: Component<TagBadgesProps> = (props) => {
-  const maxVisible = () => props.maxVisible ?? 3;
+  // maxVisible: 0 means show all, undefined defaults to 3
+  const maxVisible = () => props.maxVisible === 0 ? Infinity : (props.maxVisible ?? 3);
   const darkModeSignal = useDarkMode();
   const isDark = () => props.isDarkMode ?? darkModeSignal();
 

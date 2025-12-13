@@ -22,6 +22,11 @@ func NewDockerMetadataHandler(dataPath string) *DockerMetadataHandler {
 	}
 }
 
+// Store returns the underlying metadata store
+func (h *DockerMetadataHandler) Store() *config.DockerMetadataStore {
+	return h.store
+}
+
 // HandleGetMetadata retrieves metadata for a specific Docker resource or all resources
 func (h *DockerMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

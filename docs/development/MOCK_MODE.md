@@ -25,6 +25,8 @@ Edit `mock.env` (or `mock.env.local` for overrides):
 | `PULSE_MOCK_LXCS_PER_NODE` | `8` | Containers per node. |
 | `PULSE_MOCK_RANDOM_METRICS` | `true` | Jitter metrics. |
 | `PULSE_MOCK_STOPPED_PERCENT` | `20` | % of offline guests. |
+| `PULSE_MOCK_TRENDS_SEED_DURATION` | `1h` | Pre-seed backend chart history (improves demo “Trends” immediately). |
+| `PULSE_MOCK_TRENDS_SAMPLE_INTERVAL` | `30s` | Backend chart sampling interval while in mock mode. |
 
 ## ℹ️ How it Works
 *   **Data**: Swaps `PULSE_DATA_DIR` to `/opt/pulse/tmp/mock-data`.

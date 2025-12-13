@@ -9,6 +9,7 @@ param (
     [string]$Interval = "30s",
     [bool]$EnableHost = $true,
     [bool]$EnableDocker = $false,
+    [bool]$EnableKubernetes = $false,
     [bool]$Insecure = $false,
     [bool]$Uninstall = $false,
     [string]$AgentId = ""
@@ -20,6 +21,43 @@ $BinaryName = "pulse-agent.exe"
 $InstallDir = "C:\Program Files\Pulse"
 $LogFile = "$env:ProgramData\Pulse\pulse-agent.log"
 $DownloadTimeoutSec = 300
+
+function Parse-Bool {
+    param(
+        [string]$Value,
+        [bool]$Default = $false
+    )
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $Default
+    }
+    switch ($Value.Trim().ToLowerInvariant()) {
+        '1' { return $true }
+        'true' { return $true }
+        'yes' { return $true }
+        'y' { return $true }
+        'on' { return $true }
+        '0' { return $false }
+        'false' { return $false }
+        'no' { return $false }
+        'n' { return $false }
+        'off' { return $false }
+        default { return $Default }
+    }
+}
+
+# Support env-var configuration for boolean flags (unless explicitly passed as parameters).
+if (-not $PSBoundParameters.ContainsKey('EnableHost') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_ENABLE_HOST)) {
+    $EnableHost = Parse-Bool $env:PULSE_ENABLE_HOST $EnableHost
+}
+if (-not $PSBoundParameters.ContainsKey('EnableDocker') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_ENABLE_DOCKER)) {
+    $EnableDocker = Parse-Bool $env:PULSE_ENABLE_DOCKER $EnableDocker
+}
+if (-not $PSBoundParameters.ContainsKey('EnableKubernetes') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_ENABLE_KUBERNETES)) {
+    $EnableKubernetes = Parse-Bool $env:PULSE_ENABLE_KUBERNETES $EnableKubernetes
+}
+if (-not $PSBoundParameters.ContainsKey('Insecure') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_INSECURE_SKIP_VERIFY)) {
+    $Insecure = Parse-Bool $env:PULSE_INSECURE_SKIP_VERIFY $Insecure
+}
 
 # --- Administrator Check ---
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -309,6 +347,7 @@ $ServiceArgs = @(
 )
 if ($EnableHost) { $ServiceArgs += "--enable-host" }
 if ($EnableDocker) { $ServiceArgs += "--enable-docker" }
+if ($EnableKubernetes) { $ServiceArgs += "--enable-kubernetes" }
 if ($Insecure) { $ServiceArgs += "--insecure" }
 if (-not [string]::IsNullOrWhiteSpace($AgentId)) { $ServiceArgs += @("--agent-id", "`"$AgentId`"") }
 
@@ -319,7 +358,7 @@ try {
     New-Service -Name $AgentName `
                 -BinaryPathName $BinPath `
                 -DisplayName "Pulse Unified Agent" `
-                -Description "Pulse Unified Agent for Host and Docker monitoring" `
+                -Description "Pulse Unified Agent for Host, Docker, and Kubernetes monitoring" `
                 -StartupType Automatic | Out-Null
     Write-Host "Service created successfully" -ForegroundColor Green
 } catch {

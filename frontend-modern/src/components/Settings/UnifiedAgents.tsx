@@ -8,7 +8,7 @@ import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
 import type { HostLookupResponse } from '@/types/api';
 import type { APITokenRecord } from '@/api/security';
-import { HOST_AGENT_SCOPE, DOCKER_REPORT_SCOPE } from '@/constants/apiScopes';
+import { HOST_AGENT_SCOPE, DOCKER_REPORT_SCOPE, KUBERNETES_REPORT_SCOPE } from '@/constants/apiScopes';
 import { copyToClipboard } from '@/utils/clipboard';
 import { getPulseBaseUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
@@ -108,6 +108,8 @@ export const UnifiedAgents: Component = () => {
     const [lookupError, setLookupError] = createSignal<string | null>(null);
     const [lookupLoading, setLookupLoading] = createSignal(false);
     const [enableDocker, setEnableDocker] = createSignal(false); // Default to false - user must opt-in for Docker monitoring
+    const [enableKubernetes, setEnableKubernetes] = createSignal(false); // Default to false - user must opt-in for Kubernetes monitoring
+    const [enableProxmox, setEnableProxmox] = createSignal(false); // For Proxmox VE/PBS nodes - creates API token and auto-registers
     const [insecureMode, setInsecureMode] = createSignal(false); // For self-signed certificates (issue #806)
 
     createEffect(() => {
@@ -182,15 +184,15 @@ export const UnifiedAgents: Component = () => {
         setIsGeneratingToken(true);
         try {
             const desiredName = tokenName().trim() || buildDefaultTokenName();
-            // Generate token with BOTH scopes
-            const scopes = [HOST_AGENT_SCOPE, DOCKER_REPORT_SCOPE];
+            // Generate token with unified agent reporting scopes
+            const scopes = [HOST_AGENT_SCOPE, DOCKER_REPORT_SCOPE, KUBERNETES_REPORT_SCOPE];
             const { token, record } = await SecurityAPI.createToken(desiredName, scopes);
 
             setCurrentToken(token);
             setLatestRecord(record);
             setTokenName('');
             setConfirmedNoToken(false);
-            notificationStore.success('Token generated with Host and Docker permissions.', 4000);
+            notificationStore.success('Token generated with Host, Docker, and Kubernetes permissions.', 4000);
         } catch (err) {
             logger.error('Failed to generate agent token', err);
             notificationStore.error('Failed to generate agent token. Confirm you are signed in as an administrator.', 6000);
@@ -236,6 +238,8 @@ export const UnifiedAgents: Component = () => {
     };
 
     const getDockerFlag = () => enableDocker() ? ' --enable-docker' : '';
+    const getKubernetesFlag = () => enableKubernetes() ? ' --enable-kubernetes' : '';
+    const getProxmoxFlag = () => enableProxmox() ? ' --enable-proxmox' : '';
     const getInsecureFlag = () => insecureMode() ? ' --insecure' : '';
     const getCurlInsecureFlag = () => insecureMode() ? '-k' : '';
 
@@ -342,19 +346,32 @@ export const UnifiedAgents: Component = () => {
     });
     const hasRemovedDockerHosts = createMemo(() => removedDockerHosts().length > 0);
 
+    const kubernetesClusters = createMemo(() => {
+        const clusters = state.kubernetesClusters || [];
+        return clusters.slice().sort((a, b) => (a.displayName || a.name || a.id).localeCompare(b.displayName || b.name || b.id));
+    });
+
+    const removedKubernetesClusters = createMemo(() => {
+        const removed = state.removedKubernetesClusters || [];
+        return removed.sort((a, b) => b.removedAt - a.removedAt);
+    });
+    const hasRemovedKubernetesClusters = createMemo(() => removedKubernetesClusters().length > 0);
+
     const getUpgradeCommand = (_hostname: string) => {
         const token = resolvedToken();
         return `curl ${getCurlInsecureFlag()}-fsSL ${pulseUrl()}/install.sh | sudo bash -s -- --url ${pulseUrl()} --token ${token}${getInsecureFlag()}`;
     };
 
-    const handleRemoveAgent = async (id: string, type: 'host' | 'docker') => {
+    const handleRemoveAgent = async (id: string, type: 'host' | 'docker' | 'kubernetes') => {
         if (!confirm('Are you sure you want to remove this agent? This will stop monitoring but will not uninstall the agent from the remote machine.')) return;
 
         try {
             if (type === 'host') {
                 await MonitoringAPI.deleteHostAgent(id);
-            } else {
+            } else if (type === 'docker') {
                 await MonitoringAPI.deleteDockerHost(id);
+            } else {
+                await MonitoringAPI.deleteKubernetesCluster(id);
             }
             notificationStore.success('Agent removed from Pulse');
         } catch (err) {
@@ -370,6 +387,16 @@ export const UnifiedAgents: Component = () => {
         } catch (err) {
             logger.error('Failed to allow re-enrollment', err);
             notificationStore.error('Failed to allow re-enrollment');
+        }
+    };
+
+    const handleAllowKubernetesReenroll = async (clusterId: string, name?: string) => {
+        try {
+            await MonitoringAPI.allowKubernetesClusterReenroll(clusterId);
+            notificationStore.success(`Re-enrollment allowed for ${name || clusterId}. Restart the agent to reconnect.`);
+        } catch (err) {
+            logger.error('Failed to allow kubernetes re-enrollment', err);
+            notificationStore.error('Failed to allow kubernetes re-enrollment');
         }
     };
 
@@ -389,7 +416,7 @@ export const UnifiedAgents: Component = () => {
                             <div class="space-y-1">
                                 <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Generate API token</p>
                                 <p class="text-sm text-gray-600 dark:text-gray-400">
-                                    Create a fresh token scoped for both Host and Docker monitoring.
+                                    Create a fresh token scoped for Host, Docker, and Kubernetes monitoring.
                                 </p>
                             </div>
 
@@ -451,26 +478,57 @@ export const UnifiedAgents: Component = () => {
 
                     <Show when={commandsUnlocked()}>
                         <div class="space-y-3">
-                            <div class="flex items-center justify-between">
-                                <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Installation commands</h4>
-                                <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={enableDocker()}
-                                        onChange={(e) => setEnableDocker(e.currentTarget.checked)}
-                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                                    />
-                                    Enable Docker monitoring
-                                </label>
-                                <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
-                                    <input
-                                        type="checkbox"
-                                        checked={insecureMode()}
-                                        onChange={(e) => setInsecureMode(e.currentTarget.checked)}
-                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                                    />
-                                    Skip certificate verification
-                                </label>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Installation commands</h4>
+                                    <div class="flex items-center gap-4">
+                                        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={enableDocker()}
+                                                onChange={(e) => setEnableDocker(e.currentTarget.checked)}
+                                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                            />
+                                            Docker monitoring
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={enableKubernetes()}
+                                                onChange={(e) => setEnableKubernetes(e.currentTarget.checked)}
+                                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                            />
+                                            Kubernetes monitoring
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="For Proxmox VE/PBS nodes - auto-creates API token and registers the node">
+                                            <input
+                                                type="checkbox"
+                                                checked={enableProxmox()}
+                                                onChange={(e) => setEnableProxmox(e.currentTarget.checked)}
+                                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                            />
+                                            Proxmox setup
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
+                                            <input
+                                                type="checkbox"
+                                                checked={insecureMode()}
+                                                onChange={(e) => setInsecureMode(e.currentTarget.checked)}
+                                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                            />
+                                            Skip TLS verify
+                                        </label>
+                                    </div>
+                                </div>
+                                <Show when={enableProxmox()}>
+                                    <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+                                        <p class="font-medium">Proxmox auto-setup enabled</p>
+                                        <p class="text-xs mt-1 text-blue-700 dark:text-blue-300">
+                                            The agent will create a <code class="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">pulse-monitor</code> user and API token on the Proxmox node,
+                                            then register it with Pulse automatically. Includes temperature monitoring.
+                                        </p>
+                                    </div>
+                                </Show>
                             </div>
 
                             <div class="space-y-4">
@@ -490,25 +548,30 @@ export const UnifiedAgents: Component = () => {
                                                             if (insecureMode() && cmd.includes('curl -fsSL')) {
                                                                 cmd = cmd.replace('curl -fsSL', 'curl -kfsSL');
                                                             }
+                                                            // For bash scripts (not PowerShell), append flags directly
+                                                            const isBashScript = !cmd.includes('$env:') && !cmd.includes('irm');
                                                             // Append docker flag if enabled
                                                             if (enableDocker()) {
-                                                                // For PowerShell, we need to handle the env var or args differently
                                                                 if (cmd.includes('$env:PULSE_URL')) {
-                                                                    // Env var style: add $env:PULSE_ENABLE_DOCKER="true";
                                                                     cmd = `$env:PULSE_ENABLE_DOCKER="true"; ` + cmd;
-                                                                } else if (cmd.includes('irm')) {
-                                                                    // Simple irm style: no args passed to script directly in this snippet style
-                                                                    // Actually, the simple irm style relies on prompts, so flags don't apply directly unless we change the snippet
-                                                                    // But for the bash script, we append flags
-                                                                    if (!cmd.includes('irm')) {
-                                                                        cmd += getDockerFlag();
-                                                                    }
-                                                                } else {
+                                                                } else if (isBashScript) {
                                                                     cmd += getDockerFlag();
                                                                 }
                                                             }
+                                                            // Append kubernetes flag if enabled
+                                                            if (enableKubernetes()) {
+                                                                if (cmd.includes('$env:PULSE_URL')) {
+                                                                    cmd = `$env:PULSE_ENABLE_KUBERNETES="true"; ` + cmd;
+                                                                } else if (isBashScript) {
+                                                                    cmd += getKubernetesFlag();
+                                                                }
+                                                            }
+                                                            // Append proxmox flag if enabled (Linux only - Proxmox doesn't run on Windows/macOS)
+                                                            if (enableProxmox() && isBashScript) {
+                                                                cmd += getProxmoxFlag();
+                                                            }
                                                             // Append insecure flag for agent if enabled
-                                                            if (insecureMode() && !cmd.includes('$env:') && !cmd.includes('irm')) {
+                                                            if (insecureMode() && isBashScript) {
                                                                 cmd += getInsecureFlag();
                                                             }
                                                             return cmd;
@@ -779,6 +842,68 @@ export const UnifiedAgents: Component = () => {
                 </Card>
             </Card>
 
+            <Card padding="lg" class="space-y-4">
+                <div class="space-y-1">
+                    <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Kubernetes Clusters</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        Kubernetes clusters currently reporting to Pulse.
+                    </p>
+                </div>
+
+                <Card padding="none" tone="glass" class="overflow-hidden rounded-lg">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Cluster</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Status</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Version</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Last Seen</th>
+                                <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+                            <For each={kubernetesClusters()} fallback={
+                                <tr>
+                                    <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                        No Kubernetes clusters reporting yet.
+                                    </td>
+                                </tr>
+                            }>
+                                {(cluster) => (
+                                    <tr>
+                                        <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                            {cluster.customDisplayName || cluster.displayName || cluster.name || cluster.id}
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-3 text-sm">
+                                            <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${connectedFromStatus(cluster.status)
+                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                                }`}>
+                                                {cluster.status}
+                                            </span>
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                            {cluster.version || cluster.agentVersion || '—'}
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                            {cluster.lastSeen ? formatRelativeTime(cluster.lastSeen) : '—'}
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
+                                            <button
+                                                onClick={() => handleRemoveAgent(cluster.id, 'kubernetes')}
+                                                class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                            >
+                                                Remove
+                                            </button>
+                                        </td>
+                                    </tr>
+                                )}
+                            </For>
+                        </tbody>
+                    </table>
+                </Card>
+            </Card>
+
             <Show when={hasRemovedDockerHosts()}>
                 <Card padding="lg" class="space-y-4">
                     <div class="space-y-1">
@@ -814,6 +939,55 @@ export const UnifiedAgents: Component = () => {
                                             <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
                                                 <button
                                                     onClick={() => handleAllowReenroll(host.id, host.hostname)}
+                                                    class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                                >
+                                                    Allow re-enroll
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </For>
+                            </tbody>
+                        </table>
+                    </Card>
+                </Card>
+            </Show>
+
+            <Show when={hasRemovedKubernetesClusters()}>
+                <Card padding="lg" class="space-y-4">
+                    <div class="space-y-1">
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Removed Kubernetes Clusters</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                            Kubernetes clusters that were removed and are blocked from re-enrolling. Allow re-enrollment to let them report again.
+                        </p>
+                    </div>
+
+                    <Card padding="none" tone="glass" class="overflow-hidden rounded-lg">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-800">
+                                <tr>
+                                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Cluster</th>
+                                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Cluster ID</th>
+                                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Removed</th>
+                                    <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+                                <For each={removedKubernetesClusters()}>
+                                    {(cluster) => (
+                                        <tr>
+                                            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                                {cluster.displayName || cluster.name || 'Unknown'}
+                                            </td>
+                                            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400 font-mono text-xs">
+                                                {cluster.id.slice(0, 8)}...
+                                            </td>
+                                            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                                {formatRelativeTime(cluster.removedAt)}
+                                            </td>
+                                            <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
+                                                <button
+                                                    onClick={() => handleAllowKubernetesReenroll(cluster.id, cluster.displayName || cluster.name)}
                                                     class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                                                 >
                                                     Allow re-enroll

@@ -4,6 +4,7 @@ import type { JSX } from 'solid-js';
 import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
 import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
+import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButton';
 import type { RawOverrideConfig, PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -27,6 +28,8 @@ import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
 import Send from 'lucide-solid/icons/send';
 import Calendar from 'lucide-solid/icons/calendar';
+import { getPatrolStatus, getFindings, getFindingsHistory, getPatrolRunHistory, forcePatrol, subscribeToPatrolStream, dismissFinding, suppressFinding, getSuppressionRules, addSuppressionRule, deleteSuppressionRule, type Finding, type PatrolStatus, type PatrolRunRecord, type SuppressionRule, severityColors, formatTimestamp, categoryLabels } from '@/api/patrol';
+import { aiChatStore } from '@/stores/aiChat';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
 
@@ -492,11 +495,11 @@ export function Alerts() {
   >({}); // Store raw config
 
   // Email configuration state moved to parent to persist across tab changes
-const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
-  enabled: false,
-  provider: '',
-  server: '', // Fixed: use 'server' not 'smtpHost'
-  port: 587, // Fixed: use 'port' not 'smtpPort'
+  const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
+    enabled: false,
+    provider: '',
+    server: '', // Fixed: use 'server' not 'smtpHost'
+    port: 587, // Fixed: use 'port' not 'smtpPort'
     username: '',
     password: '',
     from: '',
@@ -506,12 +509,12 @@ const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
     replyTo: '',
     maxRetries: 3,
     retryDelay: 5,
-  rateLimit: 60,
-});
+    rateLimit: 60,
+  });
 
-const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
-  createDefaultAppriseConfig(),
-);
+  const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
+    createDefaultAppriseConfig(),
+  );
 
   // Schedule configuration state moved to parent to persist across tab changes
   const [scheduleQuietHours, setScheduleQuietHours] =
@@ -782,7 +785,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
           const severityChanged =
             (newOverride.type === 'guest' || newOverride.type === 'dockerContainer') &&
             (newOverride.poweredOffSeverity ?? null) !==
-              (existing.poweredOffSeverity ?? null);
+            (existing.poweredOffSeverity ?? null);
           return (
             thresholdsChanged ||
             connectivityChanged ||
@@ -1432,27 +1435,29 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
     label: string;
     items: { id: AlertTab; label: string; icon: JSX.Element }[];
   }[] = [
-    {
-      id: 'status',
-      label: 'Status',
-      items: [
-        { id: 'overview', label: 'Overview', icon: <LayoutDashboard class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'history', label: 'History', icon: <History class="w-4 h-4" strokeWidth={2} /> },
-      ],
-    },
-    {
-      id: 'configuration',
-      label: 'Configuration',
-      items: [
-        { id: 'thresholds', label: 'Thresholds', icon: <Gauge class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'destinations', label: 'Notifications', icon: <Send class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'schedule', label: 'Schedule', icon: <Calendar class="w-4 h-4" strokeWidth={2} /> },
-      ],
-    },
-  ];
+      {
+        id: 'status',
+        label: 'Status',
+        items: [
+          { id: 'overview', label: 'Overview', icon: <LayoutDashboard class="w-4 h-4" strokeWidth={2} /> },
+          { id: 'history', label: 'History', icon: <History class="w-4 h-4" strokeWidth={2} /> },
+        ],
+      },
+      {
+        id: 'configuration',
+        label: 'Configuration',
+        items: [
+          { id: 'thresholds', label: 'Thresholds', icon: <Gauge class="w-4 h-4" strokeWidth={2} /> },
+          { id: 'destinations', label: 'Notifications', icon: <Send class="w-4 h-4" strokeWidth={2} /> },
+          { id: 'schedule', label: 'Schedule', icon: <Calendar class="w-4 h-4" strokeWidth={2} /> },
+        ],
+      },
+    ];
 
   const flatTabs = tabGroups.flatMap((group) => group.items);
-  const [sidebarCollapsed, setSidebarCollapsed] = createSignal(true);
+  // Sidebar always starts expanded for discoverability (consistent with Settings)
+  // Users can collapse during session but it resets on page reload
+  const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
 
   return (
     <div class="space-y-4">
@@ -1467,9 +1472,8 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
           <Show when={activeTab() === 'overview'}>
             <div class="flex items-center gap-3">
               <span
-                class={`text-sm font-medium ${
-                  isAlertsActive() ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'
-                }`}
+                class={`text-sm font-medium ${isAlertsActive() ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'
+                  }`}
               >
                 {isAlertsActive() ? 'Alerts enabled' : 'Alerts disabled'}
               </span>
@@ -1489,14 +1493,12 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                   }}
                 />
                 <div
-                  class={`relative w-11 h-6 rounded-full transition ${
-                    isAlertsActive() ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
-                  } ${alertsActivation.isLoading() || isSwitchingActivation() ? 'opacity-50' : ''}`}
+                  class={`relative w-11 h-6 rounded-full transition ${isAlertsActive() ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                    } ${alertsActivation.isLoading() || isSwitchingActivation() ? 'opacity-50' : ''}`}
                 >
                   <span
-                    class={`absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white transition-all shadow ${
-                      isAlertsActive() ? 'translate-x-5' : 'translate-x-0'
-                    }`}
+                    class={`absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white transition-all shadow ${isAlertsActive() ? 'translate-x-5' : 'translate-x-0'
+                      }`}
                   />
                 </div>
               </label>
@@ -1745,247 +1747,280 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
         </Card>
       </Show>
 
-      <div class={`transition-opacity ${
-        isAlertsActive() ? 'opacity-100' : 'opacity-50 pointer-events-none'
-      }`}>
+      <div class={`transition-opacity ${isAlertsActive() ? 'opacity-100' : 'opacity-50 pointer-events-none'
+        }`}>
 
-      <Card padding="none" class="relative lg:flex">
-        <div
-          class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-300`}
-          onMouseEnter={() => setSidebarCollapsed(false)}
-          onMouseLeave={() => setSidebarCollapsed(true)}
-          aria-label="Alerts navigation"
-          aria-expanded={!sidebarCollapsed()}
-        >
-          <div class={`sticky top-24 ${sidebarCollapsed() ? 'px-2' : 'px-5'} py-6 space-y-6 transition-all duration-300`}>
-            <div id="alerts-sidebar-menu" class="space-y-6">
-              <For each={tabGroups}>
-                {(group) => (
-                  <div class="space-y-2">
-                    <Show when={!sidebarCollapsed()}>
-                      <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                        {group.label}
-                      </p>
-                    </Show>
-                    <div class="space-y-1.5">
-                      <For each={group.items}>
-                        {(item) => {
-                          const disabled = () => item.id !== 'overview' && !isAlertsActive();
-                          return (
-                            <button
-                              type="button"
-                              aria-current={activeTab() === item.id ? 'page' : undefined}
-                              class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${
-                                activeTab() === item.id
-                                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
-                                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
-                              } ${disabled() ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
-                              disabled={disabled()}
-                              onClick={() => {
-                                if (disabled()) return;
-                                handleTabChange(item.id);
-                              }}
-                              title={
-                                sidebarCollapsed()
-                                  ? disabled()
-                                    ? 'Activate alerts to configure'
-                                    : item.label
-                                  : disabled()
-                                    ? 'Activate alerts to configure'
-                                    : undefined
-                              }
-                            >
-                              {item.icon}
-                              <Show when={!sidebarCollapsed()}>
-                                <span class="truncate">{item.label}</span>
-                              </Show>
-                            </button>
-                          );
-                        }}
-                      </For>
-                    </div>
-                  </div>
-                )}
-              </For>
-            </div>
-          </div>
-        </div>
-
-        <div class="flex-1 min-w-0">
-          <Show when={flatTabs.length > 0}>
-            <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
-              <div class="p-1">
-                <div
-                  class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto"
-                  style="-webkit-overflow-scrolling: touch;"
-                >
-                  <For each={flatTabs}>
-                    {(tab) => {
-                      const disabled = () => tab.id !== 'overview' && !isAlertsActive();
-                      return (
-                        <button
-                          type="button"
-                          class={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
-                            activeTab() === tab.id
-                              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                          } ${disabled() ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
-                          disabled={disabled()}
-                          onClick={() => {
-                            if (disabled()) return;
-                            handleTabChange(tab.id);
-                          }}
-                          title={disabled() ? 'Activate alerts to configure' : undefined}
-                        >
-                          {tab.label}
-                        </button>
-                      );
-                    }}
-                  </For>
+        <Card padding="none" class="relative lg:flex overflow-hidden">
+          <div
+            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-200`}
+            aria-label="Alerts navigation"
+            aria-expanded={!sidebarCollapsed()}
+          >
+            <div
+              class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
+            >
+              <Show when={!sidebarCollapsed()}>
+                <div class="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-700">
+                  <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Alerts</h2>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarCollapsed(true)}
+                    class="p-1 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    aria-label="Collapse sidebar"
+                  >
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+                      />
+                    </svg>
+                  </button>
                 </div>
+              </Show>
+              <Show when={sidebarCollapsed()}>
+                <button
+                  type="button"
+                  onClick={() => setSidebarCollapsed(false)}
+                  class="w-full p-2 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  aria-label="Expand sidebar"
+                >
+                  <svg
+                    class="w-5 h-5 mx-auto"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 5l7 7-7 7M5 5l7 7-7 7"
+                    />
+                  </svg>
+                </button>
+              </Show>
+              <div id="alerts-sidebar-menu" class="space-y-5">
+                <For each={tabGroups}>
+                  {(group) => (
+                    <div class="space-y-2">
+                      <Show when={!sidebarCollapsed()}>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                          {group.label}
+                        </p>
+                      </Show>
+                      <div class="space-y-1.5">
+                        <For each={group.items}>
+                          {(item) => {
+                            const disabled = () => item.id !== 'overview' && !isAlertsActive();
+                            return (
+                              <button
+                                type="button"
+                                aria-current={activeTab() === item.id ? 'page' : undefined}
+                                disabled={disabled()}
+                                class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${disabled()
+                                  ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600'
+                                  : activeTab() === item.id
+                                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
+                                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
+                                  }`}
+                                onClick={() => {
+                                  if (disabled()) return;
+                                  handleTabChange(item.id);
+                                }}
+                                title={sidebarCollapsed() ? item.label : undefined}
+                              >
+                                {item.icon}
+                                <Show when={!sidebarCollapsed()}>
+                                  <span class="truncate">{item.label}</span>
+                                </Show>
+                              </button>
+                            );
+                          }}
+                        </For>
+                      </div>
+                    </div>
+                  )}
+                </For>
               </div>
             </div>
-          </Show>
-
-          {/* Tab Content */}
-          <div class="p-3 sm:p-6">
-            <Show when={activeTab() === 'overview'}>
-              <OverviewTab
-                overrides={overrides()}
-                activeAlerts={activeAlerts}
-                updateAlert={updateAlert}
-              showQuickTip={showQuickTip}
-              dismissQuickTip={dismissQuickTip}
-              showAcknowledged={showAcknowledged}
-              setShowAcknowledged={setShowAcknowledged}
-            />
-          </Show>
-
-          <Show when={activeTab() === 'thresholds'}>
-            <ThresholdsTab
-              overrides={overrides}
-              setOverrides={setOverrides}
-              rawOverridesConfig={rawOverridesConfig}
-              setRawOverridesConfig={setRawOverridesConfig}
-              allGuests={allGuests}
-              state={state}
-              hosts={state.hosts || []}
-              guestDefaults={guestDefaults}
-              guestDisableConnectivity={guestDisableConnectivity}
-              setGuestDefaults={setGuestDefaults}
-              setGuestDisableConnectivity={setGuestDisableConnectivity}
-              guestPoweredOffSeverity={guestPoweredOffSeverity}
-              setGuestPoweredOffSeverity={setGuestPoweredOffSeverity}
-              nodeDefaults={nodeDefaults}
-              setNodeDefaults={setNodeDefaults}
-              hostDefaults={hostDefaults}
-              setHostDefaults={setHostDefaults}
-              dockerDefaults={dockerDefaults}
-              dockerDisableConnectivity={dockerDisableConnectivity}
-              setDockerDisableConnectivity={setDockerDisableConnectivity}
-              dockerPoweredOffSeverity={dockerPoweredOffSeverity}
-              setDockerPoweredOffSeverity={setDockerPoweredOffSeverity}
-              setDockerDefaults={setDockerDefaults}
-              dockerIgnoredPrefixes={dockerIgnoredPrefixes}
-              setDockerIgnoredPrefixes={setDockerIgnoredPrefixes}
-              storageDefault={storageDefault}
-              setStorageDefault={setStorageDefault}
-              resetGuestDefaults={resetGuestDefaults}
-              resetNodeDefaults={resetNodeDefaults}
-              resetHostDefaults={resetHostDefaults}
-              resetDockerDefaults={resetDockerDefaults}
-              resetDockerIgnoredPrefixes={resetDockerIgnoredPrefixes}
-              resetStorageDefault={resetStorageDefault}
-              resetSnapshotDefaults={resetSnapshotDefaults}
-              resetBackupDefaults={resetBackupDefaults}
-              factoryGuestDefaults={FACTORY_GUEST_DEFAULTS}
-              factoryNodeDefaults={FACTORY_NODE_DEFAULTS}
-              factoryHostDefaults={FACTORY_HOST_DEFAULTS}
-              factoryDockerDefaults={FACTORY_DOCKER_DEFAULTS}
-              factoryStorageDefault={FACTORY_STORAGE_DEFAULT}
-              snapshotFactoryDefaults={FACTORY_SNAPSHOT_DEFAULTS}
-              backupFactoryDefaults={FACTORY_BACKUP_DEFAULTS}
-              timeThresholds={timeThresholds}
-              metricTimeThresholds={metricTimeThresholds}
-              setMetricTimeThresholds={setMetricTimeThresholds}
-              backupDefaults={backupDefaults}
-              setBackupDefaults={setBackupDefaults}
-              snapshotDefaults={snapshotDefaults}
-              setSnapshotDefaults={setSnapshotDefaults}
-              pmgThresholds={pmgThresholds}
-              setPMGThresholds={setPMGThresholds}
-              activeAlerts={activeAlerts}
-              setHasUnsavedChanges={setHasUnsavedChanges}
-              hasUnsavedChanges={hasUnsavedChanges}
-              removeAlerts={removeAlerts}
-              disableAllNodes={disableAllNodes}
-              setDisableAllNodes={setDisableAllNodes}
-              disableAllGuests={disableAllGuests}
-              setDisableAllGuests={setDisableAllGuests}
-              disableAllHosts={disableAllHosts}
-              setDisableAllHosts={setDisableAllHosts}
-              disableAllStorage={disableAllStorage}
-              setDisableAllStorage={setDisableAllStorage}
-              disableAllPBS={disableAllPBS}
-              setDisableAllPBS={setDisableAllPBS}
-              disableAllPMG={disableAllPMG}
-              setDisableAllPMG={setDisableAllPMG}
-  disableAllDockerHosts={disableAllDockerHosts}
-  setDisableAllDockerHosts={setDisableAllDockerHosts}
-  disableAllDockerServices={disableAllDockerServices}
-  setDisableAllDockerServices={setDisableAllDockerServices}
-  disableAllDockerContainers={disableAllDockerContainers}
-  setDisableAllDockerContainers={setDisableAllDockerContainers}
-              disableAllNodesOffline={disableAllNodesOffline}
-              setDisableAllNodesOffline={setDisableAllNodesOffline}
-              disableAllGuestsOffline={disableAllGuestsOffline}
-              setDisableAllGuestsOffline={setDisableAllGuestsOffline}
-              disableAllHostsOffline={disableAllHostsOffline}
-              setDisableAllHostsOffline={setDisableAllHostsOffline}
-              disableAllPBSOffline={disableAllPBSOffline}
-              setDisableAllPBSOffline={setDisableAllPBSOffline}
-              disableAllPMGOffline={disableAllPMGOffline}
-              setDisableAllPMGOffline={setDisableAllPMGOffline}
-              disableAllDockerHostsOffline={disableAllDockerHostsOffline}
-              setDisableAllDockerHostsOffline={setDisableAllDockerHostsOffline}
-            />
-          </Show>
-
-          <Show when={activeTab() === 'destinations'}>
-            <DestinationsTab
-              ref={destinationsRef}
-              hasUnsavedChanges={hasUnsavedChanges}
-              setHasUnsavedChanges={setHasUnsavedChanges}
-              emailConfig={emailConfig}
-              setEmailConfig={setEmailConfig}
-              appriseConfig={appriseConfig}
-              setAppriseConfig={setAppriseConfig}
-            />
-          </Show>
-
-          <Show when={activeTab() === 'schedule'}>
-            <ScheduleTab
-              hasUnsavedChanges={hasUnsavedChanges}
-              setHasUnsavedChanges={setHasUnsavedChanges}
-              quietHours={scheduleQuietHours}
-              setQuietHours={setScheduleQuietHours}
-              cooldown={scheduleCooldown}
-              setCooldown={setScheduleCooldown}
-              grouping={scheduleGrouping}
-              setGrouping={setScheduleGrouping}
-              notifyOnResolve={notifyOnResolve}
-              setNotifyOnResolve={setNotifyOnResolve}
-              escalation={scheduleEscalation}
-              setEscalation={setScheduleEscalation}
-            />
-          </Show>
-
-          <Show when={activeTab() === 'history'}>
-            <HistoryTab />
-          </Show>
           </div>
-        </div>
-      </Card>
+
+          <div class="flex-1 overflow-hidden">
+            <Show when={flatTabs.length > 0}>
+              <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
+                <div class="p-1">
+                  <div
+                    class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto"
+                    style="-webkit-overflow-scrolling: touch;"
+                  >
+                    <For each={flatTabs}>
+                      {(tab) => {
+                        const disabled = () => tab.id !== 'overview' && !isAlertsActive();
+                        return (
+                          <button
+                            type="button"
+                            class={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all whitespace-nowrap ${activeTab() === tab.id
+                              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                              } ${disabled() ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+                            disabled={disabled()}
+                            onClick={() => {
+                              if (disabled()) return;
+                              handleTabChange(tab.id);
+                            }}
+                            title={disabled() ? 'Activate alerts to configure' : undefined}
+                          >
+                            {tab.label}
+                          </button>
+                        );
+                      }}
+                    </For>
+                  </div>
+                </div>
+              </div>
+            </Show>
+
+            {/* Tab Content */}
+            <div class="p-3 sm:p-6">
+              <Show when={activeTab() === 'overview'}>
+                <OverviewTab
+                  overrides={overrides()}
+                  activeAlerts={activeAlerts}
+                  updateAlert={updateAlert}
+                  showQuickTip={showQuickTip}
+                  dismissQuickTip={dismissQuickTip}
+                  showAcknowledged={showAcknowledged}
+                  setShowAcknowledged={setShowAcknowledged}
+                />
+              </Show>
+
+              <Show when={activeTab() === 'thresholds'}>
+                <ThresholdsTab
+                  overrides={overrides}
+                  setOverrides={setOverrides}
+                  rawOverridesConfig={rawOverridesConfig}
+                  setRawOverridesConfig={setRawOverridesConfig}
+                  allGuests={allGuests}
+                  state={state}
+                  hosts={state.hosts || []}
+                  guestDefaults={guestDefaults}
+                  guestDisableConnectivity={guestDisableConnectivity}
+                  setGuestDefaults={setGuestDefaults}
+                  setGuestDisableConnectivity={setGuestDisableConnectivity}
+                  guestPoweredOffSeverity={guestPoweredOffSeverity}
+                  setGuestPoweredOffSeverity={setGuestPoweredOffSeverity}
+                  nodeDefaults={nodeDefaults}
+                  setNodeDefaults={setNodeDefaults}
+                  hostDefaults={hostDefaults}
+                  setHostDefaults={setHostDefaults}
+                  dockerDefaults={dockerDefaults}
+                  dockerDisableConnectivity={dockerDisableConnectivity}
+                  setDockerDisableConnectivity={setDockerDisableConnectivity}
+                  dockerPoweredOffSeverity={dockerPoweredOffSeverity}
+                  setDockerPoweredOffSeverity={setDockerPoweredOffSeverity}
+                  setDockerDefaults={setDockerDefaults}
+                  dockerIgnoredPrefixes={dockerIgnoredPrefixes}
+                  setDockerIgnoredPrefixes={setDockerIgnoredPrefixes}
+                  storageDefault={storageDefault}
+                  setStorageDefault={setStorageDefault}
+                  resetGuestDefaults={resetGuestDefaults}
+                  resetNodeDefaults={resetNodeDefaults}
+                  resetHostDefaults={resetHostDefaults}
+                  resetDockerDefaults={resetDockerDefaults}
+                  resetDockerIgnoredPrefixes={resetDockerIgnoredPrefixes}
+                  resetStorageDefault={resetStorageDefault}
+                  resetSnapshotDefaults={resetSnapshotDefaults}
+                  resetBackupDefaults={resetBackupDefaults}
+                  factoryGuestDefaults={FACTORY_GUEST_DEFAULTS}
+                  factoryNodeDefaults={FACTORY_NODE_DEFAULTS}
+                  factoryHostDefaults={FACTORY_HOST_DEFAULTS}
+                  factoryDockerDefaults={FACTORY_DOCKER_DEFAULTS}
+                  factoryStorageDefault={FACTORY_STORAGE_DEFAULT}
+                  snapshotFactoryDefaults={FACTORY_SNAPSHOT_DEFAULTS}
+                  backupFactoryDefaults={FACTORY_BACKUP_DEFAULTS}
+                  timeThresholds={timeThresholds}
+                  metricTimeThresholds={metricTimeThresholds}
+                  setMetricTimeThresholds={setMetricTimeThresholds}
+                  backupDefaults={backupDefaults}
+                  setBackupDefaults={setBackupDefaults}
+                  snapshotDefaults={snapshotDefaults}
+                  setSnapshotDefaults={setSnapshotDefaults}
+                  pmgThresholds={pmgThresholds}
+                  setPMGThresholds={setPMGThresholds}
+                  activeAlerts={activeAlerts}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                  hasUnsavedChanges={hasUnsavedChanges}
+                  removeAlerts={removeAlerts}
+                  disableAllNodes={disableAllNodes}
+                  setDisableAllNodes={setDisableAllNodes}
+                  disableAllGuests={disableAllGuests}
+                  setDisableAllGuests={setDisableAllGuests}
+                  disableAllHosts={disableAllHosts}
+                  setDisableAllHosts={setDisableAllHosts}
+                  disableAllStorage={disableAllStorage}
+                  setDisableAllStorage={setDisableAllStorage}
+                  disableAllPBS={disableAllPBS}
+                  setDisableAllPBS={setDisableAllPBS}
+                  disableAllPMG={disableAllPMG}
+                  setDisableAllPMG={setDisableAllPMG}
+                  disableAllDockerHosts={disableAllDockerHosts}
+                  setDisableAllDockerHosts={setDisableAllDockerHosts}
+                  disableAllDockerServices={disableAllDockerServices}
+                  setDisableAllDockerServices={setDisableAllDockerServices}
+                  disableAllDockerContainers={disableAllDockerContainers}
+                  setDisableAllDockerContainers={setDisableAllDockerContainers}
+                  disableAllNodesOffline={disableAllNodesOffline}
+                  setDisableAllNodesOffline={setDisableAllNodesOffline}
+                  disableAllGuestsOffline={disableAllGuestsOffline}
+                  setDisableAllGuestsOffline={setDisableAllGuestsOffline}
+                  disableAllHostsOffline={disableAllHostsOffline}
+                  setDisableAllHostsOffline={setDisableAllHostsOffline}
+                  disableAllPBSOffline={disableAllPBSOffline}
+                  setDisableAllPBSOffline={setDisableAllPBSOffline}
+                  disableAllPMGOffline={disableAllPMGOffline}
+                  setDisableAllPMGOffline={setDisableAllPMGOffline}
+                  disableAllDockerHostsOffline={disableAllDockerHostsOffline}
+                  setDisableAllDockerHostsOffline={setDisableAllDockerHostsOffline}
+                />
+              </Show>
+
+              <Show when={activeTab() === 'destinations'}>
+                <DestinationsTab
+                  ref={destinationsRef}
+                  hasUnsavedChanges={hasUnsavedChanges}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                  emailConfig={emailConfig}
+                  setEmailConfig={setEmailConfig}
+                  appriseConfig={appriseConfig}
+                  setAppriseConfig={setAppriseConfig}
+                />
+              </Show>
+
+              <Show when={activeTab() === 'schedule'}>
+                <ScheduleTab
+                  hasUnsavedChanges={hasUnsavedChanges}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                  quietHours={scheduleQuietHours}
+                  setQuietHours={setScheduleQuietHours}
+                  cooldown={scheduleCooldown}
+                  setCooldown={setScheduleCooldown}
+                  grouping={scheduleGrouping}
+                  setGrouping={setScheduleGrouping}
+                  notifyOnResolve={notifyOnResolve}
+                  setNotifyOnResolve={setNotifyOnResolve}
+                  escalation={scheduleEscalation}
+                  setEscalation={setScheduleEscalation}
+                />
+              </Show>
+
+              <Show when={activeTab() === 'history'}>
+                <HistoryTab />
+              </Show>
+            </div>
+          </div>
+        </Card>
       </div>
     </div>
   );
@@ -2004,6 +2039,232 @@ function OverviewTab(props: {
   // Loading states for buttons
   const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
 
+  // AI Patrol findings state
+  const [aiFindings, setAiFindings] = createSignal<Finding[]>([]);
+  const [patrolStatus, setPatrolStatus] = createSignal<PatrolStatus | null>(null);
+  const [patrolRunHistory, setPatrolRunHistory] = createSignal<PatrolRunRecord[]>([]);
+  // Track findings user marked as "I Fixed It" - hidden until next patrol verifies
+  const [pendingFixFindings, setPendingFixFindings] = createSignal<Set<string>>(new Set());
+  const [lastKnownPatrolAt, setLastKnownPatrolAt] = createSignal<string | null>(null);
+  const [showRunHistory, setShowRunHistory] = createSignal(false);
+  const [forcePatrolLoading, setForcePatrolLoading] = createSignal(false);
+  const [expandedRunId, setExpandedRunId] = createSignal<string | null>(null);
+  const [historyTimeFilter, setHistoryTimeFilter] = createSignal<'24h' | '7d' | 'all'>('all');
+  // Suppression rules management
+  const [suppressionRules, setSuppressionRules] = createSignal<SuppressionRule[]>([]);
+  const [showSuppressionRules, setShowSuppressionRules] = createSignal(false);
+  const [showAddRuleForm, setShowAddRuleForm] = createSignal(false);
+  const [newRuleResource, setNewRuleResource] = createSignal('');
+  const [newRuleCategory, setNewRuleCategory] = createSignal('');
+  const [newRuleDescription, setNewRuleDescription] = createSignal('');
+  // Live streaming state for running patrol
+  const [expandedLiveStream, setExpandedLiveStream] = createSignal(false);
+  // Track streaming blocks for sequential display (like AI chat)
+  interface StreamBlock {
+    type: 'phase' | 'content' | 'thinking';
+    text: string;
+    timestamp: number;
+  }
+  const [liveStreamBlocks, setLiveStreamBlocks] = createSignal<StreamBlock[]>([]);
+  const [currentThinking, setCurrentThinking] = createSignal('');
+  let liveStreamUnsubscribe: (() => void) | null = null;
+
+  // Effect to manage live stream subscription when expanded
+  createEffect(() => {
+    const isExpanded = expandedLiveStream();
+    const isRunning = patrolStatus()?.running;
+
+    if (isExpanded && isRunning && !liveStreamUnsubscribe) {
+      // Subscribe to stream
+      liveStreamUnsubscribe = subscribeToPatrolStream(
+        (event) => {
+          if (event.type === 'start') {
+            // Clear previous content
+            setLiveStreamBlocks([]);
+            setCurrentThinking('');
+          } else if (event.type === 'thinking' && event.content) {
+            // Thinking events are separate blocks - just like AI chat
+            // Finalize any current content first
+            const current = currentThinking();
+            if (current.trim()) {
+              setLiveStreamBlocks(prev => [...prev, {
+                type: 'thinking',
+                text: current.trim(),
+                timestamp: Date.now()
+              }]);
+              setCurrentThinking('');
+            }
+            // Add the thinking chunk as a new block
+            setLiveStreamBlocks(prev => [...prev, {
+              type: 'thinking',
+              text: event.content!.trim(),
+              timestamp: Date.now()
+            }]);
+          } else if (event.type === 'content' && event.content) {
+            // Content streams into current block
+            setCurrentThinking(prev => prev + event.content);
+          } else if (event.type === 'complete') {
+            // Finalize current thinking block
+            const finalThinking = currentThinking();
+            if (finalThinking.trim()) {
+              setLiveStreamBlocks(prev => [...prev, {
+                type: 'thinking',
+                text: finalThinking.trim(),
+                timestamp: Date.now()
+              }]);
+              setCurrentThinking('');
+            }
+            // Mark as complete
+            setLiveStreamBlocks(prev => [...prev, {
+              type: 'phase',
+              text: 'Analysis complete',
+              timestamp: Date.now()
+            }]);
+            // Patrol completed, refresh data
+            fetchAiData();
+          }
+          // Ignore 'phase' events - they're internal
+        },
+        () => {
+          // Error - just log it
+          console.error('Patrol stream error');
+        }
+      );
+    } else if ((!isExpanded || !isRunning) && liveStreamUnsubscribe) {
+      // Unsubscribe
+      liveStreamUnsubscribe();
+      liveStreamUnsubscribe = null;
+      if (!isRunning) {
+        setLiveStreamBlocks([]);
+        setCurrentThinking('');
+        setExpandedLiveStream(false);
+      }
+    }
+  });
+
+  // Cleanup on unmount
+  onCleanup(() => {
+    if (liveStreamUnsubscribe) {
+      liveStreamUnsubscribe();
+      liveStreamUnsubscribe = null;
+    }
+  });
+
+  // Fetch AI data - extracted for reuse
+  const fetchAiData = async () => {
+    try {
+      const [status, findings, runHistory, rules] = await Promise.all([
+        getPatrolStatus(),
+        getFindings(),
+        getPatrolRunHistory(50), // Fetch more for filtering
+        getSuppressionRules().catch(() => []) // May not be available
+      ]);
+
+      // Check if a new patrol has completed - if so, clear pending fix findings
+      const newPatrolAt = status.last_patrol_at;
+      if (newPatrolAt && newPatrolAt !== lastKnownPatrolAt()) {
+        setLastKnownPatrolAt(newPatrolAt);
+        // Clear pending fixes - the patrol has now verified what's actually fixed
+        if (pendingFixFindings().size > 0) {
+          setPendingFixFindings(new Set<string>());
+        }
+      }
+
+      setPatrolStatus(status);
+      setAiFindings(findings || []);
+      setPatrolRunHistory(runHistory || []);
+      setSuppressionRules(rules || []);
+
+      // Auto-expand history if most recent run found issues
+      if (runHistory && runHistory.length > 0 && runHistory[0].status !== 'healthy') {
+        setShowRunHistory(true);
+      }
+    } catch (_e) {
+      // AI patrol may not be enabled - silently fail
+    }
+  };
+
+  // Handle force patrol button click
+  const handleForcePatrol = async (deep: boolean = false) => {
+    setForcePatrolLoading(true);
+    try {
+      const result = await forcePatrol(deep);
+      if (!result.success) {
+        showError(result.message || 'Failed to start patrol');
+        setForcePatrolLoading(false);
+        return;
+      }
+      showSuccess('Patrol started - results will appear shortly');
+      // Wait a bit for the patrol to start and potentially complete
+      setTimeout(() => {
+        fetchAiData();
+        setForcePatrolLoading(false);
+      }, 2000);
+    } catch (e) {
+      console.error('Force patrol error:', e);
+      showError('Failed to start patrol: ' + (e instanceof Error ? e.message : 'Unknown error'));
+      setForcePatrolLoading(false);
+    }
+  };
+
+  // Filter patrol history by time
+  const filteredPatrolHistory = createMemo(() => {
+    const history = patrolRunHistory();
+    const filter = historyTimeFilter();
+    if (filter === 'all') return history;
+
+    const now = Date.now();
+    const cutoffs = {
+      '24h': now - 24 * 60 * 60 * 1000,
+      '7d': now - 7 * 24 * 60 * 60 * 1000,
+    };
+    const cutoff = cutoffs[filter];
+    return history.filter(r => new Date(r.completed_at).getTime() > cutoff);
+  });
+
+  // Calculate next patrol time
+  const nextPatrolIn = createMemo(() => {
+    const status = patrolStatus();
+    if (!status) return null;
+
+    let nextPatrolTime: number;
+
+    // Use next_patrol_at from backend if available
+    if (status.next_patrol_at) {
+      nextPatrolTime = new Date(status.next_patrol_at).getTime();
+    } else if (status.last_patrol_at && status.interval_ms) {
+      // Calculate from last patrol + interval
+      const lastPatrol = new Date(status.last_patrol_at).getTime();
+      nextPatrolTime = lastPatrol + status.interval_ms;
+    } else {
+      return null;
+    }
+
+    const now = Date.now();
+    const remainingMs = nextPatrolTime - now;
+
+    if (remainingMs <= 0) return 'Soon';
+
+    const hours = Math.floor(remainingMs / 3600000);
+    const minutes = Math.floor((remainingMs % 3600000) / 60000);
+    const seconds = Math.floor((remainingMs % 60000) / 1000);
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
+  });
+
+  // Fetch AI findings on mount and every 30 seconds
+  onMount(() => {
+    fetchAiData();
+    const interval = setInterval(fetchAiData, 30000);
+    onCleanup(() => clearInterval(interval));
+  });
+
   // Get alert stats from actual active alerts
   const alertStats = createMemo(() => {
     // Access the store properly for reactivity
@@ -2016,6 +2277,7 @@ function OverviewTab(props: {
       overrides: props.overrides.length,
     };
   });
+
 
   const filteredAlerts = createMemo(() => {
     const alerts = Object.values(props.activeAlerts);
@@ -2038,34 +2300,23 @@ function OverviewTab(props: {
 
   const [bulkAckProcessing, setBulkAckProcessing] = createSignal(false);
 
+  // Sub-tab for switching between AI Insights and Active Alerts
+  type OverviewSubTab = 'ai-insights' | 'active-alerts';
+
+  // Read subtab from URL query parameter to allow deep linking
+  const location = useLocation();
+  const getInitialSubTab = (): OverviewSubTab => {
+    const params = new URLSearchParams(location.search);
+    const subtab = params.get('subtab');
+    if (subtab === 'ai-insights') return 'ai-insights';
+    return 'active-alerts';
+  };
+  const [overviewSubTab, setOverviewSubTab] = createSignal<OverviewSubTab>(getInitialSubTab());
+
   return (
     <div class="space-y-6">
-      {/* Stats Cards */}
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
-        <Card padding="sm" class="sm:p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Active Alerts</p>
-              <p class="text-xl sm:text-2xl font-semibold text-gray-600 dark:text-gray-300">
-                {alertStats().active}
-              </p>
-            </div>
-            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-red-100 dark:bg-red-900/50 rounded-full flex items-center justify-center">
-              <svg
-                width="16"
-                height="16"
-                class="sm:w-5 sm:h-5 text-red-600 dark:text-red-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-              </svg>
-            </div>
-          </div>
-        </Card>
+      {/* Stats Cards - only show cards not duplicated in sub-tabs */}
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
 
         <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
@@ -2143,257 +2394,1154 @@ function OverviewTab(props: {
         </Card>
       </div>
 
-      {/* Recent Alerts */}
-      <div>
-        <SectionHeader title="Active Alerts" size="md" class="mb-3" />
-        <Show
-          when={Object.keys(props.activeAlerts).length > 0}
-          fallback={
-            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-              <div class="flex justify-center mb-3">
-                <svg class="w-12 h-12 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
+      {/* Sub-tabs for AI Insights vs Active Alerts */}
+      <Show when={patrolStatus()?.enabled}>
+        <div class="flex items-center gap-1 border-b border-gray-200 dark:border-gray-700/50 pb-1">
+          <button
+            class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${overviewSubTab() === 'active-alerts'
+              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-b-0 border-gray-200 dark:border-gray-700'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            onClick={() => setOverviewSubTab('active-alerts')}
+          >
+            Active Alerts
+            <Show when={alertStats().active > 0}>
+              <span class="ml-2 px-1.5 py-0.5 text-xs font-medium rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
+                {alertStats().active}
+              </span>
+            </Show>
+          </button>
+          <button
+            class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${overviewSubTab() === 'ai-insights'
+              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-b-0 border-gray-200 dark:border-gray-700'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            onClick={() => setOverviewSubTab('ai-insights')}
+          >
+            AI Insights
+            <Show when={aiFindings().length > 0}>
+              <span class="ml-2 px-1.5 py-0.5 text-xs font-medium rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300">
+                {aiFindings().length}
+              </span>
+            </Show>
+          </button>
+        </div>
+      </Show>
+
+      {/* AI Insights Section - show when AI tab selected and there are findings */}
+      <Show when={overviewSubTab() === 'ai-insights' && patrolStatus()?.enabled}>
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <SectionHeader
+              title="AI Insights"
+              size="md"
+              class="mb-0"
+            />
+            <button
+              class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700 hover:bg-purple-200 dark:hover:bg-purple-900/60 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => handleForcePatrol(true)}
+              disabled={forcePatrolLoading() || patrolStatus()?.running}
+              title={patrolStatus()?.running ? 'Patrol in progress - see table below' : 'Run a patrol check now'}
+            >
+              <span class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-              </div>
-              <p class="text-sm">No active alerts</p>
-              <p class="text-xs mt-1">Alerts will appear here when thresholds are exceeded</p>
+                Run Patrol
+              </span>
+            </button>
+          </div>
+
+          {/* Summary Stats Bar */}
+          <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 mb-4 flex flex-wrap items-center gap-4 text-xs">
+            <div class="flex items-center gap-1.5">
+              <span class="text-gray-500 dark:text-gray-400">Runs:</span>
+              <span class="font-medium text-gray-700 dark:text-gray-300">{patrolRunHistory().length}</span>
             </div>
-          }
-        >
-          <Show when={alertStats().acknowledged > 0 || alertStats().active > 0}>
-            <div class="flex flex-wrap items-center justify-between gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-t-lg border border-gray-200 dark:border-gray-700">
-              <Show when={alertStats().acknowledged > 0}>
-                <button
-                  onClick={() => props.setShowAcknowledged(!props.showAcknowledged())}
-                  class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                >
-                  {props.showAcknowledged() ? 'Hide' : 'Show'} acknowledged
-                </button>
-              </Show>
-              <Show when={alertStats().active > 0}>
-                <button
-                  type="button"
-                  class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-60 disabled:cursor-not-allowed"
-                  disabled={bulkAckProcessing()}
-                  onClick={async () => {
-                    if (bulkAckProcessing()) return;
-                    const pending = unacknowledgedAlerts();
-                    if (pending.length === 0) {
-                      return;
-                    }
-                    setBulkAckProcessing(true);
-                    try {
-                      const result = await AlertsAPI.bulkAcknowledge(pending.map((alert) => alert.id));
-                      const successes = result.results.filter((r) => r.success);
-                      const failures = result.results.filter((r) => !r.success);
-
-                      successes.forEach((res) => {
-                        props.updateAlert(res.alertId, {
-                          acknowledged: true,
-                          ackTime: new Date().toISOString(),
-                        });
-                      });
-
-                      if (successes.length > 0) {
-                        showSuccess(
-                          `Acknowledged ${successes.length} ${successes.length === 1 ? 'alert' : 'alerts'}.`,
-                        );
-                      }
-
-                      if (failures.length > 0) {
-                        showError(
-                          `Failed to acknowledge ${failures.length} ${failures.length === 1 ? 'alert' : 'alerts'}.`,
-                        );
-                      }
-                    } catch (error) {
-                      logger.error('Bulk acknowledge failed', error);
-                      showError('Failed to acknowledge alerts');
-                    } finally {
-                      setBulkAckProcessing(false);
-                    }
-                  }}
-                >
-                  {bulkAckProcessing()
-                    ? 'Acknowledging…'
-                    : `Acknowledge all (${alertStats().active})`}
-                </button>
-              </Show>
+            <div class="flex items-center gap-1.5">
+              <span class="text-gray-500 dark:text-gray-400">Healthy:</span>
+              <span class="font-medium text-green-600 dark:text-green-400">
+                {patrolRunHistory().filter(r => r.status === 'healthy').length}
+              </span>
             </div>
-          </Show>
-          <div class="space-y-2">
-            <Show when={filteredAlerts().length === 0}>
-              <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                {props.showAcknowledged() ? 'No active alerts' : 'No unacknowledged alerts'}
+            <Show when={patrolRunHistory().filter(r => r.status !== 'healthy').length > 0}>
+              <div class="flex items-center gap-1.5">
+                <span class="text-gray-500 dark:text-gray-400">Issues:</span>
+                <span class="font-medium text-yellow-600 dark:text-yellow-400">
+                  {patrolRunHistory().filter(r => r.status !== 'healthy').length}
+                </span>
               </div>
             </Show>
-            <For each={filteredAlerts()}>
-              {(alert) => (
-                <div
-                  class={`border rounded-lg p-4 transition-all ${
-                    processingAlerts().has(alert.id) ? 'opacity-50' : ''
-                  } ${
-                    alert.acknowledged
-                      ? 'opacity-60 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20'
-                      : alert.level === 'critical'
-                        ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
-                        : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
-                  }`}
-                >
-                  <div class="flex flex-col sm:flex-row sm:items-start">
-                    <div class="flex items-start flex-1">
-                      {/* Status icon */}
+            <div class="flex items-center gap-1.5">
+              <span class="text-gray-500 dark:text-gray-400">Last:</span>
+              <span class="font-medium text-gray-700 dark:text-gray-300">
+                {patrolStatus()?.last_patrol_at ? formatTimestamp(patrolStatus()!.last_patrol_at!) : 'never'}
+              </span>
+            </div>
+            <Show when={patrolStatus()?.resources_checked}>
+              <div class="flex items-center gap-1.5">
+                <span class="text-gray-500 dark:text-gray-400">Resources:</span>
+                <span class="font-medium text-gray-700 dark:text-gray-300">{patrolStatus()?.resources_checked}</span>
+              </div>
+            </Show>
+          </div>
+          <div class="space-y-2">
+            <Show
+              when={aiFindings().length > 0}
+              fallback={
+                <div class="text-center py-6 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <div class="flex justify-center mb-2">
+                    <svg class="w-10 h-10 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
+                    </svg>
+                  </div>
+                  <p class="text-sm font-medium text-green-700 dark:text-green-400">All Systems Healthy</p>
+                  <p class="text-xs text-green-600 dark:text-green-500 mt-1">AI patrol found no issues to report</p>
+                </div>
+              }
+            >
+              <For each={aiFindings().filter(f => !pendingFixFindings().has(f.id))}>
+                {(finding) => {
+                  const colors = severityColors[finding.severity];
+                  const [isExpanded, setIsExpanded] = createSignal(false);
+                  return (
+                    <div
+                      class="border rounded-lg transition-all"
+                      style={{
+                        'background-color': colors.bg,
+                        'border-color': colors.border,
+                      }}
+                    >
+                      {/* Compact header - always visible, clickable */}
                       <div
-                        class={`mr-3 mt-0.5 transition-all ${
-                          alert.acknowledged
+                        class="flex items-center gap-3 p-3 cursor-pointer hover:opacity-80"
+                        onClick={() => setIsExpanded(!isExpanded())}
+                      >
+                        {/* Expand chevron */}
+                        <svg
+                          class={`w-4 h-4 text-gray-500 transition-transform flex-shrink-0 ${isExpanded() ? 'rotate-90' : ''}`}
+                          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        >
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                        {/* Severity badge */}
+                        <span
+                          class="px-2 py-0.5 text-xs rounded capitalize font-medium flex-shrink-0"
+                          style={{ 'background-color': colors.border, color: colors.text }}
+                        >
+                          {finding.severity}
+                        </span>
+                        {/* Title (main info) */}
+                        <span class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate flex-1">
+                          {finding.title}
+                        </span>
+                        {/* Recurrence badge - show if raised multiple times */}
+                        <Show when={finding.times_raised > 1}>
+                          <span
+                            class="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 flex-shrink-0"
+                            title={`This issue has been detected ${finding.times_raised} times`}
+                          >
+                            ×{finding.times_raised}
+                          </span>
+                        </Show>
+                        {/* Dismissed status badge */}
+                        <Show when={finding.dismissed_reason}>
+                          <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 flex-shrink-0">
+                            {finding.dismissed_reason === 'not_an_issue' && '✓ Dismissed'}
+                            {finding.dismissed_reason === 'expected_behavior' && '✓ Expected'}
+                            {finding.dismissed_reason === 'will_fix_later' && '⏱ Noted'}
+                          </span>
+                        </Show>
+                        {/* Suppressed badge */}
+                        <Show when={finding.suppressed}>
+                          <span class="text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex-shrink-0">
+                            🔇 Suppressed
+                          </span>
+                        </Show>
+                        {/* Resource name pill */}
+                        <span class="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 flex-shrink-0 hidden sm:inline">
+                          {finding.resource_name}
+                        </span>
+                        {/* AI badge */}
+                        <span
+                          class="inline-flex items-center justify-center w-5 h-5 rounded text-[9px] font-bold flex-shrink-0"
+                          style={{ 'background-color': colors.border, color: colors.text }}
+                        >
+                          AI
+                        </span>
+                      </div>
+
+                      {/* Expanded details */}
+                      <Show when={isExpanded()}>
+                        <div class="px-4 pb-4 pt-1 border-t" style={{ 'border-color': colors.border }}>
+                          {/* Resource and category info */}
+                          <div class="flex flex-wrap items-center gap-2 mb-2">
+                            <span class="text-sm font-medium" style={{ color: colors.text }}>
+                              {finding.resource_name}
+                            </span>
+                            <span class="text-xs text-gray-600 dark:text-gray-400">
+                              ({finding.category})
+                            </span>
+                            <Show when={finding.node}>
+                              <span class="text-xs text-gray-500 dark:text-gray-500">
+                                on {finding.node}
+                              </span>
+                            </Show>
+                          </div>
+
+                          {/* Description */}
+                          <p class="text-sm text-gray-600 dark:text-gray-400">
+                            {finding.description}
+                          </p>
+
+                          {/* Recommendation */}
+                          <Show when={finding.recommendation}>
+                            <p class="text-xs text-gray-500 dark:text-gray-500 mt-2 italic">
+                              Suggested: {finding.recommendation}
+                            </p>
+                          </Show>
+
+                          {/* User note if present */}
+                          <Show when={finding.user_note}>
+                            <div class="mt-2 p-2 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                              <p class="text-xs text-blue-700 dark:text-blue-300">
+                                <span class="font-medium">Your note:</span> {finding.user_note}
+                              </p>
+                            </div>
+                          </Show>
+
+                          {/* Footer with time and actions */}
+                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-3 pt-2 border-t border-gray-200 dark:border-gray-600">
+                            <p class="text-xs text-gray-500 dark:text-gray-500">
+                              Detected: {formatTimestamp(finding.detected_at)}
+                            </p>
+                            <div class="flex items-center gap-2">
+                              {/* Get Help with AI button */}
+                              <button
+                                class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/50 flex items-center gap-1.5"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  aiChatStore.openWithPrompt(
+                                    `Help me fix this issue on ${finding.resource_name}: ${finding.title}\n\nDescription: ${finding.description}\n\nSuggested fix: ${finding.recommendation || 'None provided'}\n\nPlease guide me through applying this fix. When you've successfully fixed the issue, use the resolve_finding tool to mark it as resolved.`,
+                                    { findingId: finding.id }
+                                  );
+                                }}
+                              >
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                </svg>
+                                Get Help
+                              </button>
+                              {/* I Fixed It button - hides until next patrol verifies */}
+                              <button
+                                class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50 flex items-center gap-1.5"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPendingFixFindings(prev => {
+                                    const next = new Set(prev);
+                                    next.add(finding.id);
+                                    return next;
+                                  });
+                                }}
+                                title="Hide until next patrol verifies the fix"
+                              >
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                                I Fixed It
+                              </button>
+                              {/* Not an Issue dropdown - LLM memory system */}
+                              <div class="relative group">
+                                <button
+                                  class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-1.5"
+                                  onClick={(e) => e.stopPropagation()}
+                                  title="Dismiss this finding - AI won't re-raise it"
+                                >
+                                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                  </svg>
+                                  Dismiss
+                                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </button>
+                                {/* Dropdown menu - pt-2 creates visual gap while maintaining hover area */}
+                                <div class="absolute right-0 top-full pt-1 w-48 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                                  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                                    <button
+                                      class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded-t-lg transition-colors"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          await dismissFinding(finding.id, 'not_an_issue');
+                                          showSuccess('Dismissed - AI will not raise this again');
+                                          fetchAiData();
+                                        } catch (_err) {
+                                          showError('Failed to dismiss finding');
+                                        }
+                                      }}
+                                    >
+                                      <span class="font-medium text-gray-700 dark:text-gray-300">Not an Issue</span>
+                                      <p class="text-gray-500 dark:text-gray-500 mt-0.5">This isn't actually a problem</p>
+                                    </button>
+                                    <button
+                                      class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        const note = prompt('Why is this expected? (optional - helps AI understand your environment)');
+                                        try {
+                                          await dismissFinding(finding.id, 'expected_behavior', note || undefined);
+                                          showSuccess('Dismissed - AI will not raise this again');
+                                          fetchAiData();
+                                        } catch (_err) {
+                                          showError('Failed to dismiss finding');
+                                        }
+                                      }}
+                                    >
+                                      <span class="font-medium text-gray-700 dark:text-gray-300">Expected Behavior</span>
+                                      <p class="text-gray-500 dark:text-gray-500 mt-0.5">This is intentional/by design</p>
+                                    </button>
+                                    <button
+                                      class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          await dismissFinding(finding.id, 'will_fix_later');
+                                          showSuccess('Acknowledged - AI will check again later');
+                                          fetchAiData();
+                                        } catch (_err) {
+                                          showError('Failed to dismiss finding');
+                                        }
+                                      }}
+                                    >
+                                      <span class="font-medium text-gray-700 dark:text-gray-300">Will Fix Later</span>
+                                      <p class="text-gray-500 dark:text-gray-500 mt-0.5">I know about it, will address</p>
+                                    </button>
+                                    <div class="border-t border-gray-200 dark:border-gray-700">
+                                      <button
+                                        class="w-full px-3 py-2 text-left text-xs hover:bg-red-50 dark:hover:bg-red-900/30 rounded-b-lg transition-colors text-red-600 dark:text-red-400"
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          if (confirm('Permanently suppress this type of finding for this resource?\n\nThe AI will never raise this issue again.')) {
+                                            try {
+                                              await suppressFinding(finding.id);
+                                              showSuccess('Suppressed - AI will never raise this again');
+                                              fetchAiData();
+                                            } catch (_err) {
+                                              showError('Failed to suppress finding');
+                                            }
+                                          }
+                                        }}
+                                      >
+                                        <span class="font-medium">Never Alert Again</span>
+                                        <p class="text-red-500/80 dark:text-red-400/80 mt-0.5">Permanently suppress for this resource</p>
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </Show>
+                    </div>
+                  );
+                }}
+              </For>
+            </Show>
+          </div>
+
+          {/* Suppression Rules - What's being ignored */}
+          <div class="mt-6">
+            <div class="flex items-center justify-between">
+              <button
+                class="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                onClick={() => setShowSuppressionRules(!showSuppressionRules())}
+              >
+                <svg
+                  class={`w-4 h-4 transition-transform ${showSuppressionRules() ? 'rotate-90' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+                🔇 Suppression Rules ({suppressionRules().length} active)
+              </button>
+              <button
+                class="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                onClick={() => setShowAddRuleForm(!showAddRuleForm())}
+              >
+                + Add Rule
+              </button>
+            </div>
+
+            {/* Add rule form */}
+            <Show when={showAddRuleForm()}>
+              <div class="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-3">
+                  Add a suppression rule to prevent alerts
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                  <input
+                    type="text"
+                    class="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    placeholder="Resource ID (or leave empty for any)"
+                    value={newRuleResource()}
+                    onInput={(e) => setNewRuleResource(e.currentTarget.value)}
+                  />
+                  <select
+                    class="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    value={newRuleCategory()}
+                    onChange={(e) => setNewRuleCategory(e.currentTarget.value)}
+                  >
+                    <option value="">Any category</option>
+                    <option value="performance">Performance</option>
+                    <option value="capacity">Capacity</option>
+                    <option value="reliability">Reliability</option>
+                    <option value="backup">Backup</option>
+                    <option value="security">Security</option>
+                    <option value="general">General</option>
+                  </select>
+                  <input
+                    type="text"
+                    class="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    placeholder="Reason (e.g., 'Dev container runs hot')"
+                    value={newRuleDescription()}
+                    onInput={(e) => setNewRuleDescription(e.currentTarget.value)}
+                  />
+                </div>
+                <div class="flex gap-2">
+                  <button
+                    class="px-3 py-1.5 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    disabled={!newRuleDescription()}
+                    onClick={async () => {
+                      try {
+                        await addSuppressionRule(
+                          newRuleResource(),
+                          newRuleResource() || 'Any resource',
+                          (newRuleCategory() as 'performance' | 'capacity' | 'reliability' | 'backup' | 'security' | 'general' | ''),
+                          newRuleDescription()
+                        );
+                        showSuccess('Suppression rule created');
+                        setShowAddRuleForm(false);
+                        setNewRuleResource('');
+                        setNewRuleCategory('');
+                        setNewRuleDescription('');
+                        fetchAiData();
+                      } catch (_err) {
+                        showError('Failed to create rule');
+                      }
+                    }}
+                  >
+                    Create Rule
+                  </button>
+                  <button
+                    class="px-3 py-1.5 text-sm font-medium rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                    onClick={() => setShowAddRuleForm(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </Show>
+
+            {/* Rules list */}
+            <Show when={showSuppressionRules()}>
+              <div class="mt-3 space-y-2">
+                <Show when={suppressionRules().length === 0}>
+                  <p class="text-sm text-gray-500 dark:text-gray-500 italic">
+                    No suppression rules. Dismiss findings or add rules to prevent unwanted alerts.
+                  </p>
+                </Show>
+                <For each={suppressionRules()}>
+                  {(rule) => (
+                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 text-sm">
+                          <span class="font-medium text-gray-800 dark:text-gray-200">
+                            {rule.resource_name || rule.resource_id || 'Any resource'}
+                          </span>
+                          <Show when={rule.category}>
+                            <span class="px-2 py-0.5 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                              {categoryLabels[rule.category!] || rule.category}
+                            </span>
+                          </Show>
+                          <Show when={!rule.category}>
+                            <span class="px-2 py-0.5 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                              Any category
+                            </span>
+                          </Show>
+                          <span class="px-1.5 py-0.5 text-xs rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                            {rule.created_from === 'finding' ? 'From Finding' : 'Manual'}
+                          </span>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
+                          {rule.description || 'No description'}
+                        </p>
+                      </div>
+                      <button
+                        class="ml-3 px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
+                        onClick={async () => {
+                          try {
+                            await deleteSuppressionRule(rule.id);
+                            showSuccess('Rule deleted');
+                            fetchAiData();
+                          } catch (_err) {
+                            showError('Failed to delete rule');
+                          }
+                        }}
+                        title="Delete this rule"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Show>
+          </div>
+
+          {/* Patrol Check History */}
+          <div class="mt-6">
+            <div class="flex items-center justify-between">
+              <button
+                class="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                onClick={() => setShowRunHistory(!showRunHistory())}
+              >
+                <svg
+                  class={`w-4 h-4 transition-transform ${showRunHistory() ? 'rotate-90' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+                Patrol Check History ({filteredPatrolHistory().length} runs)
+                <Show when={patrolRunHistory().length > 0 && patrolRunHistory()[0].status !== 'healthy'}>
+                  <span class="ml-1 px-1.5 py-0.5 text-[10px] bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 rounded">Issues Found</span>
+                </Show>
+              </button>
+
+              {/* Next Patrol Timer */}
+              <Show when={nextPatrolIn()}>
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                  Next patrol in <span class="font-mono font-medium text-purple-600 dark:text-purple-400">{nextPatrolIn()}</span>
+                </span>
+              </Show>
+            </div>
+
+            <Show when={showRunHistory()}>
+              <div class="mt-3">
+                {/* Time Filter + Mini Health Chart */}
+                <div class="flex flex-wrap items-center gap-3 mb-3">
+                  <div class="flex gap-1">
+                    <button
+                      class={`px-2 py-1 text-xs rounded transition-colors ${historyTimeFilter() === '24h' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                      onClick={() => setHistoryTimeFilter('24h')}
+                    >
+                      24h
+                    </button>
+                    <button
+                      class={`px-2 py-1 text-xs rounded transition-colors ${historyTimeFilter() === '7d' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                      onClick={() => setHistoryTimeFilter('7d')}
+                    >
+                      7d
+                    </button>
+                    <button
+                      class={`px-2 py-1 text-xs rounded transition-colors ${historyTimeFilter() === 'all' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                      onClick={() => setHistoryTimeFilter('all')}
+                    >
+                      All
+                    </button>
+                  </div>
+
+                  {/* Mini Health Chart */}
+                  <Show when={filteredPatrolHistory().length > 0}>
+                    <div class="flex items-center gap-0.5 h-4">
+                      <For each={filteredPatrolHistory().slice(0, 20).reverse()}>
+                        {(run) => (
+                          <div
+                            class={`w-1.5 h-full rounded-sm transition-all hover:opacity-75 ${run.status === 'healthy' ? 'bg-green-400 dark:bg-green-500' :
+                              run.status === 'critical' || run.status === 'error' ? 'bg-red-400 dark:bg-red-500' :
+                                'bg-yellow-400 dark:bg-yellow-500'
+                              }`}
+                            title={`${formatTimestamp(run.completed_at)}: ${run.findings_summary}`}
+                          />
+                        )}
+                      </For>
+                      <span class="ml-1.5 text-[10px] text-gray-400">← newest</span>
+                    </div>
+                  </Show>
+                </div>
+
+                <Show
+                  when={filteredPatrolHistory().length > 0}
+                  fallback={
+                    <p class="text-sm text-gray-500 dark:text-gray-400 italic py-4">No patrol runs in selected time range.</p>
+                  }
+                >
+                  <div class="border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+                    <table class="w-full text-xs sm:text-sm">
+                      <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+                          <th class="p-1.5 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-4"></th>
+                          <th class="p-1.5 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Time</th>
+                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Type</th>
+                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Status</th>
+                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Resources</th>
+                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">New</th>
+                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Resolved</th>
+                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Duration</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {/* Show "Currently Running" row when patrol is in progress */}
+                        <Show when={patrolStatus()?.running}>
+                          <tr
+                            class="border-b border-gray-200 dark:border-gray-600 bg-purple-50 dark:bg-purple-900/20 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/30"
+                            onClick={() => setExpandedLiveStream(!expandedLiveStream())}
+                          >
+                            <td class="p-1.5 px-2 text-purple-500">
+                              <svg class={`w-3 h-3 transition-transform ${expandedLiveStream() ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                              </svg>
+                            </td>
+                            <td class="p-1.5 px-2 text-purple-600 dark:text-purple-400 font-mono whitespace-nowrap">
+                              <div class="flex items-center gap-1.5">
+                                <svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                                Now
+                              </div>
+                            </td>
+                            <td class="p-1.5 px-2 text-center">
+                              <span class="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
+                                Running
+                              </span>
+                            </td>
+                            <td class="p-1.5 px-2 text-center" colspan="5">
+                              <span class="text-xs text-purple-600 dark:text-purple-400">
+                                {expandedLiveStream() ? 'Click to collapse' : 'Click to view live AI analysis'}
+                              </span>
+                            </td>
+                          </tr>
+                          {/* Expanded Live Stream Row */}
+                          <Show when={expandedLiveStream()}>
+                            <tr class="bg-purple-50 dark:bg-purple-900/10 border-b border-gray-200 dark:border-gray-600">
+                              <td colspan="8" class="p-3">
+                                <div class="flex items-center justify-between mb-3">
+                                  <span class="text-[10px] text-purple-500 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+                                    <svg class="w-3 h-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                    </svg>
+                                    Live AI Analysis
+                                  </span>
+                                  <span class="text-[9px] text-purple-400 dark:text-purple-500">
+                                    Streaming in real-time...
+                                  </span>
+                                </div>
+                                {/* Sequential blocks display - like AI chat */}
+                                <div class="space-y-2 max-h-80 overflow-y-auto">
+                                  {/* Rendered blocks */}
+                                  <For each={liveStreamBlocks()}>
+                                    {(block) => (
+                                      <Show
+                                        when={block.type === 'phase'}
+                                        fallback={
+                                          /* Thinking block */
+                                          <div class="px-3 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-gray-700 dark:text-gray-300 rounded-lg border-l-2 border-blue-400 whitespace-pre-wrap font-mono leading-relaxed">
+                                            {block.text.length > 800 ? block.text.substring(0, 800) + '...' : block.text}
+                                          </div>
+                                        }
+                                      >
+                                        {/* Phase marker */}
+                                        <div class="flex items-center gap-2 px-2 py-1">
+                                          <Show
+                                            when={block.text === 'Analysis complete'}
+                                            fallback={
+                                              <svg class="w-3 h-3 animate-spin text-purple-500" viewBox="0 0 24 24" fill="none">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                              </svg>
+                                            }
+                                          >
+                                            <svg class="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                          </Show>
+                                          <span class="text-[10px] font-medium text-purple-600 dark:text-purple-400">
+                                            {block.text}
+                                          </span>
+                                        </div>
+                                      </Show>
+                                    )}
+                                  </For>
+                                  {/* Currently streaming content */}
+                                  <Show when={currentThinking()}>
+                                    <div class="px-3 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-gray-700 dark:text-gray-300 rounded-lg border-l-2 border-blue-400 whitespace-pre-wrap font-mono leading-relaxed">
+                                      {currentThinking().length > 500 ? currentThinking().substring(0, 500) + '...' : currentThinking()}
+                                      <span class="inline-block w-1.5 h-3 bg-blue-500 ml-0.5 animate-pulse" />
+                                    </div>
+                                  </Show>
+                                  {/* Empty state */}
+                                  <Show when={liveStreamBlocks().length === 0 && !currentThinking()}>
+                                    <div class="flex items-center gap-2 px-2 py-3 text-xs text-gray-500 dark:text-gray-400">
+                                      <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                      </svg>
+                                      <span class="italic">Waiting for AI response...</span>
+                                    </div>
+                                  </Show>
+                                </div>
+                              </td>
+                            </tr>
+                          </Show>
+                        </Show>
+                        <For each={filteredPatrolHistory()}>
+                          {(run) => {
+                            const statusStyles = {
+                              healthy: 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300',
+                              issues_found: 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300',
+                              critical: 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
+                              error: 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
+                            };
+                            const statusStyle = statusStyles[run.status] || statusStyles.healthy;
+                            const hasDetails = run.nodes_checked > 0 || run.guests_checked > 0 || run.docker_checked > 0 || run.storage_checked > 0 || run.ai_analysis;
+
+                            return (
+                              <>
+                                <tr
+                                  class={`border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${hasDetails ? 'cursor-pointer' : ''}`}
+                                  onClick={() => hasDetails && setExpandedRunId(expandedRunId() === run.id ? null : run.id)}
+                                >
+                                  <td class="p-1.5 px-2 text-gray-400">
+                                    <Show when={hasDetails}>
+                                      <svg class={`w-3 h-3 transition-transform ${expandedRunId() === run.id ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                      </svg>
+                                    </Show>
+                                  </td>
+                                  <td class="p-1.5 px-2 text-gray-600 dark:text-gray-400 font-mono whitespace-nowrap">
+                                    {formatTimestamp(run.completed_at)}
+                                  </td>
+                                  <td class="p-1.5 px-2 text-center">
+                                    <span class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${run.type === 'deep'
+                                      ? 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300'
+                                      : 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300'
+                                      }`}>
+                                      {run.type === 'deep' ? 'Deep' : 'Quick'}
+                                    </span>
+                                  </td>
+                                  <td class="p-1.5 px-2 text-center">
+                                    <span class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusStyle}`}>
+                                      {run.findings_summary}
+                                    </span>
+                                  </td>
+                                  <td class="p-1.5 px-2 text-center text-gray-700 dark:text-gray-300">
+                                    {run.resources_checked}
+                                  </td>
+                                  <td class="p-1.5 px-2 text-center">
+                                    <Show when={run.new_findings > 0} fallback={<span class="text-gray-400">-</span>}>
+                                      <span class="text-yellow-600 dark:text-yellow-400 font-medium">{run.new_findings}</span>
+                                    </Show>
+                                  </td>
+                                  <td class="p-1.5 px-2 text-center">
+                                    <Show when={run.resolved_findings > 0} fallback={<span class="text-gray-400">-</span>}>
+                                      <span class="text-green-600 dark:text-green-400 font-medium">{run.resolved_findings}</span>
+                                    </Show>
+                                  </td>
+                                  <td class="p-1.5 px-2 text-center text-gray-500 dark:text-gray-400 font-mono">
+                                    {(() => {
+                                      const totalSeconds = Math.round(run.duration_ms / 1000000000);
+                                      if (totalSeconds < 60) {
+                                        return `${totalSeconds}s`;
+                                      }
+                                      const minutes = Math.floor(totalSeconds / 60);
+                                      const seconds = totalSeconds % 60;
+                                      return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+                                    })()}
+                                  </td>
+                                </tr>
+                                {/* Expanded Details Row */}
+                                <Show when={expandedRunId() === run.id}>
+                                  <tr class="bg-gray-50 dark:bg-gray-800/50">
+                                    <td colspan="8" class="p-3">
+                                      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                        <Show when={run.nodes_checked > 0}>
+                                          <div class="flex items-center gap-2">
+                                            <span class="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-[10px]">Nodes</span>
+                                            <span class="font-medium">{run.nodes_checked}</span>
+                                          </div>
+                                        </Show>
+                                        <Show when={run.guests_checked > 0}>
+                                          <div class="flex items-center gap-2">
+                                            <span class="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded text-[10px]">VMs/CTs</span>
+                                            <span class="font-medium">{run.guests_checked}</span>
+                                          </div>
+                                        </Show>
+                                        <Show when={run.docker_checked > 0}>
+                                          <div class="flex items-center gap-2">
+                                            <span class="px-1.5 py-0.5 bg-cyan-100 dark:bg-cyan-900/50 text-cyan-700 dark:text-cyan-300 rounded text-[10px]">Docker</span>
+                                            <span class="font-medium">{run.docker_checked}</span>
+                                          </div>
+                                        </Show>
+                                        <Show when={run.storage_checked > 0}>
+                                          <div class="flex items-center gap-2">
+                                            <span class="px-1.5 py-0.5 bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 rounded text-[10px]">Storage</span>
+                                            <span class="font-medium">{run.storage_checked}</span>
+                                          </div>
+                                        </Show>
+                                        <Show when={run.hosts_checked > 0}>
+                                          <div class="flex items-center gap-2">
+                                            <span class="px-1.5 py-0.5 bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 rounded text-[10px]">Hosts</span>
+                                            <span class="font-medium">{run.hosts_checked}</span>
+                                          </div>
+                                        </Show>
+                                        <Show when={run.pbs_checked > 0}>
+                                          <div class="flex items-center gap-2">
+                                            <span class="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded text-[10px]">PBS</span>
+                                            <span class="font-medium">{run.pbs_checked}</span>
+                                          </div>
+                                        </Show>
+                                      </div>
+                                      {/* Only show findings section if we have active findings to display */}
+                                      {(() => {
+                                        const activeFindings = (run.finding_ids || [])
+                                          .map(id => aiFindings().find(f => f.id === id))
+                                          .filter(f => f !== undefined);
+                                        const resolvedCount = (run.finding_ids?.length || 0) - activeFindings.length;
+
+                                        if (activeFindings.length === 0 && resolvedCount === 0) return null;
+
+                                        return (
+                                          <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                            <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                              Findings from this run:
+                                            </span>
+                                            <div class="flex flex-col gap-1 mt-1">
+                                              <For each={activeFindings}>
+                                                {(finding) => (
+                                                  <div class="flex items-center gap-2 text-xs">
+                                                    <span class={`px-1.5 py-0.5 rounded text-[10px] ${finding!.severity === 'critical' ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' :
+                                                      finding!.severity === 'warning' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                                                        'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                                                      }`}>
+                                                      {finding!.severity}
+                                                    </span>
+                                                    <span class="font-medium text-gray-700 dark:text-gray-300">{finding!.title}</span>
+                                                    <span class="text-gray-500 dark:text-gray-400">on {finding!.resource_name}</span>
+                                                  </div>
+                                                )}
+                                              </For>
+                                              <Show when={resolvedCount > 0}>
+                                                <div class="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                                                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                  </svg>
+                                                  {resolvedCount} finding{resolvedCount > 1 ? 's' : ''} since resolved
+                                                </div>
+                                              </Show>
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
+                                      {/* AI Analysis Section */}
+                                      <Show when={run.ai_analysis}>
+                                        <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                          <div class="flex items-center justify-between mb-2">
+                                            <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                                              <svg class="w-3 h-3 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                              </svg>
+                                              AI Analysis
+                                            </span>
+                                            <Show when={run.input_tokens || run.output_tokens}>
+                                              <span class="text-[9px] text-gray-400 dark:text-gray-500">
+                                                {run.input_tokens?.toLocaleString()} in / {run.output_tokens?.toLocaleString()} out tokens
+                                              </span>
+                                            </Show>
+                                          </div>
+                                          <div class="bg-gray-100 dark:bg-gray-900 rounded-lg p-3 max-h-64 overflow-y-auto">
+                                            <pre class="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">{run.ai_analysis}</pre>
+                                          </div>
+                                        </div>
+                                      </Show>
+                                    </td>
+                                  </tr>
+                                </Show>
+                              </>
+                            );
+                          }}
+                        </For>
+                      </tbody>
+                    </table>
+                  </div>
+                </Show>
+              </div>
+            </Show>
+          </div>
+        </div>
+      </Show >
+
+      {/* Active Alerts - show when alerts tab selected OR when patrol is disabled (no sub-tabs) */}
+      < Show when={overviewSubTab() === 'active-alerts' || !patrolStatus()?.enabled
+      }>
+        <div>
+          <SectionHeader title="Active Alerts" size="md" class="mb-3" />
+          <Show
+            when={Object.keys(props.activeAlerts).length > 0}
+            fallback={
+              <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                <div class="flex justify-center mb-3">
+                  <svg class="w-12 h-12 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
+                  </svg>
+                </div>
+                <p class="text-sm">No active alerts</p>
+                <p class="text-xs mt-1">Alerts will appear here when thresholds are exceeded</p>
+              </div>
+            }
+          >
+            <Show when={alertStats().acknowledged > 0 || alertStats().active > 0}>
+              <div class="flex flex-wrap items-center justify-between gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-t-lg border border-gray-200 dark:border-gray-700">
+                <Show when={alertStats().acknowledged > 0}>
+                  <button
+                    onClick={() => props.setShowAcknowledged(!props.showAcknowledged())}
+                    class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                  >
+                    {props.showAcknowledged() ? 'Hide' : 'Show'} acknowledged
+                  </button>
+                </Show>
+                <Show when={alertStats().active > 0}>
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                    disabled={bulkAckProcessing()}
+                    onClick={async () => {
+                      if (bulkAckProcessing()) return;
+                      const pending = unacknowledgedAlerts();
+                      if (pending.length === 0) {
+                        return;
+                      }
+                      setBulkAckProcessing(true);
+                      try {
+                        const result = await AlertsAPI.bulkAcknowledge(pending.map((alert) => alert.id));
+                        const successes = result.results.filter((r) => r.success);
+                        const failures = result.results.filter((r) => !r.success);
+
+                        successes.forEach((res) => {
+                          props.updateAlert(res.alertId, {
+                            acknowledged: true,
+                            ackTime: new Date().toISOString(),
+                          });
+                        });
+
+                        if (successes.length > 0) {
+                          showSuccess(
+                            `Acknowledged ${successes.length} ${successes.length === 1 ? 'alert' : 'alerts'}.`,
+                          );
+                        }
+
+                        if (failures.length > 0) {
+                          showError(
+                            `Failed to acknowledge ${failures.length} ${failures.length === 1 ? 'alert' : 'alerts'}.`,
+                          );
+                        }
+                      } catch (error) {
+                        logger.error('Bulk acknowledge failed', error);
+                        showError('Failed to acknowledge alerts');
+                      } finally {
+                        setBulkAckProcessing(false);
+                      }
+                    }}
+                  >
+                    {bulkAckProcessing()
+                      ? 'Acknowledging…'
+                      : `Acknowledge all (${alertStats().active})`}
+                  </button>
+                </Show>
+              </div>
+            </Show>
+            <div class="space-y-2">
+              <Show when={filteredAlerts().length === 0}>
+                <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                  {props.showAcknowledged() ? 'No active alerts' : 'No unacknowledged alerts'}
+                </div>
+              </Show>
+              <For each={filteredAlerts()}>
+                {(alert) => (
+                  <div
+                    class={`border rounded-lg p-4 transition-all ${processingAlerts().has(alert.id) ? 'opacity-50' : ''
+                      } ${alert.acknowledged
+                        ? 'opacity-60 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20'
+                        : alert.level === 'critical'
+                          ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
+                          : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
+                      }`}
+                  >
+                    <div class="flex flex-col sm:flex-row sm:items-start">
+                      <div class="flex items-start flex-1">
+                        {/* Status icon */}
+                        <div
+                          class={`mr-3 mt-0.5 transition-all ${alert.acknowledged
                             ? 'text-green-600 dark:text-green-400'
                             : alert.level === 'critical'
                               ? 'text-red-600 dark:text-red-400'
                               : 'text-yellow-600 dark:text-yellow-400'
-                        }`}
-                      >
-                        {alert.acknowledged ? (
-                          // Checkmark for acknowledged
-                          <svg
-                            class="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                          </svg>
-                        ) : (
-                          // Warning/Alert icon
-                          <svg
-                            class="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                            />
-                          </svg>
-                        )}
-                      </div>
-                      <div class="flex-1 min-w-0">
-                        <div class="flex flex-wrap items-center gap-2">
-                          <span
-                            class={`text-sm font-medium truncate ${
-                              alert.level === 'critical'
+                            }`}
+                        >
+                          {alert.acknowledged ? (
+                            // Checkmark for acknowledged
+                            <svg
+                              class="w-5 h-5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                          ) : (
+                            // Warning/Alert icon
+                            <svg
+                              class="w-5 h-5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                              />
+                            </svg>
+                          )}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <span
+                              class={`text-sm font-medium truncate ${alert.level === 'critical'
                                 ? 'text-red-700 dark:text-red-400'
                                 : 'text-yellow-700 dark:text-yellow-400'
-                            }`}
-                          >
-                            {alert.resourceName}
-                          </span>
-                          <span class="text-xs text-gray-600 dark:text-gray-400">
-                            ({alert.type})
-                          </span>
-                          <Show when={alert.node}>
-                            <span class="text-xs text-gray-500 dark:text-gray-500">
-                              on {alert.node}
+                                }`}
+                            >
+                              {alert.resourceName}
                             </span>
-                          </Show>
-                          <Show when={alert.acknowledged}>
-                            <span class="px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded">
-                              Acknowledged
+                            <span class="text-xs text-gray-600 dark:text-gray-400">
+                              ({alert.type})
                             </span>
-                          </Show>
+                            <Show when={alert.node}>
+                              <span class="text-xs text-gray-500 dark:text-gray-500">
+                                on {alert.node}
+                              </span>
+                            </Show>
+                            <Show when={alert.acknowledged}>
+                              <span class="px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded">
+                                Acknowledged
+                              </span>
+                            </Show>
+                          </div>
+                          <p class="text-sm text-gray-700 dark:text-gray-300 mt-1 break-words">
+                            {alert.message}
+                          </p>
+                          <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                            Started: {new Date(alert.startTime).toLocaleString()}
+                          </p>
                         </div>
-                        <p class="text-sm text-gray-700 dark:text-gray-300 mt-1 break-words">
-                          {alert.message}
-                        </p>
-                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                          Started: {new Date(alert.startTime).toLocaleString()}
-                        </p>
                       </div>
-                    </div>
-                    <div class="flex gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start">
-                      <button
-                        class={`px-3 py-1.5 text-xs font-medium border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                          alert.acknowledged
+                      <div class="flex gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start">
+                        <button
+                          class={`px-3 py-1.5 text-xs font-medium border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${alert.acknowledged
                             ? 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
                             : 'bg-white dark:bg-gray-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
-                        }`}
-                        disabled={processingAlerts().has(alert.id)}
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
+                            }`}
+                          disabled={processingAlerts().has(alert.id)}
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
 
-                          // Prevent double-clicks
-                          if (processingAlerts().has(alert.id)) return;
+                            // Prevent double-clicks
+                            if (processingAlerts().has(alert.id)) return;
 
-                          setProcessingAlerts((prev) => new Set(prev).add(alert.id));
+                            setProcessingAlerts((prev) => new Set(prev).add(alert.id));
 
-                          // Store current state to avoid race conditions
-                          const wasAcknowledged = alert.acknowledged;
+                            // Store current state to avoid race conditions
+                            const wasAcknowledged = alert.acknowledged;
 
-                          try {
-                            if (wasAcknowledged) {
-                              // Call API first, only update local state if successful
-                              await AlertsAPI.unacknowledge(alert.id);
-                              // Only update local state after successful API call
-                              props.updateAlert(alert.id, {
-                                acknowledged: false,
-                                ackTime: undefined,
-                                ackUser: undefined,
-                              });
-                              showSuccess('Alert restored');
-                            } else {
-                              // Call API first, only update local state if successful
-                              await AlertsAPI.acknowledge(alert.id);
-                              // Only update local state after successful API call
-                              props.updateAlert(alert.id, {
-                                acknowledged: true,
-                                ackTime: new Date().toISOString(),
-                              });
-                              showSuccess('Alert acknowledged');
+                            try {
+                              if (wasAcknowledged) {
+                                // Call API first, only update local state if successful
+                                await AlertsAPI.unacknowledge(alert.id);
+                                // Only update local state after successful API call
+                                props.updateAlert(alert.id, {
+                                  acknowledged: false,
+                                  ackTime: undefined,
+                                  ackUser: undefined,
+                                });
+                                showSuccess('Alert restored');
+                              } else {
+                                // Call API first, only update local state if successful
+                                await AlertsAPI.acknowledge(alert.id);
+                                // Only update local state after successful API call
+                                props.updateAlert(alert.id, {
+                                  acknowledged: true,
+                                  ackTime: new Date().toISOString(),
+                                });
+                                showSuccess('Alert acknowledged');
+                              }
+                            } catch (err) {
+                              logger.error(
+                                `Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`,
+                                err,
+                              );
+                              showError(
+                                `Failed to ${wasAcknowledged ? 'restore' : 'acknowledge'} alert`,
+                              );
+                              // Don't update local state on error - let WebSocket keep the correct state
+                            } finally {
+                              // Keep button disabled for longer to prevent race conditions with WebSocket updates
+                              setTimeout(() => {
+                                setProcessingAlerts((prev) => {
+                                  const next = new Set(prev);
+                                  next.delete(alert.id);
+                                  return next;
+                                });
+                              }, 1500); // 1.5 seconds to allow server to process and WebSocket to sync
                             }
-                          } catch (err) {
-                            logger.error(
-                              `Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`,
-                              err,
-                            );
-                            showError(
-                              `Failed to ${wasAcknowledged ? 'restore' : 'acknowledge'} alert`,
-                            );
-                            // Don't update local state on error - let WebSocket keep the correct state
-                          } finally {
-                            // Keep button disabled for longer to prevent race conditions with WebSocket updates
-                            setTimeout(() => {
-                              setProcessingAlerts((prev) => {
-                                const next = new Set(prev);
-                                next.delete(alert.id);
-                                return next;
-                              });
-                            }, 1500); // 1.5 seconds to allow server to process and WebSocket to sync
-                          }
-                        }}
-                      >
-                        {processingAlerts().has(alert.id)
-                          ? 'Processing...'
-                          : alert.acknowledged
-                            ? 'Unacknowledge'
-                            : 'Acknowledge'}
-                      </button>
+                          }}
+                        >
+                          {processingAlerts().has(alert.id)
+                            ? 'Processing...'
+                            : alert.acknowledged
+                              ? 'Unacknowledge'
+                              : 'Acknowledge'}
+                        </button>
+                        <InvestigateAlertButton
+                          alert={alert}
+                          variant="text"
+                          size="sm"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </For>
-          </div>
-        </Show>
-      </div>
-    </div>
+                )}
+              </For>
+            </div>
+          </Show>
+        </div>
+      </Show >
+    </div >
   );
 }
 
@@ -2452,37 +3600,37 @@ interface ThresholdsTabProps {
   setDockerDefaults: (
     value:
       | {
-          cpu: number;
-          memory: number;
-          disk: number;
-          restartCount: number;
-          restartWindow: number;
-          memoryWarnPct: number;
-          memoryCriticalPct: number;
-          serviceWarnGapPercent: number;
-          serviceCriticalGapPercent: number;
-        }
+        cpu: number;
+        memory: number;
+        disk: number;
+        restartCount: number;
+        restartWindow: number;
+        memoryWarnPct: number;
+        memoryCriticalPct: number;
+        serviceWarnGapPercent: number;
+        serviceCriticalGapPercent: number;
+      }
       | ((prev: {
-          cpu: number;
-          memory: number;
-          disk: number;
-          restartCount: number;
-          restartWindow: number;
-          memoryWarnPct: number;
-          memoryCriticalPct: number;
-          serviceWarnGapPercent: number;
-          serviceCriticalGapPercent: number;
-        }) => {
-          cpu: number;
-          memory: number;
-          disk: number;
-          restartCount: number;
-          restartWindow: number;
-          memoryWarnPct: number;
-          memoryCriticalPct: number;
-          serviceWarnGapPercent: number;
-          serviceCriticalGapPercent: number;
-        }),
+        cpu: number;
+        memory: number;
+        disk: number;
+        restartCount: number;
+        restartWindow: number;
+        memoryWarnPct: number;
+        memoryCriticalPct: number;
+        serviceWarnGapPercent: number;
+        serviceCriticalGapPercent: number;
+      }) => {
+        cpu: number;
+        memory: number;
+        disk: number;
+        restartCount: number;
+        restartWindow: number;
+        memoryWarnPct: number;
+        memoryCriticalPct: number;
+        serviceWarnGapPercent: number;
+        serviceCriticalGapPercent: number;
+      }),
   ) => void;
   setDockerDisableConnectivity: (value: boolean) => void;
   setDockerPoweredOffSeverity: (value: 'warning' | 'critical') => void;
@@ -3177,22 +4325,22 @@ function ScheduleTab(props: ScheduleTabProps) {
     label: string;
     description: string;
   }> = [
-    {
-      key: 'performance',
-      label: 'Performance alerts',
-      description: 'CPU, memory, disk, and network thresholds stay quiet.',
-    },
-    {
-      key: 'storage',
-      label: 'Storage alerts',
-      description: 'Silence storage usage, disk health, and ZFS events.',
-    },
-    {
-      key: 'offline',
-      label: 'Offline & power state',
-      description: 'Skip connectivity and powered-off alerts during backups.',
-    },
-  ];
+      {
+        key: 'performance',
+        label: 'Performance alerts',
+        description: 'CPU, memory, disk, and network thresholds stay quiet.',
+      },
+      {
+        key: 'storage',
+        label: 'Storage alerts',
+        description: 'Silence storage usage, disk health, and ZFS events.',
+      },
+      {
+        key: 'offline',
+        label: 'Offline & power state',
+        description: 'Skip connectivity and powered-off alerts during backups.',
+      },
+    ];
 
   const days = [
     { id: 'monday', label: 'M', fullLabel: 'Monday' },
@@ -3322,11 +4470,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                           props.setHasUnsavedChanges(true);
                         }}
                         title={day.fullLabel}
-                        class={`px-2 py-2 text-xs font-medium transition-all duration-200 ${
-                          quietHours().days[day.id]
-                            ? 'rounded-md bg-blue-500 text-white shadow-sm'
-                            : 'rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600'
-                        }`}
+                        class={`px-2 py-2 text-xs font-medium transition-all duration-200 ${quietHours().days[day.id]
+                          ? 'rounded-md bg-blue-500 text-white shadow-sm'
+                          : 'rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600'
+                          }`}
                       >
                         {day.label}
                       </button>
@@ -3374,11 +4521,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                   <For each={quietHourSuppressOptions}>
                     {(option) => (
                       <label
-                        class={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-colors ${
-                          quietHours().suppress[option.key]
-                            ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500/10'
-                            : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
-                        }`}
+                        class={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-colors ${quietHours().suppress[option.key]
+                          ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500/10'
+                          : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
+                          }`}
                       >
                         <input
                           type="checkbox"
@@ -3396,11 +4542,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                           class="sr-only"
                         />
                         <div
-                          class={`mt-1 flex h-4 w-4 items-center justify-center rounded border-2 ${
-                            quietHours().suppress[option.key]
-                              ? 'border-blue-500 bg-blue-500'
-                              : 'border-gray-300 dark:border-gray-600'
-                          }`}
+                          class={`mt-1 flex h-4 w-4 items-center justify-center rounded border-2 ${quietHours().suppress[option.key]
+                            ? 'border-blue-500 bg-blue-500'
+                            : 'border-gray-300 dark:border-gray-600'
+                            }`}
                         >
                           <Show when={quietHours().suppress[option.key]}>
                             <svg
@@ -3579,11 +4724,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                 </span>
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label
-                    class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${
-                      grouping().byNode
-                        ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
-                        : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
-                    }`}
+                    class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${grouping().byNode
+                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
+                      : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
+                      }`}
                   >
                     <input
                       type="checkbox"
@@ -3595,11 +4739,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                       class="sr-only"
                     />
                     <div
-                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${
-                        grouping().byNode
-                          ? 'border-blue-500 bg-blue-500'
-                          : 'border-gray-300 dark:border-gray-600'
-                      }`}
+                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${grouping().byNode
+                        ? 'border-blue-500 bg-blue-500'
+                        : 'border-gray-300 dark:border-gray-600'
+                        }`}
                     >
                       <Show when={grouping().byNode}>
                         <svg
@@ -3619,11 +4762,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                   </label>
 
                   <label
-                    class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${
-                      grouping().byGuest
-                        ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
-                        : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
-                    }`}
+                    class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${grouping().byGuest
+                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
+                      : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
+                      }`}
                   >
                     <input
                       type="checkbox"
@@ -3635,11 +4777,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                       class="sr-only"
                     />
                     <div
-                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${
-                        grouping().byGuest
-                          ? 'border-blue-500 bg-blue-500'
-                          : 'border-gray-300 dark:border-gray-600'
-                      }`}
+                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${grouping().byGuest
+                        ? 'border-blue-500 bg-blue-500'
+                        : 'border-gray-300 dark:border-gray-600'
+                        }`}
                     >
                       <Show when={grouping().byGuest}>
                         <svg
@@ -3909,8 +5050,16 @@ function HistoryTab() {
       deserialize: (raw) => (raw === 'warning' || raw === 'critical' ? raw : 'all'),
     },
   );
+  const [sourceFilter, setSourceFilter] = usePersistentSignal<'all' | 'alerts' | 'ai'>(
+    'alertHistorySourceFilter',
+    'all',
+    {
+      deserialize: (raw) => (raw === 'alerts' || raw === 'ai' ? raw : 'all'),
+    },
+  );
   const [searchTerm, setSearchTerm] = createSignal('');
   const [alertHistory, setAlertHistory] = createSignal<Alert[]>([]);
+  const [aiFindingsHistory, setAiFindingsHistory] = createSignal<Finding[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [selectedBarIndex, setSelectedBarIndex] = createSignal<number | null>(null);
   const MS_PER_HOUR = 60 * 60 * 1000;
@@ -3947,18 +5096,27 @@ function HistoryTab() {
   };
 
   let fetchRequestId = 0;
-  const fetchAlertHistory = async (range: string) => {
+  const fetchHistory = async (range: string) => {
     const requestId = ++fetchRequestId;
     setLoading(true);
 
     try {
-      const history = await AlertsAPI.getHistory(buildHistoryParams(range));
+      // Fetch both alert history and AI findings history in parallel
+      const params = buildHistoryParams(range);
+      const startTimeStr = params.startTime;
+
+      const [alertHistoryData, aiFindingsData] = await Promise.all([
+        AlertsAPI.getHistory(params),
+        getFindingsHistory(startTimeStr),
+      ]);
+
       if (requestId === fetchRequestId) {
-        setAlertHistory(history);
+        setAlertHistory(alertHistoryData);
+        setAiFindingsHistory(aiFindingsData);
       }
     } catch (err) {
       if (requestId === fetchRequestId) {
-        logger.error('Failed to load alert history:', err);
+        logger.error('Failed to load history:', err);
       }
     } finally {
       if (requestId === fetchRequestId) {
@@ -3993,7 +5151,7 @@ function HistoryTab() {
 
   // Load alert history on mount
   onMount(() => {
-    fetchAlertHistory(timeFilter());
+    fetchHistory(timeFilter());
 
     // Add keyboard event listeners
     const handleKeydown = (e: KeyboardEvent) => {
@@ -4035,7 +5193,7 @@ function HistoryTab() {
       skipInitialFetchEffect = false;
       return;
     }
-    fetchAlertHistory(range);
+    fetchHistory(range);
   });
 
   // Format duration for display
@@ -4152,66 +5310,155 @@ function HistoryTab() {
     return 'Unknown';
   };
 
-  // Extended alert type for display
-  interface ExtendedAlert extends Alert {
-    status?: string;
-    duration?: string;
-    resourceType?: string;
+  // Unified history item type that can be either an alert or an AI finding
+  type HistoryItemSource = 'alert' | 'ai';
+  interface HistoryItem {
+    id: string;
+    source: HistoryItemSource;
+    status: string;
+    startTime: string;
+    endTime?: string;
+    duration: string;
+    resourceName: string;
+    resourceType: string;
+    resourceId?: string;
+    node?: string;
+    severity: string; // warning, critical for alerts; severity for findings
+    // Aliases for backward compat with existing rendering code
+    level: string; // same as severity
+    type: string; // same as title
+    message?: string; // same as description
+    title: string;
+    description?: string;
+    acknowledged?: boolean;
+    autoResolved?: boolean;
   }
 
-  // Prepare all alerts without filtering
-  const allAlertsData = createMemo(() => {
-    // Combine active and historical alerts
-    const allAlerts: ExtendedAlert[] = [];
+  // Prepare all history items (alerts + AI findings) based on source filter
+  const allHistoryData = createMemo(() => {
+    const items: HistoryItem[] = [];
+    const currentSource = sourceFilter();
 
-    // Add active alerts
-    Object.values(activeAlerts || {}).forEach((alert) => {
-      allAlerts.push({
-        ...alert,
-        status: 'active',
-        duration: formatDuration(alert.startTime),
-        resourceType: getResourceType(alert.resourceName, alert.metadata),
+    // Add alerts if not filtering to AI only
+    if (currentSource === 'all' || currentSource === 'alerts') {
+      // Add active alerts
+      Object.values(activeAlerts || {}).forEach((alert) => {
+        items.push({
+          id: alert.id,
+          source: 'alert',
+          status: 'active',
+          startTime: alert.startTime,
+          duration: formatDuration(alert.startTime),
+          resourceName: alert.resourceName,
+          resourceType: getResourceType(alert.resourceName, alert.metadata),
+          resourceId: alert.resourceId,
+          node: alert.node,
+          severity: alert.level,
+          level: alert.level,
+          type: alert.type,
+          message: alert.message,
+          title: alert.type,
+          description: alert.message,
+          acknowledged: false,
+        });
       });
-    });
 
-    // Create a set of active alert IDs for quick lookup
-    const activeAlertIds = new Set(Object.keys(activeAlerts || {}));
+      // Create a set of active alert IDs for quick lookup
+      const activeAlertIds = new Set(Object.keys(activeAlerts || {}));
 
-    // Add historical alerts
-    alertHistory().forEach((alert) => {
-      // Skip if this alert is already in active alerts (avoid duplicates)
-      if (activeAlertIds.has(alert.id)) {
-        return;
-      }
+      // Add historical alerts
+      alertHistory().forEach((alert) => {
+        if (activeAlertIds.has(alert.id)) return;
 
-      allAlerts.push({
-        ...alert,
-        status: alert.acknowledged ? 'acknowledged' : 'resolved',
-        duration: formatDuration(alert.startTime, alert.lastSeen),
-        resourceType: getResourceType(alert.resourceName, alert.metadata),
+        items.push({
+          id: alert.id,
+          source: 'alert',
+          status: alert.acknowledged ? 'acknowledged' : 'resolved',
+          startTime: alert.startTime,
+          endTime: alert.lastSeen,
+          duration: formatDuration(alert.startTime, alert.lastSeen),
+          resourceName: alert.resourceName,
+          resourceType: getResourceType(alert.resourceName, alert.metadata),
+          resourceId: alert.resourceId,
+          node: alert.node,
+          severity: alert.level,
+          level: alert.level,
+          type: alert.type,
+          message: alert.message,
+          title: alert.type,
+          description: alert.message,
+          acknowledged: alert.acknowledged,
+        });
       });
-    });
+    }
 
-    return allAlerts;
+    // Add AI findings if not filtering to alerts only
+    if (currentSource === 'all' || currentSource === 'ai') {
+      aiFindingsHistory().forEach((finding) => {
+        const isSnoozed = finding.snoozed_until && new Date(finding.snoozed_until) > new Date();
+
+        let status = 'active';
+        if (finding.resolved_at) {
+          status = finding.auto_resolved ? 'auto-resolved' : 'resolved';
+        } else if (isSnoozed) {
+          status = 'snoozed';
+        } else if (finding.acknowledged_at) {
+          status = 'acknowledged';
+        }
+
+        items.push({
+          id: finding.id,
+          source: 'ai',
+          status,
+          startTime: finding.detected_at,
+          endTime: finding.resolved_at,
+          duration: formatDuration(finding.detected_at, finding.resolved_at),
+          resourceName: finding.resource_name,
+          resourceType: finding.resource_type,
+          resourceId: finding.resource_id,
+          node: finding.node,
+          severity: finding.severity,
+          level: finding.severity, // Map severity to level for compatibility
+          type: `AI: ${finding.title}`, // Prefix with AI to distinguish
+          message: finding.description,
+          title: finding.title,
+          description: finding.description,
+          acknowledged: !!finding.acknowledged_at,
+          autoResolved: finding.auto_resolved,
+        });
+      });
+    }
+
+    return items;
   });
 
   // Apply severity & search filters (time filtering is layered separately)
-  const severityAndSearchFilteredAlerts = createMemo(() => {
-    let filtered = allAlertsData();
+  const severityAndSearchFilteredItems = createMemo(() => {
+    let filtered = allHistoryData();
 
+    // Filter by severity (map AI severity to alert levels for consistent filtering)
     if (severityFilter() !== 'all') {
-      filtered = filtered.filter((a) => a.level === severityFilter());
+      const sevFilter = severityFilter();
+      filtered = filtered.filter((item) => {
+        // For alerts, use level; for AI findings, map severity
+        if (item.source === 'alert') {
+          return item.severity === sevFilter;
+        } else {
+          // AI findings: map warning->warning, critical->critical
+          return item.severity === sevFilter;
+        }
+      });
     }
 
     if (searchTerm()) {
       const term = searchTerm().toLowerCase();
-      filtered = filtered.filter((alert) => {
-        const name = alert.resourceName?.toLowerCase() ?? '';
-        const message = alert.message?.toLowerCase() ?? '';
-        const type = alert.type?.toLowerCase() ?? '';
-        const nodeName = alert.node?.toLowerCase() ?? '';
+      filtered = filtered.filter((item) => {
+        const name = item.resourceName?.toLowerCase() ?? '';
+        const title = item.title?.toLowerCase() ?? '';
+        const description = item.description?.toLowerCase() ?? '';
+        const nodeName = item.node?.toLowerCase() ?? '';
         return (
-          name.includes(term) || message.includes(term) || type.includes(term) || nodeName.includes(term)
+          name.includes(term) || title.includes(term) || description.includes(term) || nodeName.includes(term)
         );
       });
     }
@@ -4221,7 +5468,7 @@ function HistoryTab() {
 
   // Apply filters to get the final alert data
   const alertData = createMemo(() => {
-    let filtered = severityAndSearchFilteredAlerts();
+    let filtered = severityAndSearchFilteredItems();
     const currentTimeFilter = timeFilter();
 
     // Selected bar filter (takes precedence over time filter)
@@ -4355,7 +5602,7 @@ function HistoryTab() {
   const alertTrends = createMemo(() => {
     const now = Date.now();
     const msPerHour = MS_PER_HOUR;
-    const filteredAlerts = severityAndSearchFilteredAlerts();
+    const filteredAlerts = severityAndSearchFilteredItems();
     const niceBucketSizes = [1, 2, 3, 6, 12, 24, 48, 72, 168, 336, 720, 1440]; // hours
     const maxBuckets = 30;
 
@@ -4772,6 +6019,16 @@ function HistoryTab() {
           <option value="warning">Warning Only</option>
         </select>
 
+        <select
+          value={sourceFilter()}
+          onChange={(e) => setSourceFilter(e.currentTarget.value as 'all' | 'alerts' | 'ai')}
+          class="w-full sm:w-auto px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+        >
+          <option value="all">All Sources</option>
+          <option value="alerts">Alerts Only</option>
+          <option value="ai">AI Insights Only</option>
+        </select>
+
         <div class="w-full sm:flex-1 sm:max-w-xs">
           <input
             ref={searchInputRef}
@@ -4806,12 +6063,15 @@ function HistoryTab() {
           >
             {/* Table */}
             <div class="mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
-              <ScrollableTable minWidth="900px">
-                <table class="w-full min-w-[900px] text-xs sm:text-sm">
+              <ScrollableTable minWidth="1000px">
+                <table class="w-full min-w-[1000px] text-xs sm:text-sm">
                   <thead>
                     <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
                       <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Timestamp
+                      </th>
+                      <th class="p-1 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                        Source
                       </th>
                       <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Resource
@@ -4834,6 +6094,9 @@ function HistoryTab() {
                       <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Node
                       </th>
+                      <th class="p-1 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -4843,7 +6106,7 @@ function HistoryTab() {
                           {/* Date divider */}
                           <tr class="bg-gray-50 dark:bg-gray-900/40">
                             <td
-                              colspan="8"
+                              colspan="10"
                               class="py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
                             >
                               <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
@@ -4851,8 +6114,14 @@ function HistoryTab() {
                                   {group.label}
                                 </span>
                                 <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                                  {group.alerts.length}{' '}
-                                  {group.alerts.length === 1 ? 'alert' : 'alerts'}
+                                  {(() => {
+                                    const alertCount = group.alerts.filter(a => a.source === 'alert').length;
+                                    const aiCount = group.alerts.filter(a => a.source === 'ai').length;
+                                    const parts = [];
+                                    if (alertCount > 0) parts.push(`${alertCount} alert${alertCount === 1 ? '' : 's'}`);
+                                    if (aiCount > 0) parts.push(`${aiCount} AI insight${aiCount === 1 ? '' : 's'}`);
+                                    return parts.join(', ') || `${group.alerts.length} item${group.alerts.length === 1 ? '' : 's'}`;
+                                  })()}
                                 </span>
                               </div>
                             </td>
@@ -4862,9 +6131,8 @@ function HistoryTab() {
                           <For each={group.alerts}>
                             {(alert) => (
                               <tr
-                                class={`border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                                  alert.status === 'active' ? 'bg-red-50 dark:bg-red-900/10' : ''
-                                }`}
+                                class={`border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 ${alert.status === 'active' ? 'bg-red-50 dark:bg-red-900/10' : ''
+                                  }`}
                               >
                                 {/* Timestamp */}
                                 <td class="p-1 px-2 text-gray-600 dark:text-gray-400 font-mono">
@@ -4872,6 +6140,18 @@ function HistoryTab() {
                                     hour: '2-digit',
                                     minute: '2-digit',
                                   })}
+                                </td>
+
+                                {/* Source */}
+                                <td class="p-1 px-2 text-center">
+                                  <span
+                                    class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${alert.source === 'ai'
+                                      ? 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300'
+                                      : 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300'
+                                      }`}
+                                  >
+                                    {alert.source === 'ai' ? 'AI' : 'Alert'}
+                                  </span>
                                 </td>
 
                                 {/* Resource */}
@@ -4882,17 +6162,16 @@ function HistoryTab() {
                                 {/* Type */}
                                 <td class="p-1 px-2">
                                   <span
-                                    class={`text-xs px-1 py-0.5 rounded ${
-                                      alert.resourceType === 'VM'
-                                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                                        : alert.resourceType === 'CT'
-                                          ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
-                                          : alert.resourceType === 'Node'
-                                            ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
-                                            : alert.resourceType === 'Storage'
-                                              ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
-                                              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                    }`}
+                                    class={`text-xs px-1 py-0.5 rounded ${alert.resourceType === 'VM'
+                                      ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                                      : alert.resourceType === 'CT'
+                                        ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+                                        : alert.resourceType === 'Node'
+                                          ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
+                                          : alert.resourceType === 'Storage'
+                                            ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                      }`}
                                   >
                                     {alert.type}
                                   </span>
@@ -4901,11 +6180,10 @@ function HistoryTab() {
                                 {/* Severity */}
                                 <td class="p-1 px-2 text-center">
                                   <span
-                                    class={`text-xs px-2 py-0.5 rounded font-medium ${
-                                      alert.level === 'critical'
-                                        ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
-                                        : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
-                                    }`}
+                                    class={`text-xs px-2 py-0.5 rounded font-medium ${alert.level === 'critical'
+                                      ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                      : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                                      }`}
                                   >
                                     {alert.level}
                                   </span>
@@ -4927,13 +6205,12 @@ function HistoryTab() {
                                 {/* Status */}
                                 <td class="p-1 px-2 text-center">
                                   <span
-                                    class={`text-xs px-2 py-0.5 rounded ${
-                                      alert.status === 'active'
-                                        ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 font-medium'
-                                        : alert.status === 'acknowledged'
-                                          ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
-                                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                    }`}
+                                    class={`text-xs px-2 py-0.5 rounded ${alert.status === 'active'
+                                      ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 font-medium'
+                                      : alert.status === 'acknowledged'
+                                        ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                      }`}
                                   >
                                     {alert.status}
                                   </span>
@@ -4942,6 +6219,31 @@ function HistoryTab() {
                                 {/* Node */}
                                 <td class="p-1 px-2 text-gray-600 dark:text-gray-400 truncate">
                                   {alert.node || '—'}
+                                </td>
+
+                                {/* Actions */}
+                                <td class="p-1 px-2 text-center">
+                                  <Show when={alert.status === 'active' || alert.status === 'acknowledged'}>
+                                    <InvestigateAlertButton
+                                      alert={{
+                                        id: alert.id,
+                                        type: alert.type,
+                                        level: alert.level as 'warning' | 'critical',
+                                        resourceId: alert.resourceId || '',
+                                        resourceName: alert.resourceName,
+                                        node: alert.node || '',
+                                        instance: '',
+                                        message: alert.message || '',
+                                        value: 0,
+                                        threshold: 0,
+                                        startTime: alert.startTime,
+                                        lastSeen: alert.startTime,
+                                        acknowledged: alert.status === 'acknowledged',
+                                      }}
+                                      variant="icon"
+                                      size="sm"
+                                    />
+                                  </Show>
                                 </td>
                               </tr>
                             )}

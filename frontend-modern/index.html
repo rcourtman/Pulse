@@ -6,6 +6,34 @@
     <meta name="theme-color" content="#000000" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <title>Pulse</title>
+    <!-- Inline critical styles to prevent flash of unstyled content -->
+    <style>
+      /* Apply theme immediately before any CSS loads */
+      html { background-color: #f3f4f6; } /* gray-100 */
+      html.dark { background-color: #111827; } /* gray-900 */
+      body { margin: 0; min-height: 100vh; }
+      #root { min-height: 100vh; }
+      /* Hide content until app is ready to prevent layout shift */
+      #root:empty { 
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+        background-color: inherit;
+      }
+    </style>
+    <!-- Apply dark mode immediately from localStorage to prevent flash -->
+    <script>
+      (function() {
+        try {
+          var darkMode = localStorage.getItem('pulse_dark_mode');
+          var prefersDark = darkMode === 'true' || 
+            (darkMode === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (prefersDark) {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

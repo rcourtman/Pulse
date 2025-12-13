@@ -11,15 +11,17 @@ import (
 
 // Canonical API token scope strings.
 const (
-	ScopeWildcard        = "*"
-	ScopeMonitoringRead  = "monitoring:read"
-	ScopeMonitoringWrite = "monitoring:write"
-	ScopeDockerReport    = "docker:report"
-	ScopeDockerManage    = "docker:manage"
-	ScopeHostReport      = "host-agent:report"
-	ScopeHostManage      = "host-agent:manage"
-	ScopeSettingsRead    = "settings:read"
-	ScopeSettingsWrite   = "settings:write"
+	ScopeWildcard         = "*"
+	ScopeMonitoringRead   = "monitoring:read"
+	ScopeMonitoringWrite  = "monitoring:write"
+	ScopeDockerReport     = "docker:report"
+	ScopeDockerManage     = "docker:manage"
+	ScopeKubernetesReport = "kubernetes:report"
+	ScopeKubernetesManage = "kubernetes:manage"
+	ScopeHostReport       = "host-agent:report"
+	ScopeHostManage       = "host-agent:manage"
+	ScopeSettingsRead     = "settings:read"
+	ScopeSettingsWrite    = "settings:write"
 )
 
 // AllKnownScopes enumerates scopes recognized by the backend (excluding the wildcard sentinel).
@@ -28,6 +30,8 @@ var AllKnownScopes = []string{
 	ScopeMonitoringWrite,
 	ScopeDockerReport,
 	ScopeDockerManage,
+	ScopeKubernetesReport,
+	ScopeKubernetesManage,
 	ScopeHostReport,
 	ScopeHostManage,
 	ScopeSettingsRead,

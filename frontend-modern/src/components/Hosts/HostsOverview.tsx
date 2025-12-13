@@ -1,11 +1,11 @@
-import type { Component } from 'solid-js';
-import { For, Show, createMemo, createSignal, createEffect, on, onMount, onCleanup } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
+import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { useNavigate } from '@solidjs/router';
-import type { Host } from '@/types/api';
-import { formatBytes, formatPercent, formatRelativeTime, formatUptime } from '@/utils/format';
+import type { Host, HostRAIDArray } from '@/types/api';
+import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
 import { HostsFilter } from './HostsFilter';
 import { useWebSocket } from '@/App';
@@ -14,20 +14,461 @@ import { getHostStatusIndicator } from '@/utils/status';
 import { MetricText } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
-import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
-import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useBreakpoint, type ColumnPriority } from '@/hooks/useBreakpoint';
+import { useColumnVisibility } from '@/hooks/useColumnVisibility';
+import { aiChatStore } from '@/stores/aiChat';
+import { STORAGE_KEYS } from '@/utils/localStorage';
+import { useResourcesAsLegacy } from '@/hooks/useResources';
+import { HostMetadataAPI, type HostMetadata } from '@/api/hostMetadata';
+import { logger } from '@/utils/logger';
 
-// Global drawer state to persist across re-renders
-const drawerState = new Map<string, boolean>();
-
-type SortKey = 'name' | 'platform' | 'cpu' | 'memory' | 'disk' | 'uptime';
-
-interface HostsOverviewProps {
-  hosts: Host[];
-  connectionHealth: Record<string, boolean>;
+// Column definition for hosts table
+export interface HostColumnDef {
+  id: string;
+  label: string;
+  icon?: JSX.Element;
+  priority: ColumnPriority;
+  toggleable?: boolean;
+  width?: string;
+  sortKey?: string;
 }
 
-export const HostsOverview: Component<HostsOverviewProps> = (props) => {
+// Host table column definitions
+export const HOST_COLUMNS: HostColumnDef[] = [
+  // Essential - always visible
+  { id: 'name', label: 'Host', priority: 'essential', width: '140px', sortKey: 'name' },
+  { id: 'platform', label: 'Platform', priority: 'essential', width: '90px', sortKey: 'platform' },
+  { id: 'cpu', label: 'CPU', priority: 'essential', width: '140px', sortKey: 'cpu' },
+  { id: 'memory', label: 'Memory', priority: 'essential', width: '140px', sortKey: 'memory' },
+  { id: 'disk', label: 'Disk', priority: 'essential', width: '140px', sortKey: 'disk' },
+
+  // Secondary - visible on md+, toggleable
+  { id: 'temp', label: 'Temp', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>, priority: 'secondary', width: '50px', toggleable: true },
+  { id: 'uptime', label: 'Uptime', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>, priority: 'secondary', width: '65px', toggleable: true, sortKey: 'uptime' },
+  { id: 'agent', label: 'Agent', priority: 'secondary', width: '60px', toggleable: true },
+
+  // Supplementary - visible on lg+, toggleable
+  // Note: CPU count and load average removed - they're shown in the EnhancedCPUBar tooltip
+  { id: 'ip', label: 'IP', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>, priority: 'supplementary', width: '50px', toggleable: true },
+
+  // Detailed - visible on xl+, toggleable
+  { id: 'arch', label: 'Arch', priority: 'detailed', width: '55px', toggleable: true },
+  { id: 'kernel', label: 'Kernel', priority: 'detailed', width: '120px', toggleable: true },
+  { id: 'raid', label: 'RAID', priority: 'detailed', width: '60px', toggleable: true },
+];
+
+// Network info cell with rich tooltip showing interfaces, IPs, and traffic (matches GuestRow pattern)
+interface NetworkInterface {
+  name: string;
+  addresses?: string[];
+  mac?: string;
+  rxBytes?: number;
+  txBytes?: number;
+}
+
+function HostNetworkInfoCell(props: { networkInterfaces: NetworkInterface[] }) {
+  const [showTooltip, setShowTooltip] = createSignal(false);
+  const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
+
+  const hasInterfaces = () => props.networkInterfaces.length > 0;
+
+  const totalIps = () => {
+    return props.networkInterfaces.reduce((sum, iface) => sum + (iface.addresses?.length || 0), 0);
+  };
+
+  const handleMouseEnter = (e: MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
+    setShowTooltip(true);
+  };
+
+  const handleMouseLeave = () => {
+    setShowTooltip(false);
+  };
+
+  return (
+    <>
+      <span
+        class="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <Show when={hasInterfaces()} fallback={<span class="text-gray-400">—</span>}>
+          {/* Network globe icon */}
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+          </svg>
+          <span class="text-[10px] font-medium">{totalIps()}</span>
+        </Show>
+      </span>
+
+      <Show when={showTooltip() && hasInterfaces()}>
+        <Portal mount={document.body}>
+          <div
+            class="fixed z-[9999] pointer-events-none"
+            style={{
+              left: `${tooltipPos().x}px`,
+              top: `${tooltipPos().y - 8}px`,
+              transform: 'translate(-50%, -100%)',
+            }}
+          >
+            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[180px] max-w-[280px] border border-gray-700">
+              <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                Network Interfaces
+              </div>
+
+              <For each={props.networkInterfaces}>
+                {(iface, idx) => (
+                  <div class="py-1" classList={{ 'border-t border-gray-700/50': idx() > 0 }}>
+                    <div class="flex items-center gap-2 text-blue-400 font-medium">
+                      <span>{iface.name || 'eth' + idx()}</span>
+                      <Show when={iface.mac}>
+                        <span class="text-[9px] text-gray-500 font-normal">{iface.mac}</span>
+                      </Show>
+                    </div>
+                    <Show when={iface.addresses && iface.addresses.length > 0}>
+                      <div class="mt-0.5 flex flex-wrap gap-1">
+                        <For each={iface.addresses}>
+                          {(ip) => (
+                            <span class="text-gray-300 font-mono">{ip}</span>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
+                    <Show when={!iface.addresses || iface.addresses.length === 0}>
+                      <span class="text-gray-500 text-[9px]">No IP assigned</span>
+                    </Show>
+                    <Show when={(iface.rxBytes || 0) > 0 || (iface.txBytes || 0) > 0}>
+                      <div class="mt-0.5 text-[9px] text-gray-500">
+                        RX: {formatBytes(iface.rxBytes || 0)} / TX: {formatBytes(iface.txBytes || 0)}
+                      </div>
+                    </Show>
+                  </div>
+                )}
+              </For>
+            </div>
+          </div>
+        </Portal>
+      </Show>
+    </>
+  );
+}
+
+// Temperature cell with rich tooltip showing all sensor readings
+function HostTemperatureCell(props: { sensors: Record<string, number> | null | undefined }) {
+  const [showTooltip, setShowTooltip] = createSignal(false);
+  const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
+
+  // Get the primary (highest) temperature for display
+  const primaryTemp = createMemo(() => {
+    if (!props.sensors) return null;
+    const temps = Object.values(props.sensors);
+    if (temps.length === 0) return null;
+    // Find package/composite temp first, otherwise show max
+    const keys = Object.keys(props.sensors);
+    const packageKey = keys.find(k =>
+      k.toLowerCase().includes('package') ||
+      k.toLowerCase().includes('composite') ||
+      k.toLowerCase().includes('tctl')
+    );
+    if (packageKey) return props.sensors[packageKey];
+    return Math.max(...temps);
+  });
+
+  const hasSensors = () => props.sensors && Object.keys(props.sensors).length > 0;
+
+  // Color based on temperature
+  const textColorClass = createMemo(() => {
+    const temp = primaryTemp();
+    if (temp === null) return 'text-gray-400';
+    if (temp >= 80) return 'text-red-600 dark:text-red-400';
+    if (temp >= 70) return 'text-yellow-600 dark:text-yellow-400';
+    return 'text-gray-600 dark:text-gray-400';
+  });
+
+  const handleMouseEnter = (e: MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
+    setShowTooltip(true);
+  };
+
+  const handleMouseLeave = () => {
+    setShowTooltip(false);
+  };
+
+  // Sort sensors: package/composite first, then cores, then others
+  const sortedSensors = createMemo(() => {
+    if (!props.sensors) return [];
+    return Object.entries(props.sensors).sort(([a], [b]) => {
+      const aLower = a.toLowerCase();
+      const bLower = b.toLowerCase();
+      // Package/composite/tctl first
+      const aIsPrimary = aLower.includes('package') || aLower.includes('composite') || aLower.includes('tctl');
+      const bIsPrimary = bLower.includes('package') || bLower.includes('composite') || bLower.includes('tctl');
+      if (aIsPrimary && !bIsPrimary) return -1;
+      if (bIsPrimary && !aIsPrimary) return 1;
+      // Then cores by number
+      const aCoreMatch = aLower.match(/core\s*(\d+)/);
+      const bCoreMatch = bLower.match(/core\s*(\d+)/);
+      if (aCoreMatch && bCoreMatch) {
+        return parseInt(aCoreMatch[1]) - parseInt(bCoreMatch[1]);
+      }
+      return a.localeCompare(b);
+    });
+  });
+
+  return (
+    <>
+      <span
+        class={`inline-flex items-center text-xs whitespace-nowrap ${textColorClass()}`}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <Show when={primaryTemp() !== null} fallback={<span class="text-gray-400">—</span>}>
+          {Math.round(primaryTemp()!)}°C
+        </Show>
+      </span>
+
+      <Show when={showTooltip() && hasSensors()}>
+        <Portal mount={document.body}>
+          <div
+            class="fixed z-[9999] pointer-events-none"
+            style={{
+              left: `${tooltipPos().x}px`,
+              top: `${tooltipPos().y - 8}px`,
+              transform: 'translate(-50%, -100%)',
+            }}
+          >
+            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[160px] max-w-[240px] border border-gray-700">
+              <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                Temperature Sensors
+              </div>
+
+              <div class="space-y-0.5">
+                <For each={sortedSensors()}>
+                  {([name, temp]) => {
+                    const colorClass = temp >= 80 ? 'text-red-400' : temp >= 70 ? 'text-yellow-400' : 'text-gray-200';
+                    return (
+                      <div class="flex justify-between gap-3 py-0.5">
+                        <span class="text-gray-400 truncate max-w-[120px]">{name}</span>
+                        <span class={`font-medium font-mono ${colorClass}`}>{Math.round(temp)}°C</span>
+                      </div>
+                    );
+                  }}
+                </For>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      </Show>
+    </>
+  );
+}
+
+// RAID status cell with rich tooltip showing array details
+interface HostRAIDStatusCellProps {
+  raid: HostRAIDArray[] | undefined;
+}
+
+function HostRAIDStatusCell(props: HostRAIDStatusCellProps) {
+  const [showTooltip, setShowTooltip] = createSignal(false);
+  const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
+
+  const hasArrays = () => props.raid && props.raid.length > 0;
+
+  // Analyze overall status
+  const status = createMemo(() => {
+    if (!props.raid || props.raid.length === 0) {
+      return { type: 'none' as const, label: '-', color: 'text-gray-400' };
+    }
+
+    let hasDegraded = false;
+    let hasRebuilding = false;
+    let maxRebuildPercent = 0;
+
+    for (const array of props.raid) {
+      const state = array.state.toLowerCase();
+      if (state.includes('degraded') || array.failedDevices > 0) {
+        hasDegraded = true;
+      }
+      if (state.includes('recover') || state.includes('resync') || array.rebuildPercent > 0) {
+        hasRebuilding = true;
+        maxRebuildPercent = Math.max(maxRebuildPercent, array.rebuildPercent);
+      }
+    }
+
+    if (hasDegraded) {
+      return { type: 'degraded' as const, label: 'Degraded', color: 'text-red-600 dark:text-red-400' };
+    }
+    if (hasRebuilding) {
+      return {
+        type: 'rebuilding' as const,
+        label: `${Math.round(maxRebuildPercent)}%`,
+        color: 'text-amber-600 dark:text-amber-400'
+      };
+    }
+    return { type: 'ok' as const, label: 'OK', color: 'text-green-600 dark:text-green-400' };
+  });
+
+  const handleMouseEnter = (e: MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
+    setShowTooltip(true);
+  };
+
+  const handleMouseLeave = () => {
+    setShowTooltip(false);
+  };
+
+  // Get state color for individual devices
+  const getDeviceStateColor = (state: string) => {
+    const s = state.toLowerCase();
+    if (s.includes('active') || s.includes('sync')) return 'text-green-400';
+    if (s.includes('spare')) return 'text-blue-400';
+    if (s.includes('faulty') || s.includes('removed')) return 'text-red-400';
+    if (s.includes('rebuilding')) return 'text-amber-400';
+    return 'text-gray-400';
+  };
+
+  // Get array state color
+  const getArrayStateColor = (array: HostRAIDArray) => {
+    const state = array.state.toLowerCase();
+    if (state.includes('degraded') || array.failedDevices > 0) return 'text-red-400';
+    if (state.includes('recover') || state.includes('resync') || array.rebuildPercent > 0) return 'text-amber-400';
+    if (state.includes('clean') || state.includes('active')) return 'text-green-400';
+    return 'text-gray-400';
+  };
+
+  return (
+    <>
+      <span
+        class={`inline-flex items-center gap-1 text-xs whitespace-nowrap ${status().color}`}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <Show when={hasArrays()} fallback={<span class="text-gray-400">—</span>}>
+          {/* Status icon */}
+          <Show when={status().type === 'ok'}>
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </Show>
+          <Show when={status().type === 'degraded'}>
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+          </Show>
+          <Show when={status().type === 'rebuilding'}>
+            <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+            </svg>
+          </Show>
+          <span class="text-[10px] font-medium">
+            {props.raid!.length > 1 ? `${props.raid!.length} ` : ''}{status().label}
+          </span>
+        </Show>
+      </span>
+
+      <Show when={showTooltip() && hasArrays()}>
+        <Portal mount={document.body}>
+          <div
+            class="fixed z-[9999] pointer-events-none"
+            style={{
+              left: `${tooltipPos().x}px`,
+              top: `${tooltipPos().y - 8}px`,
+              transform: 'translate(-50%, -100%)',
+            }}
+          >
+            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2.5 py-2 min-w-[200px] max-w-[320px] border border-gray-700">
+              <div class="font-medium mb-1.5 text-gray-300 border-b border-gray-700 pb-1 flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
+                </svg>
+                RAID Arrays ({props.raid!.length})
+              </div>
+
+              <div class="space-y-2">
+                <For each={props.raid}>
+                  {(array) => (
+                    <div class="border-b border-gray-700/50 pb-1.5 last:border-0 last:pb-0">
+                      {/* Array header */}
+                      <div class="flex items-center justify-between gap-2 mb-1">
+                        <div class="flex items-center gap-1.5">
+                          <span class="font-mono text-blue-400">{array.device}</span>
+                          <span class="text-gray-500 uppercase text-[9px]">{array.level}</span>
+                        </div>
+                        <span class={`font-medium capitalize ${getArrayStateColor(array)}`}>
+                          {array.state}
+                        </span>
+                      </div>
+
+                      {/* Array name if present */}
+                      <Show when={array.name}>
+                        <div class="text-[9px] text-gray-500 mb-1">{array.name}</div>
+                      </Show>
+
+                      {/* Device counts */}
+                      <div class="flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] text-gray-400 mb-1">
+                        <span>Active: <span class="text-green-400">{array.activeDevices}</span></span>
+                        <span>Working: <span class="text-gray-200">{array.workingDevices}</span></span>
+                        <Show when={array.spareDevices > 0}>
+                          <span>Spare: <span class="text-blue-400">{array.spareDevices}</span></span>
+                        </Show>
+                        <Show when={array.failedDevices > 0}>
+                          <span>Failed: <span class="text-red-400">{array.failedDevices}</span></span>
+                        </Show>
+                      </div>
+
+                      {/* Rebuild progress */}
+                      <Show when={array.rebuildPercent > 0}>
+                        <div class="mb-1">
+                          <div class="flex items-center justify-between text-[9px] mb-0.5">
+                            <span class="text-amber-400">Rebuilding</span>
+                            <span class="text-gray-300">{array.rebuildPercent.toFixed(1)}%</span>
+                          </div>
+                          <div class="h-1 bg-gray-700 rounded-full overflow-hidden">
+                            <div
+                              class="h-full bg-amber-500 transition-all duration-300"
+                              style={{ width: `${array.rebuildPercent}%` }}
+                            />
+                          </div>
+                          <Show when={array.rebuildSpeed}>
+                            <div class="text-[9px] text-gray-500 mt-0.5">
+                              Speed: {array.rebuildSpeed}
+                            </div>
+                          </Show>
+                        </div>
+                      </Show>
+
+                      {/* Individual devices */}
+                      <Show when={array.devices && array.devices.length > 0}>
+                        <div class="flex flex-wrap gap-1 mt-1">
+                          <For each={array.devices}>
+                            {(dev) => (
+                              <span
+                                class={`font-mono text-[9px] px-1 py-0.5 rounded bg-gray-800 ${getDeviceStateColor(dev.state)}`}
+                                title={`${dev.device} - ${dev.state}`}
+                              >
+                                {dev.device.replace('/dev/', '')}
+                              </span>
+                            )}
+                          </For>
+                        </div>
+                      </Show>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      </Show>
+    </>
+  );
+}
+
+type SortKey = 'name' | 'platform' | 'cpu' | 'memory' | 'disk' | 'uptime';
+export const HostsOverview: Component = () => {
   const navigate = useNavigate();
   const wsContext = useWebSocket();
   const [search, setSearch] = createSignal('');
@@ -35,6 +476,77 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
   const [sortKey, setSortKey] = createSignal<SortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
   const { isMobile } = useBreakpoint();
+
+  // Use the hook directly to ensure reactivity is maintained
+  // This fixes the issue where props.hosts would not update when the underlying data changes
+  const { asHosts } = useResourcesAsLegacy();
+
+  // Column visibility management
+  const columnVisibility = useColumnVisibility(
+    STORAGE_KEYS.HOSTS_HIDDEN_COLUMNS,
+    HOST_COLUMNS as HostColumnDef[]
+  );
+  const visibleColumns = columnVisibility.visibleColumns;
+  const visibleColumnIds = createMemo(() => visibleColumns().map(c => c.id));
+  const isColVisible = (colId: string) => visibleColumnIds().includes(colId);
+
+  // Host metadata management (for custom URLs)
+  const [hostMetadata, setHostMetadata] = createSignal<Record<string, HostMetadata>>({});
+  const [hostMetadataVersion, setHostMetadataVersion] = createSignal(0);
+
+  // Load host metadata on mount
+  createEffect(() => {
+    HostMetadataAPI.getAllMetadata()
+      .then(data => {
+        setHostMetadata(data || {});
+        logger.debug('Loaded host metadata', { count: Object.keys(data || {}).length });
+      })
+      .catch(err => {
+        logger.warn('Failed to load host metadata', { error: err });
+      });
+  });
+
+  // Get custom URL for a host
+  const getHostCustomUrl = (hostId: string): string | undefined => {
+    // Access version to trigger reactivity when metadata changes
+    hostMetadataVersion();
+    return hostMetadata()[hostId]?.customUrl;
+  };
+
+  // Update custom URL for a host
+  const updateHostCustomUrl = async (hostId: string, url: string): Promise<boolean> => {
+    try {
+      await HostMetadataAPI.updateMetadata(hostId, { customUrl: url });
+      setHostMetadata(prev => ({
+        ...prev,
+        [hostId]: { ...prev[hostId], id: hostId, customUrl: url }
+      }));
+      setHostMetadataVersion(v => v + 1);
+      logger.info('Updated host custom URL', { hostId, url });
+      return true;
+    } catch (err) {
+      logger.error('Failed to update host custom URL', { hostId, url, error: err });
+      return false;
+    }
+  };
+
+  // Delete custom URL for a host
+  const deleteHostCustomUrl = async (hostId: string): Promise<boolean> => {
+    try {
+      await HostMetadataAPI.deleteMetadata(hostId);
+      setHostMetadata(prev => {
+        const next = { ...prev };
+        delete next[hostId];
+        return next;
+      });
+      setHostMetadataVersion(v => v + 1);
+      logger.info('Deleted host custom URL', { hostId });
+      return true;
+    } catch (err) {
+      logger.error('Failed to delete host custom URL', { hostId, error: err });
+      return false;
+    }
+  };
 
   const handleSort = (key: SortKey) => {
     if (sortKey() === key) {
@@ -54,18 +566,13 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
   let searchInputRef: HTMLInputElement | undefined;
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    // Don't interfere if user is already typing in an input
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
       return;
     }
-
-    // Don't interfere with modifier key shortcuts (except Shift for capitals)
     if (e.ctrlKey || e.metaKey || e.altKey) {
       return;
     }
-
-    // Focus search on printable characters and start typing
     if (e.key.length === 1 && searchInputRef) {
       e.preventDefault();
       searchInputRef.focus();
@@ -85,17 +592,19 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
   const reconnecting = () => wsContext.reconnecting();
   const reconnect = () => wsContext.reconnect();
 
+  // Access asHosts() directly inside the memo to maintain reactivity
+  const hosts = () => asHosts() as Host[];
+
   const isInitialLoading = createMemo(() => {
-    // Only show loading spinner when we've never been connected and have no hosts
-    return !connected() && !reconnecting() && props.hosts.length === 0;
+    return !connected() && !reconnecting() && hosts().length === 0;
   });
 
   const sortedHosts = createMemo(() => {
-    const hosts = [...props.hosts];
+    const hostList = [...hosts()];
     const key = sortKey();
     const direction = sortDirection();
 
-    return hosts.sort((a, b) => {
+    return hostList.sort((a: Host, b: Host) => {
       let comparison = 0;
       switch (key) {
         case 'name':
@@ -111,8 +620,8 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
           comparison = (a.memory?.usage ?? 0) - (b.memory?.usage ?? 0);
           break;
         case 'disk': {
-          const aDisk = a.disks?.reduce((sum, d) => sum + (d.usage ?? 0), 0) ?? 0;
-          const bDisk = b.disks?.reduce((sum, d) => sum + (d.usage ?? 0), 0) ?? 0;
+          const aDisk = a.disks?.reduce((sum: number, d: { usage?: number }) => sum + (d.usage ?? 0), 0) ?? 0;
+          const bDisk = b.disks?.reduce((sum: number, d: { usage?: number }) => sum + (d.usage ?? 0), 0) ?? 0;
           comparison = aDisk - bDisk;
           break;
         }
@@ -129,12 +638,10 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
   const matchesSearch = (host: Host) => {
     const term = search().toLowerCase();
     if (!term) return true;
-
     const hostname = (host.hostname || '').toLowerCase();
     const displayName = (host.displayName || '').toLowerCase();
     const platform = (host.platform || '').toLowerCase();
     const osName = (host.osName || '').toLowerCase();
-
     return (
       hostname.includes(term) ||
       displayName.includes(term) ||
@@ -154,33 +661,6 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
     return sortedHosts().filter((host) => matchesSearch(host) && matchesStatus(host));
   });
 
-  const getTemperatureValue = (host: Host) => {
-    if (!host.sensors?.temperatureCelsius) return null;
-    const temps = host.sensors.temperatureCelsius;
-
-    // Try to find a "package" or "composite" temperature first
-    const packageKey = Object.keys(temps).find(k =>
-      k.toLowerCase().includes('package') ||
-      k.toLowerCase().includes('composite') ||
-      k.toLowerCase().includes('tctl')
-    );
-
-    if (packageKey) return temps[packageKey];
-
-    // Fallback: average of all core temps
-    const coreKeys = Object.keys(temps).filter(k => k.toLowerCase().includes('core'));
-    if (coreKeys.length > 0) {
-      const sum = coreKeys.reduce((acc, k) => acc + temps[k], 0);
-      return sum / coreKeys.length;
-    }
-
-    // Fallback: just take the first available value if any
-    const values = Object.values(temps);
-    if (values.length > 0) return values[0];
-
-    return null;
-  };
-
   const getDiskStats = (host: Host) => {
     if (!host.disks || host.disks.length === 0) return { percent: 0, used: 0, total: 0 };
     const totalUsed = host.disks.reduce((sum, d) => sum + (d.used ?? 0), 0);
@@ -191,6 +671,8 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
       total: totalSize
     };
   };
+
+
 
   const thClass = "px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap";
 
@@ -272,7 +754,7 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
           when={sortedHosts().length === 0}
           fallback={
             <>
-              {/* Filters */}
+              {/* Filters with column visibility */}
               <HostsFilter
                 search={search}
                 setSearch={setSearch}
@@ -280,6 +762,10 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                 setStatusFilter={setStatusFilter}
                 onReset={() => setSearch('')}
                 searchInputRef={(el) => (searchInputRef = el)}
+                availableColumns={columnVisibility.availableToggles()}
+                isColumnHidden={columnVisibility.isHiddenByUser}
+                onColumnToggle={columnVisibility.toggle}
+                onColumnReset={columnVisibility.resetToDefaults}
               />
 
               {/* Host Table */}
@@ -303,397 +789,71 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                     <table class="w-full border-collapse whitespace-nowrap">
                       <thead>
                         <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
-                          <th
-                            class={`${thClass} text-left pl-4`}
-                            onClick={() => handleSort('name')}
-                          >
+                          {/* Essential columns */}
+                          <th class={`${thClass} text-left pl-4`} onClick={() => handleSort('name')}>
                             Host {renderSortIndicator('name')}
                           </th>
-                          <th class={thClass} onClick={() => handleSort('platform')}>
-                            Platform {renderSortIndicator('platform')}
-                          </th>
-                          <th class={thClass} onClick={() => handleSort('cpu')}>
-                            CPU {renderSortIndicator('cpu')}
-                          </th>
-                          <th class={thClass} onClick={() => handleSort('memory')}>
-                            Memory {renderSortIndicator('memory')}
-                          </th>
-                          <th class={thClass}>
-                            Temp
-                          </th>
-                          <th class={thClass} onClick={() => handleSort('disk')}>
-                            Disk {renderSortIndicator('disk')}
-                          </th>
-                          <th class={`${thClass} text-right pr-4`} onClick={() => handleSort('uptime')}>
-                            Uptime {renderSortIndicator('uptime')}
-                          </th>
+                          <Show when={isColVisible('platform')}>
+                            <th class={thClass} onClick={() => handleSort('platform')}>
+                              Platform {renderSortIndicator('platform')}
+                            </th>
+                          </Show>
+                          <Show when={isColVisible('cpu')}>
+                            <th class={thClass} onClick={() => handleSort('cpu')}>
+                              CPU {renderSortIndicator('cpu')}
+                            </th>
+                          </Show>
+                          <Show when={isColVisible('memory')}>
+                            <th class={thClass} onClick={() => handleSort('memory')}>
+                              Memory {renderSortIndicator('memory')}
+                            </th>
+                          </Show>
+                          <Show when={isColVisible('disk')}>
+                            <th class={thClass} onClick={() => handleSort('disk')}>
+                              Disk {renderSortIndicator('disk')}
+                            </th>
+                          </Show>
+
+                          {/* Secondary columns */}
+                          <Show when={isColVisible('temp')}>
+                            <th class={thClass} title="Temperature">
+                              <span class="inline-flex items-center justify-center">{HOST_COLUMNS.find(c => c.id === 'temp')?.icon}</span>
+                            </th>
+                          </Show>
+                          <Show when={isColVisible('uptime')}>
+                            <th class={thClass} onClick={() => handleSort('uptime')} title="Uptime">
+                              <span class="inline-flex items-center justify-center gap-1">
+                                <span>{HOST_COLUMNS.find(c => c.id === 'uptime')?.icon}</span>
+                                {renderSortIndicator('uptime')}
+                              </span>
+                            </th>
+                          </Show>
+                          <Show when={isColVisible('agent')}>
+                            <th class={thClass}>Agent</th>
+                          </Show>
+
+                          {/* Supplementary columns */}
+                          <Show when={isColVisible('ip')}>
+                            <th class={thClass} title="IP Address">
+                              <span class="inline-flex items-center justify-center">{HOST_COLUMNS.find(c => c.id === 'ip')?.icon}</span>
+                            </th>
+                          </Show>
+
+                          {/* Detailed columns */}
+                          <Show when={isColVisible('arch')}>
+                            <th class={thClass}>Arch</th>
+                          </Show>
+                          <Show when={isColVisible('kernel')}>
+                            <th class={thClass}>Kernel</th>
+                          </Show>
+                          <Show when={isColVisible('raid')}>
+                            <th class={thClass} title="Linux Software RAID (mdadm) Status">RAID</th>
+                          </Show>
                         </tr>
                       </thead>
                       <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         <For each={filteredHosts()}>
-                          {(host) => {
-                            // Drawer state
-                            const [drawerOpen, setDrawerOpen] = createSignal(drawerState.get(host.id) ?? false);
-
-                            // Check if we have additional info to show in drawer
-                            const hasDrawerContent = createMemo(() => {
-                              return (
-                                (host.disks && host.disks.length > 0) ||
-                                (host.networkInterfaces && host.networkInterfaces.length > 0) ||
-                                (host.raid && host.raid.length > 0) ||
-                                host.loadAverage ||
-                                host.cpuCount ||
-                                host.kernelVersion ||
-                                host.architecture ||
-                                host.agentVersion ||
-                                (host.sensors?.temperatureCelsius && Object.keys(host.sensors.temperatureCelsius).length > 0)
-                              );
-                            });
-
-                            const toggleDrawer = (event: MouseEvent) => {
-                              if (!hasDrawerContent()) return;
-                              const target = event.target as HTMLElement;
-                              if (target.closest('a, button, [data-prevent-toggle]')) {
-                                return;
-                              }
-                              setDrawerOpen((prev) => !prev);
-                            };
-
-                            // Sync drawer state
-                            createEffect(on(() => host.id, (id) => {
-                              const stored = drawerState.get(id);
-                              if (stored !== undefined) {
-                                setDrawerOpen(stored);
-                              } else {
-                                setDrawerOpen(false);
-                              }
-                            }));
-
-                            createEffect(() => {
-                              drawerState.set(host.id, drawerOpen());
-                            });
-
-                            const rowClass = () => {
-                              const base = 'transition-all duration-200';
-                              const hover = 'hover:bg-gray-50 dark:hover:bg-gray-800/50';
-                              const clickable = hasDrawerContent() ? 'cursor-pointer' : '';
-                              const expanded = drawerOpen() ? 'bg-gray-50 dark:bg-gray-800/40' : '';
-                              return `${base} ${hover} ${clickable} ${expanded}`;
-                            };
-
-                            const hostStatus = createMemo(() => getHostStatusIndicator(host));
-                            const cpuPercent = host.cpuUsage ?? 0;
-                            const memPercent = host.memory?.usage ?? 0;
-                            const tempValue = getTemperatureValue(host);
-                            const diskStats = getDiskStats(host);
-
-                            return (
-                              <>
-                                <tr
-                                  class={rowClass()}
-                                  onClick={toggleDrawer}
-                                  aria-expanded={drawerOpen()}
-                                >
-                                  {/* Host Name */}
-                                  <td class="pl-4 pr-2 py-1 align-middle">
-                                    <div class="flex items-center gap-2 min-w-0">
-                                      <StatusDot
-                                        variant={hostStatus().variant}
-                                        title={hostStatus().label}
-                                        ariaLabel={hostStatus().label}
-                                        size="xs"
-                                      />
-                                      <div class="min-w-0">
-                                        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                                          {host.displayName || host.hostname || host.id}
-                                        </p>
-                                        <Show when={host.displayName && host.displayName !== host.hostname}>
-                                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
-                                            {host.hostname}
-                                          </p>
-                                        </Show>
-                                        <Show when={host.lastSeen}>
-                                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
-                                            Updated {formatRelativeTime(host.lastSeen!)}
-                                          </p>
-                                        </Show>
-                                      </div>
-                                    </div>
-                                  </td>
-
-                                  {/* Platform */}
-                                  <td class="px-2 py-1 align-middle">
-                                    <div class="text-xs text-gray-700 dark:text-gray-300">
-                                      <p class="font-medium capitalize whitespace-nowrap">{host.platform || '—'}</p>
-                                      <Show when={host.osName}>
-                                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
-                                          {host.osName} {host.osVersion}
-                                        </p>
-                                      </Show>
-                                    </div>
-                                  </td>
-
-                                  {/* CPU */}
-                                  <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-                                    <Show when={isMobile()}>
-                                      <div class="md:hidden flex justify-center">
-                                        <MetricText value={cpuPercent} type="cpu" />
-                                      </div>
-                                    </Show>
-                                    <div class="hidden md:block">
-                                      <EnhancedCPUBar
-                                        usage={cpuPercent}
-                                        loadAverage={host.loadAverage?.[0]}
-                                        cores={host.cpuCount}
-                                      />
-                                    </div>
-                                  </td>
-
-                                  {/* Memory */}
-                                  <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-                                    <Show when={isMobile()}>
-                                      <div class="md:hidden flex justify-center">
-                                        <MetricText value={memPercent} type="memory" />
-                                      </div>
-                                    </Show>
-                                    <div class="hidden md:block">
-                                      <StackedMemoryBar
-                                        used={host.memory?.used || 0}
-                                        total={host.memory?.total || 0}
-                                        balloon={host.memory?.balloon || 0}
-                                        swapUsed={host.memory?.swapUsed || 0}
-                                        swapTotal={host.memory?.swapTotal || 0}
-                                      />
-                                    </div>
-                                  </td>
-
-                                  {/* Temperature */}
-                                  <td class="px-2 py-1 align-middle">
-                                    <div class="flex justify-center">
-                                      <Show when={tempValue !== null} fallback={<span class="text-xs text-gray-400">—</span>}>
-                                        <TemperatureGauge value={tempValue!} />
-                                      </Show>
-                                    </div>
-                                  </td>
-
-                                  {/* Disk */}
-                                  <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-                                    <Show when={isMobile()}>
-                                      <div class="md:hidden flex justify-center">
-                                        <MetricText value={diskStats.percent} type="disk" />
-                                      </div>
-                                    </Show>
-                                    <div class="hidden md:block">
-                                      <StackedDiskBar
-                                        disks={host.disks}
-                                        aggregateDisk={{
-                                          total: diskStats.total,
-                                          used: diskStats.used,
-                                          free: diskStats.total - diskStats.used,
-                                          usage: diskStats.percent / 100
-                                        }}
-                                      />
-                                    </div>
-                                  </td>
-
-                                  {/* Uptime */}
-                                  <td class="px-2 py-1 pr-4 align-middle">
-                                    <div class="flex justify-end">
-                                      <Show
-                                        when={host.uptimeSeconds}
-                                        fallback={<span class="text-xs text-gray-400">—</span>}
-                                      >
-                                        <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                                          {formatUptime(host.uptimeSeconds!)}
-                                        </span>
-                                      </Show>
-                                    </div>
-                                  </td>
-                                </tr>
-
-                                {/* Drawer - Additional Info */}
-                                <Show when={drawerOpen() && hasDrawerContent()}>
-                                  <tr>
-                                    <td colspan={7} class="p-0">
-                                      <div class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 border-t border-gray-100 dark:border-gray-800/50">
-                                        <div class="flex flex-wrap justify-start gap-3">
-                                          {/* System Info */}
-                                          <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                            <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">System</div>
-                                            <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                                              <Show when={host.cpuCount}>
-                                                <div class="flex items-center justify-between gap-2">
-                                                  <span class="font-medium text-gray-700 dark:text-gray-200">CPUs</span>
-                                                  <span class="text-right text-gray-600 dark:text-gray-300">{host.cpuCount}</span>
-                                                </div>
-                                              </Show>
-                                              <Show when={host.loadAverage && host.loadAverage.length > 0}>
-                                                <div class="flex items-center justify-between gap-2">
-                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Load Avg</span>
-                                                  <span class="text-right text-gray-600 dark:text-gray-300">{host.loadAverage!.map(l => l.toFixed(2)).join(', ')}</span>
-                                                </div>
-                                              </Show>
-                                              <Show when={host.architecture}>
-                                                <div class="flex items-center justify-between gap-2">
-                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Arch</span>
-                                                  <span class="text-right text-gray-600 dark:text-gray-300">{host.architecture}</span>
-                                                </div>
-                                              </Show>
-                                              <Show when={host.kernelVersion}>
-                                                <div class="flex items-center justify-between gap-2">
-                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Kernel</span>
-                                                  <span class="text-right text-gray-600 dark:text-gray-300 truncate">{host.kernelVersion}</span>
-                                                </div>
-                                              </Show>
-                                              <Show when={host.agentVersion}>
-                                                <div class="flex items-center justify-between gap-2">
-                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Agent</span>
-                                                  <span class="text-right text-gray-600 dark:text-gray-300">{host.agentVersion}</span>
-                                                </div>
-                                              </Show>
-                                            </div>
-                                          </div>
-
-                                          {/* Network Interfaces */}
-                                          <Show when={host.networkInterfaces && host.networkInterfaces.length > 0}>
-                                            <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Network</div>
-                                              <div class="mt-2 space-y-2 text-[11px]">
-                                                <For each={host.networkInterfaces?.slice(0, 4)}>
-                                                  {(iface) => (
-                                                    <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700/70">
-                                                      <div class="font-medium text-gray-700 dark:text-gray-200">{iface.name}</div>
-                                                      <Show when={iface.addresses && iface.addresses.length > 0}>
-                                                        <div class="flex flex-wrap gap-1 mt-1 text-[10px]">
-                                                          <For each={iface.addresses}>
-                                                            {(addr) => (
-                                                              <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                                                                {addr}
-                                                              </span>
-                                                            )}
-                                                          </For>
-                                                        </div>
-                                                      </Show>
-                                                    </div>
-                                                  )}
-                                                </For>
-                                              </div>
-                                            </div>
-                                          </Show>
-
-                                          {/* Disk Info */}
-                                          <Show when={host.disks && host.disks.length > 0}>
-                                            <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Disks</div>
-                                              <div class="mt-2 space-y-2 text-[11px]">
-                                                <For each={host.disks?.slice(0, 3)}>
-                                                  {(disk) => {
-                                                    const diskPercent = () => disk.usage ?? 0;
-                                                    return (
-                                                      <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700/70">
-                                                        <div class="flex items-center justify-between">
-                                                          <span class="font-medium text-gray-700 dark:text-gray-200 truncate">{disk.mountpoint || disk.device}</span>
-                                                          <span class="text-[10px] text-gray-500 dark:text-gray-400">
-                                                            {formatBytes(disk.used ?? 0, 0)} / {formatBytes(disk.total ?? 0, 0)}
-                                                          </span>
-                                                        </div>
-                                                        <Show when={diskPercent() > 0}>
-                                                          <div class="mt-1">
-                                                            <MetricBar
-                                                              value={diskPercent()}
-                                                              label={formatPercent(diskPercent())}
-                                                              type="disk"
-                                                              class="max-w-none"
-                                                            />
-                                                          </div>
-                                                        </Show>
-                                                      </div>
-                                                    );
-                                                  }}
-                                                </For>
-                                              </div>
-                                            </div>
-                                          </Show>
-
-                                          {/* Temperature Sensors */}
-                                          <Show when={host.sensors?.temperatureCelsius && Object.keys(host.sensors.temperatureCelsius).length > 0}>
-                                            <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Temperatures</div>
-                                              <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                                                <For each={Object.entries(host.sensors!.temperatureCelsius!).slice(0, 5)}>
-                                                  {([name, temp]) => (
-                                                    <div class="flex items-center justify-between gap-2">
-                                                      <span class="font-medium text-gray-700 dark:text-gray-200 truncate">{name}</span>
-                                                      <span class={`text-right ${temp > 80 ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-600 dark:text-gray-300'}`}>
-                                                        {temp.toFixed(1)}°C
-                                                      </span>
-                                                    </div>
-                                                  )}
-                                                </For>
-                                              </div>
-                                            </div>
-                                          </Show>
-
-                                          {/* RAID Arrays */}
-                                          <Show when={host.raid && host.raid.length > 0}>
-                                            <For each={host.raid!}>
-                                              {(array) => {
-                                                const isDegraded = () => array.state.toLowerCase().includes('degraded') || array.failedDevices > 0;
-                                                const isRebuilding = () => array.state.toLowerCase().includes('recover') || array.state.toLowerCase().includes('resync') || array.rebuildPercent > 0;
-                                                const isHealthy = () => !isDegraded() && !isRebuilding() && array.state.toLowerCase().includes('clean');
-
-                                                const stateColor = () => {
-                                                  if (isDegraded()) return 'text-red-600 dark:text-red-400 font-semibold';
-                                                  if (isRebuilding()) return 'text-amber-600 dark:text-amber-400 font-semibold';
-                                                  if (isHealthy()) return 'text-green-600 dark:text-green-400';
-                                                  return 'text-gray-600 dark:text-gray-300';
-                                                };
-
-                                                return (
-                                                  <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                                    <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                                                      RAID {array.level.replace('raid', '')} - {array.device}
-                                                    </div>
-                                                    <div class="mt-2 space-y-1 text-[11px]">
-                                                      <div class="flex items-center justify-between gap-2">
-                                                        <span class="font-medium text-gray-700 dark:text-gray-200">State</span>
-                                                        <span class={stateColor()}>{array.state}</span>
-                                                      </div>
-                                                      <div class="flex items-center justify-between gap-2">
-                                                        <span class="font-medium text-gray-700 dark:text-gray-200">Devices</span>
-                                                        <span class="text-gray-600 dark:text-gray-300">
-                                                          {array.activeDevices}/{array.totalDevices}
-                                                          {array.failedDevices > 0 && <span class="text-red-600 dark:text-red-400"> ({array.failedDevices} failed)</span>}
-                                                        </span>
-                                                      </div>
-                                                      <Show when={isRebuilding() && array.rebuildPercent > 0}>
-                                                        <div class="flex items-center justify-between gap-2">
-                                                          <span class="font-medium text-gray-700 dark:text-gray-200">Rebuild</span>
-                                                          <span class="text-amber-600 dark:text-amber-400 font-medium">
-                                                            {array.rebuildPercent.toFixed(1)}%
-                                                          </span>
-                                                        </div>
-                                                        <Show when={array.rebuildSpeed}>
-                                                          <div class="flex items-center justify-between gap-2">
-                                                            <span class="font-medium text-gray-700 dark:text-gray-200">Speed</span>
-                                                            <span class="text-gray-600 dark:text-gray-300">{array.rebuildSpeed}</span>
-                                                          </div>
-                                                        </Show>
-                                                      </Show>
-                                                    </div>
-                                                  </div>
-                                                );
-                                              }}
-                                            </For>
-                                          </Show>
-                                        </div>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                </Show>
-                              </>
-                            );
-                          }}
+                          {(host) => <HostRow host={host} isColVisible={isColVisible} isMobile={isMobile} getDiskStats={getDiskStats} customUrl={getHostCustomUrl(host.id)} onUpdateCustomUrl={updateHostCustomUrl} onDeleteCustomUrl={deleteHostCustomUrl} />}
                         </For>
                       </tbody>
                     </table>
@@ -734,5 +894,392 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
         </Show>
       </Show>
     </div>
+  );
+};
+
+// Individual host row component
+interface HostRowProps {
+  host: Host;
+  isColVisible: (colId: string) => boolean;
+  isMobile: () => boolean;
+  getDiskStats: (host: Host) => { percent: number; used: number; total: number };
+  customUrl?: string;
+  onUpdateCustomUrl: (hostId: string, url: string) => Promise<boolean>;
+  onDeleteCustomUrl: (hostId: string) => Promise<boolean>;
+}
+
+const HostRow: Component<HostRowProps> = (props) => {
+  const { host } = props;
+
+  // Check if this host is in AI context
+  const isInAIContext = createMemo(() => aiChatStore.enabled && aiChatStore.hasContextItem(host.id));
+
+  // URL editing state
+  const [isEditingUrl, setIsEditingUrl] = createSignal(false);
+  const [editingUrlValue, setEditingUrlValue] = createSignal('');
+  const [isSavingUrl, setIsSavingUrl] = createSignal(false);
+  let urlInputRef: HTMLInputElement | undefined;
+
+  // Start editing URL
+  const startEditingUrl = (e: MouseEvent) => {
+    e.stopPropagation();
+    setEditingUrlValue(props.customUrl || '');
+    setIsEditingUrl(true);
+    // Focus input after render
+    setTimeout(() => urlInputRef?.focus(), 0);
+  };
+
+  // Save URL
+  const saveUrl = async () => {
+    const url = editingUrlValue().trim();
+    setIsSavingUrl(true);
+    try {
+      if (url) {
+        await props.onUpdateCustomUrl(host.id, url);
+      } else {
+        await props.onDeleteCustomUrl(host.id);
+      }
+      setIsEditingUrl(false);
+    } finally {
+      setIsSavingUrl(false);
+    }
+  };
+
+  // Cancel editing
+  const cancelEditingUrl = () => {
+    setIsEditingUrl(false);
+    setEditingUrlValue('');
+  };
+
+  // Build context for AI - includes routing fields
+  const buildHostContext = (): Record<string, unknown> => ({
+    hostName: host.displayName || host.hostname,
+    hostname: host.hostname,
+    node: host.hostname,           // Used by AI for command routing
+    target_host: host.hostname,    // Explicit routing hint
+    platform: host.platform,
+    osName: host.osName,
+    osVersion: host.osVersion,
+    cpuUsage: host.cpuUsage ? `${host.cpuUsage.toFixed(1)}%` : undefined,
+    memoryUsage: host.memory?.usage ? `${host.memory.usage.toFixed(1)}%` : undefined,
+    uptime: host.uptimeSeconds ? formatUptime(host.uptimeSeconds) : undefined,
+  });
+
+  // Handle row click - toggle AI context selection
+  const handleRowClick = (event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('a, button, [data-prevent-toggle], [data-url-editor]')) {
+      return;
+    }
+
+    // If AI is enabled, toggle AI context
+    if (aiChatStore.enabled) {
+      if (aiChatStore.hasContextItem(host.id)) {
+        aiChatStore.removeContextItem(host.id);
+      } else {
+        aiChatStore.addContextItem('host', host.id, host.displayName || host.hostname, buildHostContext());
+        if (!aiChatStore.isOpen) {
+          aiChatStore.open();
+        }
+      }
+    }
+  };
+
+  const hostStatus = createMemo(() => getHostStatusIndicator(host));
+  const cpuPercent = host.cpuUsage ?? 0;
+  const memPercent = host.memory?.usage ?? 0;
+  const diskStats = props.getDiskStats(host);
+
+  const rowClass = () => {
+    const base = 'transition-all duration-200';
+    const hover = 'hover:bg-gray-50 dark:hover:bg-gray-800/50';
+    const clickable = aiChatStore.enabled ? 'cursor-pointer' : '';
+    const aiContext = isInAIContext() ? 'ai-context-row' : '';
+    return `${base} ${hover} ${clickable} ${aiContext}`;
+  };
+
+  return (
+    <tr class={rowClass()} onClick={handleRowClick}>
+      {/* Host Name - always visible */}
+      <td class="pl-4 pr-2 py-1 align-middle">
+        <div class="flex items-center gap-2 min-w-0">
+          <StatusDot
+            variant={hostStatus().variant}
+            title={hostStatus().label}
+            ariaLabel={hostStatus().label}
+            size="xs"
+          />
+          <Show
+            when={isEditingUrl()}
+            fallback={
+              <div class="min-w-0 flex items-center gap-1.5 group/name">
+                <div>
+                  <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                    {host.displayName || host.hostname || host.id}
+                  </p>
+                  <Show when={host.displayName && host.displayName !== host.hostname}>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
+                      {host.hostname}
+                    </p>
+                  </Show>
+                  <Show when={host.lastSeen}>
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
+                      Updated {formatRelativeTime(host.lastSeen!)}
+                    </p>
+                  </Show>
+                </div>
+                {/* Custom URL link */}
+                <Show when={props.customUrl}>
+                  <a
+                    href={props.customUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                    title={`Open ${props.customUrl}`}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <svg
+                      class="w-3.5 h-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                      />
+                    </svg>
+                  </a>
+                </Show>
+                {/* Edit URL button - shows on hover */}
+                <button
+                  type="button"
+                  onClick={startEditingUrl}
+                  class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
+                  title={props.customUrl ? 'Edit URL' : 'Add URL'}
+                >
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+                {/* AI context indicator */}
+                <Show when={isInAIContext()}>
+                  <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                    </svg>
+                  </span>
+                </Show>
+              </div>
+            }
+          >
+            {/* URL editing mode */}
+            <div class="flex items-center gap-1 min-w-0" data-url-editor>
+              <input
+                ref={urlInputRef}
+                type="text"
+                value={editingUrlValue()}
+                onInput={(e) => setEditingUrlValue(e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveUrl();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelEditingUrl();
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="https://192.168.1.100:8080"
+                class="w-40 px-2 py-0.5 text-xs border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                disabled={isSavingUrl()}
+              />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  saveUrl();
+                }}
+                disabled={isSavingUrl()}
+                class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+                title="Save (Enter)"
+              >
+                ✓
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  cancelEditingUrl();
+                }}
+                disabled={isSavingUrl()}
+                class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors disabled:opacity-50"
+                title="Cancel (Esc)"
+              >
+                ✕
+              </button>
+            </div>
+          </Show>
+        </div>
+      </td>
+
+      {/* Platform */}
+      <Show when={props.isColVisible('platform')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="text-xs text-gray-700 dark:text-gray-300">
+            <p class="font-medium capitalize whitespace-nowrap">{host.platform || '—'}</p>
+            <Show when={host.osName}>
+              <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
+                {host.osName} {host.osVersion}
+              </p>
+            </Show>
+          </div>
+        </td>
+      </Show>
+
+      {/* CPU */}
+      <Show when={props.isColVisible('cpu')}>
+        <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+          <Show when={props.isMobile()}>
+            <div class="md:hidden flex justify-center">
+              <MetricText value={cpuPercent} type="cpu" />
+            </div>
+          </Show>
+          <div class="hidden md:block">
+            <EnhancedCPUBar
+              usage={cpuPercent}
+              loadAverage={host.loadAverage?.[0]}
+              cores={host.cpuCount}
+            />
+          </div>
+        </td>
+      </Show>
+
+      {/* Memory */}
+      <Show when={props.isColVisible('memory')}>
+        <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+          <Show when={props.isMobile()}>
+            <div class="md:hidden flex justify-center">
+              <MetricText value={memPercent} type="memory" />
+            </div>
+          </Show>
+          <div class="hidden md:block">
+            <StackedMemoryBar
+              used={host.memory?.used || 0}
+              total={host.memory?.total || 0}
+              balloon={host.memory?.balloon || 0}
+              swapUsed={host.memory?.swapUsed || 0}
+              swapTotal={host.memory?.swapTotal || 0}
+            />
+          </div>
+        </td>
+      </Show>
+
+      {/* Disk */}
+      <Show when={props.isColVisible('disk')}>
+        <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+          <Show when={props.isMobile()}>
+            <div class="md:hidden flex justify-center">
+              <MetricText value={diskStats.percent} type="disk" />
+            </div>
+          </Show>
+          <div class="hidden md:block">
+            <StackedDiskBar
+              disks={host.disks}
+              aggregateDisk={{
+                total: diskStats.total,
+                used: diskStats.used,
+                free: diskStats.total - diskStats.used,
+                usage: diskStats.percent / 100
+              }}
+            />
+          </div>
+        </td>
+      </Show>
+
+      {/* Temperature - shows primary temp with all sensors in tooltip */}
+      <Show when={props.isColVisible('temp')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center">
+            <HostTemperatureCell sensors={host.sensors?.temperatureCelsius} />
+          </div>
+        </td>
+      </Show>
+
+      {/* Uptime */}
+      <Show when={props.isColVisible('uptime')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center">
+            <Show when={host.uptimeSeconds} fallback={<span class="text-xs text-gray-400">—</span>}>
+              <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                {formatUptime(host.uptimeSeconds!)}
+              </span>
+            </Show>
+          </div>
+        </td>
+      </Show>
+
+      {/* Agent Version */}
+      <Show when={props.isColVisible('agent')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center">
+            <Show when={host.agentVersion} fallback={<span class="text-xs text-gray-400">—</span>}>
+              <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                {host.agentVersion}
+              </span>
+            </Show>
+          </div>
+        </td>
+      </Show>
+
+      {/* IP Address - uses icon + count with tooltip */}
+      <Show when={props.isColVisible('ip')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center">
+            <HostNetworkInfoCell networkInterfaces={host.networkInterfaces || []} />
+          </div>
+        </td>
+      </Show>
+
+      {/* Architecture */}
+      <Show when={props.isColVisible('arch')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center">
+            <Show when={host.architecture} fallback={<span class="text-xs text-gray-400">—</span>}>
+              <span class="text-[10px] text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                {host.architecture}
+              </span>
+            </Show>
+          </div>
+        </td>
+      </Show>
+
+      {/* Kernel */}
+      <Show when={props.isColVisible('kernel')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center">
+            <Show when={host.kernelVersion} fallback={<span class="text-xs text-gray-400">—</span>}>
+              <span
+                class="text-[10px] text-gray-700 dark:text-gray-300 max-w-[100px] truncate"
+                title={host.kernelVersion}
+              >
+                {host.kernelVersion}
+              </span>
+            </Show>
+          </div>
+        </td>
+      </Show>
+
+      {/* RAID Status */}
+      <Show when={props.isColVisible('raid')}>
+        <td class="px-2 py-1 align-middle">
+          <div class="flex justify-center">
+            <HostRAIDStatusCell raid={host.raid} />
+          </div>
+        </td>
+      </Show>
+    </tr>
   );
 };

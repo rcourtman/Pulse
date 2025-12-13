@@ -134,12 +134,10 @@ const UnifiedBackups: Component = () => {
     }
   });
 
-  const [useRelativeTime] = createLocalStorageBooleanSignal(
+  const [useRelativeTime, setUseRelativeTime] = createLocalStorageBooleanSignal(
     STORAGE_KEYS.BACKUPS_USE_RELATIVE_TIME,
     false, // Default to absolute time
   );
-  // TODO: Add time format toggle to BackupsFilter component
-  // const setUseRelativeTime = ...;
 
   // Helper functions
   const getDaySuffix = (day: number) => {
@@ -1932,6 +1930,8 @@ const UnifiedBackups: Component = () => {
           sortDirection={sortDirection}
           setSortDirection={setSortDirection}
           onReset={resetFilters}
+          useRelativeTime={useRelativeTime}
+          setUseRelativeTime={setUseRelativeTime}
         />
 
         {/* Table */}
@@ -2364,7 +2364,7 @@ const UnifiedBackups: Component = () => {
                                   </td>
                                 </Show>
                                 <td
-                                  class="hidden md:table-cell p-0.5 px-1.5 cursor-help align-middle"
+                                  class="hidden md:table-cell p-0.5 px-1.5 align-middle"
                                   onMouseEnter={(e) => {
                                     const details = [];
 

@@ -48,7 +48,7 @@ export function DiskList(props: DiskListProps) {
     <Show
       when={props.disks && props.disks.length > 0}
       fallback={
-        <span class="text-gray-400 text-sm cursor-help" title={getDiskStatusTooltip()}>
+        <span class="text-gray-400 text-sm" title={getDiskStatusTooltip()}>
           -
         </span>
       }

@@ -26,6 +26,9 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -48,14 +51,19 @@ type Router struct {
 	notificationHandlers      *NotificationHandlers
 	notificationQueueHandlers *NotificationQueueHandlers
 	dockerAgentHandlers       *DockerAgentHandlers
+	kubernetesAgentHandlers   *KubernetesAgentHandlers
 	hostAgentHandlers         *HostAgentHandlers
 	temperatureProxyHandlers  *TemperatureProxyHandlers
 	systemSettingsHandler     *SystemSettingsHandler
+	aiSettingsHandler         *AISettingsHandler
+	resourceHandlers          *ResourceHandlers
+	agentExecServer           *agentexec.Server
 	wsHub                     *websocket.Hub
 	reloadFunc                func() error
 	updateManager             *updates.Manager
 	updateHistory             *updates.UpdateHistory
 	exportLimiter             *RateLimiter
+	downloadLimiter           *RateLimiter
 	persistence               *config.ConfigPersistence
 	oidcMu                    sync.Mutex
 	oidcService               *OIDCService
@@ -70,6 +78,8 @@ type Router struct {
 	publicURLDetected    bool
 	bootstrapTokenHash   string
 	bootstrapTokenPath   string
+	checksumMu           sync.RWMutex
+	checksumCache        map[string]checksumCacheEntry
 }
 
 func pulseBinDir() string {
@@ -119,17 +129,19 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 	updateManager.SetHistory(updateHistory)
 
 	r := &Router{
-		mux:           http.NewServeMux(),
-		config:        cfg,
-		monitor:       monitor,
-		wsHub:         wsHub,
-		reloadFunc:    reloadFunc,
-		updateManager: updateManager,
-		updateHistory: updateHistory,
-		exportLimiter: NewRateLimiter(5, 1*time.Minute), // 5 attempts per minute
-		persistence:   config.NewConfigPersistence(cfg.DataPath),
-		serverVersion: strings.TrimSpace(serverVersion),
-		projectRoot:   projectRoot,
+		mux:             http.NewServeMux(),
+		config:          cfg,
+		monitor:         monitor,
+		wsHub:           wsHub,
+		reloadFunc:      reloadFunc,
+		updateManager:   updateManager,
+		updateHistory:   updateHistory,
+		exportLimiter:   NewRateLimiter(5, 1*time.Minute),  // 5 attempts per minute
+		downloadLimiter: NewRateLimiter(60, 1*time.Minute), // downloads/installers per minute per IP
+		persistence:     config.NewConfigPersistence(cfg.DataPath),
+		serverVersion:   strings.TrimSpace(serverVersion),
+		projectRoot:     projectRoot,
+		checksumCache:   make(map[string]checksumCacheEntry),
 	}
 
 	r.initializeBootstrapToken()
@@ -173,17 +185,21 @@ func (r *Router) setupRoutes() {
 	r.notificationQueueHandlers = NewNotificationQueueHandlers(r.monitor)
 	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
 	dockerMetadataHandler := NewDockerMetadataHandler(r.config.DataPath)
+	hostMetadataHandler := NewHostMetadataHandler(r.config.DataPath)
 	r.configHandlers = NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings)
 	updateHandlers := NewUpdateHandlers(r.updateManager, r.updateHistory)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.monitor, r.wsHub)
+	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.monitor, r.wsHub)
 	r.hostAgentHandlers = NewHostAgentHandlers(r.monitor, r.wsHub)
 	r.temperatureProxyHandlers = NewTemperatureProxyHandlers(r.config, r.persistence, r.reloadFunc)
+	r.resourceHandlers = NewResourceHandlers()
 
 	// API routes
 	r.mux.HandleFunc("/api/health", r.handleHealth)
 	r.mux.HandleFunc("/api/monitoring/scheduler/health", RequireAuth(r.config, r.handleSchedulerHealth))
 	r.mux.HandleFunc("/api/state", r.handleState)
 	r.mux.HandleFunc("/api/agents/docker/report", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleReport)))
+	r.mux.HandleFunc("/api/agents/kubernetes/report", RequireAuth(r.config, RequireScope(config.ScopeKubernetesReport, r.kubernetesAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/host/report", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/host/lookup", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleLookup)))
 	r.mux.HandleFunc("/api/agents/host/", RequireAdmin(r.config, RequireScope(config.ScopeHostManage, r.hostAgentHandlers.HandleDeleteHost)))
@@ -194,10 +210,13 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/temperature-proxy/host-status", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleHostProxyStatus)))
 	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleCommandAck)))
 	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
+	r.mux.HandleFunc("/api/agents/kubernetes/clusters/", RequireAdmin(r.config, RequireScope(config.ScopeKubernetesManage, r.kubernetesAgentHandlers.HandleClusterActions)))
 	r.mux.HandleFunc("/api/version", r.handleVersion)
 	r.mux.HandleFunc("/api/storage/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorage)))
 	r.mux.HandleFunc("/api/storage-charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorageCharts)))
 	r.mux.HandleFunc("/api/charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleCharts)))
+	r.mux.HandleFunc("/api/metrics-store/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsStoreStats)))
+	r.mux.HandleFunc("/api/metrics-store/history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsHistory)))
 	r.mux.HandleFunc("/api/diagnostics", RequireAuth(r.config, r.handleDiagnostics))
 	r.mux.HandleFunc("/api/diagnostics/temperature-proxy/register-nodes", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsRegisterProxyNodes)))
 	r.mux.HandleFunc("/api/diagnostics/docker/prepare-token", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsDockerPrepareToken)))
@@ -215,6 +234,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/backups/pve", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleBackupsPVE)))
 	r.mux.HandleFunc("/api/backups/pbs", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleBackupsPBS)))
 	r.mux.HandleFunc("/api/snapshots", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleSnapshots)))
+
+	// Unified resources API (Phase 1 of unified resource architecture)
+	r.mux.HandleFunc("/api/resources", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResources)))
+	r.mux.HandleFunc("/api/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResourceStats)))
+	r.mux.HandleFunc("/api/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResource)))
 
 	// Guest metadata routes
 	r.mux.HandleFunc("/api/guests/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, guestMetadataHandler.HandleGetMetadata)))
@@ -259,6 +283,30 @@ func (r *Router) setupRoutes() {
 				return
 			}
 			dockerMetadataHandler.HandleDeleteMetadata(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	// Host metadata routes
+	r.mux.HandleFunc("/api/hosts/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, hostMetadataHandler.HandleGetMetadata)))
+	r.mux.HandleFunc("/api/hosts/metadata/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			if !ensureScope(w, req, config.ScopeMonitoringRead) {
+				return
+			}
+			hostMetadataHandler.HandleGetMetadata(w, req)
+		case http.MethodPut, http.MethodPost:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
+			hostMetadataHandler.HandleUpdateMetadata(w, req)
+		case http.MethodDelete:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
+			hostMetadataHandler.HandleDeleteMetadata(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -920,6 +968,9 @@ func (r *Router) setupRoutes() {
 	// Generate setup script URL with temporary token (for authenticated users)
 	r.mux.HandleFunc("/api/setup-script-url", r.configHandlers.HandleSetupScriptURL)
 
+	// Generate agent install command with API token (for authenticated users)
+	r.mux.HandleFunc("/api/agent-install-command", RequireAuth(r.config, r.configHandlers.HandleAgentInstallCommand))
+
 	// Auto-register route for setup scripts
 	r.mux.HandleFunc("/api/auto-register", r.configHandlers.HandleAutoRegister)
 	// Discovery endpoint
@@ -994,23 +1045,124 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/system/proxy-public-key", r.handleProxyPublicKey)
 	// Old API token endpoints removed - now using /api/security/regenerate-token
 
-	// Docker agent download endpoints
-	r.mux.HandleFunc("/install-docker-agent.sh", r.handleDownloadInstallScript) // Serves the Docker agent install script
-	r.mux.HandleFunc("/install-container-agent.sh", r.handleDownloadContainerAgentInstallScript)
-	r.mux.HandleFunc("/download/pulse-docker-agent", r.handleDownloadAgent)
+	// Agent execution server for AI tool use
+	r.agentExecServer = agentexec.NewServer(func(token string) bool {
+		// Validate agent tokens using the API tokens system
+		if r.config == nil {
+			return false
+		}
+		// First check the new API tokens system
+		if _, ok := r.config.ValidateAPIToken(token); ok {
+			return true
+		}
+		// Fall back to legacy single token if set
+		if r.config.APIToken != "" {
+			return auth.CompareAPIToken(token, r.config.APIToken)
+		}
+		return false
+	})
 
-	// Host agent download endpoints
-	r.mux.HandleFunc("/install-host-agent.sh", r.handleDownloadHostAgentInstallScript)
-	r.mux.HandleFunc("/install-host-agent.ps1", r.handleDownloadHostAgentInstallScriptPS)
-	r.mux.HandleFunc("/uninstall-host-agent.sh", r.handleDownloadHostAgentUninstallScript)
-	r.mux.HandleFunc("/uninstall-host-agent.ps1", r.handleDownloadHostAgentUninstallScriptPS)
-	r.mux.HandleFunc("/download/pulse-host-agent", r.handleDownloadHostAgent)
-	r.mux.HandleFunc("/download/pulse-host-agent.sha256", r.handleDownloadHostAgent)
+	// AI settings endpoints
+	r.aiSettingsHandler = NewAISettingsHandler(r.config, r.persistence, r.agentExecServer)
+	// Inject state provider so AI has access to full infrastructure context (VMs, containers, IPs)
+	if r.monitor != nil {
+		r.aiSettingsHandler.SetStateProvider(r.monitor)
+		// Inject alert provider so AI has awareness of current alerts
+		if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+			r.aiSettingsHandler.SetAlertProvider(ai.NewAlertManagerAdapter(alertManager))
+		}
+	}
+	// Inject unified resource provider for Phase 2 AI context (cleaner, deduplicated view)
+	if r.resourceHandlers != nil {
+		r.aiSettingsHandler.SetResourceProvider(r.resourceHandlers.Store())
+	}
+	// Inject metadata provider for AI URL discovery feature
+	// This allows AI to set resource URLs when it discovers web services
+	metadataProvider := NewMetadataProvider(
+		guestMetadataHandler.Store(),
+		dockerMetadataHandler.Store(),
+		hostMetadataHandler.Store(),
+	)
+	r.aiSettingsHandler.SetMetadataProvider(metadataProvider)
+	r.mux.HandleFunc("/api/settings/ai", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetAISettings)))
+	r.mux.HandleFunc("/api/settings/ai/update", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleUpdateAISettings)))
+	r.mux.HandleFunc("/api/ai/test", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestAIConnection)))
+	r.mux.HandleFunc("/api/ai/test/{provider}", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestProvider)))
+	r.mux.HandleFunc("/api/ai/models", RequireAuth(r.config, r.aiSettingsHandler.HandleListModels))
+	r.mux.HandleFunc("/api/ai/execute", RequireAuth(r.config, r.aiSettingsHandler.HandleExecute))
+	r.mux.HandleFunc("/api/ai/execute/stream", RequireAuth(r.config, r.aiSettingsHandler.HandleExecuteStream))
+	r.mux.HandleFunc("/api/ai/investigate-alert", RequireAuth(r.config, r.aiSettingsHandler.HandleInvestigateAlert))
+	r.mux.HandleFunc("/api/ai/run-command", RequireAuth(r.config, r.aiSettingsHandler.HandleRunCommand))
+	r.mux.HandleFunc("/api/ai/knowledge", RequireAuth(r.config, r.aiSettingsHandler.HandleGetGuestKnowledge))
+	r.mux.HandleFunc("/api/ai/knowledge/save", RequireAuth(r.config, r.aiSettingsHandler.HandleSaveGuestNote))
+	r.mux.HandleFunc("/api/ai/knowledge/delete", RequireAuth(r.config, r.aiSettingsHandler.HandleDeleteGuestNote))
+	r.mux.HandleFunc("/api/ai/knowledge/export", RequireAuth(r.config, r.aiSettingsHandler.HandleExportGuestKnowledge))
+	r.mux.HandleFunc("/api/ai/knowledge/import", RequireAuth(r.config, r.aiSettingsHandler.HandleImportGuestKnowledge))
+	r.mux.HandleFunc("/api/ai/knowledge/clear", RequireAuth(r.config, r.aiSettingsHandler.HandleClearGuestKnowledge))
+	r.mux.HandleFunc("/api/ai/debug/context", RequireAdmin(r.config, r.aiSettingsHandler.HandleDebugContext))
+	r.mux.HandleFunc("/api/ai/agents", RequireAuth(r.config, r.aiSettingsHandler.HandleGetConnectedAgents))
+	r.mux.HandleFunc("/api/ai/cost/summary", RequireAuth(r.config, r.aiSettingsHandler.HandleGetAICostSummary))
+	r.mux.HandleFunc("/api/ai/cost/reset", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleResetAICostHistory)))
+	r.mux.HandleFunc("/api/ai/cost/export", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleExportAICostHistory)))
+	// OAuth endpoints for Claude Pro/Max subscription authentication
+	r.mux.HandleFunc("/api/ai/oauth/start", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthStart))
+	r.mux.HandleFunc("/api/ai/oauth/exchange", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthExchange)) // Manual code input
+	r.mux.HandleFunc("/api/ai/oauth/callback", r.aiSettingsHandler.HandleOAuthCallback)                         // Public - receives redirect from Anthropic
+	r.mux.HandleFunc("/api/ai/oauth/disconnect", RequireAdmin(r.config, r.aiSettingsHandler.HandleOAuthDisconnect))
 
-	// Unified Agent endpoints
-	r.mux.HandleFunc("/install.sh", r.handleDownloadUnifiedInstallScript)
-	r.mux.HandleFunc("/install.ps1", r.handleDownloadUnifiedInstallScriptPS)
-	r.mux.HandleFunc("/download/pulse-agent", r.handleDownloadUnifiedAgent)
+	// AI Patrol routes for background monitoring
+	r.mux.HandleFunc("/api/ai/patrol/status", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolStatus))
+	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, r.aiSettingsHandler.HandlePatrolStream))
+	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolFindings))
+	r.mux.HandleFunc("/api/ai/patrol/history", RequireAuth(r.config, r.aiSettingsHandler.HandleGetFindingsHistory))
+	r.mux.HandleFunc("/api/ai/patrol/run", RequireAdmin(r.config, r.aiSettingsHandler.HandleForcePatrol))
+	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, r.aiSettingsHandler.HandleAcknowledgeFinding))
+	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, r.aiSettingsHandler.HandleDismissFinding))   // Dismiss with reason (LLM memory)
+	r.mux.HandleFunc("/api/ai/patrol/suppress", RequireAuth(r.config, r.aiSettingsHandler.HandleSuppressFinding)) // Permanently suppress (LLM memory)
+	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, r.aiSettingsHandler.HandleSnoozeFinding))
+	r.mux.HandleFunc("/api/ai/patrol/resolve", RequireAuth(r.config, r.aiSettingsHandler.HandleResolveFinding))
+	r.mux.HandleFunc("/api/ai/patrol/runs", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolRunHistory))
+	// Suppression rules management
+	r.mux.HandleFunc("/api/ai/patrol/suppressions", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			r.aiSettingsHandler.HandleGetSuppressionRules(w, req)
+		case http.MethodPost:
+			r.aiSettingsHandler.HandleAddSuppressionRule(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	r.mux.HandleFunc("/api/ai/patrol/suppressions/", RequireAuth(r.config, r.aiSettingsHandler.HandleDeleteSuppressionRule))
+	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, r.aiSettingsHandler.HandleGetDismissedFindings))
+
+	// AI Intelligence endpoints - expose learned patterns, correlations, and predictions
+	r.mux.HandleFunc("/api/ai/intelligence/patterns", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatterns))
+	r.mux.HandleFunc("/api/ai/intelligence/predictions", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPredictions))
+	r.mux.HandleFunc("/api/ai/intelligence/correlations", RequireAuth(r.config, r.aiSettingsHandler.HandleGetCorrelations))
+	r.mux.HandleFunc("/api/ai/intelligence/changes", RequireAuth(r.config, r.aiSettingsHandler.HandleGetRecentChanges))
+	r.mux.HandleFunc("/api/ai/intelligence/baselines", RequireAuth(r.config, r.aiSettingsHandler.HandleGetBaselines))
+
+	// Agent WebSocket for AI command execution
+	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)
+
+	// Docker agent download endpoints (public but rate limited)
+	r.mux.HandleFunc("/install-docker-agent.sh", r.downloadLimiter.Middleware(r.handleDownloadInstallScript)) // Serves the Docker agent install script
+	r.mux.HandleFunc("/install-container-agent.sh", r.downloadLimiter.Middleware(r.handleDownloadContainerAgentInstallScript))
+	r.mux.HandleFunc("/download/pulse-docker-agent", r.downloadLimiter.Middleware(r.handleDownloadAgent))
+
+	// Host agent download endpoints (public but rate limited)
+	r.mux.HandleFunc("/install-host-agent.sh", r.downloadLimiter.Middleware(r.handleDownloadHostAgentInstallScript))
+	r.mux.HandleFunc("/install-host-agent.ps1", r.downloadLimiter.Middleware(r.handleDownloadHostAgentInstallScriptPS))
+	r.mux.HandleFunc("/uninstall-host-agent.sh", r.downloadLimiter.Middleware(r.handleDownloadHostAgentUninstallScript))
+	r.mux.HandleFunc("/uninstall-host-agent.ps1", r.downloadLimiter.Middleware(r.handleDownloadHostAgentUninstallScriptPS))
+	r.mux.HandleFunc("/download/pulse-host-agent", r.downloadLimiter.Middleware(r.handleDownloadHostAgent))
+	r.mux.HandleFunc("/download/pulse-host-agent.sha256", r.downloadLimiter.Middleware(r.handleDownloadHostAgent))
+
+	// Unified Agent endpoints (public but rate limited)
+	r.mux.HandleFunc("/install.sh", r.downloadLimiter.Middleware(r.handleDownloadUnifiedInstallScript))
+	r.mux.HandleFunc("/install.ps1", r.downloadLimiter.Middleware(r.handleDownloadUnifiedInstallScriptPS))
+	r.mux.HandleFunc("/download/pulse-agent", r.downloadLimiter.Middleware(r.handleDownloadUnifiedAgent))
 
 	r.mux.HandleFunc("/api/agent/version", r.handleAgentVersion)
 	r.mux.HandleFunc("/api/server/info", r.handleServerInfo)
@@ -1027,6 +1179,15 @@ func (r *Router) setupRoutes() {
 	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
 	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
 
+}
+
+// handleAgentWebSocket handles WebSocket connections from agents for AI command execution
+func (r *Router) handleAgentWebSocket(w http.ResponseWriter, req *http.Request) {
+	if r.agentExecServer == nil {
+		http.Error(w, "Agent execution not available", http.StatusServiceUnavailable)
+		return
+	}
+	r.agentExecServer.HandleWebSocket(w, req)
 }
 
 func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Request) {
@@ -1202,6 +1363,15 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 				mgr.SetPublicURL(url)
 			}
 		}
+		// Inject resource store for polling optimization
+		if r.resourceHandlers != nil {
+			log.Debug().Msg("[Router] Injecting resource store into monitor")
+			m.SetResourceStore(r.resourceHandlers.Store())
+			// Also set state provider for on-demand resource population
+			r.resourceHandlers.SetStateProvider(m)
+		} else {
+			log.Warn().Msg("[Router] resourceHandlers is nil, cannot inject resource store")
+		}
 	}
 }
 
@@ -1229,6 +1399,287 @@ func (r *Router) SetConfig(cfg *config.Config) {
 	if r.temperatureProxyHandlers != nil {
 		r.temperatureProxyHandlers.SetConfig(r.config)
 	}
+}
+
+// StartPatrol starts the AI patrol service for background infrastructure monitoring
+func (r *Router) StartPatrol(ctx context.Context) {
+	if r.aiSettingsHandler != nil {
+		// Connect patrol to user-configured alert thresholds so it warns before alerts fire
+		if r.monitor != nil {
+			if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+				thresholdAdapter := ai.NewAlertThresholdAdapter(alertManager)
+				r.aiSettingsHandler.SetPatrolThresholdProvider(thresholdAdapter)
+			}
+		}
+
+		// Enable findings persistence (load from disk, auto-save on changes)
+		if r.persistence != nil {
+			findingsPersistence := ai.NewFindingsPersistenceAdapter(r.persistence)
+			if err := r.aiSettingsHandler.SetPatrolFindingsPersistence(findingsPersistence); err != nil {
+				log.Error().Err(err).Msg("Failed to initialize AI findings persistence")
+			}
+
+			// Enable patrol run history persistence
+			historyPersistence := ai.NewPatrolHistoryPersistenceAdapter(r.persistence)
+			if err := r.aiSettingsHandler.SetPatrolRunHistoryPersistence(historyPersistence); err != nil {
+				log.Error().Err(err).Msg("Failed to initialize AI patrol run history persistence")
+			}
+		}
+
+		// Connect patrol to metrics history for enriched context (trends, predictions)
+		if r.monitor != nil {
+			if metricsHistory := r.monitor.GetMetricsHistory(); metricsHistory != nil {
+				adapter := ai.NewMetricsHistoryAdapter(metricsHistory)
+				if adapter != nil {
+					r.aiSettingsHandler.SetMetricsHistoryProvider(adapter)
+				}
+
+				// Initialize baseline store for anomaly detection
+				// Uses config dir for persistence
+				baselineCfg := ai.DefaultBaselineConfig()
+				if r.persistence != nil {
+					baselineCfg.DataDir = r.persistence.DataDir()
+				}
+				baselineStore := ai.NewBaselineStore(baselineCfg)
+				if baselineStore != nil {
+					r.aiSettingsHandler.SetBaselineStore(baselineStore)
+
+					// Start background baseline learning loop
+					go r.startBaselineLearning(ctx, baselineStore, metricsHistory)
+				}
+			}
+		}
+
+		// Initialize operational memory (change detection and remediation logging)
+		dataDir := ""
+		if r.persistence != nil {
+			dataDir = r.persistence.DataDir()
+		}
+
+		changeDetector := ai.NewChangeDetector(ai.ChangeDetectorConfig{
+			MaxChanges: 1000,
+			DataDir:    dataDir,
+		})
+		if changeDetector != nil {
+			r.aiSettingsHandler.SetChangeDetector(changeDetector)
+		}
+
+		remediationLog := ai.NewRemediationLog(ai.RemediationLogConfig{
+			MaxRecords: 500,
+			DataDir:    dataDir,
+		})
+		if remediationLog != nil {
+			r.aiSettingsHandler.SetRemediationLog(remediationLog)
+		}
+
+		// Initialize pattern detector for failure prediction
+		patternDetector := ai.NewPatternDetector(ai.PatternDetectorConfig{
+			MaxEvents:       5000,
+			MinOccurrences:  3,
+			PatternWindow:   90 * 24 * time.Hour,
+			PredictionLimit: 30 * 24 * time.Hour,
+			DataDir:         dataDir,
+		})
+		if patternDetector != nil {
+			r.aiSettingsHandler.SetPatternDetector(patternDetector)
+
+			// Wire alert history to pattern detector for event tracking
+			if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+				alertManager.OnAlertHistory(func(alert alerts.Alert) {
+					// Convert alert type to trackable event
+					patternDetector.RecordFromAlert(alert.ResourceID, alert.Type+"_"+string(alert.Level), alert.StartTime)
+				})
+				log.Info().Msg("AI Pattern Detector: Wired to alert history for failure prediction")
+			}
+		}
+
+		// Initialize correlation detector for multi-resource relationships
+		correlationDetector := ai.NewCorrelationDetector(ai.CorrelationConfig{
+			MaxEvents:         10000,
+			CorrelationWindow: 10 * time.Minute,
+			MinOccurrences:    3,
+			RetentionWindow:   30 * 24 * time.Hour,
+			DataDir:           dataDir,
+		})
+		if correlationDetector != nil {
+			r.aiSettingsHandler.SetCorrelationDetector(correlationDetector)
+
+			// Wire alert history to correlation detector
+			if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+				alertManager.OnAlertHistory(func(alert alerts.Alert) {
+					// Record as correlation event
+					eventType := ai.CorrelationEventType(ai.CorrelationEventAlert)
+					switch alert.Type {
+					case "cpu":
+						eventType = ai.CorrelationEventHighCPU
+					case "memory":
+						eventType = ai.CorrelationEventHighMem
+					case "disk":
+						eventType = ai.CorrelationEventDiskFull
+					case "offline", "connectivity":
+						eventType = ai.CorrelationEventOffline
+					}
+					correlationDetector.RecordEvent(ai.CorrelationEvent{
+						ResourceID:   alert.ResourceID,
+						ResourceName: alert.ResourceName,
+						ResourceType: alert.Type,
+						EventType:    eventType,
+						Timestamp:    alert.StartTime,
+						Value:        alert.Value,
+					})
+				})
+				log.Info().Msg("AI Correlation Detector: Wired to alert history for multi-resource analysis")
+			}
+		}
+
+		r.aiSettingsHandler.StartPatrol(ctx)
+	}
+}
+
+// StopPatrol stops the AI patrol service
+func (r *Router) StopPatrol() {
+	if r.aiSettingsHandler != nil {
+		r.aiSettingsHandler.StopPatrol()
+	}
+}
+
+// startBaselineLearning runs a background loop that learns baselines from metrics history
+// This enables anomaly detection by understanding what "normal" looks like for each resource
+func (r *Router) startBaselineLearning(ctx context.Context, store *ai.BaselineStore, metricsHistory *monitoring.MetricsHistory) {
+	if store == nil || metricsHistory == nil {
+		return
+	}
+
+	// Learn every hour
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	// Run initial learning after a short delay (allow metrics to accumulate)
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(5 * time.Minute):
+		r.learnBaselines(store, metricsHistory)
+	}
+
+	log.Info().Msg("Baseline learning loop started")
+
+	for {
+		select {
+		case <-ctx.Done():
+			// Save baselines before exit
+			if err := store.Save(); err != nil {
+				log.Warn().Err(err).Msg("Failed to save baselines on shutdown")
+			}
+			log.Info().Msg("Baseline learning loop stopped")
+			return
+		case <-ticker.C:
+			r.learnBaselines(store, metricsHistory)
+		}
+	}
+}
+
+// learnBaselines updates baselines for all resources from metrics history
+func (r *Router) learnBaselines(store *ai.BaselineStore, metricsHistory *monitoring.MetricsHistory) {
+	if r.monitor == nil {
+		return
+	}
+
+	state := r.monitor.GetState()
+	learningWindow := 7 * 24 * time.Hour // Learn from 7 days of data
+	var learned int
+
+	// Learn baselines for nodes
+	for _, node := range state.Nodes {
+		for _, metric := range []string{"cpu", "memory"} {
+			points := metricsHistory.GetNodeMetrics(node.ID, metric, learningWindow)
+			if len(points) > 0 {
+				baselinePoints := make([]ai.BaselineMetricPoint, len(points))
+				for i, p := range points {
+					baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+				}
+				if err := store.Learn(node.ID, "node", metric, baselinePoints); err == nil {
+					learned++
+				}
+			}
+		}
+	}
+
+	// Learn baselines for VMs
+	for _, vm := range state.VMs {
+		if vm.Template {
+			continue
+		}
+		for _, metric := range []string{"cpu", "memory", "disk"} {
+			points := metricsHistory.GetGuestMetrics(vm.ID, metric, learningWindow)
+			if len(points) > 0 {
+				baselinePoints := make([]ai.BaselineMetricPoint, len(points))
+				for i, p := range points {
+					baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+				}
+				if err := store.Learn(vm.ID, "vm", metric, baselinePoints); err == nil {
+					learned++
+				}
+			}
+		}
+	}
+
+	// Learn baselines for containers
+	for _, ct := range state.Containers {
+		if ct.Template {
+			continue
+		}
+		for _, metric := range []string{"cpu", "memory", "disk"} {
+			points := metricsHistory.GetGuestMetrics(ct.ID, metric, learningWindow)
+			if len(points) > 0 {
+				baselinePoints := make([]ai.BaselineMetricPoint, len(points))
+				for i, p := range points {
+					baselinePoints[i] = ai.BaselineMetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+				}
+				if err := store.Learn(ct.ID, "container", metric, baselinePoints); err == nil {
+					learned++
+				}
+			}
+		}
+	}
+
+	// Save after learning
+	if err := store.Save(); err != nil {
+		log.Warn().Err(err).Msg("Failed to save baselines")
+	}
+
+	log.Debug().
+		Int("baselines_updated", learned).
+		Int("resources", store.ResourceCount()).
+		Msg("Baseline learning complete")
+}
+
+// GetAlertTriggeredAnalyzer returns the alert-triggered analyzer for wiring into the monitor's alert callback
+// This enables AI to analyze specific resources when alerts fire, providing token-efficient real-time insights
+func (r *Router) GetAlertTriggeredAnalyzer() *ai.AlertTriggeredAnalyzer {
+	if r.aiSettingsHandler != nil {
+		return r.aiSettingsHandler.GetAlertTriggeredAnalyzer()
+	}
+	return nil
+}
+
+// WireAlertTriggeredAI connects the alert-triggered AI analyzer to the monitor's alert callback
+// This should be called after StartPatrol() to ensure the analyzer is initialized
+func (r *Router) WireAlertTriggeredAI() {
+	analyzer := r.GetAlertTriggeredAnalyzer()
+	if analyzer == nil {
+		log.Debug().Msg("Alert-triggered AI analyzer not available")
+		return
+	}
+
+	if r.monitor == nil {
+		log.Debug().Msg("Monitor not available for AI alert callback")
+		return
+	}
+
+	// Wire the analyzer's OnAlertFired method to the monitor's alert callback
+	r.monitor.SetAlertTriggeredAICallback(analyzer.OnAlertFired)
+	log.Info().Msg("Alert-triggered AI analysis wired to monitor")
 }
 
 // reloadSystemSettings loads system settings from disk and caches them
@@ -1289,6 +1740,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Token, X-CSRF-Token, X-Setup-Token")
 			w.Header().Set("Access-Control-Expose-Headers", "X-CSRF-Token, X-Authenticated-User, X-Auth-Method")
+			// Allow credentials when origin is specific (not *)
+			if r.config.AllowedOrigins != "*" {
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
 		}
 
 		// Handle preflight requests
@@ -1351,6 +1806,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/install.ps1",                                       // Unified agent Windows installer
 				"/download/pulse-agent",                              // Unified agent binary
 				"/api/agent/version",                                 // Agent update checks need to work before auth
+				"/api/agent/ws",                                      // Agent WebSocket has its own auth via registration
 				"/api/server/info",                                   // Server info for installer script
 				"/api/install/install-sensor-proxy.sh",               // Temperature proxy installer fallback
 				"/api/install/pulse-sensor-proxy",                    // Temperature proxy binary fallback
@@ -1360,6 +1816,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/system/proxy-public-key",                       // Temperature proxy public key for setup script
 				"/api/temperature-proxy/register",                    // Temperature proxy registration (called by installer)
 				"/api/temperature-proxy/authorized-nodes",            // Proxy control-plane sync
+				"/api/ai/oauth/callback",                             // OAuth callback from Anthropic for Claude subscription auth
 			}
 
 			// Also allow static assets without auth (JS, CSS, etc)
@@ -2401,6 +2858,13 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 	}
 
 	state := r.monitor.GetState()
+
+	// Also populate the unified resource store (Phase 1 of unified architecture)
+	// This runs on every state request to keep resources up-to-date
+	if r.resourceHandlers != nil {
+		r.resourceHandlers.PopulateFromSnapshot(state)
+	}
+
 	frontendState := state.ToFrontend()
 
 	if err := utils.WriteJSONResponse(w, frontendState); err != nil {
@@ -2791,11 +3255,126 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	// Build guest types map for frontend to correctly identify VM vs Container
+	guestTypes := make(map[string]string)
+	for _, vm := range state.VMs {
+		guestTypes[vm.ID] = "vm"
+	}
+	for _, ct := range state.Containers {
+		guestTypes[ct.ID] = "container"
+	}
+
+	// Process Docker containers - get historical data
+	dockerData := make(map[string]VMChartData)
+	for _, host := range state.DockerHosts {
+		for _, container := range host.Containers {
+			if container.ID == "" {
+				continue
+			}
+
+			if dockerData[container.ID] == nil {
+				dockerData[container.ID] = make(VMChartData)
+			}
+
+			// Get historical metrics using the docker: prefix key
+			metricKey := fmt.Sprintf("docker:%s", container.ID)
+			metrics := r.monitor.GetGuestMetrics(metricKey, duration)
+
+			// Convert metric points to API format
+			for metricType, points := range metrics {
+				dockerData[container.ID][metricType] = make([]MetricPoint, len(points))
+				for i, point := range points {
+					ts := point.Timestamp.Unix() * 1000
+					if ts < oldestTimestamp {
+						oldestTimestamp = ts
+					}
+					dockerData[container.ID][metricType][i] = MetricPoint{
+						Timestamp: ts,
+						Value:     point.Value,
+					}
+				}
+			}
+
+			// If no historical data, add current value
+			if len(dockerData[container.ID]["cpu"]) == 0 {
+				dockerData[container.ID]["cpu"] = []MetricPoint{
+					{Timestamp: currentTime, Value: container.CPUPercent},
+				}
+				dockerData[container.ID]["memory"] = []MetricPoint{
+					{Timestamp: currentTime, Value: container.MemoryPercent},
+				}
+				// Calculate disk percentage for Docker containers
+				var diskPercent float64
+				if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
+					diskPercent = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
+					if diskPercent > 100 {
+						diskPercent = 100
+					}
+				}
+				dockerData[container.ID]["disk"] = []MetricPoint{
+					{Timestamp: currentTime, Value: diskPercent},
+				}
+			}
+		}
+	}
+
+	// Process Docker hosts - get historical data
+	dockerHostData := make(map[string]VMChartData)
+	for _, host := range state.DockerHosts {
+		if host.ID == "" {
+			continue
+		}
+
+		if dockerHostData[host.ID] == nil {
+			dockerHostData[host.ID] = make(VMChartData)
+		}
+
+		// Get historical metrics using the dockerHost: prefix key
+		metricKey := fmt.Sprintf("dockerHost:%s", host.ID)
+		metrics := r.monitor.GetGuestMetrics(metricKey, duration)
+
+		// Convert metric points to API format
+		for metricType, points := range metrics {
+			dockerHostData[host.ID][metricType] = make([]MetricPoint, len(points))
+			for i, point := range points {
+				ts := point.Timestamp.Unix() * 1000
+				if ts < oldestTimestamp {
+					oldestTimestamp = ts
+				}
+				dockerHostData[host.ID][metricType][i] = MetricPoint{
+					Timestamp: ts,
+					Value:     point.Value,
+				}
+			}
+		}
+
+		// If no historical data, add current value
+		if len(dockerHostData[host.ID]["cpu"]) == 0 {
+			dockerHostData[host.ID]["cpu"] = []MetricPoint{
+				{Timestamp: currentTime, Value: host.CPUUsage},
+			}
+			dockerHostData[host.ID]["memory"] = []MetricPoint{
+				{Timestamp: currentTime, Value: host.Memory.Usage},
+			}
+			// Use first disk for host disk percentage
+			var diskPercent float64
+			if len(host.Disks) > 0 {
+				diskPercent = host.Disks[0].Usage
+			}
+			dockerHostData[host.ID]["disk"] = []MetricPoint{
+				{Timestamp: currentTime, Value: diskPercent},
+			}
+		}
+	}
+
 	response := ChartResponse{
-		ChartData:   chartData,
-		NodeData:    nodeData,
-		StorageData: storageData,
-		Timestamp:   currentTime,
+		ChartData:      chartData,
+		NodeData:       nodeData,
+		StorageData:    storageData,
+		DockerData:     dockerData,
+		DockerHostData: dockerHostData,
+		GuestTypes:     guestTypes,
+		Timestamp:      currentTime,
 		Stats: ChartStats{
 			OldestDataTimestamp: oldestTimestamp,
 		},
@@ -2812,6 +3391,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		Int("guests", len(chartData)).
 		Int("nodes", len(nodeData)).
 		Int("storage", len(storageData)).
+		Int("dockerContainers", len(dockerData)).
 		Str("range", timeRange).
 		Msg("Chart data response sent")
 }
@@ -2852,6 +3432,185 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(storageData); err != nil {
 		log.Error().Err(err).Msg("Failed to encode storage chart data")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+// handleMetricsStoreStats returns statistics about the persistent metrics store
+func (r *Router) handleMetricsStoreStats(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	store := r.monitor.GetMetricsStore()
+	if store == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"enabled": false,
+			"error":   "Persistent metrics store not initialized",
+		})
+		return
+	}
+
+	stats := store.GetStats()
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"enabled":       true,
+		"dbPath":        stats.DBPath,
+		"dbSize":        stats.DBSize,
+		"rawCount":      stats.RawCount,
+		"minuteCount":   stats.MinuteCount,
+		"hourlyCount":   stats.HourlyCount,
+		"dailyCount":    stats.DailyCount,
+		"totalWrites":   stats.TotalWrites,
+		"bufferSize":    stats.BufferSize,
+		"lastFlush":     stats.LastFlush,
+		"lastRollup":    stats.LastRollup,
+		"lastRetention": stats.LastRetention,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to encode metrics store stats")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+// handleMetricsHistory returns historical metrics from the persistent SQLite store
+// Query params:
+//   - resourceType: "node", "guest", "storage", "docker", "dockerHost" (required)
+//   - resourceId: the resource identifier (required)
+//   - metric: "cpu", "memory", "disk", etc. (optional, omit for all metrics)
+//   - range: time range like "1h", "24h", "7d", "30d", "90d" (optional, default "24h")
+func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	store := r.monitor.GetMetricsStore()
+	if store == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Persistent metrics store not available",
+		})
+		return
+	}
+
+	query := req.URL.Query()
+	resourceType := query.Get("resourceType")
+	resourceID := query.Get("resourceId")
+	metricType := query.Get("metric")
+	timeRange := query.Get("range")
+
+	if resourceType == "" || resourceID == "" {
+		http.Error(w, "resourceType and resourceId are required", http.StatusBadRequest)
+		return
+	}
+
+	// Parse time range
+	var duration time.Duration
+	switch timeRange {
+	case "1h":
+		duration = time.Hour
+	case "6h":
+		duration = 6 * time.Hour
+	case "12h":
+		duration = 12 * time.Hour
+	case "24h", "1d", "":
+		duration = 24 * time.Hour
+	case "7d":
+		duration = 7 * 24 * time.Hour
+	case "30d":
+		duration = 30 * 24 * time.Hour
+	case "90d":
+		duration = 90 * 24 * time.Hour
+	default:
+		// Try parsing as duration
+		var err error
+		duration, err = time.ParseDuration(timeRange)
+		if err != nil {
+			duration = 24 * time.Hour // Default to 24 hours
+		}
+	}
+
+	end := time.Now()
+	start := end.Add(-duration)
+
+	var response interface{}
+
+	if metricType != "" {
+		// Query single metric type
+		points, err := store.Query(resourceType, resourceID, metricType, start, end)
+		if err != nil {
+			log.Error().Err(err).
+				Str("resourceType", resourceType).
+				Str("resourceId", resourceID).
+				Str("metric", metricType).
+				Msg("Failed to query metrics history")
+			http.Error(w, "Failed to query metrics", http.StatusInternalServerError)
+			return
+		}
+
+		// Convert to frontend format (timestamps in milliseconds)
+		apiPoints := make([]map[string]interface{}, len(points))
+		for i, p := range points {
+			apiPoints[i] = map[string]interface{}{
+				"timestamp": p.Timestamp.UnixMilli(),
+				"value":     p.Value,
+				"min":       p.Min,
+				"max":       p.Max,
+			}
+		}
+
+		response = map[string]interface{}{
+			"resourceType": resourceType,
+			"resourceId":   resourceID,
+			"metric":       metricType,
+			"range":        timeRange,
+			"start":        start.UnixMilli(),
+			"end":          end.UnixMilli(),
+			"points":       apiPoints,
+		}
+	} else {
+		// Query all metrics for this resource
+		metricsMap, err := store.QueryAll(resourceType, resourceID, start, end)
+		if err != nil {
+			log.Error().Err(err).
+				Str("resourceType", resourceType).
+				Str("resourceId", resourceID).
+				Msg("Failed to query all metrics history")
+			http.Error(w, "Failed to query metrics", http.StatusInternalServerError)
+			return
+		}
+
+		// Convert to frontend format
+		apiData := make(map[string][]map[string]interface{})
+		for metric, points := range metricsMap {
+			apiPoints := make([]map[string]interface{}, len(points))
+			for i, p := range points {
+				apiPoints[i] = map[string]interface{}{
+					"timestamp": p.Timestamp.UnixMilli(),
+					"value":     p.Value,
+					"min":       p.Min,
+					"max":       p.Max,
+				}
+			}
+			apiData[metric] = apiPoints
+		}
+
+		response = map[string]interface{}{
+			"resourceType": resourceType,
+			"resourceId":   resourceID,
+			"range":        timeRange,
+			"start":        start.UnixMilli(),
+			"end":          end.UnixMilli(),
+			"metrics":      apiData,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Error().Err(err).Msg("Failed to encode metrics history response")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }
@@ -3391,26 +4150,19 @@ func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 			continue
 		}
 
+		checksum, err := r.cachedSHA256(candidate, info)
+		if err != nil {
+			log.Error().Err(err).Str("path", candidate).Msg("Failed to compute docker agent checksum")
+			continue
+		}
+
 		file, err := os.Open(candidate)
 		if err != nil {
 			log.Error().Err(err).Str("path", candidate).Msg("Failed to open docker agent binary for download")
 			continue
 		}
 
-		hasher := sha256.New()
-		if _, err := io.Copy(hasher, file); err != nil {
-			file.Close()
-			log.Error().Err(err).Str("path", candidate).Msg("Failed to hash docker agent binary")
-			continue
-		}
-
-		if _, err := file.Seek(0, io.SeekStart); err != nil {
-			file.Close()
-			log.Error().Err(err).Str("path", candidate).Msg("Failed to rewind docker agent binary")
-			continue
-		}
-
-		w.Header().Set("X-Checksum-Sha256", hex.EncodeToString(hasher.Sum(nil)))
+		w.Header().Set("X-Checksum-Sha256", checksum)
 		http.ServeContent(w, req, filepath.Base(candidate), info.ModTime(), file)
 		file.Close()
 		return
@@ -3661,22 +4413,73 @@ func sortedHostAgentKeys(missing map[string]agentbinaries.HostAgentBinary) []str
 	return keys
 }
 
-// serveChecksum computes and serves the SHA256 checksum of a file
-func (r *Router) serveChecksum(w http.ResponseWriter, filepath string) {
-	file, err := os.Open(filepath)
+type checksumCacheEntry struct {
+	checksum string
+	modTime  time.Time
+	size     int64
+}
+
+func (r *Router) cachedSHA256(filePath string, info os.FileInfo) (string, error) {
+	if filePath == "" {
+		return "", fmt.Errorf("empty file path")
+	}
+
+	if info == nil {
+		var err error
+		info, err = os.Stat(filePath)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	r.checksumMu.RLock()
+	entry, ok := r.checksumCache[filePath]
+	r.checksumMu.RUnlock()
+	if ok && entry.size == info.Size() && entry.modTime.Equal(info.ModTime()) {
+		return entry.checksum, nil
+	}
+
+	file, err := os.Open(filePath)
 	if err != nil {
-		http.Error(w, "Failed to open file", http.StatusInternalServerError)
-		return
+		return "", err
 	}
 	defer file.Close()
 
 	hasher := sha256.New()
 	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+
+	checksum := hex.EncodeToString(hasher.Sum(nil))
+
+	r.checksumMu.Lock()
+	if r.checksumCache == nil {
+		r.checksumCache = make(map[string]checksumCacheEntry)
+	}
+	r.checksumCache[filePath] = checksumCacheEntry{
+		checksum: checksum,
+		modTime:  info.ModTime(),
+		size:     info.Size(),
+	}
+	r.checksumMu.Unlock()
+
+	return checksum, nil
+}
+
+// serveChecksum computes and serves the SHA256 checksum of a file
+func (r *Router) serveChecksum(w http.ResponseWriter, filePath string) {
+	info, err := os.Stat(filePath)
+	if err != nil {
+		http.Error(w, "Failed to stat file", http.StatusInternalServerError)
+		return
+	}
+
+	checksum, err := r.cachedSHA256(filePath, info)
+	if err != nil {
 		http.Error(w, "Failed to compute checksum", http.StatusInternalServerError)
 		return
 	}
 
-	checksum := hex.EncodeToString(hasher.Sum(nil))
 	w.Header().Set("Content-Type", "text/plain")
 	fmt.Fprintf(w, "%s\n", checksum)
 }

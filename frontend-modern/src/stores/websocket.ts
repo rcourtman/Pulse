@@ -10,6 +10,8 @@ import type {
   Container,
   DockerHost,
   Host,
+  KubernetesCluster,
+  RemovedKubernetesCluster,
 } from '@/types/api';
 import type { ActivationState as ActivationStateType } from '@/types/alerts';
 import { logger } from '@/utils/logger';
@@ -30,6 +32,8 @@ export function createWebSocketStore(url: string) {
     vms: [],
     containers: [],
     dockerHosts: [],
+    kubernetesClusters: [],
+    removedKubernetesClusters: [],
     hosts: [],
     replicationJobs: [],
     storage: [],
@@ -74,6 +78,8 @@ export function createWebSocketStore(url: string) {
     activeAlerts: [],
     recentlyResolved: [],
     lastUpdate: '',
+    // Unified resources for cross-platform monitoring
+    resources: [],
   });
   const [activeAlerts, setActiveAlerts] = createStore<Record<string, Alert>>({});
   const [recentlyResolved, setRecentlyResolved] = createStore<Record<string, ResolvedAlert>>({});
@@ -328,16 +334,17 @@ export function createWebSocketStore(url: string) {
       try {
         const message: WSMessage = data;
 
-        if (
-          message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE ||
-          message.type === WEBSOCKET.MESSAGE_TYPES.RAW_DATA
-        ) {
-          // Update state properties individually to ensure reactivity
-          if (message.data) {
-            // Mark that we've received usable data (initial payload or raw update)
-            if (!initialDataReceived()) {
-              setInitialDataReceived(true);
-            }
+	        if (
+	          message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE ||
+	          message.type === WEBSOCKET.MESSAGE_TYPES.RAW_DATA
+	        ) {
+	          // Update state properties individually, but batch the whole payload to
+	          // reduce reactive recomputations and UI thrash on large updates.
+	          if (message.data) batch(() => {
+	            // Mark that we've received usable data (initial payload or raw update)
+	            if (!initialDataReceived()) {
+	              setInitialDataReceived(true);
+	            }
 
             // Only update if we have actual data, don't overwrite with empty arrays
             if (message.data.nodes !== undefined) {
@@ -550,6 +557,18 @@ export function createWebSocketStore(url: string) {
                 setState('hosts', reconcile(processedHosts, { key: 'id' }));
               }
             }
+            if (message.data.kubernetesClusters !== undefined) {
+              const clusters = Array.isArray(message.data.kubernetesClusters)
+                ? (message.data.kubernetesClusters as KubernetesCluster[])
+                : [];
+              setState('kubernetesClusters', reconcile(clusters, { key: 'id' }));
+            }
+            if (message.data.removedKubernetesClusters !== undefined) {
+              const removed = Array.isArray(message.data.removedKubernetesClusters)
+                ? (message.data.removedKubernetesClusters as RemovedKubernetesCluster[])
+                : [];
+              setState('removedKubernetesClusters', reconcile(removed, { key: 'id' }));
+            }
             if (message.data.storage !== undefined) setState('storage', reconcile(message.data.storage, { key: 'id' }));
             if (message.data.cephClusters !== undefined)
               setState('cephClusters', reconcile(message.data.cephClusters, { key: 'id' }));
@@ -580,6 +599,14 @@ export function createWebSocketStore(url: string) {
             if (message.data.stats !== undefined) setState('stats', message.data.stats);
             if (message.data.physicalDisks !== undefined)
               setState('physicalDisks', reconcile(message.data.physicalDisks, { key: 'id' }));
+            // Handle unified resources
+            if (message.data.resources !== undefined) {
+              logger.debug('[WebSocket] Updating resources', {
+                count: message.data.resources?.length || 0,
+                types: [...new Set(message.data.resources?.map((r: any) => r.type) || [])],
+              });
+              setState('resources', reconcile(message.data.resources, { key: 'id' }));
+            }
             // Sync active alerts from state
             if (message.data.activeAlerts !== undefined) {
               const newAlerts: Record<string, Alert> = {};
@@ -619,11 +646,11 @@ export function createWebSocketStore(url: string) {
 
               // Updated recentlyResolved
             }
-            setState('lastUpdate', message.data.lastUpdate || new Date().toISOString());
-          }
-          logger.debug('message', {
-            type: message.type,
-            hasData: !!message.data,
+	            setState('lastUpdate', message.data.lastUpdate || new Date().toISOString());
+	          });
+	          logger.debug('message', {
+	            type: message.type,
+	            hasData: !!message.data,
             nodeCount: message.data?.nodes?.length || 0,
             vmCount: message.data?.vms?.length || 0,
             containerCount: message.data?.containers?.length || 0,

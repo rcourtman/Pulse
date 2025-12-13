@@ -80,7 +80,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     host: '',
     guestURL: '',
     authType: nodeType === 'pmg' ? 'password' : ('token' as 'password' | 'token'),
-    setupMode: 'auto' as 'auto' | 'manual',
+    setupMode: 'agent' as 'agent' | 'auto' | 'manual', // Default to agent install (recommended)
     user: '',
     password: '',
     tokenName: '',
@@ -101,6 +101,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   const [proxyInstallCommand, setProxyInstallCommand] = createSignal('');
   const [loadingProxyCommand, setLoadingProxyCommand] = createSignal(false);
   const [proxyCommandError, setProxyCommandError] = createSignal<string | null>(null);
+  const [agentInstallCommand, setAgentInstallCommand] = createSignal('');
+  const [loadingAgentCommand, setLoadingAgentCommand] = createSignal(false);
+  const [agentCommandError, setAgentCommandError] = createSignal<string | null>(null);
   const showTemperatureMonitoringSection = () =>
     typeof props.temperatureMonitoringEnabled === 'boolean';
   const temperatureMonitoringEnabledValue = () => props.temperatureMonitoringEnabled ?? true;
@@ -114,7 +117,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       case 'socket-proxy':
         return {
           tone: 'success',
-          message: 'Temperatures flow through the host sensor proxy mounted at /run/pulse-sensor-proxy.',
+          message: 'Temperatures flow through the socket proxy mounted at /run/pulse-sensor-proxy.',
         };
       case 'https-proxy':
         return {
@@ -126,7 +129,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
           tone: 'danger',
           disable: true,
           message:
-            'Pulse is running in a container without the pulse-sensor-proxy bind mount. Install the proxy on the host or register an HTTPS proxy before enabling temperatures.',
+            'Pulse is running in a container. Install the Pulse agent on this node for temperature monitoring (Settings → Agents).',
         };
       case 'ssh':
         return {
@@ -400,8 +403,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
     setFormData((prev) => ({ ...prev, [field]: value }));
 
-    if (field === 'setupMode' && value !== 'auto') {
-      setQuickSetupCommand('');
+    if (field === 'setupMode') {
+      if (value !== 'auto') {
+        setQuickSetupCommand('');
+      }
+      if (value !== 'agent') {
+        setAgentInstallCommand('');
+      }
     }
   };
 
@@ -764,7 +772,21 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           <Show when={props.nodeType === 'pve'}>
                             <div class="space-y-3 text-xs">
                               {/* Tab buttons */}
-                              <div class="flex gap-2">
+                              <div class="flex gap-2 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => updateField('setupMode', 'agent')}
+                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
+                                    formData().setupMode === 'agent'
+                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                  }`}
+                                >
+                                  Agent Install
+                                  <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 rounded">
+                                    Recommended
+                                  </span>
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => updateField('setupMode', 'auto')}
@@ -774,7 +796,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
                                   }`}
                                 >
-                                  Quick Setup
+                                  API Only
                                 </button>
                                 <button
                                   type="button"
@@ -785,17 +807,106 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
                                   }`}
                                 >
-                                  Manual Setup
+                                  Manual
                                 </button>
                               </div>
 
-                              {/* Quick Setup Tab */}
-                              <Show when={formData().setupMode === 'auto' || !formData().setupMode}>
-                                <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                                  The command below creates the monitoring user, applies read-only
-                                  access, and adds the storage permissions Pulse needs to display
-                                  backups.
-                                </p>
+                              {/* Agent Install Tab (Recommended) */}
+                              <Show when={formData().setupMode === 'agent'}>
+                                <div class="space-y-3">
+                                  <p class="text-xs text-gray-600 dark:text-gray-400">
+                                    Install the Pulse agent on your Proxmox node. This single command sets everything up:
+                                  </p>
+                                  <ul class="text-xs text-gray-600 dark:text-gray-400 list-disc list-inside space-y-1">
+                                    <li>Creates monitoring user and API token automatically</li>
+                                    <li>Registers the node with Pulse</li>
+                                    <li>Enables temperature monitoring (no SSH required)</li>
+                                    <li>Enables AI features for managing VMs/containers</li>
+                                  </ul>
+                                  <p class="text-blue-800 dark:text-blue-200 font-medium">
+                                    Run this command on your Proxmox VE node:
+                                  </p>
+                                  <div class="relative bg-gray-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
+                                    <button
+                                      type="button"
+                                      disabled={loadingAgentCommand()}
+                                      onClick={async () => {
+                                        logger.debug('[Agent Install] Copy button clicked');
+                                        try {
+                                          setLoadingAgentCommand(true);
+                                          const { apiFetch } = await import('@/utils/apiClient');
+                                          const response = await apiFetch('/api/agent-install-command', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                              type: 'pve',
+                                              enableProxmox: true,
+                                            }),
+                                          });
+
+                                          if (response.ok) {
+                                            const data = await response.json();
+                                            if (data.command) {
+                                              setAgentInstallCommand(data.command);
+                                              const copied = await copyToClipboard(data.command);
+                                              if (copied) {
+                                                showSuccess('Command copied! Run it on your Proxmox node.');
+                                              } else {
+                                                showError('Failed to copy to clipboard');
+                                              }
+                                            }
+                                          } else {
+                                            showError('Failed to generate install command');
+                                          }
+                                        } catch (error) {
+                                          logger.error('[Agent Install] Error:', error);
+                                          showError('Failed to generate install command');
+                                        } finally {
+                                          setLoadingAgentCommand(false);
+                                        }
+                                      }}
+                                      class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700 rounded-md transition-colors disabled:opacity-50"
+                                      title="Copy command"
+                                    >
+                                      <Show when={loadingAgentCommand()} fallback={
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                        </svg>
+                                      }>
+                                        <svg class="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+                                          <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path>
+                                        </svg>
+                                      </Show>
+                                    </button>
+                                    <Show
+                                      when={agentInstallCommand().length > 0}
+                                      fallback={
+                                        <code class="text-blue-400">
+                                          Click the button above to copy the install command
+                                        </code>
+                                      }
+                                    >
+                                      <code class="block text-blue-100 whitespace-pre-wrap break-words">
+                                        {agentInstallCommand()}
+                                      </code>
+                                    </Show>
+                                  </div>
+                                  <p class="text-[11px] text-gray-500 dark:text-gray-400 italic">
+                                    The node will appear in Pulse automatically after the agent starts.
+                                  </p>
+                                </div>
+                              </Show>
+
+                              {/* API Only Tab (formerly Quick Setup) */}
+                              <Show when={formData().setupMode === 'auto'}>
+                                <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 mb-3 dark:border-amber-700 dark:bg-amber-900/20">
+                                  <p class="text-xs text-amber-800 dark:text-amber-200">
+                                    <strong>Limited functionality:</strong> API-only mode does not include temperature monitoring or AI features.
+                                    For full functionality, use the Agent Install tab instead.
+                                  </p>
+                                </div>
                                 <p class="text-blue-800 dark:text-blue-200">
                                   Just copy and run this one command on your Proxmox VE server:
                                 </p>
@@ -1259,17 +1370,29 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           <Show when={props.nodeType === 'pbs'}>
                             <div class="space-y-3 text-xs">
                               {/* Tab buttons for PBS */}
-                              <div class="flex gap-2">
+                              <div class="flex gap-2 flex-wrap">
                                 <button
                                   type="button"
-                                  onClick={() => updateField('setupMode', 'auto')}
-                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
-                                    formData().setupMode === 'auto' || !formData().setupMode
+                                  onClick={() => updateField('setupMode', 'agent')}
+                                  class={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
+                                    formData().setupMode === 'agent'
                                       ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
                                       : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
                                   }`}
                                 >
-                                  Quick Setup
+                                  Agent Install
+                                  <span class="text-[10px] px-1.5 py-0.5 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 rounded">Recommended</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateField('setupMode', 'auto')}
+                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
+                                    formData().setupMode === 'auto'
+                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                  }`}
+                                >
+                                  API Only
                                 </button>
                                 <button
                                   type="button"
@@ -1284,8 +1407,83 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 </button>
                               </div>
 
-                              {/* Quick Setup Tab for PBS */}
-                              <Show when={formData().setupMode === 'auto' || !formData().setupMode}>
+                              {/* Agent Install Tab for PBS */}
+                              <Show when={formData().setupMode === 'agent'}>
+                                <div class="space-y-3">
+                                  <p class="text-xs text-gray-600 dark:text-gray-400">
+                                    Install the Pulse agent on your Proxmox Backup Server. This is the recommended method as it provides:
+                                  </p>
+                                  <ul class="text-xs text-gray-600 dark:text-gray-400 list-disc list-inside space-y-1">
+                                    <li>One-command setup (creates API user and token automatically)</li>
+                                    <li>Built-in temperature monitoring (no SSH required)</li>
+                                    <li>AI features (execute commands via Pulse AI)</li>
+                                    <li>Automatic reconnection on network issues</li>
+                                  </ul>
+                                  <p class="text-blue-800 dark:text-blue-200 text-xs mt-3">
+                                    Run this command on your PBS node:
+                                  </p>
+                                  <div class="relative bg-gray-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        try {
+                                          setLoadingAgentCommand(true);
+                                          setAgentCommandError(null);
+                                          const { apiFetch } = await import('@/utils/apiClient');
+                                          const response = await apiFetch('/api/agent-install-command', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ type: 'pbs' }),
+                                          });
+                                          if (!response.ok) {
+                                            throw new Error(`Failed to generate command: ${response.status}`);
+                                          }
+                                          const data = await response.json();
+                                          if (data.command) {
+                                            setAgentInstallCommand(data.command);
+                                            const copied = await copyToClipboard(data.command);
+                                            if (copied) {
+                                              showSuccess('Command copied to clipboard');
+                                            }
+                                          }
+                                        } catch (error) {
+                                          logger.error('[Agent Install] Error:', error);
+                                          setAgentCommandError(error instanceof Error ? error.message : 'Failed to generate command');
+                                          showError('Failed to generate install command');
+                                        } finally {
+                                          setLoadingAgentCommand(false);
+                                        }
+                                      }}
+                                      class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-white rounded bg-gray-800 hover:bg-gray-700 transition-colors"
+                                      title="Copy to clipboard"
+                                      disabled={loadingAgentCommand()}
+                                    >
+                                      <Show when={loadingAgentCommand()} fallback={
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                      }>
+                                        <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                      </Show>
+                                    </button>
+                                    <code class="text-green-400 whitespace-pre-wrap break-all pr-10">
+                                      {agentInstallCommand() || 'Click the copy button to generate and copy the install command'}
+                                    </code>
+                                  </div>
+                                  <Show when={agentCommandError()}>
+                                    <p class="text-xs text-red-500">{agentCommandError()}</p>
+                                  </Show>
+                                  <p class="text-xs text-gray-500 dark:text-gray-500">
+                                    The node will automatically appear in Pulse once the agent connects.
+                                  </p>
+                                </div>
+                              </Show>
+
+                              {/* Quick Setup Tab for PBS (API Only) */}
+                              <Show when={formData().setupMode === 'auto'}>
                                 <p class="text-blue-800 dark:text-blue-200">
                                   Just copy and run this one command on your Proxmox Backup Server:
                                 </p>
@@ -1915,8 +2113,11 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           </Show>
                           <Show when={shouldOfferProxyCommand()}>
                             <div class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-800 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-100 space-y-2">
-                              <div class="font-semibold">Install HTTPS proxy on this host</div>
-                              <div>Generate a one-line installer command to run on the Proxmox host:</div>
+                              <div class="font-semibold">Temperature proxy (legacy)</div>
+                              <div class="text-amber-700 dark:text-amber-300 text-[11px]">
+                                Recommended: Install the Pulse agent instead (Settings → Agents) for temperatures + AI features.
+                              </div>
+                              <div>Or generate a one-line installer command for the standalone temperature proxy:</div>
                               <div class="flex flex-wrap gap-2">
                                 <button
                                   type="button"

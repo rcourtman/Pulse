@@ -6,6 +6,8 @@
  */
 
 import { logger } from '@/utils/logger';
+import { ChartsAPI, type ChartData, type TimeRange } from '@/api/charts';
+import { buildMetricKey } from '@/utils/metricsKeys';
 
 export interface MetricSnapshot {
   timestamp: number; // Unix timestamp in ms
@@ -21,17 +23,45 @@ interface RingBuffer {
 }
 
 // Configuration
-const MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
+const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours (to support all time ranges)
 const SAMPLE_INTERVAL_MS = 30 * 1000;   // 30 seconds
-const MAX_POINTS = Math.ceil(MAX_AGE_MS / SAMPLE_INTERVAL_MS); // ~240 points
+const MAX_POINTS = Math.ceil(MAX_AGE_MS / SAMPLE_INTERVAL_MS); // ~2880 points
 const STORAGE_KEY = 'pulse_metrics_history';
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2; // Bumped version due to increased buffer size
+
+/**
+ * Convert TimeRange string to milliseconds
+ */
+function timeRangeToMs(range: TimeRange): number {
+  switch (range) {
+    case '5m': return 5 * 60 * 1000;
+    case '15m': return 15 * 60 * 1000;
+    case '30m': return 30 * 60 * 1000;
+    case '1h': return 60 * 60 * 1000;
+    case '4h': return 4 * 60 * 60 * 1000;
+    case '12h': return 12 * 60 * 60 * 1000;
+    case '24h': return 24 * 60 * 60 * 1000;
+    case '7d': return 7 * 24 * 60 * 60 * 1000;
+    default: return 60 * 60 * 1000; // Default 1h
+  }
+}
 
 // Store - map of resourceId to ring buffer
 const metricsHistoryMap = new Map<string, RingBuffer>();
 
 // Track last sample time per resource to enforce sampling interval
 const lastSampleTimes = new Map<string, number>();
+
+// Reactive version counter - increments when data is seeded, used to trigger component re-renders
+import { createSignal } from 'solid-js';
+const [metricsVersion, setMetricsVersion] = createSignal(0);
+
+/**
+ * Get the current metrics version (for reactivity)
+ */
+export function getMetricsVersion(): number {
+  return metricsVersion();
+}
 
 /**
  * Create a new ring buffer
@@ -218,14 +248,223 @@ function debouncedSave() {
   }, 5000); // Save 5 seconds after last change
 }
 
+// Track if we've already seeded from backend to avoid redundant fetches
+let hasSeededFromBackend = false;
+let seedingPromise: Promise<void> | null = null;
+
 /**
- * Get metric history for a resource
+ * Seed metrics history from backend historical data.
+ * This provides immediate trend data instead of waiting for 30s samples.
+ * Called automatically when switching to sparklines/trends view.
+ */
+export async function seedFromBackend(range: TimeRange = '1h'): Promise<void> {
+  // Don't re-fetch if we've already seeded
+  if (hasSeededFromBackend) {
+    return;
+  }
+
+  // If already seeding, wait for that request
+  if (seedingPromise) {
+    return seedingPromise;
+  }
+
+  seedingPromise = (async () => {
+    try {
+      logger.info('[MetricsHistory] Seeding from backend', { range });
+      const response = await ChartsAPI.getCharts(range);
+
+      const now = Date.now();
+      const cutoff = now - MAX_AGE_MS;
+      let seededCount = 0;
+
+      // Helper to convert backend ChartData to our MetricSnapshot format
+      const processChartData = (resourceId: string, chartData: ChartData) => {
+        const cpuPoints = chartData.cpu || [];
+        const memPoints = chartData.memory || [];
+        const diskPoints = chartData.disk || [];
+
+        // If no data, skip
+        if (cpuPoints.length === 0 && memPoints.length === 0 && diskPoints.length === 0) {
+          return;
+        }
+
+        // Get or create ring buffer
+        let ring = metricsHistoryMap.get(resourceId);
+        if (!ring) {
+          ring = createRingBuffer();
+          metricsHistoryMap.set(resourceId, ring);
+        }
+
+        // Find all unique timestamps across all metrics
+        const timestampSet = new Set<number>();
+        cpuPoints.forEach(p => timestampSet.add(p.timestamp));
+        memPoints.forEach(p => timestampSet.add(p.timestamp));
+        diskPoints.forEach(p => timestampSet.add(p.timestamp));
+
+        // Create lookup maps for efficient access
+        const cpuMap = new Map(cpuPoints.map(p => [p.timestamp, p.value]));
+        const memMap = new Map(memPoints.map(p => [p.timestamp, p.value]));
+        const diskMap = new Map(diskPoints.map(p => [p.timestamp, p.value]));
+
+        // Sort timestamps and create snapshots
+        const timestamps = Array.from(timestampSet).sort((a, b) => a - b);
+
+        for (const ts of timestamps) {
+          // Skip if too old
+          if (ts < cutoff) continue;
+
+          // Skip if we already have data around this timestamp (within 15s)
+          let skipDuplicate = false;
+          for (let i = 0; i < ring.size; i++) {
+            const idx = (ring.head + i) % MAX_POINTS;
+            const existing = ring.buffer[idx];
+            if (existing && Math.abs(existing.timestamp - ts) < 15000) {
+              skipDuplicate = true;
+              break;
+            }
+          }
+          if (skipDuplicate) continue;
+
+          const snapshot: MetricSnapshot = {
+            timestamp: ts,
+            cpu: Math.round((cpuMap.get(ts) ?? 0) * 10) / 10,
+            memory: Math.round((memMap.get(ts) ?? 0) * 10) / 10,
+            disk: Math.round((diskMap.get(ts) ?? 0) * 10) / 10,
+          };
+
+          pushToRingBuffer(ring, snapshot);
+          seededCount++;
+        }
+      };
+
+      // Process VMs and containers using backend-provided guest types
+      // This avoids race conditions with WebSocket state
+      if (response.data) {
+        // Use guestTypes from backend response (available since backend update)
+        // Falls back to WebSocket state for backwards compatibility
+        let guestTypeMap: Map<string, 'vm' | 'container'>;
+
+        if (response.guestTypes) {
+          // Preferred: Use backend-provided types (no race condition)
+          guestTypeMap = new Map(Object.entries(response.guestTypes) as [string, 'vm' | 'container'][]);
+          logger.debug('[MetricsHistory] Using backend-provided guestTypes', { count: guestTypeMap.size });
+        } else {
+          // Fallback: Try WebSocket state (legacy backends without guestTypes)
+          guestTypeMap = new Map<string, 'vm' | 'container'>();
+          try {
+            const { getGlobalWebSocketStore } = await import('./websocket-global');
+            const wsStore = getGlobalWebSocketStore();
+            const state = wsStore?.state;
+
+            if (state?.vms) {
+              for (const vm of state.vms) {
+                if (vm.id) guestTypeMap.set(vm.id, 'vm');
+              }
+            }
+            if (state?.containers) {
+              for (const ct of state.containers) {
+                if (ct.id) guestTypeMap.set(ct.id, 'container');
+              }
+            }
+          } catch {
+            logger.warn('[MetricsHistory] Failed to load WebSocket state for guest types');
+          }
+          logger.debug('[MetricsHistory] Using WebSocket state for guestTypes', { count: guestTypeMap.size });
+        }
+
+        for (const [id, chartData] of Object.entries(response.data)) {
+          // Look up the guest type, default to 'vm' if unknown
+          const guestType = guestTypeMap.get(id) ?? 'vm';
+          const resourceKey = buildMetricKey(guestType, id);
+          processChartData(resourceKey, chartData as ChartData);
+        }
+      }
+
+      // Process nodes
+      if (response.nodeData) {
+        for (const [id, chartData] of Object.entries(response.nodeData)) {
+          const resourceKey = buildMetricKey('node', id);
+          processChartData(resourceKey, chartData as ChartData);
+        }
+      }
+
+      // Process Docker containers
+      if (response.dockerData) {
+        for (const [id, chartData] of Object.entries(response.dockerData)) {
+          const resourceKey = buildMetricKey('dockerContainer', id);
+          processChartData(resourceKey, chartData as ChartData);
+        }
+        logger.debug('[MetricsHistory] Processed Docker container data', {
+          count: Object.keys(response.dockerData).length
+        });
+      }
+
+      // Process Docker hosts
+      if (response.dockerHostData) {
+        for (const [id, chartData] of Object.entries(response.dockerHostData)) {
+          const resourceKey = buildMetricKey('dockerHost', id);
+          processChartData(resourceKey, chartData as ChartData);
+        }
+        logger.debug('[MetricsHistory] Processed Docker host data', {
+          count: Object.keys(response.dockerHostData).length
+        });
+      }
+
+
+      hasSeededFromBackend = true;
+      logger.info('[MetricsHistory] Seeded from backend', { seededCount, totalResources: metricsHistoryMap.size });
+
+      // Increment version to trigger reactive component updates
+      setMetricsVersion(v => v + 1);
+
+      // Save to localStorage
+      saveToLocalStorage();
+    } catch (error) {
+      logger.error('[MetricsHistory] Failed to seed from backend', { error });
+      // Don't throw - gracefully degrade to client-side sampling
+    } finally {
+      seedingPromise = null;
+    }
+  })();
+
+  return seedingPromise;
+}
+
+/**
+ * Force re-seed from backend (useful when range changes)
+ */
+export function resetSeedingState(): void {
+  hasSeededFromBackend = false;
+}
+
+/**
+ * Check if we have seeded from backend
+ */
+export function hasSeedData(): boolean {
+  return hasSeededFromBackend;
+}
+
+
+/**
+ * Get metric history for a resource (full history)
  */
 export function getMetricHistory(resourceId: string): MetricSnapshot[] {
   const ring = metricsHistoryMap.get(resourceId);
   if (!ring) return [];
 
   const cutoffTime = Date.now() - MAX_AGE_MS;
+  return getRingBufferData(ring, cutoffTime);
+}
+
+/**
+ * Get metric history for a resource filtered by time range
+ */
+export function getMetricHistoryForRange(resourceId: string, range: TimeRange): MetricSnapshot[] {
+  const ring = metricsHistoryMap.get(resourceId);
+  if (!ring) return [];
+
+  const rangeMs = timeRangeToMs(range);
+  const cutoffTime = Date.now() - rangeMs;
   return getRingBufferData(ring, cutoffTime);
 }
 

@@ -157,6 +157,19 @@ func (c Container) ToFrontend() ContainerFrontend {
 		LastSeen:  c.LastSeen.Unix() * 1000,
 	}
 
+	// OCI containers are classified separately from traditional LXC containers in the UI.
+	// Keep the frontend payload stable even if some internal sources only persist Type.
+	isOCI := c.IsOCI || strings.EqualFold(strings.TrimSpace(c.Type), "oci")
+	if isOCI {
+		ct.IsOCI = true
+		ct.Type = "oci"
+	}
+
+	// Preserve template metadata (LXC template or OCI image reference).
+	if c.OSTemplate != "" {
+		ct.OSTemplate = c.OSTemplate
+	}
+
 	// Convert tags array to string
 	if len(c.Tags) > 0 {
 		ct.Tags = strings.Join(c.Tags, ",")
@@ -189,6 +202,10 @@ func (c Container) ToFrontend() ContainerFrontend {
 	if len(c.NetworkInterfaces) > 0 {
 		ct.NetworkInterfaces = make([]GuestNetworkInterface, len(c.NetworkInterfaces))
 		copy(ct.NetworkInterfaces, c.NetworkInterfaces)
+	}
+
+	if c.OSName != "" {
+		ct.OSName = c.OSName
 	}
 
 	return ct
@@ -294,6 +311,151 @@ func (r RemovedDockerHost) ToFrontend() RemovedDockerHostFrontend {
 	}
 }
 
+// ToFrontend converts a KubernetesCluster to its frontend representation.
+func (c KubernetesCluster) ToFrontend() KubernetesClusterFrontend {
+	cluster := KubernetesClusterFrontend{
+		ID:                c.ID,
+		AgentID:           c.AgentID,
+		Name:              c.Name,
+		DisplayName:       c.DisplayName,
+		CustomDisplayName: c.CustomDisplayName,
+		Server:            c.Server,
+		Context:           c.Context,
+		Version:           c.Version,
+		Status:            c.Status,
+		LastSeen:          c.LastSeen.Unix() * 1000,
+		IntervalSeconds:   c.IntervalSeconds,
+		AgentVersion:      c.AgentVersion,
+		TokenID:           c.TokenID,
+		TokenName:         c.TokenName,
+		TokenHint:         c.TokenHint,
+		Hidden:            c.Hidden,
+		PendingUninstall:  c.PendingUninstall,
+	}
+
+	if c.TokenLastUsedAt != nil {
+		ts := c.TokenLastUsedAt.Unix() * 1000
+		cluster.TokenLastUsedAt = &ts
+	}
+
+	if len(c.Nodes) > 0 {
+		cluster.Nodes = make([]KubernetesNodeFrontend, len(c.Nodes))
+		for i, n := range c.Nodes {
+			cluster.Nodes[i] = KubernetesNodeFrontend{
+				UID:                     n.UID,
+				Name:                    n.Name,
+				Ready:                   n.Ready,
+				Unschedulable:           n.Unschedulable,
+				KubeletVersion:          n.KubeletVersion,
+				ContainerRuntimeVersion: n.ContainerRuntimeVersion,
+				OSImage:                 n.OSImage,
+				KernelVersion:           n.KernelVersion,
+				Architecture:            n.Architecture,
+				CapacityCPU:             n.CapacityCPU,
+				CapacityMemoryBytes:     n.CapacityMemoryBytes,
+				CapacityPods:            n.CapacityPods,
+				AllocCPU:                n.AllocCPU,
+				AllocMemoryBytes:        n.AllocMemoryBytes,
+				AllocPods:               n.AllocPods,
+				Roles:                   append([]string(nil), n.Roles...),
+			}
+		}
+	}
+
+	if len(c.Pods) > 0 {
+		cluster.Pods = make([]KubernetesPodFrontend, len(c.Pods))
+		for i, p := range c.Pods {
+			labels := make(map[string]string, len(p.Labels))
+			for k, v := range p.Labels {
+				labels[k] = v
+			}
+			containers := make([]KubernetesPodContainerFrontend, 0, len(p.Containers))
+			for _, cn := range p.Containers {
+				containers = append(containers, KubernetesPodContainerFrontend{
+					Name:         cn.Name,
+					Image:        cn.Image,
+					Ready:        cn.Ready,
+					RestartCount: cn.RestartCount,
+					State:        cn.State,
+					Reason:       cn.Reason,
+					Message:      cn.Message,
+				})
+			}
+
+			var startTime *int64
+			if p.StartTime != nil {
+				ts := p.StartTime.Unix() * 1000
+				startTime = &ts
+			}
+
+			cluster.Pods[i] = KubernetesPodFrontend{
+				UID:        p.UID,
+				Name:       p.Name,
+				Namespace:  p.Namespace,
+				NodeName:   p.NodeName,
+				Phase:      p.Phase,
+				Reason:     p.Reason,
+				Message:    p.Message,
+				QoSClass:   p.QoSClass,
+				CreatedAt:  timeToUnixMillis(p.CreatedAt),
+				StartTime:  startTime,
+				Restarts:   p.Restarts,
+				Labels:     labels,
+				OwnerKind:  p.OwnerKind,
+				OwnerName:  p.OwnerName,
+				Containers: containers,
+			}
+		}
+	}
+
+	if len(c.Deployments) > 0 {
+		cluster.Deployments = make([]KubernetesDeploymentFrontend, len(c.Deployments))
+		for i, d := range c.Deployments {
+			labels := make(map[string]string, len(d.Labels))
+			for k, v := range d.Labels {
+				labels[k] = v
+			}
+			cluster.Deployments[i] = KubernetesDeploymentFrontend{
+				UID:               d.UID,
+				Name:              d.Name,
+				Namespace:         d.Namespace,
+				DesiredReplicas:   d.DesiredReplicas,
+				UpdatedReplicas:   d.UpdatedReplicas,
+				ReadyReplicas:     d.ReadyReplicas,
+				AvailableReplicas: d.AvailableReplicas,
+				Labels:            labels,
+			}
+		}
+	}
+
+	if cluster.DisplayName == "" && cluster.Name != "" {
+		cluster.DisplayName = cluster.Name
+	}
+
+	if cluster.DisplayName == "" {
+		cluster.DisplayName = cluster.ID
+	}
+
+	return cluster
+}
+
+func timeToUnixMillis(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix() * 1000
+}
+
+// ToFrontend converts a RemovedKubernetesCluster to its frontend representation.
+func (r RemovedKubernetesCluster) ToFrontend() RemovedKubernetesClusterFrontend {
+	return RemovedKubernetesClusterFrontend{
+		ID:          r.ID,
+		Name:        r.Name,
+		DisplayName: r.DisplayName,
+		RemovedAt:   r.RemovedAt.Unix() * 1000,
+	}
+}
+
 // ToFrontend converts a Host to HostFrontend.
 func (h Host) ToFrontend() HostFrontend {
 	host := HostFrontend{
@@ -334,6 +496,10 @@ func (h Host) ToFrontend() HostFrontend {
 
 	if len(h.Disks) > 0 {
 		host.Disks = append([]Disk(nil), h.Disks...)
+	}
+
+	if len(h.DiskIO) > 0 {
+		host.DiskIO = append([]DiskIO(nil), h.DiskIO...)
 	}
 
 	if len(h.NetworkInterfaces) > 0 {
@@ -723,4 +889,142 @@ func zeroIfNegative(val int64) int64 {
 		return 0
 	}
 	return val
+}
+
+// ResourceToFrontend converts a resources.Resource to ResourceFrontend.
+// This function is in models package to avoid circular imports.
+// It takes individual fields rather than the whole Resource to avoid importing resources package.
+type ResourceConvertInput struct {
+	ID           string
+	Type         string
+	Name         string
+	DisplayName  string
+	PlatformID   string
+	PlatformType string
+	SourceType   string
+	ParentID     string
+	ClusterID    string
+	Status       string
+	CPU          *ResourceMetricInput
+	Memory       *ResourceMetricInput
+	Disk         *ResourceMetricInput
+	NetworkRX    int64
+	NetworkTX    int64
+	HasNetwork   bool
+	Temperature  *float64
+	Uptime       *int64
+	Tags         []string
+	Labels       map[string]string
+	LastSeenUnix int64
+	Alerts       []ResourceAlertInput
+	Identity     *ResourceIdentityInput
+	PlatformData map[string]any
+}
+
+// ResourceMetricInput represents a metric value for resource conversion.
+type ResourceMetricInput struct {
+	Current float64
+	Total   *int64
+	Used    *int64
+	Free    *int64
+}
+
+type ResourceAlertInput struct {
+	ID            string
+	Type          string
+	Level         string
+	Message       string
+	Value         float64
+	Threshold     float64
+	StartTimeUnix int64
+}
+
+type ResourceIdentityInput struct {
+	Hostname  string
+	MachineID string
+	IPs       []string
+}
+
+// ConvertResourceToFrontend converts input to ResourceFrontend.
+func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
+	rf := ResourceFrontend{
+		ID:           input.ID,
+		Type:         input.Type,
+		Name:         input.Name,
+		DisplayName:  input.DisplayName,
+		PlatformID:   input.PlatformID,
+		PlatformType: input.PlatformType,
+		SourceType:   input.SourceType,
+		ParentID:     input.ParentID,
+		ClusterID:    input.ClusterID,
+		Status:       input.Status,
+		Temperature:  input.Temperature,
+		Uptime:       input.Uptime,
+		Tags:         input.Tags,
+		Labels:       input.Labels,
+		LastSeen:     input.LastSeenUnix,
+		PlatformData: input.PlatformData,
+	}
+
+	// Convert metrics
+	if input.CPU != nil {
+		rf.CPU = &ResourceMetricFrontend{
+			Current: input.CPU.Current,
+			Total:   input.CPU.Total,
+			Used:    input.CPU.Used,
+			Free:    input.CPU.Free,
+		}
+	}
+
+	if input.Memory != nil {
+		rf.Memory = &ResourceMetricFrontend{
+			Current: input.Memory.Current,
+			Total:   input.Memory.Total,
+			Used:    input.Memory.Used,
+			Free:    input.Memory.Free,
+		}
+	}
+
+	if input.Disk != nil {
+		rf.Disk = &ResourceMetricFrontend{
+			Current: input.Disk.Current,
+			Total:   input.Disk.Total,
+			Used:    input.Disk.Used,
+			Free:    input.Disk.Free,
+		}
+	}
+
+	if input.HasNetwork {
+		rf.Network = &ResourceNetworkFrontend{
+			RXBytes: input.NetworkRX,
+			TXBytes: input.NetworkTX,
+		}
+	}
+
+	// Convert alerts
+	if len(input.Alerts) > 0 {
+		rf.Alerts = make([]ResourceAlertFrontend, len(input.Alerts))
+		for i, a := range input.Alerts {
+			rf.Alerts[i] = ResourceAlertFrontend{
+				ID:        a.ID,
+				Type:      a.Type,
+				Level:     a.Level,
+				Message:   a.Message,
+				Value:     a.Value,
+				Threshold: a.Threshold,
+				StartTime: a.StartTimeUnix,
+			}
+		}
+	}
+
+	// Convert identity
+	if input.Identity != nil {
+		rf.Identity = &ResourceIdentityFrontend{
+			Hostname:  input.Identity.Hostname,
+			MachineID: input.Identity.MachineID,
+			IPs:       input.Identity.IPs,
+		}
+	}
+
+	return rf
 }

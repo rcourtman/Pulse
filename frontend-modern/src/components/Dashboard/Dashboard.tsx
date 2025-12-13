@@ -1,7 +1,7 @@
 import { createSignal, createMemo, createEffect, For, Show, onMount } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
-import { GuestRow, GUEST_COLUMNS } from './GuestRow';
+import { GuestRow, GUEST_COLUMNS, type GuestColumnDef } from './GuestRow';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -19,8 +19,10 @@ import { isNodeOnline, OFFLINE_HEALTH_STATUSES, DEGRADED_HEALTH_STATUSES } from 
 import { getNodeDisplayName } from '@/utils/nodes';
 import { logger } from '@/utils/logger';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { getBackupInfo } from '@/utils/format';
+import { aiChatStore } from '@/stores/aiChat';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
 type IdleCallbackHandle = number;
@@ -199,6 +201,7 @@ type ViewMode = 'all' | 'vm' | 'lxc';
 type StatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 type BackupMode = 'all' | 'needs-backup';
 type GroupingMode = 'grouped' | 'flat';
+type ProblemsMode = 'all' | 'problems';
 
 export function Dashboard(props: DashboardProps) {
   const navigate = useNavigate();
@@ -252,6 +255,15 @@ export function Dashboard(props: DashboardProps) {
     },
   );
 
+  // Problems mode - show only guests with issues
+  const [problemsMode, setProblemsMode] = usePersistentSignal<ProblemsMode>(
+    'dashboardProblemsMode',
+    'all',
+    {
+      deserialize: (raw) => (raw === 'all' || raw === 'problems' ? raw : 'all'),
+    },
+  );
+
   const [showFilters, setShowFilters] = usePersistentSignal<boolean>(
     'dashboardShowFilters',
     false,
@@ -265,8 +277,18 @@ export function Dashboard(props: DashboardProps) {
   const [sortKey, setSortKey] = createSignal<keyof (VM | Container) | null>('vmid');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
 
+  // Column visibility management
+  // OS and IP columns are hidden by default since they require guest agent and may show dashes
+  const columnVisibility = useColumnVisibility(
+    STORAGE_KEYS.DASHBOARD_HIDDEN_COLUMNS,
+    GUEST_COLUMNS as GuestColumnDef[],
+    ['os', 'ip']  // Default hidden columns for cleaner first-run experience
+  );
+  const visibleColumns = columnVisibility.visibleColumns;
+  const visibleColumnIds = createMemo(() => visibleColumns().map(c => c.id));
+
   // Total columns for colspan calculations
-  const totalColumns = GUEST_COLUMNS.length;
+  const totalColumns = createMemo(() => visibleColumns().length);
 
   // Load all guest metadata on mount (single API call for all guests)
   onMount(async () => {
@@ -434,7 +456,8 @@ export function Dashboard(props: DashboardProps) {
           selectedNode() !== null ||
           viewMode() !== 'all' ||
           statusMode() !== 'all' ||
-          backupMode() !== 'all';
+          backupMode() !== 'all' ||
+          problemsMode() !== 'all';
 
         if (hasActiveFilters) {
           // Clear ALL filters including search text, tag filters, node selection, and view modes
@@ -446,6 +469,7 @@ export function Dashboard(props: DashboardProps) {
           setViewMode('all');
           setStatusMode('all');
           setBackupMode('all');
+          setProblemsMode('all');
 
           // Blur the search input if it's focused
           if (searchInputRef && document.activeElement === searchInputRef) {
@@ -457,6 +481,12 @@ export function Dashboard(props: DashboardProps) {
         }
       } else if (!isInputField && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
         // If it's a printable character and user is not in an input field
+        // Check if AI chat is open - if so, focus that instead
+        if (aiChatStore.focusInput()) {
+          // AI chat input was focused, let the character be typed there
+          return;
+        }
+        // Otherwise, focus the search input
         // Expand filters section if collapsed
         if (!showFilters()) {
           setShowFilters(true);
@@ -471,6 +501,32 @@ export function Dashboard(props: DashboardProps) {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
+  });
+
+  // Compute guests with problems - used for AI investigation regardless of filter state
+  const problemGuests = createMemo(() => {
+    return allGuests().filter((g) => {
+      // Skip templates
+      if (g.template) return false;
+
+      // Check for degraded status
+      const status = (g.status || '').toLowerCase();
+      const isDegraded = DEGRADED_HEALTH_STATUSES.has(status) ||
+        (status !== 'running' && !OFFLINE_HEALTH_STATUSES.has(status) && status !== 'stopped');
+      if (isDegraded) return true;
+
+      // Check for backup issues
+      const backupInfo = getBackupInfo(g.lastBackup);
+      if (backupInfo.status === 'stale' || backupInfo.status === 'critical' || backupInfo.status === 'never') {
+        return true;
+      }
+
+      // Check for high resource usage (>90%)
+      if (g.cpu > 0.9) return true;
+      if (g.memory && g.memory.usage && g.memory.usage > 90) return true;
+
+      return false;
+    });
   });
 
   // Filter guests based on current settings
@@ -493,7 +549,8 @@ export function Dashboard(props: DashboardProps) {
     if (viewMode() === 'vm') {
       guests = guests.filter((g) => g.type === 'qemu');
     } else if (viewMode() === 'lxc') {
-      guests = guests.filter((g) => g.type === 'lxc');
+      // Include both traditional LXC and OCI containers (Proxmox 9.1+)
+      guests = guests.filter((g) => g.type === 'lxc' || g.type === 'oci');
     }
 
     // Filter by status
@@ -519,6 +576,32 @@ export function Dashboard(props: DashboardProps) {
         const backupInfo = getBackupInfo(g.lastBackup);
         // Show guests that need backup: stale, critical, or never backed up
         return backupInfo.status === 'stale' || backupInfo.status === 'critical' || backupInfo.status === 'never';
+      });
+    }
+
+    // Filter by problems mode - show guests that need attention
+    if (problemsMode() === 'problems') {
+      guests = guests.filter((g) => {
+        // Skip templates
+        if (g.template) return false;
+
+        // Check for degraded status
+        const status = (g.status || '').toLowerCase();
+        const isDegraded = DEGRADED_HEALTH_STATUSES.has(status) ||
+          (status !== 'running' && !OFFLINE_HEALTH_STATUSES.has(status) && status !== 'stopped');
+        if (isDegraded) return true;
+
+        // Check for backup issues
+        const backupInfo = getBackupInfo(g.lastBackup);
+        if (backupInfo.status === 'stale' || backupInfo.status === 'critical' || backupInfo.status === 'never') {
+          return true;
+        }
+
+        // Check for high resource usage (>90%)
+        if (g.cpu > 0.9) return true;
+        if (g.memory && g.memory.usage && g.memory.usage > 90) return true;
+
+        return false;
       });
     }
 
@@ -643,6 +726,7 @@ export function Dashboard(props: DashboardProps) {
     guests.forEach((guest) => {
       // Node.ID is formatted as "instance-nodename", so we need to match that
       const nodeId = `${guest.instance}-${guest.node}`;
+
       if (!groups[nodeId]) {
         groups[nodeId] = [];
       }
@@ -724,7 +808,7 @@ export function Dashboard(props: DashboardProps) {
     }).length;
     const stopped = guests.length - running - degraded;
     const vms = guests.filter((g) => g.type === 'qemu').length;
-    const containers = guests.filter((g) => g.type === 'lxc').length;
+    const containers = guests.filter((g) => g.type === 'lxc' || g.type === 'oci').length;
     return {
       total: guests.length,
       running,
@@ -737,6 +821,27 @@ export function Dashboard(props: DashboardProps) {
 
   const handleNodeSelect = (nodeId: string | null, nodeType: 'pve' | 'pbs' | 'pmg' | null) => {
     logger.debug('handleNodeSelect called', { nodeId, nodeType });
+
+    // If AI sidebar is open, add node to AI context instead of filtering
+    if (aiChatStore.isOpen && nodeId && nodeType === 'pve') {
+      const node = props.nodes.find((n) => n.id === nodeId);
+      if (node) {
+        // Toggle: remove if already in context, add if not
+        if (aiChatStore.hasContextItem(nodeId)) {
+          aiChatStore.removeContextItem(nodeId);
+        } else {
+          aiChatStore.addContextItem('node', nodeId, node.name, {
+            nodeName: node.name,
+            name: node.name,
+            type: 'Proxmox Node',
+            status: node.status,
+            instance: node.instance,
+          });
+        }
+      }
+      return;
+    }
+
     // Track selected node for filtering (independent of search)
     if (nodeType === 'pve' || nodeType === null) {
       setSelectedNode(nodeId);
@@ -796,6 +901,43 @@ export function Dashboard(props: DashboardProps) {
     }
   };
 
+  // Handle row click - add guest to AI context (works even when sidebar is closed)
+  const handleGuestRowClick = (guest: VM | Container) => {
+    // Only enable if AI is configured
+    if (!aiChatStore.enabled) return;
+
+    const guestId = guest.id || `${guest.instance}-${guest.vmid}`;
+    const guestType = guest.type === 'qemu' ? 'vm' : 'container';
+    const isOCI = guest.type === 'oci' || ('isOci' in guest && guest.isOci === true);
+
+    // Toggle: remove if already in context, add if not
+    if (aiChatStore.hasContextItem(guestId)) {
+      aiChatStore.removeContextItem(guestId);
+      // If no items left in context and sidebar is open, keep it open for now
+    } else {
+      // Build context with OCI-specific info when applicable
+      const contextData: Record<string, unknown> = {
+        guestName: guest.name,
+        name: guest.name,
+        type: guest.type === 'qemu' ? 'Virtual Machine' : (isOCI ? 'OCI Container' : 'LXC Container'),
+        vmid: guest.vmid,
+        node: guest.node,
+        status: guest.status,
+      };
+
+      // Add OCI image info if available
+      if (isOCI && 'osTemplate' in guest && guest.osTemplate) {
+        contextData.ociImage = guest.osTemplate;
+      }
+
+      aiChatStore.addContextItem(guestType, guestId, guest.name, contextData);
+      // Auto-open the sidebar when first item is selected
+      if (!aiChatStore.isOpen) {
+        aiChatStore.open();
+      }
+    }
+  };
+
   return (
     <div class="space-y-3">
       <ProxmoxSectionNav current="overview" />
@@ -807,7 +949,7 @@ export function Dashboard(props: DashboardProps) {
         onNodeSelect={handleNodeSelect}
         nodes={props.nodes}
         filteredVms={filteredGuests().filter((g) => g.type === 'qemu')}
-        filteredContainers={filteredGuests().filter((g) => g.type === 'lxc')}
+        filteredContainers={filteredGuests().filter((g) => g.type === 'lxc' || g.type === 'oci')}
         searchTerm={search()}
       />
 
@@ -822,11 +964,18 @@ export function Dashboard(props: DashboardProps) {
         setStatusMode={setStatusMode}
         backupMode={backupMode}
         setBackupMode={setBackupMode}
+        problemsMode={problemsMode}
+        setProblemsMode={setProblemsMode}
+        filteredProblemGuests={problemGuests}
         groupingMode={groupingMode}
         setGroupingMode={setGroupingMode}
         setSortKey={setSortKey}
         setSortDirection={setSortDirection}
         searchInputRef={(el) => (searchInputRef = el)}
+        availableColumns={columnVisibility.availableToggles()}
+        isColumnHidden={columnVisibility.isHiddenByUser}
+        onColumnToggle={columnVisibility.toggle}
+        onColumnReset={columnVisibility.resetToDefaults}
       />
 
       {/* Loading State */}
@@ -951,96 +1100,40 @@ export function Dashboard(props: DashboardProps) {
         <ComponentErrorBoundary name="Guest Table">
           <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
             <div class="overflow-x-auto">
-              <table class="w-full border-collapse whitespace-nowrap">
+              <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "900px" }}>
                 <thead>
                   <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
-                    {/* Name Header */}
-                    <th
-                      class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('name')}
-                    >
-                      Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
+                    <For each={visibleColumns()}>
+                      {(col) => {
+                        const isFirst = () => col.id === visibleColumns()[0]?.id;
+                        const sortKeyForCol = col.sortKey as keyof (VM | Container) | undefined;
+                        const isSortable = !!sortKeyForCol;
+                        const isSorted = () => sortKeyForCol && sortKey() === sortKeyForCol;
 
-                    {/* Type */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('type')}
-                    >
-                      Type {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* VMID */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('vmid')}
-                    >
-                      VMID {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* Uptime */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('uptime')}
-                    >
-                      Uptime {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* CPU */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('cpu')}
-                    >
-                      CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* Memory */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('memory')}
-                    >
-                      Memory {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* Disk */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('disk')}
-                    >
-                      Disk {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* Disk Read */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('diskRead')}
-                    >
-                      Disk Read {sortKey() === 'diskRead' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* Disk Write */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('diskWrite')}
-                    >
-                      Disk Write {sortKey() === 'diskWrite' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* Net In */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('networkIn')}
-                    >
-                      Net In {sortKey() === 'networkIn' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-
-                    {/* Net Out */}
-                    <th
-                      class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                      onClick={() => handleSort('networkOut')}
-                    >
-                      Net Out {sortKey() === 'networkOut' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
+                        return (
+                          <th
+                            class={`py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
+                              ${isFirst() ? 'pl-4 pr-2 text-left' : 'px-2 text-center'}
+                              ${isSortable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
+                            style={{
+                              ...(col.width ? { "min-width": col.width } : {}),
+                              "vertical-align": 'middle'
+                            }}
+                            onClick={() => isSortable && handleSort(sortKeyForCol!)}
+                            title={col.icon ? col.label : undefined}
+                          >
+                              <div class={`flex items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`} style={{ "min-height": "14px" }}>
+                              {col.icon ? (
+                                <span class="flex items-center">{col.icon}</span>
+                              ) : (
+                                col.label
+                              )}
+                              {isSorted() && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+                            </div>
+                          </th>
+                        );
+                      }}
+                    </For>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -1059,16 +1152,23 @@ export function Dashboard(props: DashboardProps) {
                       return (
                         <>
                           <Show when={node && groupingMode() === 'grouped'}>
-                            <NodeGroupHeader node={node!} renderAs="tr" colspan={totalColumns} />
+                            <NodeGroupHeader node={node!} renderAs="tr" colspan={totalColumns()} />
                           </Show>
                           <For each={guests} fallback={<></>}>
-                            {(guest) => {
+                            {(guest, index) => {
                               const guestId = guest.id || `${guest.instance}-${guest.vmid}`;
                               const metadata =
                                 guestMetadata()[guestId] ||
                                 guestMetadata()[`${guest.node}-${guest.vmid}`];
                               const parentNode = node ?? resolveParentNode(guest);
                               const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
+
+                              // Get adjacent guest IDs for merged AI context borders
+                              const prevGuest = guests[index() - 1];
+                              const nextGuest = guests[index() + 1];
+                              const prevGuestId = prevGuest ? (prevGuest.id || `${prevGuest.instance}-${prevGuest.vmid}`) : null;
+                              const nextGuestId = nextGuest ? (nextGuest.id || `${nextGuest.instance}-${nextGuest.vmid}`) : null;
+
                               return (
                                 <ComponentErrorBoundary name="GuestRow">
                                   <GuestRow
@@ -1080,6 +1180,10 @@ export function Dashboard(props: DashboardProps) {
                                     parentNodeOnline={parentNodeOnline}
                                     onCustomUrlUpdate={handleCustomUrlUpdate}
                                     isGroupedView={groupingMode() === 'grouped'}
+                                    visibleColumnIds={visibleColumnIds()}
+                                    aboveGuestId={prevGuestId}
+                                    belowGuestId={nextGuestId}
+                                    onRowClick={aiChatStore.enabled ? handleGuestRowClick : undefined}
                                   />
                                 </ComponentErrorBoundary>
                               );
