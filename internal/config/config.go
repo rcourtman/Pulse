@@ -1087,7 +1087,7 @@ func Load() (*Config, error) {
 	if demoModeEnv != "" {
 		cfg.DemoMode = demoModeEnv == "true" || demoModeEnv == "1"
 		if cfg.DemoMode {
-			log.Warn().Msg("🎭 DEMO MODE - All modifications disabled (read-only)")
+			log.Warn().Msg("DEMO MODE - All modifications disabled (read-only)")
 		}
 	}
 

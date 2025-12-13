@@ -125,7 +125,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		log.Error().
 			Strs("foundFiles", foundFiles).
 			Str("dataDir", dataDir).
-			Msg("⚠️  CRITICAL: Encryption key not found but encrypted/backup/corrupted files exist")
+			Msg("CRITICAL: Encryption key not found but encrypted/backup/corrupted files exist")
 		return nil, fmt.Errorf("encryption key not found but encrypted data exists (%v) - cannot generate new key as it would orphan existing data. Please restore the encryption key from backup or delete ALL .enc* files to start fresh", foundFiles)
 	}
 
