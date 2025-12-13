@@ -4,6 +4,8 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
 import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import Activity from 'lucide-solid/icons/activity';
+import Sun from 'lucide-solid/icons/sun';
+import Moon from 'lucide-solid/icons/moon';
 
 const PVE_POLLING_MIN_SECONDS = 10;
 const PVE_POLLING_MAX_SECONDS = 3600;
@@ -50,12 +52,28 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           </div>
         </div>
         <div class="p-6 space-y-5">
-          <div class="flex items-center justify-between gap-3">
-            <div class="text-sm text-gray-600 dark:text-gray-400">
-              <p class="font-medium text-gray-900 dark:text-gray-100">Dark mode</p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                Toggle to match your environment. Pulse remembers this preference on each browser.
-              </p>
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+              {/* Animated theme icon */}
+              <div class={`relative p-2.5 rounded-xl transition-all duration-300 ${props.darkMode()
+                  ? 'bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25'
+                  : 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/25'
+                }`}>
+                <div class="relative w-5 h-5">
+                  <Sun class={`absolute inset-0 w-5 h-5 text-white transition-all duration-300 ${props.darkMode() ? 'opacity-0 rotate-90 scale-50' : 'opacity-100 rotate-0 scale-100'
+                    }`} strokeWidth={2} />
+                  <Moon class={`absolute inset-0 w-5 h-5 text-white transition-all duration-300 ${props.darkMode() ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-50'
+                    }`} strokeWidth={2} />
+                </div>
+              </div>
+              <div class="text-sm text-gray-600 dark:text-gray-400">
+                <p class="font-medium text-gray-900 dark:text-gray-100">
+                  {props.darkMode() ? 'Dark mode' : 'Light mode'}
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  Toggle to match your environment. Pulse remembers this preference on each browser.
+                </p>
+              </div>
             </div>
             <Toggle
               checked={props.darkMode()}
@@ -99,8 +117,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               Current cadence: {props.pvePollingInterval()} seconds (
               {props.pvePollingInterval() >= 60
                 ? `${(props.pvePollingInterval() / 60).toFixed(
-                    props.pvePollingInterval() % 60 === 0 ? 0 : 1
-                  )} minute${props.pvePollingInterval() / 60 === 1 ? '' : 's'}`
+                  props.pvePollingInterval() % 60 === 0 ? 0 : 1
+                )} minute${props.pvePollingInterval() / 60 === 1 ? '' : 's'}`
                 : 'under a minute'}
               ).
             </p>
@@ -113,11 +131,10 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 {(option) => (
                   <button
                     type="button"
-                    class={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                      props.pvePollingSelection() === option.value
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-200'
-                    } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    class={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${props.pvePollingSelection() === option.value
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-200'
+                      } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
                     disabled={props.pvePollingEnvLocked()}
                     onClick={() => {
                       if (props.pvePollingEnvLocked()) return;
@@ -132,11 +149,10 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               </For>
               <button
                 type="button"
-                class={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                  props.pvePollingSelection() === 'custom'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
-                    : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-200'
-                } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                class={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${props.pvePollingSelection() === 'custom'
+                  ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
+                  : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-200'
+                  } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
                 disabled={props.pvePollingEnvLocked()}
                 onClick={() => {
                   if (props.pvePollingEnvLocked()) return;
