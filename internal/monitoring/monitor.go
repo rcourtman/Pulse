@@ -1395,6 +1395,37 @@ func (m *Monitor) RebuildTokenBindings() {
 		Msg("Rebuilt agent token bindings after API token reload")
 }
 
+// ClearUnauthenticatedAgents removes all host agents and docker hosts from the state.
+// This should be called when security is first configured to clear any agents that
+// connected during the brief unauthenticated window before credentials were set up.
+// This prevents stale/unauthorized agent data from appearing in the UI.
+func (m *Monitor) ClearUnauthenticatedAgents() (int, int) {
+	if m == nil || m.state == nil {
+		return 0, 0
+	}
+
+	// Clear all hosts
+	hostCount := m.state.ClearAllHosts()
+
+	// Clear all docker hosts
+	dockerCount := m.state.ClearAllDockerHosts()
+
+	// Clear any token bindings since the tokens used by the old agents are invalid
+	m.mu.Lock()
+	m.dockerTokenBindings = make(map[string]string)
+	m.hostTokenBindings = make(map[string]string)
+	m.mu.Unlock()
+
+	if hostCount > 0 || dockerCount > 0 {
+		log.Info().
+			Int("hostsCleared", hostCount).
+			Int("dockerHostsCleared", dockerCount).
+			Msg("Cleared unauthenticated agents after security setup")
+	}
+
+	return hostCount, dockerCount
+}
+
 // QueueDockerHostStop queues a stop command for the specified docker host.
 func (m *Monitor) QueueDockerHostStop(hostID string) (models.DockerHostCommandStatus, error) {
 	return m.queueDockerStopCommand(hostID)

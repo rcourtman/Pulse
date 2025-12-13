@@ -1489,6 +1489,19 @@ func (s *State) RemoveDockerHost(hostID string) (DockerHost, bool) {
 	return DockerHost{}, false
 }
 
+// ClearAllDockerHosts removes all docker hosts from the state.
+// This is used during initial security setup to clear any docker hosts that may have
+// connected during the brief unauthenticated window before credentials were configured.
+func (s *State) ClearAllDockerHosts() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	count := len(s.DockerHosts)
+	s.DockerHosts = nil
+	s.LastUpdate = time.Now()
+	return count
+}
+
 // SetDockerHostStatus updates the status of a docker host if present.
 func (s *State) SetDockerHostStatus(hostID, status string) bool {
 	s.mu.Lock()
@@ -1902,6 +1915,19 @@ func (s *State) RemoveHost(hostID string) (Host, bool) {
 	}
 
 	return Host{}, false
+}
+
+// ClearAllHosts removes all host agents from the state.
+// This is used during initial security setup to clear any hosts that may have
+// connected during the brief unauthenticated window before credentials were configured.
+func (s *State) ClearAllHosts() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	count := len(s.Hosts)
+	s.Hosts = nil
+	s.LastUpdate = time.Now()
+	return count
 }
 
 // UpsertCephCluster inserts or updates a Ceph cluster in the state.
