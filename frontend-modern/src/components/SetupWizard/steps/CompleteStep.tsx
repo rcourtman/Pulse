@@ -334,29 +334,27 @@ Keep these credentials secure!
                         </svg>
                         Install Command
                     </h3>
-                    <Show when={connectedAgents().length > 0}>
-                        <button
-                            onClick={generateNewToken}
-                            disabled={generatingToken()}
-                            class="text-xs text-white/50 hover:text-white/70 flex items-center gap-1 disabled:opacity-50"
-                            title="Generate a different token if needed for security isolation"
-                        >
-                            {generatingToken() ? (
-                                <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                                </svg>
-                            ) : (
-                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                            )}
-                            Different Token
-                        </button>
-                    </Show>
+                    <button
+                        onClick={generateNewToken}
+                        disabled={generatingToken()}
+                        class="text-xs bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 hover:text-blue-200 px-2 py-1 rounded flex items-center gap-1 disabled:opacity-50"
+                        title="Generate a new token for the next host"
+                    >
+                        {generatingToken() ? (
+                            <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                        ) : (
+                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                        )}
+                        New Token
+                    </button>
                 </div>
                 <p class="text-white/70 text-xs mb-2">
-                    Run this command on any host you want to monitor. Use the same command on multiple servers.
+                    Run on the host you want to monitor. <span class="text-amber-300">Use a different token for each host</span> - click "New Token" after each install.
                 </p>
 
                 <div class="bg-black/40 rounded-lg p-2.5 font-mono text-[10px] mb-2 relative group">
