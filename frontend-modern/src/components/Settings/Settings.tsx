@@ -441,7 +441,7 @@ interface SettingsProps {
 }
 
 const Settings: Component<SettingsProps> = (props) => {
-  const { state, connected } = useWebSocket();
+  const { state, connected: _connected } = useWebSocket();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -539,8 +539,8 @@ const Settings: Component<SettingsProps> = (props) => {
       description: 'Manage Pulse configuration.',
     };
 
-  const pveBackupsState = () => state.backups?.pve ?? state.pveBackups;
-  const pbsBackupsState = () => state.backups?.pbs ?? state.pbsBackups;
+  const _pveBackupsState = () => state.backups?.pve ?? state.pveBackups;
+  const _pbsBackupsState = () => state.backups?.pbs ?? state.pbsBackups;
 
   // Keep tab state in sync with URL and handle /settings redirect without flicker
   createEffect(
@@ -652,7 +652,7 @@ const Settings: Component<SettingsProps> = (props) => {
   const [envOverrides, setEnvOverrides] = createSignal<Record<string, boolean>>({});
   const [temperatureMonitoringEnabled, setTemperatureMonitoringEnabled] = createSignal(true);
   const [savingTemperatureSetting, setSavingTemperatureSetting] = createSignal(false);
-  const [hostProxyStatus, setHostProxyStatus] = createSignal<HostProxyStatusResponse | null>(null);
+  const [_hostProxyStatus, setHostProxyStatus] = createSignal<HostProxyStatusResponse | null>(null);
   const [hideLocalLogin, setHideLocalLogin] = createSignal(false);
   const [savingHideLocalLogin, setSavingHideLocalLogin] = createSignal(false);
 
@@ -826,13 +826,13 @@ const Settings: Component<SettingsProps> = (props) => {
 
   // Diagnostics
   const [diagnosticsData, setDiagnosticsData] = createSignal<DiagnosticsData | null>(null);
-  const [runningDiagnostics, setRunningDiagnostics] = createSignal(false);
+  const [_runningDiagnostics, setRunningDiagnostics] = createSignal(false);
   const [proxyActionLoading, setProxyActionLoading] = createSignal<'register-nodes' | null>(null);
-  const [proxyRegisterSummary, setProxyRegisterSummary] = createSignal<ProxyRegisterNode[] | null>(
+  const [_proxyRegisterSummary, setProxyRegisterSummary] = createSignal<ProxyRegisterNode[] | null>(
     null,
   );
   const [dockerActionLoading, setDockerActionLoading] = createSignal<string | null>(null);
-  const [dockerMigrationResults, setDockerMigrationResults] = createSignal<
+  const [_dockerMigrationResults, setDockerMigrationResults] = createSignal<
     Record<string, DockerMigrationResult>
   >({});
 
