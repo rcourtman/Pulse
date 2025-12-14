@@ -23,6 +23,7 @@ jobs:
     outputs:
       version: ${{ steps.extract.outputs.version }}
       tag: ${{ steps.extract.outputs.tag }}
+      is_prerelease: ${{ steps.extract.outputs.is_prerelease }}
     steps:
       - name: Extract version
         id: extract
