@@ -1494,18 +1494,47 @@ create_lxc_container() {
     # When piped through curl, $0 is "bash" not the script. Download fresh copy.
     local script_source="/tmp/pulse_install_$$.sh"
     if [[ "$0" == "bash" ]] || [[ ! -f "$0" ]]; then
-        # We're being piped, download the script
-        # Use timeout to prevent hanging
-        if command -v timeout >/dev/null 2>&1; then
-            if ! timeout 15 curl -fsSL --connect-timeout 5 --max-time 15 https://github.com/rcourtman/Pulse/releases/latest/download/install.sh > "$script_source" 2>/dev/null; then
-                print_error "Failed to download install script"
-                cleanup_on_error
+        # We're being piped, download the script with retry logic
+        local download_url="https://github.com/rcourtman/Pulse/releases/latest/download/install.sh"
+        local download_success=false
+        local download_error=""
+        local max_retries=3
+        
+        for attempt in $(seq 1 $max_retries); do
+            if [[ $attempt -gt 1 ]]; then
+                print_info "Retrying download (attempt $attempt/$max_retries)..."
+                sleep 2
             fi
-        else
-            if ! curl -fsSL --connect-timeout 5 --max-time 15 https://github.com/rcourtman/Pulse/releases/latest/download/install.sh > "$script_source" 2>/dev/null; then
-                print_error "Failed to download install script"
-                cleanup_on_error
+            
+            local curl_stderr="/tmp/curl_error_$$.txt"
+            if command -v timeout >/dev/null 2>&1; then
+                if timeout 30 curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$script_source" 2>"$curl_stderr"; then
+                    download_success=true
+                    rm -f "$curl_stderr"
+                    break
+                fi
+            else
+                if curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$script_source" 2>"$curl_stderr"; then
+                    download_success=true
+                    rm -f "$curl_stderr"
+                    break
+                fi
             fi
+            download_error=$(cat "$curl_stderr" 2>/dev/null || echo "unknown error")
+            rm -f "$curl_stderr"
+        done
+        
+        if [[ "$download_success" != "true" ]]; then
+            print_error "Failed to download install script after $max_retries attempts"
+            print_error "URL: $download_url"
+            if [[ -n "$download_error" ]]; then
+                print_error "Error: $download_error"
+            fi
+            print_info ""
+            print_info "Workaround: Download the script manually and run it locally:"
+            print_info "  curl -fsSL $download_url -o install.sh"
+            print_info "  bash install.sh"
+            cleanup_on_error
         fi
     else
         # We have a local script file
