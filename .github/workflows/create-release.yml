@@ -39,9 +39,18 @@ jobs:
             fi
             TAG="v${VERSION}"
           fi
+          
+          # Detect if this is a prerelease (RC, alpha, beta)
+          IS_PRERELEASE="false"
+          if [[ "$VERSION" =~ -rc\.[0-9]+$ ]] || [[ "$VERSION" =~ -alpha\.[0-9]+$ ]] || [[ "$VERSION" =~ -beta\.[0-9]+$ ]]; then
+            IS_PRERELEASE="true"
+            echo "Detected prerelease version: ${VERSION}"
+          fi
+          
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Version: ${VERSION}, Tag: ${TAG}"
+          echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}, Tag: ${TAG}, Prerelease: ${IS_PRERELEASE}"
 
   version_guard:
     needs: extract_version
@@ -366,12 +375,15 @@ jobs:
           # Tag must exist first - draft releases can't create tags (GitHub API limitation)
           # See: https://github.com/cli/cli/issues/11589
           # Create as draft first so we can upload assets before publishing
+          IS_PRERELEASE="${{ needs.extract_version.outputs.is_prerelease }}"
+          
           RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases" \
             -X POST \
             -F tag_name="${TAG}" \
             -F name="Pulse ${TAG}" \
             -F body="$(cat $NOTES_FILE)" \
-            -F draft=true)
+            -F draft=true \
+            -F prerelease=${IS_PRERELEASE})
 
           rm -f "$NOTES_FILE"
 
@@ -435,14 +447,23 @@ jobs:
           TAG="${{ needs.extract_version.outputs.tag }}"
           RELEASE_ID="${{ steps.create_release.outputs.release_id }}"
 
-          echo "Publishing release ${TAG}..."
+          IS_PRERELEASE="${{ needs.extract_version.outputs.is_prerelease }}"
+          echo "Publishing release ${TAG} (prerelease: ${IS_PRERELEASE})..."
 
-          gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
-            -X PATCH \
-            -F draft=false \
-            -F make_latest=true
-
-          echo "✓ Release published as latest: ${TAG}"
+          # Only mark as latest if this is NOT a prerelease
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
+              -X PATCH \
+              -F draft=false \
+              -F make_latest=false
+            echo "✓ Release published as prerelease: ${TAG}"
+          else
+            gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
+              -X PATCH \
+              -F draft=false \
+              -F make_latest=true
+            echo "✓ Release published as latest: ${TAG}"
+          fi
 
       - name: Trigger Docker image publish
         continue-on-error: true  # Non-fatal if dispatch fails
