@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -118,7 +119,7 @@ func New(cfg Config) (*Agent, error) {
 
 	displayName := hostname
 
-	machineID := strings.TrimSpace(info.HostID)
+	machineID := getReliableMachineID(info.HostID, logger)
 
 	agentID := strings.TrimSpace(cfg.AgentID)
 	if agentID == "" {
@@ -642,4 +643,63 @@ func (a *Agent) runProxmoxSetup(ctx context.Context) {
 			Str("host", result.NodeHost).
 			Msg("Proxmox token created but registration failed (node may need manual configuration)")
 	}
+}
+
+// isLXCContainer detects if we're running inside an LXC container.
+// LXC containers share the host's /sys/class/dmi/id/product_uuid, which causes
+// gopsutil to return identical HostIDs for all LXC containers on the same host.
+func isLXCContainer() bool {
+	// Check systemd-detect-virt if available
+	if data, err := os.ReadFile("/run/systemd/container"); err == nil {
+		container := strings.TrimSpace(string(data))
+		if strings.Contains(container, "lxc") {
+			return true
+		}
+	}
+
+	// Check /proc/1/environ for container=lxc
+	if data, err := os.ReadFile("/proc/1/environ"); err == nil {
+		if strings.Contains(string(data), "container=lxc") {
+			return true
+		}
+	}
+
+	// Check /proc/1/cgroup for lxc markers
+	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
+		text := string(data)
+		if strings.Contains(text, "/lxc/") || strings.Contains(text, "lxc.payload") {
+			return true
+		}
+	}
+
+	return false
+}
+
+// getReliableMachineID returns a machine ID that's unique per container/host.
+// In LXC containers, gopsutil's HostID may use /sys/class/dmi/id/product_uuid
+// which is shared with the host, causing ID collisions. This function detects
+// LXC and prefers /etc/machine-id which is unique per container.
+func getReliableMachineID(gopsutilHostID string, logger zerolog.Logger) string {
+	gopsutilID := strings.TrimSpace(gopsutilHostID)
+
+	// For LXC containers, prefer /etc/machine-id to avoid ID collisions
+	if isLXCContainer() {
+		if data, err := os.ReadFile("/etc/machine-id"); err == nil {
+			machineID := strings.TrimSpace(string(data))
+			if len(machineID) >= 32 {
+				// Format as UUID if it's a 32-char hex string (like machine-id typically is)
+				if len(machineID) == 32 {
+					machineID = fmt.Sprintf("%s-%s-%s-%s-%s",
+						machineID[0:8], machineID[8:12], machineID[12:16],
+						machineID[16:20], machineID[20:32])
+				}
+				logger.Debug().
+					Str("machineID", machineID).
+					Msg("LXC container detected, using /etc/machine-id for unique identification")
+				return machineID
+			}
+		}
+	}
+
+	return gopsutilID
 }
