@@ -8,11 +8,22 @@
 #
 # Options:
 #   --enable-host       Enable host metrics (default: true)
-#   --enable-docker     Enable docker metrics (default: false)
-#   --enable-kubernetes Enable Kubernetes metrics (default: false)
+#   --enable-docker     Force enable Docker monitoring (default: auto-detect)
+#   --disable-docker    Disable Docker monitoring even if detected
+#   --enable-kubernetes Force enable Kubernetes monitoring (default: auto-detect)
+#   --disable-kubernetes Disable Kubernetes monitoring even if detected
+#   --enable-proxmox    Force enable Proxmox integration (default: auto-detect)
+#   --disable-proxmox   Disable Proxmox integration even if detected
 #   --interval <dur>    Reporting interval (default: 30s)
 #   --agent-id <id>     Custom agent identifier (default: auto-generated)
+#   --insecure          Skip TLS certificate verification
 #   --uninstall         Remove the agent
+#
+# Auto-Detection:
+#   The installer automatically detects Docker, Kubernetes, and Proxmox on the
+#   target machine and enables monitoring for detected platforms. Use --disable-*
+#   flags to skip specific platforms, or --enable-* to force enable even if not
+#   detected.
 
 set -euo pipefail
 
@@ -54,13 +65,18 @@ PULSE_URL=""
 PULSE_TOKEN=""
 INTERVAL="30s"
 ENABLE_HOST="true"
-ENABLE_DOCKER="false"
-ENABLE_KUBERNETES="false"
-ENABLE_PROXMOX="false"
+ENABLE_DOCKER=""  # Empty means "auto-detect"
+ENABLE_KUBERNETES=""  # Empty means "auto-detect"
+ENABLE_PROXMOX=""  # Empty means "auto-detect"
 PROXMOX_TYPE=""
 UNINSTALL="false"
 INSECURE="false"
 AGENT_ID=""
+
+# Track if flags were explicitly set (to override auto-detection)
+DOCKER_EXPLICIT="false"
+KUBERNETES_EXPLICIT="false"
+PROXMOX_EXPLICIT="false"
 
 # --- Helper Functions ---
 log_info() { printf "[INFO] %s\n" "$1"; }
@@ -74,6 +90,63 @@ fail() {
         read -r -p "Press Enter to exit..." < /dev/tty
     fi
     exit 1
+}
+
+# --- Auto-Detection Functions ---
+detect_docker() {
+    # Check if Docker is available and accessible
+    if command -v docker &>/dev/null; then
+        # Try to connect to Docker daemon
+        if docker info &>/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    # Also check for Podman (Docker-compatible)
+    if command -v podman &>/dev/null; then
+        if podman info &>/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+detect_kubernetes() {
+    # Check for kubectl and cluster access
+    if command -v kubectl &>/dev/null; then
+        # Try to connect to cluster (quick timeout)
+        if timeout 3 kubectl cluster-info &>/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    # Check for kubeconfig file
+    if [[ -f "${HOME}/.kube/config" ]] || [[ -f "/etc/kubernetes/admin.conf" ]]; then
+        return 0
+    fi
+    # Check if running inside a Kubernetes pod
+    if [[ -f "/var/run/secrets/kubernetes.io/serviceaccount/token" ]]; then
+        return 0
+    fi
+    return 1
+}
+
+detect_proxmox() {
+    # Check for Proxmox VE
+    if [[ -d "/etc/pve" ]]; then
+        return 0
+    fi
+    # Check for Proxmox Backup Server
+    if [[ -d "/etc/proxmox-backup" ]]; then
+        return 0
+    fi
+    # Check for pveversion command
+    if command -v pveversion &>/dev/null; then
+        return 0
+    fi
+    # Check for proxmox-backup-manager command
+    if command -v proxmox-backup-manager &>/dev/null; then
+        return 0
+    fi
+    return 1
 }
 
 # Build exec args string for use in service files
@@ -120,11 +193,12 @@ while [[ $# -gt 0 ]]; do
         --interval) INTERVAL="$2"; shift 2 ;;
         --enable-host) ENABLE_HOST="true"; shift ;;
         --disable-host) ENABLE_HOST="false"; shift ;;
-        --enable-docker) ENABLE_DOCKER="true"; shift ;;
-        --disable-docker) ENABLE_DOCKER="false"; shift ;;
-        --enable-kubernetes) ENABLE_KUBERNETES="true"; shift ;;
-        --disable-kubernetes) ENABLE_KUBERNETES="false"; shift ;;
-        --enable-proxmox) ENABLE_PROXMOX="true"; shift ;;
+        --enable-docker) ENABLE_DOCKER="true"; DOCKER_EXPLICIT="true"; shift ;;
+        --disable-docker) ENABLE_DOCKER="false"; DOCKER_EXPLICIT="true"; shift ;;
+        --enable-kubernetes) ENABLE_KUBERNETES="true"; KUBERNETES_EXPLICIT="true"; shift ;;
+        --disable-kubernetes) ENABLE_KUBERNETES="false"; KUBERNETES_EXPLICIT="true"; shift ;;
+        --enable-proxmox) ENABLE_PROXMOX="true"; PROXMOX_EXPLICIT="true"; shift ;;
+        --disable-proxmox) ENABLE_PROXMOX="false"; PROXMOX_EXPLICIT="true"; shift ;;
         --proxmox-type) PROXMOX_TYPE="$2"; shift 2 ;;
         --insecure) INSECURE="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
@@ -132,6 +206,47 @@ while [[ $# -gt 0 ]]; do
         *) fail "Unknown argument: $1" ;;
     esac
 done
+
+# --- Platform Auto-Detection ---
+# Only auto-detect if flags weren't explicitly set
+log_info "Detecting available platforms..."
+
+if [[ "$DOCKER_EXPLICIT" != "true" ]]; then
+    if detect_docker; then
+        log_info "Docker/Podman detected - enabling container monitoring"
+        log_info "  (use --disable-docker to skip)"
+        ENABLE_DOCKER="true"
+    else
+        ENABLE_DOCKER="false"
+    fi
+fi
+
+if [[ "$KUBERNETES_EXPLICIT" != "true" ]]; then
+    if detect_kubernetes; then
+        log_info "Kubernetes detected - enabling cluster monitoring"
+        log_info "  (use --disable-kubernetes to skip)"
+        ENABLE_KUBERNETES="true"
+    else
+        ENABLE_KUBERNETES="false"
+    fi
+fi
+
+if [[ "$PROXMOX_EXPLICIT" != "true" ]]; then
+    if detect_proxmox; then
+        log_info "Proxmox detected - enabling Proxmox integration"
+        log_info "  (use --disable-proxmox to skip)"
+        ENABLE_PROXMOX="true"
+    else
+        ENABLE_PROXMOX="false"
+    fi
+fi
+
+# Summary of what will be monitored
+log_info "Monitoring configuration:"
+log_info "  Host metrics: $ENABLE_HOST"
+log_info "  Docker/Podman: $ENABLE_DOCKER"
+log_info "  Kubernetes: $ENABLE_KUBERNETES"
+log_info "  Proxmox: $ENABLE_PROXMOX"
 
 # --- Uninstall Logic ---
 if [[ "$UNINSTALL" == "true" ]]; then

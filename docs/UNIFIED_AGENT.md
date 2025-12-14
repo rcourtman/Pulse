@@ -41,8 +41,12 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 | `--token` | `PULSE_TOKEN` | API token | *(required)* |
 | `--interval` | `PULSE_INTERVAL` | Reporting interval | `30s` |
 | `--enable-host` | `PULSE_ENABLE_HOST` | Enable host metrics | `true` |
-| `--enable-docker` | `PULSE_ENABLE_DOCKER` | Enable Docker metrics | `false` |
-| `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Enable Kubernetes metrics | `false` |
+| `--enable-docker` | `PULSE_ENABLE_DOCKER` | Force enable Docker metrics | **auto-detect** |
+| `--disable-docker` | - | Disable Docker even if detected | - |
+| `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Force enable Kubernetes metrics | **auto-detect** |
+| `--disable-kubernetes` | - | Disable Kubernetes even if detected | - |
+| `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Force enable Proxmox integration | **auto-detect** |
+| `--disable-proxmox` | - | Disable Proxmox even if detected | - |
 | `--kubeconfig` | `PULSE_KUBECONFIG` | Kubeconfig path (optional) | *(auto)* |
 | `--kube-context` | `PULSE_KUBE_CONTEXT` | Kubeconfig context (optional) | *(auto)* |
 | `--kube-include-namespace` | `PULSE_KUBE_INCLUDE_NAMESPACES` | Limit namespaces (repeatable or CSV) | *(all)* |
@@ -55,18 +59,34 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 | `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(machine-id)* |
 | `--health-addr` | `PULSE_HEALTH_ADDR` | Health/metrics server address | `:9191` |
 
+## Auto-Detection
+
+The installer automatically detects available platforms on the target machine:
+
+- **Docker/Podman**: Enabled if `docker info` or `podman info` succeeds
+- **Kubernetes**: Enabled if `kubectl cluster-info` succeeds or kubeconfig exists
+- **Proxmox**: Enabled if `/etc/pve` or `/etc/proxmox-backup` exists
+
+Use `--disable-*` flags to skip auto-detected platforms, or `--enable-*` to force enable.
+
 ## Installation Options
 
-### Host Monitoring Only (default)
+### Simple Install (auto-detects everything)
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
   bash -s -- --url http://<pulse-ip>:7655 --token <token>
 ```
 
-### Host + Docker Monitoring
+### Force Enable Docker (if auto-detection fails)
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
   bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-docker
+```
+
+### Disable Docker (even if detected)
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-docker
 ```
 
 ### Host + Kubernetes Monitoring

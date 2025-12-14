@@ -1,7 +1,9 @@
 import { Component, createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
+// Note: For is still used for connectedAgents list
 import { copyToClipboard } from '@/utils/clipboard';
 import { getPulseBaseUrl } from '@/utils/url';
 import { SecurityAPI } from '@/api/security';
+import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import type { WizardState } from '../SetupWizard';
 
 interface CompleteStepProps {
@@ -9,7 +11,7 @@ interface CompleteStepProps {
     onComplete: () => void;
 }
 
-type Platform = 'proxmox' | 'docker' | 'kubernetes' | 'host';
+// Platform auto-detection is now handled by the install script
 
 interface ConnectedAgent {
     id: string;
@@ -22,17 +24,9 @@ interface ConnectedAgent {
 export const CompleteStep: Component<CompleteStepProps> = (props) => {
     const [copied, setCopied] = createSignal<'password' | 'token' | 'install' | null>(null);
     const [showCredentials, setShowCredentials] = createSignal(false);
-    const [selectedPlatforms, setSelectedPlatforms] = createSignal<Platform[]>([]);
     const [connectedAgents, setConnectedAgents] = createSignal<ConnectedAgent[]>([]);
     const [currentInstallToken, setCurrentInstallToken] = createSignal(props.state.apiToken);
     const [generatingToken, setGeneratingToken] = createSignal(false);
-
-    // Available optional platforms (host monitoring is always enabled)
-    const platforms = [
-        { id: 'proxmox' as Platform, name: 'Proxmox VE', desc: 'VMs & containers via API', icon: '🖥️' },
-        { id: 'docker' as Platform, name: 'Docker', desc: 'Container monitoring', icon: '🐳' },
-        { id: 'kubernetes' as Platform, name: 'Kubernetes', desc: 'Cluster monitoring', icon: '☸️' },
-    ];
 
     // Poll for agent connections since WebSocket isn't available during setup
     createEffect(() => {
@@ -137,14 +131,7 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
         });
     });
 
-    const togglePlatform = (platform: Platform) => {
-        const current = selectedPlatforms();
-        if (current.includes(platform)) {
-            setSelectedPlatforms(current.filter(p => p !== platform));
-        } else {
-            setSelectedPlatforms([...current, platform]);
-        }
-    };
+    // Platform selection removed - installer now auto-detects Docker, Kubernetes, Proxmox
 
     const generateNewToken = async () => {
         if (generatingToken()) return;
@@ -219,13 +206,8 @@ Keep these credentials secure!
 
     const getInstallCommand = () => {
         const baseUrl = getPulseBaseUrl();
-        // Host monitoring is always enabled by default, only add flags for optional integrations
-        const platformFlags = selectedPlatforms()
-            .filter(p => p !== 'host') // host is default, don't need flag
-            .map(p => `--enable-${p}`)
-            .join(' ');
-        const flagsPart = platformFlags ? ` ${platformFlags}` : '';
-        return `curl -sSL ${baseUrl}/install.sh | sudo bash -s -- --url "${baseUrl}" --token "${currentInstallToken()}"${flagsPart}`;
+        // Simple command - the install script auto-detects Docker, Kubernetes, and Proxmox
+        return `curl -sSL ${baseUrl}/install.sh | sudo bash -s -- --url "${baseUrl}" --token "${currentInstallToken()}"`;
     };
 
     return (
@@ -275,12 +257,44 @@ Keep these credentials secure!
                 </div>
             </Show>
 
-            {/* Platform selection */}
+            {/* Auto-detection info */}
             <div class="bg-white/10 backdrop-blur-xl rounded-xl border border-white/20 p-4 text-left mb-4">
-                <h3 class="text-sm font-semibold text-white mb-3">What does this host have?</h3>
+                <h3 class="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    Smart Auto-Detection
+                </h3>
 
-                {/* Always included - Host monitoring */}
-                <div class="bg-green-500/10 border border-green-400/30 rounded-lg p-2.5 mb-3">
+                <p class="text-white/70 text-xs mb-3">
+                    The installer automatically detects what's running on each host:
+                </p>
+
+                <div class="grid grid-cols-3 gap-2 mb-3">
+                    <div class="bg-white/5 border border-white/10 rounded-lg p-2 text-center">
+                        <div class="h-6 flex items-center justify-center mb-1">
+                            <span class="text-lg">🐳</span>
+                        </div>
+                        <div class="text-white font-medium text-xs">Docker</div>
+                        <p class="text-[9px] text-white/40">Container monitoring</p>
+                    </div>
+                    <div class="bg-white/5 border border-white/10 rounded-lg p-2 text-center">
+                        <div class="h-6 flex items-center justify-center mb-1">
+                            <span class="text-lg">☸️</span>
+                        </div>
+                        <div class="text-white font-medium text-xs">Kubernetes</div>
+                        <p class="text-[9px] text-white/40">Cluster monitoring</p>
+                    </div>
+                    <div class="bg-white/5 border border-white/10 rounded-lg p-2 text-center">
+                        <div class="h-6 flex items-center justify-center mb-1">
+                            <ProxmoxIcon class="w-5 h-5 text-orange-400" />
+                        </div>
+                        <div class="text-white font-medium text-xs">Proxmox</div>
+                        <p class="text-[9px] text-white/40">VM & container API</p>
+                    </div>
+                </div>
+
+                <div class="bg-green-500/10 border border-green-400/30 rounded-lg p-2.5">
                     <div class="flex items-center gap-2">
                         <div class="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
                             <svg class="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
@@ -289,43 +303,12 @@ Keep these credentials secure!
                         </div>
                         <div class="flex-1">
                             <div class="flex items-center gap-2">
-                                <span class="text-white font-medium text-xs">Host Monitoring</span>
+                                <span class="text-white font-medium text-xs">Host Metrics</span>
                                 <span class="text-[9px] text-green-300 bg-green-500/20 px-1.5 py-0.5 rounded">Always included</span>
                             </div>
-                            <p class="text-[10px] text-white/50">CPU, memory, disk, network on any Linux/macOS/Windows server</p>
+                            <p class="text-[10px] text-white/50">CPU, memory, disk, network on any Linux/macOS/Windows</p>
                         </div>
                     </div>
-                </div>
-
-                {/* Optional integrations */}
-                <p class="text-[10px] text-white/50 mb-2">Enable if this host runs:</p>
-                <div class="grid grid-cols-3 gap-2">
-                    <For each={platforms}>
-                        {(platform) => (
-                            <button
-                                onClick={() => togglePlatform(platform.id)}
-                                class={`p-2 rounded-lg text-left transition-all border ${selectedPlatforms().includes(platform.id)
-                                    ? 'bg-blue-500/20 border-blue-400/50'
-                                    : 'bg-white/5 border-white/10 hover:bg-white/10'
-                                    }`}
-                            >
-                                <div class="flex items-center gap-1.5">
-                                    <div class={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center ${selectedPlatforms().includes(platform.id)
-                                        ? 'bg-blue-500 border-blue-500'
-                                        : 'border-white/40'
-                                        }`}>
-                                        <Show when={selectedPlatforms().includes(platform.id)}>
-                                            <svg class="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                                            </svg>
-                                        </Show>
-                                    </div>
-                                    <span class="text-white font-medium text-xs">{platform.name}</span>
-                                </div>
-                                <p class="text-[9px] text-white/40 ml-5 mt-0.5">{platform.desc}</p>
-                            </button>
-                        )}
-                    </For>
                 </div>
             </div>
 

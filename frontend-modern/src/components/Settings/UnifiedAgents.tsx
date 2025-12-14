@@ -486,49 +486,52 @@ export const UnifiedAgents: Component = () => {
                         <div class="space-y-3">
                             <div class="space-y-3">
                                 <div class="flex items-center justify-between">
-                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Installation commands</h4>
-                                    <div class="flex items-center gap-4">
-                                        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={enableDocker()}
-                                                onChange={(e) => setEnableDocker(e.currentTarget.checked)}
-                                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                                            />
-                                            Docker monitoring
-                                        </label>
-                                        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={enableKubernetes()}
-                                                onChange={(e) => setEnableKubernetes(e.currentTarget.checked)}
-                                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                                            />
-                                            Kubernetes monitoring
-                                        </label>
-                                        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="For Proxmox VE/PBS nodes - auto-creates API token and registers the node">
-                                            <input
-                                                type="checkbox"
-                                                checked={enableProxmox()}
-                                                onChange={(e) => setEnableProxmox(e.currentTarget.checked)}
-                                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                                            />
-                                            Proxmox setup
-                                        </label>
-                                        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
-                                            <input
-                                                type="checkbox"
-                                                checked={insecureMode()}
-                                                onChange={(e) => setInsecureMode(e.currentTarget.checked)}
-                                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                                            />
-                                            Skip TLS verify
-                                        </label>
+                                    <div>
+                                        <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Installation commands</h4>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">The installer auto-detects Docker, Kubernetes, and Proxmox. Use these to force enable/disable:</p>
                                     </div>
+                                </div>
+                                <div class="flex items-center gap-4 flex-wrap">
+                                    <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Force enable Docker monitoring (auto-detected if Docker/Podman is available)">
+                                        <input
+                                            type="checkbox"
+                                            checked={enableDocker()}
+                                            onChange={(e) => setEnableDocker(e.currentTarget.checked)}
+                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                        />
+                                        Force Docker
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Force enable Kubernetes monitoring (auto-detected if kubectl/kubeconfig is available)">
+                                        <input
+                                            type="checkbox"
+                                            checked={enableKubernetes()}
+                                            onChange={(e) => setEnableKubernetes(e.currentTarget.checked)}
+                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                        />
+                                        Force Kubernetes
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Force enable Proxmox integration (auto-detected on PVE/PBS hosts)">
+                                        <input
+                                            type="checkbox"
+                                            checked={enableProxmox()}
+                                            onChange={(e) => setEnableProxmox(e.currentTarget.checked)}
+                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                        />
+                                        Force Proxmox
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
+                                        <input
+                                            type="checkbox"
+                                            checked={insecureMode()}
+                                            onChange={(e) => setInsecureMode(e.currentTarget.checked)}
+                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                        />
+                                        Skip TLS verify
+                                    </label>
                                 </div>
                                 <Show when={enableProxmox()}>
                                     <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
-                                        <p class="font-medium">Proxmox auto-setup enabled</p>
+                                        <p class="font-medium">Proxmox force-enable</p>
                                         <p class="text-xs mt-1 text-blue-700 dark:text-blue-300">
                                             The agent will create a <code class="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">pulse-monitor</code> user and API token on the Proxmox node,
                                             then register it with Pulse automatically. Includes temperature monitoring.
