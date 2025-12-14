@@ -2200,7 +2200,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <div class="text-sm text-blue-900 dark:text-blue-100">
             <span class="font-medium">Quick tips:</span> Set any threshold to{' '}
             <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-900/50 rounded text-xs font-mono">
-              0
+              -1
             </code>{' '}
             to disable alerts for that metric. Click on disabled thresholds showing{' '}
             <span class="italic">Off</span> to re-enable them. Resources with custom settings show a{' '}
