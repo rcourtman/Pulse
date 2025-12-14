@@ -1290,10 +1290,15 @@ const DockerContainerRow: Component<{
       case 'image':
         return (
           <div
-            class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 truncate max-w-[200px]"
-            title={container.image || undefined}
+            class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 overflow-hidden"
+            style={{ "max-width": "200px" }}
           >
-            {container.image || '—'}
+            <span
+              class="block truncate"
+              title={container.image || undefined}
+            >
+              {container.image || '—'}
+            </span>
           </div>
         );
       case 'status':
