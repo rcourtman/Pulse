@@ -16,9 +16,16 @@ interface StackedMemoryBarProps {
 
 // Colors for memory segments
 const MEMORY_COLORS = {
-    active: 'rgba(34, 197, 94, 0.6)',   // green
+    active: 'rgba(34, 197, 94, 0.6)',   // green (base, overridden by threshold)
     balloon: 'rgba(234, 179, 8, 0.6)',  // yellow
     swap: 'rgba(168, 85, 247, 0.6)',    // purple
+};
+
+// Threshold-based colors for memory usage (matches disk bar behavior)
+const getMemoryColor = (percent: number): string => {
+    if (percent >= 90) return 'rgba(239, 68, 68, 0.7)';   // red
+    if (percent >= 70) return 'rgba(234, 179, 8, 0.7)';   // yellow/orange
+    return 'rgba(34, 197, 94, 0.6)';                      // green
 };
 
 export function StackedMemoryBar(props: StackedMemoryBarProps) {
@@ -77,7 +84,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
             const balloonLimitPercent = Math.max(0, (balloon / props.total) * 100 - usedPercent);
 
             const segs = [
-                { type: 'Active', bytes: props.used, percent: usedPercent, color: MEMORY_COLORS.active },
+                { type: 'Active', bytes: props.used, percent: usedPercent, color: getMemoryColor(usedPercent) },
             ];
 
             // Only show balloon segment if there's room between used and balloon limit
@@ -93,9 +100,9 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
             return segs.filter(s => s.bytes > 0);
         }
 
-        // No active ballooning - just show used memory as green
+        // No active ballooning - show used memory with threshold-based coloring
         return [
-            { type: 'Active', bytes: props.used, percent: usedPercent, color: MEMORY_COLORS.active },
+            { type: 'Active', bytes: props.used, percent: usedPercent, color: getMemoryColor(usedPercent) },
         ].filter(s => s.bytes > 0);
     });
 
