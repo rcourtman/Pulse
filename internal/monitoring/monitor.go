@@ -686,6 +686,22 @@ func safeFloat(val float64) float64 {
 	return val
 }
 
+// makeGuestID generates a stable guest ID that is cluster-aware.
+// When the instance is part of a cluster, the cluster name is used as the primary identifier
+// to prevent duplicate guests when multiple cluster nodes are configured as separate PVE instances.
+// Format when in cluster: clusterName-VMID (e.g., "my-cluster-100")
+// Format when standalone: instanceName-VMID (e.g., "pve-host1-100")
+// This ensures VMs/containers are properly deduplicated across multiple agents in the same cluster.
+func makeGuestID(instanceName string, clusterName string, isCluster bool, vmid int) string {
+	// Use cluster name as the identifier when the instance is part of a cluster
+	// This ensures guests are identified by their cluster, not by which node reported them
+	if isCluster && clusterName != "" {
+		return fmt.Sprintf("%s-%d", clusterName, vmid)
+	}
+	// For standalone nodes, use the instance name
+	return fmt.Sprintf("%s-%d", instanceName, vmid)
+}
+
 // parseDurationEnv parses a duration from an environment variable, returning defaultVal if not set or invalid
 func parseDurationEnv(key string, defaultVal time.Duration) time.Duration {
 	val := os.Getenv(key)
@@ -1925,43 +1941,27 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		if m.hostTokenBindings == nil {
 			m.hostTokenBindings = make(map[string]string)
 		}
-		if boundID, exists := m.hostTokenBindings[tokenID]; exists && boundID != bindingID {
-			m.mu.Unlock()
-
-			conflictingHost := "unknown"
-			for _, candidate := range existingHosts {
-				if candidate.TokenID == tokenID || candidate.ID == boundID {
-					conflictingHost = candidate.Hostname
-					if candidate.DisplayName != "" {
-						conflictingHost = candidate.DisplayName
-					}
-					break
-				}
-			}
-
-			tokenHint := tokenHintFromRecord(tokenRecord)
-			if tokenHint != "" {
-				tokenHint = " (" + tokenHint + ")"
-			}
-
-			log.Warn().
+		// Bind tokens by hostname rather than agent ID. This allows:
+		// - Same host to reconnect after agent reinstall (agent ID changes but hostname doesn't)
+		// - Multiple hosts to use the same token (each hostname gets its own binding entry)
+		// - Prevents a stolen token from being used on a different hostname
+		bindingKey := fmt.Sprintf("%s:%s", tokenID, hostname)
+		if boundID, exists := m.hostTokenBindings[bindingKey]; exists && boundID != bindingID {
+			// Same token+hostname but different agent ID - this is a reinstall, allow it
+			log.Info().
 				Str("tokenID", tokenID).
-				Str("tokenHint", tokenHint).
-				Str("reportingAgentID", bindingID).
-				Str("boundAgentID", boundID).
-				Str("conflictingHost", conflictingHost).
-				Msg("Rejecting host report: token already bound to different agent")
-
-			return models.Host{}, fmt.Errorf("API token%s is already in use by host %q (agent: %s). Generate a new token or set --agent-id before reusing it", tokenHint, conflictingHost, boundID)
-		}
-
-		if _, exists := m.hostTokenBindings[tokenID]; !exists {
-			m.hostTokenBindings[tokenID] = bindingID
+				Str("hostname", hostname).
+				Str("oldAgentID", boundID).
+				Str("newAgentID", bindingID).
+				Msg("Host agent reinstalled - updating token binding")
+			m.hostTokenBindings[bindingKey] = bindingID
+		} else if !exists {
+			m.hostTokenBindings[bindingKey] = bindingID
 			log.Debug().
 				Str("tokenID", tokenID).
 				Str("agentID", bindingID).
 				Str("hostname", hostname).
-				Msg("Bound host agent token to agent identity")
+				Msg("Bound host agent token to hostname")
 		}
 		m.mu.Unlock()
 	}
@@ -3536,8 +3536,109 @@ func (m *Monitor) getConfiguredHostIPs() []string {
 	return ips
 }
 
+// consolidateDuplicateClusters detects and merges duplicate cluster instances.
+// When multiple PVE instances belong to the same Proxmox cluster (determined by ClusterName),
+// they should be merged into a single instance with all endpoints combined.
+// This prevents duplicate VMs/containers in the UI.
+func (m *Monitor) consolidateDuplicateClusters() {
+	if m == nil || m.config == nil || len(m.config.PVEInstances) < 2 {
+		return
+	}
+
+	// Group instances by cluster name
+	clusterGroups := make(map[string][]int) // clusterName -> indices of instances
+	for i, instance := range m.config.PVEInstances {
+		if instance.IsCluster && instance.ClusterName != "" {
+			clusterGroups[instance.ClusterName] = append(clusterGroups[instance.ClusterName], i)
+		}
+	}
+
+	// Find clusters that have duplicates
+	var mergedAny bool
+	for clusterName, indices := range clusterGroups {
+		if len(indices) < 2 {
+			continue // No duplicates for this cluster
+		}
+
+		log.Warn().
+			Str("cluster", clusterName).
+			Int("duplicates", len(indices)).
+			Msg("Detected duplicate cluster instances - consolidating")
+
+		// Keep the first instance and merge all others into it
+		primaryIdx := indices[0]
+		primary := &m.config.PVEInstances[primaryIdx]
+
+		// Build a set of existing endpoint node names
+		existingEndpoints := make(map[string]bool)
+		for _, ep := range primary.ClusterEndpoints {
+			existingEndpoints[ep.NodeName] = true
+		}
+
+		// Merge endpoints from all duplicate instances
+		for _, dupIdx := range indices[1:] {
+			duplicate := m.config.PVEInstances[dupIdx]
+			log.Info().
+				Str("cluster", clusterName).
+				Str("primary", primary.Name).
+				Str("duplicate", duplicate.Name).
+				Msg("Merging duplicate cluster instance")
+
+			for _, ep := range duplicate.ClusterEndpoints {
+				if !existingEndpoints[ep.NodeName] {
+					primary.ClusterEndpoints = append(primary.ClusterEndpoints, ep)
+					existingEndpoints[ep.NodeName] = true
+					log.Info().
+						Str("cluster", clusterName).
+						Str("endpoint", ep.NodeName).
+						Msg("Added endpoint from duplicate instance")
+				}
+			}
+		}
+
+		mergedAny = true
+	}
+
+	if !mergedAny {
+		return
+	}
+
+	// Remove duplicate instances (keeping only the primary for each cluster)
+	var newInstances []config.PVEInstance
+	seenClusters := make(map[string]bool)
+
+	for _, instance := range m.config.PVEInstances {
+		if instance.IsCluster && instance.ClusterName != "" {
+			if seenClusters[instance.ClusterName] {
+				log.Info().
+					Str("cluster", instance.ClusterName).
+					Str("instance", instance.Name).
+					Msg("Removing duplicate cluster instance")
+				continue // Skip duplicates
+			}
+			seenClusters[instance.ClusterName] = true
+		}
+		newInstances = append(newInstances, instance)
+	}
+
+	m.config.PVEInstances = newInstances
+
+	// Persist the consolidated configuration
+	if m.persistence != nil {
+		if err := m.persistence.SaveNodesConfig(m.config.PVEInstances, m.config.PBSInstances, m.config.PMGInstances); err != nil {
+			log.Error().Err(err).Msg("Failed to persist cluster consolidation")
+		} else {
+			log.Info().Msg("Persisted consolidated cluster configuration")
+		}
+	}
+}
+
 // Start begins the monitoring loop
 func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
+	// Consolidate any duplicate cluster instances before starting
+	// This fixes the case where multiple agents registered from the same cluster
+	m.consolidateDuplicateClusters()
+
 	pollingInterval := m.effectivePVEPollingInterval()
 	log.Info().
 		Dur("pollingInterval", pollingInterval).
@@ -5177,10 +5278,10 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			pollErr = ctx.Err()
 			return
 		default:
-			// Always try the efficient cluster/resources endpoint first
+		// Always try the efficient cluster/resources endpoint first
 			// This endpoint works on both clustered and standalone nodes
 			// Testing confirmed it works on standalone nodes like pimox
-			useClusterEndpoint := m.pollVMsAndContainersEfficient(ctx, instanceName, client, nodeEffectiveStatus)
+			useClusterEndpoint := m.pollVMsAndContainersEfficient(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodeEffectiveStatus)
 
 			if !useClusterEndpoint {
 				// Fall back to traditional polling only if cluster/resources not available
@@ -5202,10 +5303,10 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 				// Use optimized parallel polling for better performance
 				if instanceCfg.MonitorVMs {
-					m.pollVMsWithNodes(ctx, instanceName, client, nodes, nodeEffectiveStatus)
+					m.pollVMsWithNodes(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodes, nodeEffectiveStatus)
 				}
 				if instanceCfg.MonitorContainers {
-					m.pollContainersWithNodes(ctx, instanceName, client, nodes, nodeEffectiveStatus)
+					m.pollContainersWithNodes(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodes, nodeEffectiveStatus)
 				}
 			}
 		}
@@ -5666,8 +5767,14 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 // pollVMsAndContainersEfficient uses the cluster/resources endpoint to get all VMs and containers in one call
 // This works on both clustered and standalone nodes for efficient polling
-func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceName string, client PVEClientInterface, nodeEffectiveStatus map[string]string) bool {
-	log.Info().Str("instance", instanceName).Msg("Polling VMs and containers using efficient cluster/resources endpoint")
+// When the instance is part of a cluster, the cluster name is used for guest IDs to prevent duplicates
+// when multiple cluster nodes are configured as separate PVE instances.
+func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceName string, clusterName string, isCluster bool, client PVEClientInterface, nodeEffectiveStatus map[string]string) bool {
+	log.Info().
+		Str("instance", instanceName).
+		Str("clusterName", clusterName).
+		Bool("isCluster", isCluster).
+		Msg("Polling VMs and containers using efficient cluster/resources endpoint")
 
 	// Get all resources in a single API call
 	resources, err := client.GetClusterResources(ctx, "vm")
@@ -5696,13 +5803,8 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	var allContainers []models.Container
 
 	for _, res := range resources {
-		// Avoid duplicating node name in ID when instance name equals node name
-		var guestID string
-		if instanceName == res.Node {
-			guestID = fmt.Sprintf("%s-%d", res.Node, res.VMID)
-		} else {
-			guestID = fmt.Sprintf("%s-%s-%d", instanceName, res.Node, res.VMID)
-		}
+		// Use cluster-aware guest ID to prevent duplicates when multiple cluster nodes are configured
+		guestID := makeGuestID(instanceName, clusterName, isCluster, res.VMID)
 
 		// Debug log the resource type
 		log.Debug().

@@ -185,7 +185,9 @@ func convertPoolInfoToModel(poolInfo *proxmox.ZFSPoolInfo) *models.ZFSPool {
 }
 
 // pollVMsWithNodes polls VMs from all nodes in parallel using goroutines
-func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
+// When the instance is part of a cluster, the cluster name is used for guest IDs to prevent duplicates
+// when multiple cluster nodes are configured as separate PVE instances.
+func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clusterName string, isCluster bool, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
 	startTime := time.Now()
 
 	// Channel to collect VM results from each node
@@ -253,9 +255,8 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					tags = strings.Split(vm.Tags, ";")
 				}
 
-				// Create guest ID (stable across node migrations)
-				// Format: instance-VMID
-				guestID := fmt.Sprintf("%s-%d", instanceName, vm.VMID)
+				// Use cluster-aware guest ID to prevent duplicates when multiple cluster nodes are configured
+				guestID := makeGuestID(instanceName, clusterName, isCluster, vm.VMID)
 
 				guestRaw := VMMemoryRaw{
 					ListingMem:    vm.Mem,
@@ -873,7 +874,9 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 }
 
 // pollContainersWithNodes polls containers from all nodes in parallel using goroutines
-func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
+// When the instance is part of a cluster, the cluster name is used for guest IDs to prevent duplicates
+// when multiple cluster nodes are configured as separate PVE instances.
+func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName string, clusterName string, isCluster bool, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
 	startTime := time.Now()
 
 	// Channel to collect container results from each node
@@ -967,9 +970,8 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 					tags = strings.Split(container.Tags, ";")
 				}
 
-				// Create guest ID (stable across node migrations)
-				// Format: instance-VMID
-				guestID := fmt.Sprintf("%s-%d", instanceName, container.VMID)
+				// Use cluster-aware guest ID to prevent duplicates when multiple cluster nodes are configured
+				guestID := makeGuestID(instanceName, clusterName, isCluster, int(container.VMID))
 
 				// Calculate I/O rates
 				currentMetrics := IOMetrics{
@@ -1713,7 +1715,15 @@ func (m *Monitor) pollPVENode(
 	}
 
 	// Apply grace period for node status to prevent flapping
-	nodeID := instanceName + "-" + node.Node
+	// For clustered nodes, use clusterName-nodeName as the ID to deduplicate
+	// when the same cluster is registered via multiple entry points
+	// (e.g., agent installed with --enable-proxmox on multiple cluster nodes)
+	var nodeID string
+	if instanceCfg.IsCluster && instanceCfg.ClusterName != "" {
+		nodeID = instanceCfg.ClusterName + "-" + node.Node
+	} else {
+		nodeID = instanceName + "-" + node.Node
+	}
 	effectiveStatus := node.Status
 	now := time.Now()
 

@@ -149,8 +149,8 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
         showError('Passwords do not match');
         return;
       }
-      if (password().length < 12) {
-        showError('Password must be at least 12 characters');
+      if (password().length < 1) {
+        showError('Password cannot be empty');
         return;
       }
     }
@@ -426,7 +426,7 @@ IMPORTANT: Keep these credentials secure!
                     type="text"
                     value={bootstrapToken()}
                     onInput={(e) => setBootstrapToken(e.currentTarget.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleUnlock()}
+                    onKeyPress={(e) => e.key === 'Enter' && handleUnlock()}
                     class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
                     placeholder="Paste the token from your host"
                     autofocus
@@ -494,22 +494,20 @@ IMPORTANT: Keep these credentials secure!
                     <button
                       type="button"
                       onClick={() => setUseCustomPassword(false)}
-                      class={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                        !useCustomPassword()
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                      }`}
+                      class={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${!useCustomPassword()
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
                     >
                       Generate Secure Password
                     </button>
                     <button
                       type="button"
                       onClick={() => setUseCustomPassword(true)}
-                      class={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                        useCustomPassword()
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                      }`}
+                      class={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${useCustomPassword()
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
                     >
                       Set Custom Password
                     </button>
@@ -522,7 +520,7 @@ IMPORTANT: Keep these credentials secure!
                         value={password()}
                         onInput={(e) => setPassword(e.currentTarget.value)}
                         class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Enter password (min 12 characters)"
+                        placeholder="Enter password"
                       />
                       <input
                         type="password"
@@ -556,11 +554,10 @@ IMPORTANT: Keep these credentials secure!
                         setThemeMode('system');
                         applyTheme('system');
                       }}
-                      class={`py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                        themeMode() === 'system'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                      }`}
+                      class={`py-2 px-4 rounded-lg text-sm font-medium transition-colors ${themeMode() === 'system'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
                     >
                       System
                     </button>
@@ -570,11 +567,10 @@ IMPORTANT: Keep these credentials secure!
                         setThemeMode('light');
                         applyTheme('light');
                       }}
-                      class={`py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                        themeMode() === 'light'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                      }`}
+                      class={`py-2 px-4 rounded-lg text-sm font-medium transition-colors ${themeMode() === 'light'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
                     >
                       Light
                     </button>
@@ -584,11 +580,10 @@ IMPORTANT: Keep these credentials secure!
                         setThemeMode('dark');
                         applyTheme('dark');
                       }}
-                      class={`py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                        themeMode() === 'dark'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                      }`}
+                      class={`py-2 px-4 rounded-lg text-sm font-medium transition-colors ${themeMode() === 'dark'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
                     >
                       Dark
                     </button>
