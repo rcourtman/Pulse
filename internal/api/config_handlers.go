@@ -1311,11 +1311,70 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			isCluster, clusterName, clusterEndpoints = detectPVECluster(clientConfig, req.Name, nil)
 		}
 
+		// CLUSTER DEDUPLICATION: If this node is part of a cluster, check if we already
+		// have that cluster configured. If so, this is a duplicate - we should merge
+		// the node as an endpoint to the existing cluster instead of creating a new instance.
+		// This prevents duplicate VMs/containers when users install agents on multiple cluster nodes.
+		if isCluster && clusterName != "" {
+			for i := range h.config.PVEInstances {
+				existingInstance := &h.config.PVEInstances[i]
+				if existingInstance.IsCluster && existingInstance.ClusterName == clusterName {
+					// Found existing cluster with same name - merge endpoints!
+					log.Info().
+						Str("cluster", clusterName).
+						Str("existingInstance", existingInstance.Name).
+						Str("newNode", req.Name).
+						Msg("New node belongs to already-configured cluster - merging as endpoint instead of creating duplicate")
+
+					// Merge any new endpoints from the detected cluster
+					existingEndpointMap := make(map[string]bool)
+					for _, ep := range existingInstance.ClusterEndpoints {
+						existingEndpointMap[ep.NodeName] = true
+					}
+					for _, newEp := range clusterEndpoints {
+						if !existingEndpointMap[newEp.NodeName] {
+							existingInstance.ClusterEndpoints = append(existingInstance.ClusterEndpoints, newEp)
+							log.Info().
+								Str("cluster", clusterName).
+								Str("endpoint", newEp.NodeName).
+								Msg("Added new endpoint to existing cluster")
+						}
+					}
+
+					// Save the updated configuration
+					if h.persistence != nil {
+						if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
+							log.Warn().Err(err).Msg("Failed to persist cluster endpoint merge")
+						}
+					}
+
+					// Reload the monitor to pick up the updated endpoints
+					if h.reloadFunc != nil {
+						if err := h.reloadFunc(); err != nil {
+							log.Warn().Err(err).Msg("Failed to reload monitor after cluster merge")
+						}
+					}
+
+					// Return success - the cluster is now updated with new endpoints
+					w.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"success":       true,
+						"merged":        true,
+						"cluster":       clusterName,
+						"existingNode":  existingInstance.Name,
+						"message":       fmt.Sprintf("Node merged into existing cluster '%s' (already configured as '%s')", clusterName, existingInstance.Name),
+						"totalEndpoints": len(existingInstance.ClusterEndpoints),
+					})
+					return
+				}
+			}
+		}
+
 		if isCluster {
 			log.Info().
 				Str("cluster", clusterName).
 				Int("endpoints", len(clusterEndpoints)).
-				Msg("Detected Proxmox cluster, auto-discovering all nodes")
+				Msg("Detected new Proxmox cluster, auto-discovering all nodes")
 		}
 
 		// Use sensible defaults for boolean fields if not provided
@@ -5857,6 +5916,61 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 
 			isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, nodeConfig.Name, nil)
 
+			// CLUSTER DEDUPLICATION: Check if we already have this cluster configured
+			// If so, merge this node as an endpoint instead of creating a duplicate instance
+			if isCluster && clusterName != "" {
+				for i := range h.config.PVEInstances {
+					existingInstance := &h.config.PVEInstances[i]
+					if existingInstance.IsCluster && existingInstance.ClusterName == clusterName {
+						// Found existing cluster with same name - merge endpoints!
+						log.Info().
+							Str("cluster", clusterName).
+							Str("existingInstance", existingInstance.Name).
+							Str("newNode", nodeConfig.Name).
+							Msg("Auto-registered node belongs to already-configured cluster - merging endpoints")
+
+						// Merge any new endpoints from the detected cluster
+						existingEndpointMap := make(map[string]bool)
+						for _, ep := range existingInstance.ClusterEndpoints {
+							existingEndpointMap[ep.NodeName] = true
+						}
+						for _, newEp := range clusterEndpoints {
+							if !existingEndpointMap[newEp.NodeName] {
+								existingInstance.ClusterEndpoints = append(existingInstance.ClusterEndpoints, newEp)
+								log.Info().
+									Str("cluster", clusterName).
+									Str("endpoint", newEp.NodeName).
+									Msg("Added new endpoint to existing cluster via auto-registration")
+							}
+						}
+
+						// Save and reload
+						if h.persistence != nil {
+							if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
+								log.Warn().Err(err).Msg("Failed to persist cluster endpoint merge during auto-registration")
+							}
+						}
+						if h.reloadFunc != nil {
+							if err := h.reloadFunc(); err != nil {
+								log.Warn().Err(err).Msg("Failed to reload monitor after cluster merge during auto-registration")
+							}
+						}
+
+						// Return success - merged into existing cluster
+						w.Header().Set("Content-Type", "application/json")
+						json.NewEncoder(w).Encode(map[string]interface{}{
+							"success":        true,
+							"merged":         true,
+							"cluster":        clusterName,
+							"existingNode":   existingInstance.Name,
+							"message":        fmt.Sprintf("Agent merged into existing cluster '%s'", clusterName),
+							"totalEndpoints": len(existingInstance.ClusterEndpoints),
+						})
+						return
+					}
+				}
+			}
+
 			monitorVMs := true
 			if nodeConfig.MonitorVMs != nil {
 				monitorVMs = *nodeConfig.MonitorVMs
@@ -5895,7 +6009,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				log.Info().
 					Str("cluster", clusterName).
 					Int("endpoints", len(clusterEndpoints)).
-					Msg("Added Proxmox cluster via auto-registration")
+					Msg("Added new Proxmox cluster via auto-registration")
 			}
 		} else {
 			verifySSL := false

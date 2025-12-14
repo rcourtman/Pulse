@@ -353,10 +353,17 @@ export function Dashboard(props: DashboardProps) {
   };
 
   // Create a mapping from node ID to node object
+  // Also maps by instance-nodeName for guest grouping compatibility
   const nodeByInstance = createMemo(() => {
     const map: Record<string, Node> = {};
     props.nodes.forEach((node) => {
+      // Map by node.id (may be clusterName-nodeName or instance-nodeName)
       map[node.id] = node;
+      // Also map by instance-nodeName for guest grouping (guests use instance-node format)
+      const legacyKey = `${node.instance}-${node.name}`;
+      if (!map[legacyKey]) {
+        map[legacyKey] = node;
+      }
     });
     return map;
   });

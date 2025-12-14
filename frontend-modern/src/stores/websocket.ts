@@ -710,7 +710,7 @@ export function createWebSocketStore(url: string) {
           const nodeType = node.type === 'pve' ? 'Proxmox VE' : 'Proxmox Backup Server';
 
           notificationStore.success(
-            `🎉 ${nodeType} node "${nodeName}" was successfully auto-registered and is now being monitored!`,
+            `${nodeType} node "${nodeName}" was successfully auto-registered and is now being monitored!`,
             8000,
           );
           logger.info('Node auto-registered:', node);

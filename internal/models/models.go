@@ -1267,15 +1267,14 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Create a map of existing nodes, excluding those from this instance
+	// Build a map of ALL existing nodes by ID (not filtered by instance)
+	// This handles cluster-based IDs where the same node ID comes from multiple instances
 	// Also preserve LinkedHostAgentID for nodes that are being updated
 	existingNodeLinks := make(map[string]string) // nodeID -> linkedHostAgentID
 	nodeMap := make(map[string]Node)
 	for _, node := range s.Nodes {
-		if node.Instance != instanceName {
-			nodeMap[node.ID] = node
-		} else if node.LinkedHostAgentID != "" {
-			// Preserve the link for nodes from this instance
+		nodeMap[node.ID] = node
+		if node.LinkedHostAgentID != "" {
 			existingNodeLinks[node.ID] = node.LinkedHostAgentID
 		}
 	}

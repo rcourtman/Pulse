@@ -205,6 +205,46 @@ func TestSafeFloat(t *testing.T) {
 	}
 }
 
+func TestMakeGuestID(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name         string
+		instanceName string
+		clusterName  string
+		isCluster    bool
+		vmid         int
+		want         string
+	}{
+		// Standalone nodes use instance name
+		{name: "standalone node", instanceName: "pve-host1", clusterName: "", isCluster: false, vmid: 100, want: "pve-host1-100"},
+		{name: "standalone with empty cluster name", instanceName: "pve-standalone", clusterName: "", isCluster: false, vmid: 200, want: "pve-standalone-200"},
+		{name: "non-cluster even with cluster name", instanceName: "pve-node", clusterName: "my-cluster", isCluster: false, vmid: 150, want: "pve-node-150"},
+
+		// Cluster nodes use cluster name
+		{name: "cluster node uses cluster name", instanceName: "pve-host1", clusterName: "my-cluster", isCluster: true, vmid: 100, want: "my-cluster-100"},
+		{name: "different cluster node same cluster", instanceName: "pve-host2", clusterName: "my-cluster", isCluster: true, vmid: 100, want: "my-cluster-100"},
+		{name: "cluster with different vmid", instanceName: "pve-host1", clusterName: "production", isCluster: true, vmid: 999, want: "production-999"},
+
+		// Edge case: isCluster true but no cluster name falls back to instance name
+		{name: "cluster flag but no name", instanceName: "pve-node", clusterName: "", isCluster: true, vmid: 300, want: "pve-node-300"},
+
+		// Edge case: special characters and spaces (shouldn't happen but test anyway)
+		{name: "cluster name with hyphen", instanceName: "pve-node1", clusterName: "my-prod-cluster", isCluster: true, vmid: 101, want: "my-prod-cluster-101"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := makeGuestID(tc.instanceName, tc.clusterName, tc.isCluster, tc.vmid); got != tc.want {
+				t.Fatalf("makeGuestID(%q, %q, %v, %d) = %q, want %q", tc.instanceName, tc.clusterName, tc.isCluster, tc.vmid, got, tc.want)
+			}
+		})
+	}
+}
+
+
 func TestConvertPoolInfoToModel(t *testing.T) {
 	t.Parallel()
 
