@@ -1053,8 +1053,20 @@ func (a *Agent) sendReport(ctx context.Context, report agentsdocker.Report) erro
 		return errors.Join(errs...)
 	}
 
+	// Warn if payload is approaching the server's 512KB limit
+	const warnThresholdKB = 400
+	payloadSizeKB := len(payload) / 1024
+	if payloadSizeKB >= warnThresholdKB {
+		a.logger.Warn().
+			Int("containers", containerCount).
+			Int("payloadSizeKB", payloadSizeKB).
+			Msg("Report payload is large and approaching the 512KB limit. Consider reducing container count or running 'docker container prune' to remove stopped containers.")
+	}
+
 	a.logger.Debug().
 		Int("containers", containerCount).
+		Int("payloadSizeKB", payloadSizeKB).
+		Int("payloadBytes", len(payload)).
 		Int("targets", len(a.targets)).
 		Msg("Report sent to Pulse targets")
 	return nil
