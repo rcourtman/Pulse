@@ -317,6 +317,15 @@ export const UnifiedAgents: Component = () => {
         // If we previously saw both 'host' and 'docker' for a hostname, keep both
         // unless BOTH sources are now empty (indicating intentional removal)
         const newHostTypes = new Map<string, Set<'host' | 'docker'>>();
+
+        // Helper to ensure consistent type order: 'host' always before 'docker'
+        const sortTypes = (types: ('host' | 'docker')[]): ('host' | 'docker')[] => {
+            const result: ('host' | 'docker')[] = [];
+            if (types.includes('host')) result.push('host');
+            if (types.includes('docker')) result.push('docker');
+            return result;
+        };
+
         unified.forEach((entry, key) => {
             const currentTypes = new Set(entry.types);
             const prevTypes = previousHostTypes.get(key);
@@ -328,14 +337,16 @@ export const UnifiedAgents: Component = () => {
                 if (prevTypes.has('host') && !currentTypes.has('host') && hosts.length > 0) {
                     // Host type disappeared but we still have host data overall
                     // This is likely a transient state - preserve the host type
-                    entry.types = Array.from(new Set([...entry.types, 'host']));
+                    currentTypes.add('host');
                 }
                 if (prevTypes.has('docker') && !currentTypes.has('docker') && dockerHosts.length > 0) {
                     // Docker type disappeared but we still have docker data overall
-                    entry.types = Array.from(new Set([...entry.types, 'docker']));
+                    currentTypes.add('docker');
                 }
             }
 
+            // Always ensure consistent order: 'host' before 'docker'
+            entry.types = sortTypes(Array.from(currentTypes));
             newHostTypes.set(key, new Set(entry.types));
         });
         previousHostTypes = newHostTypes;
