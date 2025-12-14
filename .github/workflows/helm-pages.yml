@@ -1,8 +1,8 @@
 name: Release Helm Chart to GitHub Pages
 
+# Only triggered manually or by create-release.yml
+# Removing release: published trigger prevents race conditions
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       chart_version:
@@ -45,26 +45,19 @@ jobs:
           helm-docs
 
           # Commit if README changed
-          if [ "${GITHUB_EVENT_NAME}" != "release" ] && ! git diff --quiet README.md; then
+          if ! git diff --quiet README.md; then
             git config user.name "$GITHUB_ACTOR"
             git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
             git add README.md
             git commit -m "Auto-update Helm chart documentation"
             git push
-          elif [ "${GITHUB_EVENT_NAME}" = "release" ] && ! git diff --quiet README.md; then
-            echo "README.md updated by helm-docs but skipping commit because release workflows checkout a detached HEAD."
           fi
           cd ../../..
 
       - name: Determine chart version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ inputs.chart_version }}"
-          else
-            VERSION="${{ github.event.release.tag_name }}"
-            VERSION="${VERSION#v}"
-          fi
+          VERSION="${{ inputs.chart_version }}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Update Chart.yaml version
@@ -73,15 +66,13 @@ jobs:
           sed -i "s/^version: .*/version: $VERSION/" deploy/helm/pulse/Chart.yaml
           sed -i "s/^appVersion: .*/appVersion: \"$VERSION\"/" deploy/helm/pulse/Chart.yaml
 
-          # Commit only on workflow_dispatch (release runs are detached HEAD)
-          if [ "${GITHUB_EVENT_NAME}" != "release" ] && ! git diff --quiet deploy/helm/pulse/Chart.yaml; then
+          # Commit if Chart.yaml changed
+          if ! git diff --quiet deploy/helm/pulse/Chart.yaml; then
             git config user.name "$GITHUB_ACTOR"
             git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
             git add deploy/helm/pulse/Chart.yaml
             git commit -m "Auto-update Helm chart version to $VERSION"
             git push
-          elif [ "${GITHUB_EVENT_NAME}" = "release" ] && ! git diff --quiet deploy/helm/pulse/Chart.yaml; then
-            echo "Chart.yaml updated for packaging, skipping commit (detached HEAD on release event)."
           fi
 
       - name: Validate Helm chart

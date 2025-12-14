@@ -1,8 +1,19 @@
 name: Promote Floating Tags
 
+# Only triggered by create-release.yml after Docker images are published
+# This prevents race conditions with release: published event
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v5.0.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Is this a prerelease?'
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   promote-images:
@@ -12,8 +23,8 @@ jobs:
       packages: write
     env:
       OWNER: ${{ github.repository_owner }}
-      TAG: ${{ github.event.release.tag_name }}
-      PRERELEASE: ${{ github.event.release.prerelease }}
+      TAG: ${{ inputs.tag }}
+      PRERELEASE: ${{ inputs.prerelease }}
 
     steps:
       - name: Log in to Docker Hub
@@ -28,6 +39,23 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for Docker image to be available
+        run: |
+          echo "Waiting for rcourtman/pulse:${TAG} to be available..."
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            if docker manifest inspect rcourtman/pulse:${TAG} > /dev/null 2>&1; then
+              echo "Image rcourtman/pulse:${TAG} is available!"
+              exit 0
+            fi
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS - Image not yet available, waiting 10s..."
+            sleep 10
+          done
+          echo "Timeout waiting for Docker image"
+          exit 1
 
       - name: Promote Pulse server image tags
         run: |
