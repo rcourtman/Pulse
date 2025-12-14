@@ -1163,6 +1163,7 @@ UNINSTALL=false
 PURGE=false
 CONTROL_PLANE_TOKEN=""
 CONTROL_PLANE_REFRESH=""
+PROXY_URL=""  # Manual override for advertised proxy URL
 SHORT_HOSTNAME=$(hostname -s 2>/dev/null || hostname | cut -d'.' -f1)
 
 while [[ $# -gt 0 ]]; do
@@ -1214,6 +1215,10 @@ while [[ $# -gt 0 ]]; do
         --purge)
             PURGE=true
             shift
+            ;;
+        --proxy-url)
+            PROXY_URL="$2"
+            shift 2
             ;;
         *)
             print_error "Unknown option: $1"
@@ -1964,37 +1969,43 @@ if [[ "$HTTP_MODE" == true ]]; then
     # Setup TLS certificates
     setup_tls_certificates "" ""  # Empty params = auto-generate
 
-    # Determine proxy URL - use IP address for reliable network access
-    PRIMARY_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-    if [[ -z "$PRIMARY_IP" ]]; then
-        print_error "Failed to determine primary IP address"
-        print_error "Use --proxy-url to specify manually"
-        exit 1
-    fi
-
-    # Validate it's an IPv4 address (not IPv6)
-    if [[ ! "$PRIMARY_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        print_warn "Primary IP appears to be IPv6 or invalid: $PRIMARY_IP"
-        print_warn "Attempting to find first IPv4 address..."
-        PRIMARY_IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+    # Determine proxy URL - use provided URL or auto-detect IP address
+    if [[ -n "$PROXY_URL" ]]; then
+        # User provided --proxy-url, use it directly
+        print_info "Using manually specified proxy URL: $PROXY_URL"
+    else
+        # Auto-detect from primary IP
+        PRIMARY_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
         if [[ -z "$PRIMARY_IP" ]]; then
-            print_error "No IPv4 address found"
-            print_error "Use --proxy-url https://YOUR_IP:${PORT_NUMBER} to specify manually"
+            print_error "Failed to determine primary IP address"
+            print_error "Use --proxy-url to specify manually"
             exit 1
         fi
-        print_info "Using IPv4 address: $PRIMARY_IP"
-    fi
 
-    # Warn if using loopback
-    if [[ "$PRIMARY_IP" == "127.0.0.1" ]]; then
-        print_warn "Primary IP is loopback (127.0.0.1)"
-        print_warn "Pulse will not be able to reach this proxy!"
-        print_error "Use --proxy-url https://YOUR_REAL_IP:${PORT_NUMBER} to specify a reachable address"
-        exit 1
-    fi
+        # Validate it's an IPv4 address (not IPv6)
+        if [[ ! "$PRIMARY_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            print_warn "Primary IP appears to be IPv6 or invalid: $PRIMARY_IP"
+            print_warn "Attempting to find first IPv4 address..."
+            PRIMARY_IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+            if [[ -z "$PRIMARY_IP" ]]; then
+                print_error "No IPv4 address found"
+                print_error "Use --proxy-url https://YOUR_IP:${PORT_NUMBER} to specify manually"
+                exit 1
+            fi
+            print_info "Using IPv4 address: $PRIMARY_IP"
+        fi
 
-    PROXY_URL="https://${PRIMARY_IP}:${PORT_NUMBER}"
-    print_info "Proxy will be accessible at: $PROXY_URL"
+        # Warn if using loopback
+        if [[ "$PRIMARY_IP" == "127.0.0.1" ]]; then
+            print_warn "Primary IP is loopback (127.0.0.1)"
+            print_warn "Pulse will not be able to reach this proxy!"
+            print_error "Use --proxy-url https://YOUR_REAL_IP:${PORT_NUMBER} to specify a reachable address"
+            exit 1
+        fi
+
+        PROXY_URL="https://${PRIMARY_IP}:${PORT_NUMBER}"
+        print_info "Proxy will be accessible at: $PROXY_URL"
+    fi
 
     # Register with Pulse and get auth/control tokens
     registration_response=$(register_with_pulse "$PULSE_SERVER" "$SHORT_HOSTNAME" "$PROXY_URL" "http")
