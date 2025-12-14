@@ -12,8 +12,7 @@ const (
 	BcryptCost = 12
 
 	// MinPasswordLength is the minimum required password length
-	// Set to 1 to allow users to choose their own password security
-	MinPasswordLength = 1
+	MinPasswordLength = 12
 )
 
 // HashPassword generates a bcrypt hash from a plain text password
@@ -37,7 +36,7 @@ func ValidatePasswordComplexity(password string) error {
 		return fmt.Errorf("password must be at least %d characters long", MinPasswordLength)
 	}
 
-	// That's it - let users choose their own passwords
-	// No annoying character type requirements
+	// Let users choose their own passwords beyond length.
+	// No character type requirements.
 	return nil
 }

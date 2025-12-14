@@ -117,7 +117,7 @@ func TestEvaluateHostAgentsClearsAlertWhenHostReturns(t *testing.T) {
 	}
 }
 
-func TestApplyHostReportRejectsTokenReuseAcrossAgents(t *testing.T) {
+func TestApplyHostReportAllowsTokenReuseAcrossHosts(t *testing.T) {
 	t.Helper()
 
 	monitor := &Monitor{
@@ -164,8 +164,20 @@ func TestApplyHostReportRejectsTokenReuseAcrossAgents(t *testing.T) {
 	secondReport.Host.Hostname = "host-two"
 	secondReport.Timestamp = now.Add(30 * time.Second)
 
-	if _, err := monitor.ApplyHostReport(secondReport, token); err == nil {
-		t.Fatalf("expected token reuse across agents to be rejected")
+	hostTwo, err := monitor.ApplyHostReport(secondReport, token)
+	if err != nil {
+		t.Fatalf("ApplyHostReport hostTwo: %v", err)
+	}
+	if hostTwo.ID == "" {
+		t.Fatalf("expected hostTwo to have an identifier")
+	}
+	if hostTwo.ID == hostOne.ID {
+		t.Fatalf("expected different host IDs for different machines, got %q", hostTwo.ID)
+	}
+
+	snapshot := monitor.state.GetSnapshot()
+	if got := len(snapshot.Hosts); got != 2 {
+		t.Fatalf("expected 2 hosts in state, got %d", got)
 	}
 }
 
@@ -187,14 +199,18 @@ func TestRemoveHostAgentUnbindsToken(t *testing.T) {
 		Hostname: "remove.me",
 		TokenID:  tokenID,
 	})
-	monitor.hostTokenBindings[tokenID] = "agent-remove"
+	monitor.hostTokenBindings[tokenID+":remove.me"] = hostID
+	monitor.hostTokenBindings[tokenID] = hostID
 
 	if _, err := monitor.RemoveHostAgent(hostID); err != nil {
 		t.Fatalf("RemoveHostAgent: %v", err)
 	}
 
-	if _, exists := monitor.hostTokenBindings[tokenID]; exists {
+	if _, exists := monitor.hostTokenBindings[tokenID+":remove.me"]; exists {
 		t.Fatalf("expected token binding to be cleared after host removal")
+	}
+	if _, exists := monitor.hostTokenBindings[tokenID]; exists {
+		t.Fatalf("expected legacy token binding to be cleared after host removal")
 	}
 }
 

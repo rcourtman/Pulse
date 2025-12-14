@@ -628,7 +628,7 @@ type Monitor struct {
 	dockerTokenBindings        map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
 	removedKubernetesClusters  map[string]time.Time // Track deliberately removed Kubernetes clusters (ID -> removal time)
 	kubernetesTokenBindings    map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
-	hostTokenBindings          map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
+	hostTokenBindings          map[string]string    // Track tokenID:hostname -> host identity bindings
 	dockerCommands             map[string]*dockerHostCommand
 	dockerCommandIndex         map[string]string
 	guestMetadataMu            sync.RWMutex
@@ -1129,33 +1129,81 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 		}
 	}
 
-	// Revoke the API token associated with this host agent
-	if host.TokenID != "" {
-		tokenRemoved := m.config.RemoveAPIToken(host.TokenID)
-		if tokenRemoved {
-			m.config.SortAPITokens()
-			m.config.APITokenEnabled = m.config.HasAPITokens()
+	tokenID := strings.TrimSpace(host.TokenID)
+	hostname := strings.TrimSpace(host.Hostname)
 
-			if m.persistence != nil {
-				if err := m.persistence.SaveAPITokens(m.config.APITokens); err != nil {
-					log.Warn().Err(err).Str("tokenID", host.TokenID).Msg("Failed to persist API token revocation after host agent removal")
-				} else {
-					log.Info().Str("tokenID", host.TokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed host agent")
+	tokenStillUsed := false
+	if tokenID != "" && m.state != nil {
+		for _, other := range m.state.GetHosts() {
+			if strings.TrimSpace(other.TokenID) == tokenID {
+				tokenStillUsed = true
+				break
+			}
+		}
+		if !tokenStillUsed {
+			for _, other := range m.state.GetDockerHosts() {
+				if strings.TrimSpace(other.TokenID) == tokenID {
+					tokenStillUsed = true
+					break
 				}
 			}
 		}
 	}
 
-	if host.TokenID != "" {
+	tokenRevoked := false
+	if tokenID != "" && !tokenStillUsed {
+		tokenRevoked = m.config.RemoveAPIToken(tokenID)
+		if tokenRevoked {
+			m.config.SortAPITokens()
+			m.config.APITokenEnabled = m.config.HasAPITokens()
+
+			if m.persistence != nil {
+				if err := m.persistence.SaveAPITokens(m.config.APITokens); err != nil {
+					log.Warn().Err(err).Str("tokenID", tokenID).Msg("Failed to persist API token revocation after host agent removal")
+				} else {
+					log.Info().Str("tokenID", tokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed host agent")
+				}
+			}
+		}
+	} else if tokenID != "" && tokenStillUsed {
+		log.Info().
+			Str("tokenID", tokenID).
+			Str("hostID", hostID).
+			Msg("API token still used by other agents; skipping revocation during host removal")
+	}
+
+	if tokenID != "" {
 		m.mu.Lock()
-		if _, exists := m.hostTokenBindings[host.TokenID]; exists {
-			delete(m.hostTokenBindings, host.TokenID)
-			log.Debug().
-				Str("tokenID", host.TokenID).
-				Str("hostID", hostID).
-				Msg("Unbound host agent token from removed host")
+		if m.hostTokenBindings == nil {
+			m.hostTokenBindings = make(map[string]string)
+		}
+
+		if _, exists := m.hostTokenBindings[tokenID]; exists {
+			delete(m.hostTokenBindings, tokenID)
+		}
+
+		if hostname != "" {
+			key := fmt.Sprintf("%s:%s", tokenID, hostname)
+			if _, exists := m.hostTokenBindings[key]; exists {
+				delete(m.hostTokenBindings, key)
+			}
+		}
+
+		if tokenRevoked {
+			prefix := tokenID + ":"
+			for key := range m.hostTokenBindings {
+				if strings.HasPrefix(key, prefix) {
+					delete(m.hostTokenBindings, key)
+				}
+			}
 		}
 		m.mu.Unlock()
+
+		log.Debug().
+			Str("tokenID", tokenID).
+			Str("hostID", hostID).
+			Bool("revoked", tokenRevoked).
+			Msg("Unbound host agent token bindings after host removal")
 	}
 
 	m.state.RemoveConnectionHealth(hostConnectionPrefix + hostID)
@@ -1390,10 +1438,11 @@ func (m *Monitor) RebuildTokenBindings() {
 		if _, valid := validTokens[tokenID]; !valid {
 			continue
 		}
-		// Use host ID as the binding identifier
-		if host.ID != "" {
-			newHostBindings[tokenID] = host.ID
+		hostname := strings.TrimSpace(host.Hostname)
+		if hostname == "" || host.ID == "" {
+			continue
 		}
+		newHostBindings[fmt.Sprintf("%s:%s", tokenID, hostname)] = host.ID
 	}
 
 	// Log what changed
@@ -1925,17 +1974,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	existingHosts := m.state.GetHosts()
 
-	agentID := strings.TrimSpace(report.Agent.ID)
-	if agentID == "" {
-		agentID = identifier
-	}
-
 	if tokenRecord != nil && tokenRecord.ID != "" {
 		tokenID := strings.TrimSpace(tokenRecord.ID)
-		bindingID := agentID
-		if bindingID == "" {
-			bindingID = identifier
-		}
+		bindingID := identifier
 
 		m.mu.Lock()
 		if m.hostTokenBindings == nil {
@@ -1944,22 +1985,20 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		// Bind tokens by hostname rather than agent ID. This allows:
 		// - Same host to reconnect after agent reinstall (agent ID changes but hostname doesn't)
 		// - Multiple hosts to use the same token (each hostname gets its own binding entry)
-		// - Prevents a stolen token from being used on a different hostname
 		bindingKey := fmt.Sprintf("%s:%s", tokenID, hostname)
 		if boundID, exists := m.hostTokenBindings[bindingKey]; exists && boundID != bindingID {
-			// Same token+hostname but different agent ID - this is a reinstall, allow it
 			log.Info().
 				Str("tokenID", tokenID).
 				Str("hostname", hostname).
-				Str("oldAgentID", boundID).
-				Str("newAgentID", bindingID).
-				Msg("Host agent reinstalled - updating token binding")
+				Str("previousHostID", boundID).
+				Str("newHostID", bindingID).
+				Msg("Host agent identity changed for token binding; updating binding")
 			m.hostTokenBindings[bindingKey] = bindingID
 		} else if !exists {
 			m.hostTokenBindings[bindingKey] = bindingID
 			log.Debug().
 				Str("tokenID", tokenID).
-				Str("agentID", bindingID).
+				Str("hostID", bindingID).
 				Str("hostname", hostname).
 				Msg("Bound host agent token to hostname")
 		}
