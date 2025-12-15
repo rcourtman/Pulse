@@ -117,8 +117,9 @@ jobs:
       - name: Update demo server
         if: steps.gate.outputs.skip != 'true' && steps.current.outputs.skip_current != 'true'
         run: |
+          TAG="${{ steps.target.outputs.tag }}"
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.DEMO_SERVER_USER }}@${{ secrets.DEMO_SERVER_HOST }} \
-            'curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash'
+            "curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --version $TAG"
 
       - name: Verify update
         if: steps.gate.outputs.skip != 'true' && steps.current.outputs.skip_current != 'true'
