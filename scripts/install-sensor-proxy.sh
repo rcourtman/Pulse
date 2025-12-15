@@ -3523,6 +3523,13 @@ if ! command -v systemctl >/dev/null 2>&1; then
     exit 0
 fi
 
+# Early exit if service is healthy - no work needed
+if systemctl is-active --quiet "${SERVICE}.service" 2>/dev/null; then
+    # Service is running - only do control plane reconcile if needed, skip everything else
+    attempt_control_plane_reconcile
+    exit 0
+fi
+
 if ! systemctl list-unit-files 2>/dev/null | grep -q "^${SERVICE}\\.service"; then
     if [[ -x "$INSTALLER" && -f "$CTID_FILE" ]]; then
         log "Service unit missing; attempting reinstall"
