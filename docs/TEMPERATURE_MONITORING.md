@@ -30,8 +30,9 @@ If running Pulse in Docker, you must install the proxy on the host and share the
     Add the socket volume to your Pulse service:
     ```yaml
     volumes:
-      - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:ro
+      - /mnt/pulse-proxy:/run/pulse-sensor-proxy:ro
     ```
+    > **Note**: The standalone installer creates the socket at `/mnt/pulse-proxy` on the host. Map it to `/run/pulse-sensor-proxy` inside the container.
 
 3.  **Restart Pulse**: `docker compose up -d`
 
