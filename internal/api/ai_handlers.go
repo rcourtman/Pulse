@@ -359,27 +359,41 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.CustomContext = strings.TrimSpace(*req.CustomContext)
 	}
 
+	// Handle multi-provider credentials FIRST - before enabled check
+	// This allows the setup flow to send API key + enabled:true together
+	// Clear flags take priority over setting new values
+	if req.ClearAnthropicKey != nil && *req.ClearAnthropicKey {
+		settings.AnthropicAPIKey = ""
+	} else if req.AnthropicAPIKey != nil {
+		settings.AnthropicAPIKey = strings.TrimSpace(*req.AnthropicAPIKey)
+	}
+	if req.ClearOpenAIKey != nil && *req.ClearOpenAIKey {
+		settings.OpenAIAPIKey = ""
+	} else if req.OpenAIAPIKey != nil {
+		settings.OpenAIAPIKey = strings.TrimSpace(*req.OpenAIAPIKey)
+	}
+	if req.ClearDeepSeekKey != nil && *req.ClearDeepSeekKey {
+		settings.DeepSeekAPIKey = ""
+	} else if req.DeepSeekAPIKey != nil {
+		settings.DeepSeekAPIKey = strings.TrimSpace(*req.DeepSeekAPIKey)
+	}
+	if req.ClearOllamaURL != nil && *req.ClearOllamaURL {
+		settings.OllamaBaseURL = ""
+	} else if req.OllamaBaseURL != nil {
+		settings.OllamaBaseURL = strings.TrimSpace(*req.OllamaBaseURL)
+	}
+	if req.OpenAIBaseURL != nil {
+		settings.OpenAIBaseURL = strings.TrimSpace(*req.OpenAIBaseURL)
+	}
+
 	if req.Enabled != nil {
 		// Only allow enabling if at least one provider is configured
 		if *req.Enabled {
 			configuredProviders := settings.GetConfiguredProviders()
 			if len(configuredProviders) == 0 {
-				// Fall back to legacy validation for backwards compatibility
-				switch settings.Provider {
-				case config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderDeepSeek:
-					if settings.APIKey == "" {
-						http.Error(w, "Cannot enable AI: configure at least one AI provider first", http.StatusBadRequest)
-						return
-					}
-				case config.AIProviderOllama:
-					// Ollama doesn't need API key, but needs base URL (or will use default)
-					if settings.BaseURL == "" {
-						settings.BaseURL = config.DefaultOllamaBaseURL
-					}
-				default:
-					http.Error(w, "Cannot enable AI: configure at least one AI provider first", http.StatusBadRequest)
-					return
-				}
+				// No providers configured - give a helpful error
+				http.Error(w, "Please configure an AI provider (API key or Ollama URL) before enabling AI", http.StatusBadRequest)
+				return
 			}
 			// If we have configured providers, we're good to enable
 		}
@@ -427,32 +441,6 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	// Handle alert-triggered analysis toggle
 	if req.AlertTriggeredAnalysis != nil {
 		settings.AlertTriggeredAnalysis = *req.AlertTriggeredAnalysis
-	}
-
-	// Handle multi-provider credentials
-	// Clear flags take priority over setting new values
-	if req.ClearAnthropicKey != nil && *req.ClearAnthropicKey {
-		settings.AnthropicAPIKey = ""
-	} else if req.AnthropicAPIKey != nil {
-		settings.AnthropicAPIKey = strings.TrimSpace(*req.AnthropicAPIKey)
-	}
-	if req.ClearOpenAIKey != nil && *req.ClearOpenAIKey {
-		settings.OpenAIAPIKey = ""
-	} else if req.OpenAIAPIKey != nil {
-		settings.OpenAIAPIKey = strings.TrimSpace(*req.OpenAIAPIKey)
-	}
-	if req.ClearDeepSeekKey != nil && *req.ClearDeepSeekKey {
-		settings.DeepSeekAPIKey = ""
-	} else if req.DeepSeekAPIKey != nil {
-		settings.DeepSeekAPIKey = strings.TrimSpace(*req.DeepSeekAPIKey)
-	}
-	if req.ClearOllamaURL != nil && *req.ClearOllamaURL {
-		settings.OllamaBaseURL = ""
-	} else if req.OllamaBaseURL != nil {
-		settings.OllamaBaseURL = strings.TrimSpace(*req.OllamaBaseURL)
-	}
-	if req.OpenAIBaseURL != nil {
-		settings.OpenAIBaseURL = strings.TrimSpace(*req.OpenAIBaseURL)
 	}
 
 	// Save settings

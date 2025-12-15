@@ -72,6 +72,13 @@ export const AISettings: Component = () => {
   // Auto-fix acknowledgement state (not persisted - must acknowledge each session)
   const [autoFixAcknowledged, setAutoFixAcknowledged] = createSignal(false);
 
+  // First-time setup modal state
+  const [showSetupModal, setShowSetupModal] = createSignal(false);
+  const [setupProvider, setSetupProvider] = createSignal<'anthropic' | 'openai' | 'deepseek' | 'ollama'>('anthropic');
+  const [setupApiKey, setSetupApiKey] = createSignal('');
+  const [setupOllamaUrl, setSetupOllamaUrl] = createSignal('http://localhost:11434');
+  const [setupSaving, setSetupSaving] = createSignal(false);
+
   const [form, setForm] = createStore({
     enabled: false,
     provider: 'anthropic' as AIProvider, // Legacy - kept for compatibility
@@ -413,871 +420,1072 @@ export const AISettings: Component = () => {
   // Legacy helper functions removed - multi-provider accordions handle all provider-specific UI
 
   return (
-    <Card
-      padding="none"
-      class="overflow-hidden border border-gray-200 dark:border-gray-700"
-      border={false}
-    >
-      <div class="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-        <div class="flex items-center gap-3">
-          <div class="p-2 bg-purple-100 dark:bg-purple-900/40 rounded-lg">
-            <svg
-              class="w-5 h-5 text-purple-600 dark:text-purple-300"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="1.8"
-                d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611l-2.576.43a18.003 18.003 0 01-5.118 0l-2.576-.43c-1.717-.293-2.299-2.379-1.067-3.611L5 14.5"
-              />
-            </svg>
-          </div>
-          <SectionHeader
-            title="AI Assistant"
-            description="Configure AI-powered infrastructure analysis"
-            size="sm"
-            class="flex-1"
-          />
-          <Toggle
-            checked={form.enabled}
-            onChange={async (event) => {
-              const newValue = event.currentTarget.checked;
-              setForm('enabled', newValue);
-              // Auto-save the enabled toggle immediately
-              try {
-                const updated = await AIAPI.updateSettings({ enabled: newValue });
-                setSettings(updated);
-                notificationStore.success(newValue ? 'AI Assistant enabled' : 'AI Assistant disabled');
-              } catch (error) {
-                // Revert on failure
-                setForm('enabled', !newValue);
-                logger.error('[AISettings] Failed to toggle AI:', error);
-                const message = error instanceof Error ? error.message : 'Failed to update AI setting';
-                notificationStore.error(message);
-              }
-            }}
-            disabled={loading() || saving()}
-            containerClass="items-center gap-2"
-            label={
-              <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
-                {form.enabled ? 'Enabled' : 'Disabled'}
-              </span>
-            }
-          />
-        </div>
-      </div>
-
-      <form class="p-6 space-y-5" onSubmit={handleSave}>
-        <div class="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-lg p-3 text-xs text-purple-800 dark:text-purple-200">
-          <p class="font-medium mb-1">AI Assistant helps you:</p>
-          <ul class="space-y-0.5 list-disc pl-4">
-            <li>Diagnose infrastructure issues with context-aware analysis</li>
-            <li>Get remediation suggestions based on your specific environment</li>
-            <li>Understand alerts and metrics with plain-language explanations</li>
-          </ul>
-        </div>
-
-        <Show when={loading()}>
-          <div class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
-            <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-            Loading AI settings...
-          </div>
-        </Show>
-
-        <Show when={!loading()}>
-          <div class="space-y-4">
-            {/* Model Selection */}
-            <div class={formField}>
-              <div class="flex items-center justify-between mb-1">
-                <label class={labelClass()}>
-                  Default Model
-                  {modelsLoading() && <span class="ml-2 text-xs text-gray-500">(loading...)</span>}
-                </label>
-                <button
-                  type="button"
-                  onClick={loadModels}
-                  disabled={modelsLoading()}
-                  class="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 disabled:opacity-50 flex items-center gap-1"
-                  title="Refresh model list from all configured providers"
-                >
-                  <svg class={`w-3 h-3 ${modelsLoading() ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Refresh Models
-                </button>
-              </div>
-              <Show when={availableModels().length > 0} fallback={
-                <input
-                  type="text"
-                  value={form.model}
-                  onInput={(e) => setForm('model', e.currentTarget.value)}
-                  placeholder="Configure a provider below to see available models"
-                  class={controlClass()}
-                  disabled={saving()}
+    <>
+      <Card
+        padding="none"
+        class="overflow-hidden border border-gray-200 dark:border-gray-700"
+        border={false}
+      >
+        <div class="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <div class="flex items-center gap-3">
+            <div class="p-2 bg-purple-100 dark:bg-purple-900/40 rounded-lg">
+              <svg
+                class="w-5 h-5 text-purple-600 dark:text-purple-300"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.8"
+                  d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611l-2.576.43a18.003 18.003 0 01-5.118 0l-2.576-.43c-1.717-.293-2.299-2.379-1.067-3.611L5 14.5"
                 />
-              }>
-                <select
-                  value={form.model}
-                  onChange={(e) => setForm('model', e.currentTarget.value)}
-                  class={controlClass()}
-                  disabled={saving()}
-                >
-                  <Show when={!form.model || !availableModels().some(m => m.id === form.model)}>
-                    <option value={form.model}>{form.model || 'Select a model...'}</option>
-                  </Show>
-                  <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
-                    {([provider, models]) => (
-                      <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
-                        <For each={models}>
-                          {(model) => (
-                            <option value={model.id}>
-                              {model.name || model.id.split(':').pop()}
-                            </option>
-                          )}
-                        </For>
-                      </optgroup>
-                    )}
-                  </For>
-                </select>
-              </Show>
-              <p class={formHelpText}>
-                Main model used when no specific override is set. {availableModels().length === 0 && 'Save API key and refresh to see available models.'}
-              </p>
+              </svg>
             </div>
+            <SectionHeader
+              title="AI Assistant"
+              description="Configure AI-powered infrastructure analysis"
+              size="sm"
+              class="flex-1"
+            />
+            {/* Toggle with first-time setup flow */}
+            {(() => {
+              const s = settings();
+              const hasConfiguredProvider = s && (s.anthropic_configured || s.openai_configured || s.deepseek_configured || s.ollama_configured);
 
-            {/* Chat Model Override */}
-            <div class={formField}>
-              <label class={labelClass()}>Chat Model (Interactive)</label>
-              <Show when={availableModels().length > 0} fallback={
-                <input
-                  type="text"
-                  value={form.chatModel}
-                  onInput={(e) => setForm('chatModel', e.currentTarget.value)}
-                  placeholder="Leave empty to use default model"
-                  class={controlClass()}
-                  disabled={saving()}
-                />
-              }>
-                <select
-                  value={form.chatModel}
-                  onChange={(e) => setForm('chatModel', e.currentTarget.value)}
-                  class={controlClass()}
-                  disabled={saving()}
-                >
-                  <option value="">Use default model ({form.model || 'not set'})</option>
-                  <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
-                    {([provider, models]) => (
-                      <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
-                        <For each={models}>
-                          {(model) => (
-                            <option value={model.id}>
-                              {model.name || model.id.split(':').pop()}
-                            </option>
-                          )}
-                        </For>
-                      </optgroup>
-                    )}
-                  </For>
-                </select>
-              </Show>
-              <p class={formHelpText}>
-                Model for interactive AI chat. Use a more capable model for complex reasoning.
-              </p>
-            </div>
-
-            {/* Patrol Model Override */}
-            <div class={formField}>
-              <label class={labelClass()}>Patrol Model (Background)</label>
-              <Show when={availableModels().length > 0} fallback={
-                <input
-                  type="text"
-                  value={form.patrolModel}
-                  onInput={(e) => setForm('patrolModel', e.currentTarget.value)}
-                  placeholder="Leave empty to use default model"
-                  class={controlClass()}
-                  disabled={saving()}
-                />
-              }>
-                <select
-                  value={form.patrolModel}
-                  onChange={(e) => setForm('patrolModel', e.currentTarget.value)}
-                  class={controlClass()}
-                  disabled={saving()}
-                >
-                  <option value="">Use default model ({form.model || 'not set'})</option>
-                  <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
-                    {([provider, models]) => (
-                      <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
-                        <For each={models}>
-                          {(model) => (
-                            <option value={model.id}>
-                              {model.name || model.id.split(':').pop()}
-                            </option>
-                          )}
-                        </For>
-                      </optgroup>
-                    )}
-                  </For>
-                </select>
-              </Show>
-              <p class={formHelpText}>
-                Model for background patrol analysis. Use a cheaper/faster model to save tokens.
-              </p>
-            </div>
-
-            {/* AI Provider Configuration - Configure API keys for all providers */}
-            <div class={`${formField} p-4 rounded-lg border bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-purple-200 dark:border-purple-800`}>
-              <div class="mb-3">
-                <h4 class="font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                  <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                  </svg>
-                  AI Provider Configuration
-                </h4>
-                <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                  Configure API keys for each AI provider you want to use. Models from all configured providers will appear in the model selectors.
-                </p>
-              </div>
-
-              {/* Provider Accordions */}
-              <div class="space-y-2">
-                {/* Anthropic */}
-                <div class={`border rounded-lg overflow-hidden ${settings()?.anthropic_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
-                  <button
-                    type="button"
-                    class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                    onClick={() => {
-                      const current = expandedProviders();
-                      const next = new Set(current);
-                      if (next.has('anthropic')) next.delete('anthropic');
-                      else next.add('anthropic');
-                      setExpandedProviders(next);
-                    }}
-                  >
-                    <div class="flex items-center gap-2">
-                      <span class="font-medium text-sm">Anthropic</span>
-                      <Show when={settings()?.anthropic_configured}>
-                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
-                      </Show>
-                    </div>
-                    <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('anthropic') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  <Show when={expandedProviders().has('anthropic')}>
-                    <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
-                      <input
-                        type="password"
-                        value={form.anthropicApiKey}
-                        onInput={(e) => setForm('anthropicApiKey', e.currentTarget.value)}
-                        placeholder={settings()?.anthropic_configured ? '••••••••••• (configured)' : 'sk-ant-...'}
-                        class={controlClass()}
-                        disabled={saving()}
-                      />
-                      <div class="flex items-center justify-between">
-                        <p class="text-xs text-gray-500">
-                          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
-                        </p>
-                        <Show when={settings()?.anthropic_configured}>
-                          <div class="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleTestProvider('anthropic')}
-                              disabled={testingProvider() === 'anthropic' || saving()}
-                              class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
-                            >
-                              {testingProvider() === 'anthropic' ? 'Testing...' : 'Test'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleClearProvider('anthropic')}
-                              disabled={saving()}
-                              class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
-                              title="Clear API key"
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </Show>
-                      </div>
-                      <Show when={providerTestResult()?.provider === 'anthropic'}>
-                        <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
-                          {providerTestResult()?.message}
-                        </p>
-                      </Show>
-                    </div>
-                  </Show>
-                </div>
-
-                {/* OpenAI */}
-                <div class={`border rounded-lg overflow-hidden ${settings()?.openai_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
-                  <button
-                    type="button"
-                    class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                    onClick={() => {
-                      const current = expandedProviders();
-                      const next = new Set(current);
-                      if (next.has('openai')) next.delete('openai');
-                      else next.add('openai');
-                      setExpandedProviders(next);
-                    }}
-                  >
-                    <div class="flex items-center gap-2">
-                      <span class="font-medium text-sm">OpenAI</span>
-                      <Show when={settings()?.openai_configured}>
-                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
-                      </Show>
-                    </div>
-                    <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('openai') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  <Show when={expandedProviders().has('openai')}>
-                    <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
-                      <input
-                        type="password"
-                        value={form.openaiApiKey}
-                        onInput={(e) => setForm('openaiApiKey', e.currentTarget.value)}
-                        placeholder={settings()?.openai_configured ? '••••••••••• (configured)' : 'sk-...'}
-                        class={controlClass()}
-                        disabled={saving()}
-                      />
-                      <input
-                        type="url"
-                        value={form.openaiBaseUrl}
-                        onInput={(e) => setForm('openaiBaseUrl', e.currentTarget.value)}
-                        placeholder="Custom base URL (optional, for Azure OpenAI)"
-                        class={controlClass()}
-                        disabled={saving()}
-                      />
-                      <div class="flex items-center justify-between">
-                        <p class="text-xs text-gray-500">
-                          <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
-                        </p>
-                        <Show when={settings()?.openai_configured}>
-                          <div class="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleTestProvider('openai')}
-                              disabled={testingProvider() === 'openai' || saving()}
-                              class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
-                            >
-                              {testingProvider() === 'openai' ? 'Testing...' : 'Test'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleClearProvider('openai')}
-                              disabled={saving()}
-                              class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
-                              title="Clear API key"
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </Show>
-                      </div>
-                      <Show when={providerTestResult()?.provider === 'openai'}>
-                        <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
-                          {providerTestResult()?.message}
-                        </p>
-                      </Show>
-                    </div>
-                  </Show>
-                </div>
-
-                {/* DeepSeek */}
-                <div class={`border rounded-lg overflow-hidden ${settings()?.deepseek_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
-                  <button
-                    type="button"
-                    class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                    onClick={() => {
-                      const current = expandedProviders();
-                      const next = new Set(current);
-                      if (next.has('deepseek')) next.delete('deepseek');
-                      else next.add('deepseek');
-                      setExpandedProviders(next);
-                    }}
-                  >
-                    <div class="flex items-center gap-2">
-                      <span class="font-medium text-sm">DeepSeek</span>
-                      <Show when={settings()?.deepseek_configured}>
-                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
-                      </Show>
-                    </div>
-                    <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('deepseek') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  <Show when={expandedProviders().has('deepseek')}>
-                    <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
-                      <input
-                        type="password"
-                        value={form.deepseekApiKey}
-                        onInput={(e) => setForm('deepseekApiKey', e.currentTarget.value)}
-                        placeholder={settings()?.deepseek_configured ? '••••••••••• (configured)' : 'sk-...'}
-                        class={controlClass()}
-                        disabled={saving()}
-                      />
-                      <div class="flex items-center justify-between">
-                        <p class="text-xs text-gray-500">
-                          <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
-                        </p>
-                        <Show when={settings()?.deepseek_configured}>
-                          <div class="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleTestProvider('deepseek')}
-                              disabled={testingProvider() === 'deepseek' || saving()}
-                              class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
-                            >
-                              {testingProvider() === 'deepseek' ? 'Testing...' : 'Test'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleClearProvider('deepseek')}
-                              disabled={saving()}
-                              class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
-                              title="Clear API key"
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </Show>
-                      </div>
-                      <Show when={providerTestResult()?.provider === 'deepseek'}>
-                        <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
-                          {providerTestResult()?.message}
-                        </p>
-                      </Show>
-                    </div>
-                  </Show>
-                </div>
-
-                {/* Ollama */}
-                <div class={`border rounded-lg overflow-hidden ${settings()?.ollama_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
-                  <button
-                    type="button"
-                    class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                    onClick={() => {
-                      const current = expandedProviders();
-                      const next = new Set(current);
-                      if (next.has('ollama')) next.delete('ollama');
-                      else next.add('ollama');
-                      setExpandedProviders(next);
-                    }}
-                  >
-                    <div class="flex items-center gap-2">
-                      <span class="font-medium text-sm">Ollama</span>
-                      <Show when={settings()?.ollama_configured}>
-                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Available</span>
-                      </Show>
-                    </div>
-                    <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('ollama') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  <Show when={expandedProviders().has('ollama')}>
-                    <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
-                      <input
-                        type="url"
-                        value={form.ollamaBaseUrl}
-                        onInput={(e) => setForm('ollamaBaseUrl', e.currentTarget.value)}
-                        placeholder="http://localhost:11434"
-                        class={controlClass()}
-                        disabled={saving()}
-                      />
-                      <div class="flex items-center justify-between">
-                        <p class="text-xs text-gray-500">
-                          <a href="https://ollama.ai" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Learn about Ollama →</a>
-                          <span class="text-gray-400"> · Free & local</span>
-                        </p>
-                        <Show when={settings()?.ollama_configured}>
-                          <div class="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleTestProvider('ollama')}
-                              disabled={testingProvider() === 'ollama' || saving()}
-                              class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
-                            >
-                              {testingProvider() === 'ollama' ? 'Testing...' : 'Test'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleClearProvider('ollama')}
-                              disabled={saving()}
-                              class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
-                              title="Clear Ollama URL"
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </Show>
-                      </div>
-                      <Show when={providerTestResult()?.provider === 'ollama'}>
-                        <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
-                          {providerTestResult()?.message}
-                        </p>
-                      </Show>
-                    </div>
-                  </Show>
-                </div>
-              </div>
-            </div>
-
-            {/* Autonomous Mode */}
-            <div class={`${formField} p-4 rounded-lg border ${form.autonomousMode ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'}`}>
-              <div class="flex items-start justify-between gap-4">
-                <div class="flex-1">
-                  <label class={`${labelClass()} flex items-center gap-2`}>
-                    Autonomous Mode
-                    <Show when={form.autonomousMode}>
-                      <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 rounded">
-                        ENABLED
-                      </span>
-                    </Show>
-                  </label>
-                  <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                    {form.autonomousMode
-                      ? 'AI will execute all commands without asking for approval. Only enable if you trust your configured model.'
-                      : 'AI will ask for approval before running commands that modify your system. Read-only commands (like df, ps, docker stats) run automatically.'}
-                  </p>
-                </div>
+              return (
                 <Toggle
-                  checked={form.autonomousMode}
-                  onChange={(event) => setForm('autonomousMode', event.currentTarget.checked)}
-                  disabled={saving()}
-                />
-              </div>
-            </div>
-
-            {/* AI Patrol & Efficiency Settings */}
-            <div class={`${formField} p-4 rounded-lg border bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800`}>
-              <div class="mb-3">
-                <label class={`${labelClass()} flex items-center gap-2`}>
-                  <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
-                  AI Patrol & Token Efficiency
-                </label>
-                <p class="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                  Configure how AI monitors your infrastructure. Balance between coverage and token usage.
-                </p>
-              </div>
-
-              {/* Patrol Interval */}
-              <div class="space-y-3">
-                <div>
-                  <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    Background Patrol Interval (minutes)
-                  </label>
-                  <div class="flex items-center gap-2">
-                    <input
-                      type="number"
-                      class={controlClass()}
-                      value={form.patrolIntervalMinutes}
-                      onInput={(e) => {
-                        const value = parseInt(e.currentTarget.value, 10);
-                        if (!isNaN(value)) {
-                          setForm('patrolIntervalMinutes', Math.max(0, value));
-                        }
-                      }}
-                      min={0}
-                      max={10080}
-                      step={15}
-                      disabled={saving()}
-                      style={{ width: '120px' }}
-                    />
-                    <span class="text-xs text-gray-500 dark:text-gray-400">
-                      {form.patrolIntervalMinutes === 0
-                        ? 'Disabled'
-                        : form.patrolIntervalMinutes >= 60
-                          ? `${Math.floor(form.patrolIntervalMinutes / 60)}h ${form.patrolIntervalMinutes % 60 > 0 ? `${form.patrolIntervalMinutes % 60}m` : ''}`
-                          : `${form.patrolIntervalMinutes}m`}
+                  checked={form.enabled}
+                  onChange={async (event) => {
+                    const newValue = event.currentTarget.checked;
+                    // Show setup modal if trying to enable without a configured provider
+                    if (newValue && !hasConfiguredProvider) {
+                      event.currentTarget.checked = false;
+                      setShowSetupModal(true);
+                      return;
+                    }
+                    setForm('enabled', newValue);
+                    // Auto-save the enabled toggle immediately
+                    try {
+                      const updated = await AIAPI.updateSettings({ enabled: newValue });
+                      setSettings(updated);
+                      notificationStore.success(newValue ? 'AI Assistant enabled' : 'AI Assistant disabled');
+                    } catch (error) {
+                      // Revert on failure
+                      setForm('enabled', !newValue);
+                      logger.error('[AISettings] Failed to toggle AI:', error);
+                      const message = error instanceof Error ? error.message : 'Failed to update AI setting';
+                      notificationStore.error(message);
+                    }
+                  }}
+                  disabled={loading() || saving()}
+                  containerClass="items-center gap-2"
+                  label={
+                    <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
+                      {form.enabled ? 'Enabled' : 'Disabled'}
                     </span>
-                  </div>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Set to 0 to disable scheduled patrol. Minimum 10 minutes when enabled.
-                  </p>
-                </div>
+                  }
+                />
+              );
+            })()}
+          </div>
+        </div>
 
-                {/* Alert-Triggered Analysis Toggle */}
-                <div class="flex items-start justify-between gap-4 pt-2">
-                  <div class="flex-1">
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                      Alert-Triggered Analysis
-                      <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                        TOKEN EFFICIENT
-                      </span>
-                    </label>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      When enabled, AI automatically analyzes specific resources when alerts fire.
-                      Uses minimal tokens since it only analyzes affected resources.
-                    </p>
-                  </div>
-                  <Toggle
-                    checked={form.alertTriggeredAnalysis}
-                    onChange={(event) => setForm('alertTriggeredAnalysis', event.currentTarget.checked)}
-                    disabled={saving()}
-                  />
-                </div>
-
-                {/* Auto-Fix Mode Toggle */}
-                <div class="flex items-start justify-between gap-4 pt-3 mt-3 border-t border-blue-200 dark:border-blue-800">
-                  <div class="flex-1">
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                      Auto-Fix Mode
-                      <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded">
-                        ADVANCED
-                      </span>
-                    </label>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      When enabled, patrol can attempt automatic remediation of issues.
-                      When disabled (default), patrol only observes and reports - it won't make changes.
-                    </p>
-                  </div>
-                  <Toggle
-                    checked={form.patrolAutoFix}
-                    onChange={(event) => {
-                      // Can only enable if acknowledged
-                      if (event.currentTarget.checked && !autoFixAcknowledged()) {
-                        return; // Prevent enabling without acknowledgement
-                      }
-                      setForm('patrolAutoFix', event.currentTarget.checked);
-                    }}
-                    disabled={saving() || (!form.patrolAutoFix && !autoFixAcknowledged())}
-                  />
-                </div>
-
-                {/* Auto-Fix Warning & Acknowledgement - Simplified inline flow */}
-                <Show when={!form.patrolAutoFix}>
-                  <div class="mt-3 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-200 dark:border-amber-800 rounded-xl">
-                    <div class="flex items-start gap-3">
-                      <div class="p-2 bg-amber-100 dark:bg-amber-800 rounded-lg flex-shrink-0">
-                        <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                      </div>
-                      <div class="flex-1 min-w-0">
-                        <p class="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-2">Enable Auto-Fix Mode?</p>
-                        <div class="text-xs text-amber-700 dark:text-amber-300 space-y-1 mb-3">
-                          <div class="flex items-center gap-2">
-                            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3" /></svg>
-                            <span>AI executes remediation commands <strong>without approval</strong></span>
-                          </div>
-                          <div class="flex items-center gap-2">
-                            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3" /></svg>
-                            <span>Actions may be <strong>irreversible</strong> (restarts, cache clears, etc.)</span>
-                          </div>
-                          <div class="flex items-center gap-2">
-                            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3" /></svg>
-                            <span>Test in staging/dev environments first</span>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAutoFixAcknowledged(true);
-                            setForm('patrolAutoFix', true);
-                          }}
-                          disabled={saving()}
-                          class="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-                        >
-                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          I understand, enable Auto-Fix
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </Show>
-
-                {/* Warning when enabled */}
-                <Show when={form.patrolAutoFix}>
-                  <div class="mt-3 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
-                    <div class="flex gap-2">
-                      <svg class="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      <div class="text-xs text-red-800 dark:text-red-200">
-                        <p class="font-semibold">⚠️ Auto-Fix is ENABLED</p>
-                        <p class="mt-1">AI patrol will automatically attempt to fix issues without asking for approval. Review findings regularly.</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Auto-Fix Model Selector - shown when auto-fix is enabled */}
-                  <div class="mt-3">
-                    <label class={labelClass()}>Auto-Fix Model (Remediation)</label>
-                    <Show when={availableModels().length > 0} fallback={
-                      <input
-                        type="text"
-                        value={form.autoFixModel}
-                        onInput={(e) => setForm('autoFixModel', e.currentTarget.value)}
-                        placeholder="Leave empty to use patrol model"
-                        class={controlClass()}
-                        disabled={saving()}
-                      />
-                    }>
-                      <select
-                        value={form.autoFixModel}
-                        onChange={(e) => setForm('autoFixModel', e.currentTarget.value)}
-                        class={controlClass()}
-                        disabled={saving()}
-                      >
-                        <option value="">Use patrol model ({form.patrolModel || form.model || 'not set'})</option>
-                        <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
-                          {([provider, models]) => (
-                            <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
-                              <For each={models}>
-                                {(model) => (
-                                  <option value={model.id}>
-                                    {model.name || model.id.split(':').pop()}
-                                  </option>
-                                )}
-                              </For>
-                            </optgroup>
-                          )}
-                        </For>
-                      </select>
-                    </Show>
-                    <p class={formHelpText}>
-                      Model for automatic remediation. Use a more capable model for better fix accuracy.
-                    </p>
-                  </div>
-                </Show>
-              </div>
-            </div>
-
-            {/* AI Cost Controls - Prominent positioning */}
-            <div class={`${formField} p-4 rounded-lg border bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-emerald-200 dark:border-emerald-800`}>
-              <div class="flex items-center gap-3 mb-3">
-                <div class="p-2 bg-emerald-100 dark:bg-emerald-800 rounded-lg">
-                  <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div class="flex-1">
-                  <label class={`${labelClass()} flex items-center gap-2`}>
-                    AI Cost Controls
-                    <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-800 text-emerald-700 dark:text-emerald-300 rounded">RECOMMENDED</span>
-                  </label>
-                  <p class="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
-                    Set a budget alert for cross-provider cost tracking
-                  </p>
-                </div>
-              </div>
-
-              <div class="flex flex-col sm:flex-row sm:items-center gap-4">
-                <div class="flex-shrink-0">
-                  <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    30-day budget (USD)
-                  </label>
-                  <div class="relative">
-                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-sm">$</span>
-                    <input
-                      type="number"
-                      class="w-32 pl-7 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                      value={form.costBudgetUSD30d}
-                      onInput={(e) => setForm('costBudgetUSD30d', e.currentTarget.value)}
-                      min={0}
-                      step={1}
-                      placeholder="0"
-                      disabled={saving()}
-                    />
-                  </div>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <Show when={parseFloat(form.costBudgetUSD30d) > 0}>
-                    <div class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                      <div class="flex items-center justify-between">
-                        <span>Daily equivalent</span>
-                        <span class="font-medium text-gray-900 dark:text-gray-100">${(parseFloat(form.costBudgetUSD30d) / 30).toFixed(2)}/day</span>
-                      </div>
-                      <div class="flex items-center justify-between">
-                        <span>Weekly equivalent</span>
-                        <span class="font-medium text-gray-900 dark:text-gray-100">${(parseFloat(form.costBudgetUSD30d) / 4.3).toFixed(2)}/week</span>
-                      </div>
-                    </div>
-                  </Show>
-                  <Show when={!form.costBudgetUSD30d || parseFloat(form.costBudgetUSD30d) === 0}>
-                    <div class="p-2 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded text-xs text-amber-700 dark:text-amber-300">
-                      💡 Set a budget to get proactive alerts before overspending
-                    </div>
-                  </Show>
-                </div>
-              </div>
-              <p class="text-[10px] text-emerald-600 dark:text-emerald-400 mt-2">
-                This is a cross-provider estimate. Provider dashboards are the source of truth for billing.
-              </p>
-            </div>
-
-
+        <form class="p-6 space-y-5" onSubmit={handleSave}>
+          <div class="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-lg p-3 text-xs text-purple-800 dark:text-purple-200">
+            <p class="font-medium mb-1">AI Assistant helps you:</p>
+            <ul class="space-y-0.5 list-disc pl-4">
+              <li>Diagnose infrastructure issues with context-aware analysis</li>
+              <li>Get remediation suggestions based on your specific environment</li>
+              <li>Understand alerts and metrics with plain-language explanations</li>
+            </ul>
           </div>
 
-          {/* Status indicator */}
-          <Show when={settings()}>
-            <div
-              class={`flex items-center gap-2 p-3 rounded-lg ${settings()?.configured
-                ? 'bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200'
-                : 'bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200'
-                }`}
-            >
-              <div
-                class={`w-2 h-2 rounded-full ${settings()?.configured ? 'bg-green-500' : 'bg-amber-500'
-                  }`}
-              />
-              <div class="flex-1">
-                <span class="text-xs font-medium">
-                  {settings()?.configured
-                    ? `Ready • ${settings()?.configured_providers?.length || 0} provider${(settings()?.configured_providers?.length || 0) !== 1 ? 's' : ''} • ${availableModels().length} models`
-                    : 'Configure at least one AI provider above to enable AI features'}
-                </span>
-                <Show when={settings()?.configured && settings()?.model}>
-                  <span class="text-xs opacity-75 ml-2">
-                    • Default: {settings()?.model?.split(':').pop() || settings()?.model}
-                  </span>
-                </Show>
-              </div>
+          <Show when={loading()}>
+            <div class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
+              <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              Loading AI settings...
             </div>
           </Show>
 
-          {/* Actions */}
-          <div class="flex flex-wrap items-center justify-between gap-3 pt-4">
-            <Show when={settings()?.api_key_set || settings()?.oauth_connected}>
-              <button
-                type="button"
-                class="px-4 py-2 text-sm border border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300 rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleTest}
-                disabled={testing() || saving() || loading()}
+          <Show when={!loading()}>
+            <div class="space-y-4">
+              {/* Model Selection */}
+              <div class={formField}>
+                <div class="flex items-center justify-between mb-1">
+                  <label class={labelClass()}>
+                    Default Model
+                    {modelsLoading() && <span class="ml-2 text-xs text-gray-500">(loading...)</span>}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={loadModels}
+                    disabled={modelsLoading()}
+                    class="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 disabled:opacity-50 flex items-center gap-1"
+                    title="Refresh model list from all configured providers"
+                  >
+                    <svg class={`w-3 h-3 ${modelsLoading() ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh Models
+                  </button>
+                </div>
+                <Show when={availableModels().length > 0} fallback={
+                  <input
+                    type="text"
+                    value={form.model}
+                    onInput={(e) => setForm('model', e.currentTarget.value)}
+                    placeholder="Configure a provider below to see available models"
+                    class={controlClass()}
+                    disabled={saving()}
+                  />
+                }>
+                  <select
+                    value={form.model}
+                    onChange={(e) => setForm('model', e.currentTarget.value)}
+                    class={controlClass()}
+                    disabled={saving()}
+                  >
+                    <Show when={!form.model || !availableModels().some(m => m.id === form.model)}>
+                      <option value={form.model}>{form.model || 'Select a model...'}</option>
+                    </Show>
+                    <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
+                      {([provider, models]) => (
+                        <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
+                          <For each={models}>
+                            {(model) => (
+                              <option value={model.id}>
+                                {model.name || model.id.split(':').pop()}
+                              </option>
+                            )}
+                          </For>
+                        </optgroup>
+                      )}
+                    </For>
+                  </select>
+                </Show>
+                <p class={formHelpText}>
+                  Main model used when no specific override is set. {availableModels().length === 0 && 'Save API key and refresh to see available models.'}
+                </p>
+              </div>
+
+              {/* Chat Model Override */}
+              <div class={formField}>
+                <label class={labelClass()}>Chat Model (Interactive)</label>
+                <Show when={availableModels().length > 0} fallback={
+                  <input
+                    type="text"
+                    value={form.chatModel}
+                    onInput={(e) => setForm('chatModel', e.currentTarget.value)}
+                    placeholder="Leave empty to use default model"
+                    class={controlClass()}
+                    disabled={saving()}
+                  />
+                }>
+                  <select
+                    value={form.chatModel}
+                    onChange={(e) => setForm('chatModel', e.currentTarget.value)}
+                    class={controlClass()}
+                    disabled={saving()}
+                  >
+                    <option value="">Use default model ({form.model || 'not set'})</option>
+                    <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
+                      {([provider, models]) => (
+                        <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
+                          <For each={models}>
+                            {(model) => (
+                              <option value={model.id}>
+                                {model.name || model.id.split(':').pop()}
+                              </option>
+                            )}
+                          </For>
+                        </optgroup>
+                      )}
+                    </For>
+                  </select>
+                </Show>
+                <p class={formHelpText}>
+                  Model for interactive AI chat. Use a more capable model for complex reasoning.
+                </p>
+              </div>
+
+              {/* Patrol Model Override */}
+              <div class={formField}>
+                <label class={labelClass()}>Patrol Model (Background)</label>
+                <Show when={availableModels().length > 0} fallback={
+                  <input
+                    type="text"
+                    value={form.patrolModel}
+                    onInput={(e) => setForm('patrolModel', e.currentTarget.value)}
+                    placeholder="Leave empty to use default model"
+                    class={controlClass()}
+                    disabled={saving()}
+                  />
+                }>
+                  <select
+                    value={form.patrolModel}
+                    onChange={(e) => setForm('patrolModel', e.currentTarget.value)}
+                    class={controlClass()}
+                    disabled={saving()}
+                  >
+                    <option value="">Use default model ({form.model || 'not set'})</option>
+                    <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
+                      {([provider, models]) => (
+                        <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
+                          <For each={models}>
+                            {(model) => (
+                              <option value={model.id}>
+                                {model.name || model.id.split(':').pop()}
+                              </option>
+                            )}
+                          </For>
+                        </optgroup>
+                      )}
+                    </For>
+                  </select>
+                </Show>
+                <p class={formHelpText}>
+                  Model for background patrol analysis. Use a cheaper/faster model to save tokens.
+                </p>
+              </div>
+
+              {/* AI Provider Configuration - Configure API keys for all providers */}
+              <div class={`${formField} p-4 rounded-lg border bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-purple-200 dark:border-purple-800`}>
+                <div class="mb-3">
+                  <h4 class="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                    <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    AI Provider Configuration
+                  </h4>
+                  <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    Configure API keys for each AI provider you want to use. Models from all configured providers will appear in the model selectors.
+                  </p>
+                </div>
+
+                {/* Provider Accordions */}
+                <div class="space-y-2">
+                  {/* Anthropic */}
+                  <div class={`border rounded-lg overflow-hidden ${settings()?.anthropic_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                    <button
+                      type="button"
+                      class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      onClick={() => {
+                        const current = expandedProviders();
+                        const next = new Set(current);
+                        if (next.has('anthropic')) next.delete('anthropic');
+                        else next.add('anthropic');
+                        setExpandedProviders(next);
+                      }}
+                    >
+                      <div class="flex items-center gap-2">
+                        <span class="font-medium text-sm">Anthropic</span>
+                        <Show when={settings()?.anthropic_configured}>
+                          <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
+                        </Show>
+                      </div>
+                      <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('anthropic') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <Show when={expandedProviders().has('anthropic')}>
+                      <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                        <input
+                          type="password"
+                          value={form.anthropicApiKey}
+                          onInput={(e) => setForm('anthropicApiKey', e.currentTarget.value)}
+                          placeholder={settings()?.anthropic_configured ? '••••••••••• (configured)' : 'sk-ant-...'}
+                          class={controlClass()}
+                          disabled={saving()}
+                        />
+                        <div class="flex items-center justify-between">
+                          <p class="text-xs text-gray-500">
+                            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
+                          </p>
+                          <Show when={settings()?.anthropic_configured}>
+                            <div class="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleTestProvider('anthropic')}
+                                disabled={testingProvider() === 'anthropic' || saving()}
+                                class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                              >
+                                {testingProvider() === 'anthropic' ? 'Testing...' : 'Test'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleClearProvider('anthropic')}
+                                disabled={saving()}
+                                class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                                title="Clear API key"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </Show>
+                        </div>
+                        <Show when={providerTestResult()?.provider === 'anthropic'}>
+                          <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
+                            {providerTestResult()?.message}
+                          </p>
+                        </Show>
+                      </div>
+                    </Show>
+                  </div>
+
+                  {/* OpenAI */}
+                  <div class={`border rounded-lg overflow-hidden ${settings()?.openai_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                    <button
+                      type="button"
+                      class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      onClick={() => {
+                        const current = expandedProviders();
+                        const next = new Set(current);
+                        if (next.has('openai')) next.delete('openai');
+                        else next.add('openai');
+                        setExpandedProviders(next);
+                      }}
+                    >
+                      <div class="flex items-center gap-2">
+                        <span class="font-medium text-sm">OpenAI</span>
+                        <Show when={settings()?.openai_configured}>
+                          <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
+                        </Show>
+                      </div>
+                      <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('openai') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <Show when={expandedProviders().has('openai')}>
+                      <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                        <input
+                          type="password"
+                          value={form.openaiApiKey}
+                          onInput={(e) => setForm('openaiApiKey', e.currentTarget.value)}
+                          placeholder={settings()?.openai_configured ? '••••••••••• (configured)' : 'sk-...'}
+                          class={controlClass()}
+                          disabled={saving()}
+                        />
+                        <input
+                          type="url"
+                          value={form.openaiBaseUrl}
+                          onInput={(e) => setForm('openaiBaseUrl', e.currentTarget.value)}
+                          placeholder="Custom base URL (optional, for Azure OpenAI)"
+                          class={controlClass()}
+                          disabled={saving()}
+                        />
+                        <div class="flex items-center justify-between">
+                          <p class="text-xs text-gray-500">
+                            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
+                          </p>
+                          <Show when={settings()?.openai_configured}>
+                            <div class="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleTestProvider('openai')}
+                                disabled={testingProvider() === 'openai' || saving()}
+                                class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                              >
+                                {testingProvider() === 'openai' ? 'Testing...' : 'Test'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleClearProvider('openai')}
+                                disabled={saving()}
+                                class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                                title="Clear API key"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </Show>
+                        </div>
+                        <Show when={providerTestResult()?.provider === 'openai'}>
+                          <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
+                            {providerTestResult()?.message}
+                          </p>
+                        </Show>
+                      </div>
+                    </Show>
+                  </div>
+
+                  {/* DeepSeek */}
+                  <div class={`border rounded-lg overflow-hidden ${settings()?.deepseek_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                    <button
+                      type="button"
+                      class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      onClick={() => {
+                        const current = expandedProviders();
+                        const next = new Set(current);
+                        if (next.has('deepseek')) next.delete('deepseek');
+                        else next.add('deepseek');
+                        setExpandedProviders(next);
+                      }}
+                    >
+                      <div class="flex items-center gap-2">
+                        <span class="font-medium text-sm">DeepSeek</span>
+                        <Show when={settings()?.deepseek_configured}>
+                          <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
+                        </Show>
+                      </div>
+                      <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('deepseek') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <Show when={expandedProviders().has('deepseek')}>
+                      <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                        <input
+                          type="password"
+                          value={form.deepseekApiKey}
+                          onInput={(e) => setForm('deepseekApiKey', e.currentTarget.value)}
+                          placeholder={settings()?.deepseek_configured ? '••••••••••• (configured)' : 'sk-...'}
+                          class={controlClass()}
+                          disabled={saving()}
+                        />
+                        <div class="flex items-center justify-between">
+                          <p class="text-xs text-gray-500">
+                            <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
+                          </p>
+                          <Show when={settings()?.deepseek_configured}>
+                            <div class="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleTestProvider('deepseek')}
+                                disabled={testingProvider() === 'deepseek' || saving()}
+                                class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                              >
+                                {testingProvider() === 'deepseek' ? 'Testing...' : 'Test'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleClearProvider('deepseek')}
+                                disabled={saving()}
+                                class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                                title="Clear API key"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </Show>
+                        </div>
+                        <Show when={providerTestResult()?.provider === 'deepseek'}>
+                          <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
+                            {providerTestResult()?.message}
+                          </p>
+                        </Show>
+                      </div>
+                    </Show>
+                  </div>
+
+                  {/* Ollama */}
+                  <div class={`border rounded-lg overflow-hidden ${settings()?.ollama_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                    <button
+                      type="button"
+                      class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      onClick={() => {
+                        const current = expandedProviders();
+                        const next = new Set(current);
+                        if (next.has('ollama')) next.delete('ollama');
+                        else next.add('ollama');
+                        setExpandedProviders(next);
+                      }}
+                    >
+                      <div class="flex items-center gap-2">
+                        <span class="font-medium text-sm">Ollama</span>
+                        <Show when={settings()?.ollama_configured}>
+                          <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Available</span>
+                        </Show>
+                      </div>
+                      <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('ollama') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <Show when={expandedProviders().has('ollama')}>
+                      <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                        <input
+                          type="url"
+                          value={form.ollamaBaseUrl}
+                          onInput={(e) => setForm('ollamaBaseUrl', e.currentTarget.value)}
+                          placeholder="http://localhost:11434"
+                          class={controlClass()}
+                          disabled={saving()}
+                        />
+                        <div class="flex items-center justify-between">
+                          <p class="text-xs text-gray-500">
+                            <a href="https://ollama.ai" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Learn about Ollama →</a>
+                            <span class="text-gray-400"> · Free & local</span>
+                          </p>
+                          <Show when={settings()?.ollama_configured}>
+                            <div class="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleTestProvider('ollama')}
+                                disabled={testingProvider() === 'ollama' || saving()}
+                                class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                              >
+                                {testingProvider() === 'ollama' ? 'Testing...' : 'Test'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleClearProvider('ollama')}
+                                disabled={saving()}
+                                class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                                title="Clear Ollama URL"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </Show>
+                        </div>
+                        <Show when={providerTestResult()?.provider === 'ollama'}>
+                          <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
+                            {providerTestResult()?.message}
+                          </p>
+                        </Show>
+                      </div>
+                    </Show>
+                  </div>
+                </div>
+              </div>
+
+              {/* Autonomous Mode */}
+              <div class={`${formField} p-4 rounded-lg border ${form.autonomousMode ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'}`}>
+                <div class="flex items-start justify-between gap-4">
+                  <div class="flex-1">
+                    <label class={`${labelClass()} flex items-center gap-2`}>
+                      Autonomous Mode
+                      <Show when={form.autonomousMode}>
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 rounded">
+                          ENABLED
+                        </span>
+                      </Show>
+                    </label>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      {form.autonomousMode
+                        ? 'AI will execute all commands without asking for approval. Only enable if you trust your configured model.'
+                        : 'AI will ask for approval before running commands that modify your system. Read-only commands (like df, ps, docker stats) run automatically.'}
+                    </p>
+                  </div>
+                  <Toggle
+                    checked={form.autonomousMode}
+                    onChange={(event) => setForm('autonomousMode', event.currentTarget.checked)}
+                    disabled={saving()}
+                  />
+                </div>
+              </div>
+
+              {/* AI Patrol & Efficiency Settings */}
+              <div class={`${formField} p-4 rounded-lg border bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800`}>
+                <div class="mb-3">
+                  <label class={`${labelClass()} flex items-center gap-2`}>
+                    <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    AI Patrol & Token Efficiency
+                  </label>
+                  <p class="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                    Configure how AI monitors your infrastructure. Balance between coverage and token usage.
+                  </p>
+                </div>
+
+                {/* Patrol Interval */}
+                <div class="space-y-3">
+                  <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Background Patrol Interval (minutes)
+                    </label>
+                    <div class="flex items-center gap-2">
+                      <input
+                        type="number"
+                        class={controlClass()}
+                        value={form.patrolIntervalMinutes}
+                        onInput={(e) => {
+                          const value = parseInt(e.currentTarget.value, 10);
+                          if (!isNaN(value)) {
+                            setForm('patrolIntervalMinutes', Math.max(0, value));
+                          }
+                        }}
+                        min={0}
+                        max={10080}
+                        step={15}
+                        disabled={saving()}
+                        style={{ width: '120px' }}
+                      />
+                      <span class="text-xs text-gray-500 dark:text-gray-400">
+                        {form.patrolIntervalMinutes === 0
+                          ? 'Disabled'
+                          : form.patrolIntervalMinutes >= 60
+                            ? `${Math.floor(form.patrolIntervalMinutes / 60)}h ${form.patrolIntervalMinutes % 60 > 0 ? `${form.patrolIntervalMinutes % 60}m` : ''}`
+                            : `${form.patrolIntervalMinutes}m`}
+                      </span>
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Set to 0 to disable scheduled patrol. Minimum 10 minutes when enabled.
+                    </p>
+                  </div>
+
+                  {/* Alert-Triggered Analysis Toggle */}
+                  <div class="flex items-start justify-between gap-4 pt-2">
+                    <div class="flex-1">
+                      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                        Alert-Triggered Analysis
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
+                          TOKEN EFFICIENT
+                        </span>
+                      </label>
+                      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        When enabled, AI automatically analyzes specific resources when alerts fire.
+                        Uses minimal tokens since it only analyzes affected resources.
+                      </p>
+                    </div>
+                    <Toggle
+                      checked={form.alertTriggeredAnalysis}
+                      onChange={(event) => setForm('alertTriggeredAnalysis', event.currentTarget.checked)}
+                      disabled={saving()}
+                    />
+                  </div>
+
+                  {/* Auto-Fix Mode Toggle */}
+                  <div class="flex items-start justify-between gap-4 pt-3 mt-3 border-t border-blue-200 dark:border-blue-800">
+                    <div class="flex-1">
+                      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                        Auto-Fix Mode
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded">
+                          ADVANCED
+                        </span>
+                      </label>
+                      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        When enabled, patrol can attempt automatic remediation of issues.
+                        When disabled (default), patrol only observes and reports - it won't make changes.
+                      </p>
+                    </div>
+                    <Toggle
+                      checked={form.patrolAutoFix}
+                      onChange={(event) => {
+                        // Can only enable if acknowledged
+                        if (event.currentTarget.checked && !autoFixAcknowledged()) {
+                          return; // Prevent enabling without acknowledgement
+                        }
+                        setForm('patrolAutoFix', event.currentTarget.checked);
+                      }}
+                      disabled={saving() || (!form.patrolAutoFix && !autoFixAcknowledged())}
+                    />
+                  </div>
+
+                  {/* Auto-Fix Warning & Acknowledgement - Simplified inline flow */}
+                  <Show when={!form.patrolAutoFix}>
+                    <div class="mt-3 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-200 dark:border-amber-800 rounded-xl">
+                      <div class="flex items-start gap-3">
+                        <div class="p-2 bg-amber-100 dark:bg-amber-800 rounded-lg flex-shrink-0">
+                          <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-2">Enable Auto-Fix Mode?</p>
+                          <div class="text-xs text-amber-700 dark:text-amber-300 space-y-1 mb-3">
+                            <div class="flex items-center gap-2">
+                              <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3" /></svg>
+                              <span>AI executes remediation commands <strong>without approval</strong></span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                              <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3" /></svg>
+                              <span>Actions may be <strong>irreversible</strong> (restarts, cache clears, etc.)</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                              <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3" /></svg>
+                              <span>Test in staging/dev environments first</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAutoFixAcknowledged(true);
+                              setForm('patrolAutoFix', true);
+                            }}
+                            disabled={saving()}
+                            class="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            I understand, enable Auto-Fix
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </Show>
+
+                  {/* Warning when enabled */}
+                  <Show when={form.patrolAutoFix}>
+                    <div class="mt-3 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+                      <div class="flex gap-2">
+                        <svg class="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <div class="text-xs text-red-800 dark:text-red-200">
+                          <p class="font-semibold">⚠️ Auto-Fix is ENABLED</p>
+                          <p class="mt-1">AI patrol will automatically attempt to fix issues without asking for approval. Review findings regularly.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Auto-Fix Model Selector - shown when auto-fix is enabled */}
+                    <div class="mt-3">
+                      <label class={labelClass()}>Auto-Fix Model (Remediation)</label>
+                      <Show when={availableModels().length > 0} fallback={
+                        <input
+                          type="text"
+                          value={form.autoFixModel}
+                          onInput={(e) => setForm('autoFixModel', e.currentTarget.value)}
+                          placeholder="Leave empty to use patrol model"
+                          class={controlClass()}
+                          disabled={saving()}
+                        />
+                      }>
+                        <select
+                          value={form.autoFixModel}
+                          onChange={(e) => setForm('autoFixModel', e.currentTarget.value)}
+                          class={controlClass()}
+                          disabled={saving()}
+                        >
+                          <option value="">Use patrol model ({form.patrolModel || form.model || 'not set'})</option>
+                          <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
+                            {([provider, models]) => (
+                              <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
+                                <For each={models}>
+                                  {(model) => (
+                                    <option value={model.id}>
+                                      {model.name || model.id.split(':').pop()}
+                                    </option>
+                                  )}
+                                </For>
+                              </optgroup>
+                            )}
+                          </For>
+                        </select>
+                      </Show>
+                      <p class={formHelpText}>
+                        Model for automatic remediation. Use a more capable model for better fix accuracy.
+                      </p>
+                    </div>
+                  </Show>
+                </div>
+              </div>
+
+              {/* AI Cost Controls - Prominent positioning */}
+              <div class={`${formField} p-4 rounded-lg border bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-emerald-200 dark:border-emerald-800`}>
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="p-2 bg-emerald-100 dark:bg-emerald-800 rounded-lg">
+                    <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div class="flex-1">
+                    <label class={`${labelClass()} flex items-center gap-2`}>
+                      AI Cost Controls
+                      <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-800 text-emerald-700 dark:text-emerald-300 rounded">RECOMMENDED</span>
+                    </label>
+                    <p class="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
+                      Set a budget alert for cross-provider cost tracking
+                    </p>
+                  </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div class="flex-shrink-0">
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      30-day budget (USD)
+                    </label>
+                    <div class="relative">
+                      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-sm">$</span>
+                      <input
+                        type="number"
+                        class="w-32 pl-7 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        value={form.costBudgetUSD30d}
+                        onInput={(e) => setForm('costBudgetUSD30d', e.currentTarget.value)}
+                        min={0}
+                        step={1}
+                        placeholder="0"
+                        disabled={saving()}
+                      />
+                    </div>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <Show when={parseFloat(form.costBudgetUSD30d) > 0}>
+                      <div class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                        <div class="flex items-center justify-between">
+                          <span>Daily equivalent</span>
+                          <span class="font-medium text-gray-900 dark:text-gray-100">${(parseFloat(form.costBudgetUSD30d) / 30).toFixed(2)}/day</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                          <span>Weekly equivalent</span>
+                          <span class="font-medium text-gray-900 dark:text-gray-100">${(parseFloat(form.costBudgetUSD30d) / 4.3).toFixed(2)}/week</span>
+                        </div>
+                      </div>
+                    </Show>
+                    <Show when={!form.costBudgetUSD30d || parseFloat(form.costBudgetUSD30d) === 0}>
+                      <div class="p-2 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded text-xs text-amber-700 dark:text-amber-300">
+                        💡 Set a budget to get proactive alerts before overspending
+                      </div>
+                    </Show>
+                  </div>
+                </div>
+                <p class="text-[10px] text-emerald-600 dark:text-emerald-400 mt-2">
+                  This is a cross-provider estimate. Provider dashboards are the source of truth for billing.
+                </p>
+              </div>
+
+
+            </div>
+
+            {/* Status indicator */}
+            <Show when={settings()}>
+              <div
+                class={`flex items-center gap-2 p-3 rounded-lg ${settings()?.configured
+                  ? 'bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+                  : 'bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200'
+                  }`}
               >
-                {testing() ? 'Testing...' : 'Test Connection'}
-              </button>
+                <div
+                  class={`w-2 h-2 rounded-full ${settings()?.configured ? 'bg-green-500' : 'bg-amber-500'
+                    }`}
+                />
+                <div class="flex-1">
+                  <span class="text-xs font-medium">
+                    {settings()?.configured
+                      ? `Ready • ${settings()?.configured_providers?.length || 0} provider${(settings()?.configured_providers?.length || 0) !== 1 ? 's' : ''} • ${availableModels().length} models`
+                      : 'Configure at least one AI provider above to enable AI features'}
+                  </span>
+                  <Show when={settings()?.configured && settings()?.model}>
+                    <span class="text-xs opacity-75 ml-2">
+                      • Default: {settings()?.model?.split(':').pop() || settings()?.model}
+                    </span>
+                  </Show>
+                </div>
+              </div>
             </Show>
-            <div class="flex gap-3 ml-auto">
+
+            {/* Actions */}
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-4">
+              <Show when={settings()?.api_key_set || settings()?.oauth_connected}>
+                <button
+                  type="button"
+                  class="px-4 py-2 text-sm border border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300 rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleTest}
+                  disabled={testing() || saving() || loading()}
+                >
+                  {testing() ? 'Testing...' : 'Test Connection'}
+                </button>
+              </Show>
+              <div class="flex gap-3 ml-auto">
+                <button
+                  type="button"
+                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                  onClick={() => resetForm(settings())}
+                  disabled={saving() || loading()}
+                >
+                  Reset
+                </button>
+                <button
+                  type="submit"
+                  class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={saving() || loading()}
+                >
+                  {saving() ? 'Saving...' : 'Save changes'}
+                </button>
+              </div>
+            </div>
+          </Show>
+        </form>
+      </Card>
+
+      {/* First-time Setup Modal */}
+      <Show when={showSetupModal()}>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header */}
+            <div class="bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-4">
+              <h3 class="text-lg font-semibold text-white">Set Up AI Assistant</h3>
+              <p class="text-purple-100 text-sm mt-1">Choose a provider to get started</p>
+            </div>
+
+            {/* Provider Selection */}
+            <div class="p-6 space-y-4">
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSetupProvider('anthropic')}
+                  class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'anthropic'
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-purple-300'
+                    }`}
+                >
+                  <div class="text-sm font-medium">Anthropic</div>
+                  <div class="text-xs text-gray-500 mt-0.5">Claude</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSetupProvider('openai')}
+                  class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'openai'
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-purple-300'
+                    }`}
+                >
+                  <div class="text-sm font-medium">OpenAI</div>
+                  <div class="text-xs text-gray-500 mt-0.5">ChatGPT</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSetupProvider('deepseek')}
+                  class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'deepseek'
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-purple-300'
+                    }`}
+                >
+                  <div class="text-sm font-medium">DeepSeek</div>
+                  <div class="text-xs text-gray-500 mt-0.5">V3</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSetupProvider('ollama')}
+                  class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'ollama'
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-purple-300'
+                    }`}
+                >
+                  <div class="text-sm font-medium">Ollama</div>
+                  <div class="text-xs text-gray-500 mt-0.5">Local</div>
+                </button>
+              </div>
+
+              {/* API Key / URL Input */}
+              <Show when={setupProvider() === 'ollama'} fallback={
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    {setupProvider() === 'anthropic' ? 'Anthropic' : setupProvider() === 'openai' ? 'OpenAI' : 'DeepSeek'} API Key
+                  </label>
+                  <input
+                    type="password"
+                    value={setupApiKey()}
+                    onInput={(e) => setSetupApiKey(e.currentTarget.value)}
+                    placeholder={setupProvider() === 'anthropic' ? 'sk-ant-...' : 'sk-...'}
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                  <p class="text-xs text-gray-500 mt-1.5">
+                    <a
+                      href={setupProvider() === 'anthropic'
+                        ? 'https://console.anthropic.com/settings/keys'
+                        : setupProvider() === 'openai'
+                          ? 'https://platform.openai.com/api-keys'
+                          : 'https://platform.deepseek.com/api_keys'
+                      }
+                      target="_blank"
+                      rel="noopener"
+                      class="text-purple-600 hover:underline"
+                    >
+                      Get your API key →
+                    </a>
+                  </p>
+                </div>
+              }>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Ollama Server URL
+                  </label>
+                  <input
+                    type="url"
+                    value={setupOllamaUrl()}
+                    onInput={(e) => setSetupOllamaUrl(e.currentTarget.value)}
+                    placeholder="http://localhost:11434"
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                  <p class="text-xs text-gray-500 mt-1.5">
+                    Ollama runs locally - no API key needed
+                  </p>
+                </div>
+              </Show>
+            </div>
+
+            {/* Footer */}
+            <div class="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
               <button
                 type="button"
-                class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-                onClick={() => resetForm(settings())}
-                disabled={saving() || loading()}
+                onClick={() => {
+                  setShowSetupModal(false);
+                  setSetupApiKey('');
+                }}
+                class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                disabled={setupSaving()}
               >
-                Reset
+                Cancel
               </button>
               <button
-                type="submit"
-                class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={saving() || loading()}
+                type="button"
+                onClick={async () => {
+                  setSetupSaving(true);
+                  try {
+                    const payload: Record<string, unknown> = { enabled: true };
+
+                    if (setupProvider() === 'anthropic') {
+                      if (!setupApiKey().trim()) {
+                        notificationStore.error('Please enter your Anthropic API key');
+                        return;
+                      }
+                      payload.anthropic_api_key = setupApiKey().trim();
+                      payload.model = 'anthropic:claude-sonnet-4-20250514';
+                    } else if (setupProvider() === 'openai') {
+                      if (!setupApiKey().trim()) {
+                        notificationStore.error('Please enter your OpenAI API key');
+                        return;
+                      }
+                      payload.openai_api_key = setupApiKey().trim();
+                      payload.model = 'openai:gpt-4o';
+                    } else if (setupProvider() === 'deepseek') {
+                      if (!setupApiKey().trim()) {
+                        notificationStore.error('Please enter your DeepSeek API key');
+                        return;
+                      }
+                      payload.deepseek_api_key = setupApiKey().trim();
+                      payload.model = 'deepseek:deepseek-chat';
+                    } else {
+                      if (!setupOllamaUrl().trim()) {
+                        notificationStore.error('Please enter your Ollama server URL');
+                        return;
+                      }
+                      payload.ollama_base_url = setupOllamaUrl().trim();
+                      payload.model = 'ollama:llama3.2:latest';
+                    }
+
+                    const updated = await AIAPI.updateSettings(payload);
+                    setSettings(updated);
+                    setForm('enabled', true);
+                    resetForm(updated);
+                    setShowSetupModal(false);
+                    setSetupApiKey('');
+                    notificationStore.success('AI Assistant enabled! You can customize settings below.');
+                    // Load models after setup
+                    loadModels();
+                  } catch (error) {
+                    logger.error('[AISettings] Setup failed:', error);
+                    const message = error instanceof Error ? error.message : 'Setup failed';
+                    notificationStore.error(message);
+                  } finally {
+                    setSetupSaving(false);
+                  }
+                }}
+                class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+                disabled={setupSaving() || (setupProvider() !== 'ollama' && !setupApiKey().trim()) || (setupProvider() === 'ollama' && !setupOllamaUrl().trim())}
               >
-                {saving() ? 'Saving...' : 'Save changes'}
+                {setupSaving() && <span class="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                Enable AI
               </button>
             </div>
           </div>
-        </Show>
-      </form>
-    </Card>
+        </div>
+      </Show>
+    </>
   );
 };
 
