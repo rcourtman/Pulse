@@ -95,11 +95,6 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
       });
 
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          throw new Error(
-            'Pulse detected a legacy DISABLE_AUTH flag. Remove that environment flag and restart Pulse before enabling security here.',
-          );
-        }
         const error = await response.text();
         throw new Error(error || 'Failed to setup security');
       }
@@ -111,7 +106,7 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
         // Security was already configured, don't show credentials
         showError(
           result.message ||
-            'Security is already configured. Please remove existing security first if you want to reconfigure.',
+          'Security is already configured. Please remove existing security first if you want to reconfigure.',
         );
         if (props.onConfigured) {
           props.onConfigured();
@@ -232,22 +227,20 @@ Important:
                 <button
                   type="button"
                   onClick={() => setUseCustomPassword(false)}
-                  class={`px-3 py-1 text-xs rounded-lg transition-colors ${
-                    !useCustomPassword()
+                  class={`px-3 py-1 text-xs rounded-lg transition-colors ${!useCustomPassword()
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                  }`}
+                    }`}
                 >
                   Auto-Generate
                 </button>
                 <button
                   type="button"
                   onClick={() => setUseCustomPassword(true)}
-                  class={`px-3 py-1 text-xs rounded-lg transition-colors ${
-                    useCustomPassword()
+                  class={`px-3 py-1 text-xs rounded-lg transition-colors ${useCustomPassword()
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                  }`}
+                    }`}
                 >
                   Custom
                 </button>
