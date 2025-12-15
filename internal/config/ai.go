@@ -286,6 +286,24 @@ func (c *AIConfig) GetModel() string {
 	if c.Model != "" {
 		return c.Model
 	}
+
+	// If only one provider is configured, use its default model
+	// This handles the case where user configures Ollama but doesn't explicitly select a model
+	configured := c.GetConfiguredProviders()
+	if len(configured) == 1 {
+		switch configured[0] {
+		case AIProviderAnthropic:
+			return DefaultAIModelAnthropic
+		case AIProviderOpenAI:
+			return DefaultAIModelOpenAI
+		case AIProviderOllama:
+			return DefaultAIModelOllama
+		case AIProviderDeepSeek:
+			return DefaultAIModelDeepSeek
+		}
+	}
+
+	// Fall back to legacy Provider field for backwards compatibility
 	switch c.Provider {
 	case AIProviderAnthropic:
 		return DefaultAIModelAnthropic
