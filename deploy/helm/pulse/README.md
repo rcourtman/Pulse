@@ -1,6 +1,6 @@
 # pulse
 
-![Version: 4.31.0](https://img.shields.io/badge/Version-4.31.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 4.31.0](https://img.shields.io/badge/AppVersion-4.31.0-informational?style=flat-square)
+![Version: 4.33.0](https://img.shields.io/badge/Version-4.33.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 4.33.0](https://img.shields.io/badge/AppVersion-4.33.0-informational?style=flat-square)
 
 Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
 
@@ -33,14 +33,27 @@ Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
 | agent.extraEnvFrom | list | `[]` |  |
 | agent.extraVolumeMounts | list | `[]` |  |
 | agent.extraVolumes | list | `[]` |  |
+| agent.healthPort | int | `9191` |  |
 | agent.image.pullPolicy | string | `"IfNotPresent"` |  |
 | agent.image.repository | string | `"ghcr.io/rcourtman/pulse-docker-agent"` |  |
 | agent.image.tag | string | `""` |  |
 | agent.kind | string | `"DaemonSet"` |  |
+| agent.livenessProbe.enabled | bool | `true` |  |
+| agent.livenessProbe.failureThreshold | int | `3` |  |
+| agent.livenessProbe.initialDelaySeconds | int | `5` |  |
+| agent.livenessProbe.path | string | `"/healthz"` |  |
+| agent.livenessProbe.periodSeconds | int | `10` |  |
+| agent.livenessProbe.timeoutSeconds | int | `3` |  |
 | agent.nodeSelector | object | `{}` |  |
 | agent.podAnnotations | object | `{}` |  |
 | agent.podLabels | object | `{}` |  |
 | agent.podSecurityContext | object | `{}` |  |
+| agent.readinessProbe.enabled | bool | `true` |  |
+| agent.readinessProbe.failureThreshold | int | `3` |  |
+| agent.readinessProbe.initialDelaySeconds | int | `5` |  |
+| agent.readinessProbe.path | string | `"/readyz"` |  |
+| agent.readinessProbe.periodSeconds | int | `5` |  |
+| agent.readinessProbe.timeoutSeconds | int | `3` |  |
 | agent.replicaCount | int | `1` |  |
 | agent.resources | object | `{}` |  |
 | agent.secretEnv.create | bool | `false` |  |
