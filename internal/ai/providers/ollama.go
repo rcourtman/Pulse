@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -22,6 +23,11 @@ func NewOllamaClient(model, baseURL string) *OllamaClient {
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
 	}
+	// Normalize the URL: strip trailing slashes and /api suffix
+	// Users sometimes enter http://host:11434/ or http://host:11434/api
+	baseURL = strings.TrimSuffix(baseURL, "/")
+	baseURL = strings.TrimSuffix(baseURL, "/api")
+	baseURL = strings.TrimSuffix(baseURL, "/") // In case it was /api/
 	return &OllamaClient{
 		model:   model,
 		baseURL: baseURL,
