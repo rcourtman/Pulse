@@ -1422,6 +1422,8 @@ except json.JSONDecodeError:
     sys.exit(1)
 
 for release in releases:
+    if release.get("prerelease"):
+        continue
     tag_name = (release.get("tag_name") or "").strip()
     if not tag_name or tag_name.startswith("helm-chart"):
         continue
@@ -1438,7 +1440,8 @@ sys.exit(0)
         fi
 
         if [[ -z "$tag" ]]; then
-            tag=$(printf '%s\n' "$response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | grep -Ev '^helm-chart-' | head -n 1 || true)
+            # Fallback: use grep-based parsing, filtering out helm-chart and common prerelease patterns
+            tag=$(printf '%s\n' "$response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | grep -Ev '^helm-chart-|-rc\.|-(alpha|beta|rc)[0-9]*$' | head -n 1 || true)
         fi
 
         if [[ -n "$tag" ]]; then
