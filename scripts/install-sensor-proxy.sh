@@ -3427,7 +3427,7 @@ EOF"
     fi
 fi  # End of container-specific configuration
 
-if [[ "$SKIP_SELF_HEAL_SETUP" == "true" ]]; then
+if [[ "$SKIP_SELF_HEAL_SETUP" == "true" || "$SKIP_SELF_HEAL_SETUP" == "1" ]]; then
     print_info "Skipping self-heal safeguards during self-heal run"
 else
     # Install self-heal safeguards to keep proxy available
