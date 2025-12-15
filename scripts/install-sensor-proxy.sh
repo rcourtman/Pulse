@@ -3212,16 +3212,17 @@ if [[ "$STANDALONE" == false && "$CONTAINER_ON_THIS_NODE" == true ]]; then
     mkdir -p "$HOST_SOCKET_SOURCE"
 
     # Back up container config before modifying
+    # Use timeout since /etc/pve is a FUSE filesystem that can hang
     LXC_CONFIG_BACKUP=$(mktemp)
-    cp "$LXC_CONFIG" "$LXC_CONFIG_BACKUP" 2>/dev/null || {
-        print_warn "Could not back up container config (may not exist yet)"
+    if ! timeout 10 cp "$LXC_CONFIG" "$LXC_CONFIG_BACKUP" 2>/dev/null; then
+        print_warn "Could not back up container config (may not exist yet or pmxcfs slow)"
         LXC_CONFIG_BACKUP=""
-    }
+    fi
 
     MOUNT_UPDATED=false
     CT_RUNNING=false
     SKIP_CONTAINER_POST_STEPS=false
-    if pct status "$CTID" 2>/dev/null | grep -q "running"; then
+    if timeout 5 pct status "$CTID" 2>/dev/null | grep -q "running"; then
         CT_RUNNING=true
     fi
 
@@ -3288,11 +3289,11 @@ if [[ "$STANDALONE" == false && "$CONTAINER_ON_THIS_NODE" == true ]]; then
     fi
     rm -f "$TEMP_CONFIG"
 
-    if ! pct config "$CTID" | grep -qxF "$LOCAL_MOUNT_ENTRY"; then
+    if ! timeout 10 pct config "$CTID" 2>/dev/null | grep -qxF "$LOCAL_MOUNT_ENTRY"; then
         print_error "Failed to persist migration-safe socket mount in container config"
         if [ -n "$LXC_CONFIG_BACKUP" ] && [ -f "$LXC_CONFIG_BACKUP" ]; then
             print_warn "Rolling back container configuration changes..."
-            cp "$LXC_CONFIG_BACKUP" "$LXC_CONFIG"
+            timeout 10 cp "$LXC_CONFIG_BACKUP" "$LXC_CONFIG" 2>/dev/null || true
             rm -f "$LXC_CONFIG_BACKUP"
         fi
         exit 1
