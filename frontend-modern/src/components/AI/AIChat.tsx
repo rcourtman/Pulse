@@ -557,6 +557,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   };
                   // Add to both toolCalls and streamEvents for chronological display
                   const events = msg.streamEvents || [];
+
+                  // Emit event for metadata refresh if AI set a resource URL
+                  if (data.name === 'set_resource_url' && data.success) {
+                    window.dispatchEvent(new CustomEvent('pulse:metadata-changed', {
+                      detail: { source: 'ai', tool: data.name }
+                    }));
+                  }
+
                   return {
                     ...msg,
                     pendingTools: updatedPending,
@@ -748,11 +756,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
           };
 
           const remainingApprovals = m.pendingApprovals?.filter((a) => a.toolId !== approval.toolId) || [];
+          const existingEvents = m.streamEvents || [];
 
           return {
             ...m,
             pendingApprovals: remainingApprovals,
             toolCalls: [...(m.toolCalls || []), newToolCall],
+            // Also add to streamEvents so it appears in the chronological view
+            streamEvents: [...existingEvents, { type: 'tool' as const, tool: newToolCall }],
             // Clear the stale "I need approval" content after the last approval is processed
             // The tool output will show the result instead
             content: remainingApprovals.length === 0 ? '' : m.content,

@@ -290,15 +290,31 @@ export function Dashboard(props: DashboardProps) {
   // Total columns for colspan calculations
   const totalColumns = createMemo(() => visibleColumns().length);
 
-  // Load all guest metadata on mount (single API call for all guests)
-  onMount(async () => {
+  // Helper function to refresh guest metadata from server
+  const refreshGuestMetadata = async () => {
     try {
       const metadata = await GuestMetadataAPI.getAllMetadata();
       updateGuestMetadataState(() => metadata || {});
+      logger.debug('Guest metadata refreshed');
     } catch (err) {
-      // Silently fail - metadata is optional for display
-      logger.debug('Failed to load guest metadata', err);
+      logger.debug('Failed to refresh guest metadata', err);
     }
+  };
+
+  // Load all guest metadata on mount (single API call for all guests)
+  onMount(async () => {
+    await refreshGuestMetadata();
+  });
+
+  // Listen for metadata changes from AI or other sources
+  createEffect(() => {
+    const handleMetadataChanged = () => {
+      logger.debug('Metadata changed event received, refreshing...');
+      refreshGuestMetadata();
+    };
+
+    window.addEventListener('pulse:metadata-changed', handleMetadataChanged);
+    return () => window.removeEventListener('pulse:metadata-changed', handleMetadataChanged);
   });
 
   // Callback to update a guest's custom URL in metadata
