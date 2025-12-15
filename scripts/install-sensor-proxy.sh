@@ -3586,9 +3586,10 @@ EOF
     systemctl enable --now pulse-sensor-proxy-selfheal.timer >/dev/null 2>&1 || true
     if [[ -f "$PENDING_CONTROL_PLANE_FILE" ]]; then
         if [[ "$QUIET" != true ]]; then
-            print_info "Pending control-plane sync detected; triggering immediate retry..."
+            print_info "Pending control-plane sync detected; will retry in background..."
         fi
-        systemctl start pulse-sensor-proxy-selfheal.service >/dev/null 2>&1 || true
+        # Use --no-block to avoid hanging the installer if sync takes a long time
+        systemctl start --no-block pulse-sensor-proxy-selfheal.service >/dev/null 2>&1 || true
     fi
 fi
 
