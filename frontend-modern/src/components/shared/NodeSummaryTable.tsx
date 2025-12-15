@@ -581,23 +581,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         </div>
                       </Show>
                       <div class="hidden md:block h-4">
-                        <Show when={isPVEItem} fallback={
-                          <ResponsiveMetricCell
-                            value={cpuPercentValue}
-                            type="cpu"
-                            resourceId={metricsKey}
-                            isRunning={online}
-                            showMobile={false}
-                          />
-                        }>
-                          <EnhancedCPUBar
-                            usage={cpuPercentValue}
-                            loadAverage={node!.loadAverage?.[0]}
-                            cores={node!.cpuInfo?.cores}
-                            model={node!.cpuInfo?.model}
-                            resourceId={metricsKey}
-                          />
-                        </Show>
+                        <EnhancedCPUBar
+                          usage={cpuPercentValue}
+                          loadAverage={isPVEItem ? node!.loadAverage?.[0] : undefined}
+                          cores={isPVEItem ? node!.cpuInfo?.cores : undefined}
+                          model={isPVEItem ? node!.cpuInfo?.model : undefined}
+                          resourceId={metricsKey}
+                        />
                       </div>
                     </td>
 
