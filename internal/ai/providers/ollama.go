@@ -98,6 +98,10 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	if model == "" {
 		model = c.model
 	}
+	// Ultimate fallback - if no model configured anywhere, use llama3
+	if model == "" {
+		model = "llama3"
+	}
 
 	ollamaReq := ollamaRequest{
 		Model:    model,
