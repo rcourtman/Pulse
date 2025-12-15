@@ -839,6 +839,20 @@ fi
 if [[ "$TRUENAS" == true ]]; then
     log_info "Configuring TrueNAS SCALE installation..."
 
+    # Stop any existing agent before we modify binaries
+    # The runtime binary may be in /root/bin or /var/tmp, not just INSTALL_DIR
+    if systemctl is-active --quiet "${AGENT_NAME}" 2>/dev/null; then
+        log_info "Stopping existing ${AGENT_NAME} service..."
+        systemctl stop "${AGENT_NAME}" 2>/dev/null || true
+        sleep 2
+    fi
+    # Kill any remaining pulse-agent processes (may be running from different paths)
+    pkill -9 -f "pulse-agent" 2>/dev/null || true
+    sleep 1
+    # Remove old runtime binaries that may be "text file busy"
+    rm -f /root/bin/pulse-agent 2>/dev/null || true
+    rm -f /var/tmp/pulse-agent 2>/dev/null || true
+
     # Create directories
     mkdir -p "$TRUENAS_STATE_DIR"
     mkdir -p "$TRUENAS_LOG_DIR"
