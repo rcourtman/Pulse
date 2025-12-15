@@ -431,6 +431,10 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 	}
 
 	model := req.Model
+	// Strip provider prefix if present - callers may pass the full "provider:model" string
+	if len(model) > 10 && model[:10] == "anthropic:" {
+		model = model[10:]
+	}
 	if model == "" {
 		model = c.model
 	}

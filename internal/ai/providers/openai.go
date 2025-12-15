@@ -28,10 +28,17 @@ type OpenAIClient struct {
 	client  *http.Client
 }
 
+
 // NewOpenAIClient creates a new OpenAI API client
 func NewOpenAIClient(apiKey, model, baseURL string) *OpenAIClient {
 	if baseURL == "" {
 		baseURL = openaiAPIURL
+	}
+	// Strip provider prefix if present - the model should be just the model name
+	if strings.HasPrefix(model, "openai:") {
+		model = strings.TrimPrefix(model, "openai:")
+	} else if strings.HasPrefix(model, "deepseek:") {
+		model = strings.TrimPrefix(model, "deepseek:")
 	}
 	return &OpenAIClient{
 		apiKey:  apiKey,
@@ -205,9 +212,18 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 
 	// Use provided model or fall back to client default
 	model := req.Model
+	// Strip provider prefix if present - callers may pass the full "provider:model" string
+	if strings.HasPrefix(model, "openai:") {
+		model = strings.TrimPrefix(model, "openai:")
+	} else if strings.HasPrefix(model, "deepseek:") {
+		model = strings.TrimPrefix(model, "deepseek:")
+	}
 	if model == "" {
 		model = c.model
 	}
+
+	// Debug log to trace model issues
+	log.Debug().Str("model", model).Str("req_model", req.Model).Str("c_model", c.model).Str("base_url", c.baseURL).Msg("OpenAI/DeepSeek Chat request")
 
 	// Build request
 	openaiReq := openaiRequest{
@@ -244,6 +260,9 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			openaiReq.ToolChoice = "auto"
 		}
 	}
+
+	// Log actual model being sent (INFO level for visibility)
+	log.Info().Str("model_in_request", openaiReq.Model).Str("base_url", c.baseURL).Msg("Sending OpenAI/DeepSeek request")
 
 	body, err := json.Marshal(openaiReq)
 	if err != nil {
