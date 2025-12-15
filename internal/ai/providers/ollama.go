@@ -95,6 +95,10 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 
 	// Use provided model or fall back to client default
 	model := req.Model
+	// Strip "ollama:" prefix if present - callers may pass the full "provider:model" string
+	if strings.HasPrefix(model, "ollama:") {
+		model = strings.TrimPrefix(model, "ollama:")
+	}
 	if model == "" {
 		model = c.model
 	}
