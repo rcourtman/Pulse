@@ -297,8 +297,9 @@ export const AISettings: Component = () => {
       if (form.deepseekApiKey.trim()) {
         payload.deepseek_api_key = form.deepseekApiKey.trim();
       }
-      // Always include Ollama URL changes
-      if (form.ollamaBaseUrl !== (settings()?.ollama_base_url || 'http://localhost:11434')) {
+      // Always include Ollama URL if it has a value and differs from what's saved
+      // Compare against actual saved value (empty string if not set), not a prefilled default
+      if (form.ollamaBaseUrl.trim() && form.ollamaBaseUrl.trim() !== (settings()?.ollama_base_url || '')) {
         payload.ollama_base_url = form.ollamaBaseUrl.trim();
       }
       if (form.openaiBaseUrl !== (settings()?.openai_base_url || '')) {
@@ -454,7 +455,8 @@ export const AISettings: Component = () => {
                 // Revert on failure
                 setForm('enabled', !newValue);
                 logger.error('[AISettings] Failed to toggle AI:', error);
-                notificationStore.error('Failed to update AI setting');
+                const message = error instanceof Error ? error.message : 'Failed to update AI setting';
+                notificationStore.error(message);
               }
             }}
             disabled={loading() || saving()}
