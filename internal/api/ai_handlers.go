@@ -360,20 +360,28 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 
 	if req.Enabled != nil {
-		// Only allow enabling if properly configured
+		// Only allow enabling if at least one provider is configured
 		if *req.Enabled {
-			switch settings.Provider {
-			case config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderDeepSeek:
-				if settings.APIKey == "" {
-					http.Error(w, "Cannot enable AI: API key is required for "+settings.Provider, http.StatusBadRequest)
+			configuredProviders := settings.GetConfiguredProviders()
+			if len(configuredProviders) == 0 {
+				// Fall back to legacy validation for backwards compatibility
+				switch settings.Provider {
+				case config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderDeepSeek:
+					if settings.APIKey == "" {
+						http.Error(w, "Cannot enable AI: configure at least one AI provider first", http.StatusBadRequest)
+						return
+					}
+				case config.AIProviderOllama:
+					// Ollama doesn't need API key, but needs base URL (or will use default)
+					if settings.BaseURL == "" {
+						settings.BaseURL = config.DefaultOllamaBaseURL
+					}
+				default:
+					http.Error(w, "Cannot enable AI: configure at least one AI provider first", http.StatusBadRequest)
 					return
 				}
-			case config.AIProviderOllama:
-				// Ollama doesn't need API key, but needs base URL (or will use default)
-				if settings.BaseURL == "" {
-					settings.BaseURL = config.DefaultOllamaBaseURL
-				}
 			}
+			// If we have configured providers, we're good to enable
 		}
 		settings.Enabled = *req.Enabled
 	}
