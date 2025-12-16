@@ -1543,22 +1543,9 @@ sys.exit(0)
         fi
     fi
 
-    if [[ "$DOWNLOAD_SUCCESS" != true ]] && [[ -n "$CTID" ]] && command -v pct >/dev/null 2>&1; then
-        pull_targets=(
-            "/opt/pulse/bin/${BINARY_NAME}"
-            "/opt/pulse/bin/pulse-sensor-proxy"
-        )
-        for src in "${pull_targets[@]}"; do
-            tmp_pull=$(mktemp)
-            if pct pull "$CTID" "$src" "$tmp_pull" >/dev/null 2>&1; then
-                mv "$tmp_pull" "$BINARY_PATH.tmp"
-                print_info "Copied pulse-sensor-proxy binary from container $CTID ($src)"
-                DOWNLOAD_SUCCESS=true
-                break
-            fi
-            rm -f "$tmp_pull"
-        done
-    fi
+    # NOTE: Previous versions attempted pct pull from container paths like
+    # /opt/pulse/bin/pulse-sensor-proxy-linux-amd64, but these paths don't exist
+    # in Pulse containers. Removed to prevent spurious PVE task errors (#817).
 
     if [[ "$DOWNLOAD_SUCCESS" != true ]]; then
         print_error "Unable to download pulse-sensor-proxy binary."
