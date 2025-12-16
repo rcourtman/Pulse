@@ -38,8 +38,8 @@ func (h *AlertHandlers) SetMonitor(m *monitoring.Monitor) {
 }
 
 // validateAlertID validates an alert ID for security.
-// Alert IDs should be alphanumeric with limited punctuation (hyphens, underscores, colons, periods).
-// This prevents issues with logging, URL encoding, and potential injection attacks.
+// Alert IDs may contain user-supplied data (e.g., Docker hostnames), so we allow
+// printable ASCII characters while blocking control characters and path traversal.
 func validateAlertID(alertID string) bool {
 	// Guard against empty strings or extremely large payloads that could impact memory usage.
 	if len(alertID) == 0 || len(alertID) > 500 {
@@ -51,15 +51,11 @@ func validateAlertID(alertID string) bool {
 		return false
 	}
 
-	// Allow alphanumeric characters and safe punctuation commonly used in IDs.
-	// Restrict to a safe character set to avoid issues with logging, URLs, and shell escaping.
+	// Allow printable ASCII characters (32-126) to support user-supplied identifiers
+	// like Docker hostnames that may contain parentheses, brackets, etc.
+	// Reject control characters (0-31) and DEL (127) which could cause logging issues.
 	for _, r := range alertID {
-		isAlphanumeric := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
-		isSafePunctuation := r == '-' || r == '_' || r == ':' || r == '.' || r == '/' || r == '@'
-		// Allow spaces for backward compatibility with existing alert IDs that include instance names
-		isSpace := r == ' '
-
-		if !isAlphanumeric && !isSafePunctuation && !isSpace {
+		if r < 32 || r > 126 {
 			return false
 		}
 	}
