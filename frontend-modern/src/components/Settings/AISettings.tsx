@@ -3,7 +3,7 @@ import { createStore } from 'solid-js/store';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
-import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
+import { formField, labelClass, controlClass } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
@@ -78,6 +78,10 @@ export const AISettings: Component = () => {
   const [setupApiKey, setSetupApiKey] = createSignal('');
   const [setupOllamaUrl, setSetupOllamaUrl] = createSignal('http://localhost:11434');
   const [setupSaving, setSetupSaving] = createSignal(false);
+
+  // UI state for collapsible sections - START COLLAPSED for compact view
+  const [showAdvancedModels, setShowAdvancedModels] = createSignal(false);
+  const [showPatrolSettings, setShowPatrolSettings] = createSignal(false);
 
   const [form, setForm] = createStore({
     enabled: false,
@@ -492,16 +496,7 @@ export const AISettings: Component = () => {
           </div>
         </div>
 
-        <form class="p-6 space-y-5" onSubmit={handleSave}>
-          <div class="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-lg p-3 text-xs text-purple-800 dark:text-purple-200">
-            <p class="font-medium mb-1">AI Assistant helps you:</p>
-            <ul class="space-y-0.5 list-disc pl-4">
-              <li>Diagnose infrastructure issues with context-aware analysis</li>
-              <li>Get remediation suggestions based on your specific environment</li>
-              <li>Understand alerts and metrics with plain-language explanations</li>
-            </ul>
-          </div>
-
+        <form class="p-5 space-y-4" onSubmit={handleSave}>
           <Show when={loading()}>
             <div class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
               <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -511,7 +506,7 @@ export const AISettings: Component = () => {
 
           <Show when={!loading()}>
             <div class="space-y-4">
-              {/* Model Selection */}
+              {/* Default Model Selection - Always visible */}
               <div class={formField}>
                 <div class="flex items-center justify-between mb-1">
                   <label class={labelClass()}>
@@ -528,7 +523,7 @@ export const AISettings: Component = () => {
                     <svg class={`w-3 h-3 ${modelsLoading() ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    Refresh Models
+                    Refresh
                   </button>
                 </div>
                 <Show when={availableModels().length > 0} fallback={
@@ -565,89 +560,107 @@ export const AISettings: Component = () => {
                     </For>
                   </select>
                 </Show>
-                <p class={formHelpText}>
-                  Main model used when no specific override is set. {availableModels().length === 0 && 'Save API key and refresh to see available models.'}
-                </p>
               </div>
 
-              {/* Chat Model Override */}
-              <div class={formField}>
-                <label class={labelClass()}>Chat Model (Interactive)</label>
-                <Show when={availableModels().length > 0} fallback={
-                  <input
-                    type="text"
-                    value={form.chatModel}
-                    onInput={(e) => setForm('chatModel', e.currentTarget.value)}
-                    placeholder="Leave empty to use default model"
-                    class={controlClass()}
-                    disabled={saving()}
-                  />
-                }>
-                  <select
-                    value={form.chatModel}
-                    onChange={(e) => setForm('chatModel', e.currentTarget.value)}
-                    class={controlClass()}
-                    disabled={saving()}
-                  >
-                    <option value="">Use default model ({form.model || 'not set'})</option>
-                    <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
-                      {([provider, models]) => (
-                        <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
-                          <For each={models}>
-                            {(model) => (
-                              <option value={model.id}>
-                                {model.name || model.id.split(':').pop()}
-                              </option>
+              {/* Advanced Model Selection - Collapsible */}
+              <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  class="w-full px-3 py-2 flex items-center justify-between bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors text-left"
+                  onClick={() => setShowAdvancedModels(!showAdvancedModels())}
+                >
+                  <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                    </svg>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Advanced Model Selection</span>
+                    <Show when={form.chatModel || form.patrolModel}>
+                      <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded">Customized</span>
+                    </Show>
+                  </div>
+                  <svg class={`w-4 h-4 text-gray-500 transition-transform ${showAdvancedModels() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <Show when={showAdvancedModels()}>
+                  <div class="px-3 py-3 bg-white dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                      Override the default model for specific tasks. Leave empty to use the default.
+                    </p>
+                    {/* Chat Model */}
+                    <div>
+                      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Chat Model (Interactive)</label>
+                      <Show when={availableModels().length > 0} fallback={
+                        <input
+                          type="text"
+                          value={form.chatModel}
+                          onInput={(e) => setForm('chatModel', e.currentTarget.value)}
+                          placeholder="Use default model"
+                          class={controlClass()}
+                          disabled={saving()}
+                        />
+                      }>
+                        <select
+                          value={form.chatModel}
+                          onChange={(e) => setForm('chatModel', e.currentTarget.value)}
+                          class={controlClass()}
+                          disabled={saving()}
+                        >
+                          <option value="">Use default ({form.model?.split(':').pop() || 'not set'})</option>
+                          <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
+                            {([provider, models]) => (
+                              <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
+                                <For each={models}>
+                                  {(model) => (
+                                    <option value={model.id}>
+                                      {model.name || model.id.split(':').pop()}
+                                    </option>
+                                  )}
+                                </For>
+                              </optgroup>
                             )}
                           </For>
-                        </optgroup>
-                      )}
-                    </For>
-                  </select>
-                </Show>
-                <p class={formHelpText}>
-                  Model for interactive AI chat. Use a more capable model for complex reasoning.
-                </p>
-              </div>
-
-              {/* Patrol Model Override */}
-              <div class={formField}>
-                <label class={labelClass()}>Patrol Model (Background)</label>
-                <Show when={availableModels().length > 0} fallback={
-                  <input
-                    type="text"
-                    value={form.patrolModel}
-                    onInput={(e) => setForm('patrolModel', e.currentTarget.value)}
-                    placeholder="Leave empty to use default model"
-                    class={controlClass()}
-                    disabled={saving()}
-                  />
-                }>
-                  <select
-                    value={form.patrolModel}
-                    onChange={(e) => setForm('patrolModel', e.currentTarget.value)}
-                    class={controlClass()}
-                    disabled={saving()}
-                  >
-                    <option value="">Use default model ({form.model || 'not set'})</option>
-                    <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
-                      {([provider, models]) => (
-                        <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
-                          <For each={models}>
-                            {(model) => (
-                              <option value={model.id}>
-                                {model.name || model.id.split(':').pop()}
-                              </option>
+                        </select>
+                      </Show>
+                    </div>
+                    {/* Patrol Model */}
+                    <div>
+                      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Patrol Model (Background)</label>
+                      <Show when={availableModels().length > 0} fallback={
+                        <input
+                          type="text"
+                          value={form.patrolModel}
+                          onInput={(e) => setForm('patrolModel', e.currentTarget.value)}
+                          placeholder="Use default model"
+                          class={controlClass()}
+                          disabled={saving()}
+                        />
+                      }>
+                        <select
+                          value={form.patrolModel}
+                          onChange={(e) => setForm('patrolModel', e.currentTarget.value)}
+                          class={controlClass()}
+                          disabled={saving()}
+                        >
+                          <option value="">Use default ({form.model?.split(':').pop() || 'not set'})</option>
+                          <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
+                            {([provider, models]) => (
+                              <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
+                                <For each={models}>
+                                  {(model) => (
+                                    <option value={model.id}>
+                                      {model.name || model.id.split(':').pop()}
+                                    </option>
+                                  )}
+                                </For>
+                              </optgroup>
                             )}
                           </For>
-                        </optgroup>
-                      )}
-                    </For>
-                  </select>
+                        </select>
+                      </Show>
+                    </div>
+                  </div>
                 </Show>
-                <p class={formHelpText}>
-                  Model for background patrol analysis. Use a cheaper/faster model to save tokens.
-                </p>
               </div>
 
               {/* AI Provider Configuration - Configure API keys for all providers */}
@@ -975,129 +988,81 @@ export const AISettings: Component = () => {
                 </div>
               </div>
 
-              {/* AI Patrol & Efficiency Settings */}
-              <div class={`${formField} p-4 rounded-lg border bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800`}>
-                <div class="mb-3">
-                  <label class={`${labelClass()} flex items-center gap-2`}>
+              {/* AI Patrol & Efficiency Settings - Collapsible */}
+              <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  class="w-full px-3 py-2 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-left"
+                  onClick={() => setShowPatrolSettings(!showPatrolSettings())}
+                >
+                  <div class="flex items-center gap-2">
                     <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                     </svg>
-                    AI Patrol & Token Efficiency
-                  </label>
-                  <p class="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                    Configure how AI monitors your infrastructure. Balance between coverage and token usage.
-                  </p>
-                </div>
-
-                {/* Patrol Interval */}
-                <div class="space-y-3">
-                  <div>
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Background Patrol Interval (minutes)
-                    </label>
-                    <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">AI Patrol Settings</span>
+                    {/* Summary badges */}
+                    <Show when={form.patrolIntervalMinutes > 0}>
+                      <span class="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
+                        {form.patrolIntervalMinutes >= 60 ? `${Math.floor(form.patrolIntervalMinutes / 60)}h` : `${form.patrolIntervalMinutes}m`}
+                      </span>
+                    </Show>
+                    <Show when={form.patrolAutoFix}>
+                      <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 dark:bg-amber-800 text-amber-700 dark:text-amber-300 rounded">Auto-Fix</span>
+                    </Show>
+                  </div>
+                  <svg class={`w-4 h-4 text-gray-500 transition-transform ${showPatrolSettings() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <Show when={showPatrolSettings()}>
+                  <div class="px-3 py-3 bg-white dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                    {/* Patrol Interval - Compact */}
+                    <div class="flex items-center gap-3">
+                      <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-32 flex-shrink-0">Patrol Interval</label>
                       <input
                         type="number"
-                        class={controlClass()}
+                        class="w-20 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
                         value={form.patrolIntervalMinutes}
                         onInput={(e) => {
                           const value = parseInt(e.currentTarget.value, 10);
-                          if (!isNaN(value)) {
-                            setForm('patrolIntervalMinutes', Math.max(0, value));
-                          }
+                          if (!isNaN(value)) setForm('patrolIntervalMinutes', Math.max(0, value));
                         }}
                         min={0}
                         max={10080}
                         step={15}
                         disabled={saving()}
-                        style={{ width: '120px' }}
                       />
-                      <span class="text-xs text-gray-500 dark:text-gray-400">
-                        {form.patrolIntervalMinutes === 0
-                          ? 'Disabled'
-                          : form.patrolIntervalMinutes >= 60
-                            ? `${Math.floor(form.patrolIntervalMinutes / 60)}h ${form.patrolIntervalMinutes % 60 > 0 ? `${form.patrolIntervalMinutes % 60}m` : ''}`
-                            : `${form.patrolIntervalMinutes}m`}
-                      </span>
+                      <span class="text-xs text-gray-500">min (0 = disabled)</span>
                     </div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Set to 0 to disable scheduled patrol. Minimum 10 minutes when enabled.
-                    </p>
-                  </div>
 
-                  {/* Alert-Triggered Analysis Toggle */}
-                  <div class="flex items-start justify-between gap-4 pt-2">
-                    <div class="flex-1">
-                      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    {/* Alert Analysis Toggle - Compact */}
+                    <div class="flex items-center justify-between gap-2">
+                      <label class="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
                         Alert-Triggered Analysis
-                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                          TOKEN EFFICIENT
-                        </span>
+                        <span class="px-1 py-0.5 text-[9px] font-medium bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Efficient</span>
                       </label>
-                      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        When enabled, AI automatically analyzes specific resources when alerts fire.
-                        Uses minimal tokens since it only analyzes affected resources.
-                      </p>
+                      <Toggle
+                        checked={form.alertTriggeredAnalysis}
+                        onChange={(event) => setForm('alertTriggeredAnalysis', event.currentTarget.checked)}
+                        disabled={saving()}
+                      />
                     </div>
-                    <Toggle
-                      checked={form.alertTriggeredAnalysis}
-                      onChange={(event) => setForm('alertTriggeredAnalysis', event.currentTarget.checked)}
-                      disabled={saving()}
-                    />
-                  </div>
 
-                  {/* Auto-Fix Mode Toggle */}
-                  <div class="flex items-start justify-between gap-4 pt-3 mt-3 border-t border-blue-200 dark:border-blue-800">
-                    <div class="flex-1">
-                      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                        Auto-Fix Mode
-                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded">
-                          ADVANCED
-                        </span>
-                      </label>
-                      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        When enabled, patrol can attempt automatic remediation of issues.
-                        When disabled (default), patrol only observes and reports - it won't make changes.
-                      </p>
-                    </div>
-                    <Toggle
-                      checked={form.patrolAutoFix}
-                      onChange={(event) => {
-                        // Can only enable if acknowledged
-                        if (event.currentTarget.checked && !autoFixAcknowledged()) {
-                          return; // Prevent enabling without acknowledgement
-                        }
-                        setForm('patrolAutoFix', event.currentTarget.checked);
-                      }}
-                      disabled={saving() || (!form.patrolAutoFix && !autoFixAcknowledged())}
-                    />
-                  </div>
-
-                  {/* Auto-Fix Warning & Acknowledgement - Simplified inline flow */}
-                  <Show when={!form.patrolAutoFix}>
-                    <div class="mt-3 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-200 dark:border-amber-800 rounded-xl">
-                      <div class="flex items-start gap-3">
-                        <div class="p-2 bg-amber-100 dark:bg-amber-800 rounded-lg flex-shrink-0">
-                          <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                          </svg>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                          <p class="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-2">Enable Auto-Fix Mode?</p>
-                          <div class="text-xs text-amber-700 dark:text-amber-300 space-y-1 mb-3">
-                            <div class="flex items-center gap-2">
-                              <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3" /></svg>
-                              <span>AI executes remediation commands <strong>without approval</strong></span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                              <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3" /></svg>
-                              <span>Actions may be <strong>irreversible</strong> (restarts, cache clears, etc.)</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                              <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3" /></svg>
-                              <span>Test in staging/dev environments first</span>
-                            </div>
-                          </div>
+                    {/* Auto-Fix Toggle - Compact with inline warning */}
+                    <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
+                      <div class="flex items-center justify-between gap-2">
+                        <label class="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+                          Auto-Fix Mode
+                          <span class="px-1 py-0.5 text-[9px] font-medium bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded">Advanced</span>
+                        </label>
+                        <Show when={autoFixAcknowledged() || form.patrolAutoFix}>
+                          <Toggle
+                            checked={form.patrolAutoFix}
+                            onChange={(event) => setForm('patrolAutoFix', event.currentTarget.checked)}
+                            disabled={saving()}
+                          />
+                        </Show>
+                        <Show when={!autoFixAcknowledged() && !form.patrolAutoFix}>
                           <button
                             type="button"
                             onClick={() => {
@@ -1105,136 +1070,94 @@ export const AISettings: Component = () => {
                               setForm('patrolAutoFix', true);
                             }}
                             disabled={saving()}
-                            class="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                            class="px-2 py-1 text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded hover:bg-amber-200 dark:hover:bg-amber-800"
                           >
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            I understand, enable Auto-Fix
+                            Enable
                           </button>
-                        </div>
+                        </Show>
                       </div>
-                    </div>
-                  </Show>
-
-                  {/* Warning when enabled */}
-                  <Show when={form.patrolAutoFix}>
-                    <div class="mt-3 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
-                      <div class="flex gap-2">
-                        <svg class="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                        <div class="text-xs text-red-800 dark:text-red-200">
-                          <p class="font-semibold">⚠️ Auto-Fix is ENABLED</p>
-                          <p class="mt-1">AI patrol will automatically attempt to fix issues without asking for approval. Review findings regularly.</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Auto-Fix Model Selector - shown when auto-fix is enabled */}
-                    <div class="mt-3">
-                      <label class={labelClass()}>Auto-Fix Model (Remediation)</label>
-                      <Show when={availableModels().length > 0} fallback={
-                        <input
-                          type="text"
-                          value={form.autoFixModel}
-                          onInput={(e) => setForm('autoFixModel', e.currentTarget.value)}
-                          placeholder="Leave empty to use patrol model"
-                          class={controlClass()}
-                          disabled={saving()}
-                        />
-                      }>
-                        <select
-                          value={form.autoFixModel}
-                          onChange={(e) => setForm('autoFixModel', e.currentTarget.value)}
-                          class={controlClass()}
-                          disabled={saving()}
-                        >
-                          <option value="">Use patrol model ({form.patrolModel || form.model || 'not set'})</option>
-                          <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
-                            {([provider, models]) => (
-                              <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
-                                <For each={models}>
-                                  {(model) => (
-                                    <option value={model.id}>
-                                      {model.name || model.id.split(':').pop()}
-                                    </option>
-                                  )}
-                                </For>
-                              </optgroup>
-                            )}
-                          </For>
-                        </select>
+                      <Show when={!form.patrolAutoFix && !autoFixAcknowledged()}>
+                        <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+                          ⚠️ AI will execute fixes without approval. Enable with caution.
+                        </p>
                       </Show>
-                      <p class={formHelpText}>
-                        Model for automatic remediation. Use a more capable model for better fix accuracy.
-                      </p>
+                      <Show when={form.patrolAutoFix}>
+                        <p class="text-[10px] text-red-600 dark:text-red-400 mt-1 flex items-center gap-1">
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          Auto-Fix is ON. AI will attempt automatic remediation.
+                        </p>
+                      </Show>
                     </div>
-                  </Show>
-                </div>
+
+                    {/* Auto-Fix Model - Only when enabled */}
+                    <Show when={form.patrolAutoFix}>
+                      <div class="flex items-center gap-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+                        <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-32 flex-shrink-0">Fix Model</label>
+                        <Show when={availableModels().length > 0} fallback={
+                          <input
+                            type="text"
+                            value={form.autoFixModel}
+                            onInput={(e) => setForm('autoFixModel', e.currentTarget.value)}
+                            placeholder="Use patrol model"
+                            class="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                            disabled={saving()}
+                          />
+                        }>
+                          <select
+                            value={form.autoFixModel}
+                            onChange={(e) => setForm('autoFixModel', e.currentTarget.value)}
+                            class="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                            disabled={saving()}
+                          >
+                            <option value="">Use patrol model</option>
+                            <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
+                              {([provider, models]) => (
+                                <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
+                                  <For each={models}>
+                                    {(model) => (
+                                      <option value={model.id}>
+                                        {model.name || model.id.split(':').pop()}
+                                      </option>
+                                    )}
+                                  </For>
+                                </optgroup>
+                              )}
+                            </For>
+                          </select>
+                        </Show>
+                      </div>
+                    </Show>
+                  </div>
+                </Show>
               </div>
 
-              {/* AI Cost Controls - Prominent positioning */}
-              <div class={`${formField} p-4 rounded-lg border bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-emerald-200 dark:border-emerald-800`}>
-                <div class="flex items-center gap-3 mb-3">
-                  <div class="p-2 bg-emerald-100 dark:bg-emerald-800 rounded-lg">
-                    <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div class="flex-1">
-                    <label class={`${labelClass()} flex items-center gap-2`}>
-                      AI Cost Controls
-                      <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-800 text-emerald-700 dark:text-emerald-300 rounded">RECOMMENDED</span>
-                    </label>
-                    <p class="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
-                      Set a budget alert for cross-provider cost tracking
-                    </p>
-                  </div>
+              {/* AI Cost Controls - Compact */}
+              <div class="flex items-center gap-3 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
+                <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <label class="text-xs font-medium text-gray-700 dark:text-gray-300">30-day Budget</label>
+                <div class="relative flex-shrink-0">
+                  <span class="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-xs">$</span>
+                  <input
+                    type="number"
+                    class="w-24 pl-5 pr-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+                    value={form.costBudgetUSD30d}
+                    onInput={(e) => setForm('costBudgetUSD30d', e.currentTarget.value)}
+                    min={0}
+                    step={1}
+                    placeholder="0"
+                    disabled={saving()}
+                  />
                 </div>
-
-                <div class="flex flex-col sm:flex-row sm:items-center gap-4">
-                  <div class="flex-shrink-0">
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      30-day budget (USD)
-                    </label>
-                    <div class="relative">
-                      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-sm">$</span>
-                      <input
-                        type="number"
-                        class="w-32 pl-7 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                        value={form.costBudgetUSD30d}
-                        onInput={(e) => setForm('costBudgetUSD30d', e.currentTarget.value)}
-                        min={0}
-                        step={1}
-                        placeholder="0"
-                        disabled={saving()}
-                      />
-                    </div>
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <Show when={parseFloat(form.costBudgetUSD30d) > 0}>
-                      <div class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                        <div class="flex items-center justify-between">
-                          <span>Daily equivalent</span>
-                          <span class="font-medium text-gray-900 dark:text-gray-100">${(parseFloat(form.costBudgetUSD30d) / 30).toFixed(2)}/day</span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                          <span>Weekly equivalent</span>
-                          <span class="font-medium text-gray-900 dark:text-gray-100">${(parseFloat(form.costBudgetUSD30d) / 4.3).toFixed(2)}/week</span>
-                        </div>
-                      </div>
-                    </Show>
-                    <Show when={!form.costBudgetUSD30d || parseFloat(form.costBudgetUSD30d) === 0}>
-                      <div class="p-2 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded text-xs text-amber-700 dark:text-amber-300">
-                        💡 Set a budget to get proactive alerts before overspending
-                      </div>
-                    </Show>
-                  </div>
-                </div>
-                <p class="text-[10px] text-emerald-600 dark:text-emerald-400 mt-2">
-                  This is a cross-provider estimate. Provider dashboards are the source of truth for billing.
-                </p>
+                <Show when={parseFloat(form.costBudgetUSD30d) > 0}>
+                  <span class="text-xs text-gray-500">≈ ${(parseFloat(form.costBudgetUSD30d) / 30).toFixed(2)}/day</span>
+                </Show>
+                <Show when={!form.costBudgetUSD30d || parseFloat(form.costBudgetUSD30d) === 0}>
+                  <span class="text-[10px] text-amber-600 dark:text-amber-400">💡 Set budget for alerts</span>
+                </Show>
               </div>
 
 
@@ -1267,8 +1190,8 @@ export const AISettings: Component = () => {
               </div>
             </Show>
 
-            {/* Actions */}
-            <div class="flex flex-wrap items-center justify-between gap-3 pt-4">
+            {/* Actions - sticky at bottom for easy access */}
+            <div class="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 -mx-6 px-6 py-4 mt-4 flex flex-wrap items-center justify-between gap-3">
               <Show when={settings()?.api_key_set || settings()?.oauth_connected}>
                 <button
                   type="button"

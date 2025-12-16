@@ -560,6 +560,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
                   // Emit event for metadata refresh if AI set a resource URL
                   if (data.name === 'set_resource_url' && data.success) {
+                    logger.info('[AIChat] Emitting metadata-changed event for set_resource_url');
                     window.dispatchEvent(new CustomEvent('pulse:metadata-changed', {
                       detail: { source: 'ai', tool: data.name }
                     }));

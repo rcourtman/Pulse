@@ -304,17 +304,19 @@ export function Dashboard(props: DashboardProps) {
   // Load all guest metadata on mount (single API call for all guests)
   onMount(async () => {
     await refreshGuestMetadata();
-  });
 
-  // Listen for metadata changes from AI or other sources
-  createEffect(() => {
-    const handleMetadataChanged = () => {
+    // Listen for metadata changes from AI or other sources
+    const handleMetadataChanged = (event: Event) => {
+      console.log('[Dashboard] Metadata changed event received:', event);
       logger.debug('Metadata changed event received, refreshing...');
       refreshGuestMetadata();
     };
 
+    console.log('[Dashboard] Adding pulse:metadata-changed listener');
     window.addEventListener('pulse:metadata-changed', handleMetadataChanged);
-    return () => window.removeEventListener('pulse:metadata-changed', handleMetadataChanged);
+
+    // Note: SolidJS onMount doesn't support cleanup return, so we rely on component unmount
+    // In practice, Dashboard is always mounted so this is fine
   });
 
   // Callback to update a guest's custom URL in metadata

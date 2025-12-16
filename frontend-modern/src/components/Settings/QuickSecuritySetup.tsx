@@ -73,6 +73,7 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
 
     setIsSettingUp(true);
 
+
     try {
       // Generate or use custom credentials
       const newCredentials: SecurityCredentials = {
@@ -81,12 +82,23 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
         apiToken: generateToken(),
       };
 
+      // Get CSRF token from cookie for authenticated requests (rotation mode)
+      const csrfToken = document.cookie
+        .split('; ')
+        .find((row) => row.startsWith('pulse_csrf='))
+        ?.split('=')[1];
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+      }
+
       // Call API to enable security
       const response = await fetch('/api/security/quick-setup', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           ...newCredentials,
           force: isRotation,
@@ -228,8 +240,8 @@ Important:
                   type="button"
                   onClick={() => setUseCustomPassword(false)}
                   class={`px-3 py-1 text-xs rounded-lg transition-colors ${!useCustomPassword()
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                     }`}
                 >
                   Auto-Generate
@@ -238,8 +250,8 @@ Important:
                   type="button"
                   onClick={() => setUseCustomPassword(true)}
                   class={`px-3 py-1 text-xs rounded-lg transition-colors ${useCustomPassword()
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                     }`}
                 >
                   Custom

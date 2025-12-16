@@ -603,14 +603,10 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 	}, nil
 }
 
-// TestConnection validates the OAuth token by making a minimal request
+// TestConnection validates the OAuth token by listing models
+// This avoids dependencies on specific model names which may get deprecated
 func (c *AnthropicOAuthClient) TestConnection(ctx context.Context) error {
-	_, err := c.Chat(ctx, ChatRequest{
-		Messages: []Message{
-			{Role: "user", Content: "Hi"},
-		},
-		MaxTokens: 10,
-	})
+	_, err := c.ListModels(ctx)
 	return err
 }
 
