@@ -330,16 +330,32 @@ chmod +x "$universal_dir/bin/pulse-agent"
 # Add VERSION file
 echo "$VERSION" > "$universal_dir/VERSION"
 
-# Package standalone host agent binaries
+# Package standalone host agent binaries (all platforms)
+# Linux
+tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-linux-amd64.tar.gz" -C "$BUILD_DIR" pulse-host-agent-linux-amd64
+tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-linux-arm64.tar.gz" -C "$BUILD_DIR" pulse-host-agent-linux-arm64
+tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-linux-armv7.tar.gz" -C "$BUILD_DIR" pulse-host-agent-linux-armv7
+tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-linux-armv6.tar.gz" -C "$BUILD_DIR" pulse-host-agent-linux-armv6
+tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-linux-386.tar.gz" -C "$BUILD_DIR" pulse-host-agent-linux-386
+# Darwin
 tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-darwin-amd64.tar.gz" -C "$BUILD_DIR" pulse-host-agent-darwin-amd64
 tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-darwin-arm64.tar.gz" -C "$BUILD_DIR" pulse-host-agent-darwin-arm64
+# Windows
 zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-amd64.zip" "$BUILD_DIR/pulse-host-agent-windows-amd64.exe"
 zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-arm64.zip" "$BUILD_DIR/pulse-host-agent-windows-arm64.exe"
 zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-386.zip" "$BUILD_DIR/pulse-host-agent-windows-386.exe"
 
-# Package standalone unified agent binaries
+# Package standalone unified agent binaries (all platforms)
+# Linux
+tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-linux-amd64.tar.gz" -C "$BUILD_DIR" pulse-agent-linux-amd64
+tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-linux-arm64.tar.gz" -C "$BUILD_DIR" pulse-agent-linux-arm64
+tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-linux-armv7.tar.gz" -C "$BUILD_DIR" pulse-agent-linux-armv7
+tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-linux-armv6.tar.gz" -C "$BUILD_DIR" pulse-agent-linux-armv6
+tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-linux-386.tar.gz" -C "$BUILD_DIR" pulse-agent-linux-386
+# Darwin
 tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-darwin-amd64.tar.gz" -C "$BUILD_DIR" pulse-agent-darwin-amd64
 tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-darwin-arm64.tar.gz" -C "$BUILD_DIR" pulse-agent-darwin-arm64
+# Windows
 zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-amd64.zip" "$BUILD_DIR/pulse-agent-windows-amd64.exe"
 zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-arm64.zip" "$BUILD_DIR/pulse-agent-windows-arm64.exe"
 zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-386.zip" "$BUILD_DIR/pulse-agent-windows-386.exe"

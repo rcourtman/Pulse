@@ -12,6 +12,7 @@ import { getDockerHostStatusIndicator } from '@/utils/status';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { ResponsiveMetricCell, MetricText } from '@/components/shared/responsive';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
+import { isAgentOutdated, getAgentVersionTooltip } from '@/utils/agentVersion';
 
 export interface DockerHostSummary {
   host: DockerHost;
@@ -129,10 +130,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
     return sortDirection() === 'asc' ? '▲' : '▼';
   };
 
-  const isAgentOutdated = (version?: string) => {
-    if (!version) return false;
-    return version.includes('dev') || version.startsWith('0.1');
-  };
+  // Agent version checking is now done via the shared utility that compares against server version
 
   return (
     <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
@@ -370,10 +368,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                                   ? 'px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 font-medium'
                                   : 'px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium'
                               }
-                              title={`${agentOutdated
-                                ? 'Agent is outdated on this host'
-                                : 'Agent is up to date'
-                                }${summary.host.intervalSeconds ? `\nReporting interval: ${summary.host.intervalSeconds}s` : ''}`}
+                              title={`${getAgentVersionTooltip(summary.host.agentVersion)}${summary.host.intervalSeconds ? `\nReporting interval: ${summary.host.intervalSeconds}s` : ''}`}
                             >
                               {version()}
                             </span>
