@@ -1163,6 +1163,10 @@ func Load() (*Config, error) {
 		oidcEnv["OIDC_CA_BUNDLE"] = val
 	}
 	if len(oidcEnv) > 0 {
+		// Ensure cfg.OIDC is initialized before merging env vars
+		if cfg.OIDC == nil {
+			cfg.OIDC = NewOIDCConfig()
+		}
 		cfg.OIDC.MergeFromEnv(oidcEnv)
 	}
 	if authUser := os.Getenv("PULSE_AUTH_USER"); authUser != "" {
