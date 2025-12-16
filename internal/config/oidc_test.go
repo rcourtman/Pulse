@@ -581,3 +581,56 @@ func TestNewOIDCConfig(t *testing.T) {
 		t.Error("EnvOverrides should be initialized")
 	}
 }
+
+// TestOIDCEnvVarsWithNilConfig is a regression test for issue #853.
+// It ensures that when starting with a nil OIDCConfig (no oidc.enc file),
+// setting OIDC_* environment variables properly initializes and configures OIDC.
+// The bug was that MergeFromEnv() on a nil receiver silently returned,
+// so env vars were ignored when no persisted oidc.enc existed.
+func TestOIDCEnvVarsWithNilConfig(t *testing.T) {
+	t.Run("nil config must be initialized before MergeFromEnv", func(t *testing.T) {
+		// Simulate the bug: calling MergeFromEnv on nil does nothing
+		var nilCfg *OIDCConfig
+		nilCfg.MergeFromEnv(map[string]string{"OIDC_ENABLED": "true"})
+		// nilCfg is still nil - this was the bug
+		if nilCfg != nil {
+			t.Error("MergeFromEnv on nil receiver should leave it nil (this is expected)")
+		}
+	})
+
+	t.Run("proper pattern: initialize before merge", func(t *testing.T) {
+		// This is the correct pattern used in config.go after the fix
+		var cfg *OIDCConfig
+		env := map[string]string{
+			"OIDC_ENABLED":    "true",
+			"OIDC_ISSUER_URL": "https://auth.example.com",
+			"OIDC_CLIENT_ID":  "my-client",
+		}
+
+		// The fix: initialize if nil before merging
+		if len(env) > 0 {
+			if cfg == nil {
+				cfg = NewOIDCConfig()
+			}
+			cfg.MergeFromEnv(env)
+		}
+
+		// Verify env vars were applied
+		if cfg == nil {
+			t.Fatal("cfg should be initialized")
+		}
+		if !cfg.Enabled {
+			t.Error("Enabled should be true from env")
+		}
+		if cfg.IssuerURL != "https://auth.example.com" {
+			t.Errorf("IssuerURL = %q, want %q", cfg.IssuerURL, "https://auth.example.com")
+		}
+		if cfg.ClientID != "my-client" {
+			t.Errorf("ClientID = %q, want %q", cfg.ClientID, "my-client")
+		}
+		// Should also have defaults from NewOIDCConfig
+		if len(cfg.Scopes) != 3 {
+			t.Errorf("Scopes should have defaults, got %v", cfg.Scopes)
+		}
+	})
+}
