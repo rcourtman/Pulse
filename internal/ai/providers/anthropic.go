@@ -339,15 +339,10 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 	}, nil
 }
 
-// TestConnection validates the API key by making a minimal request
+// TestConnection validates the API key by listing models
+// This avoids dependencies on specific model names which may get deprecated
 func (c *AnthropicClient) TestConnection(ctx context.Context) error {
-	// Make a minimal request to validate the API key
-	_, err := c.Chat(ctx, ChatRequest{
-		Messages: []Message{
-			{Role: "user", Content: "Hi"},
-		},
-		MaxTokens: 10, // Minimal tokens to save cost
-	})
+	_, err := c.ListModels(ctx)
 	return err
 }
 

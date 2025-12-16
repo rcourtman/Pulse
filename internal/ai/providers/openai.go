@@ -58,12 +58,13 @@ func (c *OpenAIClient) Name() string {
 
 // openaiRequest is the request body for the OpenAI API
 type openaiRequest struct {
-	Model       string              `json:"model"`
-	Messages    []openaiMessage     `json:"messages"`
-	MaxTokens   int                 `json:"max_tokens,omitempty"`
-	Temperature float64             `json:"temperature,omitempty"`
-	Tools       []openaiTool        `json:"tools,omitempty"`
-	ToolChoice  interface{}         `json:"tool_choice,omitempty"` // "auto", "none", or specific tool
+	Model               string              `json:"model"`
+	Messages            []openaiMessage     `json:"messages"`
+	MaxTokens           int                 `json:"max_tokens,omitempty"`             // Legacy parameter for older models
+	MaxCompletionTokens int                 `json:"max_completion_tokens,omitempty"`  // For o1/o3 models
+	Temperature         float64             `json:"temperature,omitempty"`
+	Tools               []openaiTool        `json:"tools,omitempty"`
+	ToolChoice          interface{}         `json:"tool_choice,omitempty"` // "auto", "none", or specific tool
 }
 
 // deepseekRequest extends openaiRequest with DeepSeek-specific fields
@@ -73,6 +74,14 @@ type deepseekRequest struct {
 	MaxTokens   int                 `json:"max_tokens,omitempty"`
 	Tools       []openaiTool        `json:"tools,omitempty"`
 	ToolChoice  interface{}         `json:"tool_choice,omitempty"`
+}
+
+// openaiCompletionsRequest is for non-chat models like gpt-5.2-pro that use /v1/completions
+type openaiCompletionsRequest struct {
+	Model               string  `json:"model"`
+	Prompt              string  `json:"prompt"`
+	MaxCompletionTokens int     `json:"max_completion_tokens,omitempty"`
+	Temperature         float64 `json:"temperature,omitempty"`
 }
 
 // openaiTool represents a function tool in OpenAI format
@@ -118,7 +127,8 @@ type openaiResponse struct {
 
 type openaiChoice struct {
 	Index        int           `json:"index"`
-	Message      openaiRespMsg `json:"message"`
+	Message      openaiRespMsg `json:"message"`       // For chat completions
+	Text         string        `json:"text"`          // For completions API (non-chat models)
 	FinishReason string        `json:"finish_reason"` // "stop", "tool_calls", etc.
 }
 
@@ -153,6 +163,22 @@ func (c *OpenAIClient) isDeepSeek() bool {
 // isDeepSeekReasoner returns true if using DeepSeek's reasoning model
 func (c *OpenAIClient) isDeepSeekReasoner() bool {
 	return c.isDeepSeek() && strings.Contains(c.model, "reasoner")
+}
+
+// requiresMaxCompletionTokens returns true for models that need max_completion_tokens instead of max_tokens
+func (c *OpenAIClient) requiresMaxCompletionTokens(model string) bool {
+	// o1, o1-mini, o1-preview, o3, o3-mini, o4-mini, gpt-5.2, etc.
+	return strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "o4") || strings.HasPrefix(model, "gpt-5")
+}
+
+// isGPT52NonChat returns true if using GPT-5.2 models that require /v1/completions endpoint
+// Only gpt-5.2-chat-latest uses chat completions; gpt-5.2, gpt-5.2-pro use completions
+func (c *OpenAIClient) isGPT52NonChat(model string) bool {
+	if !strings.HasPrefix(model, "gpt-5.2") {
+		return false
+	}
+	// gpt-5.2-chat-latest is the only chat model
+	return !strings.Contains(model, "chat")
 }
 
 // Chat sends a chat request to the OpenAI API
@@ -231,12 +257,18 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		Messages: messages,
 	}
 
+	// Use max_completion_tokens for all OpenAI models (newer API, backward compatible)
+	// DeepSeek still uses max_tokens
 	if req.MaxTokens > 0 {
-		openaiReq.MaxTokens = req.MaxTokens
+		if c.isDeepSeek() {
+			openaiReq.MaxTokens = req.MaxTokens
+		} else {
+			openaiReq.MaxCompletionTokens = req.MaxTokens
+		}
 	}
 
-	// DeepSeek reasoner doesn't support temperature
-	if req.Temperature > 0 && !c.isDeepSeekReasoner() {
+	// DeepSeek reasoner and newer OpenAI models don't support temperature
+	if req.Temperature > 0 && !c.isDeepSeekReasoner() && !c.requiresMaxCompletionTokens(model) {
 		openaiReq.Temperature = req.Temperature
 	}
 
@@ -264,7 +296,35 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	// Log actual model being sent (INFO level for visibility)
 	log.Info().Str("model_in_request", openaiReq.Model).Str("base_url", c.baseURL).Msg("Sending OpenAI/DeepSeek request")
 
-	body, err := json.Marshal(openaiReq)
+	var body []byte
+	var err error
+
+	// GPT-5.2 non-chat models need completions format (prompt instead of messages)
+	if c.isGPT52NonChat(model) {
+		// Convert messages to a single prompt string
+		var promptBuilder strings.Builder
+		if req.System != "" {
+			promptBuilder.WriteString("System: ")
+			promptBuilder.WriteString(req.System)
+			promptBuilder.WriteString("\n\n")
+		}
+		for _, m := range req.Messages {
+			promptBuilder.WriteString(m.Role)
+			promptBuilder.WriteString(": ")
+			promptBuilder.WriteString(m.Content)
+			promptBuilder.WriteString("\n\n")
+		}
+		promptBuilder.WriteString("Assistant: ")
+
+		completionsReq := openaiCompletionsRequest{
+			Model:               model,
+			Prompt:              promptBuilder.String(),
+			MaxCompletionTokens: req.MaxTokens,
+		}
+		body, err = json.Marshal(completionsReq)
+	} else {
+		body, err = json.Marshal(openaiReq)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
@@ -290,7 +350,14 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			}
 		}
 
-		httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(body))
+		// Use the appropriate endpoint
+		endpoint := c.baseURL
+		if c.isGPT52NonChat(model) && strings.Contains(c.baseURL, "api.openai.com") {
+			// GPT-5.2 non-chat models need completions endpoint
+			endpoint = strings.Replace(c.baseURL, "/chat/completions", "/completions", 1)
+		}
+
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -362,6 +429,10 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	// For DeepSeek reasoner, the actual content may be in reasoning_content
 	// when content is empty (it shows the "thinking" but that's the full response)
 	contentToUse := choice.Message.Content
+	// Completions API uses Text instead of Message.Content
+	if contentToUse == "" && choice.Text != "" {
+		contentToUse = choice.Text
+	}
 	if contentToUse == "" && choice.Message.ReasoningContent != "" {
 		// DeepSeek reasoner puts output in reasoning_content
 		contentToUse = choice.Message.ReasoningContent
@@ -395,14 +466,10 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	return result, nil
 }
 
-// TestConnection validates the API key by making a minimal request
+// TestConnection validates the API key by listing models
+// This avoids dependencies on specific model names which may get deprecated
 func (c *OpenAIClient) TestConnection(ctx context.Context) error {
-	_, err := c.Chat(ctx, ChatRequest{
-		Messages: []Message{
-			{Role: "user", Content: "Hi"},
-		},
-		MaxTokens: 10,
-	})
+	_, err := c.ListModels(ctx)
 	return err
 }
 

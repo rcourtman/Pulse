@@ -1790,6 +1790,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/health",
 				"/api/security/status",
 				"/api/security/validate-bootstrap-token",
+				"/api/security/quick-setup", // Handler does its own auth (bootstrap token or session)
 				"/api/version",
 				"/api/login", // Add login endpoint as public
 				"/api/oidc/login",
@@ -1919,10 +1920,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// Only skip CSRF for initial setup when no auth is configured
 		skipCSRF := false
 		if req.URL.Path == "/api/security/quick-setup" || req.URL.Path == "/api/security/apply-restart" {
-			if (r.config.AuthUser == "" && r.config.AuthPass == "") || r.config.DisableAuthEnvDetected {
-				// Allow bootstrap or legacy recovery runs without CSRF token
-				skipCSRF = true
-			}
+			// Quick-setup has its own auth logic (bootstrap token or session validation)
+			// so we can skip CSRF here - the handler will reject unauthorized requests
+			skipCSRF = true
 		}
 		// Skip CSRF for setup-script-url endpoint (generates temporary tokens, not a state change)
 		if req.URL.Path == "/api/setup-script-url" {
