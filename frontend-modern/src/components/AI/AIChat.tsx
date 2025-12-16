@@ -1003,7 +1003,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   </svg>
                 </button>
                 <Show when={showModelSelector()}>
-                  <div class="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 py-1">
+                  <div class="absolute right-0 top-full mt-1 w-64 max-h-80 overflow-y-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 py-1">
                     <button
                       onClick={() => { setSelectedModel(''); setShowModelSelector(false); }}
                       class={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${!selectedModel() ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}
