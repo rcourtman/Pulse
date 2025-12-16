@@ -1386,47 +1386,75 @@ func (s *State) UpdateContainers(containers []Container) {
 	s.LastUpdate = time.Now()
 }
 
+// backupKey creates a composite key for backup matching using instance and VMID.
+// This ensures backups are correctly matched to guests even when VMIDs are reused across instances.
+func backupKey(instance string, vmid int) string {
+	return instance + "-" + strconv.Itoa(vmid)
+}
+
 // SyncGuestBackupTimes updates LastBackup on VMs and Containers from storage backups and PBS backups.
 // Call this after updating storage backups or PBS backups to ensure guest backup indicators are accurate.
+// Matching is done by instance+VMID to prevent cross-instance VMID collisions.
 func (s *State) SyncGuestBackupTimes() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Build a map of VMID -> latest backup time from all backup sources
-	latestBackup := make(map[int]time.Time)
+	// Build a map of instance+VMID -> latest backup time from all backup sources
+	// Using composite key prevents cross-instance VMID collision issues
+	latestBackup := make(map[string]time.Time)
 
 	// Process PVE storage backups
 	for _, backup := range s.PVEBackups.StorageBackups {
-		if backup.VMID <= 0 {
+		if backup.VMID <= 0 || backup.Instance == "" {
 			continue
 		}
-		if existing, ok := latestBackup[backup.VMID]; !ok || backup.Time.After(existing) {
-			latestBackup[backup.VMID] = backup.Time
+		key := backupKey(backup.Instance, backup.VMID)
+		if existing, ok := latestBackup[key]; !ok || backup.Time.After(existing) {
+			latestBackup[key] = backup.Time
 		}
 	}
 
 	// Process PBS backups (VMID is string, BackupTime is the timestamp)
+	// Note: PBS backups use Instance field to identify the PBS server, but backups
+	// from different PVE instances can be stored in the same PBS.
+	// For PBS, we need to match against all guests since we can't reliably determine
+	// which PVE instance the backup belongs to.
+	pbsLatestByVMID := make(map[int]time.Time)
 	for _, backup := range s.PBSBackups {
 		vmid, err := strconv.Atoi(backup.VMID)
 		if err != nil || vmid <= 0 {
 			continue
 		}
-		if existing, ok := latestBackup[vmid]; !ok || backup.BackupTime.After(existing) {
-			latestBackup[vmid] = backup.BackupTime
+		if existing, ok := pbsLatestByVMID[vmid]; !ok || backup.BackupTime.After(existing) {
+			pbsLatestByVMID[vmid] = backup.BackupTime
 		}
 	}
 
-	// Update VMs
+	// Update VMs - prefer instance-specific PVE backup, fall back to PBS by VMID
 	for i := range s.VMs {
-		if backupTime, ok := latestBackup[s.VMs[i].VMID]; ok {
+		key := backupKey(s.VMs[i].Instance, s.VMs[i].VMID)
+		if backupTime, ok := latestBackup[key]; ok {
 			s.VMs[i].LastBackup = backupTime
 		}
+		// Check if PBS has a more recent backup
+		if pbsTime, ok := pbsLatestByVMID[s.VMs[i].VMID]; ok {
+			if s.VMs[i].LastBackup.IsZero() || pbsTime.After(s.VMs[i].LastBackup) {
+				s.VMs[i].LastBackup = pbsTime
+			}
+		}
 	}
 
-	// Update Containers
+	// Update Containers - prefer instance-specific PVE backup, fall back to PBS by VMID
 	for i := range s.Containers {
-		if backupTime, ok := latestBackup[s.Containers[i].VMID]; ok {
+		key := backupKey(s.Containers[i].Instance, s.Containers[i].VMID)
+		if backupTime, ok := latestBackup[key]; ok {
 			s.Containers[i].LastBackup = backupTime
+		}
+		// Check if PBS has a more recent backup
+		if pbsTime, ok := pbsLatestByVMID[s.Containers[i].VMID]; ok {
+			if s.Containers[i].LastBackup.IsZero() || pbsTime.After(s.Containers[i].LastBackup) {
+				s.Containers[i].LastBackup = pbsTime
+			}
 		}
 	}
 }
