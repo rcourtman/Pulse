@@ -745,11 +745,11 @@ func TestSyncGuestBackupTimes(t *testing.T) {
 		{VMID: 200, Name: "ct-200", Instance: "pve-1"},
 	})
 
-	// Add storage backups for VM 100
+	// Add storage backups for VM 100 (must include Instance for proper matching)
 	state.mu.Lock()
 	state.PVEBackups.StorageBackups = []StorageBackup{
-		{ID: "pve-1-backup-1", VMID: 100, Time: oldBackup},
-		{ID: "pve-1-backup-2", VMID: 100, Time: newBackup}, // newer
+		{ID: "pve-1-backup-1", VMID: 100, Instance: "pve-1", Time: oldBackup},
+		{ID: "pve-1-backup-2", VMID: 100, Instance: "pve-1", Time: newBackup}, // newer
 	}
 	state.mu.Unlock()
 
@@ -806,6 +806,63 @@ func TestSyncGuestBackupTimes(t *testing.T) {
 	}
 	if !ct200.LastBackup.Equal(newBackup) {
 		t.Errorf("Container 200 LastBackup = %v, expected %v", ct200.LastBackup, newBackup)
+	}
+}
+
+// TestSyncGuestBackupTimesCrossInstance verifies that backup matching uses instance+VMID.
+// This prevents a newly created container on one instance from incorrectly showing
+// backup time from a different container with the same VMID on another instance.
+func TestSyncGuestBackupTimesCrossInstance(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+	threeMonthsAgo := now.Add(-90 * 24 * time.Hour)
+
+	// Set up containers with the SAME VMID on DIFFERENT instances
+	// This simulates: pve-1 has VMID 100 with old backup, pve-2 has newly created VMID 100
+	state.UpdateContainers([]Container{
+		{VMID: 100, Name: "old-container", Instance: "pve-1"},
+		{VMID: 100, Name: "new-container", Instance: "pve-2"}, // newly created, no backup
+	})
+
+	// Add a 3-month-old backup for pve-1's container (VMID 100)
+	state.mu.Lock()
+	state.PVEBackups.StorageBackups = []StorageBackup{
+		{ID: "pve-1-backup-old", VMID: 100, Instance: "pve-1", Time: threeMonthsAgo},
+	}
+	state.mu.Unlock()
+
+	// Sync backup times
+	state.SyncGuestBackupTimes()
+
+	snapshot := state.GetSnapshot()
+
+	// Find both containers
+	var oldContainer, newContainer *Container
+	for i := range snapshot.Containers {
+		if snapshot.Containers[i].Instance == "pve-1" && snapshot.Containers[i].VMID == 100 {
+			oldContainer = &snapshot.Containers[i]
+		}
+		if snapshot.Containers[i].Instance == "pve-2" && snapshot.Containers[i].VMID == 100 {
+			newContainer = &snapshot.Containers[i]
+		}
+	}
+
+	if oldContainer == nil {
+		t.Fatal("pve-1 container not found")
+	}
+	if newContainer == nil {
+		t.Fatal("pve-2 container not found")
+	}
+
+	// The old container on pve-1 SHOULD have the backup time
+	if !oldContainer.LastBackup.Equal(threeMonthsAgo) {
+		t.Errorf("pve-1 container LastBackup = %v, expected %v", oldContainer.LastBackup, threeMonthsAgo)
+	}
+
+	// The NEW container on pve-2 should NOT have any backup time (it's a different container!)
+	if !newContainer.LastBackup.IsZero() {
+		t.Errorf("pve-2 container (newly created) should have no backup, got %v", newContainer.LastBackup)
 	}
 }
 
