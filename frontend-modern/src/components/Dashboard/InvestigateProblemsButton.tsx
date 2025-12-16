@@ -3,6 +3,7 @@ import { aiChatStore } from '@/stores/aiChat';
 import type { VM, Container } from '@/types/api';
 import { getBackupInfo } from '@/utils/format';
 import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 
 interface ProblemGuest {
     guest: VM | Container;
@@ -37,7 +38,8 @@ export const InvestigateProblemsButton: Component<InvestigateProblemsButtonProps
 
             // Check for backup issues
             if (!guest.template) {
-                const backupInfo = getBackupInfo(guest.lastBackup);
+                const alertsActivation = useAlertsActivation();
+                const backupInfo = getBackupInfo(guest.lastBackup, alertsActivation.getBackupThresholds());
                 if (backupInfo.status === 'critical') {
                     issues.push('Backup: Critical (very overdue)');
                 } else if (backupInfo.status === 'stale') {

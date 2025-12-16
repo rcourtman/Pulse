@@ -312,4 +312,43 @@ describe('getBackupInfo', () => {
             expect(result.status).toBe('critical');
         });
     });
+
+    describe('custom thresholds', () => {
+        it('uses custom freshHours threshold', () => {
+            const now = Date.now();
+            // 6 hours ago - would be fresh with default 24h threshold
+            const sixHoursAgo = now - 6 * 60 * 60 * 1000;
+
+            // With default thresholds (24h fresh, 72h stale)
+            const resultDefault = getBackupInfo(sixHoursAgo);
+            expect(resultDefault.status).toBe('fresh');
+
+            // With custom threshold of 4 hours for fresh
+            const resultCustom = getBackupInfo(sixHoursAgo, { freshHours: 4, staleHours: 12 });
+            expect(resultCustom.status).toBe('stale'); // 6 hours > 4 hours fresh threshold
+        });
+
+        it('uses custom staleHours threshold', () => {
+            const now = Date.now();
+            // 2 days ago - would be stale with default 72h threshold
+            const twoDaysAgo = now - 48 * 60 * 60 * 1000;
+
+            // With default thresholds
+            const resultDefault = getBackupInfo(twoDaysAgo);
+            expect(resultDefault.status).toBe('stale');
+
+            // With custom threshold of 24h stale (same as fresh)
+            const resultCustom = getBackupInfo(twoDaysAgo, { freshHours: 12, staleHours: 24 });
+            expect(resultCustom.status).toBe('critical'); // 48 hours > 24 hours stale threshold
+        });
+
+        it('handles partial custom thresholds', () => {
+            const now = Date.now();
+            const thirtyHoursAgo = now - 30 * 60 * 60 * 1000;
+
+            // Only provide freshHours, staleHours uses default (72h)
+            const result = getBackupInfo(thirtyHoursAgo, { freshHours: 12 });
+            expect(result.status).toBe('stale'); // 30h > 12h fresh, but < 72h default stale
+        });
+    });
 });

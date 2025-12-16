@@ -380,6 +380,8 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 					Enabled:      false,
 					WarningDays:  7,
 					CriticalDays: 14,
+					FreshHours:   24,
+					StaleHours:   72,
 				},
 				Overrides: make(map[string]alerts.ThresholdConfig),
 			}, nil
@@ -484,6 +486,17 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	}
 	if config.BackupDefaults.CriticalDays > 0 && config.BackupDefaults.WarningDays > config.BackupDefaults.CriticalDays {
 		config.BackupDefaults.WarningDays = config.BackupDefaults.CriticalDays
+	}
+	// Default indicator thresholds for dashboard (separate from alert thresholds)
+	if config.BackupDefaults.FreshHours <= 0 {
+		config.BackupDefaults.FreshHours = 24
+	}
+	if config.BackupDefaults.StaleHours <= 0 {
+		config.BackupDefaults.StaleHours = 72
+	}
+	// Ensure stale threshold is at least as large as fresh threshold
+	if config.BackupDefaults.StaleHours < config.BackupDefaults.FreshHours {
+		config.BackupDefaults.StaleHours = config.BackupDefaults.FreshHours
 	}
 	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
 	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)

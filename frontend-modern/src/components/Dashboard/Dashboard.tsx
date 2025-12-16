@@ -607,7 +607,7 @@ export function Dashboard(props: DashboardProps) {
       if (isDegraded) return true;
 
       // Check for backup issues
-      const backupInfo = getBackupInfo(g.lastBackup);
+      const backupInfo = getBackupInfo(g.lastBackup, alertsActivation.getBackupThresholds());
       if (backupInfo.status === 'stale' || backupInfo.status === 'critical' || backupInfo.status === 'never') {
         return true;
       }
@@ -664,7 +664,7 @@ export function Dashboard(props: DashboardProps) {
       guests = guests.filter((g) => {
         // Skip templates - they don't need backups
         if (g.template) return false;
-        const backupInfo = getBackupInfo(g.lastBackup);
+        const backupInfo = getBackupInfo(g.lastBackup, alertsActivation.getBackupThresholds());
         // Show guests that need backup: stale, critical, or never backed up
         return backupInfo.status === 'stale' || backupInfo.status === 'critical' || backupInfo.status === 'never';
       });
@@ -683,7 +683,7 @@ export function Dashboard(props: DashboardProps) {
         if (isDegraded) return true;
 
         // Check for backup issues
-        const backupInfo = getBackupInfo(g.lastBackup);
+        const backupInfo = getBackupInfo(g.lastBackup, alertsActivation.getBackupThresholds());
         if (backupInfo.status === 'stale' || backupInfo.status === 'critical' || backupInfo.status === 'never') {
           return true;
         }
