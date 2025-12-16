@@ -977,10 +977,14 @@ export function Alerts() {
         const warningDays =
           safeCritical > 0 && normalizedWarning > safeCritical ? safeCritical : normalizedWarning;
         const criticalDays = Math.max(safeCritical, warningDays);
+        const freshHours = config.backupDefaults.freshHours ?? FACTORY_BACKUP_DEFAULTS.freshHours;
+        const staleHours = config.backupDefaults.staleHours ?? FACTORY_BACKUP_DEFAULTS.staleHours;
         setBackupDefaults({
           enabled,
           warningDays,
           criticalDays,
+          freshHours,
+          staleHours,
         });
       } else {
         setBackupDefaults({ ...FACTORY_BACKUP_DEFAULTS });
@@ -1315,6 +1319,8 @@ export function Alerts() {
     enabled: false,
     warningDays: 7,
     criticalDays: 14,
+    freshHours: 24,
+    staleHours: 72,
   };
 
   // Threshold states - using trigger values for display
@@ -1655,6 +1661,8 @@ export function Alerts() {
                         enabled: backupConfig.enabled,
                         warningDays: normalizedBackupWarning,
                         criticalDays: finalBackupCritical,
+                        freshHours: backupConfig.freshHours ?? 24,
+                        staleHours: backupConfig.staleHours ?? 72,
                       },
                       pmgDefaults: pmgThresholds(),
                       // Use rawOverridesConfig which is already properly formatted with disabled flags

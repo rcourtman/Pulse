@@ -351,6 +351,9 @@ type BackupAlertConfig struct {
 	Enabled      bool `json:"enabled"`
 	WarningDays  int  `json:"warningDays"`
 	CriticalDays int  `json:"criticalDays"`
+	// Indicator thresholds for the dashboard (separate from alert thresholds)
+	FreshHours int `json:"freshHours"` // Backups newer than this show as green (default: 24)
+	StaleHours int `json:"staleHours"` // Backups older than FreshHours but newer than this show as amber (default: 72)
 }
 
 // GuestLookup describes a guest identity used for snapshot/backup evaluations.
@@ -624,6 +627,8 @@ func NewManager() *Manager {
 				Enabled:      false,
 				WarningDays:  7,
 				CriticalDays: 14,
+				FreshHours:   24,
+				StaleHours:   72,
 			},
 			StorageDefault:    HysteresisThreshold{Trigger: 85, Clear: 80},
 			MinimumDelta:      2.0, // 2% minimum change

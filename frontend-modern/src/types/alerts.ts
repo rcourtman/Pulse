@@ -103,6 +103,9 @@ export interface BackupAlertConfig {
   enabled: boolean;
   warningDays: number;
   criticalDays: number;
+  // Dashboard indicator thresholds (separate from alert thresholds)
+  freshHours?: number; // Backups newer than this show as green (default: 24)
+  staleHours?: number; // Backups older than freshHours but newer than this show as amber (default: 72)
 }
 
 export type ActivationState = 'pending_review' | 'active' | 'snoozed';

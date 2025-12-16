@@ -121,15 +121,25 @@ export interface BackupInfo {
   ageFormatted: string;
 }
 
-const BACKUP_FRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
-const BACKUP_STALE_THRESHOLD_MS = 72 * 60 * 60 * 1000; // 72 hours (3 days)
+// Default thresholds (used when no config is provided)
+const DEFAULT_FRESH_HOURS = 24;
+const DEFAULT_STALE_HOURS = 72;
+
+export interface BackupThresholds {
+  freshHours?: number;
+  staleHours?: number;
+}
 
 /**
  * Analyzes backup freshness for a guest.
  * @param lastBackup - ISO timestamp string or Unix timestamp (ms)
+ * @param thresholds - Optional thresholds for fresh/stale determination (in hours)
  * @returns BackupInfo with status and formatted age
  */
-export function getBackupInfo(lastBackup: string | number | null | undefined): BackupInfo {
+export function getBackupInfo(
+  lastBackup: string | number | null | undefined,
+  thresholds?: BackupThresholds
+): BackupInfo {
   if (!lastBackup) {
     return { status: 'never', ageMs: null, ageFormatted: 'Never' };
   }
@@ -148,10 +158,16 @@ export function getBackupInfo(lastBackup: string | number | null | undefined): B
   const now = Date.now();
   const ageMs = now - timestamp;
 
+  // Use provided thresholds or fall back to defaults
+  const freshHours = thresholds?.freshHours ?? DEFAULT_FRESH_HOURS;
+  const staleHours = thresholds?.staleHours ?? DEFAULT_STALE_HOURS;
+  const freshThresholdMs = freshHours * 60 * 60 * 1000;
+  const staleThresholdMs = staleHours * 60 * 60 * 1000;
+
   let status: BackupStatus;
-  if (ageMs <= BACKUP_FRESH_THRESHOLD_MS) {
+  if (ageMs <= freshThresholdMs) {
     status = 'fresh';
-  } else if (ageMs <= BACKUP_STALE_THRESHOLD_MS) {
+  } else if (ageMs <= staleThresholdMs) {
     status = 'stale';
   } else {
     status = 'critical';

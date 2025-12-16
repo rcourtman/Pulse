@@ -118,6 +118,15 @@ const isPastObservationWindow = (): boolean => {
   return Date.now() > expiryTime;
 };
 
+// Get backup indicator thresholds from config
+const getBackupThresholds = (): { freshHours: number; staleHours: number } => {
+  const cfg = config();
+  return {
+    freshHours: cfg?.backupDefaults?.freshHours ?? 24,
+    staleHours: cfg?.backupDefaults?.staleHours ?? 72,
+  };
+};
+
 // Export the store
 export const useAlertsActivation = () => ({
   // Signals
@@ -129,6 +138,7 @@ export const useAlertsActivation = () => ({
 
   // Computed
   isPastObservationWindow,
+  getBackupThresholds,
 
   // Actions
   refreshConfig,

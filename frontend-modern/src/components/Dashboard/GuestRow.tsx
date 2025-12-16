@@ -18,6 +18,7 @@ import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
 import { aiChatStore } from '@/stores/aiChat';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 
 type Guest = VM | Container;
 
@@ -60,7 +61,8 @@ function BackupIndicator(props: { lastBackup: string | number | null | undefined
   // Don't show for templates
   if (props.isTemplate) return null;
 
-  const backupInfo = createMemo(() => getBackupInfo(props.lastBackup));
+  const alertsActivation = useAlertsActivation();
+  const backupInfo = createMemo(() => getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds()));
   const config = createMemo(() => BACKUP_STATUS_CONFIG[backupInfo().status]);
 
   // Only show when there's a problem (stale, critical, or never)
@@ -319,7 +321,8 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
   const [showTooltip, setShowTooltip] = createSignal(false);
   const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
 
-  const info = createMemo(() => getBackupInfo(props.lastBackup));
+  const alertsActivation = useAlertsActivation();
+  const info = createMemo(() => getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds()));
   const config = createMemo(() => BACKUP_STATUS_CONFIG[info().status]);
 
   const handleMouseEnter = (e: MouseEvent) => {
