@@ -70,6 +70,61 @@ func isVMSpecificError(errStr string) bool {
 	return false
 }
 
+// sanitizeEndpointError transforms raw Go errors into user-friendly messages
+// for display in the UI. The original error is preserved in logs.
+func sanitizeEndpointError(errMsg string) string {
+	if errMsg == "" {
+		return errMsg
+	}
+
+	lower := strings.ToLower(errMsg)
+
+	// Context deadline exceeded - usually means slow API response
+	if strings.Contains(lower, "context deadline exceeded") {
+		// Check for specific causes
+		if strings.Contains(lower, "/storage") {
+			return "Request timed out - storage API slow (check for unreachable PBS/NFS/Ceph backends)"
+		}
+		if strings.Contains(lower, "pbs-") || strings.Contains(lower, ":8007") {
+			return "Request timed out - PBS storage backend unreachable"
+		}
+		return "Request timed out - Proxmox API may be slow or waiting on unreachable backend services"
+	}
+
+	// Client timeout - similar to context deadline
+	if strings.Contains(lower, "client.timeout exceeded") {
+		return "Connection timed out - Proxmox API not responding in time"
+	}
+
+	// Connection refused
+	if strings.Contains(lower, "connection refused") {
+		return "Connection refused - Proxmox API not running or firewall blocking"
+	}
+
+	// No route to host
+	if strings.Contains(lower, "no route to host") {
+		return "Network unreachable - check network connectivity to Proxmox host"
+	}
+
+	// TLS/certificate errors
+	if strings.Contains(lower, "certificate") || strings.Contains(lower, "x509") {
+		return "TLS certificate error - check SSL settings or add fingerprint"
+	}
+
+	// Auth errors - keep these specific
+	if strings.Contains(lower, "authentication") || strings.Contains(lower, "401") || strings.Contains(lower, "403") {
+		return "Authentication failed - check API token or credentials"
+	}
+
+	// PBS-specific errors
+	if strings.Contains(lower, "can't connect to") && strings.Contains(lower, ":8007") {
+		return "PBS storage unreachable - check Proxmox Backup Server connectivity"
+	}
+
+	// Return original if no transformation applies
+	return errMsg
+}
+
 // NewClusterClient creates a new cluster-aware client
 func NewClusterClient(name string, config ClientConfig, endpoints []string) *ClusterClient {
 	cc := &ClusterClient{
@@ -127,7 +182,7 @@ func (cc *ClusterClient) initialHealthCheck() {
 			if err != nil {
 				cc.mu.Lock()
 				cc.nodeHealth[ep] = false
-				cc.lastError[ep] = err.Error()
+				cc.lastError[ep] = sanitizeEndpointError(err.Error())
 				cc.lastHealthCheck[ep] = time.Now()
 				cc.mu.Unlock()
 				log.Info().
@@ -155,7 +210,7 @@ func (cc *ClusterClient) initialHealthCheck() {
 				fullClient, clientErr := NewClient(fullCfg)
 				if clientErr != nil {
 					cc.nodeHealth[ep] = false
-					cc.lastError[ep] = clientErr.Error()
+					cc.lastError[ep] = sanitizeEndpointError(clientErr.Error())
 					cc.lastHealthCheck[ep] = time.Now()
 					log.Warn().
 						Str("cluster", cc.name).
@@ -182,7 +237,7 @@ func (cc *ClusterClient) initialHealthCheck() {
 			} else {
 				// Real connectivity issue
 				cc.nodeHealth[ep] = false
-				cc.lastError[ep] = err.Error()
+				cc.lastError[ep] = sanitizeEndpointError(err.Error())
 				cc.lastHealthCheck[ep] = time.Now()
 				log.Info().
 					Str("cluster", cc.name).
@@ -422,7 +477,7 @@ func (cc *ClusterClient) markUnhealthyWithError(endpoint string, errMsg string) 
 		cc.nodeHealth[endpoint] = false
 	}
 	if errMsg != "" {
-		cc.lastError[endpoint] = errMsg
+		cc.lastError[endpoint] = sanitizeEndpointError(errMsg)
 	}
 	cc.lastHealthCheck[endpoint] = time.Now()
 }

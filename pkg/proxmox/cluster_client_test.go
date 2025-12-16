@@ -254,6 +254,46 @@ func TestIsVMSpecificError(t *testing.T) {
 	}
 }
 
+func TestSanitizeEndpointError(t *testing.T) {
+	tests := []struct {
+		name     string
+		errMsg   string
+		expected string
+	}{
+		{"empty string", "", ""},
+		{"generic error unchanged", "some random error", "some random error"},
+		// Context deadline exceeded
+		{"context deadline basic", "context deadline exceeded", "Request timed out - Proxmox API may be slow or waiting on unreachable backend services"},
+		{"context deadline storage", "Get /api2/json/nodes/delly/storage: context deadline exceeded", "Request timed out - storage API slow (check for unreachable PBS/NFS/Ceph backends)"},
+		{"context deadline pbs", "pbs-backup context deadline exceeded", "Request timed out - PBS storage backend unreachable"},
+		{"context deadline port 8007", "Can't connect to verdeclose:8007 context deadline exceeded", "Request timed out - PBS storage backend unreachable"},
+		// Client timeout
+		{"client timeout", "Client.Timeout exceeded while awaiting headers", "Connection timed out - Proxmox API not responding in time"},
+		// Connection refused
+		{"connection refused", "dial tcp 192.168.0.5:8006: connect: connection refused", "Connection refused - Proxmox API not running or firewall blocking"},
+		// No route to host
+		{"no route to host", "dial tcp: no route to host", "Network unreachable - check network connectivity to Proxmox host"},
+		// Certificate errors
+		{"certificate error", "x509: certificate signed by unknown authority", "TLS certificate error - check SSL settings or add fingerprint"},
+		{"cert in message", "certificate has expired", "TLS certificate error - check SSL settings or add fingerprint"},
+		// Auth errors
+		{"401 error", "api error 401: Unauthorized", "Authentication failed - check API token or credentials"},
+		{"403 error", "status 403: Forbidden", "Authentication failed - check API token or credentials"},
+		{"authentication keyword", "authentication failed: invalid token", "Authentication failed - check API token or credentials"},
+		// PBS specific
+		{"pbs connect error", "Can't connect to verdeclose:8007 (Connection timed out)", "PBS storage unreachable - check Proxmox Backup Server connectivity"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := sanitizeEndpointError(tt.errMsg)
+			if result != tt.expected {
+				t.Errorf("sanitizeEndpointError(%q) = %q, want %q", tt.errMsg, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestCalculateRateLimitBackoff(t *testing.T) {
 	// Test that backoff increases with attempt number
 	prev := time.Duration(0)
