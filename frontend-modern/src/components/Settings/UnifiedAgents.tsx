@@ -107,9 +107,6 @@ export const UnifiedAgents: Component = () => {
     const [lookupResult, setLookupResult] = createSignal<HostLookupResponse | null>(null);
     const [lookupError, setLookupError] = createSignal<string | null>(null);
     const [lookupLoading, setLookupLoading] = createSignal(false);
-    const [enableDocker, setEnableDocker] = createSignal(false); // Default to false - user must opt-in for Docker monitoring
-    const [enableKubernetes, setEnableKubernetes] = createSignal(false); // Default to false - user must opt-in for Kubernetes monitoring
-    const [enableProxmox, setEnableProxmox] = createSignal(false); // For Proxmox VE/PBS nodes - creates API token and auto-registers
     const [insecureMode, setInsecureMode] = createSignal(false); // For self-signed certificates (issue #806)
 
     createEffect(() => {
@@ -237,9 +234,6 @@ export const UnifiedAgents: Component = () => {
         }
     };
 
-    const getDockerFlag = () => enableDocker() ? ' --enable-docker' : '';
-    const getKubernetesFlag = () => enableKubernetes() ? ' --enable-kubernetes' : '';
-    const getProxmoxFlag = () => enableProxmox() ? ' --enable-proxmox' : '';
     const getInsecureFlag = () => insecureMode() ? ' --insecure' : '';
     const getCurlInsecureFlag = () => insecureMode() ? '-k' : '';
 
@@ -499,56 +493,23 @@ export const UnifiedAgents: Component = () => {
                                 <div class="flex items-center justify-between">
                                     <div>
                                         <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Installation commands</h4>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">The installer auto-detects Docker, Kubernetes, and Proxmox. Use these to force enable/disable:</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">The installer auto-detects Docker, Kubernetes, and Proxmox on the target machine.</p>
                                     </div>
                                 </div>
-                                <div class="flex items-center gap-4 flex-wrap">
-                                    <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Force enable Docker monitoring (auto-detected if Docker/Podman is available)">
-                                        <input
-                                            type="checkbox"
-                                            checked={enableDocker()}
-                                            onChange={(e) => setEnableDocker(e.currentTarget.checked)}
-                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                                        />
-                                        Force Docker
-                                    </label>
-                                    <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Force enable Kubernetes monitoring (auto-detected if kubectl/kubeconfig is available)">
-                                        <input
-                                            type="checkbox"
-                                            checked={enableKubernetes()}
-                                            onChange={(e) => setEnableKubernetes(e.currentTarget.checked)}
-                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                                        />
-                                        Force Kubernetes
-                                    </label>
-                                    <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Force enable Proxmox integration (auto-detected on PVE/PBS hosts)">
-                                        <input
-                                            type="checkbox"
-                                            checked={enableProxmox()}
-                                            onChange={(e) => setEnableProxmox(e.currentTarget.checked)}
-                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                                        />
-                                        Force Proxmox
-                                    </label>
-                                    <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
-                                        <input
-                                            type="checkbox"
-                                            checked={insecureMode()}
-                                            onChange={(e) => setInsecureMode(e.currentTarget.checked)}
-                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                                        />
-                                        Skip TLS verify
-                                    </label>
-                                </div>
-                                <Show when={enableProxmox()}>
-                                    <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
-                                        <p class="font-medium">Proxmox force-enable</p>
-                                        <p class="text-xs mt-1 text-blue-700 dark:text-blue-300">
-                                            The agent will create a <code class="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">pulse-monitor</code> user and API token on the Proxmox node,
-                                            then register it with Pulse automatically. Includes temperature monitoring.
-                                        </p>
+                                <Show when={insecureMode()}>
+                                    <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                                        <span class="font-medium">TLS verification disabled</span> — commands will skip certificate checks (for self-signed certs).
                                     </div>
                                 </Show>
+                                <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
+                                    <input
+                                        type="checkbox"
+                                        checked={insecureMode()}
+                                        onChange={(e) => setInsecureMode(e.currentTarget.checked)}
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                    />
+                                    Skip TLS certificate verification (self-signed certs)
+                                </label>
                             </div>
 
                             <div class="space-y-4">
@@ -568,29 +529,8 @@ export const UnifiedAgents: Component = () => {
                                                             if (insecureMode() && cmd.includes('curl -fsSL')) {
                                                                 cmd = cmd.replace('curl -fsSL', 'curl -kfsSL');
                                                             }
-                                                            // For bash scripts (not PowerShell), append flags directly
+                                                            // For bash scripts (not PowerShell), append insecure flag
                                                             const isBashScript = !cmd.includes('$env:') && !cmd.includes('irm');
-                                                            // Append docker flag if enabled
-                                                            if (enableDocker()) {
-                                                                if (cmd.includes('$env:PULSE_URL')) {
-                                                                    cmd = `$env:PULSE_ENABLE_DOCKER="true"; ` + cmd;
-                                                                } else if (isBashScript) {
-                                                                    cmd += getDockerFlag();
-                                                                }
-                                                            }
-                                                            // Append kubernetes flag if enabled
-                                                            if (enableKubernetes()) {
-                                                                if (cmd.includes('$env:PULSE_URL')) {
-                                                                    cmd = `$env:PULSE_ENABLE_KUBERNETES="true"; ` + cmd;
-                                                                } else if (isBashScript) {
-                                                                    cmd += getKubernetesFlag();
-                                                                }
-                                                            }
-                                                            // Append proxmox flag if enabled (Linux only - Proxmox doesn't run on Windows/macOS)
-                                                            if (enableProxmox() && isBashScript) {
-                                                                cmd += getProxmoxFlag();
-                                                            }
-                                                            // Append insecure flag for agent if enabled
                                                             if (insecureMode() && isBashScript) {
                                                                 cmd += getInsecureFlag();
                                                             }
@@ -706,31 +646,20 @@ export const UnifiedAgents: Component = () => {
                             </div>
                             <details class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
                                 <summary class="cursor-pointer text-sm font-medium text-gray-900 dark:text-gray-100">
-                                    Advanced options (uninstall & manual install)
+                                    Troubleshooting
                                 </summary>
                                 <div class="mt-3 space-y-4">
                                     <div>
-                                        <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Uninstall</p>
-                                        <div class="mt-2 flex items-center gap-2">
-                                            <code class="flex-1 break-all rounded bg-gray-900 px-3 py-2 font-mono text-xs text-red-400 dark:bg-gray-950">
-                                                {getUninstallCommand()}
-                                            </code>
-                                            <button
-                                                type="button"
-                                                onClick={async () => {
-                                                    const success = await copyToClipboard(getUninstallCommand());
-                                                    if (typeof window !== 'undefined' && window.showToast) {
-                                                        window.showToast(success ? 'success' : 'error', success ? 'Copied to clipboard' : 'Failed to copy to clipboard');
-                                                    }
-                                                }}
-                                                class="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
-                                            >
-                                                Copy
-                                            </button>
-                                        </div>
-                                        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                            Stops the agent, removes the binary, the systemd unit, and related files.
+                                        <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Auto-detection not working?</p>
+                                        <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                                            If Docker, Kubernetes, or Proxmox isn't detected automatically, add these flags to the install command:
                                         </p>
+                                        <ul class="mt-2 text-xs text-gray-600 dark:text-gray-400 list-disc list-inside space-y-1">
+                                            <li><code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">--enable-docker</code> — Force enable Docker/Podman monitoring</li>
+                                            <li><code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">--enable-kubernetes</code> — Force enable Kubernetes monitoring</li>
+                                            <li><code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">--enable-proxmox</code> — Force enable Proxmox integration (creates API token)</li>
+                                            <li><code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">--disable-docker</code> — Skip Docker even if detected</li>
+                                        </ul>
                                     </div>
                                 </div>
                             </details>
