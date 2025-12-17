@@ -2,6 +2,7 @@ package hostagent
 
 import (
 	"os"
+	"runtime"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -78,37 +79,57 @@ func TestNormalisePlatform(t *testing.T) {
 func TestGetReliableMachineID(t *testing.T) {
 	logger := zerolog.Nop()
 
-	// Check if we're running in an LXC container
-	inLXC := isLXCContainer()
-
-	t.Run("returns non-empty ID", func(t *testing.T) {
-		result := getReliableMachineID("test-gopsutil-id", logger)
-		if result == "" {
-			t.Error("getReliableMachineID returned empty string")
-		}
-	})
+	originalReadFile := readFile
+	t.Cleanup(func() { readFile = originalReadFile })
 
 	t.Run("trims whitespace", func(t *testing.T) {
+		readFile = func(string) ([]byte, error) { return nil, os.ErrNotExist }
 		result := getReliableMachineID("  test-id  ", logger)
-		if result == "  test-id  " {
-			t.Error("getReliableMachineID did not trim whitespace")
+		if result != "test-id" {
+			t.Errorf("getReliableMachineID trimmed result = %q, want %q", result, "test-id")
 		}
 	})
 
-	if inLXC {
-		t.Run("LXC uses machine-id", func(t *testing.T) {
-			// In LXC, we should get a machine-id regardless of gopsutil input
-			result := getReliableMachineID("gopsutil-product-uuid", logger)
-			if result == "gopsutil-product-uuid" {
-				t.Error("In LXC, getReliableMachineID should use /etc/machine-id, not gopsutil ID")
+	// On Linux, we always use /etc/machine-id to avoid ID collisions
+	// from LXC containers, cloned VMs, or identical hardware UUIDs
+	if runtime.GOOS == "linux" {
+		t.Run("Linux prefers /etc/machine-id and formats 32-char IDs", func(t *testing.T) {
+			readFile = func(name string) ([]byte, error) {
+				if name == "/etc/machine-id" {
+					return []byte("0123456789abcdef0123456789abcdef\n"), nil
+				}
+				return nil, os.ErrNotExist
 			}
-			// Verify it looks like a formatted UUID
-			if len(result) < 32 {
-				t.Errorf("Expected UUID-like result, got %q", result)
+
+			result := getReliableMachineID("gopsutil-product-uuid", logger)
+			const want = "01234567-89ab-cdef-0123-456789abcdef"
+			if result != want {
+				t.Errorf("getReliableMachineID() = %q, want %q", result, want)
+			}
+		})
+
+		t.Run("Linux falls back to gopsutil ID when /etc/machine-id missing", func(t *testing.T) {
+			readFile = func(string) ([]byte, error) { return nil, os.ErrNotExist }
+			result := getReliableMachineID("gopsutil-product-uuid", logger)
+			if result != "gopsutil-product-uuid" {
+				t.Errorf("getReliableMachineID() = %q, want %q", result, "gopsutil-product-uuid")
+			}
+		})
+
+		t.Run("Linux falls back when machine-id is too short", func(t *testing.T) {
+			readFile = func(name string) ([]byte, error) {
+				if name == "/etc/machine-id" {
+					return []byte("short\n"), nil
+				}
+				return nil, os.ErrNotExist
+			}
+			result := getReliableMachineID("gopsutil-product-uuid", logger)
+			if result != "gopsutil-product-uuid" {
+				t.Errorf("getReliableMachineID() = %q, want %q", result, "gopsutil-product-uuid")
 			}
 		})
 	} else {
-		t.Run("non-LXC uses gopsutil ID", func(t *testing.T) {
+		t.Run("non-Linux uses gopsutil ID", func(t *testing.T) {
 			result := getReliableMachineID("12345678-1234-1234-1234-123456789abc", logger)
 			if result != "12345678-1234-1234-1234-123456789abc" {
 				t.Errorf("Expected gopsutil ID, got %q", result)
@@ -118,20 +139,60 @@ func TestGetReliableMachineID(t *testing.T) {
 }
 
 func TestIsLXCContainer(t *testing.T) {
-	// This test documents the detection behavior.
-	// On non-LXC systems, isLXCContainer should return false.
-	// We can't easily test the true case without mocking filesystem.
-	result := isLXCContainer()
+	originalReadFile := readFile
+	t.Cleanup(func() { readFile = originalReadFile })
 
-	// Check if we're actually in an LXC container
-	isActuallyLXC := false
-	if data, err := os.ReadFile("/run/systemd/container"); err == nil {
-		if string(data) == "lxc" || string(data) == "lxc\n" {
-			isActuallyLXC = true
+	t.Run("/run/systemd/container detects lxc", func(t *testing.T) {
+		readFile = func(name string) ([]byte, error) {
+			if name == "/run/systemd/container" {
+				return []byte("lxc\n"), nil
+			}
+			return nil, os.ErrNotExist
 		}
-	}
+		if !isLXCContainer() {
+			t.Fatalf("expected lxc container to be detected")
+		}
+	})
 
-	if result != isActuallyLXC {
-		t.Logf("isLXCContainer() = %v (expected %v based on environment)", result, isActuallyLXC)
-	}
+	t.Run("/proc/1/environ detects container=lxc", func(t *testing.T) {
+		readFile = func(name string) ([]byte, error) {
+			if name == "/proc/1/environ" {
+				return []byte("foo=bar\x00container=lxc\x00baz=qux"), nil
+			}
+			return nil, os.ErrNotExist
+		}
+		if !isLXCContainer() {
+			t.Fatalf("expected lxc container to be detected")
+		}
+	})
+
+	t.Run("/proc/1/cgroup detects /lxc/", func(t *testing.T) {
+		readFile = func(name string) ([]byte, error) {
+			if name == "/proc/1/cgroup" {
+				return []byte("0::/lxc/abcd\n"), nil
+			}
+			return nil, os.ErrNotExist
+		}
+		if !isLXCContainer() {
+			t.Fatalf("expected lxc container to be detected")
+		}
+	})
+
+	t.Run("non-lxc container returns false", func(t *testing.T) {
+		readFile = func(name string) ([]byte, error) {
+			if name == "/run/systemd/container" {
+				return []byte("docker\n"), nil
+			}
+			if name == "/proc/1/environ" {
+				return []byte("container=podman\x00"), nil
+			}
+			if name == "/proc/1/cgroup" {
+				return []byte("0::/system.slice\n"), nil
+			}
+			return nil, os.ErrNotExist
+		}
+		if isLXCContainer() {
+			t.Fatalf("expected non-lxc container to not be detected as lxc")
+		}
+	})
 }

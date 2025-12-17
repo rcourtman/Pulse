@@ -36,12 +36,12 @@ type ProxmoxSetupResult struct {
 }
 
 const (
-	proxmoxUser     = "pulse-monitor"
-	proxmoxUserPVE  = "pulse-monitor@pam"
-	proxmoxUserPBS  = "pulse-monitor@pbs"
-	proxmoxComment  = "Pulse monitoring service"
-	stateFilePath   = "/var/lib/pulse-agent/proxmox-registered"
-	stateFileDir    = "/var/lib/pulse-agent"
+	proxmoxUser    = "pulse-monitor"
+	proxmoxUserPVE = "pulse-monitor@pam"
+	proxmoxUserPBS = "pulse-monitor@pbs"
+	proxmoxComment = "Pulse monitoring service"
+	stateFilePath  = "/var/lib/pulse-agent/proxmox-registered"
+	stateFileDir   = "/var/lib/pulse-agent"
 )
 
 // NewProxmoxSetup creates a new ProxmoxSetup instance.
@@ -246,23 +246,20 @@ func (p *ProxmoxSetup) parsePBSTokenValue(output string) string {
 }
 
 // getHostURL constructs the host URL for this Proxmox node.
-// Prefers IP address over hostname since hostnames are often not DNS-resolvable.
+// Uses intelligent IP selection to prefer LAN addresses over internal cluster networks.
 func (p *ProxmoxSetup) getHostURL(ptype string) string {
 	port := "8006"
 	if ptype == "pbs" {
 		port = "8007"
 	}
 
-	// Always prefer IP address since hostnames often can't be resolved by Pulse
-	// (e.g., "pi" hostname won't resolve via DNS)
+	// Get all IPs and select the best one for external access
 	if out, err := exec.Command("hostname", "-I").Output(); err == nil {
 		ips := strings.Fields(string(out))
 		if len(ips) > 0 {
-			// Use first non-loopback IP
-			for _, ip := range ips {
-				if ip != "127.0.0.1" && ip != "::1" {
-					return fmt.Sprintf("https://%s:%s", ip, port)
-				}
+			bestIP := selectBestIP(ips)
+			if bestIP != "" {
+				return fmt.Sprintf("https://%s:%s", bestIP, port)
 			}
 		}
 	}
@@ -273,6 +270,95 @@ func (p *ProxmoxSetup) getHostURL(ptype string) string {
 		hostname = "localhost"
 	}
 	return fmt.Sprintf("https://%s:%s", hostname, port)
+}
+
+// selectBestIP picks the most likely externally-reachable IP from a list.
+// Prefers common LAN subnets (192.168.x.x, 10.x.x.x) and avoids internal
+// cluster networks (like corosync's 172.20.x.x) and link-local addresses.
+func selectBestIP(ips []string) string {
+	type scoredIP struct {
+		ip    string
+		score int
+	}
+
+	var candidates []scoredIP
+
+	for _, ip := range ips {
+		// Skip loopback and IPv6 link-local
+		if ip == "127.0.0.1" || ip == "::1" || strings.HasPrefix(ip, "fe80:") {
+			continue
+		}
+
+		// Skip IPv6 for simplicity (most Proxmox setups use IPv4)
+		if strings.Contains(ip, ":") {
+			continue
+		}
+
+		score := scoreIPv4(ip)
+		if score > 0 {
+			candidates = append(candidates, scoredIP{ip: ip, score: score})
+		}
+	}
+
+	if len(candidates) == 0 {
+		// Fallback: return first non-loopback IP if no good candidates
+		for _, ip := range ips {
+			if ip != "127.0.0.1" && ip != "::1" && !strings.HasPrefix(ip, "fe80:") {
+				return ip
+			}
+		}
+		return ""
+	}
+
+	// Return highest scored IP
+	best := candidates[0]
+	for _, c := range candidates[1:] {
+		if c.score > best.score {
+			best = c
+		}
+	}
+	return best.ip
+}
+
+// scoreIPv4 assigns a preference score to an IPv4 address.
+// Higher score = more likely to be externally reachable.
+func scoreIPv4(ip string) int {
+	parts := strings.Split(ip, ".")
+	if len(parts) != 4 {
+		return 0
+	}
+
+	// Parse first two octets
+	first := 0
+	second := 0
+	fmt.Sscanf(parts[0], "%d", &first)
+	fmt.Sscanf(parts[1], "%d", &second)
+
+	// Scoring logic:
+	// - 192.168.x.x: Very common home/office LAN, high priority (score 100)
+	// - 10.0.x.x - 10.31.x.x: Common corporate LAN ranges (score 90)
+	// - 10.x.x.x (other): Less common, but still likely LAN (score 70)
+	// - 172.16-31.x.x: Private range, often used for internal clusters (score 50)
+	//   Corosync often uses 172.20.x.x or similar for ring0/ring1
+	// - 169.254.x.x: Link-local, skip (score 0)
+	// - Other private/public: Unknown, low priority (score 30)
+
+	switch {
+	case first == 192 && second == 168:
+		return 100 // Most common home/office LAN
+	case first == 10 && second <= 31:
+		return 90 // Common corporate LAN
+	case first == 10:
+		return 70 // Other 10.x.x.x
+	case first == 172 && second >= 16 && second <= 31:
+		// This is private 172.16-31.x.x range, often used for internal clusters
+		// Corosync commonly uses 172.20.x.x for cluster communication
+		return 50 // Lower priority - often internal cluster
+	case first == 169 && second == 254:
+		return 0 // Link-local, skip
+	default:
+		return 30 // Unknown/public - low priority
+	}
 }
 
 // registerWithPulse calls the auto-register endpoint to add the node.
