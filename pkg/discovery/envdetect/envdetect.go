@@ -15,6 +15,52 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+type ifaceInfo struct {
+	Name     string
+	Flags    net.Flags
+	Addrs    []net.Addr
+	AddrsErr error
+}
+
+type environmentProbe interface {
+	LookPath(file string) (string, error)
+	CommandCombinedOutput(name string, args ...string) ([]byte, error)
+	Stat(name string) (os.FileInfo, error)
+	ReadFile(name string) ([]byte, error)
+	Interfaces() ([]ifaceInfo, error)
+}
+
+type systemEnvironmentProbe struct{}
+
+func (systemEnvironmentProbe) LookPath(file string) (string, error) { return exec.LookPath(file) }
+
+func (systemEnvironmentProbe) CommandCombinedOutput(name string, args ...string) ([]byte, error) {
+	return exec.Command(name, args...).CombinedOutput()
+}
+
+func (systemEnvironmentProbe) Stat(name string) (os.FileInfo, error) { return os.Stat(name) }
+func (systemEnvironmentProbe) ReadFile(name string) ([]byte, error)  { return os.ReadFile(name) }
+
+func (systemEnvironmentProbe) Interfaces() ([]ifaceInfo, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]ifaceInfo, 0, len(interfaces))
+	for _, iface := range interfaces {
+		addrs, addrsErr := iface.Addrs()
+		out = append(out, ifaceInfo{
+			Name:     iface.Name,
+			Flags:    iface.Flags,
+			Addrs:    addrs,
+			AddrsErr: addrsErr,
+		})
+	}
+
+	return out, nil
+}
+
 // Environment represents the runtime environment type.
 type Environment int
 
@@ -95,6 +141,10 @@ type EnvironmentProfile struct {
 
 // DetectEnvironment performs environment detection and returns a profile.
 func DetectEnvironment() (*EnvironmentProfile, error) {
+	return detectEnvironment(systemEnvironmentProbe{})
+}
+
+func detectEnvironment(probe environmentProbe) (*EnvironmentProfile, error) {
 	profile := &EnvironmentProfile{
 		Type:       Unknown,
 		Phases:     []SubnetPhase{},
@@ -106,7 +156,7 @@ func DetectEnvironment() (*EnvironmentProfile, error) {
 
 	log.Info().Msg("Detecting runtime environment")
 
-	isContainer, containerType := detectContainer()
+	isContainer, containerType := detectContainer(probe)
 	profile.Metadata["container_detected"] = strconv.FormatBool(isContainer)
 	if containerType != "" {
 		profile.Metadata["container_type"] = containerType
@@ -115,11 +165,11 @@ func DetectEnvironment() (*EnvironmentProfile, error) {
 	var err error
 	switch {
 	case !isContainer:
-		profile, err = detectNativeEnvironment(profile)
+		profile, err = detectNativeEnvironment(profile, probe)
 	case containerType == "docker":
-		profile, err = detectDockerEnvironment(profile)
+		profile, err = detectDockerEnvironment(profile, probe)
 	case containerType == "lxc":
-		profile, err = detectLXCEnvironment(profile)
+		profile, err = detectLXCEnvironment(profile, probe)
 	default:
 		profile.Type = Unknown
 		profile.Confidence = 0.3
@@ -152,13 +202,12 @@ func DetectEnvironment() (*EnvironmentProfile, error) {
 }
 
 // detectContainer inspects the host to determine whether we are inside a container.
-func detectContainer() (bool, string) {
+func detectContainer(probe environmentProbe) (bool, string) {
 	containerType := ""
 
 	// 1. systemd-detect-virt --container
-	if _, err := exec.LookPath("systemd-detect-virt"); err == nil {
-		cmd := exec.Command("systemd-detect-virt", "--container")
-		output, err := cmd.CombinedOutput()
+	if _, err := probe.LookPath("systemd-detect-virt"); err == nil {
+		output, err := probe.CommandCombinedOutput("systemd-detect-virt", "--container")
 		if len(output) > 0 {
 			result := strings.TrimSpace(string(output))
 			if result != "" && result != "none" {
@@ -179,17 +228,17 @@ func detectContainer() (bool, string) {
 	}
 
 	// 2. Marker files
-	if _, err := os.Stat("/.dockerenv"); err == nil {
+	if _, err := probe.Stat("/.dockerenv"); err == nil {
 		log.Debug().Msg("Detected /.dockerenv marker (Docker container)")
 		return true, "docker"
 	}
-	if _, err := os.Stat("/run/.containerenv"); err == nil {
+	if _, err := probe.Stat("/run/.containerenv"); err == nil {
 		log.Debug().Msg("Detected /run/.containerenv marker (Podman/OCI container)")
 		return true, "docker"
 	}
 
 	// 3. /proc/1/cgroup
-	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
+	if data, err := probe.ReadFile("/proc/1/cgroup"); err == nil {
 		text := string(data)
 		switch {
 		case strings.Contains(text, "docker"), strings.Contains(text, "kubepods"), strings.Contains(text, "containerd"):
@@ -204,7 +253,7 @@ func detectContainer() (bool, string) {
 	}
 
 	// 4. /proc/1/environ
-	if data, err := os.ReadFile("/proc/1/environ"); err == nil {
+	if data, err := probe.ReadFile("/proc/1/environ"); err == nil {
 		text := string(data)
 		switch {
 		case strings.Contains(text, "container=lxc"):
@@ -223,8 +272,8 @@ func detectContainer() (bool, string) {
 }
 
 // detectNativeEnvironment builds an EnvironmentProfile for native or VM deployments.
-func detectNativeEnvironment(profile *EnvironmentProfile) (*EnvironmentProfile, error) {
-	subnets, err := getAllLocalSubnets()
+func detectNativeEnvironment(profile *EnvironmentProfile, probe environmentProbe) (*EnvironmentProfile, error) {
+	subnets, err := getAllLocalSubnets(probe)
 	if err != nil {
 		return addFallbackSubnets(profileWithWarning(profile, fmt.Sprintf("Failed to enumerate interfaces: %v", err)))
 	}
@@ -249,14 +298,14 @@ func detectNativeEnvironment(profile *EnvironmentProfile) (*EnvironmentProfile, 
 }
 
 // detectDockerEnvironment determines whether Docker uses host or bridge networking.
-func detectDockerEnvironment(profile *EnvironmentProfile) (*EnvironmentProfile, error) {
-	hostMode, hostModeWarnings := isDockerHostMode()
+func detectDockerEnvironment(profile *EnvironmentProfile, probe environmentProbe) (*EnvironmentProfile, error) {
+	hostMode, hostModeWarnings := isDockerHostMode(probe)
 	if len(hostModeWarnings) > 0 {
 		profile.Warnings = append(profile.Warnings, hostModeWarnings...)
 	}
 
 	if hostMode {
-		subnets, err := getAllLocalSubnets()
+		subnets, err := getAllLocalSubnets(probe)
 		if err != nil {
 			return addFallbackSubnets(profileWithWarning(profile, fmt.Sprintf("Docker host mode: failed to enumerate subnets: %v", err)))
 		}
@@ -285,7 +334,7 @@ func detectDockerEnvironment(profile *EnvironmentProfile) (*EnvironmentProfile, 
 	profile.Confidence = 0.85
 	profile.Metadata["docker_mode"] = "bridge"
 
-	containerSubnets, err := getAllLocalSubnets()
+	containerSubnets, err := getAllLocalSubnets(probe)
 	if err != nil {
 		profile.Warnings = append(profile.Warnings, fmt.Sprintf("Docker bridge: failed to enumerate container subnets: %v", err))
 	} else if len(containerSubnets) > 0 {
@@ -301,7 +350,7 @@ func detectDockerEnvironment(profile *EnvironmentProfile) (*EnvironmentProfile, 
 	}
 
 	if profile.Policy.ScanGateways {
-		hostSubnets, confidence, warnings := detectHostNetworkFromContainer()
+		hostSubnets, confidence, warnings := detectHostNetworkFromContainer(probe)
 		if len(warnings) > 0 {
 			profile.Warnings = append(profile.Warnings, warnings...)
 		}
@@ -324,13 +373,13 @@ func detectDockerEnvironment(profile *EnvironmentProfile) (*EnvironmentProfile, 
 }
 
 // detectLXCEnvironment evaluates privilege level and prepares scanning phases.
-func detectLXCEnvironment(profile *EnvironmentProfile) (*EnvironmentProfile, error) {
-	privileged, warn := isLXCPrivileged()
+func detectLXCEnvironment(profile *EnvironmentProfile, probe environmentProbe) (*EnvironmentProfile, error) {
+	privileged, warn := isLXCPrivileged(probe)
 	if warn != "" {
 		profile.Warnings = append(profile.Warnings, warn)
 	}
 
-	containerSubnets, err := getAllLocalSubnets()
+	containerSubnets, err := getAllLocalSubnets(probe)
 	if err != nil {
 		profile.Warnings = append(profile.Warnings, fmt.Sprintf("LXC: failed to enumerate container subnets: %v", err))
 	}
@@ -371,7 +420,7 @@ func detectLXCEnvironment(profile *EnvironmentProfile) (*EnvironmentProfile, err
 	}
 
 	if profile.Policy.ScanGateways {
-		hostSubnets, confidence, warnings := detectHostNetworkFromContainer()
+		hostSubnets, confidence, warnings := detectHostNetworkFromContainer(probe)
 		if len(warnings) > 0 {
 			profile.Warnings = append(profile.Warnings, warnings...)
 		}
@@ -394,17 +443,17 @@ func detectLXCEnvironment(profile *EnvironmentProfile) (*EnvironmentProfile, err
 }
 
 // isDockerHostMode attempts to determine whether Docker is using host networking.
-func isDockerHostMode() (bool, []string) {
+func isDockerHostMode(probe environmentProbe) (bool, []string) {
 	var warnings []string
 
-	interfaces, err := net.Interfaces()
+	interfaces, err := probe.Interfaces()
 	if err != nil {
 		log.Debug().Err(err).Msg("Failed to enumerate interfaces while detecting Docker mode")
 		warnings = append(warnings, fmt.Sprintf("Unable to enumerate interfaces: %v", err))
 		return false, warnings
 	}
 
-	routeCount, routeWarn := countKernelRoutes()
+	routeCount, routeWarn := countKernelRoutes(probe)
 	if routeWarn != "" {
 		warnings = append(warnings, routeWarn)
 	}
@@ -423,8 +472,8 @@ func isDockerHostMode() (bool, []string) {
 }
 
 // isLXCPrivileged inspects UID mappings to determine privilege level.
-func isLXCPrivileged() (bool, string) {
-	data, err := os.ReadFile("/proc/self/uid_map")
+func isLXCPrivileged(probe environmentProbe) (bool, string) {
+	data, err := probe.ReadFile("/proc/self/uid_map")
 	if err != nil {
 		if errors.Is(err, os.ErrPermission) {
 			return false, "Unable to read /proc/self/uid_map (permission denied); assuming unprivileged LXC"
@@ -456,8 +505,8 @@ func isLXCPrivileged() (bool, string) {
 }
 
 // getAllLocalSubnets enumerates non-loopback, UP IPv4 subnets.
-func getAllLocalSubnets() ([]net.IPNet, error) {
-	interfaces, err := net.Interfaces()
+func getAllLocalSubnets(probe environmentProbe) ([]net.IPNet, error) {
+	interfaces, err := probe.Interfaces()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list interfaces: %w", err)
 	}
@@ -470,13 +519,12 @@ func getAllLocalSubnets() ([]net.IPNet, error) {
 			continue
 		}
 
-		addrs, err := iface.Addrs()
-		if err != nil {
-			log.Debug().Err(err).Str("interface", iface.Name).Msg("Skipping interface due to address enumeration failure")
+		if iface.AddrsErr != nil {
+			log.Debug().Err(iface.AddrsErr).Str("interface", iface.Name).Msg("Skipping interface due to address enumeration failure")
 			continue
 		}
 
-		for _, addr := range addrs {
+		for _, addr := range iface.Addrs {
 			ipNet, ok := addr.(*net.IPNet)
 			if !ok || ipNet == nil {
 				continue
@@ -512,10 +560,10 @@ func getAllLocalSubnets() ([]net.IPNet, error) {
 }
 
 // detectHostNetworkFromContainer infers host LAN subnets from container context.
-func detectHostNetworkFromContainer() ([]net.IPNet, float64, []string) {
+func detectHostNetworkFromContainer(probe environmentProbe) ([]net.IPNet, float64, []string) {
 	var warnings []string
 
-	gateway, err := getDefaultGateway()
+	gateway, err := getDefaultGateway(probe)
 	if err != nil {
 		warnings = append(warnings, fmt.Sprintf("Could not determine default gateway: %v", err))
 		return tryCommonSubnets(), 0.3, warnings
@@ -553,8 +601,8 @@ func detectHostNetworkFromContainer() ([]net.IPNet, float64, []string) {
 }
 
 // getDefaultGateway parses /proc/net/route for the default gateway.
-func getDefaultGateway() (net.IP, error) {
-	data, err := os.ReadFile("/proc/net/route")
+func getDefaultGateway(probe environmentProbe) (net.IP, error) {
+	data, err := probe.ReadFile("/proc/net/route")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read /proc/net/route: %w", err)
 	}
@@ -660,8 +708,8 @@ func addFallbackSubnets(profile *EnvironmentProfile) (*EnvironmentProfile, error
 }
 
 // countKernelRoutes parses /proc/net/route and returns the number of route entries.
-func countKernelRoutes() (int, string) {
-	data, err := os.ReadFile("/proc/net/route")
+func countKernelRoutes(probe environmentProbe) (int, string) {
+	data, err := probe.ReadFile("/proc/net/route")
 	if err != nil {
 		return 0, fmt.Sprintf("Unable to read /proc/net/route: %v", err)
 	}
