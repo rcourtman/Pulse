@@ -36,6 +36,10 @@ INSTALL_SUMMARY_FILE="/etc/pulse/install_summary.json"
 HOST_PROXY_REQUESTED=false
 HOST_PROXY_INSTALLED=false
 
+# Installer version - the major version this script is bundled with
+# In v5+, pulse-sensor-proxy is deprecated (unified agent handles temperature)
+INSTALLER_MAJOR_VERSION=5
+
 AUTO_NODE_REGISTERED=false
 AUTO_NODE_REGISTERED_NAME=""
 AUTO_NODE_REGISTER_ERROR=""
@@ -791,11 +795,16 @@ create_lxc_container() {
         fi
 
         if [[ -z "$PROXY_MODE" ]]; then
-            echo
-            if prompt_proxy_installation "false" "n"; then
-                PROXY_USER_CHOICE="yes"
+            # Skip prompting for v5+ since unified agent handles temperature monitoring
+            if [[ "${INSTALLER_MAJOR_VERSION:-0}" -ge 5 ]]; then
+                PROXY_USER_CHOICE="no"  # Unified agent handles temperature, no legacy proxy needed
             else
-                PROXY_USER_CHOICE="no"
+                echo
+                if prompt_proxy_installation "false" "n"; then
+                    PROXY_USER_CHOICE="yes"
+                else
+                    PROXY_USER_CHOICE="no"
+                fi
             fi
         fi
         
@@ -923,11 +932,16 @@ create_lxc_container() {
         fi
 
         if [[ -z "$PROXY_MODE" ]]; then
-            echo
-            if prompt_proxy_installation "false" "y"; then
-                PROXY_USER_CHOICE="yes"
+            # Skip prompting for v5+ since unified agent handles temperature monitoring
+            if [[ "${INSTALLER_MAJOR_VERSION:-0}" -ge 5 ]]; then
+                PROXY_USER_CHOICE="no"  # Unified agent handles temperature, no legacy proxy needed
             else
-                PROXY_USER_CHOICE="no"
+                echo
+                if prompt_proxy_installation "false" "y"; then
+                    PROXY_USER_CHOICE="yes"
+                else
+                    PROXY_USER_CHOICE="no"
+                fi
             fi
         fi
 
@@ -1642,44 +1656,51 @@ fi'; then
     wait_for_pulse_ready "$PULSE_BASE_URL" 120 1
 
     # Determine if we should install temperature proxy
+    # NOTE: pulse-sensor-proxy is deprecated in v5+; the unified agent handles temperature monitoring
     local install_proxy=false
     local docker_in_container=false
 
-    # Check if Docker is installed in the container
-    if pct exec $CTID -- command -v docker >/dev/null 2>&1; then
-        docker_in_container=true
-    fi
+    # Skip sensor proxy for v5+ installations (unified agent handles it)
+    if [[ "${INSTALLER_MAJOR_VERSION:-0}" -ge 5 ]]; then
+        print_info "Pulse v5+ detected - temperature monitoring handled by unified agent (skipping legacy sensor proxy)"
+        install_proxy=false
+    else
+        # Check if Docker is installed in the container
+        if pct exec $CTID -- command -v docker >/dev/null 2>&1; then
+            docker_in_container=true
+        fi
 
-    # Decide based on PROXY_MODE
-    case "$PROXY_MODE" in
-        yes)
-            install_proxy=true
-            HOST_PROXY_REQUESTED=true
-            ;;
-        no)
-            install_proxy=false
-            ;;
-        auto)
-            # Auto-detect: install if Docker is present
-            if [[ "$docker_in_container" == "true" ]]; then
+        # Decide based on PROXY_MODE
+        case "$PROXY_MODE" in
+            yes)
                 install_proxy=true
                 HOST_PROXY_REQUESTED=true
-            fi
-            ;;
-        *)
-            # Empty/unset - reuse earlier user choice (defaults handled already)
-            if [[ "$PROXY_USER_CHOICE" == "yes" ]]; then
-                install_proxy=true
-                HOST_PROXY_REQUESTED=true
-            fi
-            ;;
-    esac
+                ;;
+            no)
+                install_proxy=false
+                ;;
+            auto)
+                # Auto-detect: install if Docker is present
+                if [[ "$docker_in_container" == "true" ]]; then
+                    install_proxy=true
+                    HOST_PROXY_REQUESTED=true
+                fi
+                ;;
+            *)
+                # Empty/unset - reuse earlier user choice (defaults handled already)
+                if [[ "$PROXY_USER_CHOICE" == "yes" ]]; then
+                    install_proxy=true
+                    HOST_PROXY_REQUESTED=true
+                fi
+                ;;
+        esac
 
-    if [[ "$PROXY_MODE" == "auto" ]] && [[ "$install_proxy" != "true" ]]; then
-        print_info "Docker not detected inside container; skipping temperature proxy installation (auto mode)."
+        if [[ "$PROXY_MODE" == "auto" ]] && [[ "$install_proxy" != "true" ]]; then
+            print_info "Docker not detected inside container; skipping temperature proxy installation (auto mode)."
+        fi
     fi
 
-    # Install temperature proxy on host for secure monitoring (if enabled)
+    # Install temperature proxy on host for secure monitoring (if enabled, and only for pre-v5)
     if [[ "$install_proxy" == "true" ]]; then
         echo
         print_info "Installing temperature monitoring proxy on host..."
@@ -2214,6 +2235,7 @@ compare_versions() {
     
     return 0  # versions are equal
 }
+
 
 check_existing_installation() {
     CURRENT_VERSION=""  # Make it global so we can use it later
@@ -3484,36 +3506,39 @@ print_completion() {
     echo "  Reset:      curl -sSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash -s -- --reset"
     echo "  Uninstall:  curl -sSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash -s -- --uninstall"
 
-    local proxy_status="Not installed"
-    local pending_file="/etc/pulse-sensor-proxy/pending-control-plane.env"
-    local control_token_file="/etc/pulse-sensor-proxy/.pulse-control-token"
+    # Skip temperature proxy status display for v5+ (unified agent handles it)
+    if [[ "${INSTALLER_MAJOR_VERSION:-0}" -lt 5 ]]; then
+        local proxy_status="Not installed"
+        local pending_file="/etc/pulse-sensor-proxy/pending-control-plane.env"
+        local control_token_file="/etc/pulse-sensor-proxy/.pulse-control-token"
 
-    if [[ "$HOST_PROXY_INSTALLED" == true ]]; then
-        if [[ -f "$control_token_file" ]]; then
-            proxy_status="Installed (control-plane sync active)"
-        elif [[ -f "$pending_file" ]]; then
-            proxy_status="Installed (waiting for Pulse to register host)"
-        else
-            proxy_status="Installed (local allow list)"
+        if [[ "$HOST_PROXY_INSTALLED" == true ]]; then
+            if [[ -f "$control_token_file" ]]; then
+                proxy_status="Installed (control-plane sync active)"
+            elif [[ -f "$pending_file" ]]; then
+                proxy_status="Installed (waiting for Pulse to register host)"
+            else
+                proxy_status="Installed (local allow list)"
+            fi
+        elif [[ "$HOST_PROXY_REQUESTED" == true ]]; then
+            proxy_status="Install requested (pending)"
         fi
-    elif [[ "$HOST_PROXY_REQUESTED" == true ]]; then
-        proxy_status="Install requested (pending)"
-    fi
-    echo
-    echo -e "${YELLOW}Temperature proxy:${NC} ${proxy_status}"
-
-    if [[ "$HOST_PROXY_INSTALLED" == true && -f "$pending_file" ]]; then
-        echo "  Add this host in Pulse (Settings → Nodes) and the proxy will auto-register."
-    fi
-
-    if [[ "$IN_CONTAINER" == "true" ]]; then
-        local proxy_ctid="${DETECTED_CTID:-<your-container-id>}"
         echo
-        echo -e "${YELLOW}Temperature monitoring:${NC}"
-        echo "  Run on the Proxmox host to enable secure temperature collection:"
-        echo "    curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | \\"
-        echo "      bash -s -- --ctid ${proxy_ctid} --pulse-server ${PULSE_URL}"
-        echo "  See docs/TEMPERATURE_MONITORING.md for details."
+        echo -e "${YELLOW}Temperature proxy:${NC} ${proxy_status}"
+
+        if [[ "$HOST_PROXY_INSTALLED" == true && -f "$pending_file" ]]; then
+            echo "  Add this host in Pulse (Settings → Nodes) and the proxy will auto-register."
+        fi
+
+        if [[ "$IN_CONTAINER" == "true" ]]; then
+            local proxy_ctid="${DETECTED_CTID:-<your-container-id>}"
+            echo
+            echo -e "${YELLOW}Temperature monitoring:${NC}"
+            echo "  Run on the Proxmox host to enable secure temperature collection:"
+            echo "    curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | \\"
+            echo "      bash -s -- --ctid ${proxy_ctid} --pulse-server ${PULSE_URL}"
+            echo "  See docs/TEMPERATURE_MONITORING.md for details."
+        fi
     fi
     
     # Show auto-update status if timer exists
@@ -4187,10 +4212,10 @@ while [[ $# -gt 0 ]]; do
             echo "  --source [BRANCH]  Build and install from source (default: main)"
             echo "  --enable-auto-updates  Enable automatic stable updates (via systemd timer)"
             echo "  --proxy MODE       Control temperature proxy installation (yes/no/auto)"
+            echo "                     [DEPRECATED in v5+: unified agent handles temperature]"
             echo "                     yes: Install without prompting"
             echo "                     no: Skip proxy installation"
             echo "                     auto: Auto-detect (install if Docker present)"
-            echo "                     (default: prompt user for LXC installations)"
             echo ""
             echo "Management options:"
             echo "  --reset            Reset Pulse to fresh configuration"
