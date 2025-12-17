@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -14,8 +15,8 @@ import (
 )
 
 const (
-	openaiAPIURL        = "https://api.openai.com/v1/chat/completions"
-	openaiMaxRetries    = 3
+	openaiAPIURL         = "https://api.openai.com/v1/chat/completions"
+	openaiMaxRetries     = 3
 	openaiInitialBackoff = 2 * time.Second
 )
 
@@ -27,7 +28,6 @@ type OpenAIClient struct {
 	baseURL string
 	client  *http.Client
 }
-
 
 // NewOpenAIClient creates a new OpenAI API client
 func NewOpenAIClient(apiKey, model, baseURL string) *OpenAIClient {
@@ -58,22 +58,22 @@ func (c *OpenAIClient) Name() string {
 
 // openaiRequest is the request body for the OpenAI API
 type openaiRequest struct {
-	Model               string              `json:"model"`
-	Messages            []openaiMessage     `json:"messages"`
-	MaxTokens           int                 `json:"max_tokens,omitempty"`             // Legacy parameter for older models
-	MaxCompletionTokens int                 `json:"max_completion_tokens,omitempty"`  // For o1/o3 models
-	Temperature         float64             `json:"temperature,omitempty"`
-	Tools               []openaiTool        `json:"tools,omitempty"`
-	ToolChoice          interface{}         `json:"tool_choice,omitempty"` // "auto", "none", or specific tool
+	Model               string          `json:"model"`
+	Messages            []openaiMessage `json:"messages"`
+	MaxTokens           int             `json:"max_tokens,omitempty"`            // Legacy parameter for older models
+	MaxCompletionTokens int             `json:"max_completion_tokens,omitempty"` // For o1/o3 models
+	Temperature         float64         `json:"temperature,omitempty"`
+	Tools               []openaiTool    `json:"tools,omitempty"`
+	ToolChoice          interface{}     `json:"tool_choice,omitempty"` // "auto", "none", or specific tool
 }
 
 // deepseekRequest extends openaiRequest with DeepSeek-specific fields
 type deepseekRequest struct {
-	Model       string              `json:"model"`
-	Messages    []openaiMessage     `json:"messages"`
-	MaxTokens   int                 `json:"max_tokens,omitempty"`
-	Tools       []openaiTool        `json:"tools,omitempty"`
-	ToolChoice  interface{}         `json:"tool_choice,omitempty"`
+	Model      string          `json:"model"`
+	Messages   []openaiMessage `json:"messages"`
+	MaxTokens  int             `json:"max_tokens,omitempty"`
+	Tools      []openaiTool    `json:"tools,omitempty"`
+	ToolChoice interface{}     `json:"tool_choice,omitempty"`
 }
 
 // openaiCompletionsRequest is for non-chat models like gpt-5.2-pro that use /v1/completions
@@ -98,10 +98,10 @@ type openaiFunction struct {
 
 type openaiMessage struct {
 	Role             string           `json:"role"`
-	Content          interface{}      `json:"content,omitempty"`            // string or null for tool calls
-	ReasoningContent string           `json:"reasoning_content,omitempty"`  // DeepSeek thinking mode
-	ToolCalls        []openaiToolCall `json:"tool_calls,omitempty"`         // For assistant messages with tool calls
-	ToolCallID       string           `json:"tool_call_id,omitempty"`       // For tool response messages
+	Content          interface{}      `json:"content,omitempty"`           // string or null for tool calls
+	ReasoningContent string           `json:"reasoning_content,omitempty"` // DeepSeek thinking mode
+	ToolCalls        []openaiToolCall `json:"tool_calls,omitempty"`        // For assistant messages with tool calls
+	ToolCallID       string           `json:"tool_call_id,omitempty"`      // For tool response messages
 }
 
 type openaiToolCall struct {
@@ -473,14 +473,28 @@ func (c *OpenAIClient) TestConnection(ctx context.Context) error {
 	return err
 }
 
-// ListModels fetches available models from the OpenAI API
-func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	// Determine the models endpoint based on the base URL
+func (c *OpenAIClient) modelsEndpoint() string {
+	// Default to public API endpoints to preserve current behavior if baseURL is invalid.
 	modelsURL := "https://api.openai.com/v1/models"
 	if c.isDeepSeek() {
 		modelsURL = "https://api.deepseek.com/models"
 	}
 
+	u, err := url.Parse(c.baseURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return modelsURL
+	}
+
+	base := u.Scheme + "://" + u.Host
+	if c.isDeepSeek() {
+		return base + "/models"
+	}
+	return base + "/v1/models"
+}
+
+// ListModels fetches available models from the OpenAI API
+func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	modelsURL := c.modelsEndpoint()
 	req, err := http.NewRequestWithContext(ctx, "GET", modelsURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -21,16 +22,27 @@ const (
 
 // AnthropicClient implements the Provider interface for Anthropic's Claude API
 type AnthropicClient struct {
-	apiKey string
-	model  string
-	client *http.Client
+	apiKey  string
+	model   string
+	baseURL string
+	client  *http.Client
 }
 
 // NewAnthropicClient creates a new Anthropic API client
 func NewAnthropicClient(apiKey, model string) *AnthropicClient {
+	return NewAnthropicClientWithBaseURL(apiKey, model, anthropicAPIURL)
+}
+
+// NewAnthropicClientWithBaseURL creates a new Anthropic client using a custom messages endpoint.
+// This is useful for testing and for deployments that route requests through a proxy.
+func NewAnthropicClientWithBaseURL(apiKey, model, baseURL string) *AnthropicClient {
+	if baseURL == "" {
+		baseURL = anthropicAPIURL
+	}
 	return &AnthropicClient{
-		apiKey: apiKey,
-		model:  model,
+		apiKey:  apiKey,
+		model:   model,
+		baseURL: baseURL,
 		client: &http.Client{
 			// 5 minutes - Opus and other large models can take a very long time
 			Timeout: 300 * time.Second,
@@ -54,33 +66,33 @@ type anthropicRequest struct {
 }
 
 type anthropicMessage struct {
-	Role    string        `json:"role"`
-	Content interface{}   `json:"content"` // Can be string or []anthropicContent
+	Role    string      `json:"role"`
+	Content interface{} `json:"content"` // Can be string or []anthropicContent
 }
 
 // anthropicTool represents a regular function tool
 type anthropicTool struct {
-	Type        string                 `json:"type,omitempty"`        // "web_search_20250305" for web search, omit for regular tools
+	Type        string                 `json:"type,omitempty"` // "web_search_20250305" for web search, omit for regular tools
 	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"` // Not used for web search
+	Description string                 `json:"description,omitempty"`  // Not used for web search
 	InputSchema map[string]interface{} `json:"input_schema,omitempty"` // Not used for web search
-	MaxUses     int                    `json:"max_uses,omitempty"`    // For web search: limit searches per request
+	MaxUses     int                    `json:"max_uses,omitempty"`     // For web search: limit searches per request
 }
 
 // anthropicResponse is the response from the Anthropic API
 type anthropicResponse struct {
-	ID           string `json:"id"`
-	Type         string `json:"type"`
-	Role         string `json:"role"`
+	ID           string             `json:"id"`
+	Type         string             `json:"type"`
+	Role         string             `json:"role"`
 	Content      []anthropicContent `json:"content"`
-	Model        string `json:"model"`
-	StopReason   string `json:"stop_reason"`
-	StopSequence string `json:"stop_sequence,omitempty"`
-	Usage        anthropicUsage `json:"usage"`
+	Model        string             `json:"model"`
+	StopReason   string             `json:"stop_reason"`
+	StopSequence string             `json:"stop_sequence,omitempty"`
+	Usage        anthropicUsage     `json:"usage"`
 }
 
 type anthropicContent struct {
-	Type      string                 `json:"type"`                  // "text", "tool_use", "tool_result", "server_tool_use", "web_search_tool_result"
+	Type      string                 `json:"type"` // "text", "tool_use", "tool_result", "server_tool_use", "web_search_tool_result"
 	Text      string                 `json:"text,omitempty"`
 	ID        string                 `json:"id,omitempty"`          // For tool_use
 	Name      string                 `json:"name,omitempty"`        // For tool_use
@@ -96,8 +108,8 @@ type anthropicUsage struct {
 }
 
 type anthropicError struct {
-	Type    string `json:"type"`
-	Error   anthropicErrorDetail `json:"error"`
+	Type  string               `json:"type"`
+	Error anthropicErrorDetail `json:"error"`
 }
 
 type anthropicErrorDetail struct {
@@ -239,7 +251,7 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 			}
 		}
 
-		httpReq, err := http.NewRequestWithContext(ctx, "POST", anthropicAPIURL, bytes.NewReader(body))
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(body))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -346,9 +358,18 @@ func (c *AnthropicClient) TestConnection(ctx context.Context) error {
 	return err
 }
 
+func (c *AnthropicClient) modelsEndpoint() string {
+	defaultURL := "https://api.anthropic.com/v1/models"
+	u, err := url.Parse(c.baseURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return defaultURL
+	}
+	return u.Scheme + "://" + u.Host + "/v1/models"
+}
+
 // ListModels fetches available models from the Anthropic API
 func (c *AnthropicClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.anthropic.com/v1/models", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", c.modelsEndpoint(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

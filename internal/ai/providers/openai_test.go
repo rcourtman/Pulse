@@ -5,9 +5,23 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 )
+
+type rewriteToServerTransport struct {
+	serverBase *url.URL
+	rt         http.RoundTripper
+}
+
+func (t rewriteToServerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	cloned := req.Clone(req.Context())
+	cloned.URL.Scheme = t.serverBase.Scheme
+	cloned.URL.Host = t.serverBase.Host
+	cloned.Host = t.serverBase.Host
+	return t.rt.RoundTrip(cloned)
+}
 
 // Mock OpenAI API response format
 type mockOpenAIResponse struct {
@@ -47,6 +61,9 @@ func TestOpenAIClient_Chat_Success(t *testing.T) {
 		// Verify request
 		if r.Method != "POST" {
 			t.Errorf("Expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Errorf("Expected /v1/chat/completions, got %s", r.URL.Path)
 		}
 		if r.Header.Get("Authorization") != "Bearer test-api-key" {
 			t.Errorf("Expected Bearer token, got %s", r.Header.Get("Authorization"))
@@ -98,7 +115,7 @@ func TestOpenAIClient_Chat_Success(t *testing.T) {
 	defer server.Close()
 
 	// Create client with mock server URL
-	client := NewOpenAIClient("test-api-key", "gpt-4o", server.URL)
+	client := NewOpenAIClient("test-api-key", "gpt-4o", server.URL+"/v1/chat/completions")
 
 	// Execute chat request
 	ctx := context.Background()
@@ -133,12 +150,15 @@ func TestOpenAIClient_Chat_Success(t *testing.T) {
 func TestOpenAIClient_Chat_APIError(t *testing.T) {
 	// Create a mock server that returns an error
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Errorf("Expected /v1/chat/completions, got %s", r.URL.Path)
+		}
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write([]byte(`{"error": {"message": "Invalid API key", "type": "invalid_request_error"}}`))
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("invalid-key", "gpt-4o", server.URL)
+	client := NewOpenAIClient("invalid-key", "gpt-4o", server.URL+"/v1/chat/completions")
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{
@@ -173,7 +193,7 @@ func TestOpenAIClient_Chat_ContextCanceled(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-key", "gpt-4o", server.URL)
+	client := NewOpenAIClient("test-key", "gpt-4o", server.URL+"/v1/chat/completions")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
@@ -216,7 +236,7 @@ func TestOpenAIClient_Chat_WithSystemPrompt(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-key", "gpt-4o", server.URL)
+	client := NewOpenAIClient("test-key", "gpt-4o", server.URL+"/v1/chat/completions")
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{
@@ -235,11 +255,228 @@ func TestOpenAIClient_Chat_WithSystemPrompt(t *testing.T) {
 	}
 }
 
-// Note: ListModels and TestConnection tests are not included here because
-// the OpenAI client hardcodes the models endpoint URLs (api.openai.com/v1/models).
-// To properly test these methods, the OpenAI client would need to be refactored
+func TestOpenAIClient_ListModels_UsesConfiguredHostAndFilters(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		if r.URL.Path != "/v1/models" {
+			t.Fatalf("path = %s, want /v1/models", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer test-api-key" {
+			t.Fatalf("Authorization = %q", r.Header.Get("Authorization"))
+		}
+
+		_ = json.NewEncoder(w).Encode(mockOpenAIModelsResponse{
+			Object: "list",
+			Data: []struct {
+				ID      string `json:"id"`
+				Object  string `json:"object"`
+				Created int64  `json:"created"`
+				OwnedBy string `json:"owned_by"`
+			}{
+				{ID: "gpt-4o", Object: "model", Created: 1, OwnedBy: "openai"},
+				{ID: "text-embedding-3-small", Object: "model", Created: 2, OwnedBy: "openai"},
+				{ID: "o1-mini", Object: "model", Created: 3, OwnedBy: "openai"},
+				{ID: "nonmatching", Object: "model", Created: 4, OwnedBy: "openai"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("test-api-key", "gpt-4o", server.URL+"/v1/chat/completions")
+	models, err := client.ListModels(context.Background())
+	if err != nil {
+		t.Fatalf("ListModels: %v", err)
+	}
+
+	if len(models) != 2 {
+		t.Fatalf("models = %d, want 2", len(models))
+	}
+	if models[0].ID != "gpt-4o" || models[1].ID != "o1-mini" {
+		t.Fatalf("unexpected models: %+v", models)
+	}
+}
+
+func TestOpenAIClient_TestConnection_CallsListModels(t *testing.T) {
+	var called int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			t.Fatalf("path = %s, want /v1/models", r.URL.Path)
+		}
+		called++
+		_ = json.NewEncoder(w).Encode(mockOpenAIModelsResponse{
+			Object: "list",
+			Data:   nil,
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("test-api-key", "gpt-4o", server.URL+"/v1/chat/completions")
+	if err := client.TestConnection(context.Background()); err != nil {
+		t.Fatalf("TestConnection: %v", err)
+	}
+	if called != 1 {
+		t.Fatalf("ListModels calls = %d, want 1", called)
+	}
+}
+
+func TestOpenAIClient_Chat_UsesMaxCompletionTokensForOpenAI(t *testing.T) {
+	var got map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_ = json.NewEncoder(w).Encode(mockOpenAIResponse{
+			ID:    "chatcmpl-123",
+			Model: "gpt-4o",
+			Choices: []struct {
+				Index   int `json:"index"`
+				Message struct {
+					Role    string `json:"role"`
+					Content string `json:"content"`
+				} `json:"message"`
+				FinishReason string `json:"finish_reason"`
+			}{
+				{Message: struct {
+					Role    string `json:"role"`
+					Content string `json:"content"`
+				}{Role: "assistant", Content: "ok"}, FinishReason: "stop"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("test-api-key", "gpt-4o", server.URL+"/v1/chat/completions")
+	_, err := client.Chat(context.Background(), ChatRequest{
+		Messages:  []Message{{Role: "user", Content: "Hello"}},
+		MaxTokens: 123,
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+
+	if _, ok := got["max_completion_tokens"]; !ok {
+		t.Fatalf("expected max_completion_tokens to be set, got: %+v", got)
+	}
+	if _, ok := got["max_tokens"]; ok {
+		t.Fatalf("did not expect max_tokens for OpenAI, got: %+v", got)
+	}
+}
+
+func TestOpenAIClient_Chat_GPT52NonChat_UsesCompletionsEndpointAndPrompt(t *testing.T) {
+	var got map[string]any
+	var gotPath string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_ = json.NewEncoder(w).Encode(openaiResponse{
+			Model: "gpt-5.2-pro",
+			Choices: []openaiChoice{
+				{Text: "ok", FinishReason: "stop"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	serverURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse server url: %v", err)
+	}
+
+	client := NewOpenAIClient("test-api-key", "gpt-5.2-pro", "https://api.openai.com/v1/chat/completions")
+	client.client.Transport = rewriteToServerTransport{serverBase: serverURL, rt: http.DefaultTransport}
+
+	_, err = client.Chat(context.Background(), ChatRequest{
+		System:    "System prompt",
+		Messages:  []Message{{Role: "user", Content: "Hello"}},
+		MaxTokens: 50,
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+
+	if gotPath != "/v1/completions" {
+		t.Fatalf("path = %q, want /v1/completions", gotPath)
+	}
+	if _, ok := got["prompt"]; !ok {
+		t.Fatalf("expected prompt in completions request, got: %+v", got)
+	}
+	if _, ok := got["messages"]; ok {
+		t.Fatalf("did not expect messages in completions request, got: %+v", got)
+	}
+}
+
+func TestOpenAIClient_ListModels_DeepSeekUsesModelsEndpoint(t *testing.T) {
+	var gotPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_ = json.NewEncoder(w).Encode(struct {
+			Data []struct {
+				ID      string `json:"id"`
+				Object  string `json:"object"`
+				Created int64  `json:"created"`
+				OwnedBy string `json:"owned_by"`
+			} `json:"data"`
+		}{})
+	}))
+	defer server.Close()
+
+	serverURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse server url: %v", err)
+	}
+
+	client := NewOpenAIClient("test-api-key", "deepseek-chat", "https://api.deepseek.com/v1/chat/completions")
+	client.client.Transport = rewriteToServerTransport{serverBase: serverURL, rt: http.DefaultTransport}
+
+	_, err = client.ListModels(context.Background())
+	if err != nil {
+		t.Fatalf("ListModels: %v", err)
+	}
+	if gotPath != "/models" {
+		t.Fatalf("path = %q, want /models", gotPath)
+	}
+}
+
+func TestOpenAIClient_Chat_O1OmitsTemperature(t *testing.T) {
+	var got map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_ = json.NewEncoder(w).Encode(mockOpenAIResponse{
+			ID:    "chatcmpl-123",
+			Model: "o1-mini",
+			Choices: []struct {
+				Index   int `json:"index"`
+				Message struct {
+					Role    string `json:"role"`
+					Content string `json:"content"`
+				} `json:"message"`
+				FinishReason string `json:"finish_reason"`
+			}{
+				{Message: struct {
+					Role    string `json:"role"`
+					Content string `json:"content"`
+				}{Role: "assistant", Content: "ok"}, FinishReason: "stop"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("test-api-key", "o1-mini", server.URL+"/v1/chat/completions")
+	_, err := client.Chat(context.Background(), ChatRequest{
+		Messages:    []Message{{Role: "user", Content: "Hello"}},
+		Model:       "o1-mini",
+		Temperature: 0.7,
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if _, ok := got["temperature"]; ok {
+		t.Fatalf("did not expect temperature for o1 models, got: %+v", got)
+	}
+}
+
 // to derive the models URL from the baseURL, similar to how Chat works.
 //
 // For now, these tests would require actual API keys to run E2E tests,
 // which should be done in a separate integration test suite.
-
