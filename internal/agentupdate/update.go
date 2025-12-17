@@ -64,6 +64,8 @@ type Updater struct {
 	cfg    Config
 	client *http.Client
 	logger zerolog.Logger
+
+	performUpdateFn func(context.Context) error
 }
 
 // New creates a new Updater with the given configuration.
@@ -84,7 +86,7 @@ func New(cfg Config) *Updater {
 		},
 	}
 
-	return &Updater{
+	u := &Updater{
 		cfg: cfg,
 		client: &http.Client{
 			Transport: transport,
@@ -92,6 +94,8 @@ func New(cfg Config) *Updater {
 		},
 		logger: logger,
 	}
+	u.performUpdateFn = u.performUpdate
+	return u
 }
 
 // RunLoop starts the update check loop. It blocks until the context is cancelled.
@@ -179,7 +183,7 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 		Str("availableVersion", serverVersion).
 		Msg("New agent version available, performing self-update")
 
-	if err := u.performUpdate(ctx); err != nil {
+	if err := u.performUpdateFn(ctx); err != nil {
 		u.logger.Error().Err(err).Msg("Failed to self-update agent")
 		return
 	}

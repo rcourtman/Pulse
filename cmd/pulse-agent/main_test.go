@@ -143,6 +143,55 @@ func TestGatherTags(t *testing.T) {
 	}
 }
 
+func TestGatherCSV(t *testing.T) {
+	tests := []struct {
+		name     string
+		env      string
+		flags    []string
+		expected []string
+	}{
+		{"empty", "", nil, []string{}},
+		{"env only", "a,b", nil, []string{"a", "b"}},
+		{"env trims", " a , b ", nil, []string{"a", "b"}},
+		{"flags only", "", []string{"x", " y "}, []string{"x", "y"}},
+		{"both", "a", []string{"b"}, []string{"a", "b"}},
+		{"filters empties", "a,,", []string{"", "b", "  "}, []string{"a", "b"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := gatherCSV(tc.env, tc.flags)
+			if !reflect.DeepEqual(got, tc.expected) {
+				t.Fatalf("expected %v, got %v", tc.expected, got)
+			}
+		})
+	}
+}
+
+func TestDefaultInt(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		fallback int
+		expected int
+	}{
+		{"empty uses fallback", "", 5, 5},
+		{"whitespace uses fallback", "   ", 5, 5},
+		{"valid int", "12", 5, 12},
+		{"invalid uses fallback", "nope", 5, 5},
+		{"leading whitespace", " 7", 5, 7},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := defaultInt(tc.value, tc.fallback)
+			if got != tc.expected {
+				t.Fatalf("expected %d, got %d", tc.expected, got)
+			}
+		})
+	}
+}
+
 func TestParseLogLevel(t *testing.T) {
 	tests := []struct {
 		name      string

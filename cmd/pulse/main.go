@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"os"
@@ -179,7 +178,7 @@ func runServer() {
 		return nil
 	}
 	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), wsHub, reloadFunc, Version)
-	
+
 	// Inject resource store into monitor for WebSocket broadcasts
 	// This must be done after router creation since resourceHandlers is created in NewRouter
 	router.SetMonitor(reloadableMonitor.GetMonitor())
@@ -352,14 +351,17 @@ func performAutoImport() error {
 		if err != nil {
 			return fmt.Errorf("failed to read config file: %w", err)
 		}
-		encryptedData = string(data)
-	} else if configData != "" {
-		// Try to decode base64 if it looks encoded
-		if decoded, err := base64.StdEncoding.DecodeString(configData); err == nil {
-			encryptedData = string(decoded)
-		} else {
-			encryptedData = configData
+		payload, err := normalizeImportPayload(data)
+		if err != nil {
+			return err
 		}
+		encryptedData = payload
+	} else if configData != "" {
+		payload, err := normalizeImportPayload([]byte(configData))
+		if err != nil {
+			return err
+		}
+		encryptedData = payload
 	} else {
 		return fmt.Errorf("no config data provided")
 	}

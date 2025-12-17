@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -253,19 +252,17 @@ var configAutoImportCmd = &cobra.Command{
 				return fmt.Errorf("configuration response from URL was empty")
 			}
 
-			trimmed := strings.TrimSpace(string(body))
-			if decoded, err := base64.StdEncoding.DecodeString(trimmed); err == nil {
-				encryptedData = string(decoded)
-			} else {
-				encryptedData = string(body)
+			payload, err := normalizeImportPayload(body)
+			if err != nil {
+				return err
 			}
+			encryptedData = payload
 		} else if configData != "" {
-			// Decode base64 if needed
-			if decoded, err := base64.StdEncoding.DecodeString(configData); err == nil {
-				encryptedData = string(decoded)
-			} else {
-				encryptedData = configData
+			payload, err := normalizeImportPayload([]byte(configData))
+			if err != nil {
+				return err
 			}
+			encryptedData = payload
 		}
 
 		// Load configuration path
