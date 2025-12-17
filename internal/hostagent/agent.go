@@ -72,6 +72,17 @@ const defaultInterval = 30 * time.Second
 
 var readFile = os.ReadFile
 
+var (
+	hostInfoWithContext   = gohost.InfoWithContext
+	hostUptimeWithContext = gohost.UptimeWithContext
+	hostmetricsCollect    = hostmetrics.Collect
+	sensorsCollectLocal   = sensors.CollectLocal
+	sensorsParse          = sensors.Parse
+	mdadmCollectArrays    = mdadm.CollectArrays
+	cephCollect           = ceph.Collect
+	nowUTC                = func() time.Time { return time.Now().UTC() }
+)
+
 // New constructs a fully initialised host Agent.
 func New(cfg Config) (*Agent, error) {
 	if cfg.Interval <= 0 {
@@ -107,7 +118,7 @@ func New(cfg Config) (*Agent, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	info, err := gohost.InfoWithContext(ctx)
+	info, err := hostInfoWithContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetch host info: %w", err)
 	}
@@ -311,8 +322,8 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	collectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	uptime, _ := gohost.UptimeWithContext(collectCtx)
-	snapshot, err := hostmetrics.Collect(collectCtx)
+	uptime, _ := hostUptimeWithContext(collectCtx)
+	snapshot, err := hostmetricsCollect(collectCtx)
 	if err != nil {
 		return agentshost.Report{}, fmt.Errorf("collect metrics: %w", err)
 	}
@@ -361,7 +372,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		RAID:      raidData,
 		Ceph:      cephData,
 		Tags:      append([]string(nil), a.cfg.Tags...),
-		Timestamp: time.Now().UTC(),
+		Timestamp: nowUTC(),
 	}
 
 	return report, nil
@@ -416,14 +427,14 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 	}
 
 	// Collect sensor JSON output
-	jsonOutput, err := sensors.CollectLocal(ctx)
+	jsonOutput, err := sensorsCollectLocal(ctx)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to collect sensor data (lm-sensors may not be installed)")
 		return agentshost.Sensors{}
 	}
 
 	// Parse the sensor output
-	tempData, err := sensors.Parse(jsonOutput)
+	tempData, err := sensorsParse(jsonOutput)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to parse sensor data")
 		return agentshost.Sensors{}
@@ -476,7 +487,7 @@ func (a *Agent) collectRAIDArrays(ctx context.Context) []agentshost.RAIDArray {
 		return nil
 	}
 
-	arrays, err := mdadm.CollectArrays(ctx)
+	arrays, err := mdadmCollectArrays(ctx)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to collect RAID array data (mdadm may not be installed)")
 		return nil
@@ -499,7 +510,7 @@ func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
 		return nil
 	}
 
-	status, err := ceph.Collect(ctx)
+	status, err := cephCollect(ctx)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to collect Ceph status")
 		return nil
