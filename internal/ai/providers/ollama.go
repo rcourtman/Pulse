@@ -48,11 +48,36 @@ type ollamaRequest struct {
 	Messages []ollamaMessage `json:"messages"`
 	Stream   bool            `json:"stream"`
 	Options  *ollamaOptions  `json:"options,omitempty"`
+	Tools    []ollamaTool    `json:"tools,omitempty"` // Tool definitions for function calling
 }
 
 type ollamaMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role      string           `json:"role"`
+	Content   string           `json:"content"`
+	ToolCalls []ollamaToolCall `json:"tool_calls,omitempty"` // For assistant messages with tool calls
+}
+
+type ollamaToolCall struct {
+	ID       string             `json:"id,omitempty"` // Ollama provides an ID for tool calls
+	Function ollamaFunctionCall `json:"function"`
+}
+
+type ollamaFunctionCall struct {
+	Index     int                    `json:"index,omitempty"` // Index in the tool call array
+	Name      string                 `json:"name"`
+	Arguments map[string]interface{} `json:"arguments"`
+}
+
+// ollamaTool represents a tool definition for Ollama
+type ollamaTool struct {
+	Type     string             `json:"type"` // "function"
+	Function ollamaToolFunction `json:"function"`
+}
+
+type ollamaToolFunction struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Parameters  map[string]interface{} `json:"parameters"`
 }
 
 type ollamaOptions struct {
@@ -62,15 +87,22 @@ type ollamaOptions struct {
 
 // ollamaResponse is the response from the Ollama API
 type ollamaResponse struct {
-	Model     string        `json:"model"`
-	CreatedAt string        `json:"created_at"`
-	Message   ollamaMessage `json:"message"`
-	Done      bool          `json:"done"`
-	DoneReason string       `json:"done_reason,omitempty"`
-	TotalDuration   int64  `json:"total_duration,omitempty"`
-	LoadDuration    int64  `json:"load_duration,omitempty"`
-	PromptEvalCount int    `json:"prompt_eval_count,omitempty"`
-	EvalCount       int    `json:"eval_count,omitempty"`
+	Model           string            `json:"model"`
+	CreatedAt       string            `json:"created_at"`
+	Message         ollamaMessageResp `json:"message"`
+	Done            bool              `json:"done"`
+	DoneReason      string            `json:"done_reason,omitempty"`
+	TotalDuration   int64             `json:"total_duration,omitempty"`
+	LoadDuration    int64             `json:"load_duration,omitempty"`
+	PromptEvalCount int               `json:"prompt_eval_count,omitempty"`
+	EvalCount       int               `json:"eval_count,omitempty"`
+}
+
+// ollamaMessageResp is the response message format (can include tool_calls)
+type ollamaMessageResp struct {
+	Role      string           `json:"role"`
+	Content   string           `json:"content"`
+	ToolCalls []ollamaToolCall `json:"tool_calls,omitempty"`
 }
 
 // Chat sends a chat request to the Ollama API
@@ -87,10 +119,27 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	for _, m := range req.Messages {
-		messages = append(messages, ollamaMessage{
+		msg := ollamaMessage{
 			Role:    m.Role,
 			Content: m.Content,
-		})
+		}
+		// Include tool calls for assistant messages (for multi-turn with tool use)
+		if len(m.ToolCalls) > 0 {
+			for _, tc := range m.ToolCalls {
+				msg.ToolCalls = append(msg.ToolCalls, ollamaToolCall{
+					Function: ollamaFunctionCall{
+						Name:      tc.Name,
+						Arguments: tc.Input,
+					},
+				})
+			}
+		}
+		// Handle tool results - Ollama expects role "tool" with content
+		if m.ToolResult != nil {
+			msg.Role = "tool"
+			msg.Content = m.ToolResult.Content
+		}
+		messages = append(messages, msg)
 	}
 
 	// Use provided model or fall back to client default
@@ -111,6 +160,25 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		Model:    model,
 		Messages: messages,
 		Stream:   false, // Non-streaming for now
+	}
+
+	// Convert tools to Ollama format
+	if len(req.Tools) > 0 {
+		ollamaReq.Tools = make([]ollamaTool, 0, len(req.Tools))
+		for _, t := range req.Tools {
+			// Skip non-function tools (like web_search which Ollama doesn't support)
+			if t.Type != "" && t.Type != "function" {
+				continue
+			}
+			ollamaReq.Tools = append(ollamaReq.Tools, ollamaTool{
+				Type: "function",
+				Function: ollamaToolFunction{
+					Name:        t.Name,
+					Description: t.Description,
+					Parameters:  t.InputSchema,
+				},
+			})
+		}
 	}
 
 	if req.MaxTokens > 0 || req.Temperature > 0 {
@@ -156,13 +224,33 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	return &ChatResponse{
+	// Build response with tool calls if present
+	chatResp := &ChatResponse{
 		Content:      ollamaResp.Message.Content,
 		Model:        ollamaResp.Model,
 		StopReason:   ollamaResp.DoneReason,
 		InputTokens:  ollamaResp.PromptEvalCount,
 		OutputTokens: ollamaResp.EvalCount,
-	}, nil
+	}
+
+	// Convert Ollama tool calls to our format
+	if len(ollamaResp.Message.ToolCalls) > 0 {
+		chatResp.StopReason = "tool_use" // Signal that we need to execute tools
+		for _, tc := range ollamaResp.Message.ToolCalls {
+			// Use Ollama's ID if provided, otherwise generate one
+			toolCallID := tc.ID
+			if toolCallID == "" {
+				toolCallID = fmt.Sprintf("ollama_%s_%d", tc.Function.Name, time.Now().UnixNano())
+			}
+			chatResp.ToolCalls = append(chatResp.ToolCalls, ToolCall{
+				ID:    toolCallID,
+				Name:  tc.Function.Name,
+				Input: tc.Function.Arguments,
+			})
+		}
+	}
+
+	return chatResp, nil
 }
 
 // TestConnection validates connectivity by checking the Ollama version endpoint
