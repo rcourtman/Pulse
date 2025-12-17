@@ -258,7 +258,7 @@ func cleanupDockerAgent(agent *dockeragent.Agent, logger *zerolog.Logger) {
 	}
 }
 
-func startHealthServer(ctx context.Context, addr string, ready *atomic.Bool, logger *zerolog.Logger) {
+func healthHandler(ready *atomic.Bool) http.Handler {
 	mux := http.NewServeMux()
 
 	// Liveness probe - always returns 200 if server is running
@@ -280,10 +280,13 @@ func startHealthServer(ctx context.Context, addr string, ready *atomic.Bool, log
 
 	// Prometheus metrics
 	mux.Handle("/metrics", promhttp.Handler())
+	return mux
+}
 
+func startHealthServer(ctx context.Context, addr string, ready *atomic.Bool, logger *zerolog.Logger) {
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler:      healthHandler(ready),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  30 * time.Second,
