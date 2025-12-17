@@ -655,8 +655,8 @@ type Monitor struct {
 	dlqInsightMap            map[string]*dlqInsight
 	nodeLastOnline           map[string]time.Time   // Track last time each node was seen online (for grace period)
 	resourceStore            ResourceStoreInterface // Optional unified resource store for polling optimization
-	mockMetricsCancel         context.CancelFunc
-	mockMetricsWg             sync.WaitGroup
+	mockMetricsCancel        context.CancelFunc
+	mockMetricsWg            sync.WaitGroup
 }
 
 type rrdMemCacheEntry struct {
@@ -1939,26 +1939,26 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		return models.Host{}, fmt.Errorf("host report missing hostname")
 	}
 
-	identifier := strings.TrimSpace(report.Host.ID)
-	if identifier != "" {
-		identifier = sanitizeDockerHostSuffix(identifier)
+	baseIdentifier := strings.TrimSpace(report.Host.ID)
+	if baseIdentifier != "" {
+		baseIdentifier = sanitizeDockerHostSuffix(baseIdentifier)
 	}
-	if identifier == "" {
+	if baseIdentifier == "" {
 		if machine := sanitizeDockerHostSuffix(report.Host.MachineID); machine != "" {
-			identifier = machine
+			baseIdentifier = machine
 		}
 	}
-	if identifier == "" {
+	if baseIdentifier == "" {
 		if agentID := sanitizeDockerHostSuffix(report.Agent.ID); agentID != "" {
-			identifier = agentID
+			baseIdentifier = agentID
 		}
 	}
-	if identifier == "" {
+	if baseIdentifier == "" {
 		if hostName := sanitizeDockerHostSuffix(hostname); hostName != "" {
-			identifier = hostName
+			baseIdentifier = hostName
 		}
 	}
-	if identifier == "" {
+	if baseIdentifier == "" {
 		seedParts := uniqueNonEmptyStrings(
 			report.Host.MachineID,
 			report.Agent.ID,
@@ -1969,14 +1969,38 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		}
 		seed := strings.Join(seedParts, "|")
 		sum := sha1.Sum([]byte(seed))
-		identifier = fmt.Sprintf("host-%s", hex.EncodeToString(sum[:6]))
+		baseIdentifier = fmt.Sprintf("host-%s", hex.EncodeToString(sum[:6]))
 	}
 
 	existingHosts := m.state.GetHosts()
 
-	if tokenRecord != nil && tokenRecord.ID != "" {
+	identifier := baseIdentifier
+	if tokenRecord != nil && strings.TrimSpace(tokenRecord.ID) != "" {
 		tokenID := strings.TrimSpace(tokenRecord.ID)
-		bindingID := identifier
+
+		bindingID := baseIdentifier
+		for _, candidate := range existingHosts {
+			if candidate.ID != bindingID {
+				continue
+			}
+			if strings.TrimSpace(candidate.Hostname) == hostname && strings.TrimSpace(candidate.TokenID) == tokenID {
+				break
+			}
+
+			seed := strings.Join([]string{tokenID, hostname, bindingID}, "|")
+			sum := sha1.Sum([]byte(seed))
+			suffix := hex.EncodeToString(sum[:4])
+
+			base := bindingID
+			if base == "" {
+				base = "host"
+			}
+			if len(base) > 40 {
+				base = base[:40]
+			}
+			bindingID = fmt.Sprintf("%s-%s", base, suffix)
+			break
+		}
 
 		m.mu.Lock()
 		if m.hostTokenBindings == nil {
@@ -2003,6 +2027,8 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 				Msg("Bound host agent token to hostname")
 		}
 		m.mu.Unlock()
+
+		identifier = bindingID
 	}
 
 	var previous models.Host
@@ -5317,7 +5343,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			pollErr = ctx.Err()
 			return
 		default:
-		// Always try the efficient cluster/resources endpoint first
+			// Always try the efficient cluster/resources endpoint first
 			// This endpoint works on both clustered and standalone nodes
 			// Testing confirmed it works on standalone nodes like pimox
 			useClusterEndpoint := m.pollVMsAndContainersEfficient(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodeEffectiveStatus)

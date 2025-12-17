@@ -181,6 +181,75 @@ func TestApplyHostReportAllowsTokenReuseAcrossHosts(t *testing.T) {
 	}
 }
 
+func TestApplyHostReportDisambiguatesCollidingIdentifiersAcrossTokens(t *testing.T) {
+	t.Helper()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	now := time.Now().UTC()
+	baseReport := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-one",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "colliding-machine-id",
+			Hostname:  "nas-one",
+			Platform:  "linux",
+			OSName:    "synology",
+			OSVersion: "7.0",
+		},
+		Timestamp: now,
+		Metrics: agentshost.Metrics{
+			CPUUsagePercent: 1.0,
+		},
+	}
+
+	hostOne, err := monitor.ApplyHostReport(baseReport, &config.APITokenRecord{ID: "token-one"})
+	if err != nil {
+		t.Fatalf("ApplyHostReport hostOne: %v", err)
+	}
+	if hostOne.ID == "" {
+		t.Fatalf("expected hostOne to have an identifier")
+	}
+
+	secondReport := baseReport
+	secondReport.Agent.ID = "agent-two"
+	secondReport.Host.Hostname = "nas-two"
+	secondReport.Timestamp = now.Add(30 * time.Second)
+
+	hostTwo, err := monitor.ApplyHostReport(secondReport, &config.APITokenRecord{ID: "token-two"})
+	if err != nil {
+		t.Fatalf("ApplyHostReport hostTwo: %v", err)
+	}
+	if hostTwo.ID == "" {
+		t.Fatalf("expected hostTwo to have an identifier")
+	}
+	if hostTwo.ID == hostOne.ID {
+		t.Fatalf("expected disambiguated host IDs, got %q", hostTwo.ID)
+	}
+
+	hostTwoRepeat, err := monitor.ApplyHostReport(secondReport, &config.APITokenRecord{ID: "token-two"})
+	if err != nil {
+		t.Fatalf("ApplyHostReport hostTwo repeat: %v", err)
+	}
+	if hostTwoRepeat.ID != hostTwo.ID {
+		t.Fatalf("expected stable host ID for repeated reports, got %q want %q", hostTwoRepeat.ID, hostTwo.ID)
+	}
+
+	snapshot := monitor.state.GetSnapshot()
+	if got := len(snapshot.Hosts); got != 2 {
+		t.Fatalf("expected 2 hosts in state, got %d", got)
+	}
+}
+
 func TestRemoveHostAgentUnbindsToken(t *testing.T) {
 	t.Helper()
 

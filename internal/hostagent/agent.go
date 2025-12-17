@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -71,6 +73,7 @@ type Agent struct {
 const defaultInterval = 30 * time.Second
 
 var readFile = os.ReadFile
+var netInterfaces = net.Interfaces
 
 var (
 	hostInfoWithContext   = gohost.InfoWithContext
@@ -698,7 +701,7 @@ func isLXCContainer() bool {
 func getReliableMachineID(gopsutilHostID string, logger zerolog.Logger) string {
 	gopsutilID := strings.TrimSpace(gopsutilHostID)
 
-	// On Linux, always prefer /etc/machine-id as it's guaranteed unique per installation.
+	// On Linux, prefer /etc/machine-id when available.
 	// This avoids ID collisions from:
 	// - LXC containers sharing host's DMI product UUID
 	// - Cloned VMs with identical hardware UUIDs
@@ -706,9 +709,9 @@ func getReliableMachineID(gopsutilHostID string, logger zerolog.Logger) string {
 	if runtime.GOOS == "linux" {
 		if data, err := readFile("/etc/machine-id"); err == nil {
 			machineID := strings.TrimSpace(string(data))
-			if len(machineID) >= 32 {
-				// Format as UUID if it's a 32-char hex string (like machine-id typically is)
-				if len(machineID) == 32 {
+			if machineID != "" && len(machineID) >= 8 {
+				// Format as UUID if it's a 32-char hex string (like machine-id typically is).
+				if len(machineID) == 32 && isHexString(machineID) {
 					machineID = fmt.Sprintf("%s-%s-%s-%s-%s",
 						machineID[0:8], machineID[8:12], machineID[12:16],
 						machineID[16:20], machineID[20:32])
@@ -725,7 +728,90 @@ func getReliableMachineID(gopsutilHostID string, logger zerolog.Logger) string {
 				return machineID
 			}
 		}
+
+		if macID := getPrimaryMACIdentifier(); macID != "" {
+			logger.Debug().
+				Str("machineID", macID).
+				Msg("Linux host missing usable /etc/machine-id, using MAC address for unique identification")
+			return macID
+		}
 	}
 
 	return gopsutilID
+}
+
+func isHexString(input string) bool {
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+		switch {
+		case ch >= '0' && ch <= '9':
+		case ch >= 'a' && ch <= 'f':
+		case ch >= 'A' && ch <= 'F':
+		default:
+			return false
+		}
+	}
+	return input != ""
+}
+
+func getPrimaryMACIdentifier() string {
+	interfaces, err := netInterfaces()
+	if err != nil {
+		return ""
+	}
+
+	sort.Slice(interfaces, func(i, j int) bool {
+		return interfaces[i].Name < interfaces[j].Name
+	})
+
+	// Prefer a stable-looking interface name first to avoid selecting docker bridges
+	// or other virtual interfaces when physical interfaces are present.
+	for pass := 0; pass < 2; pass++ {
+		for _, iface := range interfaces {
+			if len(iface.HardwareAddr) == 0 {
+				continue
+			}
+			if iface.Flags&net.FlagLoopback != 0 {
+				continue
+			}
+			if pass == 0 && isLikelyVirtualInterfaceName(iface.Name) {
+				continue
+			}
+
+			mac := strings.ToLower(iface.HardwareAddr.String())
+			normalized := strings.NewReplacer(":", "", "-", "", ".", "").Replace(mac)
+			if normalized == "" {
+				continue
+			}
+			return "mac-" + normalized
+		}
+	}
+
+	return ""
+}
+
+func isLikelyVirtualInterfaceName(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	switch {
+	case name == "":
+		return true
+	case name == "lo":
+		return true
+	case strings.HasPrefix(name, "docker"):
+		return true
+	case strings.HasPrefix(name, "veth"):
+		return true
+	case strings.HasPrefix(name, "br-"):
+		return true
+	case strings.HasPrefix(name, "cni"):
+		return true
+	case strings.HasPrefix(name, "flannel"):
+		return true
+	case strings.HasPrefix(name, "virbr"):
+		return true
+	case strings.HasPrefix(name, "zt"):
+		return true
+	default:
+		return false
+	}
 }

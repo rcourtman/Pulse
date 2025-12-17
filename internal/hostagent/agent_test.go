@@ -1,6 +1,8 @@
 package hostagent
 
 import (
+	"errors"
+	"net"
 	"os"
 	"runtime"
 	"testing"
@@ -80,10 +82,15 @@ func TestGetReliableMachineID(t *testing.T) {
 	logger := zerolog.Nop()
 
 	originalReadFile := readFile
-	t.Cleanup(func() { readFile = originalReadFile })
+	originalNetInterfaces := netInterfaces
+	t.Cleanup(func() {
+		readFile = originalReadFile
+		netInterfaces = originalNetInterfaces
+	})
 
 	t.Run("trims whitespace", func(t *testing.T) {
 		readFile = func(string) ([]byte, error) { return nil, os.ErrNotExist }
+		netInterfaces = func() ([]net.Interface, error) { return nil, errors.New("no interfaces") }
 		result := getReliableMachineID("  test-id  ", logger)
 		if result != "test-id" {
 			t.Errorf("getReliableMachineID trimmed result = %q, want %q", result, "test-id")
@@ -100,6 +107,7 @@ func TestGetReliableMachineID(t *testing.T) {
 				}
 				return nil, os.ErrNotExist
 			}
+			netInterfaces = func() ([]net.Interface, error) { return nil, errors.New("no interfaces") }
 
 			result := getReliableMachineID("gopsutil-product-uuid", logger)
 			const want = "01234567-89ab-cdef-0123-456789abcdef"
@@ -108,24 +116,49 @@ func TestGetReliableMachineID(t *testing.T) {
 			}
 		})
 
-		t.Run("Linux falls back to gopsutil ID when /etc/machine-id missing", func(t *testing.T) {
+		t.Run("Linux falls back to MAC when /etc/machine-id missing", func(t *testing.T) {
 			readFile = func(string) ([]byte, error) { return nil, os.ErrNotExist }
+			netInterfaces = func() ([]net.Interface, error) {
+				return []net.Interface{
+					{
+						Name:         "eth0",
+						HardwareAddr: net.HardwareAddr{0x00, 0x11, 0x22, 0xAA, 0xBB, 0xCC},
+					},
+				}, nil
+			}
+			result := getReliableMachineID("gopsutil-product-uuid", logger)
+			if result != "mac-001122aabbcc" {
+				t.Errorf("getReliableMachineID() = %q, want %q", result, "mac-001122aabbcc")
+			}
+		})
+
+		t.Run("Linux falls back to gopsutil ID when machine-id missing and MAC unavailable", func(t *testing.T) {
+			readFile = func(string) ([]byte, error) { return nil, os.ErrNotExist }
+			netInterfaces = func() ([]net.Interface, error) { return nil, errors.New("no interfaces") }
 			result := getReliableMachineID("gopsutil-product-uuid", logger)
 			if result != "gopsutil-product-uuid" {
 				t.Errorf("getReliableMachineID() = %q, want %q", result, "gopsutil-product-uuid")
 			}
 		})
 
-		t.Run("Linux falls back when machine-id is too short", func(t *testing.T) {
+		t.Run("Linux falls back to MAC when machine-id is too short", func(t *testing.T) {
 			readFile = func(name string) ([]byte, error) {
 				if name == "/etc/machine-id" {
 					return []byte("short\n"), nil
 				}
 				return nil, os.ErrNotExist
 			}
+			netInterfaces = func() ([]net.Interface, error) {
+				return []net.Interface{
+					{
+						Name:         "eth0",
+						HardwareAddr: net.HardwareAddr{0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01},
+					},
+				}, nil
+			}
 			result := getReliableMachineID("gopsutil-product-uuid", logger)
-			if result != "gopsutil-product-uuid" {
-				t.Errorf("getReliableMachineID() = %q, want %q", result, "gopsutil-product-uuid")
+			if result != "mac-deadbeef0001" {
+				t.Errorf("getReliableMachineID() = %q, want %q", result, "mac-deadbeef0001")
 			}
 		})
 	} else {
