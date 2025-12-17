@@ -31,7 +31,7 @@ func TestOllamaClient_Chat_Success(t *testing.T) {
 		resp := ollamaResponse{
 			Model:     "llama2",
 			CreatedAt: time.Now().Format(time.RFC3339),
-			Message: ollamaMessage{
+			Message: ollamaMessageResp{
 				Role:    "assistant",
 				Content: "Hello! I'm Llama.",
 			},
@@ -84,7 +84,7 @@ func TestOllamaClient_Chat_WithSystemPrompt(t *testing.T) {
 
 		resp := ollamaResponse{
 			Model:   "llama2",
-			Message: ollamaMessage{Role: "assistant", Content: "Response"},
+			Message: ollamaMessageResp{Role: "assistant", Content: "Response"},
 			Done:    true,
 		}
 		json.NewEncoder(w).Encode(resp)
@@ -125,7 +125,7 @@ func TestOllamaClient_Chat_WithOptions(t *testing.T) {
 
 		resp := ollamaResponse{
 			Model:   "llama2",
-			Message: ollamaMessage{Role: "assistant", Content: "Response"},
+			Message: ollamaMessageResp{Role: "assistant", Content: "Response"},
 			Done:    true,
 		}
 		json.NewEncoder(w).Encode(resp)
@@ -202,7 +202,7 @@ func TestOllamaClient_Chat_ModelFallback(t *testing.T) {
 
 		resp := ollamaResponse{
 			Model:   req.Model,
-			Message: ollamaMessage{Role: "assistant", Content: "Response"},
+			Message: ollamaMessageResp{Role: "assistant", Content: "Response"},
 			Done:    true,
 		}
 		json.NewEncoder(w).Encode(resp)
@@ -238,7 +238,7 @@ func TestOllamaClient_Chat_StripModelPrefix(t *testing.T) {
 
 		resp := ollamaResponse{
 			Model:   req.Model,
-			Message: ollamaMessage{Role: "assistant", Content: "Response"},
+			Message: ollamaMessageResp{Role: "assistant", Content: "Response"},
 			Done:    true,
 		}
 		json.NewEncoder(w).Encode(resp)
