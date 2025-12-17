@@ -912,8 +912,26 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 	// CRITICAL: Never save empty nodes configuration
 	// This prevents data loss from accidental wipes
 	if !allowEmpty && len(pveInstances) == 0 && len(pbsInstances) == 0 && len(pmgInstances) == 0 {
-		// Check if we're replacing existing non-empty config
-		if existing, err := c.LoadNodesConfig(); err == nil && existing != nil {
+		// If we're replacing an existing non-empty config, block the wipe.
+		// We must not call LoadNodesConfig here because it acquires c.mu again.
+		if _, err := os.Stat(c.nodesFile); err == nil {
+			data, err := os.ReadFile(c.nodesFile)
+			if err != nil {
+				return fmt.Errorf("refusing to save empty nodes config: failed to read existing nodes config: %w", err)
+			}
+			if c.crypto != nil {
+				decrypted, err := c.crypto.Decrypt(data)
+				if err != nil {
+					return fmt.Errorf("refusing to save empty nodes config: existing nodes config is not decryptable: %w", err)
+				}
+				data = decrypted
+			}
+
+			var existing NodesConfig
+			if err := json.Unmarshal(data, &existing); err != nil {
+				return fmt.Errorf("refusing to save empty nodes config: existing nodes config is not parseable: %w", err)
+			}
+
 			if len(existing.PVEInstances) > 0 || len(existing.PBSInstances) > 0 || len(existing.PMGInstances) > 0 {
 				log.Error().
 					Int("existing_pve", len(existing.PVEInstances)).
