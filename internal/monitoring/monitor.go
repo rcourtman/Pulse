@@ -1977,58 +1977,61 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	identifier := baseIdentifier
 	if tokenRecord != nil && strings.TrimSpace(tokenRecord.ID) != "" {
 		tokenID := strings.TrimSpace(tokenRecord.ID)
-
-		bindingID := baseIdentifier
-		for _, candidate := range existingHosts {
-			if candidate.ID != bindingID {
-				continue
-			}
-			if strings.TrimSpace(candidate.Hostname) == hostname && strings.TrimSpace(candidate.TokenID) == tokenID {
-				break
-			}
-
-			seed := strings.Join([]string{tokenID, hostname, bindingID}, "|")
-			sum := sha1.Sum([]byte(seed))
-			suffix := hex.EncodeToString(sum[:4])
-
-			base := bindingID
-			if base == "" {
-				base = "host"
-			}
-			if len(base) > 40 {
-				base = base[:40]
-			}
-			bindingID = fmt.Sprintf("%s-%s", base, suffix)
-			break
-		}
+		bindingKey := fmt.Sprintf("%s:%s", tokenID, hostname)
 
 		m.mu.Lock()
 		if m.hostTokenBindings == nil {
 			m.hostTokenBindings = make(map[string]string)
 		}
-		// Bind tokens by hostname rather than agent ID. This allows:
-		// - Same host to reconnect after agent reinstall (agent ID changes but hostname doesn't)
-		// - Multiple hosts to use the same token (each hostname gets its own binding entry)
-		bindingKey := fmt.Sprintf("%s:%s", tokenID, hostname)
-		if boundID, exists := m.hostTokenBindings[bindingKey]; exists && boundID != bindingID {
-			log.Info().
-				Str("tokenID", tokenID).
-				Str("hostname", hostname).
-				Str("previousHostID", boundID).
-				Str("newHostID", bindingID).
-				Msg("Host agent identity changed for token binding; updating binding")
-			m.hostTokenBindings[bindingKey] = bindingID
-		} else if !exists {
-			m.hostTokenBindings[bindingKey] = bindingID
-			log.Debug().
-				Str("tokenID", tokenID).
-				Str("hostID", bindingID).
-				Str("hostname", hostname).
-				Msg("Bound host agent token to hostname")
-		}
+		boundID := strings.TrimSpace(m.hostTokenBindings[bindingKey])
 		m.mu.Unlock()
 
-		identifier = bindingID
+		// If we already have a binding for this token+hostname, use it to keep host IDs stable
+		// even if another colliding host disappears later.
+		if boundID != "" {
+			identifier = boundID
+		} else {
+			bindingID := baseIdentifier
+			for _, candidate := range existingHosts {
+				if candidate.ID != bindingID {
+					continue
+				}
+				if strings.TrimSpace(candidate.Hostname) == hostname && strings.TrimSpace(candidate.TokenID) == tokenID {
+					break
+				}
+
+				seed := strings.Join([]string{tokenID, hostname, bindingID}, "|")
+				sum := sha1.Sum([]byte(seed))
+				suffix := hex.EncodeToString(sum[:4])
+
+				base := bindingID
+				if base == "" {
+					base = "host"
+				}
+				if len(base) > 40 {
+					base = base[:40]
+				}
+				bindingID = fmt.Sprintf("%s-%s", base, suffix)
+				break
+			}
+
+			m.mu.Lock()
+			if m.hostTokenBindings == nil {
+				m.hostTokenBindings = make(map[string]string)
+			}
+			if existing := strings.TrimSpace(m.hostTokenBindings[bindingKey]); existing != "" {
+				identifier = existing
+			} else {
+				m.hostTokenBindings[bindingKey] = bindingID
+				log.Debug().
+					Str("tokenID", tokenID).
+					Str("hostID", bindingID).
+					Str("hostname", hostname).
+					Msg("Bound host agent token to hostname")
+				identifier = bindingID
+			}
+			m.mu.Unlock()
+		}
 	}
 
 	var previous models.Host

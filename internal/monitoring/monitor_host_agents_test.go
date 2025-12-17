@@ -244,9 +244,22 @@ func TestApplyHostReportDisambiguatesCollidingIdentifiersAcrossTokens(t *testing
 		t.Fatalf("expected stable host ID for repeated reports, got %q want %q", hostTwoRepeat.ID, hostTwo.ID)
 	}
 
+	// Removing the first host should not cause the second host to change identity.
+	if _, err := monitor.RemoveHostAgent(hostOne.ID); err != nil {
+		t.Fatalf("RemoveHostAgent hostOne: %v", err)
+	}
+
+	hostTwoAfterRemoval, err := monitor.ApplyHostReport(secondReport, &config.APITokenRecord{ID: "token-two"})
+	if err != nil {
+		t.Fatalf("ApplyHostReport hostTwo after removal: %v", err)
+	}
+	if hostTwoAfterRemoval.ID != hostTwo.ID {
+		t.Fatalf("expected stable host ID after removal, got %q want %q", hostTwoAfterRemoval.ID, hostTwo.ID)
+	}
+
 	snapshot := monitor.state.GetSnapshot()
-	if got := len(snapshot.Hosts); got != 2 {
-		t.Fatalf("expected 2 hosts in state, got %d", got)
+	if got := len(snapshot.Hosts); got != 1 {
+		t.Fatalf("expected 1 host in state after removal, got %d", got)
 	}
 }
 
