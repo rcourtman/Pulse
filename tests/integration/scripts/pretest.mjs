@@ -8,6 +8,11 @@ const truthy = (value) => {
 const shouldSkipDocker = truthy(process.env.PULSE_E2E_SKIP_DOCKER);
 const shouldSkipPlaywrightInstall = truthy(process.env.PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL);
 
+const DEFAULT_E2E_BOOTSTRAP_TOKEN = '0123456789abcdef0123456789abcdef0123456789abcdef';
+if (!process.env.PULSE_E2E_BOOTSTRAP_TOKEN) {
+  process.env.PULSE_E2E_BOOTSTRAP_TOKEN = DEFAULT_E2E_BOOTSTRAP_TOKEN;
+}
+
 const run = (command, args, options = {}) =>
   new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: 'inherit', ...options });

@@ -33,7 +33,20 @@ test.describe.serial('Core E2E flows', () => {
   test('Alerts page - create and delete threshold override', async ({ page }) => {
     await ensureAuthenticated(page);
 
-    await page.goto('/alerts/thresholds/proxmox');
+    await page.goto('/alerts/overview');
+    await expect(page.getByRole('heading', { name: 'Alerts Overview' })).toBeVisible();
+
+    const alertsToggleOnOverview = page.getByRole('checkbox', { name: /toggle alerts/i });
+    await expect(alertsToggleOnOverview).toBeVisible();
+    const alertsInitiallyEnabled = await alertsToggleOnOverview.isChecked();
+    if (!alertsInitiallyEnabled) {
+      await alertsToggleOnOverview.setChecked(true, { force: true });
+      await expect(page.getByText('Alerts enabled', { exact: true })).toBeVisible();
+    }
+
+    // Navigate to thresholds via in-app nav to avoid a full reload redirecting while activation is loading.
+    await page.getByRole('button', { name: 'Thresholds' }).click();
+    await expect(page).toHaveURL(/\/alerts\/thresholds/);
     await expect(page.getByRole('heading', { name: 'Alert Thresholds' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Proxmox Nodes' })).toBeVisible();
 
@@ -41,36 +54,131 @@ test.describe.serial('Core E2E flows', () => {
       .getByRole('heading', { name: 'Proxmox Nodes' })
       .locator('xpath=ancestor::*[.//table][1]');
 
-    const firstRow = proxmoxNodesSection.locator('table tbody tr').first();
-    await expect(firstRow).toBeVisible();
+    const globalDefaultsRow = proxmoxNodesSection.locator('table tbody tr').filter({
+      hasText: 'Global Defaults',
+    });
+    await expect(globalDefaultsRow).toBeVisible();
+    const cpuDefaultValueRaw = await globalDefaultsRow.locator('input[type="number"]').first().inputValue();
+    const cpuDefault = Number(cpuDefaultValueRaw);
+    if (!Number.isFinite(cpuDefault)) {
+      test.skip(true, `Unable to read CPU default threshold (value="${cpuDefaultValueRaw}")`);
+    }
 
-    await firstRow.locator('button[title="Edit thresholds"]').click();
-    const firstMetricInput = firstRow.locator('input[type="number"]').first();
-    await expect(firstMetricInput).toBeVisible();
-    await firstMetricInput.fill('77');
-    await page.keyboard.press('Tab');
+    const nodeRows = proxmoxNodesSection
+      .locator('table tbody tr')
+      .filter({ hasNotText: 'Global Defaults' });
+    const rowCount = await nodeRows.count();
+    let targetRowIndex = -1;
+    for (let i = 0; i < rowCount; i++) {
+      const row = nodeRows.nth(i);
+      const hasEdit = await row.locator('button[title="Edit thresholds"]').isVisible().catch(() => false);
+      if (!hasEdit) continue;
+      const hasCustom = await row.getByText('Custom', { exact: true }).isVisible().catch(() => false);
+      if (hasCustom) continue;
+      targetRowIndex = i;
+      break;
+    }
+    if (targetRowIndex < 0) {
+      test.skip(true, 'No Proxmox node row without an existing override was found');
+    }
+
+    const targetRow = nodeRows.nth(targetRowIndex);
+    await expect(targetRow).toBeVisible();
+
+    const resourceName = (await targetRow.locator('td').nth(1).locator('a, span').first().innerText()).trim();
+    const cpuCellBefore = (await targetRow.locator('td').nth(2).innerText()).trim();
+
+    const overrideValue = cpuDefault === -1 ? 80 : Math.max(0, cpuDefault - 3);
+    if (overrideValue === cpuDefault) {
+      test.skip(true, `Computed overrideValue equals default (${cpuDefault})`);
+    }
+
+    await targetRow.locator('button[title="Edit thresholds"]').click();
+    const cancelButton = proxmoxNodesSection.locator('button[title="Cancel editing"]').first();
+    await expect(cancelButton).toBeVisible();
+    const editedRow = cancelButton.locator('xpath=ancestor::tr[1]');
+
+    const cpuInput = editedRow.locator('input[type="number"]').first();
+    await expect(cpuInput).toBeVisible();
+    await cpuInput.fill(String(overrideValue));
+    await cpuInput.blur();
 
     const unsaved = page.getByText('You have unsaved changes');
     await expect(unsaved).toBeVisible();
     await page.getByRole('button', { name: 'Save Changes' }).click();
     await expect(unsaved).not.toBeVisible();
 
-    await expect(firstRow.getByText('Custom')).toBeVisible();
-    await expect(firstRow.locator('button[title="Remove override"]')).toBeVisible();
+    const updatedRow = proxmoxNodesSection.locator('table tbody tr').filter({ hasText: resourceName }).first();
+    await expect(updatedRow).toBeVisible();
+    await expect(updatedRow.getByText('Custom')).toBeVisible();
+    await expect(updatedRow.locator('button[title="Remove override"]')).toBeVisible();
 
-    await firstRow.locator('button[title="Remove override"]').click();
+    const stateRes = await page.request.get('/api/state');
+    expect(stateRes.ok()).toBeTruthy();
+    const state = (await stateRes.json()) as { nodes?: Array<{ id: string; name: string }> };
+    const nodeId = state.nodes?.find((n) => n.name === resourceName)?.id;
+    expect(nodeId).toBeTruthy();
+
+    const configResAfterCreate = await page.request.get('/api/alerts/config');
+    expect(configResAfterCreate.ok()).toBeTruthy();
+    const configAfterCreate = (await configResAfterCreate.json()) as { overrides?: Record<string, unknown> };
+    expect(configAfterCreate.overrides && Object.prototype.hasOwnProperty.call(configAfterCreate.overrides, nodeId as string)).toBeTruthy();
+
+    await updatedRow.locator('button[title="Remove override"]').click();
     await expect(unsaved).toBeVisible();
     await page.getByRole('button', { name: 'Save Changes' }).click();
     await expect(unsaved).not.toBeVisible();
 
-    await expect(firstRow.getByText('Custom')).not.toBeVisible();
+    const configResAfterDelete = await page.request.get('/api/alerts/config');
+    expect(configResAfterDelete.ok()).toBeTruthy();
+    const configAfterDelete = (await configResAfterDelete.json()) as { overrides?: Record<string, unknown> };
+    expect(configAfterDelete.overrides && Object.prototype.hasOwnProperty.call(configAfterDelete.overrides, nodeId as string)).toBeFalsy();
+
+    const parseNumericCell = (raw: string) => {
+      const cleaned = raw.replace(/[^\d.-]+/g, '');
+      const num = Number(cleaned);
+      return Number.isFinite(num) ? num : null;
+    };
+
+    await page.reload();
+    if (!/\/alerts\/thresholds/.test(page.url())) {
+      await page.goto('/alerts/overview');
+      await expect(page.getByRole('heading', { name: 'Alerts Overview' })).toBeVisible();
+      const toggle = page.getByRole('checkbox', { name: /toggle alerts/i });
+      await expect(toggle).toBeVisible();
+      await toggle.setChecked(true, { force: true });
+      await page.getByRole('button', { name: 'Thresholds' }).click();
+      await expect(page).toHaveURL(/\/alerts\/thresholds/);
+    }
+
+    await expect(page.getByRole('heading', { name: 'Alert Thresholds' })).toBeVisible();
+    const rowAfterReload = page
+      .getByRole('heading', { name: 'Proxmox Nodes' })
+      .locator('xpath=ancestor::*[.//table][1]')
+      .locator('table tbody tr')
+      .filter({ hasText: resourceName })
+      .first();
+    await expect(rowAfterReload).toBeVisible();
+    await expect(rowAfterReload.getByText('Custom')).not.toBeVisible();
+    const cpuCellAfter = (await rowAfterReload.locator('td').nth(2).innerText()).trim();
+    expect(parseNumericCell(cpuCellAfter)).toBe(parseNumericCell(cpuCellBefore));
+
+    // Restore prior activation state to keep the test safe against real instances.
+    if (!alertsInitiallyEnabled) {
+      await page.goto('/alerts/overview');
+      await expect(page.getByRole('heading', { name: 'Alerts Overview' })).toBeVisible();
+      const alertsToggleRestore = page.getByRole('checkbox', { name: /toggle alerts/i });
+      await expect(alertsToggleRestore).toBeVisible();
+      await alertsToggleRestore.setChecked(false, { force: true });
+      await expect(page.getByText('Alerts disabled', { exact: true })).toBeVisible();
+    }
   });
 
   test('Settings persistence - toggle auto update checks', async ({ page }) => {
     await ensureAuthenticated(page);
 
     await page.goto('/settings/system-updates');
-    await expect(page.getByRole('heading', { name: 'Updates' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Updates', level: 1 })).toBeVisible();
 
     const toggle = page.getByTestId('updates-auto-check-toggle');
     const initial = await toggle.isChecked();
@@ -81,9 +189,23 @@ test.describe.serial('Core E2E flows', () => {
     await page.getByRole('button', { name: 'Save Changes' }).click();
     await expect(unsaved).not.toBeVisible();
 
+    // Wait for the backend to reflect the saved value (Settings reload happens asynchronously).
+    await expect
+      .poll(
+        async () => {
+          const res = await page.request.get('/api/system/settings');
+          if (!res.ok()) return null;
+          const json = (await res.json()) as { autoUpdateEnabled?: boolean };
+          return Boolean(json.autoUpdateEnabled);
+        },
+        { timeout: 10_000 },
+      )
+      .toBe(!initial);
+
+    // The settings page fetches system settings asynchronously; wait until the toggle reflects persisted state.
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'Updates' })).toBeVisible();
-    expect(await page.getByTestId('updates-auto-check-toggle').isChecked()).toBe(!initial);
+    await expect(page.getByRole('heading', { name: 'Updates', level: 1 })).toBeVisible();
+    await expect(page.getByTestId('updates-auto-check-toggle')).toBeChecked({ checked: !initial });
 
     // Restore previous state to keep the test safe against real instances
     await page.getByTestId('updates-auto-check-toggle').setChecked(initial, { force: true });

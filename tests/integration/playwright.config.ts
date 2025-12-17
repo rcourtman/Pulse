@@ -21,7 +21,7 @@ export default defineConfig({
 
   /* Reporter to use */
   reporter: [
-    ['html', { outputFolder: 'playwright-report' }],
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
     ['list'],
     ['junit', { outputFile: 'test-results/junit.xml' }]
   ],

@@ -4,7 +4,17 @@
 
 import { test, expect } from '@playwright/test';
 
+const truthy = (value: string | undefined) => {
+  if (!value) return false;
+  return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+};
+
 test.describe('Login Diagnostic', () => {
+  test.skip(
+    !truthy(process.env.PULSE_E2E_DIAGNOSTIC),
+    'Set PULSE_E2E_DIAGNOSTIC=1 to enable verbose login diagnostics',
+  );
+
   test('diagnose login page and API access', async ({ page }) => {
     // Capture all console messages including errors
     page.on('console', msg => {
@@ -43,7 +53,7 @@ test.describe('Login Diagnostic', () => {
     });
 
     console.log('\n=== Navigating to login page ===');
-    await page.goto('http://localhost:7655/');
+    await page.goto('/');
     console.log('Page loaded');
 
     // Wait a bit for any async operations

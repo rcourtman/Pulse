@@ -461,7 +461,11 @@ export function Alerts() {
   });
 
   createEffect(() => {
-    if (!isAlertsActive() && activeTab() !== 'overview') {
+    const activation = alertsActivation.activationState();
+    if (activation === null) {
+      return;
+    }
+    if (activation !== 'active' && activeTab() !== 'overview') {
       handleTabChange('overview');
     }
   });
@@ -1588,8 +1592,16 @@ export function Alerts() {
                         : 0;
                     const groupingEnabled = groupingState.enabled && groupingWindowSeconds > 0;
 
+                    const existingActivationState = alertsActivation.activationState();
+                    const existingActivationTime = alertsActivation.config()?.activationTime;
+                    const existingObservationWindowHours =
+                      alertsActivation.config()?.observationWindowHours;
+
                     const alertConfig = {
                       enabled: true,
+                      activationState: existingActivationState ?? undefined,
+                      activationTime: existingActivationTime,
+                      observationWindowHours: existingObservationWindowHours,
                       // Global disable flags per resource type
                       disableAllNodes: disableAllNodes(),
                       disableAllGuests: disableAllGuests(),
