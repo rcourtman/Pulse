@@ -3,6 +3,8 @@ package hostagent
 import (
 	"context"
 	"crypto/tls"
+	"errors"
+	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -137,12 +139,14 @@ func TestNew_DefaultPulseURL(t *testing.T) {
 	}
 }
 
-func TestNew_FallsBackToHostnameWhenMachineIDEmpty(t *testing.T) {
+func TestNew_FallsBackToHostnameWhenMachineIDAndMACEmpty(t *testing.T) {
 	originalHostInfo := hostInfoWithContext
 	originalReadFile := readFile
+	originalNetInterfaces := netInterfaces
 	t.Cleanup(func() {
 		hostInfoWithContext = originalHostInfo
 		readFile = originalReadFile
+		netInterfaces = originalNetInterfaces
 	})
 
 	hostInfoWithContext = func(context.Context) (*gohost.InfoStat, error) {
@@ -153,6 +157,7 @@ func TestNew_FallsBackToHostnameWhenMachineIDEmpty(t *testing.T) {
 		}, nil
 	}
 	readFile = func(string) ([]byte, error) { return nil, os.ErrNotExist }
+	netInterfaces = func() ([]net.Interface, error) { return nil, errors.New("no interfaces") }
 
 	agent, err := New(Config{APIToken: "token", LogLevel: zerolog.InfoLevel})
 	if err != nil {
@@ -163,5 +168,42 @@ func TestNew_FallsBackToHostnameWhenMachineIDEmpty(t *testing.T) {
 	}
 	if agent.agentID != "host-from-info" {
 		t.Fatalf("agentID = %q, want %q", agent.agentID, "host-from-info")
+	}
+}
+
+func TestNew_FallsBackToMACWhenMachineIDEmpty(t *testing.T) {
+	originalHostInfo := hostInfoWithContext
+	originalReadFile := readFile
+	originalNetInterfaces := netInterfaces
+	t.Cleanup(func() {
+		hostInfoWithContext = originalHostInfo
+		readFile = originalReadFile
+		netInterfaces = originalNetInterfaces
+	})
+
+	hostInfoWithContext = func(context.Context) (*gohost.InfoStat, error) {
+		return &gohost.InfoStat{
+			Hostname:   "host-from-info",
+			HostID:     "",
+			KernelArch: runtime.GOARCH,
+		}, nil
+	}
+	readFile = func(string) ([]byte, error) { return nil, os.ErrNotExist }
+	netInterfaces = func() ([]net.Interface, error) {
+		return []net.Interface{
+			{Name: "eth0", HardwareAddr: net.HardwareAddr{0x02, 0x00, 0x00, 0x00, 0x00, 0x01}},
+		}, nil
+	}
+
+	agent, err := New(Config{APIToken: "token", LogLevel: zerolog.InfoLevel})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if agent.machineID != "mac-020000000001" {
+		t.Fatalf("machineID = %q, want %q", agent.machineID, "mac-020000000001")
+	}
+	if agent.agentID != "mac-020000000001" {
+		t.Fatalf("agentID = %q, want %q", agent.agentID, "mac-020000000001")
 	}
 }
