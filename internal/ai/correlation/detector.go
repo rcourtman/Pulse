@@ -410,14 +410,26 @@ func (d *Detector) saveToDisk() error {
 	}
 
 	d.mu.RLock()
+	eventsSnapshot := make([]Event, len(d.events))
+	copy(eventsSnapshot, d.events)
+
+	correlationsSnapshot := make(map[string]*Correlation, len(d.correlations))
+	for k, v := range d.correlations {
+		if v == nil {
+			continue
+		}
+		c := *v
+		correlationsSnapshot[k] = &c
+	}
+	d.mu.RUnlock()
+
 	data := struct {
 		Events       []Event                 `json:"events"`
 		Correlations map[string]*Correlation `json:"correlations"`
 	}{
-		Events:       d.events,
-		Correlations: d.correlations,
+		Events:       eventsSnapshot,
+		Correlations: correlationsSnapshot,
 	}
-	d.mu.RUnlock()
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {

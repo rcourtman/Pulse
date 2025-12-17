@@ -35,7 +35,12 @@ export default defineConfig({
   /* Shared settings for all projects */
   use: {
     /* Base URL for all tests */
-    baseURL: 'http://localhost:7655',
+    baseURL: process.env.PULSE_BASE_URL || process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:7655',
+
+    /* Allow testing against self-signed TLS when explicitly enabled */
+    ignoreHTTPSErrors: ['1', 'true', 'yes', 'on'].includes(
+      String(process.env.PULSE_E2E_INSECURE_TLS || '').trim().toLowerCase(),
+    ),
 
     /* Collect trace when retrying the failed test */
     trace: 'on-first-retry',
@@ -59,8 +64,6 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        // Use headless mode in CI
-        headless: !!process.env.CI,
       },
     },
 

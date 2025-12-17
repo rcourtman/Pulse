@@ -12,6 +12,79 @@ export const ADMIN_CREDENTIALS = {
   password: 'admin',
 };
 
+const DEFAULT_E2E_BOOTSTRAP_TOKEN = '0123456789abcdef0123456789abcdef0123456789abcdef';
+
+export const E2E_CREDENTIALS = {
+  bootstrapToken: process.env.PULSE_E2E_BOOTSTRAP_TOKEN || DEFAULT_E2E_BOOTSTRAP_TOKEN,
+  username: process.env.PULSE_E2E_USERNAME || ADMIN_CREDENTIALS.username,
+  password: process.env.PULSE_E2E_PASSWORD || ADMIN_CREDENTIALS.password,
+};
+
+export async function waitForPulseReady(page: Page, timeoutMs = 120_000) {
+  const startedAt = Date.now();
+  let lastError: unknown = null;
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const res = await page.request.get('/api/health');
+      if (res.ok()) {
+        return;
+      }
+      lastError = new Error(`Health check returned ${res.status()}`);
+    } catch (err) {
+      lastError = err;
+    }
+    await page.waitForTimeout(1000);
+  }
+  throw lastError ?? new Error('Timed out waiting for Pulse to become ready');
+}
+
+type SecurityStatus = {
+  hasAuthentication?: boolean;
+};
+
+export async function getSecurityStatus(page: Page): Promise<SecurityStatus> {
+  const res = await page.request.get('/api/security/status');
+  if (!res.ok()) {
+    throw new Error(`Failed to fetch security status: ${res.status()}`);
+  }
+  return (await res.json()) as SecurityStatus;
+}
+
+export async function maybeCompleteSetupWizard(page: Page) {
+  const security = await getSecurityStatus(page);
+  if (security.hasAuthentication !== false) {
+    return;
+  }
+
+  if (!E2E_CREDENTIALS.bootstrapToken) {
+    throw new Error(
+      'Pulse requires first-run setup but PULSE_E2E_BOOTSTRAP_TOKEN is not set (or is empty)',
+    );
+  }
+
+  await page.goto('/');
+
+  const wizard = page.getByRole('main', { name: 'Pulse Setup Wizard' });
+  await expect(wizard).toBeVisible();
+
+  await page.getByPlaceholder('Paste your bootstrap token').fill(E2E_CREDENTIALS.bootstrapToken);
+  await page.getByRole('button', { name: /continue/i }).click();
+
+  await expect(wizard.getByText('Secure Your Dashboard')).toBeVisible();
+  await wizard.getByRole('button', { name: /custom password/i }).click();
+
+  await wizard.locator('input[type="text"]').first().fill(E2E_CREDENTIALS.username);
+  await wizard.locator('input[type="password"]').nth(0).fill(E2E_CREDENTIALS.password);
+  await wizard.locator('input[type="password"]').nth(1).fill(E2E_CREDENTIALS.password);
+
+  await wizard.getByRole('button', { name: /create account/i }).click();
+  await expect(wizard.getByText(/security configured/i)).toBeVisible();
+
+  await wizard.getByRole('button', { name: /go to dashboard|skip for now/i }).click();
+
+  await page.waitForLoadState('domcontentloaded');
+}
+
 /**
  * Login as admin user
  */
@@ -24,6 +97,48 @@ export async function loginAsAdmin(page: Page) {
 
   // Wait for redirect to dashboard
   await page.waitForURL(/\/(dashboard|nodes|proxmox)/);
+}
+
+export async function login(page: Page, credentials = E2E_CREDENTIALS) {
+  await page.goto('/');
+  await page.waitForSelector('input[name="username"]', { state: 'visible' });
+  await page.fill('input[name="username"]', credentials.username);
+  await page.fill('input[name="password"]', credentials.password);
+  await page.click('button[type="submit"]');
+  await page.waitForURL(/\/(proxmox|dashboard|nodes|hosts|docker)/);
+}
+
+export async function ensureAuthenticated(page: Page) {
+  await waitForPulseReady(page);
+  await maybeCompleteSetupWizard(page);
+  await login(page);
+  await expect(page).toHaveURL(/\/(proxmox|dashboard|nodes|hosts|docker)/);
+}
+
+export async function logout(page: Page) {
+  const logoutButton = page.locator('button[aria-label="Logout"]').first();
+  await expect(logoutButton).toBeVisible();
+  await logoutButton.click();
+  await expect(page.locator('input[name="username"]')).toBeVisible();
+}
+
+export async function setMockMode(page: Page, enabled: boolean) {
+  const res = await page.request.post('/api/system/mock-mode', {
+    data: { enabled },
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok()) {
+    throw new Error(`Failed to update mock mode: ${res.status()} ${await res.text()}`);
+  }
+  return (await res.json()) as { enabled: boolean };
+}
+
+export async function getMockMode(page: Page) {
+  const res = await page.request.get('/api/system/mock-mode');
+  if (!res.ok()) {
+    throw new Error(`Failed to read mock mode: ${res.status()} ${await res.text()}`);
+  }
+  return (await res.json()) as { enabled: boolean };
 }
 
 /**

@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# Run update integration tests with different configurations
-# Usage: ./run-tests.sh [test-suite]
-#   test-suite: all, happy, checksums, rate-limit, network, stale, frontend
+# Run Pulse integration tests with different suites
+# Usage: ./run-tests.sh [suite]
+#   suite: all, core, diagnostic, updates-api
 #
 
 set -e
@@ -10,7 +10,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-TEST_SUITE="${1:-all}"
+SUITE="${1:-all}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -25,10 +25,10 @@ echo ""
 
 cd "$TEST_ROOT"
 
-# Function to run test with specific config
-run_test() {
+# Function to run suite with specific mock config
+run_suite() {
     local name="$1"
-    local file="$2"
+    local suite="$2"
     local checksum_error="${3:-false}"
     local network_error="${4:-false}"
     local rate_limit="${5:-false}"
@@ -50,7 +50,12 @@ run_test() {
 
     # Wait for services
     echo "Waiting for services to be ready..."
-    sleep 15
+    for i in {1..60}; do
+        if curl -fsS "http://localhost:7655/api/health" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+    done
 
     # Check if services are healthy
     if ! docker-compose -f docker-compose.test.yml ps | grep -q "Up"; then
@@ -62,12 +67,30 @@ run_test() {
 
     # Run tests
     echo "Running tests..."
-    if npx playwright test "$file" --reporter=list; then
+    set +e
+    case "$suite" in
+        diagnostic)
+            npx playwright test "tests/00-diagnostic.spec.ts" --reporter=list
+            ;;
+        core)
+            npx playwright test "tests/01-core-e2e.spec.ts" --reporter=list
+            ;;
+        updates-api)
+            UPDATE_API_BASE_URL=http://localhost:7655 go test ./api -run TestUpdateFlowIntegration -count=1
+            ;;
+        *)
+            echo "Unknown suite: $suite"
+            set -e
+            return 1
+            ;;
+    esac
+    TEST_RESULT=$?
+    set -e
+
+    if [ $TEST_RESULT -eq 0 ]; then
         echo -e "${GREEN}✅ $name passed${NC}"
-        TEST_RESULT=0
     else
         echo -e "${RED}❌ $name failed${NC}"
-        TEST_RESULT=1
     fi
 
     # Cleanup
@@ -80,45 +103,29 @@ run_test() {
 # Run specific test suite or all tests
 FAILED_TESTS=()
 
-case "$TEST_SUITE" in
+case "$SUITE" in
     all)
-        echo "Running all test suites..."
-
-        run_test "Happy Path" "tests/01-happy-path.spec.ts" || FAILED_TESTS+=("Happy Path")
-        run_test "Bad Checksums" "tests/02-bad-checksums.spec.ts" "true" || FAILED_TESTS+=("Bad Checksums")
-        run_test "Rate Limiting" "tests/03-rate-limiting.spec.ts" "false" "false" "true" || FAILED_TESTS+=("Rate Limiting")
-        run_test "Network Failures" "tests/04-network-failure.spec.ts" "false" "true" || FAILED_TESTS+=("Network Failures")
-        run_test "Stale Releases" "tests/05-stale-release.spec.ts" "false" "false" "false" "true" || FAILED_TESTS+=("Stale Releases")
-        run_test "Frontend Validation" "tests/06-frontend-validation.spec.ts" || FAILED_TESTS+=("Frontend Validation")
+        echo "Running all suites..."
+        run_suite "Diagnostic Smoke" "diagnostic" || FAILED_TESTS+=("Diagnostic Smoke")
+        run_suite "Core E2E" "core" || FAILED_TESTS+=("Core E2E")
+        run_suite "Update API Integration" "updates-api" || FAILED_TESTS+=("Update API Integration")
         ;;
 
-    happy)
-        run_test "Happy Path" "tests/01-happy-path.spec.ts" || FAILED_TESTS+=("Happy Path")
+    diagnostic)
+        run_suite "Diagnostic Smoke" "diagnostic" || FAILED_TESTS+=("Diagnostic Smoke")
         ;;
 
-    checksums)
-        run_test "Bad Checksums" "tests/02-bad-checksums.spec.ts" "true" || FAILED_TESTS+=("Bad Checksums")
+    core)
+        run_suite "Core E2E" "core" || FAILED_TESTS+=("Core E2E")
         ;;
 
-    rate-limit)
-        run_test "Rate Limiting" "tests/03-rate-limiting.spec.ts" "false" "false" "true" || FAILED_TESTS+=("Rate Limiting")
-        ;;
-
-    network)
-        run_test "Network Failures" "tests/04-network-failure.spec.ts" "false" "true" || FAILED_TESTS+=("Network Failures")
-        ;;
-
-    stale)
-        run_test "Stale Releases" "tests/05-stale-release.spec.ts" "false" "false" "false" "true" || FAILED_TESTS+=("Stale Releases")
-        ;;
-
-    frontend)
-        run_test "Frontend Validation" "tests/06-frontend-validation.spec.ts" || FAILED_TESTS+=("Frontend Validation")
+    updates-api)
+        run_suite "Update API Integration" "updates-api" || FAILED_TESTS+=("Update API Integration")
         ;;
 
     *)
-        echo "Unknown test suite: $TEST_SUITE"
-        echo "Available suites: all, happy, checksums, rate-limit, network, stale, frontend"
+        echo "Unknown suite: $SUITE"
+        echo "Available suites: all, diagnostic, core, updates-api"
         exit 1
         ;;
 esac

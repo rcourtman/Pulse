@@ -1,6 +1,6 @@
-# Update Integration Tests
+# Integration Tests (Playwright)
 
-End-to-end tests for the Pulse update flow, validating the entire path from UI to backend.
+End-to-end Playwright tests that validate critical user flows against a running Pulse instance.
 
 ## Architecture
 
@@ -14,37 +14,52 @@ End-to-end tests for the Pulse update flow, validating the entire path from UI t
 
 ## Test Scenarios
 
-> **Note:** The comprehensive Playwright update specs were removed on 2025‑11‑12 after repeated
-> release-blocking flakes. We now rely on:
->
-> 1. `tests/00-diagnostic.spec.ts` — ensures the containerized stack boots and the login page renders.
-> 2. `tests/integration/api/update_flow_test.go` — drives the `/api/updates/*` endpoints directly to
->    verify the backend can discover, plan, apply, and complete an update.
->
-> Reintroduce full UI coverage once we have deterministic fixtures and selectors for the update flow.
+- `tests/00-diagnostic.spec.ts` — smoke test that the stack boots and the UI renders.
+- `tests/01-core-e2e.spec.ts` — critical UI flows:
+  - Bootstrap setup wizard (fresh instance)
+  - Login + authenticated state
+  - Alerts thresholds create/delete
+  - Settings persistence across refresh
+  - Add/delete a Proxmox node (test-only)
 
 ## Running Tests
 
-### Local Development
+### Local Development (Docker compose stack)
 ```bash
-# Start test environment
 cd tests/integration
-docker-compose up -d
+./scripts/setup.sh   # one-time (installs deps + builds docker images)
+npm test
+```
 
-# Run diagnostic Playwright test
-npx playwright test tests/00-diagnostic.spec.ts
+The docker-compose stack seeds a deterministic bootstrap token for first-run setup:
+- Override via `PULSE_E2E_BOOTSTRAP_TOKEN`
+- Default token value is defined in `tests/integration/docker-compose.test.yml`
 
-# Run API integration test from repo root
-UPDATE_API_BASE_URL=http://localhost:7655 go test ./tests/integration/api -run TestUpdateFlowIntegration
+Credentials used by the E2E suite can be overridden:
+- `PULSE_E2E_USERNAME` (default `admin`)
+- `PULSE_E2E_PASSWORD` (default `admin`)
+- `PULSE_E2E_ALLOW_NODE_MUTATION=1` to enable the optional "Add Proxmox node" test (disabled by default for safety)
 
-# Cleanup
-docker-compose down -v
+### Run Against An Existing Pulse Instance
+```bash
+cd tests/integration
+PULSE_E2E_SKIP_DOCKER=1 \
+PULSE_BASE_URL='http://your-pulse-host:7655' \
+PULSE_E2E_USERNAME='admin' \
+PULSE_E2E_PASSWORD='admin' \
+npm test
+```
+
+If the instance is behind self-signed TLS:
+```bash
+PULSE_E2E_INSECURE_TLS=1 PULSE_E2E_SKIP_DOCKER=1 PULSE_BASE_URL='https://...' npm test
 ```
 
 ### CI Pipeline
-Tests run automatically on every PR touching update code via `.github/workflows/test-updates.yml`
+- Core E2E flows run via `.github/workflows/test-e2e.yml`
+- Update flow coverage remains in `.github/workflows/test-updates.yml`
 
-## Test Data
+## Test Data (Update Flow Only)
 
 The mock GitHub server (`mock-github-server/`) provides controllable responses:
 - `/api/releases` - List all releases
@@ -60,7 +75,5 @@ Response behavior can be controlled via environment variables:
 
 ## Success Criteria
 
-- ✅ Tests run in CI on every PR touching update code
-- ✅ All scenarios pass reliably
-- ✅ Tests catch checksum validation issues automatically
-- ✅ Frontend UX regressions are blocked
+- ✅ Core E2E flows pass reliably in CI
+- ✅ Update flow remains covered via API integration test + smoke UI check

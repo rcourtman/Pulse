@@ -106,37 +106,15 @@ npm run test:report
 
 ## Test Scenarios
 
-### 1. Happy Path (`01-happy-path.spec.ts`)
-- Valid checksums, successful update flow
-- Tests complete update from UI to backend
-- Verifies modal appears exactly once
+### 1. Diagnostic Smoke Test (`00-diagnostic.spec.ts`)
+- Ensures the containerized stack boots and the UI renders.
 
-### 2. Bad Checksums (`02-bad-checksums.spec.ts`)
-- Server rejects update due to invalid checksums
-- UI shows error **once** (not twice)
-- Error messages are user-friendly
-
-### 3. Rate Limiting (`03-rate-limiting.spec.ts`)
-- Multiple rapid requests are throttled gracefully
-- Proper rate limit headers returned
-- Clear error messages when limited
-
-### 4. Network Failure (`04-network-failure.spec.ts`)
-- UI retries with exponential backoff
-- Handles timeouts gracefully
-- Shows appropriate loading states
-
-### 5. Stale Release (`05-stale-release.spec.ts`)
-- Backend refuses to install flagged releases
-- Proper error messages about why release is rejected
-- No backup created for rejected releases
-
-### 6. Frontend Validation (`06-frontend-validation.spec.ts`)
-- UpdateProgressModal appears exactly once
-- Error messages are user-friendly (not raw API errors)
-- Modal can be dismissed after error
-- No duplicate modals on error
-- Proper accessibility attributes
+### 2. Core E2E Flows (`01-core-e2e.spec.ts`)
+- First-run setup wizard (fresh instance)
+- Login/logout + authenticated state
+- Alerts thresholds create/delete
+- Settings persistence across refresh
+- Add/delete a Proxmox node (test-only)
 
 ## Troubleshooting
 
