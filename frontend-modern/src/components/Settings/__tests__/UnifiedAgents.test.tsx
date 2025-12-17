@@ -362,7 +362,7 @@ describe('UnifiedAgents platform commands', () => {
     expect(screen.getByText('Install on Windows')).toBeInTheDocument();
   });
 
-  it('includes docker flag when docker monitoring is enabled', async () => {
+  it('includes insecure flag when TLS skip is enabled', async () => {
     createTokenMock.mockResolvedValue({
       token: 'test-token',
       record: {
@@ -382,18 +382,18 @@ describe('UnifiedAgents platform commands', () => {
     await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
 
     await waitFor(() => {
-      expect(screen.getByText('Force Docker')).toBeInTheDocument();
+      expect(screen.getByText(/Skip TLS certificate verification/i)).toBeInTheDocument();
     });
 
-    // Docker is disabled by default (force off)
-    const checkbox = screen.getByRole('checkbox', { name: /Force Docker/i });
+    // TLS skip is disabled by default
+    const checkbox = screen.getByRole('checkbox', { name: /Skip TLS certificate verification/i });
     expect(checkbox).not.toBeChecked();
 
     // Enable it
     fireEvent.click(checkbox);
     expect(checkbox).toBeChecked();
 
-    // Find a copy button and check that the command includes the docker flag
+    // Find a copy button and check that the command includes the insecure flag
     const copyButtons = screen.getAllByRole('button', { name: /Copy command/i });
     expect(copyButtons.length).toBeGreaterThan(0);
   });
