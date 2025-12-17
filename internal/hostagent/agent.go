@@ -70,6 +70,8 @@ type Agent struct {
 
 const defaultInterval = 30 * time.Second
 
+var readFile = os.ReadFile
+
 // New constructs a fully initialised host Agent.
 func New(cfg Config) (*Agent, error) {
 	if cfg.Interval <= 0 {
@@ -100,6 +102,7 @@ func New(cfg Config) (*Agent, error) {
 		pulseURL = "http://localhost:7655"
 	}
 	pulseURL = strings.TrimRight(pulseURL, "/")
+	cfg.PulseURL = pulseURL
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -650,7 +653,7 @@ func (a *Agent) runProxmoxSetup(ctx context.Context) {
 // gopsutil to return identical HostIDs for all LXC containers on the same host.
 func isLXCContainer() bool {
 	// Check systemd-detect-virt if available
-	if data, err := os.ReadFile("/run/systemd/container"); err == nil {
+	if data, err := readFile("/run/systemd/container"); err == nil {
 		container := strings.TrimSpace(string(data))
 		if strings.Contains(container, "lxc") {
 			return true
@@ -658,14 +661,14 @@ func isLXCContainer() bool {
 	}
 
 	// Check /proc/1/environ for container=lxc
-	if data, err := os.ReadFile("/proc/1/environ"); err == nil {
+	if data, err := readFile("/proc/1/environ"); err == nil {
 		if strings.Contains(string(data), "container=lxc") {
 			return true
 		}
 	}
 
 	// Check /proc/1/cgroup for lxc markers
-	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
+	if data, err := readFile("/proc/1/cgroup"); err == nil {
 		text := string(data)
 		if strings.Contains(text, "/lxc/") || strings.Contains(text, "lxc.payload") {
 			return true
@@ -676,15 +679,21 @@ func isLXCContainer() bool {
 }
 
 // getReliableMachineID returns a machine ID that's unique per container/host.
-// In LXC containers, gopsutil's HostID may use /sys/class/dmi/id/product_uuid
-// which is shared with the host, causing ID collisions. This function detects
-// LXC and prefers /etc/machine-id which is unique per container.
+// On Linux, /etc/machine-id is always preferred over gopsutil's HostID because:
+// - LXC containers share the host's /sys/class/dmi/id/product_uuid
+// - Cloned VMs/hosts may share the same DMI product UUID
+// - Proxmox cluster nodes with identical hardware may have the same UUID
+// The /etc/machine-id file is guaranteed unique per installation.
 func getReliableMachineID(gopsutilHostID string, logger zerolog.Logger) string {
 	gopsutilID := strings.TrimSpace(gopsutilHostID)
 
-	// For LXC containers, prefer /etc/machine-id to avoid ID collisions
-	if isLXCContainer() {
-		if data, err := os.ReadFile("/etc/machine-id"); err == nil {
+	// On Linux, always prefer /etc/machine-id as it's guaranteed unique per installation.
+	// This avoids ID collisions from:
+	// - LXC containers sharing host's DMI product UUID
+	// - Cloned VMs with identical hardware UUIDs
+	// - Proxmox cluster nodes with same hardware configuration
+	if runtime.GOOS == "linux" {
+		if data, err := readFile("/etc/machine-id"); err == nil {
 			machineID := strings.TrimSpace(string(data))
 			if len(machineID) >= 32 {
 				// Format as UUID if it's a 32-char hex string (like machine-id typically is)
@@ -693,9 +702,15 @@ func getReliableMachineID(gopsutilHostID string, logger zerolog.Logger) string {
 						machineID[0:8], machineID[8:12], machineID[12:16],
 						machineID[16:20], machineID[20:32])
 				}
-				logger.Debug().
-					Str("machineID", machineID).
-					Msg("LXC container detected, using /etc/machine-id for unique identification")
+				if isLXCContainer() {
+					logger.Debug().
+						Str("machineID", machineID).
+						Msg("LXC container detected, using /etc/machine-id for unique identification")
+				} else {
+					logger.Debug().
+						Str("machineID", machineID).
+						Msg("Linux host detected, using /etc/machine-id for unique identification")
+				}
 				return machineID
 			}
 		}
