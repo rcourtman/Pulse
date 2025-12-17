@@ -109,22 +109,25 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 	archParam := strings.TrimSpace(req.URL.Query().Get("arch"))
 	searchPaths := make([]string, 0, 6)
 
-	if normalized := normalizeUnifiedAgentArch(archParam); normalized != "" {
+	// If a specific architecture is requested, only look for that architecture
+	// Do NOT fall back to generic binary - that could serve the wrong architecture
+	normalized := normalizeUnifiedAgentArch(archParam)
+	if normalized != "" {
 		searchPaths = append(searchPaths,
 			filepath.Join(pulseBinDir(), "pulse-agent-"+normalized),
 			filepath.Join("/opt/pulse", "pulse-agent-"+normalized),
 			filepath.Join("/app", "pulse-agent-"+normalized),
 			filepath.Join(r.projectRoot, "bin", "pulse-agent-"+normalized),
 		)
+	} else {
+		// No specific architecture requested - allow fallback to generic binary
+		searchPaths = append(searchPaths,
+			filepath.Join(pulseBinDir(), "pulse-agent"),
+			"/opt/pulse/pulse-agent",
+			filepath.Join("/app", "pulse-agent"),
+			filepath.Join(r.projectRoot, "bin", "pulse-agent"),
+		)
 	}
-
-	// Default locations (host architecture)
-	searchPaths = append(searchPaths,
-		filepath.Join(pulseBinDir(), "pulse-agent"),
-		"/opt/pulse/pulse-agent",
-		filepath.Join("/app", "pulse-agent"),
-		filepath.Join(r.projectRoot, "bin", "pulse-agent"),
-	)
 
 	for _, candidate := range searchPaths {
 		if candidate == "" {
@@ -154,5 +157,11 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 		return
 	}
 
-	http.Error(w, "Agent binary not found", http.StatusNotFound)
+	// Provide helpful error message
+	if normalized != "" {
+		log.Warn().Str("arch", normalized).Msg("Unified agent binary not found for requested architecture")
+		http.Error(w, "Agent binary not found for architecture: "+normalized, http.StatusNotFound)
+	} else {
+		http.Error(w, "Agent binary not found", http.StatusNotFound)
+	}
 }
