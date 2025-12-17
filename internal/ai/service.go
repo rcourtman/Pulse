@@ -675,14 +675,55 @@ func (s *Service) LoadConfig() error {
 				return nil
 			}
 		} else {
-			log.Warn().
-				Err(err).
-				Str("selected_model", selectedModel).
-				Str("selected_provider", selectedProvider).
-				Strs("configured_providers", cfg.GetConfiguredProviders()).
-				Msg("AI enabled but selected provider is not configured; check API keys or model selection")
-			s.provider = nil
-			return nil
+			// Smart fallback: if selected provider isn't configured but OTHER providers are,
+			// automatically switch to a model from a configured provider.
+			// This prevents confusing errors when the user has e.g. DeepSeek configured
+			// but the model is still set to an Anthropic model.
+			configuredProviders := cfg.GetConfiguredProviders()
+			if len(configuredProviders) > 0 {
+				fallbackProvider := configuredProviders[0]
+				var fallbackModel string
+				switch fallbackProvider {
+				case config.AIProviderAnthropic:
+					fallbackModel = config.AIProviderAnthropic + ":" + config.DefaultAIModelAnthropic
+				case config.AIProviderOpenAI:
+					fallbackModel = config.AIProviderOpenAI + ":" + config.DefaultAIModelOpenAI
+				case config.AIProviderDeepSeek:
+					fallbackModel = config.AIProviderDeepSeek + ":" + config.DefaultAIModelDeepSeek
+				case config.AIProviderOllama:
+					fallbackModel = config.AIProviderOllama + ":" + config.DefaultAIModelOllama
+				}
+
+				if fallbackModel != "" {
+					log.Warn().
+						Str("selected_model", selectedModel).
+						Str("selected_provider", selectedProvider).
+						Str("fallback_model", fallbackModel).
+						Str("fallback_provider", fallbackProvider).
+						Msg("Selected provider not configured - automatically falling back to configured provider")
+
+					providerClient, err = providers.NewForModel(cfg, fallbackModel)
+					if err == nil {
+						selectedModel = fallbackModel
+						selectedProvider = fallbackProvider
+					} else {
+						log.Error().Err(err).Str("fallback_model", fallbackModel).Msg("Failed to create fallback provider")
+						s.provider = nil
+						return nil
+					}
+				}
+			}
+
+			if providerClient == nil {
+				log.Warn().
+					Err(err).
+					Str("selected_model", selectedModel).
+					Str("selected_provider", selectedProvider).
+					Strs("configured_providers", cfg.GetConfiguredProviders()).
+					Msg("AI enabled but no providers configured")
+				s.provider = nil
+				return nil
+			}
 		}
 	}
 

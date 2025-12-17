@@ -38,6 +38,24 @@ function getProviderFromModelId(modelId: string): string {
   return 'ollama';
 }
 
+// Check if a provider is configured based on settings
+function isProviderConfigured(provider: string, settings: AISettingsType | null): boolean {
+  if (!settings) return false;
+  switch (provider) {
+    case 'anthropic': return settings.anthropic_configured;
+    case 'openai': return settings.openai_configured;
+    case 'deepseek': return settings.deepseek_configured;
+    case 'ollama': return settings.ollama_configured;
+    default: return false;
+  }
+}
+
+// Check if a model's provider is configured
+function isModelProviderConfigured(modelId: string, settings: AISettingsType | null): boolean {
+  const provider = getProviderFromModelId(modelId);
+  return isProviderConfigured(provider, settings);
+}
+
 // Group models by provider for optgroup rendering
 function groupModelsByProvider(models: { id: string; name: string; description?: string }[]): Map<string, { id: string; name: string; description?: string }[]> {
   const grouped = new Map<string, { id: string; name: string; description?: string }[]>();
@@ -243,11 +261,39 @@ export const AISettings: Component = () => {
   const handleSave = async (event?: Event) => {
     event?.preventDefault();
 
+    // Frontend validation: warn if model's provider isn't configured
+    const selectedModel = form.model.trim();
+    if (selectedModel && form.enabled) {
+      const modelProvider = getProviderFromModelId(selectedModel);
+      if (!isProviderConfigured(modelProvider, settings())) {
+        // Check if any API key is being added in this save for this provider
+        const isAddingCredential =
+          (modelProvider === 'anthropic' && form.anthropicApiKey.trim()) ||
+          (modelProvider === 'openai' && form.openaiApiKey.trim()) ||
+          (modelProvider === 'deepseek' && form.deepseekApiKey.trim()) ||
+          (modelProvider === 'ollama' && form.ollamaBaseUrl.trim());
+
+        if (!isAddingCredential) {
+          notificationStore.error(
+            `Cannot save: Model "${selectedModel}" requires ${PROVIDER_DISPLAY_NAMES[modelProvider] || modelProvider} to be configured. ` +
+            `Please add an API key for ${PROVIDER_DISPLAY_NAMES[modelProvider] || modelProvider} or select a different model.`
+          );
+          return;
+        }
+      }
+    }
+
+    // Validate patrol interval (must be 0 or >= 10)
+    if (form.patrolIntervalMinutes > 0 && form.patrolIntervalMinutes < 10) {
+      notificationStore.error('Patrol interval must be at least 10 minutes (or 0 to disable)');
+      return;
+    }
+
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {
         provider: form.provider,
-        model: form.model.trim(),
+        model: selectedModel,
       };
 
       // Only include base_url if it's set or if provider is ollama
@@ -384,7 +430,25 @@ export const AISettings: Component = () => {
   };
 
   const handleClearProvider = async (provider: string) => {
-    if (!confirm(`Clear ${provider} credentials? You'll need to re-enter them to use this provider.`)) {
+    // Check if this is the last configured provider
+    const s = settings();
+    const configuredCount = [s?.anthropic_configured, s?.openai_configured, s?.deepseek_configured, s?.ollama_configured].filter(Boolean).length;
+    const isLastProvider = configuredCount === 1 && isProviderConfigured(provider, s);
+
+    // Check if current model uses this provider
+    const currentModel = form.model.trim();
+    const modelUsesProvider = currentModel && getProviderFromModelId(currentModel) === provider;
+
+    let confirmMessage = `Clear ${PROVIDER_DISPLAY_NAMES[provider] || provider} credentials?`;
+    if (isLastProvider) {
+      confirmMessage = `⚠️ This is your only configured provider! Clearing it will disable AI until you configure another provider. Continue?`;
+    } else if (modelUsesProvider) {
+      confirmMessage = `Your current model uses ${PROVIDER_DISPLAY_NAMES[provider] || provider}. Clearing this will require selecting a different model. Continue?`;
+    } else {
+      confirmMessage += ` You'll need to re-enter credentials to use this provider.`;
+    }
+
+    if (!confirm(confirmMessage)) {
       return;
     }
 
@@ -545,7 +609,8 @@ export const AISettings: Component = () => {
                     <Show when={!form.model || !availableModels().some(m => m.id === form.model)}>
                       <option value={form.model}>{form.model || 'Select a model...'}</option>
                     </Show>
-                    <For each={Array.from(groupModelsByProvider(availableModels()).entries())}>
+                    {/* Show configured providers first */}
+                    <For each={Array.from(groupModelsByProvider(availableModels()).entries()).filter(([p]) => isProviderConfigured(p, settings()))}>
                       {([provider, models]) => (
                         <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
                           <For each={models}>
@@ -558,7 +623,31 @@ export const AISettings: Component = () => {
                         </optgroup>
                       )}
                     </For>
+                    {/* Show unconfigured providers in a separate section with warning */}
+                    <For each={Array.from(groupModelsByProvider(availableModels()).entries()).filter(([p]) => !isProviderConfigured(p, settings()))}>
+                      {([provider, models]) => (
+                        <optgroup label={`⚠️ ${PROVIDER_DISPLAY_NAMES[provider] || provider} (not configured)`}>
+                          <For each={models}>
+                            {(model) => (
+                              <option value={model.id} class="text-gray-400">
+                                {model.name || model.id.split(':').pop()}
+                              </option>
+                            )}
+                          </For>
+                        </optgroup>
+                      )}
+                    </For>
                   </select>
+                </Show>
+                {/* Warning if selected model's provider is not configured */}
+                <Show when={form.model && !isModelProviderConfigured(form.model, settings())}>
+                  <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    This model requires {PROVIDER_DISPLAY_NAMES[getProviderFromModelId(form.model)] || getProviderFromModelId(form.model)} to be configured.
+                    Add an API key below or select a different model.
+                  </p>
                 </Show>
               </div>
 
@@ -1017,22 +1106,30 @@ export const AISettings: Component = () => {
                 <Show when={showPatrolSettings()}>
                   <div class="px-3 py-3 bg-white dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-3">
                     {/* Patrol Interval - Compact */}
-                    <div class="flex items-center gap-3">
-                      <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-32 flex-shrink-0">Patrol Interval</label>
-                      <input
-                        type="number"
-                        class="w-20 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
-                        value={form.patrolIntervalMinutes}
-                        onInput={(e) => {
-                          const value = parseInt(e.currentTarget.value, 10);
-                          if (!isNaN(value)) setForm('patrolIntervalMinutes', Math.max(0, value));
-                        }}
-                        min={0}
-                        max={10080}
-                        step={15}
-                        disabled={saving()}
-                      />
-                      <span class="text-xs text-gray-500">min (0 = disabled)</span>
+                    <div class="flex flex-col gap-1">
+                      <div class="flex items-center gap-3">
+                        <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-32 flex-shrink-0">Patrol Interval</label>
+                        <input
+                          type="number"
+                          class={`w-20 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-700 ${form.patrolIntervalMinutes > 0 && form.patrolIntervalMinutes < 10
+                            ? 'border-red-300 dark:border-red-600'
+                            : 'border-gray-300 dark:border-gray-600'
+                            }`}
+                          value={form.patrolIntervalMinutes}
+                          onInput={(e) => {
+                            const value = parseInt(e.currentTarget.value, 10);
+                            if (!isNaN(value)) setForm('patrolIntervalMinutes', Math.max(0, value));
+                          }}
+                          min={0}
+                          max={10080}
+                          step={15}
+                          disabled={saving()}
+                        />
+                        <span class="text-xs text-gray-500">min (0=off, 10+ to enable)</span>
+                      </div>
+                      <Show when={form.patrolIntervalMinutes > 0 && form.patrolIntervalMinutes < 10}>
+                        <p class="text-xs text-red-500 ml-32 pl-3">Minimum interval is 10 minutes</p>
+                      </Show>
                     </div>
 
                     {/* Alert Analysis Toggle - Compact */}

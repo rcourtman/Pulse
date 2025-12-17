@@ -1,0 +1,78 @@
+name: Core E2E Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'frontend-modern/**'
+      - 'internal/**'
+      - 'tests/integration/**'
+      - 'Dockerfile'
+      - '.github/workflows/test-e2e.yml'
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'frontend-modern/**'
+      - 'internal/**'
+      - 'tests/integration/**'
+      - 'Dockerfile'
+      - '.github/workflows/test-e2e.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright Core E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: tests/integration/package-lock.json
+
+      - name: Install Playwright dependencies
+        working-directory: tests/integration
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Build Docker images for test environment
+        run: |
+          docker build -t pulse-mock-github:test ./tests/integration/mock-github-server
+          docker build -t pulse:test -f Dockerfile .
+
+      - name: Run E2E suite
+        working-directory: tests/integration
+        env:
+          PULSE_E2E_BOOTSTRAP_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef
+        run: npm test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/integration/playwright-report/
+          retention-days: 30
+
+      - name: Upload test videos and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-failures
+          path: tests/integration/test-results/
+          retention-days: 7
+

@@ -1,12 +1,24 @@
-version: '3.8'
-
 services:
+  # Seed a deterministic bootstrap token for first-run setup E2E flows.
+  # This is only used by the test stack and is safe to keep deterministic.
+  seed-bootstrap-token:
+    image: alpine:3.20
+    container_name: pulse-test-seed-bootstrap-token
+    environment:
+      - PULSE_E2E_BOOTSTRAP_TOKEN=${PULSE_E2E_BOOTSTRAP_TOKEN:-0123456789abcdef0123456789abcdef0123456789abcdef}
+    volumes:
+      - test-data:/data
+    command: >
+      sh -c "set -e; umask 077; echo \"$PULSE_E2E_BOOTSTRAP_TOKEN\" > /data/.bootstrap_token"
+    networks:
+      - test-network
+
   # Mock GitHub API server for controlled testing
   mock-github:
     image: pulse-mock-github:test
     container_name: pulse-mock-github
     ports:
-      - "8080:8080"
+      - "${PULSE_E2E_MOCK_GITHUB_PORT:-8080}:8080"
     environment:
       - PORT=8080
       - MOCK_BASE_URL=http://mock-github:8080
@@ -29,7 +41,7 @@ services:
     image: pulse:test
     container_name: pulse-test-server
     ports:
-      - "7655:7655"
+      - "${PULSE_E2E_PORT:-7655}:7655"
     environment:
       - TZ=UTC
       # Point to mock GitHub server
@@ -42,12 +54,11 @@ services:
       - PULSE_MOCK_MODE=true
       - PULSE_ALLOW_DOCKER_UPDATES=true
       - PULSE_UPDATE_STAGE_DELAY_MS=250
-      # Pre-configure authentication to bypass first-run setup
-      - PULSE_AUTH_USER=admin
-      - PULSE_AUTH_PASS=admin
     volumes:
       - test-data:/data
     depends_on:
+      seed-bootstrap-token:
+        condition: service_completed_successfully
       mock-github:
         condition: service_healthy
     healthcheck:

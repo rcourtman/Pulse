@@ -591,6 +591,7 @@ sudo tar -xzf pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /
                     <label class="relative inline-flex items-center cursor-pointer">
                       <input
                         type="checkbox"
+                        data-testid="updates-auto-check-toggle"
                         checked={props.autoUpdateEnabled()}
                         onChange={(e) => {
                           props.setAutoUpdateEnabled(e.currentTarget.checked);

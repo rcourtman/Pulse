@@ -1,7 +1,7 @@
 {
   "name": "pulse-integration-tests",
   "version": "1.0.0",
-  "description": "Integration tests for Pulse update flow",
+  "description": "Integration tests for Pulse (Playwright E2E)",
   "type": "module",
   "scripts": {
     "test": "playwright test",
@@ -13,8 +13,8 @@
     "docker:down": "docker-compose -f docker-compose.test.yml down -v",
     "docker:logs": "docker-compose -f docker-compose.test.yml logs -f",
     "docker:rebuild": "docker-compose -f docker-compose.test.yml up -d --build",
-    "pretest": "npm run docker:up && sleep 10",
-    "posttest": "npm run docker:down"
+    "pretest": "node ./scripts/pretest.mjs",
+    "posttest": "node ./scripts/posttest.mjs"
   },
   "keywords": ["pulse", "integration", "e2e", "playwright"],
   "author": "rcourtman",
