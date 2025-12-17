@@ -260,3 +260,45 @@ func TestLargeDataEncryption(t *testing.T) {
 		t.Error("Large data round-trip failed")
 	}
 }
+
+func TestEncryptRefusesAfterKeyDeleted(t *testing.T) {
+	tmpDir := t.TempDir()
+	cm, err := NewCryptoManagerAt(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCryptoManagerAt() error: %v", err)
+	}
+
+	// Encrypt should work initially
+	plaintext := []byte("test data")
+	encrypted, err := cm.Encrypt(plaintext)
+	if err != nil {
+		t.Fatalf("Initial Encrypt() failed: %v", err)
+	}
+
+	// Decrypt should also work
+	_, err = cm.Decrypt(encrypted)
+	if err != nil {
+		t.Fatalf("Initial Decrypt() failed: %v", err)
+	}
+
+	// Now delete the key file (simulating what happened in the bug)
+	keyPath := filepath.Join(tmpDir, ".encryption.key")
+	if err := os.Remove(keyPath); err != nil {
+		t.Fatalf("Failed to remove key file: %v", err)
+	}
+
+	// Encrypt should now FAIL to prevent orphaned data
+	_, err = cm.Encrypt([]byte("new data"))
+	if err == nil {
+		t.Error("Encrypt() should fail after key file is deleted")
+	}
+
+	// Decrypt should still work (key is in memory)
+	decrypted, err := cm.Decrypt(encrypted)
+	if err != nil {
+		t.Fatalf("Decrypt() should still work with in-memory key: %v", err)
+	}
+	if !bytes.Equal(decrypted, plaintext) {
+		t.Error("Decrypt() returned wrong data")
+	}
+}

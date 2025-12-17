@@ -16,18 +16,25 @@ import (
 
 // CryptoManager handles encryption/decryption of sensitive data
 type CryptoManager struct {
-	key []byte
+	key     []byte
+	keyPath string // Path to the encryption key file for runtime validation
 }
 
 // NewCryptoManagerAt creates a new crypto manager with an explicit data directory override.
 func NewCryptoManagerAt(dataDir string) (*CryptoManager, error) {
+	if dataDir == "" {
+		dataDir = utils.GetDataDir()
+	}
+	keyPath := filepath.Join(dataDir, ".encryption.key")
+
 	key, err := getOrCreateKeyAt(dataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get encryption key: %w", err)
 	}
 
 	return &CryptoManager{
-		key: key,
+		key:     key,
+		keyPath: keyPath,
 	}, nil
 }
 
@@ -151,7 +158,20 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 }
 
 // Encrypt encrypts data using AES-GCM
+// SAFETY: Verifies the encryption key file still exists on disk before encrypting.
+// This prevents orphaned encrypted data if the key was deleted while Pulse was running.
 func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
+	// CRITICAL: Verify the key file still exists on disk before encrypting
+	// This prevents creating orphaned encrypted data that can never be decrypted
+	if c.keyPath != "" {
+		if _, err := os.Stat(c.keyPath); os.IsNotExist(err) {
+			log.Error().
+				Str("keyPath", c.keyPath).
+				Msg("CRITICAL: Encryption key file has been deleted - refusing to encrypt to prevent orphaned data")
+			return nil, fmt.Errorf("encryption key file deleted - cannot encrypt (would create orphaned data)")
+		}
+	}
+
 	block, err := aes.NewCipher(c.key)
 	if err != nil {
 		return nil, err

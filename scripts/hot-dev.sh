@@ -273,6 +273,13 @@ else
                 log_info "Generated dev encryption key at ${DEV_KEY_FILE}"
             fi
             export PULSE_ENCRYPTION_KEY="$(<"${DEV_KEY_FILE}")"
+        elif [[ ${HOT_DEV_USE_PROD_DATA:-false} == "true" ]]; then
+            # Production data mode but no key - generate one to prevent orphaned encrypted data
+            log_warn "No encryption key found for ${PULSE_DATA_DIR}. Generating new key..."
+            openssl rand -base64 32 > "${PULSE_DATA_DIR}/.encryption.key"
+            chmod 600 "${PULSE_DATA_DIR}/.encryption.key"
+            export PULSE_ENCRYPTION_KEY="$(<"${PULSE_DATA_DIR}/.encryption.key")"
+            log_info "Generated new encryption key at ${PULSE_DATA_DIR}/.encryption.key"
         else
             log_warn "No encryption key found for ${PULSE_DATA_DIR}. Encrypted config may fail to load."
         fi
