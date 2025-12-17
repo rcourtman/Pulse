@@ -141,7 +141,7 @@ export class AIAPI {
     target_type: string;
     target_id: string;
     run_on_host: boolean;
-    vmid?: string;
+    vmid?: string | number;
     target_host?: string; // Explicit host for command routing
   }): Promise<{ output: string; success: boolean; error?: string }> {
     // Ensure run_on_host is explicitly a boolean (not undefined)
