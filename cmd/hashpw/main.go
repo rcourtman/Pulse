@@ -2,23 +2,29 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 )
 
-func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: hashpw <password>")
-		os.Exit(1)
+func run(args []string, out io.Writer) int {
+	if len(args) < 2 {
+		fmt.Fprintln(out, "Usage: hashpw <password>")
+		return 1
 	}
 
-	password := os.Args[1]
+	password := args[1]
 	hash, err := auth.HashPassword(password)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(out, "Error: %v\n", err)
+		return 1
 	}
 
-	fmt.Println(hash)
+	fmt.Fprintln(out, hash)
+	return 0
+}
+
+func main() {
+	os.Exit(run(os.Args, os.Stdout))
 }
