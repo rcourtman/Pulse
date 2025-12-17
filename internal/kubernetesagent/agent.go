@@ -55,7 +55,7 @@ type Agent struct {
 	logger     zerolog.Logger
 	httpClient *http.Client
 
-	kubeClient *kubernetes.Clientset
+	kubeClient kubernetes.Interface
 	restCfg    *rest.Config
 
 	agentID      string

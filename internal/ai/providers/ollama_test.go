@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -358,5 +359,147 @@ func TestOllamaClient_ListModels_Failure(t *testing.T) {
 
 	if err == nil {
 		t.Error("Expected error for failed list models")
+	}
+}
+
+func TestNewOllamaClient_NormalizesBaseURL(t *testing.T) {
+	tests := []struct {
+		in       string
+		expected string
+	}{
+		{"", "http://localhost:11434"},
+		{"http://example:11434", "http://example:11434"},
+		{"http://example:11434/", "http://example:11434"},
+		{"http://example:11434/api", "http://example:11434"},
+		{"http://example:11434/api/", "http://example:11434"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.in, func(t *testing.T) {
+			client := NewOllamaClient("llama3", tc.in)
+			if client.baseURL != tc.expected {
+				t.Fatalf("baseURL = %q, want %q", client.baseURL, tc.expected)
+			}
+		})
+	}
+}
+
+func TestOllamaClient_Chat_ToolCallsResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := ollamaResponse{
+			Model: "llama3",
+			Message: ollamaMessageResp{
+				Role:    "assistant",
+				Content: "",
+				ToolCalls: []ollamaToolCall{
+					{
+						ID: "call_1",
+						Function: ollamaFunctionCall{
+							Name:      "get_time",
+							Arguments: map[string]interface{}{"tz": "UTC"},
+						},
+					},
+				},
+			},
+			Done:       true,
+			DoneReason: "stop",
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewOllamaClient("llama3", server.URL)
+	out, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "What time is it?"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if out.StopReason != "tool_use" {
+		t.Fatalf("StopReason = %q, want tool_use", out.StopReason)
+	}
+	if len(out.ToolCalls) != 1 {
+		t.Fatalf("ToolCalls = %d, want 1", len(out.ToolCalls))
+	}
+	if out.ToolCalls[0].ID != "call_1" || out.ToolCalls[0].Name != "get_time" {
+		t.Fatalf("unexpected tool call: %+v", out.ToolCalls[0])
+	}
+	if out.ToolCalls[0].Input["tz"] != "UTC" {
+		t.Fatalf("unexpected tool call input: %+v", out.ToolCalls[0].Input)
+	}
+}
+
+func TestOllamaClient_Chat_ToolCallsAndToolResultsInRequest(t *testing.T) {
+	var got ollamaRequest
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_ = json.NewEncoder(w).Encode(ollamaResponse{
+			Model:   got.Model,
+			Message: ollamaMessageResp{Role: "assistant", Content: "ok"},
+			Done:    true,
+		})
+	}))
+	defer server.Close()
+
+	client := NewOllamaClient("llama3", server.URL)
+	_, err := client.Chat(context.Background(), ChatRequest{
+		System: "system prompt",
+		Messages: []Message{
+			{
+				Role:    "assistant",
+				Content: "calling tool",
+				ToolCalls: []ToolCall{
+					{Name: "get_time", Input: map[string]any{"tz": "UTC"}},
+				},
+			},
+			{
+				Role:       "assistant",
+				ToolResult: &ToolResult{Content: "{\"time\":\"00:00\"}"},
+			},
+		},
+		Tools: []Tool{
+			{
+				Type:        "function",
+				Name:        "get_time",
+				Description: "get time",
+				InputSchema: map[string]any{"type": "object"},
+			},
+			{
+				Type: "web_search",
+				Name: "search",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+
+	if got.Messages[0].Role != "system" || got.Messages[0].Content != "system prompt" {
+		t.Fatalf("expected system message first, got: %+v", got.Messages[0])
+	}
+
+	var sawAssistantToolCall bool
+	var sawToolResult bool
+	for _, m := range got.Messages {
+		if m.Role == "assistant" && len(m.ToolCalls) == 1 && m.ToolCalls[0].Function.Name == "get_time" {
+			if m.ToolCalls[0].Function.Arguments["tz"] != "UTC" {
+				t.Fatalf("unexpected tool call args: %+v", m.ToolCalls[0].Function.Arguments)
+			}
+			sawAssistantToolCall = true
+		}
+		if m.Role == "tool" && strings.Contains(m.Content, "00:00") {
+			sawToolResult = true
+		}
+	}
+	if !sawAssistantToolCall {
+		t.Fatalf("expected assistant tool call message in request, got: %+v", got.Messages)
+	}
+	if !sawToolResult {
+		t.Fatalf("expected tool result message in request, got: %+v", got.Messages)
+	}
+
+	if len(got.Tools) != 1 || got.Tools[0].Function.Name != "get_time" {
+		t.Fatalf("expected only function tools to be included, got: %+v", got.Tools)
 	}
 }

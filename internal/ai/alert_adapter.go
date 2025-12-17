@@ -10,11 +10,16 @@ import (
 
 // AlertManagerAdapter adapts the alerts.Manager to the AI's AlertProvider interface
 type AlertManagerAdapter struct {
-	manager *alerts.Manager
+	manager alertManager
+}
+
+type alertManager interface {
+	GetActiveAlerts() []alerts.Alert
+	GetRecentlyResolved() []models.ResolvedAlert
 }
 
 // NewAlertManagerAdapter creates a new adapter for the alert manager
-func NewAlertManagerAdapter(manager *alerts.Manager) *AlertManagerAdapter {
+func NewAlertManagerAdapter(manager alertManager) *AlertManagerAdapter {
 	return &AlertManagerAdapter{manager: manager}
 }
 
