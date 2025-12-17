@@ -472,7 +472,7 @@ func (a *Agent) collectPods(ctx context.Context) ([]agentsk8s.Pod, error) {
 		if !a.namespaceAllowed(pod.Namespace) {
 			continue
 		}
-		if !a.cfg.IncludeAllPods && !isProblemPod(pod) {
+		if !a.cfg.IncludeAllPods && isProblemPod(pod) {
 			continue
 		}
 
@@ -545,7 +545,10 @@ func isProblemPod(pod corev1.Pod) bool {
 	}
 
 	for _, cs := range pod.Status.InitContainerStatuses {
-		if cs.State.Waiting != nil || cs.State.Terminated != nil {
+		if cs.State.Terminated != nil && cs.State.Terminated.ExitCode != 0 {
+			return true
+		}
+		if cs.State.Waiting != nil {
 			return true
 		}
 		if !cs.Ready && (cs.State.Running == nil) {
@@ -601,7 +604,7 @@ func (a *Agent) collectDeployments(ctx context.Context) ([]agentsk8s.Deployment,
 		if !a.namespaceAllowed(dep.Namespace) {
 			continue
 		}
-		if !isProblemDeployment(dep) {
+		if isProblemDeployment(dep) {
 			continue
 		}
 
