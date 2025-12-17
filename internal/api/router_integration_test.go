@@ -169,6 +169,32 @@ func TestVersionEndpointUsesRepoVersion(t *testing.T) {
 	t.Fatalf("expected version to match release %q or runtime %q, got %s", releaseVersion, runtimeVersion, actual)
 }
 
+func TestAlertAcknowledge_AllowsPrintableAlertIDs(t *testing.T) {
+	srv := newIntegrationServer(t)
+
+	// This ID includes parentheses which were rejected in v5 RC builds due to overly strict
+	// validation. The request should make it to the alert manager, which returns 404 because
+	// the alert does not exist in this test environment.
+	alertID := "docker(host)-container-unhealthy"
+	escaped := url.PathEscape(alertID)
+
+	req, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/alerts/"+escaped+"/acknowledge", nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("ack request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNotFound {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("unexpected status: got %d want %d, body=%s", res.StatusCode, http.StatusNotFound, string(body))
+	}
+}
+
 func TestStateEndpointReturnsMockData(t *testing.T) {
 	srv := newIntegrationServer(t)
 
