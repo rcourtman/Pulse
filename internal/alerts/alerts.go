@@ -960,6 +960,15 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Preserve activation state/time when clients update the config without including it.
+	// This avoids unintentionally resetting alerts to pending review when saving thresholds.
+	if config.ActivationState == "" && m.config.ActivationState != "" {
+		config.ActivationState = m.config.ActivationState
+		if config.ActivationTime == nil && m.config.ActivationTime != nil {
+			config.ActivationTime = m.config.ActivationTime
+		}
+	}
+
 	// Normalize all config sections
 	normalizeStorageDefaults(&config)
 	normalizeDockerDefaults(&config)

@@ -201,10 +201,10 @@ Example:
 
 ```typescript
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin, navigateToSettings } from './helpers';
+import { ensureAuthenticated, navigateToSettings } from './helpers';
 
 test('my new test', async ({ page }) => {
-  await loginAsAdmin(page);
+  await ensureAuthenticated(page);
   await navigateToSettings(page);
 
   // Your test logic here

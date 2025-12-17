@@ -37,7 +37,7 @@ The docker-compose stack seeds a deterministic bootstrap token for first-run set
 
 Credentials used by the E2E suite can be overridden:
 - `PULSE_E2E_USERNAME` (default `admin`)
-- `PULSE_E2E_PASSWORD` (default `admin`)
+- `PULSE_E2E_PASSWORD` (default `adminadminadmin`)
 - `PULSE_E2E_ALLOW_NODE_MUTATION=1` to enable the optional "Add Proxmox node" test (disabled by default for safety)
 
 ### Run Against An Existing Pulse Instance
@@ -46,7 +46,7 @@ cd tests/integration
 PULSE_E2E_SKIP_DOCKER=1 \
 PULSE_BASE_URL='http://your-pulse-host:7655' \
 PULSE_E2E_USERNAME='admin' \
-PULSE_E2E_PASSWORD='admin' \
+PULSE_E2E_PASSWORD='adminadminadmin' \
 npm test
 ```
 

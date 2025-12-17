@@ -9,7 +9,8 @@ import { Page, expect } from '@playwright/test';
  */
 export const ADMIN_CREDENTIALS = {
   username: 'admin',
-  password: 'admin',
+  // Pulse enforces a minimum password length of 12 characters.
+  password: 'adminadminadmin',
 };
 
 const DEFAULT_E2E_BOOTSTRAP_TOKEN = '0123456789abcdef0123456789abcdef0123456789abcdef';
@@ -91,8 +92,8 @@ export async function maybeCompleteSetupWizard(page: Page) {
 export async function loginAsAdmin(page: Page) {
   await page.goto('/');
   await page.waitForSelector('input[name="username"]', { state: 'visible' });
-  await page.fill('input[name="username"]', ADMIN_CREDENTIALS.username);
-  await page.fill('input[name="password"]', ADMIN_CREDENTIALS.password);
+  await page.fill('input[name="username"]', E2E_CREDENTIALS.username);
+  await page.fill('input[name="password"]', E2E_CREDENTIALS.password);
   await page.click('button[type="submit"]');
 
   // Wait for redirect to dashboard
@@ -101,11 +102,36 @@ export async function loginAsAdmin(page: Page) {
 
 export async function login(page: Page, credentials = E2E_CREDENTIALS) {
   await page.goto('/');
-  await page.waitForSelector('input[name="username"]', { state: 'visible' });
+  await page.waitForLoadState('domcontentloaded');
+
+  const authenticatedURL = /\/(proxmox|dashboard|nodes|hosts|docker)/;
+  const usernameInput = page.locator('input[name="username"]');
+
+  const state = await Promise.race([
+    usernameInput
+      .waitFor({ state: 'visible', timeout: 10_000 })
+      .then(() => 'login')
+      .catch(() => undefined),
+    page
+      .waitForURL(authenticatedURL, { timeout: 10_000 })
+      .then(() => 'authenticated')
+      .catch(() => undefined),
+  ]);
+
+  if (state === 'authenticated') {
+    return;
+  }
+
+  if (state !== 'login') {
+    const url = page.url();
+    const preview = ((await page.locator('body').textContent()) || '').replace(/\s+/g, ' ').slice(0, 200);
+    throw new Error(`Login did not render and did not redirect (url=${url}, body="${preview}")`);
+  }
+
   await page.fill('input[name="username"]', credentials.username);
   await page.fill('input[name="password"]', credentials.password);
   await page.click('button[type="submit"]');
-  await page.waitForURL(/\/(proxmox|dashboard|nodes|hosts|docker)/);
+  await page.waitForURL(authenticatedURL);
 }
 
 export async function ensureAuthenticated(page: Page) {
@@ -119,6 +145,7 @@ export async function logout(page: Page) {
   const logoutButton = page.locator('button[aria-label="Logout"]').first();
   await expect(logoutButton).toBeVisible();
   await logoutButton.click();
+  await page.waitForURL(/\/$/, { timeout: 15000 });
   await expect(page.locator('input[name="username"]')).toBeVisible();
 }
 

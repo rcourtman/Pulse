@@ -9,7 +9,7 @@ services:
     volumes:
       - test-data:/data
     command: >
-      sh -c "set -e; umask 077; echo \"$PULSE_E2E_BOOTSTRAP_TOKEN\" > /data/.bootstrap_token"
+      sh -c "set -e; umask 077; echo \"$$PULSE_E2E_BOOTSTRAP_TOKEN\" > /data/.bootstrap_token"
     networks:
       - test-network
 
