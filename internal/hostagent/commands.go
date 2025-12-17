@@ -361,6 +361,16 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 	}
 }
 
+func wrapCommand(payload executeCommandPayload) string {
+	if payload.TargetType == "container" && payload.TargetID != "" {
+		return fmt.Sprintf("pct exec %s -- %s", payload.TargetID, payload.Command)
+	}
+	if payload.TargetType == "vm" && payload.TargetID != "" {
+		return fmt.Sprintf("qm guest exec %s -- %s", payload.TargetID, payload.Command)
+	}
+	return payload.Command
+}
+
 func (c *CommandClient) executeCommand(ctx context.Context, payload executeCommandPayload) commandResultPayload {
 	result := commandResultPayload{
 		RequestID: payload.RequestID,
@@ -375,17 +385,7 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// Build the command based on target type
-	command := payload.Command
-
-	// If targeting a container or VM, wrap the command
-	if payload.TargetType == "container" && payload.TargetID != "" {
-		// Use pct exec for LXC containers
-		command = fmt.Sprintf("pct exec %s -- %s", payload.TargetID, payload.Command)
-	} else if payload.TargetType == "vm" && payload.TargetID != "" {
-		// Use qm guest exec for VMs (requires QEMU guest agent)
-		command = fmt.Sprintf("qm guest exec %s -- %s", payload.TargetID, payload.Command)
-	}
+	command := wrapCommand(payload)
 
 	// Execute the command
 	var cmd *exec.Cmd
@@ -405,12 +405,12 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	result.Stderr = stderr.String()
 
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			result.ExitCode = exitErr.ExitCode()
-			result.Success = false
-		} else if cmdCtx.Err() == context.DeadlineExceeded {
+		if cmdCtx.Err() == context.DeadlineExceeded {
 			result.Error = "command timed out"
 			result.ExitCode = -1
+			result.Success = false
+		} else if exitErr, ok := err.(*exec.ExitError); ok {
+			result.ExitCode = exitErr.ExitCode()
 			result.Success = false
 		} else {
 			result.Error = err.Error()
