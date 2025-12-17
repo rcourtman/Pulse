@@ -48,6 +48,16 @@ const (
 	oauthScopes = "org:create_api_key user:profile user:inference user:sessions:claude_code"
 )
 
+var (
+	oauthAuthorizeURL = anthropicAuthorizeURL
+	oauthTokenURL     = anthropicTokenURL
+	oauthAPIKeyURL    = anthropicAPIKeyURL
+
+	// oauthHTTPClient is used for token exchange, refresh, and API key creation.
+	// It is a package variable to enable deterministic, local unit tests.
+	oauthHTTPClient = &http.Client{Timeout: 30 * time.Second}
+)
+
 // OAuthTokens represents the tokens obtained from OAuth flow
 type OAuthTokens struct {
 	AccessToken  string    `json:"access_token"`
@@ -111,7 +121,7 @@ func GetAuthorizationURL(session *OAuthSession) string {
 	params.Set("code_challenge_method", "S256")
 	params.Set("state", session.State)
 
-	return anthropicAuthorizeURL + "?" + params.Encode()
+	return oauthAuthorizeURL + "?" + params.Encode()
 }
 
 // ExchangeCodeForTokens exchanges an authorization code for access tokens
@@ -141,15 +151,14 @@ func ExchangeCodeForTokens(ctx context.Context, code string, session *OAuthSessi
 		Str("redirect_uri", "https://console.anthropic.com/oauth/code/callback").
 		Msg("Sending OAuth token exchange request (JSON)")
 
-	req, err := http.NewRequestWithContext(ctx, "POST", anthropicTokenURL, bytes.NewReader(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", oauthTokenURL, bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := oauthHTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("token request failed: %w", err)
 	}
@@ -190,15 +199,14 @@ func ExchangeCodeForTokens(ctx context.Context, code string, session *OAuthSessi
 // CreateAPIKeyFromOAuth uses an OAuth access token to create a real API key
 // This is how Claude Code uses the OAuth flow - the OAuth token creates an API key
 func CreateAPIKeyFromOAuth(ctx context.Context, accessToken string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, "POST", anthropicAPIKeyURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "POST", oauthAPIKeyURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create API key request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := oauthHTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("API key request failed: %w", err)
 	}
@@ -252,15 +260,14 @@ func RefreshAccessToken(ctx context.Context, refreshToken string) (*OAuthTokens,
 		Str("client_id", claudeCodeClientID).
 		Msg("Sending OAuth token refresh request")
 
-	req, err := http.NewRequestWithContext(ctx, "POST", anthropicTokenURL, bytes.NewReader(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", oauthTokenURL, bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create refresh request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := oauthHTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("refresh request failed: %w", err)
 	}
@@ -303,21 +310,32 @@ func RefreshAccessToken(ctx context.Context, refreshToken string) (*OAuthTokens,
 
 // AnthropicOAuthClient is a client that uses OAuth tokens instead of API keys
 type AnthropicOAuthClient struct {
-	accessToken  string
-	refreshToken string
-	expiresAt    time.Time
-	model        string
-	client       *http.Client
+	accessToken    string
+	refreshToken   string
+	expiresAt      time.Time
+	model          string
+	baseURL        string
+	client         *http.Client
 	onTokenRefresh func(tokens *OAuthTokens) // Callback when tokens are refreshed
 }
 
 // NewAnthropicOAuthClient creates a new Anthropic client using OAuth tokens
 func NewAnthropicOAuthClient(accessToken, refreshToken string, expiresAt time.Time, model string) *AnthropicOAuthClient {
+	return NewAnthropicOAuthClientWithBaseURL(accessToken, refreshToken, expiresAt, model, "https://api.anthropic.com/v1/messages?beta=true")
+}
+
+// NewAnthropicOAuthClientWithBaseURL creates a new Anthropic OAuth client using a custom messages endpoint.
+// This is useful for testing and for deployments that route requests through a proxy.
+func NewAnthropicOAuthClientWithBaseURL(accessToken, refreshToken string, expiresAt time.Time, model, baseURL string) *AnthropicOAuthClient {
+	if baseURL == "" {
+		baseURL = "https://api.anthropic.com/v1/messages?beta=true"
+	}
 	return &AnthropicOAuthClient{
 		accessToken:  accessToken,
 		refreshToken: refreshToken,
 		expiresAt:    expiresAt,
 		model:        model,
+		baseURL:      baseURL,
 		client: &http.Client{
 			Timeout: 300 * time.Second,
 		},
@@ -479,29 +497,31 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Use the beta endpoint for subscription-based access
-	apiURL := "https://api.anthropic.com/v1/messages?beta=true"
-
 	var respBody []byte
 	var lastErr error
+	var skipBackoff bool
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
-			backoff := initialBackoff * time.Duration(1<<(attempt-1))
-			log.Warn().
-				Int("attempt", attempt).
-				Dur("backoff", backoff).
-				Str("last_error", lastErr.Error()).
-				Msg("Retrying Anthropic OAuth API request after transient error")
+			if skipBackoff {
+				skipBackoff = false
+			} else {
+				backoff := initialBackoff * time.Duration(1<<(attempt-1))
+				log.Warn().
+					Int("attempt", attempt).
+					Dur("backoff", backoff).
+					Str("last_error", lastErr.Error()).
+					Msg("Retrying Anthropic OAuth API request after transient error")
 
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(backoff):
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(backoff):
+				}
 			}
 		}
 
-		httpReq, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(body))
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(body))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -533,8 +553,9 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 		if resp.StatusCode == 401 && c.refreshToken != "" {
 			log.Info().Msg("Got 401, forcing token refresh...")
 			if err := c.forceRefreshToken(ctx); err == nil {
-				// Token refreshed, retry immediately
+				// Token refreshed, retry immediately without backoff
 				lastErr = fmt.Errorf("token expired, retried with refreshed token")
+				skipBackoff = true
 				continue
 			} else {
 				log.Error().Err(err).Msg("Failed to refresh token after 401")
@@ -610,6 +631,15 @@ func (c *AnthropicOAuthClient) TestConnection(ctx context.Context) error {
 	return err
 }
 
+func (c *AnthropicOAuthClient) modelsEndpoint() string {
+	defaultURL := "https://api.anthropic.com/v1/models"
+	u, err := url.Parse(c.baseURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return defaultURL
+	}
+	return u.Scheme + "://" + u.Host + "/v1/models"
+}
+
 // ListModels fetches available models from the Anthropic API using OAuth
 func (c *AnthropicOAuthClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	// Ensure we have a valid token
@@ -617,7 +647,7 @@ func (c *AnthropicOAuthClient) ListModels(ctx context.Context) ([]ModelInfo, err
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.anthropic.com/v1/models", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", c.modelsEndpoint(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
