@@ -45,6 +45,7 @@ func TestUpdateFlowIntegration(t *testing.T) {
 
 	username := getenvDefault("UPDATE_API_USERNAME", "admin")
 	password := getenvDefault("UPDATE_API_PASSWORD", "admin")
+	bootstrapToken := getenvDefault("PULSE_E2E_BOOTSTRAP_TOKEN", "0123456789abcdef0123456789abcdef0123456789abcdef")
 
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -60,6 +61,7 @@ func TestUpdateFlowIntegration(t *testing.T) {
 	}
 
 	waitForHealth(t, client, baseURL, 2*time.Minute)
+	setupCredentials(t, client, baseURL, bootstrapToken, username, password)
 	login(t, client, baseURL, username, password)
 
 	info := fetchUpdateInfo(t, client, baseURL)
@@ -95,6 +97,36 @@ func waitForHealth(t *testing.T, client *http.Client, baseURL string, timeout ti
 			t.Fatalf("health check failed: %v", err)
 		}
 		time.Sleep(2 * time.Second)
+	}
+}
+
+func setupCredentials(t *testing.T, client *http.Client, baseURL, bootstrapToken, username, password string) {
+	t.Helper()
+	payload := map[string]interface{}{
+		"username":   username,
+		"password":   password,
+		"setupToken": bootstrapToken,
+	}
+	req, err := http.NewRequest("POST", baseURL+"/api/security/quick-setup", nil)
+	if err != nil {
+		t.Fatalf("failed to create setup request: %v", err)
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("failed to marshal setup payload: %v", err)
+	}
+	req.Body = io.NopCloser(bytes.NewReader(data))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Setup-Token", bootstrapToken)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("setup request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("security setup failed with status %s: %s", resp.Status, string(body))
 	}
 }
 
