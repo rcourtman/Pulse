@@ -57,7 +57,9 @@ Pulse is configured via environment variables.
 | `API_TOKENS` | Comma-separated API tokens | *(unset)* |
 | `DISCOVERY_SUBNET` | Custom CIDR to scan | *(auto)* |
 | `ALLOWED_ORIGINS` | CORS allowed domains | *(none)* |
-| `LOG_LEVEL` | Log verbosity | `info` |
+| `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
+
+> **Tip**: Set `LOG_LEVEL=warn` to reduce log volume while still capturing important events.
 
 <details>
 <summary><strong>Advanced: Resource Limits & Healthcheck</strong></summary>

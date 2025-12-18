@@ -208,7 +208,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 		}
 	}
 
-	log.Info().
+	log.Debug().
 		Str("instance", instanceName).
 		Int("totalNodes", len(nodes)).
 		Int("onlineNodes", onlineNodes).
@@ -864,7 +864,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 	}
 
 	duration := time.Since(startTime)
-	log.Info().
+	log.Debug().
 		Str("instance", instanceName).
 		Int("totalVMs", len(allVMs)).
 		Int("successfulNodes", successfulNodes).
@@ -913,7 +913,7 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 		}
 	}
 
-	log.Info().
+	log.Debug().
 		Str("instance", instanceName).
 		Int("totalNodes", len(nodes)).
 		Int("onlineNodes", onlineNodes).
@@ -1173,7 +1173,7 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 	}
 
 	duration := time.Since(startTime)
-	log.Info().
+	log.Debug().
 		Str("instance", instanceName).
 		Int("totalContainers", len(allContainers)).
 		Int("successfulNodes", successfulNodes).
@@ -1236,7 +1236,7 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 		}
 	}
 
-	log.Info().
+	log.Debug().
 		Str("instance", instanceName).
 		Int("totalNodes", len(nodes)).
 		Int("onlineNodes", onlineNodes).
@@ -1623,7 +1623,7 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			Int("failedNodes", failedNodes).
 			Msg("All nodes failed to retrieve storage - check Proxmox API permissions for Datastore.Audit on all storage")
 	} else {
-		log.Info().
+		log.Debug().
 			Str("instance", instanceName).
 			Int("totalStorage", len(allStorage)).
 			Int("successfulNodes", successfulNodes).

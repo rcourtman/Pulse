@@ -2057,7 +2057,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 
 		// Debug logging for high memory VMs
 		if memUsage > 85 {
-			log.Info().
+			log.Debug().
 				Str("vm", name).
 				Float64("memUsage", memUsage).
 				Str("status", status).
@@ -2100,7 +2100,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 
 	monitorOnly := settings.MonitorOnly
 	if monitorOnly || m.guestHasMonitorOnlyAlerts(guestID) {
-		log.Info().
+		log.Debug().
 			Str("guest", name).
 			Bool("monitorOnly", monitorOnly).
 			Msg("Pulse monitor-only status applied")
@@ -2185,7 +2185,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	}
 
 	// Check each metric
-	log.Info().
+	log.Debug().
 		Str("guest", name).
 		Float64("cpu", cpu).
 		Float64("memory", memUsage).
@@ -4341,7 +4341,7 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 	// Check usage if storage has valid data (even if not currently active on this node)
 	// In clusters, storage may show as inactive on nodes where it's not currently mounted
 	// but we still want to alert on high usage
-	log.Info().
+	log.Debug().
 		Str("storage", storage.Name).
 		Str("id", storage.ID).
 		Float64("usage", storage.Usage).
@@ -8140,7 +8140,7 @@ func (m *Manager) SaveActiveAlerts() error {
 		return fmt.Errorf("failed to rename active alerts file: %w", err)
 	}
 
-	log.Info().Int("count", len(alerts)).Msg("Saved active alerts to disk")
+	log.Debug().Int("count", len(alerts)).Msg("Saved active alerts to disk")
 	return nil
 }
 
@@ -8316,7 +8316,7 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	log.Info().
+	log.Debug().
 		Int("totalAlerts", len(m.activeAlerts)).
 		Int("existingNodes", len(existingNodes)).
 		Interface("nodes", existingNodes).
@@ -8349,7 +8349,7 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 	}
 
 	if removedCount > 0 {
-		log.Info().Int("removed", removedCount).Int("remaining", len(m.activeAlerts)).Msg("Cleaned up alerts for non-existent nodes")
+		log.Debug().Int("removed", removedCount).Int("remaining", len(m.activeAlerts)).Msg("Cleaned up alerts for non-existent nodes")
 		// Save the cleaned up state
 		go func() {
 			defer func() {
