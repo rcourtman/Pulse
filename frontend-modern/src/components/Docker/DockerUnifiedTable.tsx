@@ -772,6 +772,8 @@ const DockerContainerRow: Component<{
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
   showHostContext?: boolean;
   resourceIndentClass?: string;
+  aiEnabled?: boolean;
+  initialNotes?: string[];
 }> = (props) => {
   const { host, container } = props.row;
   const runtimeInfo = resolveHostRuntime(host);
@@ -792,26 +794,21 @@ const DockerContainerRow: Component<{
   });
   let urlInputRef: HTMLInputElement | undefined;
 
-  // Annotations and AI state
-  const [aiEnabled, setAiEnabled] = createSignal(false);
+  // Annotations and AI state - use props passed from parent to avoid per-row API calls
+  const aiEnabled = () => props.aiEnabled ?? false;
   // Check if this container is in AI context
   const isInAIContext = createMemo(() => aiChatStore.enabled && aiChatStore.hasContextItem(resourceId()));
-  const [annotations, setAnnotations] = createSignal<string[]>([]);
+  // Initialize annotations from props (pre-fetched metadata) instead of per-row API call
+  const [annotations, setAnnotations] = createSignal<string[]>(props.initialNotes ?? []);
   const [newAnnotation, setNewAnnotation] = createSignal('');
   const [saving, setSaving] = createSignal(false);
 
-  // Check if AI is enabled and load annotations on mount
+  // Update annotations if props change (e.g., parent re-fetches metadata)
   createEffect(() => {
-    AIAPI.getSettings()
-      .then((settings) => setAiEnabled(settings.enabled && settings.configured))
-      .catch((err) => logger.debug('[DockerContainer] AI settings check failed:', err));
-
-    // Load existing annotations
-    DockerMetadataAPI.getMetadata(resourceId())
-      .then((meta) => {
-        if (meta.notes && Array.isArray(meta.notes)) setAnnotations(meta.notes);
-      })
-      .catch((err) => logger.debug('[DockerContainer] Failed to load annotations:', err));
+    const notes = props.initialNotes;
+    if (notes && Array.isArray(notes)) {
+      setAnnotations(notes);
+    }
   });
 
   const saveAnnotations = async (newAnnotations: string[]) => {
@@ -2387,9 +2384,20 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
   // Use the breakpoint hook for responsive behavior
   const { isMobile } = useBreakpoint();
 
+  // AI enabled state - fetched once at the parent level to avoid per-row API calls
+  const [aiEnabled, setAiEnabled] = createSignal(false);
+
+  // Fetch AI settings once when component mounts
+  createEffect(() => {
+    AIAPI.getSettings()
+      .then((settings) => setAiEnabled(settings.enabled && settings.configured))
+      .catch((err) => logger.debug('[DockerUnifiedTable] AI settings check failed:', err));
+  });
+
   // Caches for stable object references to prevent re-animations
   const rowCache = new Map<string, DockerRow>();
   const tasksCache = new Map<string, DockerTask[]>();
+
 
   const tokens = createMemo(() => parseSearchTerm(props.searchTerm));
   const [sortKey, setSortKey] = usePersistentSignal<SortKey>('dockerUnifiedSortKey', 'host', {
@@ -2717,7 +2725,10 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
         onCustomUrlUpdate={props.onCustomUrlUpdate}
         showHostContext={!grouped}
         resourceIndentClass={grouped ? GROUPED_RESOURCE_INDENT : UNGROUPED_RESOURCE_INDENT}
+        aiEnabled={aiEnabled()}
+        initialNotes={metadata?.notes}
       />
+
     ) : (
       <DockerServiceRow
         row={row}
