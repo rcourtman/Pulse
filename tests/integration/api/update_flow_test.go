@@ -44,7 +44,7 @@ func TestUpdateFlowIntegration(t *testing.T) {
 	}
 
 	username := getenvDefault("UPDATE_API_USERNAME", "admin")
-	password := getenvDefault("UPDATE_API_PASSWORD", "admin")
+	password := getenvDefault("UPDATE_API_PASSWORD", "AdminPass123!")
 	bootstrapToken := getenvDefault("PULSE_E2E_BOOTSTRAP_TOKEN", "0123456789abcdef0123456789abcdef0123456789abcdef")
 
 	jar, err := cookiejar.New(nil)
