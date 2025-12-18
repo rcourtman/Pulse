@@ -21,7 +21,9 @@ type DockerMetadata struct {
 
 // DockerHostMetadata holds additional metadata for a Docker host
 type DockerHostMetadata struct {
-	CustomDisplayName string `json:"customDisplayName,omitempty"` // User-defined custom display name
+	CustomDisplayName string   `json:"customDisplayName,omitempty"` // User-defined custom display name
+	CustomURL         string   `json:"customUrl,omitempty"`         // Custom URL for administration (e.g., Portainer)
+	Notes             []string `json:"notes,omitempty"`             // User annotations for AI context
 }
 
 // dockerMetadataFile represents the on-disk format for Docker metadata
@@ -107,8 +109,8 @@ func (s *DockerMetadataStore) SetHostMetadata(hostID string, meta *DockerHostMet
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if meta == nil || meta.CustomDisplayName == "" {
-		// If metadata is nil or custom display name is empty, delete the entry
+	// If metadata is nil or all fields are empty, delete the entry
+	if meta == nil || (meta.CustomDisplayName == "" && meta.CustomURL == "" && len(meta.Notes) == 0) {
 		delete(s.hostMetadata, hostID)
 	} else {
 		s.hostMetadata[hostID] = meta
@@ -116,6 +118,7 @@ func (s *DockerMetadataStore) SetHostMetadata(hostID string, meta *DockerHostMet
 
 	// Save to disk
 	return s.save()
+
 }
 
 // Set updates or creates metadata for a Docker resource

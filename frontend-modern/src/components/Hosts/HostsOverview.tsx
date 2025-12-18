@@ -20,6 +20,8 @@ import { aiChatStore } from '@/stores/aiChat';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useResourcesAsLegacy } from '@/hooks/useResources';
 import { HostMetadataAPI, type HostMetadata } from '@/api/hostMetadata';
+import { UrlEditPopover, createUrlEditState } from '@/components/shared/UrlEditPopover';
+import { showSuccess, showError } from '@/utils/toast';
 import { logger } from '@/utils/logger';
 
 // Column definition for hosts table
@@ -43,13 +45,13 @@ export const HOST_COLUMNS: HostColumnDef[] = [
   { id: 'disk', label: 'Disk', priority: 'essential', width: '140px', sortKey: 'disk' },
 
   // Secondary - visible on md+, toggleable
-  { id: 'temp', label: 'Temp', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>, priority: 'secondary', width: '50px', toggleable: true },
-  { id: 'uptime', label: 'Uptime', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>, priority: 'secondary', width: '65px', toggleable: true, sortKey: 'uptime' },
+  { id: 'temp', label: 'Temp', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, priority: 'secondary', width: '50px', toggleable: true },
+  { id: 'uptime', label: 'Uptime', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>, priority: 'secondary', width: '65px', toggleable: true, sortKey: 'uptime' },
   { id: 'agent', label: 'Agent', priority: 'secondary', width: '60px', toggleable: true },
 
   // Supplementary - visible on lg+, toggleable
   // Note: CPU count and load average removed - they're shown in the EnhancedCPUBar tooltip
-  { id: 'ip', label: 'IP', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>, priority: 'supplementary', width: '50px', toggleable: true },
+  { id: 'ip', label: 'IP', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>, priority: 'supplementary', width: '50px', toggleable: true },
 
   // Detailed - visible on xl+, toggleable
   { id: 'arch', label: 'Arch', priority: 'detailed', width: '55px', toggleable: true },
@@ -914,41 +916,43 @@ const HostRow: Component<HostRowProps> = (props) => {
   // Check if this host is in AI context
   const isInAIContext = createMemo(() => aiChatStore.enabled && aiChatStore.hasContextItem(host.id));
 
-  // URL editing state
-  const [isEditingUrl, setIsEditingUrl] = createSignal(false);
-  const [editingUrlValue, setEditingUrlValue] = createSignal('');
-  const [isSavingUrl, setIsSavingUrl] = createSignal(false);
-  let urlInputRef: HTMLInputElement | undefined;
+  // URL editing using shared hook
+  const urlEdit = createUrlEditState();
 
-  // Start editing URL
-  const startEditingUrl = (e: MouseEvent) => {
-    e.stopPropagation();
-    setEditingUrlValue(props.customUrl || '');
-    setIsEditingUrl(true);
-    // Focus input after render
-    setTimeout(() => urlInputRef?.focus(), 0);
+  const handleStartEditingUrl = (e: MouseEvent) => {
+    urlEdit.startEditing(host.id, props.customUrl || '', e);
   };
 
-  // Save URL
-  const saveUrl = async () => {
-    const url = editingUrlValue().trim();
-    setIsSavingUrl(true);
+  const handleSaveUrl = async () => {
+    const url = urlEdit.editingValue().trim();
+    urlEdit.setIsSaving(true);
     try {
       if (url) {
         await props.onUpdateCustomUrl(host.id, url);
+        showSuccess('Host URL saved');
       } else {
         await props.onDeleteCustomUrl(host.id);
+        showSuccess('Host URL removed');
       }
-      setIsEditingUrl(false);
-    } finally {
-      setIsSavingUrl(false);
+      urlEdit.finishEditing();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save URL';
+      showError(message);
+      urlEdit.setIsSaving(false);
     }
   };
 
-  // Cancel editing
-  const cancelEditingUrl = () => {
-    setIsEditingUrl(false);
-    setEditingUrlValue('');
+  const handleDeleteUrl = async () => {
+    urlEdit.setIsSaving(true);
+    try {
+      await props.onDeleteCustomUrl(host.id);
+      showSuccess('Host URL removed');
+      urlEdit.finishEditing();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to remove URL';
+      showError(message);
+      urlEdit.setIsSaving(false);
+    }
   };
 
   // Build context for AI - includes routing fields
@@ -999,287 +1003,252 @@ const HostRow: Component<HostRowProps> = (props) => {
   };
 
   return (
-    <tr class={rowClass()} onClick={handleRowClick}>
-      {/* Host Name - always visible */}
-      <td class="pl-4 pr-2 py-1 align-middle">
-        <div class="flex items-center gap-2 min-w-0">
-          <StatusDot
-            variant={hostStatus().variant}
-            title={hostStatus().label}
-            ariaLabel={hostStatus().label}
-            size="xs"
-          />
-          <Show
-            when={isEditingUrl()}
-            fallback={
-              <div class="min-w-0 flex items-center gap-1.5 group/name">
-                <div>
-                  <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                    {host.displayName || host.hostname || host.id}
+    <>
+      <tr class={rowClass()} onClick={handleRowClick}>
+        {/* Host Name - always visible */}
+        <td class="pl-4 pr-2 py-1 align-middle">
+          <div class="flex items-center gap-2 min-w-0">
+            <StatusDot
+              variant={hostStatus().variant}
+              title={hostStatus().label}
+              ariaLabel={hostStatus().label}
+              size="xs"
+            />
+            <div class="min-w-0 flex items-center gap-1.5 group/name">
+              <div>
+                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                  {host.displayName || host.hostname || host.id}
+                </p>
+                <Show when={host.displayName && host.displayName !== host.hostname}>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
+                    {host.hostname}
                   </p>
-                  <Show when={host.displayName && host.displayName !== host.hostname}>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
-                      {host.hostname}
-                    </p>
-                  </Show>
-                  <Show when={host.lastSeen}>
-                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
-                      Updated {formatRelativeTime(host.lastSeen!)}
-                    </p>
-                  </Show>
-                </div>
-                {/* Custom URL link */}
-                <Show when={props.customUrl}>
-                  <a
-                    href={props.customUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                    title={`Open ${props.customUrl}`}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <svg
-                      class="w-3.5 h-3.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                      />
-                    </svg>
-                  </a>
                 </Show>
-                {/* Edit URL button - shows on hover */}
-                <button
-                  type="button"
-                  onClick={startEditingUrl}
-                  class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
-                  title={props.customUrl ? 'Edit URL' : 'Add URL'}
-                >
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-                </button>
-                {/* AI context indicator */}
-                <Show when={isInAIContext()}>
-                  <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-                    </svg>
-                  </span>
+                <Show when={host.lastSeen}>
+                  <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
+                    Updated {formatRelativeTime(host.lastSeen!)}
+                  </p>
                 </Show>
               </div>
-            }
-          >
-            {/* URL editing mode */}
-            <div class="flex items-center gap-1 min-w-0" data-url-editor>
-              <input
-                ref={urlInputRef}
-                type="text"
-                value={editingUrlValue()}
-                onInput={(e) => setEditingUrlValue(e.currentTarget.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    saveUrl();
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    cancelEditingUrl();
-                  }
-                }}
-                onClick={(e) => e.stopPropagation()}
-                placeholder="https://192.168.1.100:8080"
-                class="w-40 px-2 py-0.5 text-xs border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                disabled={isSavingUrl()}
+              {/* Custom URL link */}
+              <Show when={props.customUrl}>
+                <a
+                  href={props.customUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                  title={`Open ${props.customUrl}`}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <svg
+                    class="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                    />
+                  </svg>
+                </a>
+              </Show>
+              {/* Edit URL button - shows on hover */}
+              <button
+                type="button"
+                onClick={handleStartEditingUrl}
+                class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
+                title={props.customUrl ? 'Edit URL' : 'Add URL'}
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
+              {/* AI context indicator */}
+              <Show when={isInAIContext()}>
+                <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                  </svg>
+                </span>
+              </Show>
+            </div>
+          </div>
+        </td>
+
+        {/* Platform */}
+        <Show when={props.isColVisible('platform')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="text-xs text-gray-700 dark:text-gray-300">
+              <p class="font-medium capitalize whitespace-nowrap">{host.platform || '—'}</p>
+              <Show when={host.osName}>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
+                  {host.osName} {host.osVersion}
+                </p>
+              </Show>
+            </div>
+          </td>
+        </Show>
+
+        {/* CPU */}
+        <Show when={props.isColVisible('cpu')}>
+          <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+            <Show when={props.isMobile()}>
+              <div class="md:hidden flex justify-center">
+                <MetricText value={cpuPercent} type="cpu" />
+              </div>
+            </Show>
+            <div class="hidden md:block">
+              <EnhancedCPUBar
+                usage={cpuPercent}
+                loadAverage={host.loadAverage?.[0]}
+                cores={host.cpuCount}
               />
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  saveUrl();
+            </div>
+          </td>
+        </Show>
+
+        {/* Memory */}
+        <Show when={props.isColVisible('memory')}>
+          <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+            <Show when={props.isMobile()}>
+              <div class="md:hidden flex justify-center">
+                <MetricText value={memPercent} type="memory" />
+              </div>
+            </Show>
+            <div class="hidden md:block">
+              <StackedMemoryBar
+                used={host.memory?.used || 0}
+                total={host.memory?.total || 0}
+                balloon={host.memory?.balloon || 0}
+                swapUsed={host.memory?.swapUsed || 0}
+                swapTotal={host.memory?.swapTotal || 0}
+              />
+            </div>
+          </td>
+        </Show>
+
+        {/* Disk */}
+        <Show when={props.isColVisible('disk')}>
+          <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
+            <Show when={props.isMobile()}>
+              <div class="md:hidden flex justify-center">
+                <MetricText value={diskStats.percent} type="disk" />
+              </div>
+            </Show>
+            <div class="hidden md:block">
+              <StackedDiskBar
+                disks={host.disks}
+                aggregateDisk={{
+                  total: diskStats.total,
+                  used: diskStats.used,
+                  free: diskStats.total - diskStats.used,
+                  usage: diskStats.percent / 100
                 }}
-                disabled={isSavingUrl()}
-                class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
-                title="Save (Enter)"
-              >
-                ✓
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  cancelEditingUrl();
-                }}
-                disabled={isSavingUrl()}
-                class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors disabled:opacity-50"
-                title="Cancel (Esc)"
-              >
-                ✕
-              </button>
+              />
             </div>
-          </Show>
-        </div>
-      </td>
+          </td>
+        </Show>
 
-      {/* Platform */}
-      <Show when={props.isColVisible('platform')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="text-xs text-gray-700 dark:text-gray-300">
-            <p class="font-medium capitalize whitespace-nowrap">{host.platform || '—'}</p>
-            <Show when={host.osName}>
-              <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
-                {host.osName} {host.osVersion}
-              </p>
-            </Show>
-          </div>
-        </td>
-      </Show>
-
-      {/* CPU */}
-      <Show when={props.isColVisible('cpu')}>
-        <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-          <Show when={props.isMobile()}>
-            <div class="md:hidden flex justify-center">
-              <MetricText value={cpuPercent} type="cpu" />
+        {/* Temperature - shows primary temp with all sensors in tooltip */}
+        <Show when={props.isColVisible('temp')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <HostTemperatureCell sensors={host.sensors?.temperatureCelsius} />
             </div>
-          </Show>
-          <div class="hidden md:block">
-            <EnhancedCPUBar
-              usage={cpuPercent}
-              loadAverage={host.loadAverage?.[0]}
-              cores={host.cpuCount}
-            />
-          </div>
-        </td>
-      </Show>
+          </td>
+        </Show>
 
-      {/* Memory */}
-      <Show when={props.isColVisible('memory')}>
-        <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-          <Show when={props.isMobile()}>
-            <div class="md:hidden flex justify-center">
-              <MetricText value={memPercent} type="memory" />
+        {/* Uptime */}
+        <Show when={props.isColVisible('uptime')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <Show when={host.uptimeSeconds} fallback={<span class="text-xs text-gray-400">—</span>}>
+                <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                  {formatUptime(host.uptimeSeconds!)}
+                </span>
+              </Show>
             </div>
-          </Show>
-          <div class="hidden md:block">
-            <StackedMemoryBar
-              used={host.memory?.used || 0}
-              total={host.memory?.total || 0}
-              balloon={host.memory?.balloon || 0}
-              swapUsed={host.memory?.swapUsed || 0}
-              swapTotal={host.memory?.swapTotal || 0}
-            />
-          </div>
-        </td>
-      </Show>
+          </td>
+        </Show>
 
-      {/* Disk */}
-      <Show when={props.isColVisible('disk')}>
-        <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-          <Show when={props.isMobile()}>
-            <div class="md:hidden flex justify-center">
-              <MetricText value={diskStats.percent} type="disk" />
+        {/* Agent Version */}
+        <Show when={props.isColVisible('agent')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <Show when={host.agentVersion} fallback={<span class="text-xs text-gray-400">—</span>}>
+                <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                  {host.agentVersion}
+                </span>
+              </Show>
             </div>
-          </Show>
-          <div class="hidden md:block">
-            <StackedDiskBar
-              disks={host.disks}
-              aggregateDisk={{
-                total: diskStats.total,
-                used: diskStats.used,
-                free: diskStats.total - diskStats.used,
-                usage: diskStats.percent / 100
-              }}
-            />
-          </div>
-        </td>
-      </Show>
+          </td>
+        </Show>
 
-      {/* Temperature - shows primary temp with all sensors in tooltip */}
-      <Show when={props.isColVisible('temp')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center">
-            <HostTemperatureCell sensors={host.sensors?.temperatureCelsius} />
-          </div>
-        </td>
-      </Show>
+        {/* IP Address - uses icon + count with tooltip */}
+        <Show when={props.isColVisible('ip')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <HostNetworkInfoCell networkInterfaces={host.networkInterfaces || []} />
+            </div>
+          </td>
+        </Show>
 
-      {/* Uptime */}
-      <Show when={props.isColVisible('uptime')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center">
-            <Show when={host.uptimeSeconds} fallback={<span class="text-xs text-gray-400">—</span>}>
-              <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                {formatUptime(host.uptimeSeconds!)}
-              </span>
-            </Show>
-          </div>
-        </td>
-      </Show>
+        {/* Architecture */}
+        <Show when={props.isColVisible('arch')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <Show when={host.architecture} fallback={<span class="text-xs text-gray-400">—</span>}>
+                <span class="text-[10px] text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                  {host.architecture}
+                </span>
+              </Show>
+            </div>
+          </td>
+        </Show>
 
-      {/* Agent Version */}
-      <Show when={props.isColVisible('agent')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center">
-            <Show when={host.agentVersion} fallback={<span class="text-xs text-gray-400">—</span>}>
-              <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                {host.agentVersion}
-              </span>
-            </Show>
-          </div>
-        </td>
-      </Show>
+        {/* Kernel */}
+        <Show when={props.isColVisible('kernel')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <Show when={host.kernelVersion} fallback={<span class="text-xs text-gray-400">—</span>}>
+                <span
+                  class="text-[10px] text-gray-700 dark:text-gray-300 max-w-[100px] truncate"
+                  title={host.kernelVersion}
+                >
+                  {host.kernelVersion}
+                </span>
+              </Show>
+            </div>
+          </td>
+        </Show>
 
-      {/* IP Address - uses icon + count with tooltip */}
-      <Show when={props.isColVisible('ip')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center">
-            <HostNetworkInfoCell networkInterfaces={host.networkInterfaces || []} />
-          </div>
-        </td>
-      </Show>
+        {/* RAID Status */}
+        <Show when={props.isColVisible('raid')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <HostRAIDStatusCell raid={host.raid} />
+            </div>
+          </td>
+        </Show>
+      </tr>
 
-      {/* Architecture */}
-      <Show when={props.isColVisible('arch')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center">
-            <Show when={host.architecture} fallback={<span class="text-xs text-gray-400">—</span>}>
-              <span class="text-[10px] text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                {host.architecture}
-              </span>
-            </Show>
-          </div>
-        </td>
-      </Show>
-
-      {/* Kernel */}
-      <Show when={props.isColVisible('kernel')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center">
-            <Show when={host.kernelVersion} fallback={<span class="text-xs text-gray-400">—</span>}>
-              <span
-                class="text-[10px] text-gray-700 dark:text-gray-300 max-w-[100px] truncate"
-                title={host.kernelVersion}
-              >
-                {host.kernelVersion}
-              </span>
-            </Show>
-          </div>
-        </td>
-      </Show>
-
-      {/* RAID Status */}
-      <Show when={props.isColVisible('raid')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center">
-            <HostRAIDStatusCell raid={host.raid} />
-          </div>
-        </td>
-      </Show>
-    </tr>
+      {/* URL editing popover - using shared component */}
+      <UrlEditPopover
+        isOpen={urlEdit.isEditing() && urlEdit.editingId() === host.id}
+        value={urlEdit.editingValue()}
+        position={urlEdit.position()}
+        isSaving={urlEdit.isSaving()}
+        hasExistingUrl={!!props.customUrl}
+        placeholder="https://192.168.1.100:8080"
+        helpText="Add a URL to quickly access this host's web interface"
+        onValueChange={urlEdit.setEditingValue}
+        onSave={handleSaveUrl}
+        onCancel={urlEdit.cancelEditing}
+        onDelete={handleDeleteUrl}
+      />
+    </>
   );
 };

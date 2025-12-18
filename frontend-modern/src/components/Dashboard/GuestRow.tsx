@@ -10,6 +10,7 @@ import { StackedMemoryBar } from './StackedMemoryBar';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
+import { UrlEditPopover, createUrlEditState } from '@/components/shared/UrlEditPopover';
 import { showSuccess, showError } from '@/utils/toast';
 import { logger } from '@/utils/logger';
 import { buildMetricKey } from '@/utils/metricsKeys';
@@ -516,28 +517,17 @@ export function GuestRow(props: GuestRowProps) {
 
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
-  const [isEditingUrl, setIsEditingUrl] = createSignal(false);
-  const [editingUrlValue, setEditingUrlValue] = createSignal('');
-  const [isSavingUrl, setIsSavingUrl] = createSignal(false);
-  let urlInputRef: HTMLInputElement | undefined;
 
-  // Focus input when editing starts
-  createEffect(() => {
-    if (isEditingUrl() && urlInputRef) {
-      urlInputRef.focus();
-      urlInputRef.select();
-    }
-  });
+  // URL editing using shared hook
+  const urlEdit = createUrlEditState();
 
-  const startEditingUrl = (event: MouseEvent) => {
-    event.stopPropagation();
-    setEditingUrlValue(customUrl() || '');
-    setIsEditingUrl(true);
+  const handleStartEditingUrl = (event: MouseEvent) => {
+    urlEdit.startEditing(guestId(), customUrl() || '', event);
   };
 
-  const saveUrl = async () => {
-    const newUrl = editingUrlValue().trim();
-    setIsSavingUrl(true);
+  const handleSaveUrl = async () => {
+    const newUrl = urlEdit.editingValue().trim();
+    urlEdit.setIsSaving(true);
 
     try {
       await GuestMetadataAPI.updateMetadata(guestId(), { customUrl: newUrl });
@@ -549,7 +539,6 @@ export function GuestRow(props: GuestRowProps) {
       }
 
       setCustomUrl(newUrl || undefined);
-      setIsEditingUrl(false);
 
       if (props.onCustomUrlUpdate) {
         props.onCustomUrlUpdate(guestId(), newUrl);
@@ -560,18 +549,36 @@ export function GuestRow(props: GuestRowProps) {
       } else {
         showSuccess('Guest URL cleared');
       }
+
+      urlEdit.finishEditing();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to save guest URL';
       logger.error('Failed to save guest URL:', err);
       showError(message);
-    } finally {
-      setIsSavingUrl(false);
+      urlEdit.setIsSaving(false);
     }
   };
 
-  const cancelEditingUrl = () => {
-    setIsEditingUrl(false);
-    setEditingUrlValue('');
+  const handleDeleteUrl = async () => {
+    urlEdit.setIsSaving(true);
+
+    try {
+      await GuestMetadataAPI.updateMetadata(guestId(), { customUrl: '' });
+
+      setCustomUrl(undefined);
+
+      if (props.onCustomUrlUpdate) {
+        props.onCustomUrlUpdate(guestId(), '');
+      }
+
+      showSuccess('Guest URL removed');
+      urlEdit.finishEditing();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to remove guest URL';
+      logger.error('Failed to remove guest URL:', err);
+      showError(message);
+      urlEdit.setIsSaving(false);
+    }
   };
 
   const ipAddresses = createMemo(() => props.guest.ipAddresses ?? []);
@@ -776,423 +783,388 @@ export function GuestRow(props: GuestRowProps) {
   };
 
   return (
-    <tr
-      class={rowClass()}
-      style={rowStyle()}
-      onClick={handleRowClick}
-      data-guest-id={guestId()}
-    >
-      {/* Name - always visible */}
-      <td class={`pr-2 py-1 align-middle whitespace-nowrap ${props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT}`}>
-        <div class="flex items-center gap-2 min-w-0">
-          <div class="flex items-center gap-1.5 min-w-0">
-            <StatusDot
-              variant={guestStatus().variant}
-              title={guestStatus().label}
-              ariaLabel={guestStatus().label}
-              size="xs"
-            />
-            <Show
-              when={isEditingUrl()}
-              fallback={
-                <div class="flex items-center gap-1.5 min-w-0 group/name">
-                  <span
-                    class="text-xs font-medium text-gray-900 dark:text-gray-100 select-none whitespace-nowrap"
-                    title={props.guest.name}
+    <>
+      <tr
+        class={rowClass()}
+        style={rowStyle()}
+        onClick={handleRowClick}
+        data-guest-id={guestId()}
+      >
+        {/* Name - always visible */}
+        <td class={`pr-2 py-1 align-middle whitespace-nowrap ${props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT}`}>
+          <div class="flex items-center gap-2 min-w-0">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <StatusDot
+                variant={guestStatus().variant}
+                title={guestStatus().label}
+                ariaLabel={guestStatus().label}
+                size="xs"
+              />
+              <div class="flex items-center gap-1.5 min-w-0 group/name">
+                <span
+                  class="text-xs font-medium text-gray-900 dark:text-gray-100 select-none whitespace-nowrap"
+                  title={props.guest.name}
+                >
+                  {props.guest.name}
+                </span>
+                <Show when={customUrl() && customUrl() !== ''}>
+                  <a
+                    href={customUrl()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
+                    title={`Open ${customUrl()}`}
+                    onClick={(event) => event.stopPropagation()}
                   >
-                    {props.guest.name}
-                  </span>
-                  <Show when={customUrl() && customUrl() !== ''}>
-                    <a
-                      href={customUrl()}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
-                      title={`Open ${customUrl()}`}
-                      onClick={(event) => event.stopPropagation()}
+                    <svg
+                      class="w-3.5 h-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
                     >
-                      <svg
-                        class="w-3.5 h-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                        />
-                      </svg>
-                    </a>
-                  </Show>
-                  {/* Edit URL button - shows on hover */}
-                  <button
-                    type="button"
-                    onClick={startEditingUrl}
-                    class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
-                    title={customUrl() ? 'Edit URL' : 'Add URL'}
-                  >
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                      />
                     </svg>
-                  </button>
-                  {/* Show backup indicator in name cell only if backup column is hidden */}
-                  <Show when={!isColVisible('backup')}>
-                    <BackupIndicator lastBackup={props.guest.lastBackup} isTemplate={props.guest.template} />
-                  </Show>
-                  {/* AI context indicator - shows when row is selected for AI */}
-                  <Show when={isInAIContext()}>
-                    <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-                      </svg>
-                    </span>
-                  </Show>
+                  </a>
+                </Show>
+                {/* Edit URL button - shows on hover */}
+                <button
+                  type="button"
+                  onClick={handleStartEditingUrl}
+                  class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
+                  title={customUrl() ? 'Edit URL' : 'Add URL'}
+                >
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+                {/* Show backup indicator in name cell only if backup column is hidden */}
+                <Show when={!isColVisible('backup')}>
+                  <BackupIndicator lastBackup={props.guest.lastBackup} isTemplate={props.guest.template} />
+                </Show>
+                {/* AI context indicator - shows when row is selected for AI */}
+                <Show when={isInAIContext()}>
+                  <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                    </svg>
+                  </span>
+                </Show>
+              </div>
+            </div>
+
+
+
+            <Show when={lockLabel()}>
+              <span
+                class="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
+                title={`Guest is locked (${lockLabel()})`}
+              >
+                Lock: {lockLabel()}
+              </span>
+            </Show>
+          </div>
+        </td>
+
+        {/* Type */}
+        <Show when={isColVisible('type')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <span
+                class={`inline-block px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${props.guest.type === 'qemu'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                  : isOCIContainer()
+                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+                    : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                  }`}
+                title={
+                  isVM(props.guest)
+                    ? 'Virtual Machine'
+                    : isOCIContainer()
+                      ? `OCI Container${ociImage() ? ` • ${ociImage()}` : ''}`
+                      : 'LXC Container'
+                }
+              >
+                {isVM(props.guest) ? 'VM' : isOCIContainer() ? 'OCI' : 'LXC'}
+              </span>
+            </div>
+          </td>
+        </Show>
+
+        {/* VMID */}
+        <Show when={isColVisible('vmid')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
+              {props.guest.vmid}
+            </div>
+          </td>
+        </Show>
+
+        {/* CPU */}
+        <Show when={isColVisible('cpu')}>
+          <td class="px-2 py-1 align-middle" style={{ width: "140px", "min-width": "140px", "max-width": "140px" }}>
+            <Show when={isMobile()}>
+              <div class="md:hidden h-4 flex items-center justify-center">
+                <MetricText value={cpuPercent()} type="cpu" />
+              </div>
+            </Show>
+            <div class="hidden md:block h-4">
+              <EnhancedCPUBar
+                usage={cpuPercent()}
+                cores={props.guest.cpus}
+                resourceId={metricsKey()}
+              />
+            </div>
+          </td>
+        </Show>
+
+        {/* Memory */}
+        <Show when={isColVisible('memory')}>
+          <td class="px-2 py-1 align-middle" style={{ width: "140px", "min-width": "140px", "max-width": "140px" }}>
+            <div title={memoryTooltip() ?? undefined}>
+              <Show when={isMobile()}>
+                <div class="md:hidden flex justify-center">
+                  <ResponsiveMetricCell
+                    value={memPercent()}
+                    type="memory"
+                    resourceId={metricsKey()}
+                    sublabel={memoryUsageLabel()}
+                    isRunning={isRunning()}
+                    showMobile={true}
+                  />
+                </div>
+              </Show>
+              <div class="hidden md:block">
+                <Show
+                  when={viewMode() === 'sparklines'}
+                  fallback={
+                    <StackedMemoryBar
+                      used={props.guest.memory?.used || 0}
+                      total={props.guest.memory?.total || 0}
+                      balloon={props.guest.memory?.balloon || 0}
+                      swapUsed={props.guest.memory?.swapUsed || 0}
+                      swapTotal={props.guest.memory?.swapTotal || 0}
+                      resourceId={metricsKey()}
+                    />
+                  }
+                >
+                  <ResponsiveMetricCell
+                    value={memPercent()}
+                    type="memory"
+                    resourceId={metricsKey()}
+                    sublabel={memoryUsageLabel()}
+                    isRunning={isRunning()}
+                    showMobile={false}
+                  />
+                </Show>
+              </div>
+            </div>
+          </td>
+        </Show>
+
+        {/* Disk */}
+        <Show when={isColVisible('disk')}>
+          <td class="px-2 py-1 align-middle" style={{ width: "140px", "min-width": "140px", "max-width": "140px" }}>
+            <Show
+              when={hasDiskUsage()}
+              fallback={
+                <div class="flex justify-center">
+                  <span class="text-xs text-gray-400" title={getDiskStatusTooltip()}>
+                    -
+                  </span>
                 </div>
               }
             >
-              {/* URL editing mode */}
-              <div class="flex items-center gap-1 min-w-0" data-url-editor>
-                <input
-                  ref={urlInputRef}
-                  type="text"
-                  value={editingUrlValue()}
-                  onInput={(e) => setEditingUrlValue(e.currentTarget.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      saveUrl();
-                    } else if (e.key === 'Escape') {
-                      e.preventDefault();
-                      cancelEditingUrl();
-                    }
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  placeholder="https://192.168.1.100:8080"
-                  class="w-40 px-2 py-0.5 text-xs border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  disabled={isSavingUrl()}
-                />
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    saveUrl();
-                  }}
-                  disabled={isSavingUrl()}
-                  class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  title="Save (Enter)"
-                >
-                  ✓
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    cancelEditingUrl();
-                  }}
-                  disabled={isSavingUrl()}
-                  class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors disabled:opacity-50"
-                  title="Cancel (Esc)"
-                >
-                  ✕
-                </button>
-              </div>
-            </Show>
-          </div>
-
-
-
-          <Show when={lockLabel()}>
-            <span
-              class="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
-              title={`Guest is locked (${lockLabel()})`}
-            >
-              Lock: {lockLabel()}
-            </span>
-          </Show>
-        </div>
-      </td>
-
-      {/* Type */}
-      <Show when={isColVisible('type')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center">
-            <span
-              class={`inline-block px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${props.guest.type === 'qemu'
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                : isOCIContainer()
-                  ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-                  : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
-                }`}
-              title={
-                isVM(props.guest)
-                  ? 'Virtual Machine'
-                  : isOCIContainer()
-                    ? `OCI Container${ociImage() ? ` • ${ociImage()}` : ''}`
-                    : 'LXC Container'
-              }
-            >
-              {isVM(props.guest) ? 'VM' : isOCIContainer() ? 'OCI' : 'LXC'}
-            </span>
-          </div>
-        </td>
-      </Show>
-
-      {/* VMID */}
-      <Show when={isColVisible('vmid')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
-            {props.guest.vmid}
-          </div>
-        </td>
-      </Show>
-
-      {/* CPU */}
-      <Show when={isColVisible('cpu')}>
-        <td class="px-2 py-1 align-middle" style={{ width: "140px", "min-width": "140px", "max-width": "140px" }}>
-          <Show when={isMobile()}>
-            <div class="md:hidden h-4 flex items-center justify-center">
-              <MetricText value={cpuPercent()} type="cpu" />
-            </div>
-          </Show>
-          <div class="hidden md:block h-4">
-            <EnhancedCPUBar
-              usage={cpuPercent()}
-              cores={props.guest.cpus}
-              resourceId={metricsKey()}
-            />
-          </div>
-        </td>
-      </Show>
-
-      {/* Memory */}
-      <Show when={isColVisible('memory')}>
-        <td class="px-2 py-1 align-middle" style={{ width: "140px", "min-width": "140px", "max-width": "140px" }}>
-          <div title={memoryTooltip() ?? undefined}>
-            <Show when={isMobile()}>
-              <div class="md:hidden flex justify-center">
-                <ResponsiveMetricCell
-                  value={memPercent()}
-                  type="memory"
-                  resourceId={metricsKey()}
-                  sublabel={memoryUsageLabel()}
-                  isRunning={isRunning()}
-                  showMobile={true}
-                />
-              </div>
-            </Show>
-            <div class="hidden md:block">
-              <Show
-                when={viewMode() === 'sparklines'}
-                fallback={
-                  <StackedMemoryBar
-                    used={props.guest.memory?.used || 0}
-                    total={props.guest.memory?.total || 0}
-                    balloon={props.guest.memory?.balloon || 0}
-                    swapUsed={props.guest.memory?.swapUsed || 0}
-                    swapTotal={props.guest.memory?.swapTotal || 0}
-                    resourceId={metricsKey()}
-                  />
-                }
-              >
-                <ResponsiveMetricCell
-                  value={memPercent()}
-                  type="memory"
-                  resourceId={metricsKey()}
-                  sublabel={memoryUsageLabel()}
-                  isRunning={isRunning()}
-                  showMobile={false}
-                />
+              <Show when={isMobile()}>
+                <div class="md:hidden flex justify-center text-xs text-gray-600 dark:text-gray-400">
+                  {formatPercent(diskPercent())}
+                </div>
               </Show>
-            </div>
-          </div>
-        </td>
-      </Show>
-
-      {/* Disk */}
-      <Show when={isColVisible('disk')}>
-        <td class="px-2 py-1 align-middle" style={{ width: "140px", "min-width": "140px", "max-width": "140px" }}>
-          <Show
-            when={hasDiskUsage()}
-            fallback={
-              <div class="flex justify-center">
-                <span class="text-xs text-gray-400" title={getDiskStatusTooltip()}>
-                  -
-                </span>
-              </div>
-            }
-          >
-            <Show when={isMobile()}>
-              <div class="md:hidden flex justify-center text-xs text-gray-600 dark:text-gray-400">
-                {formatPercent(diskPercent())}
-              </div>
-            </Show>
-            <div class={isMobile() ? 'hidden md:block' : ''}>
-              <Show
-                when={viewMode() === 'sparklines'}
-                fallback={
-                  <StackedDiskBar
-                    disks={props.guest.disks}
-                    aggregateDisk={props.guest.disk}
-                  />
-                }
-              >
-                <ResponsiveMetricCell
-                  value={diskPercent()}
-                  type="disk"
-                  resourceId={metricsKey()}
-                  isRunning={isRunning()}
-                  showMobile={false}
-                />
-              </Show>
-            </div>
-          </Show>
-        </td>
-      </Show>
-
-      {/* IP Address with Network Tooltip */}
-      <Show when={isColVisible('ip')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center">
-            <Show when={ipAddresses().length > 0 || hasNetworkInterfaces()} fallback={<span class="text-xs text-gray-400">-</span>}>
-              <NetworkInfoCell
-                ipAddresses={ipAddresses()}
-                networkInterfaces={networkInterfaces()}
-              />
-            </Show>
-          </div>
-        </td>
-      </Show>
-
-      {/* Uptime */}
-      <Show when={isColVisible('uptime')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center">
-            <span class={`text-xs whitespace-nowrap ${props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'}`}>
-              <Show when={isRunning()} fallback="-">
-                <Show when={isMobile()} fallback={formatUptime(props.guest.uptime)}>
-                  {formatUptime(props.guest.uptime, true)}
-                </Show>
-              </Show>
-            </span>
-          </div>
-        </td>
-      </Show>
-
-      {/* Node - NEW */}
-      <Show when={isColVisible('node')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center">
-            <span class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[80px]" title={props.guest.node}>
-              {props.guest.node}
-            </span>
-          </div>
-        </td>
-      </Show>
-
-      {/* Backup Status */}
-      <Show when={isColVisible('backup')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center">
-            <Show when={!props.guest.template}>
-              <BackupStatusCell lastBackup={props.guest.lastBackup} />
-            </Show>
-            <Show when={props.guest.template}>
-              <span class="text-xs text-gray-400">-</span>
-            </Show>
-          </div>
-        </td>
-      </Show>
-
-      {/* Tags */}
-      <Show when={isColVisible('tags')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center" onClick={(event) => event.stopPropagation()}>
-            <TagBadges
-              tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
-              maxVisible={0}
-              onTagClick={props.onTagClick}
-              activeSearch={props.activeSearch}
-            />
-          </div>
-        </td>
-      </Show>
-
-      {/* OS */}
-      <Show when={isColVisible('os')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center">
-            <Show
-              when={hasOsInfo()}
-              fallback={
+              <div class={isMobile() ? 'hidden md:block' : ''}>
                 <Show
-                  when={ociImage()}
-                  fallback={<span class="text-xs text-gray-400">-</span>}
+                  when={viewMode() === 'sparklines'}
+                  fallback={
+                    <StackedDiskBar
+                      disks={props.guest.disks}
+                      aggregateDisk={props.guest.disk}
+                    />
+                  }
                 >
-                  {/* For OCI containers without guest agent, show image name in OS column */}
-                  <span
-                    class="text-xs text-purple-600 dark:text-purple-400 truncate max-w-[100px]"
-                    title={`OCI Image: ${ociImage()}`}
-                  >
-                    {ociImage()}
-                  </span>
+                  <ResponsiveMetricCell
+                    value={diskPercent()}
+                    type="disk"
+                    resourceId={metricsKey()}
+                    isRunning={isRunning()}
+                    showMobile={false}
+                  />
                 </Show>
-              }
-            >
-              <OSInfoCell
-                osName={osName()}
-                osVersion={osVersion()}
-                agentVersion={agentVersion()}
+              </div>
+            </Show>
+          </td>
+        </Show>
+
+        {/* IP Address with Network Tooltip */}
+        <Show when={isColVisible('ip')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <Show when={ipAddresses().length > 0 || hasNetworkInterfaces()} fallback={<span class="text-xs text-gray-400">-</span>}>
+                <NetworkInfoCell
+                  ipAddresses={ipAddresses()}
+                  networkInterfaces={networkInterfaces()}
+                />
+              </Show>
+            </div>
+          </td>
+        </Show>
+
+        {/* Uptime */}
+        <Show when={isColVisible('uptime')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <span class={`text-xs whitespace-nowrap ${props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'}`}>
+                <Show when={isRunning()} fallback="-">
+                  <Show when={isMobile()} fallback={formatUptime(props.guest.uptime)}>
+                    {formatUptime(props.guest.uptime, true)}
+                  </Show>
+                </Show>
+              </span>
+            </div>
+          </td>
+        </Show>
+
+        {/* Node - NEW */}
+        <Show when={isColVisible('node')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <span class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[80px]" title={props.guest.node}>
+                {props.guest.node}
+              </span>
+            </div>
+          </td>
+        </Show>
+
+        {/* Backup Status */}
+        <Show when={isColVisible('backup')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <Show when={!props.guest.template}>
+                <BackupStatusCell lastBackup={props.guest.lastBackup} />
+              </Show>
+              <Show when={props.guest.template}>
+                <span class="text-xs text-gray-400">-</span>
+              </Show>
+            </div>
+          </td>
+        </Show>
+
+        {/* Tags */}
+        <Show when={isColVisible('tags')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center" onClick={(event) => event.stopPropagation()}>
+              <TagBadges
+                tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
+                maxVisible={0}
+                onTagClick={props.onTagClick}
+                activeSearch={props.activeSearch}
               />
-            </Show>
-          </div>
-        </td>
-      </Show>
+            </div>
+          </td>
+        </Show>
 
-      {/* Disk Read */}
-      <Show when={isColVisible('diskRead')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center whitespace-nowrap">
-            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-              <span class={`text-xs ${getIOColorClass(diskRead())}`}>{formatSpeed(diskRead())}</span>
-            </Show>
-          </div>
-        </td>
-      </Show>
+        {/* OS */}
+        <Show when={isColVisible('os')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <Show
+                when={hasOsInfo()}
+                fallback={
+                  <Show
+                    when={ociImage()}
+                    fallback={<span class="text-xs text-gray-400">-</span>}
+                  >
+                    {/* For OCI containers without guest agent, show image name in OS column */}
+                    <span
+                      class="text-xs text-purple-600 dark:text-purple-400 truncate max-w-[100px]"
+                      title={`OCI Image: ${ociImage()}`}
+                    >
+                      {ociImage()}
+                    </span>
+                  </Show>
+                }
+              >
+                <OSInfoCell
+                  osName={osName()}
+                  osVersion={osVersion()}
+                  agentVersion={agentVersion()}
+                />
+              </Show>
+            </div>
+          </td>
+        </Show>
 
-      {/* Disk Write */}
-      <Show when={isColVisible('diskWrite')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center whitespace-nowrap">
-            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-              <span class={`text-xs ${getIOColorClass(diskWrite())}`}>{formatSpeed(diskWrite())}</span>
-            </Show>
-          </div>
-        </td>
-      </Show>
+        {/* Disk Read */}
+        <Show when={isColVisible('diskRead')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center whitespace-nowrap">
+              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+                <span class={`text-xs ${getIOColorClass(diskRead())}`}>{formatSpeed(diskRead())}</span>
+              </Show>
+            </div>
+          </td>
+        </Show>
 
-      {/* Net In */}
-      <Show when={isColVisible('netIn')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center whitespace-nowrap">
-            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-              <span class={`text-xs ${getIOColorClass(networkIn())}`}>{formatSpeed(networkIn())}</span>
-            </Show>
-          </div>
-        </td>
-      </Show>
+        {/* Disk Write */}
+        <Show when={isColVisible('diskWrite')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center whitespace-nowrap">
+              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+                <span class={`text-xs ${getIOColorClass(diskWrite())}`}>{formatSpeed(diskWrite())}</span>
+              </Show>
+            </div>
+          </td>
+        </Show>
 
-      {/* Net Out */}
-      <Show when={isColVisible('netOut')}>
-        <td class="px-2 py-1 align-middle">
-          <div class="flex justify-center whitespace-nowrap">
-            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-              <span class={`text-xs ${getIOColorClass(networkOut())}`}>{formatSpeed(networkOut())}</span>
-            </Show>
-          </div>
-        </td>
-      </Show>
-    </tr>
+        {/* Net In */}
+        <Show when={isColVisible('netIn')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center whitespace-nowrap">
+              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+                <span class={`text-xs ${getIOColorClass(networkIn())}`}>{formatSpeed(networkIn())}</span>
+              </Show>
+            </div>
+          </td>
+        </Show>
+
+        {/* Net Out */}
+        <Show when={isColVisible('netOut')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center whitespace-nowrap">
+              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+                <span class={`text-xs ${getIOColorClass(networkOut())}`}>{formatSpeed(networkOut())}</span>
+              </Show>
+            </div>
+          </td>
+        </Show>
+      </tr>
+
+      {/* URL editing popover - using shared component */}
+      <UrlEditPopover
+        isOpen={urlEdit.isEditing() && urlEdit.editingId() === guestId()}
+        value={urlEdit.editingValue()}
+        position={urlEdit.position()}
+        isSaving={urlEdit.isSaving()}
+        hasExistingUrl={!!customUrl()}
+        placeholder="https://192.168.1.100:8080"
+        helpText="Add a URL to quickly access this guest's web interface"
+        onValueChange={urlEdit.setEditingValue}
+        onSave={handleSaveUrl}
+        onCancel={urlEdit.cancelEditing}
+        onDelete={handleDeleteUrl}
+      />
+    </>
   );
 }

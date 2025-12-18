@@ -26,6 +26,7 @@ import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
+import { UrlEditPopover } from '@/components/shared/UrlEditPopover';
 import type { ColumnConfig } from '@/types/responsive';
 
 const typeBadgeClass = (type: 'container' | 'service' | 'task' | 'unknown') => {
@@ -145,6 +146,7 @@ const [currentlyExpandedRowId, setCurrentlyExpandedRowId] = createSignal<string 
 const [currentlyEditingDockerResourceId, setCurrentlyEditingDockerResourceId] = createSignal<string | null>(null);
 const dockerEditingValues = new Map<string, string>();
 const [dockerEditingValuesVersion, setDockerEditingValuesVersion] = createSignal(0);
+const [dockerPopoverPosition, setDockerPopoverPosition] = createSignal<{ top: number; left: number } | null>(null);
 
 const toLower = (value?: string | null) => value?.toLowerCase() ?? '';
 
@@ -994,6 +996,12 @@ const DockerContainerRow: Component<{
 
   const startEditingUrl = (event: MouseEvent) => {
     event.stopPropagation();
+    event.preventDefault();
+
+    // Calculate popover position from the button
+    const button = event.currentTarget as HTMLElement;
+    const rect = button.getBoundingClientRect();
+    setDockerPopoverPosition({ top: rect.bottom + 4, left: Math.max(8, rect.left - 100) });
 
     // If another resource is being edited, save it first
     const currentEditing = currentlyEditingDockerResourceId();
@@ -1057,6 +1065,7 @@ const DockerContainerRow: Component<{
     dockerEditingValues.delete(resourceId());
     setDockerEditingValuesVersion(v => v + 1);
     setCurrentlyEditingDockerResourceId(null);
+    setDockerPopoverPosition(null);
 
     // If URL hasn't changed, don't save
     if (newUrl === (customUrl() || '')) return;
@@ -1100,6 +1109,7 @@ const DockerContainerRow: Component<{
     dockerEditingValues.delete(resourceId());
     setDockerEditingValuesVersion(v => v + 1);
     setCurrentlyEditingDockerResourceId(null);
+    setDockerPopoverPosition(null);
 
     // If there was a URL set, delete it
     if (customUrl()) {
@@ -1127,6 +1137,7 @@ const DockerContainerRow: Component<{
     dockerEditingValues.delete(resourceId());
     setDockerEditingValuesVersion(v => v + 1);
     setCurrentlyEditingDockerResourceId(null);
+    setDockerPopoverPosition(null);
   };
 
   const cpuPercent = () => Math.max(0, Math.min(100, container.cpuPercent ?? 0));
@@ -1189,89 +1200,68 @@ const DockerContainerRow: Component<{
                 size="xs"
               />
               <div class="flex-1 min-w-0 truncate">
-                <Show
-                  when={isEditingUrl()}
-                  fallback={
-                    <div class="flex items-center gap-1.5 flex-1 min-w-0 group/name">
-                      <span
-                        class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none truncate"
-                        title={containerTitle()}
-                      >
-                        {container.name || container.id}
-                      </span>
-                      <Show when={podName()}>
-                        {(name) => (
-                          <span class="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 flex-shrink-0">
-                            Pod: {name()}
-                            <Show when={isPodInfra()}>
-                              <span class="rounded bg-purple-200 px-1 py-0.5 text-[9px] uppercase text-purple-800 dark:bg-purple-800/50 dark:text-purple-200 ml-1">
-                                infra
-                              </span>
-                            </Show>
+                <div class="flex items-center gap-1.5 flex-1 min-w-0 group/name">
+                  <span
+                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none truncate"
+                    title={containerTitle()}
+                  >
+                    {container.name || container.id}
+                  </span>
+                  <Show when={podName()}>
+                    {(name) => (
+                      <span class="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 flex-shrink-0">
+                        Pod: {name()}
+                        <Show when={isPodInfra()}>
+                          <span class="rounded bg-purple-200 px-1 py-0.5 text-[9px] uppercase text-purple-800 dark:bg-purple-800/50 dark:text-purple-200 ml-1">
+                            infra
                           </span>
-                        )}
-                      </Show>
-                      <Show when={customUrl()}>
-                        <a
-                          href={customUrl()}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
-                          title="Open in new tab"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                        </a>
-                      </Show>
-                      {/* Edit URL button - shows on hover */}
-                      <button
-                        type="button"
-                        onClick={startEditingUrl}
-                        class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
-                        title={customUrl() ? 'Edit URL' : 'Add URL'}
-                      >
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                      </button>
-                      <Show when={props.showHostContext}>
-                        <span
-                          class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300 flex-shrink-0 max-w-[120px]"
-                          title={`Host: ${hostDisplayName()}`}
-                        >
-                          <StatusDot variant={hostStatus().variant} title={hostStatus().label} ariaLabel={hostStatus().label} size="xs" />
-                          <span class="truncate">{hostDisplayName()}</span>
-                        </span>
-                      </Show>
-                      {/* AI context indicator - shows when container is selected for AI */}
-                      <Show when={isInAIContext()}>
-                        <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
-                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-                          </svg>
-                        </span>
-                      </Show>
-                    </div>
-                  }
-                >
-                  <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
-                    <input
-                      ref={urlInputRef}
-                      type="text"
-                      value={editingUrlValue()}
-                      data-resource-id={resourceId()}
-                      onInput={(e) => { dockerEditingValues.set(resourceId(), e.currentTarget.value); setDockerEditingValuesVersion(v => v + 1); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveUrl(); } else if (e.key === 'Escape') { e.preventDefault(); cancelEditingUrl(); } }}
-                      onClick={(e) => e.stopPropagation()}
-                      placeholder="https://example.com:8080"
-                      class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button type="button" data-url-editor-button onClick={(e) => { e.stopPropagation(); saveUrl(); }} class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors" title="Save (or press Enter)">✓</button>
-                    <button type="button" data-url-editor-button onClick={(e) => { e.stopPropagation(); deleteUrl(); }} class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors" title="Delete URL">✕</button>
-                  </div>
-                </Show>
+                        </Show>
+                      </span>
+                    )}
+                  </Show>
+                  <Show when={customUrl()}>
+                    <a
+                      href={customUrl()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
+                      title="Open in new tab"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  </Show>
+                  {/* Edit URL button - shows on hover */}
+                  <button
+                    type="button"
+                    onClick={startEditingUrl}
+                    class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
+                    title={customUrl() ? 'Edit URL' : 'Add URL'}
+                  >
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
+                  <Show when={props.showHostContext}>
+                    <span
+                      class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300 flex-shrink-0 max-w-[120px]"
+                      title={`Host: ${hostDisplayName()}`}
+                    >
+                      <StatusDot variant={hostStatus().variant} title={hostStatus().label} ariaLabel={hostStatus().label} size="xs" />
+                      <span class="truncate">{hostDisplayName()}</span>
+                    </span>
+                  </Show>
+                  {/* AI context indicator - shows when container is selected for AI */}
+                  <Show when={isInAIContext()}>
+                    <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                      </svg>
+                    </span>
+                  </Show>
+                </div>
               </div>
             </div>
           </div>
@@ -1413,6 +1403,21 @@ const DockerContainerRow: Component<{
           )}
         </For>
       </tr>
+
+      {/* URL editing popover - using shared component */}
+      <UrlEditPopover
+        isOpen={isEditingUrl()}
+        value={editingUrlValue()}
+        position={dockerPopoverPosition()}
+        isSaving={false}
+        hasExistingUrl={!!customUrl()}
+        placeholder="https://example.com:8080"
+        helpText="Add a URL to quickly access this container's web interface"
+        onValueChange={(value) => { dockerEditingValues.set(resourceId(), value); setDockerEditingValuesVersion(v => v + 1); }}
+        onSave={saveUrl}
+        onCancel={cancelEditingUrl}
+        onDelete={deleteUrl}
+      />
 
       <Show when={expanded() && hasDrawerContent()}>
         <tr>
@@ -1921,6 +1926,12 @@ const DockerServiceRow: Component<{
 
   const startEditingUrl = (event: MouseEvent) => {
     event.stopPropagation();
+    event.preventDefault();
+
+    // Calculate popover position from the button
+    const button = event.currentTarget as HTMLElement;
+    const rect = button.getBoundingClientRect();
+    setDockerPopoverPosition({ top: rect.bottom + 4, left: Math.max(8, rect.left - 100) });
 
     // If another resource is being edited, save it first
     const currentEditing = currentlyEditingDockerResourceId();
@@ -1984,6 +1995,7 @@ const DockerServiceRow: Component<{
     dockerEditingValues.delete(resourceId());
     setDockerEditingValuesVersion(v => v + 1);
     setCurrentlyEditingDockerResourceId(null);
+    setDockerPopoverPosition(null);
 
     // If URL hasn't changed, don't save
     if (newUrl === (customUrl() || '')) return;
@@ -2027,6 +2039,7 @@ const DockerServiceRow: Component<{
     dockerEditingValues.delete(resourceId());
     setDockerEditingValuesVersion(v => v + 1);
     setCurrentlyEditingDockerResourceId(null);
+    setDockerPopoverPosition(null);
 
     // If there was a URL set, delete it
     if (customUrl()) {
@@ -2054,6 +2067,7 @@ const DockerServiceRow: Component<{
     dockerEditingValues.delete(resourceId());
     setDockerEditingValuesVersion(v => v + 1);
     setCurrentlyEditingDockerResourceId(null);
+    setDockerPopoverPosition(null);
   };
 
   const badge = serviceHealthBadge(service);
@@ -2085,82 +2099,61 @@ const DockerServiceRow: Component<{
                 size="xs"
               />
               <div class="flex-1 min-w-0">
-                <Show
-                  when={isEditingUrl()}
-                  fallback={
-                    <div class="flex items-center gap-1.5 flex-1 min-w-0 group/name">
-                      <span
-                        class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none"
-                        title={serviceTitle()}
-                      >
-                        {service.name || service.id || 'Service'}
-                      </span>
-                      <Show when={customUrl()}>
-                        <a
-                          href={customUrl()}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
-                          title="Open in new tab"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                        </a>
-                      </Show>
-                      {/* Edit URL button - shows on hover */}
-                      <button
-                        type="button"
-                        onClick={startEditingUrl}
-                        class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
-                        title={customUrl() ? 'Edit URL' : 'Add URL'}
-                      >
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                      </button>
-                      <Show when={service.stack && !isEditingUrl()}>
-                        <span class="text-[10px] text-gray-500 dark:text-gray-400 truncate" title={`Stack: ${service.stack}`}>
-                          Stack: {service.stack}
-                        </span>
-                      </Show>
-                      <Show when={props.showHostContext}>
-                        <span
-                          class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300"
-                          title={`Host: ${hostDisplayName()}`}
-                        >
-                          <StatusDot variant={hostStatus().variant} title={hostStatus().label} ariaLabel={hostStatus().label} size="xs" />
-                          <span class="max-w-[160px] truncate">{hostDisplayName()}</span>
-                        </span>
-                      </Show>
-                      {/* AI context indicator - shows when service is selected for AI */}
-                      <Show when={isInAIContext()}>
-                        <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
-                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-                          </svg>
-                        </span>
-                      </Show>
-                    </div>
-                  }
-                >
-                  <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
-                    <input
-                      ref={urlInputRef}
-                      type="text"
-                      value={editingUrlValue()}
-                      data-resource-id={resourceId()}
-                      onInput={(e) => { dockerEditingValues.set(resourceId(), e.currentTarget.value); setDockerEditingValuesVersion(v => v + 1); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveUrl(); } else if (e.key === 'Escape') { e.preventDefault(); cancelEditingUrl(); } }}
-                      onClick={(e) => e.stopPropagation()}
-                      placeholder="https://example.com:8080"
-                      class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button type="button" data-url-editor-button onClick={(e) => { e.stopPropagation(); saveUrl(); }} class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors" title="Save (or press Enter)">✓</button>
-                    <button type="button" data-url-editor-button onClick={(e) => { e.stopPropagation(); deleteUrl(); }} class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors" title="Delete URL">✕</button>
-                  </div>
-                </Show>
+                <div class="flex items-center gap-1.5 flex-1 min-w-0 group/name">
+                  <span
+                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 select-none"
+                    title={serviceTitle()}
+                  >
+                    {service.name || service.id || 'Service'}
+                  </span>
+                  <Show when={customUrl()}>
+                    <a
+                      href={customUrl()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
+                      title="Open in new tab"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  </Show>
+                  {/* Edit URL button - shows on hover */}
+                  <button
+                    type="button"
+                    onClick={startEditingUrl}
+                    class="flex-shrink-0 opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all"
+                    title={customUrl() ? 'Edit URL' : 'Add URL'}
+                  >
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
+                  <Show when={service.stack}>
+                    <span class="text-[10px] text-gray-500 dark:text-gray-400 truncate" title={`Stack: ${service.stack}`}>
+                      Stack: {service.stack}
+                    </span>
+                  </Show>
+                  <Show when={props.showHostContext}>
+                    <span
+                      class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                      title={`Host: ${hostDisplayName()}`}
+                    >
+                      <StatusDot variant={hostStatus().variant} title={hostStatus().label} ariaLabel={hostStatus().label} size="xs" />
+                      <span class="max-w-[160px] truncate">{hostDisplayName()}</span>
+                    </span>
+                  </Show>
+                  {/* AI context indicator - shows when service is selected for AI */}
+                  <Show when={isInAIContext()}>
+                    <span class="flex-shrink-0 text-purple-500 dark:text-purple-400" title="Selected for AI context">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                      </svg>
+                    </span>
+                  </Show>
+                </div>
               </div>
             </div>
           </div>
@@ -2240,6 +2233,21 @@ const DockerServiceRow: Component<{
           )}
         </For>
       </tr>
+
+      {/* URL editing popover - using shared component */}
+      <UrlEditPopover
+        isOpen={isEditingUrl()}
+        value={editingUrlValue()}
+        position={dockerPopoverPosition()}
+        isSaving={false}
+        hasExistingUrl={!!customUrl()}
+        placeholder="https://example.com:8080"
+        helpText="Add a URL to quickly access this service's web interface"
+        onValueChange={(value) => { dockerEditingValues.set(resourceId(), value); setDockerEditingValuesVersion(v => v + 1); }}
+        onSave={saveUrl}
+        onCancel={cancelEditingUrl}
+        onDelete={deleteUrl}
+      />
 
       <Show when={expanded() && hasTasks()}>
         <tr>

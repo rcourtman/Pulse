@@ -12,11 +12,13 @@ import { useWebSocket } from '@/App';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { formatBytes, formatRelativeTime } from '@/utils/format';
 import { DockerMetadataAPI, type DockerMetadata } from '@/api/dockerMetadata';
+import { DockerHostMetadataAPI, type DockerHostMetadata } from '@/api/dockerHostMetadata';
 import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 
 type DockerMetadataRecord = Record<string, DockerMetadata>;
+type DockerHostMetadataRecord = Record<string, DockerHostMetadata>;
 
 interface DockerHostsProps {
   hosts: DockerHost[];
@@ -40,8 +42,25 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
     return {};
   };
 
+  // Load docker host metadata from localStorage
+  const loadInitialDockerHostMetadata = (): DockerHostMetadataRecord => {
+    try {
+      const cached = localStorage.getItem(STORAGE_KEYS.DOCKER_METADATA + '_hosts');
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (err) {
+      logger.warn('Failed to parse cached docker host metadata', err);
+    }
+    return {};
+  };
+
   const [dockerMetadata, setDockerMetadata] = createSignal<DockerMetadataRecord>(
     loadInitialDockerMetadata(),
+  );
+
+  const [dockerHostMetadata, setDockerHostMetadata] = createSignal<DockerHostMetadataRecord>(
+    loadInitialDockerHostMetadata(),
   );
 
   const sortedHosts = createMemo(() => {
@@ -207,8 +226,57 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
       .catch((err) => {
         logger.debug('Failed to load docker metadata', err);
       });
+
+    // Load docker host metadata from API
+    DockerHostMetadataAPI.getAllMetadata()
+      .then((metadata) => {
+        setDockerHostMetadata(metadata || {});
+        try {
+          localStorage.setItem(STORAGE_KEYS.DOCKER_METADATA + '_hosts', JSON.stringify(metadata || {}));
+        } catch (err) {
+          logger.warn('Failed to cache docker host metadata', err);
+        }
+      })
+      .catch((err) => {
+        logger.debug('Failed to load docker host metadata', err);
+      });
   });
   onCleanup(() => document.removeEventListener('keydown', handleKeyDown));
+
+  // Handler to update docker host custom URL
+  const handleHostCustomUrlUpdate = (hostId: string, url: string) => {
+    const trimmedUrl = url.trim();
+    const nextUrl = trimmedUrl === '' ? undefined : trimmedUrl;
+
+    setDockerHostMetadata((prev) => {
+      const updated = { ...prev };
+      if (nextUrl === undefined) {
+        // Remove URL but keep other metadata fields
+        if (updated[hostId]) {
+          const { customUrl: _removed, ...rest } = updated[hostId];
+          if (Object.keys(rest).length === 0 || (Object.keys(rest).length === 1 && !rest.customDisplayName && !rest.notes?.length)) {
+            delete updated[hostId];
+          } else {
+            updated[hostId] = rest;
+          }
+        }
+      } else {
+        updated[hostId] = {
+          ...(prev[hostId] || {}),
+          customUrl: nextUrl,
+        };
+      }
+
+      // Cache to localStorage
+      try {
+        localStorage.setItem(STORAGE_KEYS.DOCKER_METADATA + '_hosts', JSON.stringify(updated));
+      } catch (err) {
+        logger.warn('Failed to cache docker host metadata', err);
+      }
+
+      return updated;
+    });
+  };
 
   // Handler to update docker resource custom URL
   const handleCustomUrlUpdate = (resourceId: string, url: string) => {
@@ -407,6 +475,8 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
               summaries={filteredHostSummaries}
               selectedHostId={selectedHostId}
               onSelect={handleHostSelect}
+              dockerHostMetadata={dockerHostMetadata()}
+              onHostCustomUrlUpdate={handleHostCustomUrlUpdate}
             />
           </Show>
 
