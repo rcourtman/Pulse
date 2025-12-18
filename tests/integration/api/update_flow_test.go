@@ -102,9 +102,12 @@ func waitForHealth(t *testing.T, client *http.Client, baseURL string, timeout ti
 
 func setupCredentials(t *testing.T, client *http.Client, baseURL, bootstrapToken, username, password string) {
 	t.Helper()
+	// Generate a dummy API token for tests (64 hex chars)
+	apiToken := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	payload := map[string]interface{}{
 		"username":   username,
 		"password":   password,
+		"apiToken":   apiToken,
 		"setupToken": bootstrapToken,
 	}
 	req, err := http.NewRequest("POST", baseURL+"/api/security/quick-setup", nil)
