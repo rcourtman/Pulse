@@ -1,8 +1,11 @@
 name: Release Helm Chart to GitHub Pages
 
-# Only triggered manually or by create-release.yml
-# Removing release: published trigger prevents race conditions
+# Triggered automatically when publish-docker.yml completes, or manually
+# We wait for Docker publish because the smoke test pulls the Docker image
 on:
+  workflow_run:
+    workflows: ["Publish Docker Images"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       chart_version:
@@ -15,6 +18,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Only run if workflow_dispatch OR if workflow_run completed successfully
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,9 +61,31 @@ jobs:
 
       - name: Determine chart version
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${{ inputs.chart_version }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual dispatch - use input directly
+            VERSION="${{ inputs.chart_version }}"
+          else
+            # workflow_run trigger - extract version from the triggering workflow
+            RUN_ID="${{ github.event.workflow_run.id }}"
+            echo "Extracting version from workflow run ${RUN_ID}..."
+            
+            WORKFLOW_DATA=$(gh api repos/${{ github.repository }}/actions/runs/${RUN_ID})
+            TAG=$(echo "$WORKFLOW_DATA" | jq -r '.display_title' | grep -oP 'v?\d+\.\d+\.\d+(-[a-zA-Z]+\.\d+)?' || echo "")
+            
+            if [ -z "$TAG" ]; then
+              echo "::error::Could not extract version from workflow_run"
+              exit 1
+            fi
+            
+            # Remove leading 'v' if present
+            VERSION="${TAG#v}"
+          fi
+          
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Chart version: $VERSION"
 
       - name: Update Chart.yaml version
         run: |

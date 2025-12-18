@@ -1,8 +1,10 @@
 name: Promote Floating Tags
 
-# Only triggered by create-release.yml after Docker images are published
-# This prevents race conditions with release: published event
+# Triggered automatically when publish-docker.yml completes, or manually
 on:
+  workflow_run:
+    workflows: ["Publish Docker Images"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
@@ -18,15 +20,56 @@ on:
 jobs:
   promote-images:
     runs-on: ubuntu-latest
+    # Only run if workflow_dispatch OR if workflow_run completed successfully
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       packages: write
-    env:
-      OWNER: ${{ github.repository_owner }}
-      TAG: ${{ inputs.tag }}
-      PRERELEASE: ${{ inputs.prerelease }}
 
     steps:
+      - name: Extract tag from trigger
+        id: extract
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual dispatch - use inputs directly
+            TAG="${{ inputs.tag }}"
+            PRERELEASE="${{ inputs.prerelease }}"
+          else
+            # workflow_run trigger - extract from the triggering workflow's inputs
+            # The publish-docker workflow was triggered with a tag input
+            RUN_ID="${{ github.event.workflow_run.id }}"
+            echo "Extracting inputs from workflow run ${RUN_ID}..."
+            
+            # Get the workflow run details to extract the tag
+            WORKFLOW_DATA=$(gh api repos/${{ github.repository }}/actions/runs/${RUN_ID})
+            TAG=$(echo "$WORKFLOW_DATA" | jq -r '.head_branch // ""')
+            
+            # If head_branch is main, we need to get it from the run's inputs
+            # The inputs are stored in the run's display_title or we parse from artifacts
+            if [ "$TAG" = "main" ] || [ -z "$TAG" ]; then
+              # Try to get from run name which typically includes the tag
+              TAG=$(echo "$WORKFLOW_DATA" | jq -r '.display_title' | grep -oP 'v\d+\.\d+\.\d+(-[a-zA-Z]+\.\d+)?' || echo "")
+            fi
+            
+            if [ -z "$TAG" ]; then
+              echo "::error::Could not extract tag from workflow_run"
+              exit 1
+            fi
+            
+            # Detect prerelease from tag
+            if [[ "$TAG" =~ -rc\.[0-9]+$ ]] || [[ "$TAG" =~ -alpha\.[0-9]+$ ]] || [[ "$TAG" =~ -beta\.[0-9]+$ ]]; then
+              PRERELEASE="true"
+            else
+              PRERELEASE="false"
+            fi
+          fi
+          
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "prerelease=${PRERELEASE}" >> $GITHUB_OUTPUT
+          echo "Promoting floating tags for ${TAG} (prerelease: ${PRERELEASE})"
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -40,27 +83,52 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Wait for Docker image to be available
+      - name: Wait for Docker images to be available
+        env:
+          TAG: ${{ steps.extract.outputs.tag }}
         run: |
-          echo "Waiting for rcourtman/pulse:${TAG} to be available..."
+          echo "Waiting for Docker images with tag ${TAG} to be available..."
           MAX_ATTEMPTS=30
           ATTEMPT=0
+          
+          # Wait for main pulse image
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             if docker manifest inspect rcourtman/pulse:${TAG} > /dev/null 2>&1; then
               echo "Image rcourtman/pulse:${TAG} is available!"
+              break
+            fi
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS - pulse image not yet available, waiting 10s..."
+            sleep 10
+          done
+          
+          if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
+            echo "Timeout waiting for pulse Docker image"
+            exit 1
+          fi
+          
+          # Also wait for agent image
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            if docker manifest inspect rcourtman/pulse-docker-agent:${TAG} > /dev/null 2>&1; then
+              echo "Image rcourtman/pulse-docker-agent:${TAG} is available!"
               exit 0
             fi
             ATTEMPT=$((ATTEMPT + 1))
-            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS - Image not yet available, waiting 10s..."
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS - agent image not yet available, waiting 10s..."
             sleep 10
           done
-          echo "Timeout waiting for Docker image"
+          
+          echo "Timeout waiting for agent Docker image"
           exit 1
 
       - name: Promote Pulse server image tags
+        env:
+          TAG: ${{ steps.extract.outputs.tag }}
+          PRERELEASE: ${{ steps.extract.outputs.prerelease }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          TAG="${TAG}"
           VERSION="${TAG#v}"
           BASE_VERSION="${VERSION%%-*}"
           IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
@@ -90,9 +158,12 @@ jobs:
           fi
 
       - name: Promote Docker agent image tags
+        env:
+          TAG: ${{ steps.extract.outputs.tag }}
+          PRERELEASE: ${{ steps.extract.outputs.prerelease }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          TAG="${TAG}"
           VERSION="${TAG#v}"
           BASE_VERSION="${VERSION%%-*}"
           IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
@@ -120,9 +191,17 @@ jobs:
           fi
 
       - name: Promotion summary
+        env:
+          TAG: ${{ steps.extract.outputs.tag }}
+          PRERELEASE: ${{ steps.extract.outputs.prerelease }}
         run: |
+          VERSION="${TAG#v}"
+          BASE_VERSION="${VERSION%%-*}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
+          MAJOR_MINOR="$MAJOR.${MINOR:-0}"
+          
           if [ "$PRERELEASE" = "true" ]; then
-            echo "Updated rc tags to point to ${TAG} for both server and agent images."
+            echo "✅ Updated :rc tags to point to ${TAG} for both server and agent images."
           else
-            echo "Updated latest/${MAJOR_MINOR}/${MAJOR} tags to point to ${TAG} for both server and agent images."
+            echo "✅ Updated :latest, :${MAJOR_MINOR}, :${MAJOR} tags to point to ${TAG} for both server and agent images."
           fi

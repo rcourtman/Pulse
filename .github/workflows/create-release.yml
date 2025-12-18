@@ -493,33 +493,10 @@ jobs:
 
           echo "✓ Docker publish workflow dispatched"
 
-      - name: Trigger floating tag promotion
-        if: ${{ github.event.inputs.draft_only != 'true' }}
-        continue-on-error: true  # Non-fatal if dispatch fails
-        env:
-          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
-        run: |
-          TAG="${{ needs.extract_version.outputs.tag }}"
-          IS_PRERELEASE="${{ needs.extract_version.outputs.is_prerelease }}"
-          echo "Triggering floating tag promotion for ${TAG} (prerelease: ${IS_PRERELEASE})..."
 
-          gh workflow run promote-floating-tags.yml -f tag="${TAG}" -f prerelease="${IS_PRERELEASE}"
-
-          echo "✓ Floating tag promotion workflow dispatched"
-
-      - name: Trigger Helm chart release
-        if: ${{ github.event.inputs.draft_only != 'true' }}
-        continue-on-error: true  # Non-fatal if dispatch fails
-        env:
-          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
-        run: |
-          TAG="${{ needs.extract_version.outputs.tag }}"
-          VERSION="${TAG#v}"
-          echo "Triggering Helm chart release for ${VERSION}..."
-
-          gh workflow run helm-pages.yml -f chart_version="${VERSION}"
-
-          echo "✓ Helm chart release workflow dispatched"
+      # NOTE: Floating tag promotion and Helm chart release workflows now trigger
+      # automatically when publish-docker.yml completes via workflow_run.
+      # No need to dispatch them manually - this eliminates race conditions.
 
       - name: Trigger demo server update
         if: ${{ github.event.inputs.draft_only != 'true' }}
