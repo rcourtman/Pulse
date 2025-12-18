@@ -62,8 +62,8 @@ users:
 
 func TestNamespaceAllowed_IncludeExclude(t *testing.T) {
 	a := &Agent{
-		includeNamespaces: makeNamespaceSet([]string{"a", "b"}),
-		excludeNamespaces: makeNamespaceSet([]string{"b"}),
+		includeNamespaces: []string{"a", "b"},
+		excludeNamespaces: []string{"b"},
 	}
 
 	if !a.namespaceAllowed("a") {
@@ -122,9 +122,9 @@ func TestCollectPods_FiltersProblemsAndSorts(t *testing.T) {
 			MaxPods:        2,
 			IncludeAllPods: false,
 		},
-		kubeClient:       clientset,
-		includeNamespaces: makeNamespaceSet(nil),
-		excludeNamespaces: makeNamespaceSet(nil),
+		kubeClient:        clientset,
+		includeNamespaces: nil,
+		excludeNamespaces: nil,
 	}
 
 	pods, err := a.collectPods(context.Background())
@@ -165,10 +165,10 @@ func TestCollectDeployments_FiltersProblems(t *testing.T) {
 	)
 
 	a := &Agent{
-		cfg:              Config{IncludeAllPods: false},
-		kubeClient:       clientset,
-		includeNamespaces: makeNamespaceSet(nil),
-		excludeNamespaces: makeNamespaceSet(nil),
+		cfg:               Config{IncludeAllPods: false},
+		kubeClient:        clientset,
+		includeNamespaces: nil,
+		excludeNamespaces: nil,
 	}
 
 	deps, err := a.collectDeployments(context.Background())
