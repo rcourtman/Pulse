@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/IGLOU-EU/go-wildcard/v2"
 	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
 	"github.com/rs/zerolog"
@@ -69,8 +70,8 @@ type Agent struct {
 	clusterContext string
 	clusterVersion string
 
-	includeNamespaces sets.Set[string]
-	excludeNamespaces sets.Set[string]
+	includeNamespaces []string
+	excludeNamespaces []string
 
 	reportBuffer *buffer.Queue[agentsk8s.Report]
 }
@@ -164,8 +165,8 @@ func New(cfg Config) (*Agent, error) {
 		clusterName:       clusterName,
 		clusterServer:     clusterServer,
 		clusterContext:    clusterContext,
-		includeNamespaces: makeNamespaceSet(cfg.IncludeNamespaces),
-		excludeNamespaces: makeNamespaceSet(cfg.ExcludeNamespaces),
+		includeNamespaces: cfg.IncludeNamespaces,
+		excludeNamespaces: cfg.ExcludeNamespaces,
 		reportBuffer:      buffer.New[agentsk8s.Report](60),
 	}
 
@@ -241,17 +242,6 @@ func buildRESTConfig(kubeconfigPath, kubeContext string) (*rest.Config, string, 
 	return restCfg, contextName, nil
 }
 
-func makeNamespaceSet(values []string) sets.Set[string] {
-	set := sets.New[string]()
-	for _, v := range values {
-		v = strings.TrimSpace(v)
-		if v != "" {
-			set.Insert(v)
-		}
-	}
-	return set
-}
-
 func computeClusterID(server, context, name string) string {
 	payload := strings.TrimSpace(server) + "|" + strings.TrimSpace(context) + "|" + strings.TrimSpace(name)
 	sum := sha256.Sum256([]byte(payload))
@@ -321,13 +311,20 @@ func (a *Agent) namespaceAllowed(ns string) bool {
 	if ns == "" {
 		return false
 	}
-	if a.excludeNamespaces.Has(ns) {
-		return false
+	for _, excludeNamespace := range a.excludeNamespaces {
+		if wildcard.Match(excludeNamespace, ns) {
+			return false
+		}
 	}
-	if a.includeNamespaces.Len() == 0 {
+	if len(a.includeNamespaces) == 0 {
 		return true
 	}
-	return a.includeNamespaces.Has(ns)
+	for _, includeNamespace := range a.includeNamespaces {
+		if wildcard.Match(includeNamespace, ns) {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
