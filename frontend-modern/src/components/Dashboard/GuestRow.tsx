@@ -14,7 +14,8 @@ import { showSuccess, showError } from '@/utils/toast';
 import { logger } from '@/utils/logger';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { type ColumnPriority } from '@/hooks/useBreakpoint';
-import { ResponsiveMetricCell } from '@/components/shared/responsive';
+import { ResponsiveMetricCell, MetricText } from '@/components/shared/responsive';
+import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
 import { aiChatStore } from '@/stores/aiChat';
@@ -950,33 +951,15 @@ export function GuestRow(props: GuestRowProps) {
       <Show when={isColVisible('cpu')}>
         <td class="px-2 py-1 align-middle" style={{ width: "140px", "min-width": "140px", "max-width": "140px" }}>
           <Show when={isMobile()}>
-            <div class="md:hidden flex justify-center">
-              <ResponsiveMetricCell
-                value={cpuPercent()}
-                type="cpu"
-                resourceId={metricsKey()}
-                sublabel={
-                  props.guest.cpus
-                    ? `${props.guest.cpus} ${props.guest.cpus === 1 ? 'core' : 'cores'}`
-                    : undefined
-                }
-                isRunning={isRunning()}
-                showMobile={true}
-              />
+            <div class="md:hidden h-4 flex items-center justify-center">
+              <MetricText value={cpuPercent()} type="cpu" />
             </div>
           </Show>
-          <div class="hidden md:block">
-            <ResponsiveMetricCell
-              value={cpuPercent()}
-              type="cpu"
+          <div class="hidden md:block h-4">
+            <EnhancedCPUBar
+              usage={cpuPercent()}
+              cores={props.guest.cpus}
               resourceId={metricsKey()}
-              sublabel={
-                props.guest.cpus
-                  ? `${props.guest.cpus} ${props.guest.cpus === 1 ? 'core' : 'cores'}`
-                  : undefined
-              }
-              isRunning={isRunning()}
-              showMobile={false}
             />
           </div>
         </td>
