@@ -2,6 +2,7 @@ package hostmetrics
 
 import (
 	"context"
+	"os"
 	"testing"
 )
 
@@ -68,6 +69,57 @@ func TestSummarizeZFSPoolsFallback(t *testing.T) {
 	}
 	if tank.Usage < 39.9 || tank.Usage > 40.1 {
 		t.Errorf("expected tank usage ~40%%, got %.2f", tank.Usage)
+	}
+}
+
+func TestFindZpool(t *testing.T) {
+	// This test verifies that findZpool correctly:
+	// 1. Uses exec.LookPath first (if zpool is in PATH)
+	// 2. Falls back to common absolute paths
+
+	// We can't easily mock os.Stat, so we just verify the function
+	// returns a path (if zpool is installed) or an error (if not)
+	path, err := findZpool()
+
+	// On a system without zpool, we expect an error
+	if err != nil {
+		if path != "" {
+			t.Errorf("findZpool() returned path %q with error: %v", path, err)
+		}
+		// Expected behavior on systems without zpool
+		return
+	}
+
+	// On a system with zpool, verify the path looks valid
+	if path == "" {
+		t.Error("findZpool() returned empty path without error")
+	}
+
+	// Verify the returned path exists
+	if _, statErr := os.Stat(path); statErr != nil {
+		t.Errorf("findZpool() returned path %q but os.Stat failed: %v", path, statErr)
+	}
+}
+
+func TestCommonZpoolPaths(t *testing.T) {
+	// Verify that commonZpoolPaths contains expected paths for TrueNAS
+	expectedPaths := []string{
+		"/usr/sbin/zpool",       // TrueNAS SCALE, Debian, Ubuntu
+		"/sbin/zpool",           // FreeBSD, older Linux
+		"/usr/local/sbin/zpool", // FreeBSD ports
+	}
+
+	for _, expected := range expectedPaths {
+		found := false
+		for _, path := range commonZpoolPaths {
+			if path == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("commonZpoolPaths missing expected path: %s", expected)
+		}
 	}
 }
 
