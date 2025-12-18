@@ -1,8 +1,8 @@
 # 🛡️ Sensor Proxy Hardening
 
-> **⚠️ Deprecated:** The sensor-proxy is deprecated in favor of the unified Pulse agent.
-> For new installations, use `install.sh --enable-proxmox` instead.
-> See [TEMPERATURE_MONITORING.md](/docs/security/TEMPERATURE_MONITORING.md).
+> **Deprecated in v5:** `pulse-sensor-proxy` is deprecated and not recommended for new deployments.
+> Use `pulse-agent --enable-proxmox` for temperature monitoring.
+> This document is retained for existing installations during the migration window.
 
 The `pulse-sensor-proxy` runs on the host to securely collect temperatures, keeping SSH keys out of containers.
 
@@ -48,7 +48,7 @@ SSH keys are restricted to `sensors -j` only.
 
 **Rotation**:
 ```bash
-/opt/pulse/scripts/pulse-sensor-proxy-rotate-keys.sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/pulse-proxy-rotate-keys.sh)"
 ```
 *   **Dry Run**: Add `--dry-run`.
 *   **Rollback**: Add `--rollback`.
@@ -56,6 +56,9 @@ SSH keys are restricted to `sensors -j` only.
 ## 🚨 Incident Response
 If compromised:
 1.  **Stop Proxy**: `systemctl stop pulse-sensor-proxy`.
-2.  **Rotate Keys**: Remove old keys from nodes manually or use `pulse-sensor-proxy-rotate-keys.sh`.
+2.  **Rotate Keys**: Remove old keys from nodes manually or use the rotation helper above.
 3.  **Audit Logs**: Check `journalctl -u pulse-sensor-proxy`.
-4.  **Reinstall**: Run `/opt/pulse/scripts/install-sensor-proxy.sh`.
+4.  **Reinstall**:
+    ```bash
+    curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | sudo bash
+    ```

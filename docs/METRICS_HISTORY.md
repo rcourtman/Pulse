@@ -1,87 +1,74 @@
-# Metrics History
+# Metrics History (Persistent)
 
-Pulse 5.0 introduces persistent metrics history, allowing you to view historical resource usage data and trends over time.
+Pulse persists metrics history to disk so trend views and sparklines survive restarts.
 
-## Features
+## Storage Location
 
-- **Persistent Storage**: Metrics are saved to disk and survive restarts
-- **Configurable Retention**: Set how long to keep different metric types
-- **Trend Analysis**: View resource usage patterns over time
-- **Spark Lines**: See at-a-glance trends in the dashboard
+Metrics history is stored in a SQLite database named `metrics.db` under the Pulse data directory:
 
-## Configuration
+- **systemd/LXC installs**: typically `/etc/pulse/metrics.db`
+- **Docker/Kubernetes installs**: typically `/data/metrics.db`
 
-### Retention Settings
+## Retention Model (Tiered)
 
-Configure retention periods in **Settings → General → Metrics History**:
+Pulse keeps multiple resolutions of the same data, which allows longer history without storing raw samples forever:
 
-| Metric Type | Default | Description |
-|-------------|---------|-------------|
-| **Host Metrics** | 7 days | CPU, memory, disk for hypervisors |
-| **Guest Metrics** | 7 days | VM and container metrics |
-| **Container Metrics** | 3 days | Docker/Podman container stats |
-| **Aggregate Metrics** | 30 days | Cluster-wide summaries |
+- **Raw** (high-resolution, short window)
+- **Minute aggregates**
+- **Hourly aggregates**
+- **Daily aggregates**
 
-### Environment Variables
+Default retention values (subject to change) are:
 
-```bash
-# Override via environment
-PULSE_METRICS_HOST_RETENTION_DAYS=14
-PULSE_METRICS_GUEST_RETENTION_DAYS=14
-PULSE_METRICS_CONTAINER_RETENTION_DAYS=7
-PULSE_METRICS_AGGREGATE_RETENTION_DAYS=60
+- Raw: 2 hours
+- Minute: 24 hours
+- Hourly: 7 days
+- Daily: 90 days
+
+## Advanced: Retention Tuning
+
+Tiered retention is stored in `system.json` in the Pulse data directory:
+
+- **systemd/LXC installs**: typically `/etc/pulse/system.json`
+- **Docker/Kubernetes installs**: typically `/data/system.json`
+
+Keys:
+
+```json
+{
+  "metricsRetentionRawHours": 2,
+  "metricsRetentionMinuteHours": 24,
+  "metricsRetentionHourlyDays": 7,
+  "metricsRetentionDailyDays": 90
+}
 ```
 
-## Storage
-
-Metrics are stored in `/etc/pulse/data/metrics/` (or your configured data directory).
-
-### Disk Usage
-
-Approximate storage requirements:
-- ~1 KB per resource per hour
-- 10 hosts × 50 guests × 7 days ≈ 8 MB
-
-### Database Maintenance
-
-Pulse automatically:
-- Compacts old data
-- Prunes metrics beyond retention period
-- Optimizes storage during low-usage periods
+After changing these values, restart Pulse.
 
 ## API Access
 
-Query historical metrics via the API:
+Pulse exposes the persistent metrics store via:
+
+- `GET /api/metrics-store/stats`
+- `GET /api/metrics-store/history`
+
+### History Query Parameters
+
+`GET /api/metrics-store/history` supports:
+
+- `resourceType` (required): `node`, `guest`, `storage`, `docker`, `dockerHost`
+- `resourceId` (required): resource identifier
+- `metric` (optional): `cpu`, `memory`, `disk`, etc. Omit to return all metrics for the resource.
+- `range` (optional): `1h`, `6h`, `12h`, `24h`, `7d`, `30d`, `90d` (default `24h`)
+
+Example:
 
 ```bash
-# Get metrics for a specific resource
 curl -H "X-API-Token: $TOKEN" \
-  "http://localhost:7655/api/metrics/history?resource=vm-100&hours=24"
-
-# Get aggregated cluster metrics
-curl -H "X-API-Token: $TOKEN" \
-  "http://localhost:7655/api/metrics/history?type=aggregate&days=7"
+  "http://localhost:7655/api/metrics-store/history?resourceType=guest&resourceId=vm-100&range=7d&metric=cpu"
 ```
-
-## Visualization
-
-### Dashboard Sparklines
-The dashboard shows 24-hour trend sparklines for each resource, updating in real-time.
-
-### Detailed Charts
-Click on any resource to see detailed historical charts with:
-- Selectable time ranges (1h, 6h, 24h, 7d, 30d)
-- Multiple metric overlays (CPU, memory, disk, network)
-- Zoom and pan controls
 
 ## Troubleshooting
 
-### Metrics not persisting
-1. Check data directory permissions
-2. Verify disk space availability
-3. Check logs: `journalctl -u pulse | grep metrics`
-
-### High disk usage
-1. Reduce retention periods in Settings
-2. Exclude low-value resources from history
-3. Run manual cleanup: Settings → General → Clear Old Metrics
+- **No sparklines / empty history**: confirm the instance can write to the data directory and that `metrics.db` exists.
+- **Large disk usage**: reduce polling frequency first. If you need tighter retention, adjust the tiered retention settings in `system.json` (advanced) and restart Pulse.

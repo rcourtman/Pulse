@@ -23,7 +23,7 @@ pveum acl modify /nodes -user pulse-monitor@pam -role PVEAuditor
 ZFS monitoring is **enabled by default**. To disable it:
 
 ```bash
-# Add to /opt/pulse/.env
+# Add to /etc/pulse/.env (systemd/LXC) or /data/.env (Docker/Kubernetes)
 PULSE_DISABLE_ZFS_MONITORING=true
 ```
 
@@ -39,4 +39,4 @@ PULSE_DISABLE_ZFS_MONITORING=true
 **No ZFS Data?**
 1.  Check permissions: `pveum user permissions pulse-monitor@pam`.
 2.  Verify pools exist: `zpool list`.
-3.  Check logs: `grep ZFS /opt/pulse/pulse.log`.
+3.  Check logs: `journalctl -u pulse -n 200 | grep -i zfs`.

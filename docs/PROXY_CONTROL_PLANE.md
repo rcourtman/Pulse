@@ -2,6 +2,8 @@
 
 The Control Plane synchronizes `pulse-sensor-proxy` instances with the Pulse server, ensuring they trust the correct nodes without manual configuration.
 
+> **Deprecated in v5:** `pulse-sensor-proxy` (and its control-plane sync) is deprecated and not recommended for new deployments. New installs should use `pulse-agent --enable-proxmox` for temperature monitoring.
+
 ## 🏗️ Architecture
 
 ```mermaid
@@ -37,4 +39,3 @@ pulse_control_plane:
 *   **Tokens**: The `ctrl_token` is unique per proxy instance.
 *   **Least Privilege**: The proxy only knows about nodes explicitly added to Pulse.
 *   **Fallback**: If the control plane is unreachable, the proxy uses its last known good configuration.
-

@@ -2,19 +2,37 @@
 
 Monitor real-time CPU and NVMe temperatures for your Proxmox nodes.
 
+> **Deprecation notice (v5):** `pulse-sensor-proxy` is deprecated and not recommended for new deployments. Temperature monitoring should be done via the unified agent (`pulse-agent --enable-proxmox`). Existing proxy installs can continue during the migration window, but plan to migrate to the agent.
+
+## Recommended: Pulse Agent
+
+For new installations, prefer the unified agent on Proxmox hosts. It reads sensors locally and reports temperatures to Pulse without SSH keys or proxy wiring.
+
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <api-token> --enable-proxmox
+```
+
+If you use the agent method, the rest of this document (sensor proxy) is optional. See `docs/security/TEMPERATURE_MONITORING.md` for the security model overview.
+
 ## 🚀 Quick Start
 
-### 1. Enable in Pulse
-Go to **Settings → Nodes → [Node] → Advanced Monitoring** and enable "Temperature Monitoring".
+### 1. Install the agent on Proxmox hosts
+Install the unified agent on each Proxmox host with Proxmox integration enabled (example in the section above).
 
-### 2. Install Sensor Proxy
-The setup depends on your deployment:
+### 2. Enable temperature monitoring (optional)
+Go to **Settings → Proxmox → [Node] → Advanced Monitoring** and enable "Temperature monitoring" if you want to collect temperatures for that node.
 
-| Deployment | Recommended Method |
-| :--- | :--- |
-| **LXC (Pulse)** | Run the **Setup Script** in Pulse UI. It auto-installs the proxy on the host. |
-| **Docker (Pulse)** | Install proxy on host + bind mount socket. (See below) |
-| **Remote Node** | Install proxy in **HTTP Mode** on the remote node. |
+## Deprecated: pulse-sensor-proxy (existing installs only)
+
+This section is retained for existing installations during the migration window.
+
+If you are starting fresh on Pulse v5, do not deploy `pulse-sensor-proxy`. Use the agent method above.
+
+If you already have the proxy deployed:
+
+- Keep it running while you migrate to `pulse-agent --enable-proxmox`.
+- Expect future removal in a major release. Do not treat the proxy as a long-term solution.
 
 ## 📦 Docker Setup (Manual)
 
@@ -61,7 +79,7 @@ If you have Pulse running on **Server A** and want to monitor temperatures on **
 
 | Issue | Solution |
 | :--- | :--- |
-| **No Data** | Check **Settings → Diagnostics → Temperature Proxy**. |
+| **No Data** | Check **Settings → Diagnostics** (Temperature Proxy section). |
 | **Proxy Unreachable** | Ensure port `8443` is open on the remote node. |
 | **"Permission Denied"** | Re-run the installer to fix permissions or SSH keys. |
 | **LXC Issues** | Ensure the container has the bind mount: `lxc.mount.entry: /run/pulse-sensor-proxy ...` |
@@ -98,7 +116,7 @@ If you can't run the installer script, create the configuration manually:
 ```bash
 curl -L https://github.com/rcourtman/Pulse/releases/latest/download/pulse-sensor-proxy-linux-amd64 \
   -o /tmp/pulse-sensor-proxy
-install -D -m 0755 /tmp/pulse-sensor-proxy /opt/pulse/sensor-proxy/bin/pulse-sensor-proxy
+install -D -m 0755 /tmp/pulse-sensor-proxy /usr/local/bin/pulse-sensor-proxy
 ```
 
 **2. Create service user:**
@@ -128,7 +146,7 @@ Allowed nodes live in `/etc/pulse-sensor-proxy/allowed_nodes.yaml`; change them 
 **5. Install systemd service:**
 ```bash
 # Download from: https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh
-# Extract the systemd unit from the installer (ExecStartPre/ExecStart use /opt/pulse/sensor-proxy/bin)
+# Extract the systemd unit from the installer (ExecStartPre/ExecStart typically uses /usr/local/bin/pulse-sensor-proxy)
 systemctl daemon-reload
 systemctl enable --now pulse-sensor-proxy
 ```
@@ -230,16 +248,15 @@ The installer is idempotent and safe to re-run:
 # After adding a new Proxmox node to cluster
 bash install-sensor-proxy.sh --standalone --pulse-server http://pulse:7655 --quiet
 
-# After upgrading Pulse version
-bash install-sensor-proxy.sh --standalone --pulse-server http://pulse:7655 --version v4.27.0 --quiet
-
 # Verify installation
 systemctl status pulse-sensor-proxy
 ```
 
-### Legacy Security Concerns (Pre-v4.24.0)
+### Legacy SSH Security Concerns
 
-Older versions stored SSH keys inside the container, creating security risks:
+SSH-based temperature collection from inside containers is unsafe. Pulse blocks this by default for container deployments.
+
+In legacy/non-container setups where you intentionally use SSH, the main risks are:
 
 - Compromised container = exposed SSH keys
 - Even with forced commands, keys could be extracted
@@ -402,14 +419,15 @@ Rotate SSH keys periodically for security (recommended every 90 days).
 
 **Automated Rotation (Recommended):**
 
-The `/opt/pulse/scripts/pulse-proxy-rotate-keys.sh` script handles rotation safely with staging, verification, and rollback support:
+The `pulse-proxy-rotate-keys.sh` helper script handles rotation safely with staging, verification, and rollback support:
 
 ```bash
 # 1. Dry-run first (recommended)
-sudo /opt/pulse/scripts/pulse-proxy-rotate-keys.sh --dry-run
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/pulse-proxy-rotate-keys.sh | \
+  sudo bash -s -- --dry-run
 
 # 2. Perform rotation
-sudo /opt/pulse/scripts/pulse-proxy-rotate-keys.sh
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/pulse-proxy-rotate-keys.sh | sudo bash
 ```
 
 **What the script does:**
@@ -421,7 +439,8 @@ sudo /opt/pulse/scripts/pulse-proxy-rotate-keys.sh
 
 **If rotation fails, rollback:**
 ```bash
-sudo /opt/pulse/scripts/pulse-proxy-rotate-keys.sh --rollback
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/pulse-proxy-rotate-keys.sh | \
+  sudo bash -s -- --rollback
 ```
 
 **Manual Rotation (Fallback):**
@@ -444,11 +463,11 @@ curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-s
 # 4. Verify temperature data still works in Pulse UI
 ```
 
-### Automatic Cleanup When Nodes Are Removed (v4.26.0+)
+### Automatic Cleanup When Nodes Are Removed
 
-Starting in v4.26.0, SSH keys are **automatically removed** when you delete a node from Pulse:
+SSH keys are automatically removed when you delete a node from Pulse:
 
-1. **When you remove a node** in Pulse Settings → Nodes, Pulse signals the temperature proxy
+1. **When you remove a node** in Pulse (**Settings → Proxmox**), Pulse signals the temperature proxy
 2. **The proxy creates a cleanup request** file at `/var/lib/pulse-sensor-proxy/cleanup-request.json`
 3. **A systemd path unit detects the request** and triggers the cleanup service
 4. **The cleanup script automatically:**
@@ -572,7 +591,7 @@ test -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock && echo "Socket OK" || e
 - Proxy uses `pvecm status` to discover cluster nodes (requires Proxmox IPC access)
 - If Proxmox hardens IPC access or cluster topology changes unexpectedly, discovery may fail
 - Standalone Proxmox nodes work but only monitor that single node
-- Fallback: Re-run setup script manually to reconfigure cluster access
+- Fallback: re-run the proxy installer script to reconfigure cluster access
 
 **Rate Limiting & Scaling** (updated in commit 46b8b8d):
 
@@ -637,7 +656,7 @@ test -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock && echo "Socket OK" || e
 **New Cluster Node Not Showing Temperatures:**
 1. Ensure lm-sensors installed: `ssh root@new-node "sensors -j"`
 2. Proxy auto-discovers on next poll (may take up to 1 minute)
-3. Re-run the setup script to configure SSH keys on the new node: `curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid <CTID>`
+3. Re-run the proxy installer script to configure SSH keys on the new node: `curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid <CTID>`
 
 **Permission Denied Errors:**
 1. Verify socket permissions: `ls -l /run/pulse-sensor-proxy/pulse-sensor-proxy.sock`
@@ -646,55 +665,13 @@ test -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock && echo "Socket OK" || e
 
 **Proxy Service Won't Start:**
 1. Check logs: `journalctl -u pulse-sensor-proxy -n 50`
-2. Verify binary exists: `ls -l /opt/pulse/sensor-proxy/bin/pulse-sensor-proxy`
-3. Test manually: `/opt/pulse/sensor-proxy/bin/pulse-sensor-proxy --version`
+2. Verify binary exists: `ls -l /usr/local/bin/pulse-sensor-proxy`
+3. Test manually: `/usr/local/bin/pulse-sensor-proxy --version`
 4. Check socket directory: `ls -ld /var/run`
-
-### Future Improvements
-
-**Potential Enhancements (Roadmap):**
-
-1. **Proxmox API Integration**
-   - If future Proxmox versions expose temperature telemetry via API, retire SSH approach
-   - Would eliminate SSH key management and improve security posture
-   - Monitor Proxmox development for metrics/RRD temperature endpoints
-
-2. **Agent-Based Architecture**
-   - Deploy lightweight agents on each node for richer telemetry
-   - Reduces SSH fan-out overhead for large clusters
-   - Trade-off: Adds deployment/update complexity
-   - Consider only if demand for additional metrics grows
-
-3. **SNMP/IPMI Support**
-   - Optional integration for baseboard management controllers
-   - Better for hardware-level sensors (baseboard temps, fan speeds)
-   - Requires hardware/firmware support, so keep as optional add-on
-
-4. **Schema Validation**
-   - Add JSON schema validation for `sensors -j` output
-   - Detect format changes early with instrumentation
-   - Log warnings when unexpected sensor formats appear
-
-5. **Caching & Throttling**
-   - Implement result caching for large clusters (10+ nodes)
-   - Reduce SSH overhead with configurable TTL
-   - Add request throttling to prevent SSH rate limiting
-
-6. **Automated Key Rotation**
-   - Systemd timer for automatic 90-day rotation
-   - Already supported via `/opt/pulse/scripts/pulse-proxy-rotate-keys.sh`
-   - Just needs timer unit configuration (documented in hardening guide)
-
-7. **Health Check Endpoint**
-   - Add `/health` endpoint separate from Prometheus metrics
-   - Enable external monitoring systems (Nagios, Zabbix, etc.)
-   - Return proxy status, socket accessibility, and last successful poll
-
-**Contributions Welcome:** If any of these improvements interest you, open a GitHub issue to discuss implementation!
 
 ## Configuration Management
 
-Starting with v4.31.1, the sensor proxy includes a built-in CLI for safe configuration management. This prevents config corruption that caused 99% of temperature monitoring failures.
+The sensor proxy includes a built-in CLI for safe configuration management. It uses locking and atomic writes to prevent config corruption.
 
 ### Quick Reference
 
@@ -717,19 +694,19 @@ pulse-sensor-proxy config set-allowed-nodes --replace --merge 192.168.0.1
 
 **See also:**
 - [Sensor Proxy Config Management Guide](operations/SENSOR_PROXY_CONFIG.md) - Complete runbook
-- [Sensor Proxy CLI Reference](/opt/pulse/cmd/pulse-sensor-proxy/README.md) - Full command documentation
+- [Sensor Proxy CLI Reference](../cmd/pulse-sensor-proxy/README.md) - Full command documentation
 
 ## Control-Plane Sync & Migration
 
-As of v4.32 the sensor proxy registers with Pulse and syncs its authorized node list via `/api/temperature-proxy/authorized-nodes`. No more manual `allowed_nodes` maintenance or `/etc/pve` access is required.
+The sensor proxy can register with Pulse and sync its authorized node list via `/api/temperature-proxy/authorized-nodes`. This avoids manual `allowed_nodes` maintenance and reduces reliance on `/etc/pve` access.
 
 ### New installs
 
 Always pass the Pulse URL when installing:
 
 ```bash
-curl -sSL https://pulse.example.com/api/install/install-sensor-proxy.sh \
-  | sudo bash -s -- --ctid 108 --pulse-server http://192.168.0.149:7655
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | \
+  sudo bash -s -- --ctid <pulse-lxc-id> --pulse-server http://<pulse-ip>:7655
 ```
 
 The installer now:
@@ -740,11 +717,11 @@ The installer now:
 
 ### Migrating existing hosts
 
-If you installed before v4.32, run the migration helper on each host:
+If your proxy was installed without control-plane sync enabled, run the migration helper on each host:
 
 ```bash
-curl -sSL https://pulse.example.com/api/install/migrate-sensor-proxy-control-plane.sh \
-  | sudo bash -s -- --pulse-server http://192.168.0.149:7655
+curl -fsSL http://<pulse-ip>:7655/api/install/migrate-sensor-proxy-control-plane.sh | \
+  sudo bash -s -- --pulse-server http://<pulse-ip>:7655
 ```
 
 The script registers the existing proxy, writes the control token, updates the config, and restarts the service (use `--skip-restart` if you prefer to bounce it yourself). Once migrated, temperatures for every node defined in Pulse will continue working even if the proxy can’t reach `/etc/pve` or Corosync IPC.

@@ -32,9 +32,9 @@ Designed for homelabs, sysadmins, and MSPs who need a "single pane of glass" wit
 
 ### Pulse AI *(New in 5.0)*
 - **Chat Assistant**: Ask questions about your infrastructure in natural language
-- **Patrol Mode**: Automated health checks with proactive issue detection
-- **Auto-Fix**: Automatically resolve common issues with AI-guided remediation
-- **Predictive Intelligence**: Forecast problems before they happen
+- **Patrol**: Background health checks that generate findings on a schedule
+- **Alert Analysis**: Optional AI analysis when alerts fire
+- **Cost Tracking**: Track usage and costs per provider/model
 
 ### Multi-Platform
 - **Proxmox VE/PBS/PMG**: Full monitoring and management

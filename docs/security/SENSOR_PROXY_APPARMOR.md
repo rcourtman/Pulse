@@ -1,8 +1,8 @@
-# 🛡️ Sensor Proxy Hardening
+# 🛡️ Sensor Proxy AppArmor (Optional)
 
-> **⚠️ Deprecated:** The sensor-proxy is deprecated in favor of the unified Pulse agent.
-> For new installations, use `install.sh --enable-proxmox` instead.
-> See [TEMPERATURE_MONITORING.md](/docs/security/TEMPERATURE_MONITORING.md).
+> **Deprecated in v5:** `pulse-sensor-proxy` is deprecated and not recommended for new deployments.
+> Use `pulse-agent --enable-proxmox` for temperature monitoring.
+> This document is retained for existing installations during the migration window.
 
 Secure `pulse-sensor-proxy` with AppArmor and Seccomp.
 
@@ -14,7 +14,8 @@ Profile: `security/apparmor/pulse-sensor-proxy.apparmor`
 
 ### Install & Enforce
 ```bash
-sudo install -m 0644 security/apparmor/pulse-sensor-proxy.apparmor /etc/apparmor.d/pulse-sensor-proxy
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/security/apparmor/pulse-sensor-proxy.apparmor | \
+  sudo tee /etc/apparmor.d/pulse-sensor-proxy >/dev/null
 sudo apparmor_parser -r /etc/apparmor.d/pulse-sensor-proxy
 sudo aa-enforce pulse-sensor-proxy
 ```
@@ -36,7 +37,10 @@ SystemCallAllow=accept;connect;recvfrom;sendto;recvmsg;sendmsg;sendmmsg;getsockn
 
 ### Containers (Docker/Podman)
 ```bash
-podman run --seccomp-profile /opt/pulse/security/seccomp/pulse-sensor-proxy.json ...
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/security/seccomp/pulse-sensor-proxy.json | \
+  sudo tee /etc/pulse-sensor-proxy.seccomp.json >/dev/null
+
+podman run --seccomp-profile /etc/pulse-sensor-proxy.seccomp.json ...
 ```
 
 ## 🔍 Verification

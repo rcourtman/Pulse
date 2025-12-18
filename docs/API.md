@@ -115,8 +115,12 @@ Triggers a test alert to all configured channels.
 ## ⚙️ System Settings
 
 ### Get Settings
-`GET /api/config/system`
-Retrieve current system configuration.
+`GET /api/system/settings`
+Retrieve current system settings.
+
+### Update Settings
+`POST /api/system/settings/update`
+Update system settings. Requires admin + `settings:write`.
 
 ### Toggle Mock Mode
 `POST /api/system/mock-mode`
@@ -140,34 +144,47 @@ Initiate OIDC login flow.
 
 ---
 
-## 🤖 Pulse AI *(New in 5.0)*
+## 🤖 Pulse AI *(v5)*
 
 ### Get AI Settings
 `GET /api/settings/ai`
-Returns current AI configuration (providers, models, patrol status).
+Returns current AI configuration (providers, models, patrol status). Requires admin + `settings:read`.
 
 ### Update AI Settings
-`PUT /api/settings/ai`
-Configure AI providers, API keys, and preferences.
+`PUT /api/settings/ai/update` (or `POST /api/settings/ai/update`)
+Configure AI providers, API keys, and preferences. Requires admin + `settings:write`.
 
-### Chat
-`POST /api/ai/chat`
-Send a message to the AI assistant.
-```json
-{ "message": "What VMs are using the most CPU?", "context": ["vm-100", "vm-101"] }
-```
+### List Models
+`GET /api/ai/models`
+Lists models available to the configured providers (queried live from provider APIs).
 
-### Patrol Status
-`GET /api/ai/patrol/status`
-Get current patrol status and recent findings.
+### Execute (Chat + Tools)
+`POST /api/ai/execute`
+Runs an AI request which may return tool calls, findings, or suggested actions.
 
-### Patrol Findings
-`GET /api/ai/patrol/findings`
-List all patrol findings with severity and recommendations.
+### Execute (Streaming)
+`POST /api/ai/execute/stream`
+Streaming variant of execute (used by the UI for incremental responses).
+
+### Patrol
+- `GET /api/ai/patrol/status`
+- `GET /api/ai/patrol/findings`
+- `GET /api/ai/patrol/history`
+- `POST /api/ai/patrol/run` (admin)
 
 ### Cost Tracking
-`GET /api/ai/cost?period=30d`
-Get AI usage statistics and costs.
+`GET /api/ai/cost/summary`
+Get AI usage statistics (includes retention window details).
+
+## 📈 Metrics Store (v5)
+
+### Store Stats
+`GET /api/metrics-store/stats`
+Returns stats for the persistent metrics store (SQLite-backed).
+
+### History
+`GET /api/metrics-store/history`
+Returns historical metric series for a resource and time range.
 
 ---
 
@@ -180,6 +197,10 @@ Downloads the unified agent binary for the current platform.
 The unified agent combines host, Docker, and Kubernetes monitoring. Use `--enable-docker` or `--enable-kubernetes` to enable additional metrics.
 
 See [UNIFIED_AGENT.md](UNIFIED_AGENT.md) for installation instructions.
+
+### Unified Agent Installer Script
+`GET /install.sh`
+Serves the universal `install.sh` used to install `pulse-agent` on target machines.
 
 ### Legacy Agents (Deprecated)
 `GET /download/pulse-host-agent` - *Deprecated, use pulse-agent*

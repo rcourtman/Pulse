@@ -2,7 +2,9 @@
 
 ![Version: 5.0.0-rc.4](https://img.shields.io/badge/Version-5.0.0--rc.4-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 5.0.0-rc.4](https://img.shields.io/badge/AppVersion-5.0.0--rc.4-informational?style=flat-square)
 
-Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
+Helm chart for deploying the Pulse server and an optional legacy Docker monitoring agent.
+
+Note: the `agent.*` values currently deploy `pulse-docker-agent`, which is deprecated in favor of the unified agent (`pulse-agent`) where possible.
 
 **Homepage:** <https://github.com/rcourtman/Pulse>
 

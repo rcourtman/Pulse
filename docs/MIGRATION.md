@@ -1,34 +1,36 @@
 # 🚚 Migrating Pulse
 
-**Updated for Pulse v4.24.0+**
+This guide covers migrating Pulse to a new host using the built-in encrypted export/import workflow.
 
 ## 🚀 Quick Migration Guide
 
 ### ❌ DON'T: Copy Files
-Never copy `/etc/pulse` or `/var/lib/pulse` manually. Encryption keys and credentials will break.
+Never copy `/etc/pulse` (or `/data` in Docker/Kubernetes) manually. Encryption keys and credentials can break.
 
 ### ✅ DO: Use Export/Import
 
 #### 1. Export (Old Server)
-1.  Go to **Settings → Configuration Management**.
-2.  Click **Export Configuration**.
-3.  Enter a strong passphrase and save the `.enc` file.
+1.  Go to **Settings → System → Backups**.
+2.  Click **Create Backup**.
+3.  Enter a strong passphrase and download the encrypted backup.
 
 #### 2. Import (New Server)
 1.  Install a fresh Pulse instance.
-2.  Go to **Settings → Configuration Management**.
-3.  Click **Import Configuration** and upload your file.
+2.  Go to **Settings → System → Backups**.
+3.  Click **Restore Configuration** and upload your file.
 4.  Enter the passphrase.
 
 ## 📦 What Gets Migrated
 
 | Included ✅ | Not Included ❌ |
 | :--- | :--- |
-| Nodes & Credentials | Historical Metrics |
-| Alert Settings | Alert History |
-| Email & Webhooks | Auth Settings (Passwords/Tokens) |
-| System Settings | Update Rollback History |
-| Guest Metadata | |
+| Nodes & credentials | Historical metrics history (`metrics.db`) |
+| Alerts & overrides | Browser sessions and local cookies |
+| Notifications (email, webhooks, Apprise) | Local login username/password (`.env`) |
+| System settings (`system.json`) | Update history/backup folders |
+| API token records | |
+| OIDC config | |
+| Guest metadata/notes | |
 
 ## 🔄 Common Scenarios
 
@@ -45,12 +47,12 @@ The export file works across all installation methods. You can migrate from Dock
 
 ## 📋 Post-Migration Checklist
 
-Because authentication secrets are excluded from exports, you must:
+Because local login credentials are stored in `.env` (not part of exports), you must:
 
 1.  **Re-create Admin User**: If not using `.env` overrides, create your admin account on the new instance.
-2.  **Re-issue API Tokens**:
-    *   Go to **Settings → Security**.
-    *   Generate new tokens for your agents and scripts.
+2.  **Confirm API access**:
+    *   If you created API tokens in the UI, those token records are included in the export and should continue working.
+    *   If you used `.env`-based `API_TOKENS`/`API_TOKEN`, reconfigure them on the new host.
 3.  **Update Agents**:
     *   **Unified Agent**: Update the `--token` flag in your service definition.
     *   **Docker**: Update `PULSE_TOKEN` in your container config.
@@ -58,7 +60,7 @@ Because authentication secrets are excluded from exports, you must:
 
 ## 🔒 Security
 
-*   **Encryption**: Exports are encrypted with PBKDF2 (100k iterations).
+*   **Encryption**: Exports are encrypted with passphrase-based encryption (PBKDF2 + AES-GCM).
 *   **Storage**: Safe to store in cloud backups or password managers.
 *   **Passphrase**: Use a strong, unique passphrase (min 12 chars).
 
@@ -67,4 +69,4 @@ Because authentication secrets are excluded from exports, you must:
 *   **"Invalid passphrase"**: Ensure exact match (case-sensitive).
 *   **Missing Nodes**: Verify export date.
 *   **Connection Errors**: Update node IPs in Settings if they changed.
-*   **Logging**: Re-configure log levels in **Settings → System → Logging** if needed.
+*   **Logging**: Adjust `LOG_LEVEL`/`LOG_FORMAT` via environment variables if needed.

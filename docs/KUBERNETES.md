@@ -4,24 +4,20 @@ Deploy Pulse to Kubernetes using the official Helm chart.
 
 ## 🚀 Installation
 
-1. **Add Repo**
+1. **Install (OCI chart, recommended)**
    ```bash
-   helm repo add pulse https://rcourtman.github.io/Pulse/
-   helm repo update
-   ```
-
-2. **Install**
-   ```bash
-   helm install pulse pulse/pulse \
+   helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart \
      --namespace pulse \
      --create-namespace
    ```
 
-3. **Access**
+2. **Access**
    ```bash
    kubectl -n pulse port-forward svc/pulse 7655:7655
    ```
    Open `http://localhost:7655` to complete setup.
+
+> If you installed using a Helm repository URL previously, you can keep using it. OCI is the preferred distribution format going forward.
 
 ---
 
@@ -35,7 +31,9 @@ Configure via `values.yaml` or `--set` flags.
 | `ingress.enabled` | Enable Ingress | `false` |
 | `persistence.enabled` | Enable PVC for /data | `true` |
 | `persistence.size` | PVC Size | `8Gi` |
-| `agent.enabled` | Enable Docker Agent sidecar | `false` |
+| `agent.enabled` | Enable legacy docker agent workload | `false` |
+
+> Note: the `agent.*` block is legacy and currently references `pulse-docker-agent`. For new deployments, prefer the unified agent (`pulse-agent`) where possible.
 
 ### Example `values.yaml`
 
@@ -59,7 +57,7 @@ server:
       API_TOKENS: "my-token"
 
 agent:
-  enabled: true
+  enabled: false
   secretEnv:
     create: true
     data:
@@ -76,8 +74,7 @@ helm upgrade --install pulse pulse/pulse -n pulse -f values.yaml
 ## 🔄 Upgrades
 
 ```bash
-helm repo update
-helm upgrade pulse pulse/pulse -n pulse
+helm upgrade pulse oci://ghcr.io/rcourtman/pulse-chart -n pulse
 ```
 
 **Rollback**:

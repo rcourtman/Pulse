@@ -20,14 +20,13 @@ Monitor actual disk usage inside your VMs using the QEMU Guest Agent.
 *   **Proxmox Permissions**:
     *   **Proxmox 8**: `VM.Monitor`
     *   **Proxmox 9+**: `VM.GuestAgent.Audit`
-    *   *Note: The Pulse setup script handles these permissions automatically.*
 
 ## 🔧 Troubleshooting
 
 | Issue | Solution |
 | :--- | :--- |
 | **Disk shows "-"** | Hover over the dash for details. Common causes: Agent not running, disabled in config, or permission denied. |
-| **Permission Denied** | Re-run the Pulse setup script to update permissions, or manually add `VM.GuestAgent.Audit`. |
+| **Permission Denied** | Ensure your Proxmox token/user has `VM.GuestAgent.Audit` (PVE 9+) or `VM.Monitor` (PVE 8). |
 | **Agent Timeout** | Increase timeouts via env vars if network is slow: `GUEST_AGENT_FSINFO_TIMEOUT=10s`. |
 | **Windows VMs** | Ensure the **QEMU Guest Agent** service is running in Windows Services. |
 

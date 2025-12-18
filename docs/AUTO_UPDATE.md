@@ -15,7 +15,7 @@ Pulse 5.0 introduces one-click updates for supported deployment types, making it
 
 ### When an Update is Available
 
-1. Navigate to **Settings → System Updates**
+1. Navigate to **Settings → System → Updates**
 2. If an update is available, you'll see an **"Install Update"** button
 3. Click the button to open the confirmation dialog
 4. Review the update details:
@@ -44,7 +44,7 @@ A real-time progress modal shows:
 
 ### Update Preferences
 
-In **Settings → System Updates**:
+In **Settings → System → Updates**:
 
 | Setting | Description |
 |---------|-------------|
@@ -67,7 +67,7 @@ PULSE_UPDATE_CHANNEL=rc
 
 ```bash
 # Pull latest image
-docker pull ghcr.io/rcourtman/pulse:latest
+docker pull rcourtman/pulse:latest
 
 # Restart container
 docker-compose down && docker-compose up -d
@@ -76,21 +76,19 @@ docker-compose down && docker-compose up -d
 ### ProxmoxVE LXC (Manual)
 
 ```bash
-# Inside the container
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install.sh | bash
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
 ### Systemd Service (Manual)
 
 ```bash
-# Download new release
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install.sh | bash
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
 ### Source Build
 
 ```bash
-cd /opt/pulse
+cd /path/to/pulse
 git pull
 make build
 sudo systemctl restart pulse
@@ -107,17 +105,13 @@ Pulse creates a backup before updating. If the update fails:
 3. Error details are logged
 
 ### Manual Rollback
-```bash
-# Backups are stored in /etc/pulse/backups/
-ls /etc/pulse/backups/
+If rollback is supported for your deployment, use the **Rollback** action from the update history in **Settings → System → Updates**.
 
-# Restore a specific backup
-sudo /opt/pulse/scripts/restore-backup.sh /etc/pulse/backups/pulse-backup-20250101.tar.gz
-```
+Backups are stored as `backup-<timestamp>/` folders inside the Pulse data directory (`/etc/pulse` or `/data`).
 
 ## Update History
 
-View past updates in **Settings → System Updates → Update History**:
+View past updates in **Settings → System → Updates → Update History**:
 - Previous versions installed
 - Update timestamps
 - Success/failure status

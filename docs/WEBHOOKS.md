@@ -39,5 +39,5 @@ For generic webhooks, use Go templates to format the JSON payload.
 
 ## 🛡️ Security
 
-- **Private IPs**: By default, webhooks to private IPs are blocked. Allow them in **Settings → System → Webhook Security**.
+- **Private IPs**: By default, webhooks to private IPs are blocked. Allow them in **Settings → System → Network → Webhook Security**.
 - **Headers**: Add custom headers (e.g., `Authorization: Bearer ...`) in the webhook config.

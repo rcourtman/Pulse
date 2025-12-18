@@ -7,10 +7,16 @@
 ```bash
 docker exec pulse rm /data/.env
 docker restart pulse
-# Access UI to run setup wizard again
+# Access UI again. Pulse will require a bootstrap token for setup.
+# Get it with:
+docker exec pulse /app/pulse bootstrap-token
 ```
 **Systemd**:
-Delete `/etc/pulse/.env` and restart the service.
+Delete `/etc/pulse/.env` and restart the service. Pulse will require a bootstrap token for setup:
+
+```bash
+sudo pulse bootstrap-token
+```
 
 ### Port change didn't take effect
 1. Check which service is running: `systemctl status pulse` (or `pulse-backend`).
@@ -47,7 +53,7 @@ Delete `/etc/pulse/.env` and restart the service.
 **Temperature data missing**
 - Install `lm-sensors` on the host.
 - Run `sensors-detect`.
-- Re-run the Pulse setup script to install the sensor proxy.
+- Install the unified agent on the Proxmox host with `--enable-proxmox`.
 - See [Temperature Monitoring](TEMPERATURE_MONITORING.md).
 
 **Docker hosts appearing/disappearing**
@@ -78,10 +84,15 @@ grep "request_id=abc123" /var/log/pulse/pulse.log
 ### Check Permissions (Proxmox)
 If Pulse can't see VMs or storage, check the user permissions on Proxmox:
 ```bash
-pveum user permissions pulse-monitor@pam
+pveum user permissions <user>@pam
 ```
-Required: `PVEAuditor` role.
-Recommended: `VM.Audit`, `Sys.Audit` (added by setup script).
+At minimum, ensure the user/token has read access for inventory and metrics:
+
+- `Sys.Audit`
+- `VM.Monitor`
+- `Datastore.Audit`
+
+For VM disk usage via QEMU guest agent, also ensure `VM.GuestAgent.Audit` (PVE 9+).
 
 ### Recovery Mode
 If you are completely locked out, you can trigger a recovery token from the localhost CLI:
