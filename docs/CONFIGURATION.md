@@ -87,8 +87,19 @@ Environment variables take precedence over `system.json`.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `FRONTEND_PORT` | Public listening port | `7655` |
-| `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
+| `LOG_LEVEL` | Log verbosity (see below) | `info` |
 | `LOG_FORMAT` | Log output format (`auto`, `json`, `console`) | `auto` |
+
+#### Log Levels
+
+| Level | Description |
+|-------|-------------|
+| `error` | Only errors and critical issues |
+| `warn` | Errors + warnings (recommended for minimal logging) |
+| `info` | Standard operational messages (startup, connections, alerts) |
+| `debug` | Verbose output including per-guest/storage polling details |
+
+> **Tip**: If your syslog is being flooded with Pulse messages, set `LOG_LEVEL=warn` to significantly reduce log volume while still capturing important events.
 | `PULSE_PUBLIC_URL` | Public URL for notifications/OIDC | `""` |
 | `ALLOWED_ORIGINS` | CORS allowed domains | `""` (Same origin) |
 | `DISCOVERY_ENABLED` | Auto-discover nodes | `false` |

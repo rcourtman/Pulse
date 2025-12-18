@@ -2219,7 +2219,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	linkedNodeID, linkedVMID, linkedContainerID := m.findLinkedProxmoxEntity(hostname)
 	if linkedNodeID != "" {
 		host.LinkedNodeID = linkedNodeID
-		log.Info().
+		log.Debug().
 			Str("hostId", identifier).
 			Str("hostname", hostname).
 			Str("linkedNodeId", linkedNodeID).
@@ -2227,7 +2227,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 	if linkedVMID != "" {
 		host.LinkedVMID = linkedVMID
-		log.Info().
+		log.Debug().
 			Str("hostId", identifier).
 			Str("hostname", hostname).
 			Str("linkedVmId", linkedVMID).
@@ -2235,7 +2235,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 	if linkedContainerID != "" {
 		host.LinkedContainerID = linkedContainerID
-		log.Info().
+		log.Debug().
 			Str("hostId", identifier).
 			Str("hostname", hostname).
 			Str("linkedContainerId", linkedContainerID).
@@ -5837,7 +5837,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 // When the instance is part of a cluster, the cluster name is used for guest IDs to prevent duplicates
 // when multiple cluster nodes are configured as separate PVE instances.
 func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceName string, clusterName string, isCluster bool, client PVEClientInterface, nodeEffectiveStatus map[string]string) bool {
-	log.Info().
+	log.Debug().
 		Str("instance", instanceName).
 		Str("clusterName", clusterName).
 		Bool("isCluster", isCluster).
@@ -6189,7 +6189,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 							}
 
 							if len(includedFS) > 0 {
-								log.Info().
+								log.Debug().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
 									Int("vmid", res.VMID).
@@ -6223,7 +6223,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								diskFree = totalBytes - usedBytes
 								diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
 
-								log.Info().
+								log.Debug().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
 									Int("vmid", res.VMID).
@@ -6596,7 +6596,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		nodesWithResources[res.Node] = true
 	}
 
-	log.Info().
+	log.Debug().
 		Str("instance", instanceName).
 		Int("nodesInResources", len(nodesWithResources)).
 		Int("totalVMsFromResources", len(allVMs)).
@@ -6719,7 +6719,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 
 	m.pollReplicationStatus(ctx, instanceName, client, allVMs)
 
-	log.Info().
+	log.Debug().
 		Str("instance", instanceName).
 		Int("vms", len(allVMs)).
 		Int("containers", len(allContainers)).
