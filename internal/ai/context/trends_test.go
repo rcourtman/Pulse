@@ -248,3 +248,110 @@ func TestComputeStats(t *testing.T) {
 		t.Errorf("Expected mean 30, got %.2f", stats.Mean)
 	}
 }
+
+// TestComputeTrend_ShortTimeSpanBlip tests that a small fluctuation
+// over a very short time span (like 1 minute) doesn't get extrapolated
+// to an absurd daily rate like 700%/day
+func TestComputeTrend_ShortTimeSpanBlip(t *testing.T) {
+	// This simulates the exact bug: homepage-docker goes from 24.8% to 25.2%
+	// over 1 minute (3 data points), but was being reported as 708%/day growth
+	now := time.Now()
+	points := []MetricPoint{
+		{Value: 24.8, Timestamp: now.Add(-2 * time.Minute)},
+		{Value: 25.0, Timestamp: now.Add(-1 * time.Minute)},
+		{Value: 25.2, Timestamp: now}, // Only 0.4% change total
+	}
+
+	trend := ComputeTrend(points, "memory", 24*time.Hour)
+
+	// With only 2 minutes of data, we should NOT extrapolate to crazy daily rates
+	// The observed change is only 0.4%, so a 700% daily rate is nonsense
+	if trend.RatePerDay > 50 {
+		t.Errorf("Short time span blip should not extrapolate to %f%%/day (expected < 50)", trend.RatePerDay)
+	}
+
+	// Confidence should be low for such short time spans
+	if trend.Confidence > 0.5 {
+		t.Errorf("Expected low confidence for 2-minute span, got %.2f", trend.Confidence)
+	}
+}
+
+// TestComputeTrend_PercentageCapping tests that percentage metrics (0-100)
+// have their growth rates capped to physically possible limits
+func TestComputeTrend_PercentageCapping(t *testing.T) {
+	// Even with a long time span, if the raw rate comes out absurdly high
+	// (which shouldn't happen with good data, but let's test the cap)
+	now := time.Now()
+	
+	// Create data that would naively produce a >100%/day rate
+	// 5 points over 2 hours with aggressive growth
+	points := make([]MetricPoint, 5)
+	for i := 0; i < 5; i++ {
+		points[i] = MetricPoint{
+			Value:     20 + float64(i)*10, // 20, 30, 40, 50, 60
+			Timestamp: now.Add(time.Duration(-4+i) * 30 * time.Minute), // 30 min apart
+		}
+	}
+
+	trend := ComputeTrend(points, "memory", 24*time.Hour)
+
+	// For a percentage metric, rate should be capped at 100%/day max
+	if trend.RatePerDay > 100 {
+		t.Errorf("Percentage metric should be capped at 100%%/day, got %.2f", trend.RatePerDay)
+	}
+}
+
+// TestComputeTrend_MediumTimeSpan tests that 10-60 minutes of data
+// gets moderate rate capping but isn't completely zeroed out
+func TestComputeTrend_MediumTimeSpan(t *testing.T) {
+	now := time.Now()
+	// 30 minutes of data with steady growth
+	points := make([]MetricPoint, 7)
+	for i := 0; i < 7; i++ {
+		points[i] = MetricPoint{
+			Value:     30 + float64(i)*1.5, // Growing ~10% over 30 min
+			Timestamp: now.Add(time.Duration(-30+i*5) * time.Minute),
+		}
+	}
+
+	trend := ComputeTrend(points, "cpu", 24*time.Hour)
+
+	// Rate should be present (not zeroed) but reasonable
+	if trend.RatePerHour == 0 {
+		t.Errorf("Medium time span should have non-zero hourly rate")
+	}
+	
+	// But daily extrapolation should be constrained
+	observedChange := 1.5 * 6 // ~9% change
+	if trend.RatePerDay > observedChange*15 {
+		t.Errorf("Daily rate %.2f should not vastly exceed observed change %.2f", 
+			trend.RatePerDay, observedChange)
+	}
+}
+
+// TestComputeTrend_LongTimeSpanNoChange tests that with 24h of data
+// and minimal change, we get stable (not growing) trend
+func TestComputeTrend_LongTimeSpanNoChange(t *testing.T) {
+	now := time.Now()
+	// 24 hours of stable data at ~25%
+	points := make([]MetricPoint, 24)
+	for i := 0; i < 24; i++ {
+		// Very small oscillation around 25%
+		points[i] = MetricPoint{
+			Value:     25.0 + float64(i%2)*0.2, // 25.0, 25.2, 25.0, 25.2...
+			Timestamp: now.Add(time.Duration(-24+i) * time.Hour),
+		}
+	}
+
+	trend := ComputeTrend(points, "memory", 24*time.Hour)
+
+	if trend.Direction == TrendGrowing {
+		t.Errorf("Stable oscillating data should not be classified as Growing")
+	}
+	
+	// Rate should be tiny
+	if trend.RatePerDay > 1 || trend.RatePerDay < -1 {
+		t.Errorf("Stable data should have near-zero rate, got %.2f/day", trend.RatePerDay)
+	}
+}
+

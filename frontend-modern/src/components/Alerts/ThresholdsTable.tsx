@@ -2,6 +2,17 @@ import { createSignal, createMemo, Show, For, onMount, onCleanup, createEffect }
 import { useNavigate, useLocation } from '@solidjs/router';
 import Toggle from '@/components/shared/Toggle';
 import { Card } from '@/components/shared/Card';
+import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
+import { useCollapsedSections } from './Thresholds/hooks/useCollapsedSections';
+import Server from 'lucide-solid/icons/server';
+import Monitor from 'lucide-solid/icons/monitor';
+import HardDrive from 'lucide-solid/icons/hard-drive';
+import Database from 'lucide-solid/icons/database';
+import Archive from 'lucide-solid/icons/archive';
+import Camera from 'lucide-solid/icons/camera';
+import Mail from 'lucide-solid/icons/mail';
+import Users from 'lucide-solid/icons/users';
+import Boxes from 'lucide-solid/icons/boxes';
 
 // Workaround for eslint false-positive when `For` is used only in JSX
 const __ensureForUsage = For;
@@ -308,6 +319,21 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
 
+  // Collapsible section state management
+  const { isCollapsed, toggleSection, expandAll, collapseAll } = useCollapsedSections();
+
+  // Help banner dismiss state (persisted to localStorage)
+  const HELP_BANNER_KEY = 'pulse-thresholds-help-dismissed';
+  const [helpBannerDismissed, setHelpBannerDismissed] = createSignal(
+    typeof window !== 'undefined' && localStorage.getItem(HELP_BANNER_KEY) === 'true'
+  );
+  const dismissHelpBanner = () => {
+    setHelpBannerDismissed(true);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(HELP_BANNER_KEY, 'true');
+    }
+  };
+
   const [searchTerm, setSearchTerm] = createSignal('');
   const [editingId, setEditingId] = createSignal<string | null>(null);
   const [editingThresholds, setEditingThresholds] = createSignal<
@@ -410,6 +436,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       const target = e.target as HTMLElement | null;
       const activeElement = (document.activeElement as HTMLElement) ?? null;
       const inEditable = isEditableElement(target);
+
+      // Ctrl/Cmd+F to focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        if (searchInputRef) {
+          searchInputRef.focus();
+          searchInputRef.select();
+        }
+        return;
+      }
 
       if (e.key === 'Escape') {
         if (searchTerm()) {
@@ -2139,17 +2175,20 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
 
   return (
-    <div class="space-y-6">
+    <div class="space-y-4">
       {/* Search Bar */}
       <div class="relative">
         <input
           ref={searchInputRef}
           type="text"
-          placeholder="Search resources..."
+          placeholder="Search resources... (Ctrl+F)"
           value={searchTerm()}
           onInput={(e) => setSearchTerm(e.currentTarget.value)}
-          class="w-full pl-10 pr-10 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          class="w-full pl-10 pr-20 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         />
+        <kbd class="absolute right-10 top-2 hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">
+          ⌘F
+        </kbd>
         <svg
           class="absolute left-3 top-2.5 w-5 h-5 text-gray-400"
           fill="none"
@@ -2181,462 +2220,567 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         </Show>
       </div>
 
-      {/* Help Banner */}
-      <div class="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-3">
-        <div class="flex items-start gap-2">
-          <svg
-            class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+      {/* Help Banner - Dismissible */}
+      <Show when={!helpBannerDismissed()}>
+        <div class="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-3 relative group">
+          <button
+            type="button"
+            onClick={dismissHelpBanner}
+            class="absolute top-2 right-2 p-1 rounded-md text-blue-400 hover:text-blue-600 dark:text-blue-500 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Dismiss tips"
+            aria-label="Dismiss tips"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          <div class="text-sm text-blue-900 dark:text-blue-100">
-            <span class="font-medium">Quick tips:</span> Set any threshold to{' '}
-            <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-900/50 rounded text-xs font-mono">
-              -1
-            </code>{' '}
-            to disable alerts for that metric. Click on disabled thresholds showing{' '}
-            <span class="italic">Off</span> to re-enable them. Resources with custom settings show a{' '}
-            <span class="inline-flex items-center px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs">
-              Custom
-            </span>{' '}
-            badge.
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <div class="flex items-start gap-2 pr-6">
+            <svg
+              class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <div class="text-sm text-blue-900 dark:text-blue-100">
+              <span class="font-medium">Quick tips:</span> Set any threshold to{' '}
+              <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-900/50 rounded text-xs font-mono">
+                -1
+              </code>{' '}
+              to disable alerts for that metric. Click on disabled thresholds showing{' '}
+              <span class="italic">Off</span> to re-enable them. Resources with custom settings show a{' '}
+              <span class="inline-flex items-center px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs">
+                Custom
+              </span>{' '}
+              badge. <span class="text-blue-600/70 dark:text-blue-400/70">Click sections to collapse/expand.</span>
+            </div>
           </div>
         </div>
-      </div>
+      </Show>
 
       {/* Tab Navigation */}
       <div class="border-b border-gray-200 dark:border-gray-700">
-        <nav class="-mb-px flex gap-6" aria-label="Tabs">
+        <nav class="-mb-px flex gap-4 sm:gap-6" aria-label="Tabs">
           <button
             type="button"
             onClick={() => handleTabClick('proxmox')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${activeTab() === 'proxmox'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'proxmox'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
               }`}
           >
-            Proxmox / PBS
+            <Server class="w-4 h-4" />
+            <span class="hidden sm:inline">Proxmox / PBS</span>
+            <span class="sm:hidden">Proxmox</span>
           </button>
           <button
             type="button"
             onClick={() => handleTabClick('pmg')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${activeTab() === 'pmg'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'pmg'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
               }`}
           >
-            Mail Gateway
+            <Mail class="w-4 h-4" />
+            <span class="hidden sm:inline">Mail Gateway</span>
+            <span class="sm:hidden">Mail</span>
           </button>
           <button
             type="button"
             onClick={() => handleTabClick('hosts')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${activeTab() === 'hosts'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'hosts'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
               }`}
           >
-            Host Agents
+            <Users class="w-4 h-4" />
+            <span class="hidden sm:inline">Host Agents</span>
+            <span class="sm:hidden">Hosts</span>
           </button>
           <button
             type="button"
             onClick={() => handleTabClick('docker')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${activeTab() === 'docker'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'docker'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
               }`}
           >
-            Containers
+            <Boxes class="w-4 h-4" />
+            <span>Containers</span>
           </button>
         </nav>
       </div>
 
+      {/* Section Controls - Only show on Proxmox tab which has multiple sections */}
+      <Show when={activeTab() === 'proxmox'}>
+        <div class="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={expandAll}
+            class="text-xs px-2 py-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+          >
+            Expand all
+          </button>
+          <span class="text-gray-300 dark:text-gray-600">|</span>
+          <button
+            type="button"
+            onClick={collapseAll}
+            class="text-xs px-2 py-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+          >
+            Collapse all
+          </button>
+        </div>
+      </Show>
+
       <div class="space-y-6">
         <Show when={activeTab() === 'proxmox'}>
           <Show when={hasSection('nodes')}>
-            <div ref={registerSection('nodes')} class="scroll-mt-24">
-              <ResourceTable
-                title="Proxmox Nodes"
-                resources={nodesWithOverrides()}
-                columns={['CPU %', 'Memory %', 'Disk %', 'Temp °C']}
-                activeAlerts={props.activeAlerts}
-                emptyMessage="No nodes match the current filters."
-                onEdit={startEditing}
-                onSaveEdit={saveEdit}
-                onCancelEdit={cancelEdit}
-                onRemoveOverride={removeOverride}
-                onToggleDisabled={toggleDisabled}
-                onToggleNodeConnectivity={toggleNodeConnectivity}
-                showOfflineAlertsColumn={true}
-                editingId={editingId}
-                editingThresholds={editingThresholds}
-                setEditingThresholds={setEditingThresholds}
-                editingNote={editingNote}
-                setEditingNote={setEditingNote}
-                formatMetricValue={formatMetricValue}
-                hasActiveAlert={hasActiveAlert}
-                globalDefaults={props.nodeDefaults}
-                setGlobalDefaults={props.setNodeDefaults}
-                setHasUnsavedChanges={props.setHasUnsavedChanges}
-                globalDisableFlag={props.disableAllNodes}
-                onToggleGlobalDisable={() => props.setDisableAllNodes(!props.disableAllNodes())}
-                globalDisableOfflineFlag={props.disableAllNodesOffline}
-                onToggleGlobalDisableOffline={() =>
-                  props.setDisableAllNodesOffline(!props.disableAllNodesOffline())
-                }
-                showDelayColumn={true}
-                globalDelaySeconds={props.timeThresholds().node}
-                metricDelaySeconds={props.metricTimeThresholds().node ?? {}}
-                onMetricDelayChange={(metric, value) => updateMetricDelay('node', metric, value)}
-                factoryDefaults={props.factoryNodeDefaults}
-                onResetDefaults={props.resetNodeDefaults}
-              />
-            </div>
+            <CollapsibleSection
+              id="nodes"
+              title="Proxmox Nodes"
+              resourceCount={nodesWithOverrides().length}
+              collapsed={isCollapsed('nodes')}
+              onToggle={() => toggleSection('nodes')}
+              icon={<Server class="w-5 h-5" />}
+              isGloballyDisabled={props.disableAllNodes()}
+              emptyMessage="No nodes match the current filters."
+            >
+              <div ref={registerSection('nodes')} class="scroll-mt-24">
+                <ResourceTable
+                  title=""
+                  resources={nodesWithOverrides()}
+                  columns={['CPU %', 'Memory %', 'Disk %', 'Temp °C']}
+                  activeAlerts={props.activeAlerts}
+                  emptyMessage="No nodes match the current filters."
+                  onEdit={startEditing}
+                  onSaveEdit={saveEdit}
+                  onCancelEdit={cancelEdit}
+                  onRemoveOverride={removeOverride}
+                  onToggleDisabled={toggleDisabled}
+                  onToggleNodeConnectivity={toggleNodeConnectivity}
+                  showOfflineAlertsColumn={true}
+                  editingId={editingId}
+                  editingThresholds={editingThresholds}
+                  setEditingThresholds={setEditingThresholds}
+                  editingNote={editingNote}
+                  setEditingNote={setEditingNote}
+                  formatMetricValue={formatMetricValue}
+                  hasActiveAlert={hasActiveAlert}
+                  globalDefaults={props.nodeDefaults}
+                  setGlobalDefaults={props.setNodeDefaults}
+                  setHasUnsavedChanges={props.setHasUnsavedChanges}
+                  globalDisableFlag={props.disableAllNodes}
+                  onToggleGlobalDisable={() => props.setDisableAllNodes(!props.disableAllNodes())}
+                  globalDisableOfflineFlag={props.disableAllNodesOffline}
+                  onToggleGlobalDisableOffline={() =>
+                    props.setDisableAllNodesOffline(!props.disableAllNodesOffline())
+                  }
+                  showDelayColumn={true}
+                  globalDelaySeconds={props.timeThresholds().node}
+                  metricDelaySeconds={props.metricTimeThresholds().node ?? {}}
+                  onMetricDelayChange={(metric, value) => updateMetricDelay('node', metric, value)}
+                  factoryDefaults={props.factoryNodeDefaults}
+                  onResetDefaults={props.resetNodeDefaults}
+                />
+              </div>
+            </CollapsibleSection>
           </Show>
 
           <Show when={hasSection('pbs')}>
-            <div ref={registerSection('pbs')} class="scroll-mt-24">
-              <ResourceTable
-                title="PBS Servers"
-                resources={pbsServersWithOverrides()}
-                columns={['CPU %', 'Memory %']}
-                activeAlerts={props.activeAlerts}
-                emptyMessage="No PBS servers match the current filters."
-                onEdit={startEditing}
-                onSaveEdit={saveEdit}
-                onCancelEdit={cancelEdit}
-                onRemoveOverride={removeOverride}
-                onToggleDisabled={toggleDisabled}
-                onToggleNodeConnectivity={toggleNodeConnectivity}
-                showOfflineAlertsColumn={true}
-                editingId={editingId}
-                editingThresholds={editingThresholds}
-                setEditingThresholds={setEditingThresholds}
-                editingNote={editingNote}
-                setEditingNote={setEditingNote}
-                formatMetricValue={formatMetricValue}
-                hasActiveAlert={hasActiveAlert}
-                globalDefaults={{ cpu: props.nodeDefaults.cpu, memory: props.nodeDefaults.memory }}
-                setGlobalDefaults={(value) => {
-                  if (typeof value === 'function') {
-                    const newValue = value({
-                      cpu: props.nodeDefaults.cpu,
-                      memory: props.nodeDefaults.memory,
-                    });
-                    props.setNodeDefaults((prev) => ({
-                      ...prev,
-                      cpu: newValue.cpu ?? prev.cpu,
-                      memory: newValue.memory ?? prev.memory,
-                    }));
-                  } else {
-                    props.setNodeDefaults((prev) => ({
-                      ...prev,
-                      cpu: value.cpu ?? prev.cpu,
-                      memory: value.memory ?? prev.memory,
-                    }));
-                  }
-                }}
-                setHasUnsavedChanges={props.setHasUnsavedChanges}
-                globalDisableFlag={props.disableAllPBS}
-                onToggleGlobalDisable={() => props.setDisableAllPBS(!props.disableAllPBS())}
-                globalDisableOfflineFlag={props.disableAllPBSOffline}
-                onToggleGlobalDisableOffline={() =>
-                  props.setDisableAllPBSOffline(!props.disableAllPBSOffline())
-                }
-                showDelayColumn={true}
-                globalDelaySeconds={props.timeThresholds().pbs}
-                metricDelaySeconds={props.metricTimeThresholds().pbs ?? {}}
-                onMetricDelayChange={(metric, value) => updateMetricDelay('pbs', metric, value)}
-                factoryDefaults={
-                  props.factoryNodeDefaults
-                    ? {
-                      cpu: props.factoryNodeDefaults.cpu,
-                      memory: props.factoryNodeDefaults.memory,
+            <CollapsibleSection
+              id="pbs"
+              title="PBS Servers"
+              resourceCount={pbsServersWithOverrides().length}
+              collapsed={isCollapsed('pbs')}
+              onToggle={() => toggleSection('pbs')}
+              icon={<Database class="w-5 h-5" />}
+              isGloballyDisabled={props.disableAllPBS()}
+              emptyMessage="No PBS servers configured."
+            >
+              <div ref={registerSection('pbs')} class="scroll-mt-24">
+                <ResourceTable
+                  title=""
+                  resources={pbsServersWithOverrides()}
+                  columns={['CPU %', 'Memory %']}
+                  activeAlerts={props.activeAlerts}
+                  emptyMessage="No PBS servers match the current filters."
+                  onEdit={startEditing}
+                  onSaveEdit={saveEdit}
+                  onCancelEdit={cancelEdit}
+                  onRemoveOverride={removeOverride}
+                  onToggleDisabled={toggleDisabled}
+                  onToggleNodeConnectivity={toggleNodeConnectivity}
+                  showOfflineAlertsColumn={true}
+                  editingId={editingId}
+                  editingThresholds={editingThresholds}
+                  setEditingThresholds={setEditingThresholds}
+                  editingNote={editingNote}
+                  setEditingNote={setEditingNote}
+                  formatMetricValue={formatMetricValue}
+                  hasActiveAlert={hasActiveAlert}
+                  globalDefaults={{ cpu: props.nodeDefaults.cpu, memory: props.nodeDefaults.memory }}
+                  setGlobalDefaults={(value) => {
+                    if (typeof value === 'function') {
+                      const newValue = value({
+                        cpu: props.nodeDefaults.cpu,
+                        memory: props.nodeDefaults.memory,
+                      });
+                      props.setNodeDefaults((prev) => ({
+                        ...prev,
+                        cpu: newValue.cpu ?? prev.cpu,
+                        memory: newValue.memory ?? prev.memory,
+                      }));
+                    } else {
+                      props.setNodeDefaults((prev) => ({
+                        ...prev,
+                        cpu: value.cpu ?? prev.cpu,
+                        memory: value.memory ?? prev.memory,
+                      }));
                     }
-                    : undefined
-                }
-                onResetDefaults={props.resetNodeDefaults}
-              />
-            </div>
+                  }}
+                  setHasUnsavedChanges={props.setHasUnsavedChanges}
+                  globalDisableFlag={props.disableAllPBS}
+                  onToggleGlobalDisable={() => props.setDisableAllPBS(!props.disableAllPBS())}
+                  globalDisableOfflineFlag={props.disableAllPBSOffline}
+                  onToggleGlobalDisableOffline={() =>
+                    props.setDisableAllPBSOffline(!props.disableAllPBSOffline())
+                  }
+                  showDelayColumn={true}
+                  globalDelaySeconds={props.timeThresholds().pbs}
+                  metricDelaySeconds={props.metricTimeThresholds().pbs ?? {}}
+                  onMetricDelayChange={(metric, value) => updateMetricDelay('pbs', metric, value)}
+                  factoryDefaults={
+                    props.factoryNodeDefaults
+                      ? {
+                        cpu: props.factoryNodeDefaults.cpu,
+                        memory: props.factoryNodeDefaults.memory,
+                      }
+                      : undefined
+                  }
+                  onResetDefaults={props.resetNodeDefaults}
+                />
+              </div>
+            </CollapsibleSection>
           </Show>
 
           <Show when={hasSection('guests')}>
-            <div ref={registerSection('guests')} class="scroll-mt-24">
-              <ResourceTable
-                title="VMs & Containers"
-                groupedResources={guestsGroupedByNode()}
-                groupHeaderMeta={guestGroupHeaderMeta()}
-                columns={[
-                  'CPU %',
-                  'Memory %',
-                  'Disk %',
-                  'Disk R MB/s',
-                  'Disk W MB/s',
-                  'Net In MB/s',
-                  'Net Out MB/s',
-                ]}
-                activeAlerts={props.activeAlerts}
-                emptyMessage="No VMs or containers match the current filters."
-                onEdit={startEditing}
-                onSaveEdit={saveEdit}
-                onCancelEdit={cancelEdit}
-                onRemoveOverride={removeOverride}
-                onToggleDisabled={toggleDisabled}
-                onToggleNodeConnectivity={toggleNodeConnectivity}
-                showOfflineAlertsColumn={true}
-                editingId={editingId}
-                editingThresholds={editingThresholds}
-                setEditingThresholds={setEditingThresholds}
-                editingNote={editingNote}
-                setEditingNote={setEditingNote}
-                formatMetricValue={formatMetricValue}
-                hasActiveAlert={hasActiveAlert}
-                globalDefaults={props.guestDefaults}
-                setGlobalDefaults={props.setGuestDefaults}
-                setHasUnsavedChanges={props.setHasUnsavedChanges}
-                globalDisableFlag={props.disableAllGuests}
-                onToggleGlobalDisable={() => props.setDisableAllGuests(!props.disableAllGuests())}
-                globalDisableOfflineFlag={() => props.guestDisableConnectivity()}
-                onToggleGlobalDisableOffline={() =>
-                  props.setGuestDisableConnectivity(!props.guestDisableConnectivity())
-                }
-                globalOfflineSeverity={props.guestPoweredOffSeverity()}
-                onSetGlobalOfflineState={(state) => {
-                  if (state === 'off') {
-                    props.setGuestDisableConnectivity(true);
-                  } else {
-                    props.setGuestDisableConnectivity(false);
-                    props.setGuestPoweredOffSeverity(state === 'critical' ? 'critical' : 'warning');
+            <CollapsibleSection
+              id="guests"
+              title="VMs & Containers"
+              resourceCount={props.allGuests().length}
+              collapsed={isCollapsed('guests')}
+              onToggle={() => toggleSection('guests')}
+              icon={<Monitor class="w-5 h-5" />}
+              isGloballyDisabled={props.disableAllGuests()}
+              emptyMessage="No VMs or containers found."
+            >
+              <div ref={registerSection('guests')} class="scroll-mt-24">
+                <ResourceTable
+                  title=""
+                  groupedResources={guestsGroupedByNode()}
+                  groupHeaderMeta={guestGroupHeaderMeta()}
+                  columns={[
+                    'CPU %',
+                    'Memory %',
+                    'Disk %',
+                    'Disk R MB/s',
+                    'Disk W MB/s',
+                    'Net In MB/s',
+                    'Net Out MB/s',
+                  ]}
+                  activeAlerts={props.activeAlerts}
+                  emptyMessage="No VMs or containers match the current filters."
+                  onEdit={startEditing}
+                  onSaveEdit={saveEdit}
+                  onCancelEdit={cancelEdit}
+                  onRemoveOverride={removeOverride}
+                  onToggleDisabled={toggleDisabled}
+                  onToggleNodeConnectivity={toggleNodeConnectivity}
+                  showOfflineAlertsColumn={true}
+                  editingId={editingId}
+                  editingThresholds={editingThresholds}
+                  setEditingThresholds={setEditingThresholds}
+                  editingNote={editingNote}
+                  setEditingNote={setEditingNote}
+                  formatMetricValue={formatMetricValue}
+                  hasActiveAlert={hasActiveAlert}
+                  globalDefaults={props.guestDefaults}
+                  setGlobalDefaults={props.setGuestDefaults}
+                  setHasUnsavedChanges={props.setHasUnsavedChanges}
+                  globalDisableFlag={props.disableAllGuests}
+                  onToggleGlobalDisable={() => props.setDisableAllGuests(!props.disableAllGuests())}
+                  globalDisableOfflineFlag={() => props.guestDisableConnectivity()}
+                  onToggleGlobalDisableOffline={() =>
+                    props.setGuestDisableConnectivity(!props.guestDisableConnectivity())
                   }
-                  props.setHasUnsavedChanges(true);
-                }}
-                onSetOfflineState={setOfflineState}
-                showDelayColumn={true}
-                globalDelaySeconds={props.timeThresholds().guest}
-                metricDelaySeconds={props.metricTimeThresholds().guest ?? {}}
-                onMetricDelayChange={(metric, value) => updateMetricDelay('guest', metric, value)}
-                factoryDefaults={props.factoryGuestDefaults}
-                onResetDefaults={props.resetGuestDefaults}
-              />
-            </div>
+                  globalOfflineSeverity={props.guestPoweredOffSeverity()}
+                  onSetGlobalOfflineState={(state) => {
+                    if (state === 'off') {
+                      props.setGuestDisableConnectivity(true);
+                    } else {
+                      props.setGuestDisableConnectivity(false);
+                      props.setGuestPoweredOffSeverity(state === 'critical' ? 'critical' : 'warning');
+                    }
+                    props.setHasUnsavedChanges(true);
+                  }}
+                  onSetOfflineState={setOfflineState}
+                  showDelayColumn={true}
+                  globalDelaySeconds={props.timeThresholds().guest}
+                  metricDelaySeconds={props.metricTimeThresholds().guest ?? {}}
+                  onMetricDelayChange={(metric, value) => updateMetricDelay('guest', metric, value)}
+                  factoryDefaults={props.factoryGuestDefaults}
+                  onResetDefaults={props.resetGuestDefaults}
+                />
+              </div>
+            </CollapsibleSection>
           </Show>
 
           <Show when={hasSection('backups')}>
-            <div ref={registerSection('backups')} class="scroll-mt-24">
-              <ResourceTable
-                title="Backups"
-                resources={[
-                  {
-                    id: 'backups-defaults',
-                    name: 'Global Defaults',
-                    thresholds: backupDefaultsRecord(),
-                    defaults: backupDefaultsRecord(),
-                    editable: true,
-                    editScope: 'backup',
-                  },
-                ]}
-                columns={[
-                  'Warning Days',
-                  'Critical Days',
-                  'Warning Size (GiB)',
-                  'Critical Size (GiB)',
-                ]}
-                activeAlerts={props.activeAlerts}
-                emptyMessage=""
-                onEdit={startEditing}
-                onSaveEdit={saveEdit}
-                onCancelEdit={cancelEdit}
-                onRemoveOverride={removeOverride}
-                showOfflineAlertsColumn={true}
-                editingId={editingId}
-                editingThresholds={editingThresholds}
-                setEditingThresholds={setEditingThresholds}
-                editingNote={editingNote}
-                setEditingNote={setEditingNote}
-                formatMetricValue={formatMetricValue}
-                hasActiveAlert={hasActiveAlert}
-                globalDefaults={backupDefaultsRecord()}
-                setGlobalDefaults={(value) => {
-                  updateBackupDefaults((prev) => {
-                    const currentRecord = {
-                      'warning days': prev.warningDays ?? 0,
-                      'critical days': prev.criticalDays ?? 0,
-                    };
-                    const nextRecord =
-                      typeof value === 'function'
-                        ? value(currentRecord)
-                        : { ...currentRecord, ...value };
-                    return {
+            <CollapsibleSection
+              id="backups"
+              title="Backups"
+              collapsed={isCollapsed('backups')}
+              onToggle={() => toggleSection('backups')}
+              icon={<Archive class="w-5 h-5" />}
+              isGloballyDisabled={!props.backupDefaults().enabled}
+              emptyMessage="Configure backup alert thresholds."
+            >
+              <div ref={registerSection('backups')} class="scroll-mt-24">
+                <ResourceTable
+                  title=""
+                  resources={[
+                    {
+                      id: 'backups-defaults',
+                      name: 'Global Defaults',
+                      thresholds: backupDefaultsRecord(),
+                      defaults: backupDefaultsRecord(),
+                      editable: true,
+                      editScope: 'backup',
+                    },
+                  ]}
+                  columns={[
+                    'Warning Days',
+                    'Critical Days',
+                    'Warning Size (GiB)',
+                    'Critical Size (GiB)',
+                  ]}
+                  activeAlerts={props.activeAlerts}
+                  emptyMessage=""
+                  onEdit={startEditing}
+                  onSaveEdit={saveEdit}
+                  onCancelEdit={cancelEdit}
+                  onRemoveOverride={removeOverride}
+                  showOfflineAlertsColumn={true}
+                  editingId={editingId}
+                  editingThresholds={editingThresholds}
+                  setEditingThresholds={setEditingThresholds}
+                  editingNote={editingNote}
+                  setEditingNote={setEditingNote}
+                  formatMetricValue={formatMetricValue}
+                  hasActiveAlert={hasActiveAlert}
+                  globalDefaults={backupDefaultsRecord()}
+                  setGlobalDefaults={(value) => {
+                    updateBackupDefaults((prev) => {
+                      const currentRecord = {
+                        'warning days': prev.warningDays ?? 0,
+                        'critical days': prev.criticalDays ?? 0,
+                      };
+                      const nextRecord =
+                        typeof value === 'function'
+                          ? value(currentRecord)
+                          : { ...currentRecord, ...value };
+                      return {
+                        ...prev,
+                        warningDays:
+                          typeof nextRecord['warning days'] === 'number'
+                            ? nextRecord['warning days']
+                            : prev.warningDays,
+                        criticalDays:
+                          typeof nextRecord['critical days'] === 'number'
+                            ? nextRecord['critical days']
+                            : prev.criticalDays,
+                      };
+                    });
+                  }}
+                  setHasUnsavedChanges={props.setHasUnsavedChanges}
+                  globalDisableFlag={() => !props.backupDefaults().enabled}
+                  onToggleGlobalDisable={() =>
+                    updateBackupDefaults((prev) => ({
                       ...prev,
-                      warningDays:
-                        typeof nextRecord['warning days'] === 'number'
-                          ? nextRecord['warning days']
-                          : prev.warningDays,
-                      criticalDays:
-                        typeof nextRecord['critical days'] === 'number'
-                          ? nextRecord['critical days']
-                          : prev.criticalDays,
-                    };
-                  });
-                }}
-                setHasUnsavedChanges={props.setHasUnsavedChanges}
-                globalDisableFlag={() => !props.backupDefaults().enabled}
-                onToggleGlobalDisable={() =>
-                  updateBackupDefaults((prev) => ({
-                    ...prev,
-                    enabled: !prev.enabled,
-                  }))
-                }
-                factoryDefaults={backupFactoryDefaultsRecord()}
-                onResetDefaults={() => {
-                  if (props.resetBackupDefaults) {
-                    props.resetBackupDefaults();
-                    props.setHasUnsavedChanges(true);
-                  } else {
-                    updateBackupDefaults(backupFactoryConfig());
+                      enabled: !prev.enabled,
+                    }))
                   }
-                }}
-              />
-            </div>
+                  factoryDefaults={backupFactoryDefaultsRecord()}
+                  onResetDefaults={() => {
+                    if (props.resetBackupDefaults) {
+                      props.resetBackupDefaults();
+                      props.setHasUnsavedChanges(true);
+                    } else {
+                      updateBackupDefaults(backupFactoryConfig());
+                    }
+                  }}
+                />
+              </div>
+            </CollapsibleSection>
           </Show>
 
           <Show when={hasSection('snapshots')}>
-            <div ref={registerSection('snapshots')} class="scroll-mt-24">
-              <ResourceTable
-                title="Snapshot Age"
-                resources={[
-                  {
-                    id: 'snapshots-defaults',
-                    name: 'Global Defaults',
-                    thresholds: snapshotDefaultsRecord(),
-                    defaults: snapshotDefaultsRecord(),
-                    editable: true,
-                    editScope: 'snapshot',
-                  },
-                ]}
-                columns={['Warning Days', 'Critical Days']}
-                activeAlerts={props.activeAlerts}
-                emptyMessage=""
-                onEdit={startEditing}
-                onSaveEdit={saveEdit}
-                onCancelEdit={cancelEdit}
-                onRemoveOverride={removeOverride}
-                showOfflineAlertsColumn={true}
-                editingId={editingId}
-                editingThresholds={editingThresholds}
-                setEditingThresholds={setEditingThresholds}
-                editingNote={editingNote}
-                setEditingNote={setEditingNote}
-                formatMetricValue={formatMetricValue}
-                hasActiveAlert={hasActiveAlert}
-                globalDefaults={snapshotDefaultsRecord()}
-                setGlobalDefaults={(value) => {
-                  updateSnapshotDefaults((prev) => {
-                    const currentRecord = {
-                      'warning days': prev.warningDays ?? 0,
-                      'critical days': prev.criticalDays ?? 0,
-                      'warning size (gib)': prev.warningSizeGiB ?? 0,
-                      'critical size (gib)': prev.criticalSizeGiB ?? 0,
-                    };
-                    const nextRecord =
-                      typeof value === 'function'
-                        ? value(currentRecord)
-                        : { ...currentRecord, ...value };
-                    return {
+            <CollapsibleSection
+              id="snapshots"
+              title="Snapshot Age"
+              collapsed={isCollapsed('snapshots')}
+              onToggle={() => toggleSection('snapshots')}
+              icon={<Camera class="w-5 h-5" />}
+              isGloballyDisabled={!props.snapshotDefaults().enabled}
+              emptyMessage="Configure snapshot age thresholds."
+            >
+              <div ref={registerSection('snapshots')} class="scroll-mt-24">
+                <ResourceTable
+                  title=""
+                  resources={[
+                    {
+                      id: 'snapshots-defaults',
+                      name: 'Global Defaults',
+                      thresholds: snapshotDefaultsRecord(),
+                      defaults: snapshotDefaultsRecord(),
+                      editable: true,
+                      editScope: 'snapshot',
+                    },
+                  ]}
+                  columns={['Warning Days', 'Critical Days']}
+                  activeAlerts={props.activeAlerts}
+                  emptyMessage=""
+                  onEdit={startEditing}
+                  onSaveEdit={saveEdit}
+                  onCancelEdit={cancelEdit}
+                  onRemoveOverride={removeOverride}
+                  showOfflineAlertsColumn={true}
+                  editingId={editingId}
+                  editingThresholds={editingThresholds}
+                  setEditingThresholds={setEditingThresholds}
+                  editingNote={editingNote}
+                  setEditingNote={setEditingNote}
+                  formatMetricValue={formatMetricValue}
+                  hasActiveAlert={hasActiveAlert}
+                  globalDefaults={snapshotDefaultsRecord()}
+                  setGlobalDefaults={(value) => {
+                    updateSnapshotDefaults((prev) => {
+                      const currentRecord = {
+                        'warning days': prev.warningDays ?? 0,
+                        'critical days': prev.criticalDays ?? 0,
+                        'warning size (gib)': prev.warningSizeGiB ?? 0,
+                        'critical size (gib)': prev.criticalSizeGiB ?? 0,
+                      };
+                      const nextRecord =
+                        typeof value === 'function'
+                          ? value(currentRecord)
+                          : { ...currentRecord, ...value };
+                      return {
+                        ...prev,
+                        warningDays:
+                          typeof nextRecord['warning days'] === 'number'
+                            ? nextRecord['warning days']
+                            : prev.warningDays,
+                        criticalDays:
+                          typeof nextRecord['critical days'] === 'number'
+                            ? nextRecord['critical days']
+                            : prev.criticalDays,
+                        warningSizeGiB:
+                          typeof nextRecord['warning size (gib)'] === 'number'
+                            ? nextRecord['warning size (gib)']
+                            : prev.warningSizeGiB,
+                        criticalSizeGiB:
+                          typeof nextRecord['critical size (gib)'] === 'number'
+                            ? nextRecord['critical size (gib)']
+                            : prev.criticalSizeGiB,
+                      };
+                    });
+                  }}
+                  setHasUnsavedChanges={props.setHasUnsavedChanges}
+                  globalDisableFlag={() => !props.snapshotDefaults().enabled}
+                  onToggleGlobalDisable={() =>
+                    updateSnapshotDefaults((prev) => ({
                       ...prev,
-                      warningDays:
-                        typeof nextRecord['warning days'] === 'number'
-                          ? nextRecord['warning days']
-                          : prev.warningDays,
-                      criticalDays:
-                        typeof nextRecord['critical days'] === 'number'
-                          ? nextRecord['critical days']
-                          : prev.criticalDays,
-                      warningSizeGiB:
-                        typeof nextRecord['warning size (gib)'] === 'number'
-                          ? nextRecord['warning size (gib)']
-                          : prev.warningSizeGiB,
-                      criticalSizeGiB:
-                        typeof nextRecord['critical size (gib)'] === 'number'
-                          ? nextRecord['critical size (gib)']
-                          : prev.criticalSizeGiB,
-                    };
-                  });
-                }}
-                setHasUnsavedChanges={props.setHasUnsavedChanges}
-                globalDisableFlag={() => !props.snapshotDefaults().enabled}
-                onToggleGlobalDisable={() =>
-                  updateSnapshotDefaults((prev) => ({
-                    ...prev,
-                    enabled: !prev.enabled,
-                  }))
-                }
-                factoryDefaults={snapshotFactoryDefaultsRecord()}
-                onResetDefaults={() => {
-                  if (props.resetSnapshotDefaults) {
-                    props.resetSnapshotDefaults();
-                    props.setHasUnsavedChanges(true);
-                  } else {
-                    updateSnapshotDefaults(snapshotFactoryConfig());
+                      enabled: !prev.enabled,
+                    }))
                   }
-                }}
-              />
-            </div>
+                  factoryDefaults={snapshotFactoryDefaultsRecord()}
+                  onResetDefaults={() => {
+                    if (props.resetSnapshotDefaults) {
+                      props.resetSnapshotDefaults();
+                      props.setHasUnsavedChanges(true);
+                    } else {
+                      updateSnapshotDefaults(snapshotFactoryConfig());
+                    }
+                  }}
+                />
+              </div>
+            </CollapsibleSection>
           </Show>
 
           <Show when={hasSection('storage')}>
-            <div ref={registerSection('storage')} class="scroll-mt-24">
-              <ResourceTable
-                title="Storage Devices"
-                groupedResources={storageGroupedByNode()}
-                groupHeaderMeta={guestGroupHeaderMeta()}
-                columns={['Usage %']}
-                activeAlerts={props.activeAlerts}
-                emptyMessage="No storage devices match the current filters."
-                onEdit={startEditing}
-                onSaveEdit={saveEdit}
-                onCancelEdit={cancelEdit}
-                onRemoveOverride={removeOverride}
-                onToggleDisabled={toggleDisabled}
-                showOfflineAlertsColumn={false}
-                editingId={editingId}
-                editingThresholds={editingThresholds}
-                setEditingThresholds={setEditingThresholds}
-                editingNote={editingNote}
-                setEditingNote={setEditingNote}
-                formatMetricValue={formatMetricValue}
-                hasActiveAlert={hasActiveAlert}
-                globalDefaults={{ usage: props.storageDefault() }}
-                setGlobalDefaults={(value) => {
-                  if (typeof value === 'function') {
-                    const newValue = value({ usage: props.storageDefault() });
-                    props.setStorageDefault(newValue.usage ?? 85);
-                  } else {
-                    props.setStorageDefault(value.usage ?? 85);
+            <CollapsibleSection
+              id="storage"
+              title="Storage Devices"
+              resourceCount={props.storage.length}
+              collapsed={isCollapsed('storage')}
+              onToggle={() => toggleSection('storage')}
+              icon={<HardDrive class="w-5 h-5" />}
+              isGloballyDisabled={props.disableAllStorage()}
+              emptyMessage="No storage devices found."
+            >
+              <div ref={registerSection('storage')} class="scroll-mt-24">
+                <ResourceTable
+                  title=""
+                  groupedResources={storageGroupedByNode()}
+                  groupHeaderMeta={guestGroupHeaderMeta()}
+                  columns={['Usage %']}
+                  activeAlerts={props.activeAlerts}
+                  emptyMessage="No storage devices match the current filters."
+                  onEdit={startEditing}
+                  onSaveEdit={saveEdit}
+                  onCancelEdit={cancelEdit}
+                  onRemoveOverride={removeOverride}
+                  onToggleDisabled={toggleDisabled}
+                  showOfflineAlertsColumn={false}
+                  editingId={editingId}
+                  editingThresholds={editingThresholds}
+                  setEditingThresholds={setEditingThresholds}
+                  editingNote={editingNote}
+                  setEditingNote={setEditingNote}
+                  formatMetricValue={formatMetricValue}
+                  hasActiveAlert={hasActiveAlert}
+                  globalDefaults={{ usage: props.storageDefault() }}
+                  setGlobalDefaults={(value) => {
+                    if (typeof value === 'function') {
+                      const newValue = value({ usage: props.storageDefault() });
+                      props.setStorageDefault(newValue.usage ?? 85);
+                    } else {
+                      props.setStorageDefault(value.usage ?? 85);
+                    }
+                  }}
+                  setHasUnsavedChanges={props.setHasUnsavedChanges}
+                  globalDisableFlag={props.disableAllStorage}
+                  onToggleGlobalDisable={() => props.setDisableAllStorage(!props.disableAllStorage())}
+                  showDelayColumn={true}
+                  globalDelaySeconds={props.timeThresholds().storage}
+                  metricDelaySeconds={props.metricTimeThresholds().storage ?? {}}
+                  onMetricDelayChange={(metric, value) => updateMetricDelay('storage', metric, value)}
+                  factoryDefaults={
+                    props.factoryStorageDefault !== undefined
+                      ? { usage: props.factoryStorageDefault }
+                      : undefined
                   }
-                }}
-                setHasUnsavedChanges={props.setHasUnsavedChanges}
-                globalDisableFlag={props.disableAllStorage}
-                onToggleGlobalDisable={() => props.setDisableAllStorage(!props.disableAllStorage())}
-                showDelayColumn={true}
-                globalDelaySeconds={props.timeThresholds().storage}
-                metricDelaySeconds={props.metricTimeThresholds().storage ?? {}}
-                onMetricDelayChange={(metric, value) => updateMetricDelay('storage', metric, value)}
-                factoryDefaults={
-                  props.factoryStorageDefault !== undefined
-                    ? { usage: props.factoryStorageDefault }
-                    : undefined
-                }
-                onResetDefaults={props.resetStorageDefault}
-              />
-            </div>
+                  onResetDefaults={props.resetStorageDefault}
+                />
+              </div>
+            </CollapsibleSection>
           </Show>
         </Show>
 
