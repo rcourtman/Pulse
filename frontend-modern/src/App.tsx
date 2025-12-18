@@ -318,6 +318,16 @@ function App() {
   const [isLoading, setIsLoading] = createSignal(true);
   const [needsAuth, setNeedsAuth] = createSignal(false);
   const [hasAuth, setHasAuth] = createSignal(false);
+  // Store full security status for Login component (hideLocalLogin, oidcEnabled, etc.)
+  const [securityStatus, setSecurityStatus] = createSignal<{
+    hasAuthentication: boolean;
+    oidcEnabled?: boolean;
+    oidcIssuer?: string;
+    oidcClientId?: string;
+    oidcEnvOverrides?: Record<string, boolean>;
+    hideLocalLogin?: boolean;
+    deprecatedDisableAuth?: boolean;
+  } | null>(null);
   const [proxyAuthInfo, setProxyAuthInfo] = createSignal<{
     username?: string;
     logoutURL?: string;
@@ -520,6 +530,17 @@ function App() {
 
       const securityData = await securityRes.json();
       logger.debug('[App] Security status fetched', securityData);
+
+      // Store full security status for Login component
+      setSecurityStatus({
+        hasAuthentication: securityData.hasAuthentication || false,
+        oidcEnabled: securityData.oidcEnabled,
+        oidcIssuer: securityData.oidcIssuer,
+        oidcClientId: securityData.oidcClientId,
+        oidcEnvOverrides: securityData.oidcEnvOverrides,
+        hideLocalLogin: securityData.hideLocalLogin,
+        deprecatedDisableAuth: securityData.deprecatedDisableAuth,
+      });
 
       // Detect legacy DISABLE_AUTH flag (now ignored) so we can surface a warning
       if (securityData.deprecatedDisableAuth === true) {
@@ -798,7 +819,7 @@ function App() {
           </div>
         }
       >
-        <Show when={!needsAuth()} fallback={<Login onLogin={handleLogin} hasAuth={hasAuth()} />}>
+        <Show when={!needsAuth()} fallback={<Login onLogin={handleLogin} hasAuth={hasAuth()} securityStatus={securityStatus() ?? undefined} />}>
           <ErrorBoundary>
             <Show when={enhancedStore()} fallback={
               <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">

@@ -9,6 +9,7 @@ const SetupWizard = lazy(() =>
 interface LoginProps {
   onLogin: () => void;
   hasAuth?: boolean; // If true, auth is configured (passed from App.tsx to skip redundant check)
+  securityStatus?: SecurityStatus; // Full security status from App.tsx to avoid redundant API call
 }
 
 interface SecurityStatus {
@@ -30,9 +31,10 @@ export const Login: Component<LoginProps> = (props) => {
   const [rememberMe, setRememberMe] = createSignal(false);
   const [error, setError] = createSignal('');
   const [loading, setLoading] = createSignal(false);
-  const [authStatus, setAuthStatus] = createSignal<SecurityStatus | null>(null);
+  const [authStatus, setAuthStatus] = createSignal<SecurityStatus | null>(props.securityStatus ?? null);
   // If hasAuth is passed from App.tsx, we already know auth status - skip the loading state
-  const [loadingAuth, setLoadingAuth] = createSignal(props.hasAuth === undefined);
+  // Also skip if securityStatus is provided
+  const [loadingAuth, setLoadingAuth] = createSignal(props.hasAuth === undefined && !props.securityStatus);
   const [oidcLoading, setOidcLoading] = createSignal(false);
   const [oidcError, setOidcError] = createSignal('');
   const [oidcMessage, setOidcMessage] = createSignal('');
@@ -98,13 +100,20 @@ export const Login: Component<LoginProps> = (props) => {
       window.history.replaceState({}, document.title, newUrl);
     }
 
-    // If hasAuth was passed from App.tsx, use it directly without making another API call
+    // If securityStatus was passed from App.tsx, use it directly without making another API call
     // This eliminates the flicker between "Checking authentication..." and the login form
-    if (props.hasAuth !== undefined) {
-      logger.debug('[Login] Using hasAuth from App.tsx, skipping redundant auth check');
-      setAuthStatus({ hasAuthentication: props.hasAuth });
+    // AND ensures hideLocalLogin, oidcEnabled, etc. are properly respected
+    if (props.securityStatus) {
+      logger.debug('[Login] Using securityStatus from App.tsx, skipping redundant auth check', props.securityStatus);
+      setAuthStatus(props.securityStatus);
       setLoadingAuth(false);
       return;
+    }
+
+    // Legacy fallback: if only hasAuth was passed (without full securityStatus)
+    if (props.hasAuth !== undefined && !props.securityStatus) {
+      logger.debug('[Login] Using hasAuth from App.tsx (legacy), fetching full security status');
+      // Still need to fetch full status to get hideLocalLogin, OIDC settings, etc.
     }
 
     logger.debug('[Login] Starting auth check...');
