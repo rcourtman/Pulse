@@ -5,7 +5,7 @@
  * Replaces wide table rows with a compact, mobile-friendly design.
  */
 
-import { Component, Show, For, createSignal, createMemo, JSX } from 'solid-js';
+import { Component, Show, For, createSignal, createMemo } from 'solid-js';
 import ChevronDown from 'lucide-solid/icons/chevron-down';
 import ChevronUp from 'lucide-solid/icons/chevron-up';
 import Settings from 'lucide-solid/icons/settings';
@@ -14,7 +14,7 @@ import Check from 'lucide-solid/icons/check';
 import X from 'lucide-solid/icons/x';
 import Bell from 'lucide-solid/icons/bell';
 import BellOff from 'lucide-solid/icons/bell-off';
-import Power from 'lucide-solid/icons/power';
+
 import ExternalLink from 'lucide-solid/icons/external-link';
 import StickyNote from 'lucide-solid/icons/sticky-note';
 import { ThresholdBadge, ThresholdBadgeGroup } from './ThresholdBadge';
@@ -189,7 +189,9 @@ export const ResourceCard: Component<ResourceCardProps> = (props) => {
 
                             {/* Has note indicator */}
                             <Show when={props.resource.note}>
-                                <StickyNote class="w-3.5 h-3.5 text-yellow-500" title={props.resource.note} />
+                                <span title={props.resource.note}>
+                                    <StickyNote class="w-3.5 h-3.5 text-yellow-500" />
+                                </span>
                             </Show>
 
                             {/* Disabled badge */}

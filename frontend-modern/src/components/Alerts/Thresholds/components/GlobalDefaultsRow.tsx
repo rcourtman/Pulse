@@ -5,7 +5,7 @@
  * Shows at the top of each section with editable threshold badges.
  */
 
-import { Component, Show, For, createSignal, createEffect, createMemo } from 'solid-js';
+import { Component, Show, For, createSignal, createMemo } from 'solid-js';
 import Settings from 'lucide-solid/icons/settings';
 import RotateCcw from 'lucide-solid/icons/rotate-ccw';
 import Check from 'lucide-solid/icons/check';

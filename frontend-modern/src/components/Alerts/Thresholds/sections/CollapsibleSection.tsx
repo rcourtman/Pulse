@@ -8,7 +8,7 @@
 import { Component, Show, createSignal, createEffect, JSX } from 'solid-js';
 import ChevronRight from 'lucide-solid/icons/chevron-right';
 import ChevronDown from 'lucide-solid/icons/chevron-down';
-import Settings from 'lucide-solid/icons/settings';
+
 
 export interface CollapsibleSectionProps {
     /** Unique identifier for the section */
