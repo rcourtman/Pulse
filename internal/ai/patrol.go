@@ -265,18 +265,19 @@ func NewPatrolService(aiService *Service, stateProvider StateProvider) *PatrolSe
 // SetConfig updates the patrol configuration
 func (p *PatrolService) SetConfig(cfg PatrolConfig) {
 	p.mu.Lock()
-	oldInterval := p.config.QuickCheckInterval
+	oldInterval := p.config.GetInterval()
 	p.config = cfg
+	newInterval := cfg.GetInterval()
 	configCh := p.configChanged
 	p.mu.Unlock()
 
 	// Signal config change if patrol is running and interval changed
-	if configCh != nil && cfg.QuickCheckInterval != oldInterval {
+	if configCh != nil && newInterval != oldInterval {
 		select {
 		case configCh <- struct{}{}:
 			log.Info().
 				Dur("old_interval", oldInterval).
-				Dur("new_interval", cfg.QuickCheckInterval).
+				Dur("new_interval", newInterval).
 				Msg("Patrol interval updated, resetting ticker")
 		default:
 			// Channel full or not ready, config will be picked up on next cycle

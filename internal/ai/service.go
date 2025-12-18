@@ -358,13 +358,12 @@ func (s *Service) StartPatrol(ctx context.Context) {
 
 	// Configure patrol from AI config
 	patrolCfg := PatrolConfig{
-		Enabled:              true,
-		QuickCheckInterval:   cfg.GetPatrolInterval(),
-		DeepAnalysisInterval: 6 * time.Hour,
-		AnalyzeNodes:         cfg.PatrolAnalyzeNodes,
-		AnalyzeGuests:        cfg.PatrolAnalyzeGuests,
-		AnalyzeDocker:        cfg.PatrolAnalyzeDocker,
-		AnalyzeStorage:       cfg.PatrolAnalyzeStorage,
+		Enabled:       true,
+		Interval:      cfg.GetPatrolInterval(),
+		AnalyzeNodes:  cfg.PatrolAnalyzeNodes,
+		AnalyzeGuests: cfg.PatrolAnalyzeGuests,
+		AnalyzeDocker: cfg.PatrolAnalyzeDocker,
+		AnalyzeStorage: cfg.PatrolAnalyzeStorage,
 	}
 	patrol.SetConfig(patrolCfg)
 	patrol.Start(ctx)
@@ -404,13 +403,12 @@ func (s *Service) ReconfigurePatrol() {
 
 	// Update patrol configuration
 	patrolCfg := PatrolConfig{
-		Enabled:              cfg.IsPatrolEnabled(),
-		QuickCheckInterval:   cfg.GetPatrolInterval(),
-		DeepAnalysisInterval: 6 * time.Hour,
-		AnalyzeNodes:         cfg.PatrolAnalyzeNodes,
-		AnalyzeGuests:        cfg.PatrolAnalyzeGuests,
-		AnalyzeDocker:        cfg.PatrolAnalyzeDocker,
-		AnalyzeStorage:       cfg.PatrolAnalyzeStorage,
+		Enabled:       cfg.IsPatrolEnabled(),
+		Interval:      cfg.GetPatrolInterval(),
+		AnalyzeNodes:  cfg.PatrolAnalyzeNodes,
+		AnalyzeGuests: cfg.PatrolAnalyzeGuests,
+		AnalyzeDocker: cfg.PatrolAnalyzeDocker,
+		AnalyzeStorage: cfg.PatrolAnalyzeStorage,
 	}
 	patrol.SetConfig(patrolCfg)
 
