@@ -40,13 +40,88 @@ func ComputeTrend(points []MetricPoint, metricName string, period time.Duration)
 	regression := linearRegression(sorted)
 	trend.Confidence = regression.R2
 
+	// Calculate actual time span of the data
+	actualSpan := sorted[len(sorted)-1].Timestamp.Sub(sorted[0].Timestamp)
+
 	// Convert slope from "per second" to "per hour" and "per day"
 	// Slope is in units/second
 	trend.RatePerHour = regression.Slope * 3600
 	trend.RatePerDay = regression.Slope * 86400
 
+	// Apply sanity checks for short time spans and percentage metrics
+	trend = applyTrendSanityChecks(trend, actualSpan, metricName, stats.Mean)
+
 	// Classify the trend direction
 	trend.Direction = classifyTrend(regression.Slope, stats.Mean, stats.StdDev)
+
+	return trend
+}
+
+// applyTrendSanityChecks applies corrections to prevent unrealistic extrapolated rates.
+// This addresses issues like a 1-minute data span being extrapolated to 700%/day.
+func applyTrendSanityChecks(trend Trend, actualSpan time.Duration, metricName string, mean float64) Trend {
+	// Minimum time span required for meaningful extrapolation
+	// Without at least 1 hour of data, daily rate extrapolation is very unreliable
+	minSpanForDailyRate := time.Hour
+	minSpanForHourlyRate := 10 * time.Minute
+
+	// If we don't have enough time span for meaningful extrapolation,
+	// reduce confidence and cap the rates
+	if actualSpan < minSpanForHourlyRate {
+		// Very short time span - rates are unreliable
+		trend.Confidence *= 0.1 // Heavily penalize confidence
+		// Don't extrapolate short blips to large rates
+		trend.RatePerHour = 0
+		trend.RatePerDay = 0
+	} else if actualSpan < minSpanForDailyRate {
+		// Medium time span - hourly is somewhat reliable, daily is not
+		spanRatio := float64(actualSpan) / float64(minSpanForDailyRate)
+		trend.Confidence *= spanRatio // Scale confidence by how much data we have
+		// Cap daily rate extrapolation for short spans
+		// Scale down the daily rate by how much of the day we actually observed
+		dailyScaleFactor := float64(actualSpan) / float64(24*time.Hour)
+		if dailyScaleFactor < 0.1 {
+			dailyScaleFactor = 0.1
+		}
+		// Cap absurd rates - if extrapolated rate is much higher than observed change, it's noise
+		observedChange := math.Abs(trend.Max - trend.Min)
+		maxReasonableDaily := observedChange * 10 // Allow 10x the observed change as max daily
+		if math.Abs(trend.RatePerDay) > maxReasonableDaily && maxReasonableDaily > 0 {
+			if trend.RatePerDay > 0 {
+				trend.RatePerDay = maxReasonableDaily
+			} else {
+				trend.RatePerDay = -maxReasonableDaily
+			}
+		}
+	}
+
+	// For percentage metrics (0-100 range), apply physical limits
+	// A metric bounded 0-100 can't grow more than 100% per day
+	isPercentageMetric := metricName == "cpu" || metricName == "memory" || metricName == "disk" || 
+		metricName == "usage" || mean <= 100
+
+	if isPercentageMetric {
+		// Maximum physically possible rate for a 0-100% metric
+		// Even a runaway process can't grow more than 100 percentage points per day
+		maxRate := 100.0
+		if math.Abs(trend.RatePerDay) > maxRate {
+			if trend.RatePerDay > 0 {
+				trend.RatePerDay = maxRate
+			} else {
+				trend.RatePerDay = -maxRate
+			}
+			// Also cap hourly rate
+			if math.Abs(trend.RatePerHour) > maxRate/24 {
+				if trend.RatePerHour > 0 {
+					trend.RatePerHour = maxRate / 24
+				} else {
+					trend.RatePerHour = -maxRate / 24
+				}
+			}
+			// Reduce confidence as the raw calculation was clearly wrong
+			trend.Confidence *= 0.5
+		}
+	}
 
 	return trend
 }
