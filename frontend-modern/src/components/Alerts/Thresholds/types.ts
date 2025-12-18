@@ -6,7 +6,7 @@
  */
 
 import type { Alert } from '@/types/api';
-import type { RawOverrideConfig, PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
+// Alert types imported from shared alert types
 
 // ============================================================================
 // Resource Types
@@ -182,7 +182,16 @@ export interface EditingActions {
 /**
  * Default threshold configuration for guests
  */
-export interface GuestDefaults extends ThresholdValues {
+export interface GuestDefaults {
+    cpu?: number;
+    memory?: number;
+    disk?: number;
+    diskRead?: number;
+    diskWrite?: number;
+    networkIn?: number;
+    networkOut?: number;
+    temperature?: number;
+    usage?: number;
     disableConnectivity?: boolean;
     poweredOffSeverity?: 'warning' | 'critical';
 }

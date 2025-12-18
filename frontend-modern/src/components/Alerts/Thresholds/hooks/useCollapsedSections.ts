@@ -5,7 +5,7 @@
  * Provides a clean interface for toggling sections and remembering user preferences.
  */
 
-import { createSignal, createEffect, onMount } from 'solid-js';
+import { createSignal, createEffect } from 'solid-js';
 
 const STORAGE_KEY = 'pulse-thresholds-collapsed-sections';
 

@@ -69,15 +69,6 @@ const formatDisplayValue = (metric: string, value: number | undefined): string =
     return String(value);
 };
 
-/**
- * Get the unit suffix for a metric
- */
-const getUnitSuffix = (metric: string): string => {
-    if (['cpu', 'memory', 'disk', 'usage'].includes(metric)) return '%';
-    if (metric === 'temperature') return '°C';
-    if (['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) return ' MB/s';
-    return '';
-};
 
 /**
  * Get readable label for a metric

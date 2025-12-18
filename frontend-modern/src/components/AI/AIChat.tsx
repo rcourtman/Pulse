@@ -253,7 +253,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       await AIAPI.updateSettings({ autonomous_mode: newValue });
       setAutonomousMode(newValue);
       notificationStore.success(newValue ? 'Autonomous mode enabled' : 'Autonomous mode disabled');
-    } catch (e) {
+    } catch (_e) {
       notificationStore.error('Failed to toggle autonomous mode');
     } finally {
       setIsTogglingAutonomous(false);
