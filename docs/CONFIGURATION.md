@@ -53,7 +53,7 @@ docker run -d \
 <details>
 <summary><strong>Advanced: OIDC / SSO</strong></summary>
 
-Configure Single Sign-On in **Settings → Security → OIDC**, or use environment variables to lock the configuration.
+Configure Single Sign-On in **Settings → Security → Single Sign-On**, or use environment variables to lock the configuration.
 
 See [OIDC Documentation](OIDC.md) and [Proxy Auth](PROXY_AUTH.md) for details.
 </details>
@@ -92,6 +92,7 @@ Environment variables take precedence over `system.json`.
 | `PULSE_PUBLIC_URL` | Public URL for notifications/OIDC | `""` |
 | `ALLOWED_ORIGINS` | CORS allowed domains | `""` (Same origin) |
 | `DISCOVERY_ENABLED` | Auto-discover nodes | `false` |
+| `PULSE_ENABLE_SENSOR_PROXY` | Enable legacy `pulse-sensor-proxy` endpoints (deprecated, unsupported) | `false` |
 | `PULSE_AUTH_HIDE_LOCAL_LOGIN` | Hide username/password form | `false` |
 | `DEMO_MODE` | Enable read-only demo mode | `false` |
 

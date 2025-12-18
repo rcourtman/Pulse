@@ -43,7 +43,7 @@ cd ..
 npm run mock:on             # Optional: enable mock data
 ```
 
-See `docs/development/MOCK_MODE.md` for tips on synthetic fixtures.
+Mock mode is supported for development, but the internal developer notes are not shipped in this repository.
 
 ---
 

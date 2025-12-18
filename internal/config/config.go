@@ -99,6 +99,7 @@ type Config struct {
 	BackupPollingInterval           time.Duration `envconfig:"BACKUP_POLLING_INTERVAL"`
 	EnableBackupPolling             bool          `envconfig:"ENABLE_BACKUP_POLLING" default:"true"`
 	TemperatureMonitoringEnabled    bool          `json:"temperatureMonitoringEnabled"`
+	EnableSensorProxy               bool          `envconfig:"PULSE_ENABLE_SENSOR_PROXY" default:"false" json:"-"` // Legacy pulse-sensor-proxy support (deprecated, opt-in)
 	WebhookBatchDelay               time.Duration `envconfig:"WEBHOOK_BATCH_DELAY" default:"10s"`
 	AdaptivePollingEnabled          bool          `envconfig:"ADAPTIVE_POLLING_ENABLED" default:"false"`
 	AdaptivePollingBaseInterval     time.Duration `envconfig:"ADAPTIVE_POLLING_BASE_INTERVAL" default:"10s"`
@@ -117,7 +118,6 @@ type Config struct {
 	MetricsRetentionMinuteHours int `json:"metricsRetentionMinuteHours"` // Minute averages, default: 24 hours
 	MetricsRetentionHourlyDays  int `json:"metricsRetentionHourlyDays"`  // Hourly averages, default: 7 days
 	MetricsRetentionDailyDays   int `json:"metricsRetentionDailyDays"`   // Daily averages, default: 90 days
-
 
 	// Logging settings
 	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
@@ -580,6 +580,7 @@ func Load() (*Config, error) {
 		DiscoveryEnabled:                false,
 		DiscoverySubnet:                 "auto",
 		TemperatureMonitoringEnabled:    true,
+		EnableSensorProxy:               false,
 		EnvOverrides:                    make(map[string]bool),
 		OIDC:                            NewOIDCConfig(),
 		// Metrics retention defaults (tiered)
@@ -816,6 +817,22 @@ func Load() (*Config, error) {
 			log.Warn().
 				Str("value", enabledStr).
 				Msg("Invalid ENABLE_TEMPERATURE_MONITORING value, ignoring")
+		}
+	}
+
+	if enabledStr := utils.GetenvTrim("PULSE_ENABLE_SENSOR_PROXY"); enabledStr != "" {
+		if enabled, err := strconv.ParseBool(enabledStr); err == nil {
+			cfg.EnableSensorProxy = enabled
+			cfg.EnvOverrides["PULSE_ENABLE_SENSOR_PROXY"] = true
+			if enabled {
+				log.Warn().Msg("Legacy pulse-sensor-proxy support enabled via PULSE_ENABLE_SENSOR_PROXY (deprecated, unsupported)")
+			} else {
+				log.Info().Msg("Legacy pulse-sensor-proxy support disabled via PULSE_ENABLE_SENSOR_PROXY")
+			}
+		} else {
+			log.Warn().
+				Str("value", enabledStr).
+				Msg("Invalid PULSE_ENABLE_SENSOR_PROXY value, ignoring")
 		}
 	}
 

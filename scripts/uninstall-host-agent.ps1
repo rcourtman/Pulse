@@ -1,7 +1,7 @@
 # Pulse Host Agent Uninstallation Script for Windows
 #
 # Usage:
-#   iwr -useb http://pulse-server:7656/uninstall-host-agent.ps1 | iex
+#   iwr -useb http://pulse-server:7655/uninstall-host-agent.ps1 | iex
 #
 
 param(

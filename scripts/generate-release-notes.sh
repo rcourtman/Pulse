@@ -92,7 +92,7 @@ docker pull rcourtman/pulse:v${VERSION}
 docker stop pulse && docker rm pulse
 docker run -d --name pulse \\
   --restart unless-stopped \\
-  -p 7655:7655 -p 7656:7656 \\
+  -p 7655:7655 \\
   -v /opt/pulse/data:/data \\
   rcourtman/pulse:v${VERSION}
 \`\`\`
@@ -322,7 +322,7 @@ docker pull rcourtman/pulse:v${VERSION}
 docker stop pulse && docker rm pulse
 docker run -d --name pulse \
   --restart unless-stopped \
-  -p 7655:7655 -p 7656:7656 \
+  -p 7655:7655 \
   -v /opt/pulse/data:/data \
   rcourtman/pulse:v${VERSION}
 ```

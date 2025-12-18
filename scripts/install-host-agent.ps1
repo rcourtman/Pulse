@@ -15,9 +15,9 @@
 # └─────────────────────────────────────────────────────────────────────────────┘
 #
 # Usage:
-#   iwr -useb http://pulse-server:7656/install-host-agent.ps1 | iex
+#   iwr -useb http://pulse-server:7655/install-host-agent.ps1 | iex
 #   OR with parameters:
-#   $url = "http://pulse-server:7656"; $token = "your-token"; iwr -useb "$url/install-host-agent.ps1" | iex
+#   $url = "http://pulse-server:7655"; $token = "your-token"; iwr -useb "$url/install-host-agent.ps1" | iex
 #
 # Parameters can be passed via environment variables or script parameters
 
@@ -248,7 +248,7 @@ if (-not $isAdmin) {
 
 # Interactive prompts if parameters not provided
 if (-not $PulseUrl) {
-    $PulseUrl = Read-Host "Enter Pulse server URL (e.g., http://pulse.example.com:7656)"
+    $PulseUrl = Read-Host "Enter Pulse server URL (e.g., http://pulse.example.com:7655)"
 }
 $PulseUrl = $PulseUrl.TrimEnd('/')
 

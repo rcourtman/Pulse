@@ -5,6 +5,8 @@ This page describes the recommended v5 approach for temperature monitoring and t
 For the full sensor-proxy setup guide (socket mounts, HTTP mode, troubleshooting), see:
 `docs/TEMPERATURE_MONITORING.md`.
 
+> **Deprecation notice (v5):** `pulse-sensor-proxy` is deprecated and not recommended for new deployments. Use `pulse-agent --enable-proxmox` for temperature monitoring. The sensor-proxy section below is retained for existing installations during the migration window. In v5, legacy sensor-proxy endpoints are disabled by default unless `PULSE_ENABLE_SENSOR_PROXY=true` is set on the Pulse server.
+
 ## Recommended: Pulse Agent
 
 The simplest and most feature-rich method is installing the Pulse agent on your Proxmox nodes:
