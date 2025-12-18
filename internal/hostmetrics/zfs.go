@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -139,12 +140,45 @@ func fallbackZFSDisks(bestDatasets map[string]zfsDatasetUsage, mountpoints map[s
 	return disks
 }
 
+// commonZpoolPaths lists common locations for the zpool binary.
+// TrueNAS SCALE, FreeBSD, and various Linux distributions may install
+// zpool in different locations that might not be in the agent's PATH.
+// This helps fix issue #718 where TrueNAS reports inflated storage.
+var commonZpoolPaths = []string{
+	"/usr/sbin/zpool",         // TrueNAS SCALE, Debian, Ubuntu
+	"/sbin/zpool",             // FreeBSD, older Linux
+	"/usr/local/sbin/zpool",   // FreeBSD ports, custom builds
+	"/usr/local/bin/zpool",    // Custom installations
+	"/opt/zfs/bin/zpool",      // Some enterprise Linux
+	"/usr/bin/zpool",          // Some distributions
+}
+
+// findZpool returns the path to the zpool binary by first trying exec.LookPath,
+// then falling back to common hardcoded paths for TrueNAS/FreeBSD/Linux systems.
+func findZpool() (string, error) {
+	// First, try the standard PATH lookup
+	if path, err := exec.LookPath("zpool"); err == nil {
+		return path, nil
+	}
+
+	// If that fails, try common absolute paths
+	// This is especially important for TrueNAS SCALE where the agent
+	// might run with a restricted PATH that doesn't include /usr/sbin
+	for _, path := range commonZpoolPaths {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+
+	return "", fmt.Errorf("zpool binary not found in PATH or common locations")
+}
+
 func fetchZpoolStats(ctx context.Context, pools []string) (map[string]zpoolStats, error) {
 	if len(pools) == 0 {
 		return nil, nil
 	}
 
-	path, err := exec.LookPath("zpool")
+	path, err := findZpool()
 	if err != nil {
 		return nil, err
 	}
