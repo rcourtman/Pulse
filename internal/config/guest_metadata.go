@@ -56,8 +56,13 @@ func (s *GuestMetadataStore) Get(guestID string) *GuestMetadata {
 }
 
 // GetWithLegacyMigration retrieves metadata for a guest, attempting legacy ID formats if needed
-// and migrating them to the new stable format. This should be called when full guest context
-// (node, instance, vmid) is available.
+// and migrating them to the new stable format (instance:node:vmid).
+// This should be called when full guest context (instance, node, vmid) is available.
+//
+// Legacy formats attempted (in order):
+// 1. instance-node-vmid (e.g., "delly-minipc-201") - most specific legacy format
+// 2. instance-vmid (e.g., "delly-201") - old cluster format without node
+// 3. node-vmid (e.g., "minipc-201") - standalone format
 func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node string, vmid int) *GuestMetadata {
 	s.mu.RLock()
 	meta, exists := s.metadata[guestID]
@@ -67,15 +72,10 @@ func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node stri
 		return meta
 	}
 
-	// Try legacy formats and migrate if found
-	var legacyID string
-	var legacyMeta *GuestMetadata
-
-	// Try legacy format: instance-node-VMID
-	if instance != node {
-		legacyID = fmt.Sprintf("%s-%s-%d", instance, node, vmid)
+	// Helper to migrate a legacy ID to the new format
+	migrate := func(legacyID string) *GuestMetadata {
 		s.mu.RLock()
-		legacyMeta = s.metadata[legacyID]
+		legacyMeta := s.metadata[legacyID]
 		s.mu.RUnlock()
 
 		if legacyMeta != nil {
@@ -99,35 +99,27 @@ func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node stri
 
 			return legacyMeta
 		}
+		return nil
 	}
 
-	// Try standalone format: node-VMID
-	if instance == node {
-		legacyID = fmt.Sprintf("%s-%d", node, vmid)
-		s.mu.RLock()
-		legacyMeta = s.metadata[legacyID]
-		s.mu.RUnlock()
+	// Try legacy format 1: instance-node-vmid (most specific)
+	if instance != node {
+		if result := migrate(fmt.Sprintf("%s-%s-%d", instance, node, vmid)); result != nil {
+			return result
+		}
+	}
 
-		if legacyMeta != nil {
-			log.Info().
-				Str("legacyID", legacyID).
-				Str("newID", guestID).
-				Msg("Migrating guest metadata from legacy standalone ID format")
+	// Try legacy format 2: instance-vmid (old cluster format)
+	// This was used when cluster name was used without node differentiation
+	if result := migrate(fmt.Sprintf("%s-%d", instance, vmid)); result != nil {
+		return result
+	}
 
-			s.mu.Lock()
-			// Move to new ID
-			s.metadata[guestID] = legacyMeta
-			legacyMeta.ID = guestID
-			delete(s.metadata, legacyID)
-			// Save asynchronously
-			go func() {
-				if err := s.save(); err != nil {
-					log.Error().Err(err).Msg("Failed to save guest metadata after migration")
-				}
-			}()
-			s.mu.Unlock()
-
-			return legacyMeta
+	// Try legacy format 3: node-vmid (standalone format or node-only reference)
+	// Only try if instance != node to avoid duplicate check
+	if instance != node {
+		if result := migrate(fmt.Sprintf("%s-%d", node, vmid)); result != nil {
+			return result
 		}
 	}
 

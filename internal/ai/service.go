@@ -690,6 +690,8 @@ func (s *Service) LoadConfig() error {
 					fallbackModel = config.AIProviderOpenAI + ":" + config.DefaultAIModelOpenAI
 				case config.AIProviderDeepSeek:
 					fallbackModel = config.AIProviderDeepSeek + ":" + config.DefaultAIModelDeepSeek
+				case config.AIProviderGemini:
+					fallbackModel = config.AIProviderGemini + ":" + config.DefaultAIModelGemini
 				case config.AIProviderOllama:
 					fallbackModel = config.AIProviderOllama + ":" + config.DefaultAIModelOllama
 				}
@@ -1738,10 +1740,10 @@ func (s *Service) getTools() []providers.Tool {
 					},
 					"url": map[string]interface{}{
 						"type":        "string",
-						"description": "The discovered URL (e.g., 'http://192.168.1.50:8096' for Jellyfin). Use the IP/hostname and port you discovered.",
+						"description": "The discovered URL (e.g., 'http://192.168.1.50:8096' for Jellyfin). Use an empty string to remove the URL.",
 					},
 				},
-				"required": []string{"resource_type", "resource_id", "url"},
+				"required": []string{"resource_type", "resource_id"},
 			},
 		},
 		{
@@ -1907,10 +1909,12 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 				return execution.Output, execution
 			}
 		}
-		if url == "" {
-			execution.Output = "Error: url is required"
-			return execution.Output, execution
-		}
+
+		// Allow empty URL to clear the setting
+		// if url == "" {
+		// 	execution.Output = "Error: url is required"
+		// 	return execution.Output, execution
+		// }
 
 		// Update the metadata
 		if err := s.SetResourceURL(resourceType, resourceID, url); err != nil {
@@ -2460,7 +2464,14 @@ Common discovery commands:
 - Check running processes: ps aux | grep -E 'node|python|java|nginx|apache|httpd'
 - Get IP: hostname -I | awk '{print $1}'
 
-When you find a web service and are confident, use set_resource_url to save it. The resource_id should match the ID from the current context.
+**CRITICAL: resource_id format for set_resource_url**
+The resource_id MUST be in the canonical format: {instance}:{node}:{vmid} (uses COLONS, not dashes)
+- Example for VMID 201 on node "minipc" in instance "delly": resource_id = "delly:minipc:201"
+- Example for VMID 101 on node "delly" in instance "delly": resource_id = "delly:delly:101"
+- The instance name is typically the cluster name for PVE clusters
+- Always check which NODE the guest is on (visible in the target_host or context)
+
+When working across multiple nodes, use the correct instance:node:vmid format for each guest.
 
 ## Installing/Updating Pulse Itself
 If asked to install or update Pulse itself, use the official install script. DO NOT investigate configs/services first.
@@ -2779,7 +2790,7 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 	var allModels []providers.ModelInfo
 
 	// Query each configured provider
-	providersList := []string{config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderDeepSeek, config.AIProviderOllama}
+	providersList := []string{config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderDeepSeek, config.AIProviderGemini, config.AIProviderOllama}
 
 	for _, providerName := range providersList {
 		if !cfg.HasProvider(providerName) {
@@ -2849,6 +2860,8 @@ func providerDisplayName(provider string) string {
 		return "OpenAI"
 	case config.AIProviderDeepSeek:
 		return "DeepSeek"
+	case config.AIProviderGemini:
+		return "Google Gemini"
 	case config.AIProviderOllama:
 		return "Ollama"
 	default:

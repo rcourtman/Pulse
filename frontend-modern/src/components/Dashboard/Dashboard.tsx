@@ -307,7 +307,34 @@ export function Dashboard(props: DashboardProps) {
 
     // Listen for metadata changes from AI or other sources
     const handleMetadataChanged = (event: Event) => {
-      console.log('[Dashboard] Metadata changed event received:', event);
+      const customEvent = event as CustomEvent;
+      console.log('[Dashboard] Metadata changed event received:', customEvent.detail);
+
+      // Handle optimistic update if payload is present - this fixes the "guest url not appearing straight away" issue
+      if (customEvent.detail?.payload) {
+        let { guestId, url } = customEvent.detail.payload;
+        if (guestId) {
+          // Normalize guestId if it's in the canonical AI format (instance:node:vmid)
+          // Frontend uses 'instance-vmid' (e.g., 'delly-101') but AI sends 'delly:delly:101'
+          if (guestId.includes(':')) {
+            const parts = guestId.split(':');
+            if (parts.length === 3) {
+              const [instance, _node, vmid] = parts;
+              // Construct frontend ID format
+              guestId = `${instance}-${vmid}`;
+              logger.debug('[Dashboard] Normalized optimistic guestId', { original: customEvent.detail.payload.guestId, normalized: guestId });
+            }
+          }
+
+          logger.debug('[Dashboard] Applying optimistic metadata update', { guestId, url });
+          // Ensure url is a string (handle null/undefined for removal)
+          handleCustomUrlUpdate(guestId, url || '');
+          // Skip immediate refresh to prevent race condition with backend consistency
+          // The optimistic update is authoritative for this action
+          return;
+        }
+      }
+
       logger.debug('Metadata changed event received, refreshing...');
       refreshGuestMetadata();
     };
@@ -1146,7 +1173,9 @@ export function Dashboard(props: DashboardProps) {
                           <For each={guests} fallback={<></>}>
                             {(guest, index) => {
                               const guestId = guest.id || `${guest.instance}-${guest.vmid}`;
-                              const metadata =
+                              // Create a getter function for metadata to ensure reactivity
+                              // Accessing guestMetadata() in a plain variable breaks SolidJS reactivity
+                              const getMetadata = () =>
                                 guestMetadata()[guestId] ||
                                 guestMetadata()[`${guest.node}-${guest.vmid}`];
                               // PERFORMANCE: Use pre-computed parent node map instead of resolveParentNode
@@ -1164,7 +1193,7 @@ export function Dashboard(props: DashboardProps) {
                                   <GuestRow
                                     guest={guest}
                                     alertStyles={getAlertStyles(guestId, activeAlerts, alertsEnabled())}
-                                    customUrl={metadata?.customUrl}
+                                    customUrl={getMetadata()?.customUrl}
                                     onTagClick={handleTagClick}
                                     activeSearch={search()}
                                     parentNodeOnline={parentNodeOnline}

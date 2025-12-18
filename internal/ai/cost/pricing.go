@@ -52,6 +52,17 @@ var providerPrices = map[string][]modelPrice{
 		// DeepSeek docs include an "input cache hit" discount; this uses cache-miss rates for conservative estimates.
 		{Pattern: "deepseek-*", InputUSDPerMTok: 0.28, OutputUSDPerMTok: 0.42},
 	},
+	"gemini": {
+		// Gemini pricing (as of December 2025)
+		// Gemini 3 models are in preview, pricing may change
+		{Pattern: "gemini-3-pro*", InputUSDPerMTok: 1.25, OutputUSDPerMTok: 5.00},
+		{Pattern: "gemini-3-flash*", InputUSDPerMTok: 0.075, OutputUSDPerMTok: 0.30},
+		{Pattern: "gemini-2.5-pro*", InputUSDPerMTok: 1.25, OutputUSDPerMTok: 5.00},
+		{Pattern: "gemini-2.5-flash*", InputUSDPerMTok: 0.075, OutputUSDPerMTok: 0.30},
+		{Pattern: "gemini-1.5-pro*", InputUSDPerMTok: 1.25, OutputUSDPerMTok: 5.00},
+		{Pattern: "gemini-1.5-flash*", InputUSDPerMTok: 0.075, OutputUSDPerMTok: 0.30},
+		{Pattern: "gemini-*", InputUSDPerMTok: 0.075, OutputUSDPerMTok: 0.30}, // Default to flash pricing
+	},
 	"ollama": {
 		{Pattern: "*", InputUSDPerMTok: 0, OutputUSDPerMTok: 0},
 	},

@@ -16,6 +16,7 @@ const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
   deepseek: 'DeepSeek',
+  gemini: 'Google Gemini',
   ollama: 'Ollama',
 };
 
@@ -35,6 +36,9 @@ function getProviderFromModelId(modelId: string): string {
   if (modelId.includes('deepseek')) {
     return 'deepseek';
   }
+  if (modelId.includes('gemini')) {
+    return 'gemini';
+  }
   return 'ollama';
 }
 
@@ -45,6 +49,7 @@ function isProviderConfigured(provider: string, settings: AISettingsType | null)
     case 'anthropic': return settings.anthropic_configured;
     case 'openai': return settings.openai_configured;
     case 'deepseek': return settings.deepseek_configured;
+    case 'gemini': return settings.gemini_configured;
     case 'ollama': return settings.ollama_configured;
     default: return false;
   }
@@ -92,7 +97,7 @@ export const AISettings: Component = () => {
 
   // First-time setup modal state
   const [showSetupModal, setShowSetupModal] = createSignal(false);
-  const [setupProvider, setSetupProvider] = createSignal<'anthropic' | 'openai' | 'deepseek' | 'ollama'>('anthropic');
+  const [setupProvider, setSetupProvider] = createSignal<'anthropic' | 'openai' | 'deepseek' | 'gemini' | 'ollama'>('anthropic');
   const [setupApiKey, setSetupApiKey] = createSignal('');
   const [setupOllamaUrl, setSetupOllamaUrl] = createSignal('http://localhost:11434');
   const [setupSaving, setSetupSaving] = createSignal(false);
@@ -120,6 +125,7 @@ export const AISettings: Component = () => {
     anthropicApiKey: '',
     openaiApiKey: '',
     deepseekApiKey: '',
+    geminiApiKey: '',
     ollamaBaseUrl: 'http://localhost:11434',
     openaiBaseUrl: '',
     // Cost controls
@@ -147,6 +153,7 @@ export const AISettings: Component = () => {
         anthropicApiKey: '',
         openaiApiKey: '',
         deepseekApiKey: '',
+        geminiApiKey: '',
         ollamaBaseUrl: 'http://localhost:11434',
         openaiBaseUrl: '',
         costBudgetUSD30d: '',
@@ -173,6 +180,7 @@ export const AISettings: Component = () => {
       anthropicApiKey: '', // Always empty - we only show if configured
       openaiApiKey: '',
       deepseekApiKey: '',
+      geminiApiKey: '',
       ollamaBaseUrl: data.ollama_base_url || 'http://localhost:11434',
       openaiBaseUrl: data.openai_base_url || '',
       costBudgetUSD30d:
@@ -186,6 +194,7 @@ export const AISettings: Component = () => {
     if (data.anthropic_configured) configured.add('anthropic');
     if (data.openai_configured) configured.add('openai');
     if (data.deepseek_configured) configured.add('deepseek');
+    if (data.gemini_configured) configured.add('gemini');
     if (data.ollama_configured) configured.add('ollama');
     // Default to anthropic if nothing is configured
     if (configured.size === 0) configured.add('anthropic');
@@ -271,6 +280,7 @@ export const AISettings: Component = () => {
           (modelProvider === 'anthropic' && form.anthropicApiKey.trim()) ||
           (modelProvider === 'openai' && form.openaiApiKey.trim()) ||
           (modelProvider === 'deepseek' && form.deepseekApiKey.trim()) ||
+          (modelProvider === 'gemini' && form.geminiApiKey.trim()) ||
           (modelProvider === 'ollama' && form.ollamaBaseUrl.trim());
 
         if (!isAddingCredential) {
@@ -354,6 +364,9 @@ export const AISettings: Component = () => {
       if (form.deepseekApiKey.trim()) {
         payload.deepseek_api_key = form.deepseekApiKey.trim();
       }
+      if (form.geminiApiKey.trim()) {
+        payload.gemini_api_key = form.geminiApiKey.trim();
+      }
       // Always include Ollama URL if it has a value and differs from what's saved
       // Compare against actual saved value (empty string if not set), not a prefilled default
       if (form.ollamaBaseUrl.trim() && form.ollamaBaseUrl.trim() !== (settings()?.ollama_base_url || '')) {
@@ -432,7 +445,7 @@ export const AISettings: Component = () => {
   const handleClearProvider = async (provider: string) => {
     // Check if this is the last configured provider
     const s = settings();
-    const configuredCount = [s?.anthropic_configured, s?.openai_configured, s?.deepseek_configured, s?.ollama_configured].filter(Boolean).length;
+    const configuredCount = [s?.anthropic_configured, s?.openai_configured, s?.deepseek_configured, s?.gemini_configured, s?.ollama_configured].filter(Boolean).length;
     const isLastProvider = configuredCount === 1 && isProviderConfigured(provider, s);
 
     // Check if current model uses this provider
@@ -458,6 +471,7 @@ export const AISettings: Component = () => {
       if (provider === 'anthropic') clearPayload.clear_anthropic_key = true;
       if (provider === 'openai') clearPayload.clear_openai_key = true;
       if (provider === 'deepseek') clearPayload.clear_deepseek_key = true;
+      if (provider === 'gemini') clearPayload.clear_gemini_key = true;
       if (provider === 'ollama') clearPayload.clear_ollama_url = true;
 
       await AIAPI.updateSettings(clearPayload);
@@ -470,6 +484,7 @@ export const AISettings: Component = () => {
       if (provider === 'anthropic') setForm('anthropicApiKey', '');
       if (provider === 'openai') setForm('openaiApiKey', '');
       if (provider === 'deepseek') setForm('deepseekApiKey', '');
+      if (provider === 'gemini') setForm('geminiApiKey', '');
       if (provider === 'ollama') setForm('ollamaBaseUrl', '');
 
       notificationStore.success(`${provider} credentials cleared`);
@@ -980,6 +995,74 @@ export const AISettings: Component = () => {
                     </Show>
                   </div>
 
+                  {/* Google Gemini */}
+                  <div class={`border rounded-lg overflow-hidden ${settings()?.gemini_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                    <button
+                      type="button"
+                      class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      onClick={() => {
+                        const current = expandedProviders();
+                        const next = new Set(current);
+                        if (next.has('gemini')) next.delete('gemini');
+                        else next.add('gemini');
+                        setExpandedProviders(next);
+                      }}
+                    >
+                      <div class="flex items-center gap-2">
+                        <span class="font-medium text-sm">Google Gemini</span>
+                        <Show when={settings()?.gemini_configured}>
+                          <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
+                        </Show>
+                      </div>
+                      <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('gemini') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <Show when={expandedProviders().has('gemini')}>
+                      <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                        <input
+                          type="password"
+                          value={form.geminiApiKey}
+                          onInput={(e) => setForm('geminiApiKey', e.currentTarget.value)}
+                          placeholder={settings()?.gemini_configured ? '••••••••••• (configured)' : 'AIza...'}
+                          class={controlClass()}
+                          disabled={saving()}
+                        />
+                        <div class="flex items-center justify-between">
+                          <p class="text-xs text-gray-500">
+                            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
+                          </p>
+                          <Show when={settings()?.gemini_configured}>
+                            <div class="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleTestProvider('gemini')}
+                                disabled={testingProvider() === 'gemini' || saving()}
+                                class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                              >
+                                {testingProvider() === 'gemini' ? 'Testing...' : 'Test'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleClearProvider('gemini')}
+                                disabled={saving()}
+                                class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                                title="Clear API key"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </Show>
+                        </div>
+                        <Show when={providerTestResult()?.provider === 'gemini'}>
+                          <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
+                            {providerTestResult()?.message}
+                          </p>
+                        </Show>
+                      </div>
+                    </Show>
+                  </div>
+
                   {/* Ollama */}
                   <div class={`border rounded-lg overflow-hidden ${settings()?.ollama_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
                     <button
@@ -1369,6 +1452,17 @@ export const AISettings: Component = () => {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setSetupProvider('gemini')}
+                  class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'gemini'
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-purple-300'
+                    }`}
+                >
+                  <div class="text-sm font-medium">Gemini</div>
+                  <div class="text-xs text-gray-500 mt-0.5">Google</div>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setSetupProvider('ollama')}
                   class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'ollama'
                     ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
@@ -1384,13 +1478,13 @@ export const AISettings: Component = () => {
               <Show when={setupProvider() === 'ollama'} fallback={
                 <div>
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    {setupProvider() === 'anthropic' ? 'Anthropic' : setupProvider() === 'openai' ? 'OpenAI' : 'DeepSeek'} API Key
+                    {setupProvider() === 'anthropic' ? 'Anthropic' : setupProvider() === 'openai' ? 'OpenAI' : setupProvider() === 'gemini' ? 'Google Gemini' : 'DeepSeek'} API Key
                   </label>
                   <input
                     type="password"
                     value={setupApiKey()}
                     onInput={(e) => setSetupApiKey(e.currentTarget.value)}
-                    placeholder={setupProvider() === 'anthropic' ? 'sk-ant-...' : 'sk-...'}
+                    placeholder={setupProvider() === 'anthropic' ? 'sk-ant-...' : setupProvider() === 'gemini' ? 'AIza...' : 'sk-...'}
                     class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   />
                   <p class="text-xs text-gray-500 mt-1.5">
@@ -1399,7 +1493,9 @@ export const AISettings: Component = () => {
                         ? 'https://console.anthropic.com/settings/keys'
                         : setupProvider() === 'openai'
                           ? 'https://platform.openai.com/api-keys'
-                          : 'https://platform.deepseek.com/api_keys'
+                          : setupProvider() === 'gemini'
+                            ? 'https://aistudio.google.com/app/apikey'
+                            : 'https://platform.deepseek.com/api_keys'
                       }
                       target="_blank"
                       rel="noopener"
@@ -1469,6 +1565,13 @@ export const AISettings: Component = () => {
                       }
                       payload.deepseek_api_key = setupApiKey().trim();
                       payload.model = 'deepseek:deepseek-chat';
+                    } else if (setupProvider() === 'gemini') {
+                      if (!setupApiKey().trim()) {
+                        notificationStore.error('Please enter your Google Gemini API key');
+                        return;
+                      }
+                      payload.gemini_api_key = setupApiKey().trim();
+                      payload.model = 'gemini:gemini-2.5-flash';
                     } else {
                       if (!setupOllamaUrl().trim()) {
                         notificationStore.error('Please enter your Ollama server URL');
