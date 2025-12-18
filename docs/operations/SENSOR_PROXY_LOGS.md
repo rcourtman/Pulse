@@ -1,8 +1,8 @@
 # 📝 Sensor Proxy Log Forwarding
 
-> **⚠️ Deprecated:** The sensor-proxy is deprecated in favor of the unified Pulse agent.
-> For new installations, use `install.sh --enable-proxmox` instead.
-> See [TEMPERATURE_MONITORING.md](/docs/security/TEMPERATURE_MONITORING.md).
+> **Deprecated in v5:** `pulse-sensor-proxy` is deprecated and not recommended for new deployments.
+> Use `pulse-agent --enable-proxmox` for temperature monitoring.
+> This document is retained for existing installations during the migration window.
 
 Forward `audit.log` and `proxy.log` to a central SIEM via RELP + TLS.
 
@@ -16,7 +16,7 @@ sudo REMOTE_HOST=logs.example.com \
      CA_CERT=/path/to/ca.crt \
      CLIENT_CERT=/path/to/client.crt \
      CLIENT_KEY=/path/to/client.key \
-     /opt/pulse/scripts/setup-log-forwarding.sh
+     bash -c "$(curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/setup-log-forwarding.sh)"
 ```
 
 ## 📋 What It Does

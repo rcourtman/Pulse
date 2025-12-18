@@ -205,10 +205,11 @@ func main() {
 			Logger:             &logger,
 			KubeconfigPath:     cfg.KubeconfigPath,
 			KubeContext:        cfg.KubeContext,
-			IncludeNamespaces:  cfg.KubeIncludeNamespaces,
-			ExcludeNamespaces:  cfg.KubeExcludeNamespaces,
-			IncludeAllPods:     cfg.KubeIncludeAllPods,
-			MaxPods:            cfg.KubeMaxPods,
+			IncludeNamespaces:     cfg.KubeIncludeNamespaces,
+			ExcludeNamespaces:     cfg.KubeExcludeNamespaces,
+			IncludeAllPods:        cfg.KubeIncludeAllPods,
+			IncludeAllDeployments: cfg.KubeIncludeAllDeployments,
+			MaxPods:               cfg.KubeMaxPods,
 		}
 
 		agent, err := kubernetesagent.New(kubeCfg)
@@ -336,10 +337,11 @@ type Config struct {
 	// Kubernetes
 	KubeconfigPath        string
 	KubeContext           string
-	KubeIncludeNamespaces []string
-	KubeExcludeNamespaces []string
-	KubeIncludeAllPods    bool
-	KubeMaxPods           int
+	KubeIncludeNamespaces     []string
+	KubeExcludeNamespaces     []string
+	KubeIncludeAllPods        bool
+	KubeIncludeAllDeployments bool
+	KubeMaxPods               int
 }
 
 func loadConfig() Config {
@@ -364,6 +366,7 @@ func loadConfig() Config {
 	envKubeIncludeNamespaces := utils.GetenvTrim("PULSE_KUBE_INCLUDE_NAMESPACES")
 	envKubeExcludeNamespaces := utils.GetenvTrim("PULSE_KUBE_EXCLUDE_NAMESPACES")
 	envKubeIncludeAllPods := utils.GetenvTrim("PULSE_KUBE_INCLUDE_ALL_PODS")
+	envKubeIncludeAllDeployments := utils.GetenvTrim("PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS")
 	envKubeMaxPods := utils.GetenvTrim("PULSE_KUBE_MAX_PODS")
 
 	// Defaults
@@ -418,6 +421,7 @@ func loadConfig() Config {
 	kubeconfigFlag := flag.String("kubeconfig", envKubeconfig, "Path to kubeconfig (optional; uses in-cluster config if available)")
 	kubeContextFlag := flag.String("kube-context", envKubeContext, "Kubeconfig context (optional)")
 	kubeIncludeAllPodsFlag := flag.Bool("kube-include-all-pods", utils.ParseBool(envKubeIncludeAllPods), "Include all non-succeeded pods (may be large)")
+	kubeIncludeAllDeploymentsFlag := flag.Bool("kube-include-all-deployments", utils.ParseBool(envKubeIncludeAllDeployments), "Include all deployments, not just problem ones")
 	kubeMaxPodsFlag := flag.Int("kube-max-pods", defaultInt(envKubeMaxPods, 200), "Max pods included in report")
 	showVersion := flag.Bool("version", false, "Print the agent version and exit")
 
@@ -474,10 +478,11 @@ func loadConfig() Config {
 		HealthAddr:            strings.TrimSpace(*healthAddrFlag),
 		KubeconfigPath:        strings.TrimSpace(*kubeconfigFlag),
 		KubeContext:           strings.TrimSpace(*kubeContextFlag),
-		KubeIncludeNamespaces: kubeIncludeNamespaces,
-		KubeExcludeNamespaces: kubeExcludeNamespaces,
-		KubeIncludeAllPods:    *kubeIncludeAllPodsFlag,
-		KubeMaxPods:           *kubeMaxPodsFlag,
+		KubeIncludeNamespaces:     kubeIncludeNamespaces,
+		KubeExcludeNamespaces:     kubeExcludeNamespaces,
+		KubeIncludeAllPods:        *kubeIncludeAllPodsFlag,
+		KubeIncludeAllDeployments: *kubeIncludeAllDeploymentsFlag,
+		KubeMaxPods:               *kubeMaxPodsFlag,
 	}
 }
 

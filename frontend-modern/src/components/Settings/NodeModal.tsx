@@ -6,7 +6,6 @@ import { copyToClipboard } from '@/utils/clipboard';
 import { showSuccess, showError } from '@/utils/toast';
 import { getPulseBaseUrl } from '@/utils/url';
 import { NodesAPI } from '@/api/nodes';
-import { apiFetchJSON } from '@/utils/apiClient';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import {
   formField,
@@ -39,12 +38,6 @@ type TemperatureTransportDetail = {
   message: string;
   disable?: boolean;
 };
-
-interface ProxyInstallResponse {
-  command: string;
-  pulseURL: string;
-  node?: string;
-}
 
 const deriveNameFromHost = (host: string): string => {
   let value = host.trim();
@@ -98,9 +91,6 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   const [quickSetupCommand, setQuickSetupCommand] = createSignal('');
   const [quickSetupToken, setQuickSetupToken] = createSignal('');
   const [quickSetupExpiry, setQuickSetupExpiry] = createSignal<number | null>(null);
-  const [proxyInstallCommand, setProxyInstallCommand] = createSignal('');
-  const [loadingProxyCommand, setLoadingProxyCommand] = createSignal(false);
-  const [proxyCommandError, setProxyCommandError] = createSignal<string | null>(null);
   const [agentInstallCommand, setAgentInstallCommand] = createSignal('');
   const [loadingAgentCommand, setLoadingAgentCommand] = createSignal(false);
   const [agentCommandError, setAgentCommandError] = createSignal<string | null>(null);
@@ -163,36 +153,6 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       return detail.message;
     }
     return undefined;
-  };
-  const shouldOfferProxyCommand = () =>
-    props.nodeType === 'pve' && Boolean(props.editingNode?.id) && Boolean(temperatureTransportDetail()?.disable);
-  const fetchProxyInstallCommand = async () => {
-    if (loadingProxyCommand()) {
-      return;
-    }
-    setLoadingProxyCommand(true);
-    setProxyCommandError(null);
-    setProxyInstallCommand('');
-    try {
-      const nodeName = props.editingNode?.name ? encodeURIComponent(props.editingNode!.name) : '';
-      const query = nodeName ? `?node=${nodeName}` : '';
-      const response = (await apiFetchJSON(
-        `/api/temperature-proxy/install-command${query}`,
-      )) as ProxyInstallResponse;
-      if (!response || typeof response.command !== 'string') {
-        throw new Error('Proxy installer command unavailable');
-      }
-      setProxyInstallCommand(response.command);
-      showSuccess('HTTPS proxy command ready', undefined, 2000);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to generate HTTPS proxy command';
-      setProxyCommandError(message);
-      showError(message);
-      logger.error('Failed to load proxy install command', error);
-    } finally {
-      setLoadingProxyCommand(false);
-    }
   };
   const quickSetupExpiryLabel = () => {
     const expiry = quickSetupExpiry();
@@ -2104,56 +2064,6 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                             <p class={`mt-2 text-xs ${temperatureTransportMessageClass()}`}>
                               {temperatureTransportDetail()?.message}
                             </p>
-                          </Show>
-                          <Show when={shouldOfferProxyCommand()}>
-                            <div class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-800 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-100 space-y-2">
-                              <div class="font-semibold">Temperature proxy (legacy)</div>
-                              <div class="text-amber-700 dark:text-amber-300 text-[11px]">
-                                Recommended: Install the Pulse agent instead (Settings → Agents) for temperatures + AI features.
-                              </div>
-                              <div>Or generate a one-line installer command for the standalone temperature proxy:</div>
-                              <div class="flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  class="rounded bg-blue-600 px-2 py-1 text-white hover:bg-blue-700 disabled:opacity-70"
-                                  onClick={() => void fetchProxyInstallCommand()}
-                                  disabled={loadingProxyCommand()}
-                                >
-                                  {loadingProxyCommand() ? 'Generating…' : 'Generate command'}
-                                </button>
-                                <a
-                                  href="/api/install/install-sensor-proxy.sh"
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  class="rounded border border-blue-400 px-2 py-1 text-blue-700 hover:bg-blue-100 dark:text-blue-200 dark:border-blue-300 dark:hover:bg-blue-900/40"
-                                >
-                                  Download installer script
-                                </a>
-                              </div>
-                              <Show when={proxyCommandError()}>
-                                <p class="text-xs text-red-600 dark:text-red-300">
-                                  {proxyCommandError()}
-                                </p>
-                              </Show>
-                              <Show when={proxyInstallCommand()}>
-                                <pre class="overflow-x-auto rounded bg-white/70 px-2 py-1 font-mono text-[0.65rem] text-gray-800 dark:bg-gray-900/40 dark:text-gray-200">
-                                  {proxyInstallCommand()}
-                                </pre>
-                                <button
-                                  type="button"
-                                  class="rounded bg-blue-600 px-2 py-1 text-white hover:bg-blue-700"
-                                  onClick={() => {
-                                    const command = proxyInstallCommand();
-                                    if (command) {
-                                      void copyToClipboard(command);
-                                      showSuccess('Proxy installer command copied');
-                                    }
-                                  }}
-                                >
-                                  Copy command
-                                </button>
-                              </Show>
-                            </div>
                           </Show>
                           <Show when={!temperatureMonitoringEnabledValue()}>
                             <p class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">

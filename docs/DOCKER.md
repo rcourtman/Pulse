@@ -105,7 +105,9 @@ docker compose up -d
   ```bash
   docker exec pulse rm /data/.env
   docker restart pulse
-  # Access UI to run setup wizard again
+  # Access UI again. Pulse will require a bootstrap token for setup.
+  # Get it with:
+  docker exec pulse /app/pulse bootstrap-token
   ```
 
 - **Logs**

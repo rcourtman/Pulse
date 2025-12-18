@@ -9,18 +9,21 @@ Pulse uses an adaptive scheduler to optimize polling based on instance health an
 *   **Backoff**: Exponential retry delays (5s to 5m).
 
 ## ⚙️ Configuration
-Adaptive polling is **enabled by default**.
+Adaptive polling is **disabled by default**.
 
 ### UI
-**Settings → System → Monitoring**.
+There is currently no dedicated UI for adaptive polling in v5.
 
 ### Environment Variables
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `ADAPTIVE_POLLING_ENABLED` | `true` | Enable/disable. |
+| `ADAPTIVE_POLLING_ENABLED` | `false` | Enable/disable. |
 | `ADAPTIVE_POLLING_BASE_INTERVAL` | `10s` | Healthy poll rate. |
 | `ADAPTIVE_POLLING_MIN_INTERVAL` | `5s` | Active/busy rate. |
 | `ADAPTIVE_POLLING_MAX_INTERVAL` | `5m` | Idle/backoff rate. |
+
+### system.json
+You can also set `adaptivePollingEnabled` (and related interval fields) in `system.json` and restart Pulse.
 
 ## 📊 Metrics
 Exposed at `:9091/metrics`.

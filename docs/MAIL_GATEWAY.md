@@ -19,32 +19,26 @@ Pulse 5.0 adds support for monitoring Proxmox Mail Gateway instances alongside y
 4. Enter connection details:
    - Host: Your PMG IP or hostname
    - Port: 8006 (default)
-   - API Token ID: e.g., `root@pam!pulse`
-   - API Token Secret: Your token secret
+   - API Token ID: e.g., `root@pmg!pulse` (format: `<user>@<realm>!<token-id>`)
+   - API Token Secret: Your token secret (shown once when you create the token)
 
 ### Via Discovery
 
 Pulse can automatically discover PMG instances on your network:
 
-1. Go to **Settings → Discovery**
-2. Enable network discovery
-3. PMG instances on port 8006 will be detected
-4. Click to add discovered instances
+1. Enable discovery in **Settings → System → Network**
+2. Go to **Settings → Proxmox**
+3. PMG instances on port 8006 are detected and shown in the Proxmox discovery panels
+4. Click a discovered PMG server to add it
 
 ## API Token Setup on PMG
 
-Create an API token on your PMG server:
+Create an API token on your PMG server (recommended). The easiest method is via the PMG web UI:
 
-```bash
-# SSH to your PMG server
-pveum user token add root@pam pulse --privsep 0
+- Create a token for a user (for example `root@pmg`)
+- Copy the token secret when it is displayed (it is typically shown once)
 
-# Note the token secret - it's only shown once!
-```
-
-Required permissions:
-- `Sys.Audit` - Read system status
-- `Datastore.Audit` - Read mail statistics
+If you see 403/permission errors, start by testing with a token for an admin user to confirm connectivity, then tighten permissions once you know which PMG endpoints your instance requires.
 
 ## Dashboard
 

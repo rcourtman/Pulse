@@ -41,14 +41,20 @@ environment where `PULSE_DOCKER=true`/`/.dockerenv` is detected.
 
 #### Migration Path (Production)
 
-1. **Install the sensor proxy on the Proxmox host that runs Pulse**
-   ```bash
-   curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | \
-     bash -s -- --ctid <pulse-lxc-id> --pulse-server https://pulse.example.com:7655
-   ```
-   - For Docker or standalone hosts where Pulse cannot mount the socket (or when collecting temps from *other* nodes), run the installer with `--standalone --http-mode` so each host exposes its own HTTPS endpoint on port 8443.
-2. **Let the installer manage the hardened systemd unit** – it creates the dedicated `pulse-sensor-proxy` user, installs TLS material, and restarts the service safely.
-3. **Restart the Pulse container** so it binds to `/run/pulse-sensor-proxy` (for local temps) and registers the HTTPS proxy (for remote temps). The backend automatically prefers the HTTPS proxy, then the socket, and never stores SSH keys in the container.
+Preferred option (no SSH keys, no proxy wiring):
+
+1. Install the unified agent (`pulse-agent`) on each Proxmox host with Proxmox integration enabled.
+   - Use the UI to generate an install command in **Settings → Agents**, or run:
+     ```bash
+     curl -fsSL http://pulse.example.com:7655/install.sh | \
+       sudo bash -s -- --url http://pulse.example.com:7655 --token <api-token> --enable-proxmox
+     ```
+
+Deprecated option (existing installs only):
+
+- `pulse-sensor-proxy` is deprecated in Pulse v5 and is not recommended for new deployments.
+- Existing installs continue to work during the migration window, but plan to move to `pulse-agent --enable-proxmox`.
+- Canonical temperature docs: `docs/TEMPERATURE_MONITORING.md`
 
 #### Removing Old SSH Keys
 
@@ -68,15 +74,15 @@ docker exec pulse rm -rf /home/pulse/.ssh/id_ed25519*
 ┌─────────────────────────────────────┐
 │  Proxmox Host                       │
 │  ┌───────────────────────────────┐  │
-│  │  pulse-sensor-proxy (svc user)│  │
-│  │  · Runs sensors -j            │  │
-│  │  · Exposes Unix socket + TLS  │  │
+│  │  pulse-agent                  │  │
+│  │  · Reads sensors locally      │  │
+│  │  · Sends metrics via HTTPS    │  │
 │  └───────────────────────────────┘  │
 │            │                         │
-│            │ /run/pulse-sensor-proxy.sock
+│            │ HTTPS + API token       │
 │            │                         │
 │  ┌─────────▼─────────────────────┐  │
-│  │  Pulse container (bind mount) │  │
+│  │  Pulse (Docker/LXC container) │  │
 │  │  · No SSH keys                │  │
 │  │  · No host root privileges    │  │
 │  └───────────────────────────────┘  │
@@ -95,13 +101,16 @@ rotate keys regularly.
 ```bash
 # Detect vulnerable containers
 ls /home/pulse/.ssh/id_ed25519* 2>/dev/null && echo "⚠️  SSH keys present"
-
-# Check container logs for proxy detection
-docker logs pulse | grep -i "temperature proxy detected"
-
-# Verify the host service
-systemctl status pulse-sensor-proxy
 ```
+
+Verify temperature collection is agent-based:
+
+- UI: **Settings → Agents** shows each Proxmox host connected and reporting.
+- On each Proxmox host:
+  ```bash
+  systemctl status pulse-agent
+  journalctl -u pulse-agent -n 200 --no-pager
+  ```
 
 **Documentation:** https://github.com/rcourtman/Pulse/blob/main/SECURITY.md#critical-security-notice-for-container-deployments
 **Issues:** https://github.com/rcourtman/pulse/issues
@@ -397,7 +406,7 @@ curl -H "Authorization: Bearer your-original-token" http://localhost:7655/api/ex
 
 ### Runtime Logging Configuration
 
-**New in v4.24.0:** Adjust logging settings dynamically without restarting Pulse.
+Pulse supports configurable logging (level, format, optional file output, rotation) via environment variables.
 
 #### Security Benefits
 - Enable debug logging temporarily for incident investigation
@@ -407,13 +416,7 @@ curl -H "Authorization: Bearer your-original-token" http://localhost:7655/api/ex
 
 #### Configuration Options
 
-**Via UI:**
-Navigate to **Settings → System → Logging**:
-- **Log Level**: `debug`, `info`, `warn`, `error`
-- **Log Format**: `json` (for log aggregation), `text` (human-readable)
-- **File Rotation**: size limits, retention policies
-
-**Via Environment Variables:**
+**Via environment variables:**
 ```bash
 # Systemd
 sudo systemctl edit pulse
@@ -421,16 +424,16 @@ sudo systemctl edit pulse
 Environment="LOG_LEVEL=info"
 Environment="LOG_FORMAT=json"
 Environment="LOG_MAX_SIZE=100"        # MB per log file
-Environment="LOG_MAX_BACKUPS=10"      # Number of rotated logs to keep
 Environment="LOG_MAX_AGE=30"          # Days to retain logs
+Environment="LOG_COMPRESS=true"       # Compress rotated logs
 
 # Docker
 docker run \
   -e LOG_LEVEL=info \
   -e LOG_FORMAT=json \
   -e LOG_MAX_SIZE=100 \
-  -e LOG_MAX_BACKUPS=10 \
   -e LOG_MAX_AGE=30 \
+  -e LOG_COMPRESS=true \
   rcourtman/pulse:latest
 ```
 
@@ -438,7 +441,7 @@ docker run \
 - Debug logs may contain sensitive data—enable only when needed
 - JSON format recommended for security monitoring and SIEM
 - Adjust retention based on compliance requirements
-- Changes are logged to audit trail
+ - Changes take effect on restart
 
 ## CORS (Cross-Origin Resource Sharing)
 
@@ -499,8 +502,7 @@ curl -s http://localhost:7655/api/monitoring/scheduler/health | jq
 - **Backoff Delays**: Increased backoff may indicate rate limiting or errors
 - **Error Rates**: Track failed API calls and authentication attempts
 
-**Dashboard Access:**
-Navigate to **Settings → System → Monitoring** for visual representation of scheduler health.
+There is currently no dedicated scheduler-health UI in v5. Use the API endpoint above (or export diagnostics from **Settings → Diagnostics**) when troubleshooting.
 
 ## Security Best Practices
 

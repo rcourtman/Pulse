@@ -374,9 +374,10 @@ go build ./cmd/pulse-sensor-proxy
 
 ### References
 
-- **Audit Report:** `/opt/pulse/docs/SECURITY_AUDIT_2025-11-07.md` (to be created)
-- **Security Architecture:** `/opt/pulse/docs/TEMPERATURE_MONITORING_SECURITY.md`
-- **Hardening Guide:** `/opt/pulse/docs/PULSE_SENSOR_PROXY_HARDENING.md`
+- **Audit Report:** `docs/SECURITY_AUDIT_2025-11-07.md`
+- **Audit Report:** `docs/SECURITY_AUDIT_2025-12-18.md`
+- **Temperature Monitoring Overview:** `docs/security/TEMPERATURE_MONITORING.md`
+- **Sensor Proxy Hardening:** `docs/security/SENSOR_PROXY_HARDENING.md`
 
 ---
 

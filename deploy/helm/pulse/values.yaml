@@ -98,6 +98,8 @@ server:
     failureThreshold: 3
 
 agent:
+  # Legacy: this deploys the deprecated `pulse-docker-agent`.
+  # For new deployments, prefer installing the unified agent (`pulse-agent`) on the hosts you want to monitor.
   enabled: false
   kind: DaemonSet # Supported: DaemonSet | Deployment
   replicaCount: 1

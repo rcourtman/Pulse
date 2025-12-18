@@ -1,5 +1,8 @@
 # 🔄 Sensor Proxy Audit Log Rotation
 
+> **Deprecated in v5:** `pulse-sensor-proxy` is deprecated and not recommended for new deployments.
+> This document is retained for existing installations during the migration window.
+
 The proxy writes append-only, hash-chained logs to `/var/log/pulse/sensor-proxy/audit.log`.
 
 ## ⚠️ Important

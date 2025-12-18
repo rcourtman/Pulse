@@ -2,6 +2,12 @@
 
 Pulse exposes metrics at `/metrics` (default port `9091`).
 
+Example scrape target:
+
+- `http://<pulse-host>:9091/metrics`
+
+This listener is separate from the main UI/API port (`7655`). In Docker and Kubernetes you must expose `9091` explicitly if you want to scrape it from outside the container/pod.
+
 ## 🌐 HTTP Ingress
 | Metric | Type | Description |
 | :--- | :--- | :--- |

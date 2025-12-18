@@ -183,6 +183,39 @@ func TestCollectDeployments_FiltersProblems(t *testing.T) {
 	}
 }
 
+func TestCollectDeployments_IncludeAllDeployments(t *testing.T) {
+	replicas := int32(3)
+	okReplicas := int32(2)
+
+	clientset := fake.NewSimpleClientset(
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "bad"},
+			Spec:       appsv1.DeploymentSpec{Replicas: &replicas},
+			Status:     appsv1.DeploymentStatus{AvailableReplicas: 2, ReadyReplicas: 2, UpdatedReplicas: 2},
+		},
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "ok"},
+			Spec:       appsv1.DeploymentSpec{Replicas: &okReplicas},
+			Status:     appsv1.DeploymentStatus{AvailableReplicas: 2, ReadyReplicas: 2, UpdatedReplicas: 2},
+		},
+	)
+
+	a := &Agent{
+		cfg:               Config{IncludeAllDeployments: true},
+		kubeClient:        clientset,
+		includeNamespaces: nil,
+		excludeNamespaces: nil,
+	}
+
+	deps, err := a.collectDeployments(context.Background())
+	if err != nil {
+		t.Fatalf("collectDeployments: %v", err)
+	}
+	if len(deps) != 2 {
+		t.Fatalf("expected 2 deployments with IncludeAllDeployments=true, got %d (%+v)", len(deps), deps)
+	}
+}
+
 func TestCollectNodes_MapsReadyRolesAndResources(t *testing.T) {
 	clientset := fake.NewSimpleClientset(
 		&corev1.Node{

@@ -4,6 +4,15 @@ Pulse offers flexible installation options from Docker to enterprise-ready Kuber
 
 ## 🚀 Quick Start (Recommended)
 
+### Proxmox VE (LXC installer)
+If you run Proxmox VE, the easiest and most “Pulse-native” deployment is the official installer which creates and configures a lightweight LXC container.
+
+Run this on your Proxmox host:
+
+```bash
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
+```
+
 ### Docker
 Ideal for containerized environments or testing.
 
@@ -46,22 +55,27 @@ volumes:
 Deploy to your cluster using our Helm chart.
 
 ```bash
-helm repo add pulse https://rcourtman.github.io/Pulse/
-helm repo update
-helm install pulse pulse/pulse \
+helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart \
   --namespace pulse \
   --create-namespace
 ```
 See [KUBERNETES.md](KUBERNETES.md) for ingress and persistence configuration.
 
 ### 2. Bare Metal / Systemd
-For bare-metal Linux servers, download the release binary directly.
+For Linux servers (VM or bare metal), use the official installer:
 
 ```bash
-# Download and extract
-curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/pulse-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m).tar.gz | tar xz
-sudo mv pulse /usr/local/bin/
-sudo chmod +x /usr/local/bin/pulse
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | sudo bash
+```
+
+<details>
+<summary><strong>Manual systemd install (advanced)</strong></summary>
+
+```bash
+# Download the correct tarball from GitHub Releases and extract it
+# https://github.com/rcourtman/Pulse/releases
+
+sudo install -m 0755 pulse /usr/local/bin/pulse
 
 # Create systemd service
 sudo tee /etc/systemd/system/pulse.service > /dev/null << 'EOF'
@@ -85,6 +99,7 @@ sudo mkdir -p /etc/pulse
 sudo systemctl daemon-reload
 sudo systemctl enable --now pulse
 ```
+</details>
 
 ---
 
@@ -96,16 +111,16 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
 
 | Platform | Command |
 |----------|---------|
-| **Docker** | `docker exec pulse cat /data/.bootstrap_token` |
-| **Kubernetes** | `kubectl exec -it <pod> -- cat /data/.bootstrap_token` |
-| **Systemd** | `sudo cat /etc/pulse/.bootstrap_token` |
+| **Docker** | `docker exec pulse cat /data/.bootstrap_token` or `docker exec pulse /app/pulse bootstrap-token` |
+| **Kubernetes** | `kubectl exec -it <pod> -- cat /data/.bootstrap_token` or `kubectl exec -it <pod> -- /app/pulse bootstrap-token` |
+| **Systemd** | `sudo cat /etc/pulse/.bootstrap_token` or `sudo pulse bootstrap-token` |
 
 ### Step 2: Create Admin Account
 1. Open `http://<your-ip>:7655`
 2. Paste the **Bootstrap Token**.
 3. Create your **Admin Username** and **Password**.
 
-> **Note**: If you configure `PULSE_AUTH_USER` and `PULSE_AUTH_PASS` via environment variables, this step is skipped.
+> **Note**: If you configure authentication via environment variables (`PULSE_AUTH_USER`/`PULSE_AUTH_PASS` and/or `API_TOKENS`), the bootstrap token is automatically removed and this step is skipped.
 
 ---
 
@@ -114,7 +129,7 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
 ### Automatic Updates (Systemd only)
 Pulse can self-update to the latest stable version.
 
-**Enable via UI**: Settings → System → Automatic Updates
+**Enable via UI**: Settings → System → Updates
 
 ### Manual Update
 | Platform | Command |

@@ -8,6 +8,13 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `system.json` | General Settings | 📝 Standard |
 | `nodes.enc` | Node Credentials | 🔒 **Encrypted** (AES-256-GCM) |
 | `alerts.json` | Alert Rules | 📝 Standard |
+| `email.enc` | SMTP settings | 🔒 **Encrypted** |
+| `webhooks.enc` | Webhook URLs + headers | 🔒 **Encrypted** |
+| `apprise.enc` | Apprise notification config | 🔒 **Encrypted** |
+| `oidc.enc` | OIDC provider config | 🔒 **Encrypted** |
+| `api_tokens.json` | API token records (hashed) | 🔒 **Sensitive** |
+| `ai.enc` | AI settings and credentials | 🔒 **Encrypted** |
+| `metrics.db` | Persistent metrics history (SQLite) | 📝 Standard |
 
 All files are located in `/etc/pulse/` (Systemd) or `/data/` (Docker/Kubernetes).
 
@@ -67,7 +74,7 @@ Controls runtime behavior like ports, logging, and polling intervals. Most of th
   "frontendPort": 7655,           // Public port
   "logLevel": "info",             // debug, info, warn, error
   "autoUpdateEnabled": false,     // Enable auto-update checks
-  "adaptivePollingEnabled": true  // Smart polling for large clusters
+  "adaptivePollingEnabled": false // Smart polling for large clusters
 }
 ```
 
@@ -97,10 +104,21 @@ Environment variables take precedence over `system.json`.
 | `PMG_POLLING_INTERVAL` | PMG metrics polling frequency | `60s` |
 | `ENABLE_BACKUP_POLLING` | Enable backup job monitoring | `true` |
 | `BACKUP_POLLING_INTERVAL` | Backup polling frequency | `0` (Auto) |
-| `ENABLE_TEMPERATURE_MONITORING` | Enable SSH temperature checks | `true` |
-| `SSH_PORT` | SSH port for temperature checks | `22` |
+| `ENABLE_TEMPERATURE_MONITORING` | Enable temperature monitoring (where supported) | `true` |
+| `SSH_PORT` | SSH port for legacy SSH-based temperature collection | `22` |
 | `ADAPTIVE_POLLING_ENABLED` | Enable smart polling for large clusters | `false` |
 | `WEBHOOK_BATCH_DELAY` | Delay before sending batched webhooks | `10s` |
+
+### Metrics Retention (Tiered)
+
+Persistent metrics history uses tiered retention windows. These values are stored in `system.json` and can be adjusted for storage vs history depth:
+
+- `metricsRetentionRawHours`
+- `metricsRetentionMinuteHours`
+- `metricsRetentionHourlyDays`
+- `metricsRetentionDailyDays`
+
+See [METRICS_HISTORY.md](METRICS_HISTORY.md) for details.
 
 ---
 

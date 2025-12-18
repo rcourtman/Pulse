@@ -4738,6 +4738,12 @@ func (r *Router) handleDownloadInstallerScript(w http.ResponseWriter, req *http.
 		return
 	}
 
+	log.Warn().
+		Str("path", req.URL.Path).
+		Str("remote", req.RemoteAddr).
+		Msg("Deprecated pulse-sensor-proxy installer requested - use pulse-agent --enable-proxmox instead")
+	w.Header().Set("Warning", `299 - "pulse-sensor-proxy is deprecated in v5; use pulse-agent --enable-proxmox"`)
+
 	// Try pre-built location first (in container)
 	scriptPath := "/opt/pulse/scripts/install-sensor-proxy.sh"
 	content, err := os.ReadFile(scriptPath)
@@ -4841,6 +4847,12 @@ func (r *Router) handleTemperatureProxyInstallCommand(w http.ResponseWriter, req
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
 		return
 	}
+
+	log.Warn().
+		Str("path", req.URL.Path).
+		Str("remote", req.RemoteAddr).
+		Msg("Deprecated sensor-proxy install command requested - use pulse-agent --enable-proxmox instead")
+	w.Header().Set("Warning", `299 - "pulse-sensor-proxy is deprecated in v5; use pulse-agent --enable-proxmox"`)
 
 	baseURL := strings.TrimSpace(r.resolvePublicURL(req))
 	if baseURL == "" {

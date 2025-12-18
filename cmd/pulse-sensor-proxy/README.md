@@ -1,9 +1,9 @@
 # pulse-sensor-proxy
 
-> **⚠️ Deprecated:** The sensor-proxy is deprecated in favor of the unified Pulse agent.
-> For new installations, use `install.sh --enable-proxmox` instead. The agent provides
-> temperature monitoring plus additional features (AI, automatic Proxmox API setup).
-> See [TEMPERATURE_MONITORING.md](/docs/security/TEMPERATURE_MONITORING.md) for details.
+> **Deprecated in v5:** `pulse-sensor-proxy` is deprecated and not recommended for new deployments.
+> Temperature monitoring should be done via the unified agent (`pulse-agent --enable-proxmox`).
+> This README is retained for existing installations during the migration window.
+> See `docs/TEMPERATURE_MONITORING.md`.
 
 The sensor proxy keeps SSH identities and temperature polling logic on the
 Proxmox host while presenting a small RPC surface (Unix socket or HTTPS) to the
@@ -16,7 +16,7 @@ capabilities, and produces append-only audit logs.
 | --- | --- |
 | **Recommended (automated)** | `curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh \| bash` |
 | **Manual build** | `go build ./cmd/pulse-sensor-proxy` and `sudo install -m 0755 pulse-sensor-proxy /usr/local/bin/` |
-| **Prebuilt artifact** | Copy the binary from `/opt/pulse/bin/pulse-sensor-proxy-*` inside the Pulse Docker image or download via `/download/pulse-sensor-proxy?platform=linux&arch=amd64`. |
+| **Prebuilt artifact** | Download `pulse-sensor-proxy-<platform>-<arch>` from GitHub Releases, or copy it from `/opt/pulse/bin/` inside the Pulse Docker image. |
 
 The installer script provisions:
 
@@ -176,7 +176,7 @@ Set alerts on:
 | Symptom | Guidance |
 | --- | --- |
 | Service fails to start with "Config validation failed" | Run `pulse-sensor-proxy config validate` to see specific errors. Check for duplicate keys or malformed YAML. |
-| Config corruption detected during startup | Older versions had dual code paths. Update to v4.31.1+ and reinstall proxy. The migration runs automatically. |
+| Config corruption detected during startup | Older versions had dual code paths. Update to the latest release and reinstall the proxy. The migration runs automatically. |
 | Temperature monitoring stops working after config change | Validate config first with `pulse-sensor-proxy config validate`, then restart service: `systemctl restart pulse-sensor-proxy`. |
 | `Cannot open audit log file` | Check permissions on `/var/log/pulse/sensor-proxy`. Remove `chattr +a` only during rotation. |
 | `connection denied` in audit log | UID/GID not listed in `allowed_peers`. Verify Pulse container UID mapping. |

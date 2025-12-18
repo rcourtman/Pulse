@@ -1,8 +1,8 @@
 # 🌐 Sensor Proxy Network Segmentation
 
-> **⚠️ Deprecated:** The sensor-proxy is deprecated in favor of the unified Pulse agent.
-> For new installations, use `install.sh --enable-proxmox` instead.
-> See [TEMPERATURE_MONITORING.md](/docs/security/TEMPERATURE_MONITORING.md).
+> **Deprecated in v5:** `pulse-sensor-proxy` is deprecated and not recommended for new deployments.
+> Use `pulse-agent --enable-proxmox` for temperature monitoring.
+> This document is retained for existing installations during the migration window.
 
 Isolate the proxy to prevent lateral movement.
 

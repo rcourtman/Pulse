@@ -13,16 +13,16 @@ Manage Pulse auto-updates on host-mode installations.
 ## 🚀 Enable/Disable
 
 ### Via UI (Recommended)
-**Settings → System → Updates → Automatic Updates**.
+**Settings → System → Updates**.
 
 ### Via CLI
 ```bash
 # Enable
-sudo jq '.autoUpdateEnabled=true' /var/lib/pulse/system.json > tmp && sudo mv tmp /var/lib/pulse/system.json
+sudo jq '.autoUpdateEnabled=true' /etc/pulse/system.json > /tmp/system.json && sudo mv /tmp/system.json /etc/pulse/system.json
 sudo systemctl enable --now pulse-update.timer
 
 # Disable
-sudo jq '.autoUpdateEnabled=false' /var/lib/pulse/system.json > tmp && sudo mv tmp /var/lib/pulse/system.json
+sudo jq '.autoUpdateEnabled=false' /etc/pulse/system.json > /tmp/system.json && sudo mv /tmp/system.json /etc/pulse/system.json
 sudo systemctl disable --now pulse-update.timer
 ```
 
@@ -40,8 +40,9 @@ journalctl -u pulse-update -f
 ## ↩️ Rollback
 If an update fails:
 1.  Check logs: `/var/log/pulse/update-YYYYMMDDHHMMSS.log`.
-2.  Revert manually:
+2.  Use the **Rollback** action in **Settings → System → Updates** if available for your deployment type.
+3.  If you need to pin a specific version, re-run the installer with a version:
     ```bash
-    sudo /opt/pulse/install.sh --version v4.30.0
+    curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | \
+      sudo bash -s -- --version vX.Y.Z
     ```
-    Or use the **Rollback** button in the UI if available.

@@ -10,8 +10,12 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
   Step-by-step guides for Docker, Kubernetes, and bare metal.
 - **[Configuration](CONFIGURATION.md)**  
   Learn how to configure authentication, notifications (Email, Discord, etc.), and system settings.
+- **[Deployment Models](DEPLOYMENT_MODELS.md)**  
+  Where config lives, how updates work, and what differs per deployment.
 - **[Migration Guide](MIGRATION.md)**  
   Moving to a new server? Here's how to export and import your data safely.
+- **[Upgrade to v5](UPGRADE_v5.md)**  
+  Practical upgrade guidance and post-upgrade checks.
 - **[FAQ](FAQ.md)**  
   Common questions and quick answers.
 
@@ -28,11 +32,11 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 
 ## ✨ New in 5.0
 
-- **[Pulse AI](AI.md)** – Intelligent monitoring assistant with chat, patrol mode, and auto-fix.
+- **[Pulse AI](AI.md)** – Optional assistant for chat, patrol findings, alert analysis, and execution workflows.
 - **[Metrics History](METRICS_HISTORY.md)** – Persistent metrics storage with configurable retention.
 - **[Mail Gateway](MAIL_GATEWAY.md)** – Proxmox Mail Gateway (PMG) monitoring.
 - **[Auto Updates](AUTO_UPDATE.md)** – One-click updates for supported deployments.
-- **[Kubernetes](KUBERNETES.md)** – Complete K8s cluster monitoring via agents.
+- **[Kubernetes](KUBERNETES.md)** – Helm deployment (ingress, persistence, HA patterns).
 
 ## 📡 Monitoring & Agents
 
