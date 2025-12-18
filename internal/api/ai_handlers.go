@@ -1956,6 +1956,7 @@ type PatrolStatusResponse struct {
 	ResourcesChecked int        `json:"resources_checked"`
 	FindingsCount    int        `json:"findings_count"`
 	Healthy          bool       `json:"healthy"`
+	IntervalMs       int64      `json:"interval_ms"` // Patrol interval in milliseconds
 	Summary          struct {
 		Critical int `json:"critical"`
 		Warning  int `json:"warning"`
@@ -1997,6 +1998,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		ResourcesChecked: status.ResourcesChecked,
 		FindingsCount:    status.FindingsCount,
 		Healthy:          status.Healthy,
+		IntervalMs:       status.IntervalMs,
 	}
 	response.Summary.Critical = summary.Critical
 	response.Summary.Warning = summary.Warning
