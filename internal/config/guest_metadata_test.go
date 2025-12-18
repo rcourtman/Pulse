@@ -647,6 +647,9 @@ func TestGuestMetadataStore_GetWithLegacyMigration_ClusteredMatchesNodeFormat(t 
 	if result.ID != "pve1:node1:100" {
 		t.Errorf("ID = %q, want %q", result.ID, "pve1:node1:100")
 	}
+
+	// Wait for async save to complete before test cleanup
+	time.Sleep(100 * time.Millisecond)
 }
 
 func TestGuestMetadataStore_GetWithLegacyMigration_ConcurrentMigration(t *testing.T) {
