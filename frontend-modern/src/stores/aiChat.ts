@@ -33,11 +33,32 @@ interface Message {
   }>;
 }
 
+// Local storage key
+const HISTORY_STORAGE_KEY = 'pulse:ai_chat_history';
+
+// Load initial messages from storage
+const loadMessagesFromStorage = (): Message[] => {
+  try {
+    const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
+    if (!stored) return [];
+
+    const parsed = JSON.parse(stored);
+    // Revive Date objects
+    return parsed.map((m: any) => ({
+      ...m,
+      timestamp: new Date(m.timestamp)
+    }));
+  } catch (e) {
+    console.error('Failed to load chat history:', e);
+    return [];
+  }
+};
+
 // Global state for the AI chat drawer
 const [isAIChatOpen, setIsAIChatOpen] = createSignal(false);
 const [aiChatContext, setAIChatContext] = createSignal<AIChatContext>({});
 const [contextItems, setContextItems] = createSignal<ContextItem[]>([]);
-const [messages, setMessages] = createSignal<Message[]>([]);
+const [messages, setMessages] = createSignal<Message[]>(loadMessagesFromStorage());
 const [aiEnabled, setAiEnabled] = createSignal<boolean | null>(null); // null = not checked yet
 
 // Store reference to AI input for focusing from keyboard shortcuts
@@ -82,6 +103,11 @@ export const aiChatStore = {
   // Set messages (for persistence from AIChat component)
   setMessages(msgs: Message[]) {
     setMessages(msgs);
+    try {
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(msgs));
+    } catch (e) {
+      console.error('Failed to save chat history:', e);
+    }
   },
 
   // Toggle the AI chat panel
@@ -164,6 +190,7 @@ export const aiChatStore = {
   // Clear conversation (start fresh)
   clearConversation() {
     setMessages([]);
+    localStorage.removeItem(HISTORY_STORAGE_KEY);
   },
 
   // Convenience method to update context for a specific target (host, VM, container, etc.)

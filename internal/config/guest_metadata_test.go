@@ -622,23 +622,30 @@ func TestGuestMetadataStore_GetWithLegacyMigration_NotFound(t *testing.T) {
 	}
 }
 
-func TestGuestMetadataStore_GetWithLegacyMigration_ClusteredSkipStandalone(t *testing.T) {
+func TestGuestMetadataStore_GetWithLegacyMigration_ClusteredMatchesNodeFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 	store := &GuestMetadataStore{
 		metadata: make(map[string]*GuestMetadata),
 		dataPath: tmpDir,
 	}
 
-	// Only add standalone format (shouldn't match for clustered request)
+	// Add node-vmid format (legacy standalone format)
 	store.metadata["node1-100"] = &GuestMetadata{
 		ID:        "node1-100",
 		CustomURL: "http://standalone.com",
 	}
 
-	// Clustered request (instance != node) should NOT match standalone format
+	// Clustered request (instance != node) CAN match node-vmid as fallback
+	// This handles cases where metadata was created with old format
 	result := store.GetWithLegacyMigration("pve1:node1:100", "pve1", "node1", 100)
-	if result != nil {
-		t.Error("Clustered request should not match standalone legacy format")
+	if result == nil {
+		t.Fatal("Should migrate from node-vmid format for clustered request")
+	}
+	if result.CustomURL != "http://standalone.com" {
+		t.Errorf("CustomURL = %q, want %q", result.CustomURL, "http://standalone.com")
+	}
+	if result.ID != "pve1:node1:100" {
+		t.Errorf("ID = %q, want %q", result.ID, "pve1:node1:100")
 	}
 }
 

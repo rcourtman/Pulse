@@ -606,7 +606,8 @@ export function GuestRow(props: GuestRowProps) {
     const newUrl = props.customUrl;
 
     // Only animate when URL transitions from empty to having a value
-    if (!prevUrl && newUrl) {
+    // Use a tracking variable to prevent initial mount animation if desired, but here we want to animate on first add
+    if (prevUrl === undefined && newUrl) {
       setShouldAnimateIcon(true);
       // Remove animation class after it completes
       setTimeout(() => setShouldAnimateIcon(false), 200);
@@ -801,7 +802,7 @@ export function GuestRow(props: GuestRowProps) {
                   >
                     {props.guest.name}
                   </span>
-                  <Show when={customUrl()}>
+                  <Show when={customUrl() && customUrl() !== ''}>
                     <a
                       href={customUrl()}
                       target="_blank"

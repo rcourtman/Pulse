@@ -255,8 +255,8 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 					tags = strings.Split(vm.Tags, ";")
 				}
 
-				// Use cluster-aware guest ID to prevent duplicates when multiple cluster nodes are configured
-				guestID := makeGuestID(instanceName, clusterName, isCluster, vm.VMID)
+				// Generate canonical guest ID: instance:node:vmid
+				guestID := makeGuestID(instanceName, n.Node, vm.VMID)
 
 				guestRaw := VMMemoryRaw{
 					ListingMem:    vm.Mem,
@@ -970,8 +970,8 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 					tags = strings.Split(container.Tags, ";")
 				}
 
-				// Use cluster-aware guest ID to prevent duplicates when multiple cluster nodes are configured
-				guestID := makeGuestID(instanceName, clusterName, isCluster, int(container.VMID))
+				// Generate canonical guest ID: instance:node:vmid
+				guestID := makeGuestID(instanceName, n.Node, int(container.VMID))
 
 				// Calculate I/O rates
 				currentMetrics := IOMetrics{

@@ -215,25 +215,50 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [selectedModel, setSelectedModel] = createSignal<string>(''); // Empty = use default
   const [showModelSelector, setShowModelSelector] = createSignal(false);
 
+  // Autonomous mode toggle
+  const [autonomousMode, setAutonomousMode] = createSignal(false);
+  const [isTogglingAutonomous, setIsTogglingAutonomous] = createSignal(false);
+
   let messagesEndRef: HTMLDivElement | undefined;
   let inputRef: HTMLTextAreaElement | undefined;
   let abortControllerRef: AbortController | null = null;
 
-  // Fetch available models on mount using the dynamic API
+  // Fetch available models and settings on mount
   onMount(async () => {
     try {
-      const result = await AIAPI.getModels();
-      if (result.models && result.models.length > 0) {
-        setAvailableModels(result.models.map(m => ({
+      const [modelsResult, settingsResult] = await Promise.all([
+        AIAPI.getModels(),
+        AIAPI.getSettings(),
+      ]);
+      if (modelsResult.models && modelsResult.models.length > 0) {
+        setAvailableModels(modelsResult.models.map(m => ({
           id: m.id,
           name: m.name || m.id,
           description: m.description,
         })));
       }
+      if (settingsResult) {
+        setAutonomousMode(settingsResult.autonomous_mode || false);
+      }
     } catch (_e) {
       // Silently fail - models will just not be selectable
     }
   });
+
+  // Toggle autonomous mode
+  const toggleAutonomousMode = async () => {
+    const newValue = !autonomousMode();
+    setIsTogglingAutonomous(true);
+    try {
+      await AIAPI.updateSettings({ autonomous_mode: newValue });
+      setAutonomousMode(newValue);
+      notificationStore.success(newValue ? 'Autonomous mode enabled' : 'Autonomous mode disabled');
+    } catch (e) {
+      notificationStore.error('Failed to toggle autonomous mode');
+    } finally {
+      setIsTogglingAutonomous(false);
+    }
+  };
 
   // Wrapper to sync messages to global store
   const setMessages = (updater: Message[] | ((prev: Message[]) => Message[])) => {
@@ -448,9 +473,22 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
                   // Emit event for metadata refresh if AI set a resource URL
                   if (data.name === 'set_resource_url' && data.success) {
-                    logger.info('[AIChat] Emitting metadata-changed event for set_resource_url');
+                    let payload;
+                    try {
+                      // Optimistically parse the input to pass relevant data for immediate update
+                      const parsedInput = JSON.parse(data.input);
+                      // Handle both new 'resource_id' field and legacy 'id'/'guest_id' fields
+                      const id = parsedInput.resource_id || parsedInput.guest_id || parsedInput.id;
+                      if (id && typeof parsedInput.url !== 'undefined') {
+                        payload = { guestId: id, url: parsedInput.url };
+                      }
+                    } catch (e) {
+                      logger.warn('[AIChat] Failed to parse set_resource_url input for optimistic update', e);
+                    }
+
+                    logger.info('[AIChat] Emitting metadata-changed event for set_resource_url', { payload });
                     window.dispatchEvent(new CustomEvent('pulse:metadata-changed', {
-                      detail: { source: 'ai', tool: data.name }
+                      detail: { source: 'ai', tool: data.name, payload }
                     }));
                   }
 
@@ -719,10 +757,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
             await AIAPI.executeStream(
               {
                 prompt: continuationPrompt,
-                target_type: targetType(),
-                target_id: targetId(),
-                context: contextData(),
-                history: historyForContinuation,
+                target_type: targetType() || undefined,
+                target_id: targetId() || undefined,
+                context: contextData() || undefined,
+                history: historyForContinuation.length > 0 ? historyForContinuation : undefined,
               },
               (event: AIStreamEvent) => {
                 logger.debug('[AIChat] Continuation event received', { type: event.type });
@@ -924,6 +962,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </Show>
               </div>
             </Show>
+            {/* Autonomous Mode toggle */}
+            <button
+              onClick={toggleAutonomousMode}
+              disabled={isTogglingAutonomous()}
+              class={`p-2 rounded-lg transition-colors ${autonomousMode()
+                ? 'text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60'
+                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                } ${isTogglingAutonomous() ? 'opacity-50 cursor-wait' : ''}`}
+              title={autonomousMode() ? 'Autonomous Mode: ON (commands run without approval)' : 'Autonomous Mode: OFF (commands need approval)'}
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                />
+              </svg>
+            </button>
             <button
               onClick={clearChat}
               class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -1018,7 +1075,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 class={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  class={`max-w-[85%] rounded-lg px-4 py-2 ${message.role === 'user'
+                  class={`max-w-[85%] rounded-lg px-4 py-2 overflow-hidden break-words ${message.role === 'user'
                     ? 'bg-purple-600 text-white'
                     : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
                     }`}

@@ -29,6 +29,7 @@ type AIConfig struct {
 	AnthropicAPIKey string `json:"anthropic_api_key,omitempty"` // Anthropic API key
 	OpenAIAPIKey    string `json:"openai_api_key,omitempty"`    // OpenAI API key
 	DeepSeekAPIKey  string `json:"deepseek_api_key,omitempty"`  // DeepSeek API key
+	GeminiAPIKey    string `json:"gemini_api_key,omitempty"`    // Google Gemini API key
 	OllamaBaseURL   string `json:"ollama_base_url,omitempty"`   // Ollama server URL (default: http://localhost:11434)
 	OpenAIBaseURL   string `json:"openai_base_url,omitempty"`   // Custom OpenAI-compatible base URL (optional)
 
@@ -63,6 +64,7 @@ const (
 	AIProviderOpenAI    = "openai"
 	AIProviderOllama    = "ollama"
 	AIProviderDeepSeek  = "deepseek"
+	AIProviderGemini    = "gemini"
 )
 
 // Default models per provider
@@ -71,8 +73,10 @@ const (
 	DefaultAIModelOpenAI    = "gpt-4o"
 	DefaultAIModelOllama    = "llama3"
 	DefaultAIModelDeepSeek  = "deepseek-chat" // V3.2 with tool-use support
+	DefaultAIModelGemini    = "gemini-2.5-flash" // Latest stable Gemini model
 	DefaultOllamaBaseURL    = "http://localhost:11434"
 	DefaultDeepSeekBaseURL  = "https://api.deepseek.com/chat/completions"
+	DefaultGeminiBaseURL    = "https://generativelanguage.googleapis.com/v1beta"
 )
 
 // ModelInfo represents information about an available model
@@ -120,7 +124,8 @@ func (c *AIConfig) IsConfigured() bool {
 
 	// Check multi-provider credentials first (new format)
 	if c.HasProvider(AIProviderAnthropic) || c.HasProvider(AIProviderOpenAI) ||
-		c.HasProvider(AIProviderDeepSeek) || c.HasProvider(AIProviderOllama) {
+		c.HasProvider(AIProviderDeepSeek) || c.HasProvider(AIProviderOllama) ||
+		c.HasProvider(AIProviderGemini) {
 		return true
 	}
 
@@ -153,6 +158,8 @@ func (c *AIConfig) HasProvider(provider string) bool {
 		return c.OpenAIAPIKey != ""
 	case AIProviderDeepSeek:
 		return c.DeepSeekAPIKey != ""
+	case AIProviderGemini:
+		return c.GeminiAPIKey != ""
 	case AIProviderOllama:
 		// Ollama is only "configured" if user has explicitly set a base URL
 		return c.OllamaBaseURL != ""
@@ -172,6 +179,9 @@ func (c *AIConfig) GetConfiguredProviders() []string {
 	}
 	if c.HasProvider(AIProviderDeepSeek) {
 		providers = append(providers, AIProviderDeepSeek)
+	}
+	if c.HasProvider(AIProviderGemini) {
+		providers = append(providers, AIProviderGemini)
 	}
 	if c.HasProvider(AIProviderOllama) {
 		providers = append(providers, AIProviderOllama)
@@ -204,6 +214,13 @@ func (c *AIConfig) GetAPIKeyForProvider(provider string) string {
 		if c.Provider == AIProviderDeepSeek {
 			return c.APIKey
 		}
+	case AIProviderGemini:
+		if c.GeminiAPIKey != "" {
+			return c.GeminiAPIKey
+		}
+		if c.Provider == AIProviderGemini {
+			return c.APIKey
+		}
 	}
 	return ""
 }
@@ -227,6 +244,8 @@ func (c *AIConfig) GetBaseURLForProvider(provider string) string {
 		return "" // Uses default OpenAI URL
 	case AIProviderDeepSeek:
 		return DefaultDeepSeekBaseURL
+	case AIProviderGemini:
+		return DefaultGeminiBaseURL
 	}
 	return ""
 }
@@ -240,7 +259,7 @@ func (c *AIConfig) IsUsingOAuth() bool {
 // Returns the provider and model name. If no provider prefix, attempts to detect.
 func ParseModelString(model string) (provider, modelName string) {
 	// Check for explicit provider prefix
-	for _, p := range []string{AIProviderAnthropic, AIProviderOpenAI, AIProviderDeepSeek, AIProviderOllama} {
+	for _, p := range []string{AIProviderAnthropic, AIProviderOpenAI, AIProviderDeepSeek, AIProviderGemini, AIProviderOllama} {
 		prefix := p + ":"
 		if len(model) > len(prefix) && model[:len(prefix)] == prefix {
 			return p, model[len(prefix):]
@@ -255,6 +274,8 @@ func ParseModelString(model string) (provider, modelName string) {
 		return AIProviderOpenAI, model
 	case len(model) >= 8 && model[:8] == "deepseek":
 		return AIProviderDeepSeek, model
+	case len(model) >= 6 && model[:6] == "gemini":
+		return AIProviderGemini, model
 	default:
 		// Assume Ollama for unrecognized models (local models have varied names)
 		return AIProviderOllama, model
@@ -277,6 +298,8 @@ func (c *AIConfig) GetBaseURL() string {
 		return DefaultOllamaBaseURL
 	case AIProviderDeepSeek:
 		return DefaultDeepSeekBaseURL
+	case AIProviderGemini:
+		return DefaultGeminiBaseURL
 	}
 	return ""
 }
@@ -300,6 +323,8 @@ func (c *AIConfig) GetModel() string {
 			return DefaultAIModelOllama
 		case AIProviderDeepSeek:
 			return DefaultAIModelDeepSeek
+		case AIProviderGemini:
+			return DefaultAIModelGemini
 		}
 	}
 
@@ -313,6 +338,8 @@ func (c *AIConfig) GetModel() string {
 		return DefaultAIModelOllama
 	case AIProviderDeepSeek:
 		return DefaultAIModelDeepSeek
+	case AIProviderGemini:
+		return DefaultAIModelGemini
 	default:
 		return ""
 	}

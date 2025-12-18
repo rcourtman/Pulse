@@ -686,20 +686,19 @@ func safeFloat(val float64) float64 {
 	return val
 }
 
-// makeGuestID generates a stable guest ID that is cluster-aware.
-// When the instance is part of a cluster, the cluster name is used as the primary identifier
-// to prevent duplicate guests when multiple cluster nodes are configured as separate PVE instances.
-// Format when in cluster: clusterName-VMID (e.g., "my-cluster-100")
-// Format when standalone: instanceName-VMID (e.g., "pve-host1-100")
-// This ensures VMs/containers are properly deduplicated across multiple agents in the same cluster.
-func makeGuestID(instanceName string, clusterName string, isCluster bool, vmid int) string {
-	// Use cluster name as the identifier when the instance is part of a cluster
-	// This ensures guests are identified by their cluster, not by which node reported them
-	if isCluster && clusterName != "" {
-		return fmt.Sprintf("%s-%d", clusterName, vmid)
-	}
-	// For standalone nodes, use the instance name
-	return fmt.Sprintf("%s-%d", instanceName, vmid)
+// makeGuestID generates a stable, canonical guest ID that includes instance, node, and VMID.
+// Format: {instance}:{node}:{vmid} (e.g., "delly:minipc:201")
+//
+// Using colons as separators prevents ambiguity with dashes in instance/node names.
+// This format ensures:
+// - Unique IDs across all deployment scenarios (single agent, per-node agents, mixed)
+// - Stable IDs that don't change when monitoring topology changes
+// - Easy parsing to extract instance, node, and VMID components
+//
+// For clustered setups, the instance name is the cluster name.
+// For standalone nodes, the instance name matches the node name.
+func makeGuestID(instanceName string, node string, vmid int) string {
+	return fmt.Sprintf("%s:%s:%d", instanceName, node, vmid)
 }
 
 // parseDurationEnv parses a duration from an environment variable, returning defaultVal if not set or invalid
@@ -5871,8 +5870,8 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	var allContainers []models.Container
 
 	for _, res := range resources {
-		// Use cluster-aware guest ID to prevent duplicates when multiple cluster nodes are configured
-		guestID := makeGuestID(instanceName, clusterName, isCluster, res.VMID)
+		// Generate canonical guest ID: instance:node:vmid
+		guestID := makeGuestID(instanceName, res.Node, res.VMID)
 
 		// Debug log the resource type
 		log.Debug().
@@ -6356,6 +6355,11 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					}
 				}
 			}
+			
+			// Trigger guest metadata migration if old format exists
+			if m.guestMetadataStore != nil {
+				m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, res.Node, res.VMID)
+			}
 
 			allVMs = append(allVMs, vm)
 
@@ -6546,6 +6550,11 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				container.NetworkOut = 0
 				container.DiskRead = 0
 				container.DiskWrite = 0
+			}
+
+			// Trigger guest metadata migration if old format exists
+			if m.guestMetadataStore != nil {
+				m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, res.Node, res.VMID)
 			}
 
 			allContainers = append(allContainers, container)

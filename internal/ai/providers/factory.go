@@ -58,6 +58,12 @@ func NewFromConfig(cfg *config.AIConfig) (Provider, error) {
 		// DeepSeek uses OpenAI-compatible API
 		return NewOpenAIClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL()), nil
 
+	case config.AIProviderGemini:
+		if cfg.APIKey == "" {
+			return nil, fmt.Errorf("Gemini API key is required")
+		}
+		return NewGeminiClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL()), nil
+
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", cfg.Provider)
 	}
@@ -106,6 +112,14 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 	case config.AIProviderOllama:
 		baseURL := cfg.GetBaseURLForProvider(config.AIProviderOllama)
 		return NewOllamaClient(model, baseURL), nil
+
+	case config.AIProviderGemini:
+		apiKey := cfg.GetAPIKeyForProvider(config.AIProviderGemini)
+		if apiKey == "" {
+			return nil, fmt.Errorf("Gemini API key not configured")
+		}
+		baseURL := cfg.GetBaseURLForProvider(config.AIProviderGemini)
+		return NewGeminiClient(apiKey, model, baseURL), nil
 
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", provider)
