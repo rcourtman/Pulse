@@ -42,16 +42,14 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 
 - **[Unified Agent](UNIFIED_AGENT.md)** – Single binary for Host and Docker monitoring.
 - **[VM Disk Monitoring](VM_DISK_MONITORING.md)** – Enabling QEMU Guest Agent for disk stats.
-- **[Temperature Monitoring](TEMPERATURE_MONITORING.md)** – Setting up hardware sensors.
+- **[Temperature Monitoring](TEMPERATURE_MONITORING.md)** – Agent-based temperature monitoring (`pulse-agent --enable-proxmox`). Sensor proxy is deprecated in v5.
 - **[Webhooks](WEBHOOKS.md)** – Custom notification payloads.
 
 ## 💻 Development
 
 - **[API Reference](API.md)** – Complete REST API documentation.
-- **[Dev Quick Start](../DEV-QUICK-START.md)** – Hot-reload workflow for contributors.
 - **[Architecture](../ARCHITECTURE.md)** – System design and component interaction.
 - **[Contributing](../CONTRIBUTING.md)** – How to contribute to Pulse.
-- **[Mock Mode](development/MOCK_MODE.md)** – Developing without real infrastructure.
 
 ---
 

@@ -203,11 +203,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/agents/host/report", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/host/lookup", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleLookup)))
 	r.mux.HandleFunc("/api/agents/host/", RequireAdmin(r.config, RequireScope(config.ScopeHostManage, r.hostAgentHandlers.HandleDeleteHost)))
-	r.mux.HandleFunc("/api/temperature-proxy/register", r.temperatureProxyHandlers.HandleRegister)
-	r.mux.HandleFunc("/api/temperature-proxy/authorized-nodes", r.temperatureProxyHandlers.HandleAuthorizedNodes)
-	r.mux.HandleFunc("/api/temperature-proxy/unregister", RequireAdmin(r.config, r.temperatureProxyHandlers.HandleUnregister))
-	r.mux.HandleFunc("/api/temperature-proxy/install-command", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleTemperatureProxyInstallCommand)))
-	r.mux.HandleFunc("/api/temperature-proxy/host-status", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleHostProxyStatus)))
+	r.mux.HandleFunc("/api/temperature-proxy/register", r.requireSensorProxyEnabled(r.temperatureProxyHandlers.HandleRegister))
+	r.mux.HandleFunc("/api/temperature-proxy/authorized-nodes", r.requireSensorProxyEnabled(r.temperatureProxyHandlers.HandleAuthorizedNodes))
+	r.mux.HandleFunc("/api/temperature-proxy/unregister", r.requireSensorProxyEnabled(RequireAdmin(r.config, r.temperatureProxyHandlers.HandleUnregister)))
+	r.mux.HandleFunc("/api/temperature-proxy/install-command", r.requireSensorProxyEnabled(RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleTemperatureProxyInstallCommand))))
+	r.mux.HandleFunc("/api/temperature-proxy/host-status", r.requireSensorProxyEnabled(RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleHostProxyStatus))))
 	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleCommandAck)))
 	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
 	r.mux.HandleFunc("/api/agents/kubernetes/clusters/", RequireAdmin(r.config, RequireScope(config.ScopeKubernetesManage, r.kubernetesAgentHandlers.HandleClusterActions)))
@@ -218,12 +218,12 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/metrics-store/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsStoreStats)))
 	r.mux.HandleFunc("/api/metrics-store/history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsHistory)))
 	r.mux.HandleFunc("/api/diagnostics", RequireAuth(r.config, r.handleDiagnostics))
-	r.mux.HandleFunc("/api/diagnostics/temperature-proxy/register-nodes", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsRegisterProxyNodes)))
+	r.mux.HandleFunc("/api/diagnostics/temperature-proxy/register-nodes", r.requireSensorProxyEnabled(RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsRegisterProxyNodes))))
 	r.mux.HandleFunc("/api/diagnostics/docker/prepare-token", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsDockerPrepareToken)))
-	r.mux.HandleFunc("/api/install/pulse-sensor-proxy", r.handleDownloadPulseSensorProxy)
-	r.mux.HandleFunc("/api/install/install-sensor-proxy.sh", r.handleDownloadInstallerScript)
-	r.mux.HandleFunc("/api/install/migrate-sensor-proxy-control-plane.sh", r.handleDownloadMigrationScript)
-	r.mux.HandleFunc("/api/install/migrate-temperature-proxy.sh", r.handleDownloadTemperatureProxyMigrationScript)
+	r.mux.HandleFunc("/api/install/pulse-sensor-proxy", r.requireSensorProxyEnabled(r.handleDownloadPulseSensorProxy))
+	r.mux.HandleFunc("/api/install/install-sensor-proxy.sh", r.requireSensorProxyEnabled(r.handleDownloadInstallerScript))
+	r.mux.HandleFunc("/api/install/migrate-sensor-proxy-control-plane.sh", r.requireSensorProxyEnabled(r.handleDownloadMigrationScript))
+	r.mux.HandleFunc("/api/install/migrate-temperature-proxy.sh", r.requireSensorProxyEnabled(r.handleDownloadTemperatureProxyMigrationScript))
 	r.mux.HandleFunc("/api/install/install-docker.sh", r.handleDownloadDockerInstallerScript)
 	r.mux.HandleFunc("/api/install/install.sh", r.handleDownloadUnifiedInstallScript)
 	r.mux.HandleFunc("/api/install/install.ps1", r.handleDownloadUnifiedInstallScriptPS)
@@ -283,6 +283,30 @@ func (r *Router) setupRoutes() {
 				return
 			}
 			dockerMetadataHandler.HandleDeleteMetadata(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	// Docker host metadata routes (for managing Docker host custom URLs, e.g., Portainer links)
+	r.mux.HandleFunc("/api/docker/hosts/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, dockerMetadataHandler.HandleGetHostMetadata)))
+	r.mux.HandleFunc("/api/docker/hosts/metadata/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			if !ensureScope(w, req, config.ScopeMonitoringRead) {
+				return
+			}
+			dockerMetadataHandler.HandleGetHostMetadata(w, req)
+		case http.MethodPut, http.MethodPost:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
+			dockerMetadataHandler.HandleUpdateHostMetadata(w, req)
+		case http.MethodDelete:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
+			dockerMetadataHandler.HandleDeleteHostMetadata(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -1042,7 +1066,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/system/settings/update", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.systemSettingsHandler.HandleUpdateSystemSettings)))
 	r.mux.HandleFunc("/api/system/ssh-config", r.handleSSHConfig)
 	r.mux.HandleFunc("/api/system/verify-temperature-ssh", r.handleVerifyTemperatureSSH)
-	r.mux.HandleFunc("/api/system/proxy-public-key", r.handleProxyPublicKey)
+	r.mux.HandleFunc("/api/system/proxy-public-key", r.requireSensorProxyEnabled(r.handleProxyPublicKey))
 	// Old API token endpoints removed - now using /api/security/regenerate-token
 
 	// Agent execution server for AI tool use

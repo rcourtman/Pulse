@@ -78,7 +78,11 @@ sudo pulse bootstrap-token
 ### Correlate Logs with Requests
 Every API response has an `X-Request-ID` header. Use it to find the exact log entry:
 ```bash
-grep "request_id=abc123" /var/log/pulse/pulse.log
+# systemd / Proxmox LXC
+journalctl -u pulse --no-pager | grep "request_id=abc123"
+
+# Docker
+docker logs pulse 2>&1 | grep "request_id=abc123"
 ```
 
 ### Check Permissions (Proxmox)

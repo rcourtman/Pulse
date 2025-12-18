@@ -52,7 +52,7 @@ Preferred option (no SSH keys, no proxy wiring):
 
 Deprecated option (existing installs only):
 
-- `pulse-sensor-proxy` is deprecated in Pulse v5 and is not recommended for new deployments.
+- `pulse-sensor-proxy` is deprecated in Pulse v5 and is not recommended for new deployments. In v5, legacy sensor-proxy endpoints are disabled by default unless `PULSE_ENABLE_SENSOR_PROXY=true` is set on the Pulse server.
 - Existing installs continue to work during the migration window, but plan to move to `pulse-agent --enable-proxmox`.
 - Canonical temperature docs: `docs/TEMPERATURE_MONITORING.md`
 
@@ -376,7 +376,7 @@ docker run -e API_TOKENS=ansible-token,docker-agent-token rcourtman/pulse:latest
 
 **Security Note**: Tokens defined via environment variables are hashed with SHA3-256 before being stored on disk. Plain values never persist beyond startup.
 
-#### Token Management (Settings → Security → API tokens)
+#### Token Management (Settings → API Tokens)
 - Issue dedicated tokens for automation/agents without sharing a global credential
 - View prefixes/suffixes and last-used timestamps for auditing
 - Revoke tokens individually without downtime
@@ -441,7 +441,7 @@ docker run \
 - Debug logs may contain sensitive data—enable only when needed
 - JSON format recommended for security monitoring and SIEM
 - Adjust retention based on compliance requirements
- - Changes take effect on restart
+- Changes take effect on restart
 
 ## CORS (Cross-Origin Resource Sharing)
 
@@ -460,14 +460,14 @@ sudo systemctl edit pulse
 [Service]
 Environment="ALLOWED_ORIGINS=https://app.example.com"
 
-# Multiple origins (comma-separated)
-ALLOWED_ORIGINS="https://app.example.com,https://dashboard.example.com"
-
 # Development mode (allows localhost)
 PULSE_DEV=true
 ```
 
-**Security Note**: Never use `ALLOWED_ORIGINS=*` in production as it allows any website to access your API.
+Notes:
+
+- `ALLOWED_ORIGINS` currently supports a single origin or `*` (it is written directly to `Access-Control-Allow-Origin`).
+- Never use `ALLOWED_ORIGINS=*` in production as it allows any website to access your API.
 
 ## Monitoring and Observability
 
@@ -566,7 +566,7 @@ curl -X POST http://localhost:7655/api/security/reset-lockout \
 **Export blocked?** You're on a public network – login with password, set an API token (`API_TOKENS`), or set `ALLOW_UNPROTECTED_EXPORT=true`  
 **Rate limited?** Wait 1 minute and try again  
 **Can't login?** Check `PULSE_AUTH_USER` and `PULSE_AUTH_PASS` environment variables  
-**API access denied?** Verify the token you supplied matches one of the values created in *Settings → Security → API tokens* (use the original token, not the hash)  
+**API access denied?** Verify the token you supplied matches one of the values created in *Settings → API Tokens* (use the original token, not the hash)  
 **CORS errors?** Configure `ALLOWED_ORIGINS` for your domain  
 **Forgot password?** Start fresh – delete your Pulse data and restart
 

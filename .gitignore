@@ -139,6 +139,7 @@ mock.env.backup
 # Sensitive files - DO NOT COMMIT
 secrets.env
 *secret*.env
+docs/PULSE_PRO_IMPLEMENTATION.md
 
 # Browser/session artifacts
 **/cookies.txt
@@ -149,6 +150,10 @@ secrets.env
 # Development documentation (local only)
 CLAUDE_DEV_SETUP.md
 AGENT_METRICS_*.md
+DEV-QUICK-START.md
+docs/DOCS_AUDIT_*.md
+docs/SECURITY_AUDIT_*.md
+docs/development/
 
 # Temporary scripts
 tmp_*.py

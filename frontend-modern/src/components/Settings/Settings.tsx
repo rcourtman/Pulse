@@ -15,7 +15,6 @@ import { showSuccess, showError, showWarning } from '@/utils/toast';
 import { logger } from '@/utils/logger';
 import {
   apiFetch,
-  apiFetchJSON,
   clearApiToken as clearApiClientToken,
   getApiToken as getApiClientToken,
   setApiToken as setApiClientToken,
@@ -980,9 +979,16 @@ const Settings: Component<SettingsProps> = (props) => {
 
   const refreshHostProxyStatus = async (notify = false) => {
     try {
-      const status = (await apiFetchJSON(
-        '/api/temperature-proxy/host-status',
-      )) as HostProxyStatusResponse;
+      const response = await apiFetch('/api/temperature-proxy/host-status');
+      if (response.status === 410) {
+        // pulse-sensor-proxy is deprecated and disabled by default in v5
+        setHostProxyStatus(null);
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+      const status = (await response.json()) as HostProxyStatusResponse;
       setHostProxyStatus(status);
       if (notify) {
         showSuccess('Host proxy status refreshed', undefined, 2000);

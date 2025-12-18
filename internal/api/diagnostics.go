@@ -443,7 +443,11 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 		socketHostState = r.monitor.SocketProxyHostDiagnostics()
 	}
 
-	diag.TemperatureProxy = buildTemperatureProxyDiagnostic(r.config, proxySync, socketHostState)
+	if r.config != nil && !r.config.EnableSensorProxy {
+		diag.TemperatureProxy = nil
+	} else {
+		diag.TemperatureProxy = buildTemperatureProxyDiagnostic(r.config, proxySync, socketHostState)
+	}
 	diag.APITokens = buildAPITokenDiagnostic(r.config, r.monitor)
 
 	// Test each configured node

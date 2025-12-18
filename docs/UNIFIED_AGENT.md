@@ -2,6 +2,8 @@
 
 The unified agent (`pulse-agent`) combines host, Docker, and Kubernetes monitoring into a single binary. It replaces the separate `pulse-host-agent` and `pulse-docker-agent` for simpler deployment and management.
 
+> Note: In v5, temperature monitoring should be done via `pulse-agent --enable-proxmox`. `pulse-sensor-proxy` is deprecated and retained only for existing installs during the migration window.
+
 ## Quick Start
 
 Generate an installation command in the UI:

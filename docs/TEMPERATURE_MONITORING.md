@@ -2,7 +2,7 @@
 
 Monitor real-time CPU and NVMe temperatures for your Proxmox nodes.
 
-> **Deprecation notice (v5):** `pulse-sensor-proxy` is deprecated and not recommended for new deployments. Temperature monitoring should be done via the unified agent (`pulse-agent --enable-proxmox`). Existing proxy installs can continue during the migration window, but plan to migrate to the agent.
+> **Deprecation notice (v5):** `pulse-sensor-proxy` is deprecated and not recommended for new deployments. Temperature monitoring should be done via the unified agent (`pulse-agent --enable-proxmox`). Existing proxy installs can continue during the migration window, but plan to migrate to the agent. In v5, legacy sensor-proxy endpoints are disabled by default unless `PULSE_ENABLE_SENSOR_PROXY=true` is set on the Pulse server.
 
 ## Recommended: Pulse Agent
 
@@ -14,6 +14,23 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 ```
 
 If you use the agent method, the rest of this document (sensor proxy) is optional. See `docs/security/TEMPERATURE_MONITORING.md` for the security model overview.
+
+## Migration: pulse-sensor-proxy → pulse-agent
+
+If you already deployed `pulse-sensor-proxy`, migrate to the agent to avoid proxy maintenance and remove SSH-from-container complexity:
+
+1. Install `lm-sensors` on each Proxmox host (if not already): `apt install lm-sensors && sensors-detect`
+2. Install the agent on each Proxmox host:
+   ```bash
+   curl -fsSL http://<pulse-ip>:7655/install.sh | \
+     bash -s -- --url http://<pulse-ip>:7655 --token <api-token> --enable-proxmox
+   ```
+3. Confirm temperatures are updating in the dashboard.
+4. Disable the proxy service on hosts where it was installed:
+   ```bash
+   sudo systemctl disable --now pulse-sensor-proxy
+   ```
+5. If your Pulse container had a proxy socket mount, remove the mount and remove `PULSE_SENSOR_PROXY_SOCKET` from the Pulse `.env` (for example `/data/.env` in Docker) before restarting Pulse.
 
 ## 🚀 Quick Start
 
