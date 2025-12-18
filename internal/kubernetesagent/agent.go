@@ -468,7 +468,7 @@ func (a *Agent) collectPods(ctx context.Context) ([]agentsk8s.Pod, error) {
 		if !a.namespaceAllowed(pod.Namespace) {
 			continue
 		}
-		if !a.cfg.IncludeAllPods && isProblemPod(pod) {
+		if !a.cfg.IncludeAllPods && !isProblemPod(pod) {
 			continue
 		}
 
@@ -600,7 +600,7 @@ func (a *Agent) collectDeployments(ctx context.Context) ([]agentsk8s.Deployment,
 		if !a.namespaceAllowed(dep.Namespace) {
 			continue
 		}
-		if isProblemDeployment(dep) {
+		if !isProblemDeployment(dep) {
 			continue
 		}
 
