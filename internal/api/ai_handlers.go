@@ -20,6 +20,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -134,6 +135,11 @@ func (h *AISettingsHandler) StopPatrol() {
 // GetAlertTriggeredAnalyzer returns the alert-triggered analyzer for wiring into alert callbacks
 func (h *AISettingsHandler) GetAlertTriggeredAnalyzer() *ai.AlertTriggeredAnalyzer {
 	return h.aiService.GetAlertTriggeredAnalyzer()
+}
+
+// SetLicenseChecker sets the license checker for Pro feature gating
+func (h *AISettingsHandler) SetLicenseChecker(checker ai.LicenseChecker) {
+	h.aiService.SetLicenseChecker(checker)
 }
 
 // AISettingsResponse is returned by GET /api/settings/ai
@@ -1957,7 +1963,11 @@ type PatrolStatusResponse struct {
 	FindingsCount    int        `json:"findings_count"`
 	Healthy          bool       `json:"healthy"`
 	IntervalMs       int64      `json:"interval_ms"` // Patrol interval in milliseconds
-	Summary          struct {
+	// License status for Pro feature gating
+	LicenseRequired bool   `json:"license_required"` // True if Pro license needed for full features
+	LicenseStatus   string `json:"license_status"`   // "active", "expired", "grace_period", "none"
+	UpgradeURL      string `json:"upgrade_url,omitempty"`
+	Summary         struct {
 		Critical int `json:"critical"`
 		Warning  int `json:"warning"`
 		Watch    int `json:"watch"`
@@ -1989,6 +1999,12 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 	status := patrol.GetStatus()
 	summary := patrol.GetFindingsSummary()
 
+	// Determine license status for Pro feature gating
+	// GetLicenseState returns accurate state: none, active, expired, grace_period
+	licenseStatus, _ := h.aiService.GetLicenseState()
+	// Check specifically for ai_patrol feature using canonical license constant
+	hasPatrolFeature := h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
+
 	response := PatrolStatusResponse{
 		Running:          status.Running,
 		Enabled:          h.aiService.IsEnabled(),
@@ -1999,6 +2015,11 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		FindingsCount:    status.FindingsCount,
 		Healthy:          status.Healthy,
 		IntervalMs:       status.IntervalMs,
+		LicenseRequired:  !hasPatrolFeature,
+		LicenseStatus:    licenseStatus,
+	}
+	if !hasPatrolFeature {
+		response.UpgradeURL = "https://pulsemonitor.app/pro"
 	}
 	response.Summary.Critical = summary.Critical
 	response.Summary.Warning = summary.Warning

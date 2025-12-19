@@ -2088,6 +2088,25 @@ function OverviewTab(props: {
   const [liveStreamBlocks, setLiveStreamBlocks] = createSignal<StreamBlock[]>([]);
   const [currentThinking, setCurrentThinking] = createSignal('');
   let liveStreamUnsubscribe: (() => void) | null = null;
+  const patrolRequiresLicense = createMemo(() => patrolStatus()?.license_required === true);
+  const patrolUpgradeURL = createMemo(() => patrolStatus()?.upgrade_url || 'https://pulsemonitor.app/pro');
+  const patrolLicenseNote = createMemo(() => {
+    if (!patrolRequiresLicense()) return '';
+    const status = patrolStatus()?.license_status;
+    if (status === 'active') {
+      return 'Your license is active but does not include AI Patrol.';
+    }
+    if (status === 'expired') {
+      return 'Your license has expired. Renew to restore AI Patrol.';
+    }
+    if (status === 'none') {
+      return 'No Pulse Pro license is active.';
+    }
+    if (status === 'grace_period') {
+      return 'Your license is in the grace period.';
+    }
+    return 'AI Patrol insights require Pulse Pro.';
+  });
 
   // Effect to manage live stream subscription when expanded
   createEffect(() => {
@@ -2460,8 +2479,10 @@ function OverviewTab(props: {
             <button
               class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700 hover:bg-purple-200 dark:hover:bg-purple-900/60 disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => handleForcePatrol(true)}
-              disabled={forcePatrolLoading() || patrolStatus()?.running}
-              title={patrolStatus()?.running ? 'Patrol in progress - see table below' : 'Run a patrol check now'}
+              disabled={forcePatrolLoading() || patrolStatus()?.running || patrolRequiresLicense()}
+              title={patrolRequiresLicense()
+                ? 'Pulse Pro required to run AI Patrol'
+                : (patrolStatus()?.running ? 'Patrol in progress - see table below' : 'Run a patrol check now')}
             >
               <span class="flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2472,6 +2493,30 @@ function OverviewTab(props: {
               </span>
             </button>
           </div>
+
+          <Show when={patrolRequiresLicense()}>
+            <div class="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3">
+              <div class="flex items-start gap-3">
+                <svg class="w-4 h-4 text-amber-600 dark:text-amber-300 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11V7a4 4 0 00-8 0v4m12 0a2 2 0 012 2v6a2 2 0 01-2 2H8a2 2 0 01-2-2v-6a2 2 0 012-2h8z" />
+                </svg>
+                <div class="flex-1">
+                  <p class="text-sm font-medium text-amber-800 dark:text-amber-200">Pulse Pro required</p>
+                  <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                    {patrolLicenseNote() || 'AI Patrol insights require Pulse Pro.'}
+                  </p>
+                  <a
+                    class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-amber-800 dark:text-amber-200 hover:underline"
+                    href={patrolUpgradeURL()}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Upgrade to Pulse Pro
+                  </a>
+                </div>
+              </div>
+            </div>
+          </Show>
 
           {/* Summary Stats Bar */}
           <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 mb-4 flex flex-wrap items-center gap-4 text-xs">
@@ -2506,34 +2551,35 @@ function OverviewTab(props: {
               </div>
             </Show>
           </div>
-          <div class="space-y-2">
-            <Show
-              when={aiFindings().length > 0}
-              fallback={
-                <div class="text-center py-6 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                  <div class="flex justify-center mb-2">
-                    <svg class="w-10 h-10 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
-                    </svg>
+          <Show when={!patrolRequiresLicense()}>
+            <div class="space-y-2">
+              <Show
+                when={aiFindings().length > 0}
+                fallback={
+                  <div class="text-center py-6 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <div class="flex justify-center mb-2">
+                      <svg class="w-10 h-10 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
+                      </svg>
+                    </div>
+                    <p class="text-sm font-medium text-green-700 dark:text-green-400">All Systems Healthy</p>
+                    <p class="text-xs text-green-600 dark:text-green-500 mt-1">AI patrol found no issues to report</p>
                   </div>
-                  <p class="text-sm font-medium text-green-700 dark:text-green-400">All Systems Healthy</p>
-                  <p class="text-xs text-green-600 dark:text-green-500 mt-1">AI patrol found no issues to report</p>
-                </div>
-              }
-            >
-              <For each={aiFindings().filter(f => !pendingFixFindings().has(f.id))}>
-                {(finding) => {
-                  const colors = severityColors[finding.severity];
-                  const [isExpanded, setIsExpanded] = createSignal(false);
-                  return (
-                    <div
-                      class="border rounded-lg transition-all"
-                      style={{
-                        'background-color': colors.bg,
-                        'border-color': colors.border,
-                      }}
-                    >
+                }
+              >
+                <For each={aiFindings().filter(f => !pendingFixFindings().has(f.id))}>
+                  {(finding) => {
+                    const colors = severityColors[finding.severity];
+                    const [isExpanded, setIsExpanded] = createSignal(false);
+                    return (
+                      <div
+                        class="border rounded-lg transition-all"
+                        style={{
+                          'background-color': colors.bg,
+                          'border-color': colors.border,
+                        }}
+                      >
                       {/* Compact header - always visible, clickable */}
                       <div
                         class="flex items-center gap-3 p-3 cursor-pointer hover:opacity-80"
@@ -2767,36 +2813,38 @@ function OverviewTab(props: {
                         </div>
                       </Show>
                     </div>
-                  );
-                }}
-              </For>
-            </Show>
-          </div>
-
-          {/* Suppression Rules - What's being ignored */}
-          <div class="mt-6">
-            <div class="flex items-center justify-between">
-              <button
-                class="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                onClick={() => setShowSuppressionRules(!showSuppressionRules())}
-              >
-                <svg
-                  class={`w-4 h-4 transition-transform ${showSuppressionRules() ? 'rotate-90' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                </svg>
-                🔇 Suppression Rules ({suppressionRules().length} active)
-              </button>
-              <button
-                class="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                onClick={() => setShowAddRuleForm(!showAddRuleForm())}
-              >
-                + Add Rule
-              </button>
+                    );
+                  }}
+                </For>
+              </Show>
             </div>
+          </Show>
+
+          <Show when={!patrolRequiresLicense()}>
+            {/* Suppression Rules - What's being ignored */}
+            <div class="mt-6">
+              <div class="flex items-center justify-between">
+                <button
+                  class="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                  onClick={() => setShowSuppressionRules(!showSuppressionRules())}
+                >
+                  <svg
+                    class={`w-4 h-4 transition-transform ${showSuppressionRules() ? 'rotate-90' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                  🔇 Suppression Rules ({suppressionRules().length} active)
+                </button>
+                <button
+                  class="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  onClick={() => setShowAddRuleForm(!showAddRuleForm())}
+                >
+                  + Add Rule
+                </button>
+              </div>
 
             {/* Add rule form */}
             <Show when={showAddRuleForm()}>
@@ -2921,29 +2969,31 @@ function OverviewTab(props: {
                   )}
                 </For>
               </div>
-            </Show>
-          </div>
+              </Show>
+            </div>
+          </Show>
 
-          {/* Patrol Check History */}
-          <div class="mt-6">
-            <div class="flex items-center justify-between">
-              <button
-                class="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                onClick={() => setShowRunHistory(!showRunHistory())}
-              >
-                <svg
-                  class={`w-4 h-4 transition-transform ${showRunHistory() ? 'rotate-90' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+          <Show when={!patrolRequiresLicense()}>
+            {/* Patrol Check History */}
+            <div class="mt-6">
+              <div class="flex items-center justify-between">
+                <button
+                  class="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                  onClick={() => setShowRunHistory(!showRunHistory())}
                 >
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                </svg>
-                Patrol Check History ({filteredPatrolHistory().length} runs)
-                <Show when={patrolRunHistory().length > 0 && patrolRunHistory()[0].status !== 'healthy'}>
-                  <span class="ml-1 px-1.5 py-0.5 text-[10px] bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 rounded">Issues Found</span>
-                </Show>
-              </button>
+                  <svg
+                    class={`w-4 h-4 transition-transform ${showRunHistory() ? 'rotate-90' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                  Patrol Check History ({filteredPatrolHistory().length} runs)
+                  <Show when={patrolRunHistory().length > 0 && patrolRunHistory()[0].status !== 'healthy'}>
+                    <span class="ml-1 px-1.5 py-0.5 text-[10px] bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 rounded">Issues Found</span>
+                  </Show>
+                </button>
 
               {/* Next Patrol Timer */}
               <Show when={nextPatrolIn()}>
@@ -3303,8 +3353,9 @@ function OverviewTab(props: {
                   </div>
                 </Show>
               </div>
-            </Show>
-          </div>
+              </Show>
+            </div>
+          </Show>
         </div>
       </Show >
 

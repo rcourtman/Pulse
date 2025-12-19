@@ -49,7 +49,17 @@ export function AIStatusIndicator() {
 
     const tooltipText = createMemo(() => {
         const s = status();
-        if (!s || !s.enabled) return 'AI Patrol disabled';
+        if (!s) return 'AI Patrol status unavailable';
+        if (!s.enabled) return 'AI Patrol disabled';
+        if (s.license_required) {
+            if (s.license_status === 'active') {
+                return 'AI Patrol is not included in this license tier';
+            }
+            if (s.license_status === 'expired') {
+                return 'AI Patrol license expired - upgrade to restore';
+            }
+            return 'AI Patrol requires Pulse Pro';
+        }
         if (!s.running) return 'AI Patrol not running';
 
         const parts: string[] = [];
