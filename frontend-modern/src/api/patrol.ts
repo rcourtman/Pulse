@@ -41,6 +41,8 @@ export interface FindingsSummary {
     info: number;
 }
 
+export type LicenseStatus = 'none' | 'active' | 'expired' | 'grace_period';
+
 export interface PatrolStatus {
     running: boolean;
     enabled: boolean;
@@ -53,6 +55,9 @@ export interface PatrolStatus {
     error_count: number;
     healthy: boolean;
     interval_ms: number; // Patrol interval in milliseconds
+    license_required?: boolean;
+    license_status?: LicenseStatus;
+    upgrade_url?: string;
     summary: FindingsSummary;
 }
 

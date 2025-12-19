@@ -9,7 +9,7 @@ type SettingsPanelProps = {
   bodyClass?: string;
   tone?: 'default' | 'muted' | 'info' | 'success' | 'warning' | 'danger';
   padding?: 'none' | 'sm' | 'md' | 'lg';
-} & JSX.HTMLAttributes<HTMLDivElement>;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'title'>;
 
 export function SettingsPanel(props: SettingsPanelProps) {
   const [local, rest] = splitProps(props, [
