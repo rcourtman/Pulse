@@ -57,23 +57,18 @@ const canRun = async (command, args) => {
 
 
 const waitForHealth = async (healthURL, timeoutMs = 120_000) => {
-  console.log(`[pretest] Starting health check loop for ${healthURL}`);
+  console.log(`[pretest] Waiting for ${healthURL} to become healthy...`);
   const startedAt = Date.now();
   let attempt = 0;
 
   const checkHealth = () => {
     return new Promise((resolve) => {
       const req = http.get(healthURL, (res) => {
-        console.log(`[pretest] HTTP response status: ${res.statusCode}`);
         res.resume(); // Consume response data to free up memory
         resolve(res.statusCode >= 200 && res.statusCode < 300);
       });
-      req.on('error', (err) => {
-        console.log(`[pretest] HTTP error: ${err.code || err.message}`);
-        resolve(false);
-      });
+      req.on('error', () => resolve(false));
       req.setTimeout(5000, () => {
-        console.log(`[pretest] HTTP timeout`);
         req.destroy();
         resolve(false);
       });
@@ -82,20 +77,18 @@ const waitForHealth = async (healthURL, timeoutMs = 120_000) => {
 
   while (Date.now() - startedAt < timeoutMs) {
     attempt++;
-    console.log(`[pretest] Health check attempt ${attempt}...`);
     try {
       const ok = await checkHealth();
       if (ok) {
-        console.log(`[pretest] Health check succeeded!`);
+        console.log(`[pretest] Health check passed after ${attempt} attempts`);
         return;
       }
-    } catch (error) {
-      console.log(`[pretest] Unexpected error: ${error.message}`);
+    } catch {
+      // ignore and retry
     }
-    console.log(`[pretest] Sleeping 1s before retry...`);
     await new Promise((r) => setTimeout(r, 1000));
   }
-  throw new Error(`Timed out waiting for ${healthURL}`);
+  throw new Error(`Timed out waiting for ${healthURL} after ${attempt} attempts`);
 };
 
 
