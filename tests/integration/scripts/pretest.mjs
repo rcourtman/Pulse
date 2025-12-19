@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import http from 'node:http';
 
 // Add signal handlers to debug unexpected termination
 const signals = ['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGPIPE', 'SIGQUIT'];
@@ -54,24 +55,42 @@ const canRun = async (command, args) => {
   }
 };
 
+
 const waitForHealth = async (healthURL, timeoutMs = 120_000) => {
   console.log(`[pretest] Starting health check loop for ${healthURL}`);
   const startedAt = Date.now();
   let attempt = 0;
+
+  const checkHealth = () => {
+    return new Promise((resolve) => {
+      const req = http.get(healthURL, (res) => {
+        console.log(`[pretest] HTTP response status: ${res.statusCode}`);
+        res.resume(); // Consume response data to free up memory
+        resolve(res.statusCode >= 200 && res.statusCode < 300);
+      });
+      req.on('error', (err) => {
+        console.log(`[pretest] HTTP error: ${err.code || err.message}`);
+        resolve(false);
+      });
+      req.setTimeout(5000, () => {
+        console.log(`[pretest] HTTP timeout`);
+        req.destroy();
+        resolve(false);
+      });
+    });
+  };
+
   while (Date.now() - startedAt < timeoutMs) {
     attempt++;
     console.log(`[pretest] Health check attempt ${attempt}...`);
     try {
-      console.log(`[pretest] Calling fetch...`);
-      const res = await fetch(healthURL, { method: 'GET' });
-      console.log(`[pretest] Fetch returned status ${res.status}`);
-      if (res.ok) {
+      const ok = await checkHealth();
+      if (ok) {
         console.log(`[pretest] Health check succeeded!`);
         return;
       }
     } catch (error) {
-      console.log(`[pretest] Fetch error: ${error.code || error.message}`);
-      // ignore and retry
+      console.log(`[pretest] Unexpected error: ${error.message}`);
     }
     console.log(`[pretest] Sleeping 1s before retry...`);
     await new Promise((r) => setTimeout(r, 1000));
