@@ -703,26 +703,36 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 	runStats.resourceCount = runStats.nodesChecked + runStats.guestsChecked + 
 		runStats.dockerChecked + runStats.storageChecked + runStats.pbsChecked + runStats.hostsChecked
 
-	// Run AI analysis using the LLM - this is the ONLY analysis method
-	// The LLM analyzes the infrastructure and identifies issues
-	aiResult, aiErr := p.runAIAnalysis(ctx, state)
-	if aiErr != nil {
-		log.Warn().Err(aiErr).Msg("AI Patrol: LLM analysis failed")
-		runStats.errors++
-	} else if aiResult != nil {
-		runStats.aiAnalysis = aiResult
-		for _, f := range aiResult.Findings {
-			trackFinding(f)
+	// Check license before running LLM analysis (Pro feature)
+	if p.aiService != nil && !p.aiService.HasLicenseFeature(FeatureAIPatrol) {
+		log.Debug().Msg("AI Patrol: Skipping LLM analysis - requires Pulse Pro license")
+		// No LLM analysis for free users - patrol just tracks resource counts
+	} else {
+		// Run AI analysis using the LLM - this is the ONLY analysis method
+		// The LLM analyzes the infrastructure and identifies issues
+		aiResult, aiErr := p.runAIAnalysis(ctx, state)
+		if aiErr != nil {
+			log.Warn().Err(aiErr).Msg("AI Patrol: LLM analysis failed")
+			runStats.errors++
+		} else if aiResult != nil {
+			runStats.aiAnalysis = aiResult
+			for _, f := range aiResult.Findings {
+				trackFinding(f)
+			}
 		}
 	}
 
 	// Auto-resolve findings that weren't seen in this patrol run
-	resolvedCount := p.autoResolveStaleFindings(start)
+	// Only do this if we have a license - otherwise preserve existing findings
+	var resolvedCount int
+	if p.aiService != nil && p.aiService.HasLicenseFeature(FeatureAIPatrol) {
+		resolvedCount = p.autoResolveStaleFindings(start)
 
-	// Cleanup old resolved findings
-	cleaned := p.findings.Cleanup(24 * time.Hour)
-	if cleaned > 0 {
-		log.Debug().Int("cleaned", cleaned).Msg("AI Patrol: Cleaned up old findings")
+		// Cleanup old resolved findings (only when licensed to modify findings)
+		cleaned := p.findings.Cleanup(24 * time.Hour)
+		if cleaned > 0 {
+			log.Debug().Int("cleaned", cleaned).Msg("AI Patrol: Cleaned up old findings")
+		}
 	}
 
 	duration := time.Since(start)
