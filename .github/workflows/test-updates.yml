@@ -72,7 +72,9 @@ jobs:
 
           # Build Pulse test image
           cd ../../
-          docker build -t pulse:test -f Dockerfile .
+          docker build -t pulse:test -f Dockerfile --build-arg PULSE_LICENSE_PUBLIC_KEY="$PULSE_LICENSE_PUBLIC_KEY" .
+        env:
+          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
 
       - name: Run diagnostic smoke test
         working-directory: tests/integration
