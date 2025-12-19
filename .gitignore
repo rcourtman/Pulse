@@ -114,6 +114,7 @@ test-*.html
 PMG_BACKUP_DETECTION.md
 SAFE_TESTING.md
 tmp/
+.secrets/
 
 # Master plan documents (local only)
 PULSE_V4_ISSUES_MASTER_PLAN.md

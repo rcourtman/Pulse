@@ -77,7 +77,9 @@ jobs:
       - name: Build Docker images for integration tests
         run: |
           docker build -t pulse-mock-github:test tests/integration/mock-github-server
-          docker build -t pulse:test -f Dockerfile --target runtime --cache-from ghcr.io/${{ github.repository_owner }}/pulse:buildcache --build-arg BUILDKIT_INLINE_CACHE=1 .
+          docker build -t pulse:test -f Dockerfile --target runtime --cache-from ghcr.io/${{ github.repository_owner }}/pulse:buildcache --build-arg BUILDKIT_INLINE_CACHE=1 --build-arg PULSE_LICENSE_PUBLIC_KEY="$PULSE_LICENSE_PUBLIC_KEY" .
+        env:
+          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
 
       - name: Run integration diagnostics
         working-directory: tests/integration

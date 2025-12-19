@@ -1,4 +1,4 @@
-import { Component, Show, createSignal, onMount, For } from 'solid-js';
+import { Component, Show, createSignal, onMount, For, createMemo } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -7,6 +7,7 @@ import { formField, labelClass, controlClass } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
+import { LicenseAPI, type LicenseStatus } from '@/api/license';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
 
 // Providers are now configured via accordion sections, not a single-provider selector
@@ -91,6 +92,19 @@ export const AISettings: Component = () => {
   // Per-provider test state
   const [testingProvider, setTestingProvider] = createSignal<string | null>(null);
   const [providerTestResult, setProviderTestResult] = createSignal<{ provider: string; success: boolean; message: string } | null>(null);
+  const [licenseStatus, setLicenseStatus] = createSignal<LicenseStatus | null>(null);
+  const hasAlertAnalysisFeature = createMemo(() => {
+    const status = licenseStatus();
+    if (!status) return true;
+    return Boolean(status.valid && status.features?.includes('ai_alerts'));
+  });
+  const hasAutoFixFeature = createMemo(() => {
+    const status = licenseStatus();
+    if (!status) return true;
+    return Boolean(status.valid && status.features?.includes('ai_autofix'));
+  });
+  const alertAnalysisLocked = createMemo(() => !hasAlertAnalysisFeature());
+  const autoFixLocked = createMemo(() => !hasAutoFixFeature());
 
   // Auto-fix acknowledgement state (not persisted - must acknowledge each session)
   const [autoFixAcknowledged, setAutoFixAcknowledged] = createSignal(false);
@@ -239,6 +253,15 @@ export const AISettings: Component = () => {
 
   onMount(() => {
     loadSettings();
+    void (async () => {
+      try {
+        const status = await LicenseAPI.getStatus();
+        setLicenseStatus(status);
+      } catch (err) {
+        logger.debug('Failed to load license status for AI gating', err);
+        setLicenseStatus(null);
+      }
+    })();
 
     // Check for OAuth callback parameters in URL
     const params = new URLSearchParams(window.location.search);
@@ -1220,13 +1243,29 @@ export const AISettings: Component = () => {
                       <label class="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
                         Alert-Triggered Analysis
                         <span class="px-1 py-0.5 text-[9px] font-medium bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Efficient</span>
+                        <Show when={alertAnalysisLocked()}>
+                          <span class="px-1 py-0.5 text-[9px] font-semibold bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded">Pro</span>
+                        </Show>
                       </label>
                       <Toggle
                         checked={form.alertTriggeredAnalysis}
                         onChange={(event) => setForm('alertTriggeredAnalysis', event.currentTarget.checked)}
-                        disabled={saving()}
+                        disabled={saving() || alertAnalysisLocked()}
                       />
                     </div>
+                    <Show when={alertAnalysisLocked()}>
+                      <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+                        Pulse Pro required for alert-triggered analysis.{' '}
+                        <a
+                          class="underline decoration-dotted"
+                          href="https://pulsemonitor.app/pro"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Upgrade
+                        </a>
+                      </p>
+                    </Show>
 
                     {/* Auto-Fix Toggle - Compact with inline warning */}
                     <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
@@ -1234,12 +1273,15 @@ export const AISettings: Component = () => {
                         <label class="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
                           Auto-Fix Mode
                           <span class="px-1 py-0.5 text-[9px] font-medium bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded">Advanced</span>
+                          <Show when={autoFixLocked()}>
+                            <span class="px-1 py-0.5 text-[9px] font-semibold bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded">Pro</span>
+                          </Show>
                         </label>
                         <Show when={autoFixAcknowledged() || form.patrolAutoFix}>
                           <Toggle
                             checked={form.patrolAutoFix}
                             onChange={(event) => setForm('patrolAutoFix', event.currentTarget.checked)}
-                            disabled={saving()}
+                            disabled={saving() || autoFixLocked()}
                           />
                         </Show>
                         <Show when={!autoFixAcknowledged() && !form.patrolAutoFix}>
@@ -1249,19 +1291,32 @@ export const AISettings: Component = () => {
                               setAutoFixAcknowledged(true);
                               setForm('patrolAutoFix', true);
                             }}
-                            disabled={saving()}
-                            class="px-2 py-1 text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded hover:bg-amber-200 dark:hover:bg-amber-800"
+                            disabled={saving() || autoFixLocked()}
+                            class="px-2 py-1 text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded hover:bg-amber-200 dark:hover:bg-amber-800 disabled:opacity-60 disabled:cursor-not-allowed"
                           >
                             Enable
                           </button>
                         </Show>
                       </div>
-                      <Show when={!form.patrolAutoFix && !autoFixAcknowledged()}>
+                      <Show when={autoFixLocked()}>
+                        <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+                          Pulse Pro required for auto-fix.{' '}
+                          <a
+                            class="underline decoration-dotted"
+                            href="https://pulsemonitor.app/pro"
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Upgrade
+                          </a>
+                        </p>
+                      </Show>
+                      <Show when={!autoFixLocked() && !form.patrolAutoFix && !autoFixAcknowledged()}>
                         <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
                           ⚠️ AI will execute fixes without approval. Enable with caution.
                         </p>
                       </Show>
-                      <Show when={form.patrolAutoFix}>
+                      <Show when={!autoFixLocked() && form.patrolAutoFix}>
                         <p class="text-[10px] text-red-600 dark:text-red-400 mt-1 flex items-center gap-1">
                           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -1272,7 +1327,7 @@ export const AISettings: Component = () => {
                     </div>
 
                     {/* Auto-Fix Model - Only when enabled */}
-                    <Show when={form.patrolAutoFix}>
+                    <Show when={form.patrolAutoFix && !autoFixLocked()}>
                       <div class="flex items-center gap-3 pt-2 border-t border-gray-200 dark:border-gray-700">
                         <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-32 flex-shrink-0">Fix Model</label>
                         <Show when={availableModels().length > 0} fallback={

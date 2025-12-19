@@ -180,6 +180,8 @@ jobs:
           provenance: false
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache,mode=max
+          build-args: |
+            PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/pulse:staging-${{ needs.extract_version.outputs.tag }}
 
@@ -194,13 +196,17 @@ jobs:
           provenance: false
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache,mode=max
+          build-args: |
+            PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:staging-${{ needs.extract_version.outputs.tag }}
 
       - name: Build Docker images for integration tests
         run: |
           docker build -t pulse-mock-github:test tests/integration/mock-github-server
-          docker build -t pulse:test -f Dockerfile --target runtime --cache-from ghcr.io/${{ github.repository_owner }}/pulse:buildcache --build-arg BUILDKIT_INLINE_CACHE=1 .
+          docker build -t pulse:test -f Dockerfile --target runtime --cache-from ghcr.io/${{ github.repository_owner }}/pulse:buildcache --build-arg BUILDKIT_INLINE_CACHE=1 --build-arg PULSE_LICENSE_PUBLIC_KEY="$PULSE_LICENSE_PUBLIC_KEY" .
+        env:
+          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
 
       - name: Run update integration smoke tests
         working-directory: tests/integration
@@ -305,6 +311,8 @@ jobs:
         run: |
           echo "Building release ${{ needs.extract_version.outputs.tag }}..."
           ./scripts/build-release.sh ${{ needs.extract_version.outputs.version }}
+        env:
+          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
 
       - name: Post-build health check
         run: |
@@ -535,5 +543,4 @@ jobs:
       release_id: ${{ needs.create_release.outputs.release_id }}
       draft: false
       target_commitish: ${{ needs.create_release.outputs.target_commitish }}
-
 

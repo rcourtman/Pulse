@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -30,6 +32,11 @@ type StateProvider interface {
 	GetState() models.StateSnapshot
 }
 
+// CommandPolicy defines the interface for command security policy
+type CommandPolicy interface {
+	Evaluate(command string) agentexec.PolicyDecision
+}
+
 // LicenseState represents the current state of the license
 type LicenseState string
 
@@ -48,14 +55,20 @@ type LicenseChecker interface {
 	GetLicenseStateString() (string, bool)
 }
 
+// AgentServer defines the interface for communicating with agents
+type AgentServer interface {
+	GetConnectedAgents() []agentexec.ConnectedAgent
+	ExecuteCommand(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error)
+}
+
 // Service orchestrates AI interactions
 type Service struct {
 	mu               sync.RWMutex
 	persistence      *config.ConfigPersistence
 	provider         providers.Provider
 	cfg              *config.AIConfig
-	agentServer      *agentexec.Server
-	policy           *agentexec.CommandPolicy
+	agentServer      AgentServer
+	policy           CommandPolicy
 	stateProvider    StateProvider
 	alertProvider    AlertProvider
 	knowledgeStore   *knowledge.Store
@@ -89,7 +102,7 @@ type modelsCache struct {
 }
 
 // NewService creates a new AI service
-func NewService(persistence *config.ConfigPersistence, agentServer *agentexec.Server) *Service {
+func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) *Service {
 	// Initialize knowledge store
 	var knowledgeStore *knowledge.Store
 	costStore := cost.NewStore(cost.DefaultMaxDays)
@@ -1693,7 +1706,15 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 // This uses the same routing logic as command execution to determine if the target
 // can be reached, including cluster peer routing for Proxmox clusters.
 func (s *Service) hasAgentForTarget(req ExecuteRequest) bool {
+	// Check for nil interface or nil underlying value
+	// Note: A typed nil pointer assigned to an interface is NOT nil according to Go's == operator
+	// We need to use reflection to check if the underlying value is nil
 	if s.agentServer == nil {
+		return false
+	}
+	// Check if the interface contains a typed nil pointer
+	v := reflect.ValueOf(s.agentServer)
+	if v.Kind() == reflect.Ptr && v.IsNil() {
 		return false
 	}
 
@@ -2155,9 +2176,12 @@ func parseAndValidateFetchURL(ctx context.Context, urlStr string) (*url.URL, err
 		return nil, fmt.Errorf("url is required")
 	}
 
-	parsed, err := url.ParseRequestURI(clean)
+	parsed, err := url.Parse(clean)
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %w", err)
+	}
+	if !parsed.IsAbs() {
+		return nil, fmt.Errorf("URL must be absolute")
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return nil, fmt.Errorf("only http/https URLs are allowed")
@@ -2212,6 +2236,9 @@ func isBlockedFetchIP(ip net.IP) bool {
 		return true
 	}
 	if ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		if ip.IsLoopback() && os.Getenv("PULSE_AI_ALLOW_LOOPBACK") == "true" {
+			return false
+		}
 		return true
 	}
 	// Block multicast and other non-unicast targets.

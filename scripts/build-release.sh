@@ -19,6 +19,14 @@ RELEASE_DIR="release"
 
 echo "Building Pulse v${VERSION}..."
 
+# Optional public key embedding for license validation
+LICENSE_LDFLAGS=""
+if [[ -n "${PULSE_LICENSE_PUBLIC_KEY:-}" ]]; then
+    LICENSE_LDFLAGS="-X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=${PULSE_LICENSE_PUBLIC_KEY}"
+else
+    echo "Warning: PULSE_LICENSE_PUBLIC_KEY not set; Pulse Pro license activation will fail for release binaries."
+fi
+
 # Clean previous builds
 rm -rf $BUILD_DIR $RELEASE_DIR
 mkdir -p $BUILD_DIR $RELEASE_DIR
@@ -100,7 +108,7 @@ for build_name in "${build_order[@]}"; do
 
     # Build backend binary with version info
     env $build_env go build \
-        -ldflags="-s -w -X main.Version=v${VERSION} -X main.BuildTime=${build_time} -X main.GitCommit=${git_commit} -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=v${VERSION}" \
+        -ldflags="-s -w -X main.Version=v${VERSION} -X main.BuildTime=${build_time} -X main.GitCommit=${git_commit} -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=v${VERSION} ${LICENSE_LDFLAGS}" \
         -trimpath \
         -o "$BUILD_DIR/pulse-$build_name" \
         ./cmd/pulse

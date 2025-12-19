@@ -25,11 +25,21 @@ export interface ClearLicenseResponse {
   message?: string;
 }
 
+export interface LicenseFeatureStatus {
+  license_status: string;
+  features: Record<string, boolean>;
+  upgrade_url: string;
+}
+
 export class LicenseAPI {
   private static baseUrl = '/api/license';
 
   static async getStatus(): Promise<LicenseStatus> {
     return apiFetchJSON(`${this.baseUrl}/status`) as Promise<LicenseStatus>;
+  }
+
+  static async getFeatures(): Promise<LicenseFeatureStatus> {
+    return apiFetchJSON(`${this.baseUrl}/features`) as Promise<LicenseFeatureStatus>;
   }
 
   static async activateLicense(licenseKey: string): Promise<ActivateLicenseResponse> {
