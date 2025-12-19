@@ -11,6 +11,7 @@ import type {
   DockerHost,
   Host,
   KubernetesCluster,
+  RemovedDockerHost,
   RemovedKubernetesCluster,
 } from '@/types/api';
 import type { ActivationState as ActivationStateType } from '@/types/alerts';
@@ -32,6 +33,7 @@ export function createWebSocketStore(url: string) {
     vms: [],
     containers: [],
     dockerHosts: [],
+    removedDockerHosts: [],
     kubernetesClusters: [],
     removedKubernetesClusters: [],
     hosts: [],
@@ -578,6 +580,12 @@ export function createWebSocketStore(url: string) {
               if (shouldApplyHosts && processedHosts !== null) {
                 setState('hosts', reconcile(processedHosts, { key: 'id' }));
               }
+            }
+            if (message.data.removedDockerHosts !== undefined) {
+              const removed = Array.isArray(message.data.removedDockerHosts)
+                ? (message.data.removedDockerHosts as RemovedDockerHost[])
+                : [];
+              setState('removedDockerHosts', reconcile(removed, { key: 'id' }));
             }
             if (message.data.kubernetesClusters !== undefined) {
               const clusters = Array.isArray(message.data.kubernetesClusters)

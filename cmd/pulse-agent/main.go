@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -144,6 +145,20 @@ func main() {
 			logger.Info().Msg("Host agent module started")
 			return agent.Run(ctx)
 		})
+	}
+
+	// Auto-detect Docker/Podman if not explicitly configured
+	if !cfg.EnableDocker && !cfg.DockerConfigured {
+		// Check for docker binary
+		if _, err := exec.LookPath("docker"); err == nil {
+			logger.Info().Msg("Auto-detected Docker binary, enabling Docker monitoring")
+			cfg.EnableDocker = true
+		} else if _, err := exec.LookPath("podman"); err == nil {
+			logger.Info().Msg("Auto-detected Podman binary, enabling Docker monitoring")
+			cfg.EnableDocker = true
+		} else {
+			logger.Debug().Msg("Docker/Podman not found, skipping Docker monitoring")
+		}
 	}
 
 	// 9. Start Docker Agent (if enabled)
@@ -324,6 +339,7 @@ type Config struct {
 	// Module flags
 	EnableHost       bool
 	EnableDocker     bool
+	DockerConfigured bool
 	EnableKubernetes bool
 	EnableProxmox    bool
 	ProxmoxType      string // "pve", "pbs", or "" for auto-detect
@@ -460,6 +476,16 @@ func loadConfig() Config {
 	kubeIncludeNamespaces := gatherCSV(envKubeIncludeNamespaces, kubeIncludeNamespaceFlags)
 	kubeExcludeNamespaces := gatherCSV(envKubeExcludeNamespaces, kubeExcludeNamespaceFlags)
 
+	// Check if Docker was explicitly configured via flag or env
+	dockerConfigured := envEnableDocker != ""
+	if !dockerConfigured {
+		flag.Visit(func(f *flag.Flag) {
+			if f.Name == "enable-docker" {
+				dockerConfigured = true
+			}
+		})
+	}
+
 	return Config{
 		PulseURL:              pulseURL,
 		APIToken:              token,
@@ -471,6 +497,7 @@ func loadConfig() Config {
 		LogLevel:              logLevel,
 		EnableHost:            *enableHostFlag,
 		EnableDocker:          *enableDockerFlag,
+		DockerConfigured:      dockerConfigured,
 		EnableKubernetes:      *enableKubernetesFlag,
 		EnableProxmox:         *enableProxmoxFlag,
 		ProxmoxType:           strings.TrimSpace(*proxmoxTypeFlag),

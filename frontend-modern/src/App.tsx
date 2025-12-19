@@ -268,6 +268,7 @@ function App() {
     vms: [],
     containers: [],
     dockerHosts: [],
+    removedDockerHosts: [],
     hosts: [],
     storage: [],
     cephClusters: [],
