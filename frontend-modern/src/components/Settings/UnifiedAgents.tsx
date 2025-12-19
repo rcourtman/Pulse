@@ -14,7 +14,6 @@ import { getPulseBaseUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
 
 const TOKEN_PLACEHOLDER = '<api-token>';
-const pulseUrl = () => getPulseBaseUrl();
 
 const buildDefaultTokenName = () => {
     const now = new Date();
@@ -25,14 +24,16 @@ const buildDefaultTokenName = () => {
 
 type AgentPlatform = 'linux' | 'macos' | 'windows';
 
-const commandsByPlatform: Record<
+// Generate platform-specific commands with the appropriate Pulse URL
+// Uses agentUrl from API (PULSE_PUBLIC_URL) if configured, otherwise falls back to window.location
+const buildCommandsByPlatform = (url: string): Record<
     AgentPlatform,
     {
         title: string;
         description: string;
         snippets: { label: string; command: string; note?: string | any }[];
     }
-> = {
+> => ({
     linux: {
         title: 'Install on Linux',
         description:
@@ -40,7 +41,7 @@ const commandsByPlatform: Record<
         snippets: [
             {
                 label: 'Install',
-                command: `curl -fsSL ${pulseUrl()}/install.sh | sudo bash -s -- --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
+                command: `curl -fsSL ${url}/install.sh | sudo bash -s -- --url ${url} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
                 note: (
                     <span>
                         Automatically detects your init system (systemd, OpenRC, Unraid, Synology) and configures the appropriate service. Works on Debian, Ubuntu, Fedora, Alpine, Gentoo, Unraid, Synology, and more.
@@ -56,7 +57,7 @@ const commandsByPlatform: Record<
         snippets: [
             {
                 label: 'Install with launchd',
-                command: `curl -fsSL ${pulseUrl()}/install.sh | sudo bash -s -- --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
+                command: `curl -fsSL ${url}/install.sh | sudo bash -s -- --url ${url} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
                 note: (
                     <span>
                         Creates <code>/Library/LaunchDaemons/com.pulse.agent.plist</code> and starts the agent automatically.
@@ -72,7 +73,7 @@ const commandsByPlatform: Record<
         snippets: [
             {
                 label: 'Install as Windows Service (PowerShell)',
-                command: `irm ${pulseUrl()}/install.ps1 | iex`,
+                command: `irm ${url}/install.ps1 | iex`,
                 note: (
                     <span>
                         Run in PowerShell as Administrator. The script will prompt for the Pulse URL and API token, download the agent binary, and install it as a Windows service with automatic startup.
@@ -81,7 +82,7 @@ const commandsByPlatform: Record<
             },
             {
                 label: 'Install with parameters (PowerShell)',
-                command: `$env:PULSE_URL="${pulseUrl()}"; $env:PULSE_TOKEN="${TOKEN_PLACEHOLDER}"; irm ${pulseUrl()}/install.ps1 | iex`,
+                command: `$env:PULSE_URL="${url}"; $env:PULSE_TOKEN="${TOKEN_PLACEHOLDER}"; irm ${url}/install.ps1 | iex`,
                 note: (
                     <span>
                         Non-interactive installation. Set environment variables before running to skip prompts.
@@ -90,7 +91,7 @@ const commandsByPlatform: Record<
             },
         ],
     },
-};
+});
 
 export const UnifiedAgents: Component = () => {
     const { state } = useWebSocket();
@@ -118,12 +119,16 @@ export const UnifiedAgents: Component = () => {
         }
     });
 
-    const commandSections = createMemo(() =>
-        Object.entries(commandsByPlatform).map(([platform, meta]) => ({
+    // Use agentUrl from API (PULSE_PUBLIC_URL) if configured, otherwise fall back to window.location
+    const agentUrl = () => securityStatus()?.agentUrl || getPulseBaseUrl();
+
+    const commandSections = createMemo(() => {
+        const commands = buildCommandsByPlatform(agentUrl());
+        return Object.entries(commands).map(([platform, meta]) => ({
             platform: platform as AgentPlatform,
             ...meta,
-        })),
-    );
+        }));
+    });
 
     const connectedFromStatus = (status: string | undefined | null) => {
         if (!status) return false;
@@ -238,7 +243,7 @@ export const UnifiedAgents: Component = () => {
     const getCurlInsecureFlag = () => insecureMode() ? '-k' : '';
 
     const getUninstallCommand = () => {
-        return `curl ${getCurlInsecureFlag()}-fsSL ${pulseUrl()}/install.sh | sudo bash -s -- --uninstall`;
+        return `curl ${getCurlInsecureFlag()}-fsSL ${agentUrl()}/install.sh | sudo bash -s -- --uninstall`;
     };
 
     // Track previously seen host types to prevent flapping when one source temporarily has no data
@@ -370,7 +375,7 @@ export const UnifiedAgents: Component = () => {
 
     const getUpgradeCommand = (_hostname: string) => {
         const token = resolvedToken();
-        return `curl ${getCurlInsecureFlag()}-fsSL ${pulseUrl()}/install.sh | sudo bash -s -- --url ${pulseUrl()} --token ${token}${getInsecureFlag()}`;
+        return `curl ${getCurlInsecureFlag()}-fsSL ${agentUrl()}/install.sh | sudo bash -s -- --url ${agentUrl()} --token ${token}${getInsecureFlag()}`;
     };
 
     const handleRemoveAgent = async (id: string, type: 'host' | 'docker' | 'kubernetes') => {
