@@ -15,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	_ "github.com/rcourtman/pulse-go-rewrite/internal/mock" // Import for init() to run
@@ -100,6 +101,9 @@ func runServer() {
 		Level:     cfg.LogLevel,
 		Component: "pulse",
 	})
+
+	// Initialize license public key for Pro feature validation
+	license.InitPublicKey()
 
 	log.Info().Msg("Starting Pulse monitoring server")
 

@@ -31,6 +31,7 @@ import { NetworkSettingsPanel } from './NetworkSettingsPanel';
 import { UpdatesSettingsPanel } from './UpdatesSettingsPanel';
 import { UpdateConfirmationModal } from '@/components/UpdateConfirmationModal';
 import { BackupsSettingsPanel } from './BackupsSettingsPanel';
+import { ProLicensePanel } from './ProLicensePanel';
 import { SecurityAuthPanel } from './SecurityAuthPanel';
 import { APIAccessPanel } from './APIAccessPanel';
 import { SecurityOverviewPanel } from './SecurityOverviewPanel';
@@ -308,6 +309,7 @@ type SettingsTab =
   | 'system-updates'
   | 'system-backups'
   | 'system-ai'
+  | 'system-pro'
   | 'api'
   | 'security-overview'
   | 'security-auth'
@@ -356,6 +358,10 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
   'system-ai': {
     title: 'AI Assistant',
     description: 'Configure AI-powered infrastructure analysis and remediation suggestions.',
+  },
+  'system-pro': {
+    title: 'Pulse Pro',
+    description: 'Manage license activation and Pulse Pro feature access.',
   },
   api: {
     title: 'API access',
@@ -443,6 +449,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/system-updates')) return 'system-updates';
     if (path.includes('/settings/system-backups')) return 'system-backups';
     if (path.includes('/settings/system-ai')) return 'system-ai';
+    if (path.includes('/settings/system-pro')) return 'system-pro';
     if (path.includes('/settings/system')) return 'system-general';
     if (path.includes('/settings/api')) return 'api';
     if (path.includes('/settings/security-overview')) return 'security-overview';
@@ -1082,6 +1089,12 @@ const Settings: Component<SettingsProps> = (props) => {
             id: 'system-ai',
             label: 'AI Assistant',
             icon: Sparkles,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'system-pro',
+            label: 'Pulse Pro',
+            icon: BadgeCheck,
             iconProps: { strokeWidth: 2 },
           },
         ],
@@ -3561,6 +3574,11 @@ const Settings: Component<SettingsProps> = (props) => {
                   <AISettings />
                   <AICostDashboard />
                 </div>
+              </Show>
+
+              {/* Pulse Pro License Tab */}
+              <Show when={activeTab() === 'system-pro'}>
+                <ProLicensePanel />
               </Show>
 
               {/* API Access */}

@@ -30,6 +30,24 @@ type StateProvider interface {
 	GetState() models.StateSnapshot
 }
 
+// LicenseState represents the current state of the license
+type LicenseState string
+
+const (
+	LicenseStateNone        LicenseState = "none"
+	LicenseStateActive      LicenseState = "active"
+	LicenseStateExpired     LicenseState = "expired"
+	LicenseStateGracePeriod LicenseState = "grace_period"
+)
+
+// LicenseChecker provides license feature checking for Pro features
+type LicenseChecker interface {
+	HasFeature(feature string) bool
+	// GetLicenseStateString returns the current license state (none, active, expired, grace_period)
+	// and whether features are available (true for active/grace_period)
+	GetLicenseStateString() (string, bool)
+}
+
 // Service orchestrates AI interactions
 type Service struct {
 	mu               sync.RWMutex
@@ -52,6 +70,9 @@ type Service struct {
 	limits executionLimits
 
 	modelsCache modelsCache
+
+	// License checker for Pro feature gating
+	licenseChecker LicenseChecker
 }
 
 type executionLimits struct {
@@ -338,12 +359,55 @@ func (s *Service) SetCorrelationDetector(detector *CorrelationDetector) {
 	}
 }
 
+// SetLicenseChecker sets the license checker for Pro feature gating
+func (s *Service) SetLicenseChecker(checker LicenseChecker) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.licenseChecker = checker
+}
+
+// HasLicenseFeature checks if a Pro feature is licensed (returns true if no license checker is set)
+func (s *Service) HasLicenseFeature(feature string) bool {
+	s.mu.RLock()
+	checker := s.licenseChecker
+	s.mu.RUnlock()
+
+	if checker == nil {
+		// No license checker means no enforcement (development mode or feature not gated)
+		return true
+	}
+	return checker.HasFeature(feature)
+}
+
+// GetLicenseState returns the current license state and whether features are available
+func (s *Service) GetLicenseState() (string, bool) {
+	s.mu.RLock()
+	checker := s.licenseChecker
+	s.mu.RUnlock()
+
+	if checker == nil {
+		// No license checker means development mode - treat as active
+		return string(LicenseStateActive), true
+	}
+	return checker.GetLicenseStateString()
+}
+
+// FeatureAIPatrol is the license feature constant for AI Patrol
+const FeatureAIPatrol = "ai_patrol"
+
+// FeatureAIAlerts is the license feature constant for AI Alert Analysis
+const FeatureAIAlerts = "ai_alerts"
+
+// FeatureAIAutoFix is the license feature constant for AI Auto-Fix
+const FeatureAIAutoFix = "ai_autofix"
+
 // StartPatrol starts the background patrol service
 func (s *Service) StartPatrol(ctx context.Context) {
 	s.mu.RLock()
 	patrol := s.patrolService
 	alertAnalyzer := s.alertTriggeredAnalyzer
 	cfg := s.cfg
+	licenseChecker := s.licenseChecker
 	s.mu.RUnlock()
 
 	if patrol == nil {
@@ -354,6 +418,13 @@ func (s *Service) StartPatrol(ctx context.Context) {
 	if cfg == nil || !cfg.IsPatrolEnabled() {
 		log.Debug().Msg("AI Patrol not enabled")
 		return
+	}
+
+	// Check license for AI Patrol feature (Pro only)
+	if licenseChecker != nil && !licenseChecker.HasFeature(FeatureAIPatrol) {
+		log.Info().Msg("AI Patrol requires Pulse Pro license - patrol will not run LLM analysis")
+		// Note: We still configure patrol but it won't have LLM capability
+		// The patrol service itself should check HasLicenseFeature before LLM calls
 	}
 
 	// Configure patrol from AI config
@@ -368,11 +439,17 @@ func (s *Service) StartPatrol(ctx context.Context) {
 	patrol.SetConfig(patrolCfg)
 	patrol.Start(ctx)
 
-	// Configure alert-triggered analyzer
+	// Configure alert-triggered analyzer (also Pro-only)
 	if alertAnalyzer != nil {
-		alertAnalyzer.SetEnabled(cfg.IsAlertTriggeredAnalysisEnabled())
+		// Only enable if licensed for AI Alerts
+		enabled := cfg.IsAlertTriggeredAnalysisEnabled()
+		if enabled && licenseChecker != nil && !licenseChecker.HasFeature(FeatureAIAlerts) {
+			log.Info().Msg("AI Alert Analysis requires Pulse Pro license - alert-triggered analysis disabled")
+			enabled = false
+		}
+		alertAnalyzer.SetEnabled(enabled)
 		log.Info().
-			Bool("enabled", cfg.IsAlertTriggeredAnalysisEnabled()).
+			Bool("enabled", enabled).
 			Msg("Alert-triggered AI analysis configured")
 	}
 }
@@ -395,6 +472,7 @@ func (s *Service) ReconfigurePatrol() {
 	patrol := s.patrolService
 	alertAnalyzer := s.alertTriggeredAnalyzer
 	cfg := s.cfg
+	licenseChecker := s.licenseChecker
 	s.mu.RUnlock()
 
 	if patrol == nil || cfg == nil {
@@ -417,9 +495,15 @@ func (s *Service) ReconfigurePatrol() {
 		Dur("interval", patrolCfg.QuickCheckInterval).
 		Msg("Patrol configuration updated")
 
-	// Update alert-triggered analyzer
+	// Update alert-triggered analyzer (re-check license on each config change)
 	if alertAnalyzer != nil {
-		alertAnalyzer.SetEnabled(cfg.IsAlertTriggeredAnalysisEnabled())
+		enabled := cfg.IsAlertTriggeredAnalysisEnabled()
+		// Re-check license - don't allow re-enabling without valid license
+		if enabled && licenseChecker != nil && !licenseChecker.HasFeature(FeatureAIAlerts) {
+			log.Debug().Msg("Alert-triggered analysis requires Pulse Pro license - staying disabled")
+			enabled = false
+		}
+		alertAnalyzer.SetEnabled(enabled)
 	}
 }
 
