@@ -2,8 +2,14 @@ package ai
 
 import (
 	"context"
+	"errors"
+	"os"
+	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -450,19 +456,379 @@ func TestService_SetProviders(t *testing.T) {
 	svc.SetCorrelationDetector(nil)
 }
 
-// Helper functions
-func hasPrefix(s, prefix string) bool {
-	if len(s) < len(prefix) {
-		return false
+func TestService_Execute(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pulse-ai-execute-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	return s[:len(prefix)] == prefix
+	defer os.RemoveAll(tmpDir)
+
+	persistence := config.NewConfigPersistence(tmpDir)
+	svc := NewService(persistence, nil)
+	
+	// Set enabled config
+	svc.cfg = &config.AIConfig{
+		Enabled: true,
+	}
+
+	// Set mock provider
+	mockP := &mockProvider{
+		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+			return &providers.ChatResponse{
+				Content: "Hello from mock AI",
+				Model:   "mock-model",
+			}, nil
+		},
+	}
+	svc.provider = mockP
+
+	req := ExecuteRequest{
+		Prompt: "Hello",
+		Model:  "anthropic:test-model", // Use known provider with no key to force fallback
+	}
+
+	resp, err := svc.Execute(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	if resp.Content != "Hello from mock AI" {
+		t.Errorf("Expected 'Hello from mock AI', got '%s'", resp.Content)
+	}
+}
+
+func TestService_Execute_Error(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "pulse-ai-execute-error-test-*")
+	defer os.RemoveAll(tmpDir)
+	persistence := config.NewConfigPersistence(tmpDir)
+	svc := NewService(persistence, nil)
+	svc.cfg = &config.AIConfig{Enabled: true}
+	
+	mockP := &mockProvider{
+		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+			return nil, errors.New("API error")
+		},
+	}
+	svc.provider = mockP
+
+	_, err := svc.Execute(context.Background(), ExecuteRequest{
+		Prompt: "Hello",
+		Model:  "anthropic:test-model",
+	})
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+}
+
+func TestService_ExecuteStream(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "pulse-ai-execute-stream-test-*")
+	defer os.RemoveAll(tmpDir)
+	persistence := config.NewConfigPersistence(tmpDir)
+	svc := NewService(persistence, nil)
+	svc.cfg = &config.AIConfig{Enabled: true}
+	
+	mockP := &mockProvider{
+		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+			return &providers.ChatResponse{
+				Content: "Streaming response",
+				Model:   "mock-model",
+			}, nil
+		},
+	}
+	svc.provider = mockP
+
+	var events []StreamEvent
+	callback := func(ev StreamEvent) {
+		events = append(events, ev)
+	}
+
+	resp, err := svc.ExecuteStream(context.Background(), ExecuteRequest{
+		Prompt: "Hello",
+		Model:  "anthropic:test-model", // Use known provider with no key to force fallback
+	}, callback)
+	if err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+
+	if resp.Content != "Streaming response" {
+		t.Errorf("Expected 'Streaming response', got '%s'", resp.Content)
+	}
+
+	// Should have at least one content event
+	foundContent := false
+	for _, ev := range events {
+		if ev.Type == "content" && ev.Data == "Streaming response" {
+			foundContent = true
+			break
+		}
+	}
+	if !foundContent {
+		t.Error("Expected content event in stream")
+	}
+}
+
+func TestService_Execute_WithTool(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "pulse-ai-execute-tool-test-*")
+	defer os.RemoveAll(tmpDir)
+	persistence := config.NewConfigPersistence(tmpDir)
+	svc := NewService(persistence, nil)
+	svc.cfg = &config.AIConfig{Enabled: true}
+
+	// Mock provider that returns a tool call
+	mockP := &mockProvider{
+		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+			// First call returns a tool call
+			if len(req.Messages) <= 1 {
+				return &providers.ChatResponse{
+					Content: "I will run a command",
+					Model:   "mock-model",
+					ToolCalls: []providers.ToolCall{
+						{
+							ID:    "call-123",
+							Name:  "run_command",
+							Input: map[string]interface{}{"command": "uptime"},
+						},
+					},
+					StopReason: "tool_use",
+				}, nil
+			}
+			// Second call returns the final answer
+			return &providers.ChatResponse{
+				Content: "Command executed successfully",
+				Model:   "mock-model",
+			}, nil
+		},
+	}
+	svc.provider = mockP
+
+	resp, err := svc.Execute(context.Background(), ExecuteRequest{
+		Prompt: "Run uptime",
+		Model:  "anthropic:test-model",
+	})
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	if len(resp.ToolCalls) != 1 {
+		t.Errorf("Expected 1 tool call, got %d", len(resp.ToolCalls))
+	}
+	if resp.ToolCalls[0].Name != "run_command" {
+		t.Errorf("Expected run_command, got %s", resp.ToolCalls[0].Name)
+	}
+}
+
+func TestService_Execute_SystemPrompt(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "pulse-ai-prompt-test-*")
+	defer os.RemoveAll(tmpDir)
+	persistence := config.NewConfigPersistence(tmpDir)
+	svc := NewService(persistence, nil)
+	svc.cfg = &config.AIConfig{
+		Enabled:       true,
+		CustomContext: "This is my home lab",
+	}
+
+	mockRP := &mockResourceProvider{
+		getStatsFunc: func() resources.StoreStats {
+			return resources.StoreStats{TotalResources: 1}
+		},
+	}
+	svc.SetResourceProvider(mockRP)
+
+	var capturedSystemPrompt string
+	mockP := &mockProvider{
+		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+			capturedSystemPrompt = req.System
+			return &providers.ChatResponse{Content: "OK"}, nil
+		},
+	}
+	svc.provider = mockP
+
+	_, err := svc.Execute(context.Background(), ExecuteRequest{
+		Prompt: "Hello",
+		Model:  "anthropic:test-model",
+	})
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	if !containsString(capturedSystemPrompt, "This is my home lab") {
+		t.Error("System prompt should contain custom context")
+	}
+	if !containsString(capturedSystemPrompt, "## Unified Infrastructure View") {
+		t.Error("System prompt should contain unified infrastructure view section")
+	}
+}
+
+func TestService_KnowledgeMethods(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "pulse-ai-knowledge-test-*")
+	defer os.RemoveAll(tmpDir)
+	persistence := config.NewConfigPersistence(tmpDir)
+	svc := NewService(persistence, nil)
+
+	if svc.knowledgeStore == nil {
+		t.Fatal("knowledgeStore should be initialized")
+	}
+
+	guestID := "test-guest"
+	err := svc.SaveGuestNote(guestID, "Guest 1", "vm", "test", "Title", "Content")
+	if err != nil {
+		t.Fatalf("SaveGuestNote failed: %v", err)
+	}
+
+	kn, err := svc.GetGuestKnowledge(guestID)
+	if err != nil {
+		t.Fatalf("GetGuestKnowledge failed: %v", err)
+	}
+	if len(kn.Notes) != 1 {
+		t.Errorf("Expected 1 note, got %d", len(kn.Notes))
+	}
+
+	noteID := kn.Notes[0].ID
+	err = svc.DeleteGuestNote(guestID, noteID)
+	if err != nil {
+		t.Fatalf("DeleteGuestNote failed: %v", err)
+	}
+
+	kn, _ = svc.GetGuestKnowledge(guestID)
+	if len(kn.Notes) != 0 {
+		t.Error("Note should have been deleted")
+	}
+}
+
+func TestService_Reload(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "pulse-ai-reload-test-*")
+	defer os.RemoveAll(tmpDir)
+	persistence := config.NewConfigPersistence(tmpDir)
+	svc := NewService(persistence, nil)
+
+	err := svc.Reload()
+	if err != nil {
+		t.Fatalf("Reload failed: %v", err)
+	}
+}
+
+func TestService_ListModels(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "pulse-ai-list-models-test-*")
+	defer os.RemoveAll(tmpDir)
+	persistence := config.NewConfigPersistence(tmpDir)
+	svc := NewService(persistence, nil)
+
+	// Mock config with no providers
+	svc.cfg = &config.AIConfig{Enabled: true}
+
+	// Should return empty list when no providers configured
+	models, err := svc.ListModels(context.Background())
+	if err != nil {
+		t.Fatalf("ListModels failed: %v", err)
+	}
+	if len(models) != 0 {
+		t.Errorf("Expected 0 models, got %d", len(models))
+	}
+}
+
+func TestService_TestConnection(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "pulse-ai-test-conn-*")
+	defer os.RemoveAll(tmpDir)
+	persistence := config.NewConfigPersistence(tmpDir)
+	svc := NewService(persistence, nil)
+
+	// Test with no config
+	err := svc.TestConnection(context.Background())
+	if err == nil {
+		t.Error("Expected error with no config")
+	}
+}
+
+func TestService_SetMetricsHistoryProvider(t *testing.T) {
+	svc := NewService(nil, nil)
+	svc.SetMetricsHistoryProvider(nil)
+	if svc.stateProvider != nil {
+		t.Error("Expected stateProvider to be nil")
+	}
+}
+
+func TestService_LicenseGating(t *testing.T) {
+	svc := NewService(nil, nil)
+	
+	// Default should be true when no checker is set (dev mode)
+	if !svc.HasLicenseFeature("test") {
+		t.Error("Expected true for no license checker (dev mode)")
+	}
+
+	mockLC := &mockLicenseChecker{hasFeature: true}
+	svc.SetLicenseChecker(mockLC)
+	
+	if !svc.HasLicenseFeature("test") {
+		t.Error("Expected true with mock license checker")
+	}
+	
+	tier, ok := svc.GetLicenseState()
+	if tier != "active" || !ok {
+		t.Errorf("Expected active tier from mock, got %s, %v", tier, ok)
+	}
+}
+
+func TestService_IsAutonomous(t *testing.T) {
+	svc := NewService(nil, nil)
+	svc.cfg = &config.AIConfig{AutonomousMode: true}
+	if !svc.IsAutonomous() {
+		t.Error("Expected true")
+	}
+	
+	svc.cfg.AutonomousMode = false
+	if svc.IsAutonomous() {
+		t.Error("Expected false")
+	}
+}
+
+type mockLicenseChecker struct {
+	hasFeature bool
+}
+
+func (m *mockLicenseChecker) HasFeature(f string) bool { return m.hasFeature }
+func (m *mockLicenseChecker) GetLicenseStateString() (string, bool) {
+	return "active", true
+}
+
+func TestService_RunCommand(t *testing.T) {
+	svc := NewService(nil, nil)
+	// Should fail with no agent server
+	resp, err := svc.RunCommand(context.Background(), RunCommandRequest{Command: "uptime"})
+	if err != nil {
+		t.Fatalf("RunCommand failed: %v", err)
+	}
+	if resp.Success {
+		t.Error("Expected success=false with no agent server")
+	}
+}
+
+func TestService_ExecuteTool(t *testing.T) {
+	svc := NewService(nil, nil)
+	ctx := context.Background()
+	req := ExecuteRequest{Prompt: "test"}
+	tc := providers.ToolCall{
+		ID:    "call-1",
+		Name:  "run_command",
+		Input: map[string]interface{}{"command": "uptime"},
+	}
+
+	output, exec := svc.executeTool(ctx, req, tc)
+	if !containsString(output, "agent server not available") {
+		t.Errorf("Expected agent server error, got: %s", output)
+	}
+	if exec.Success {
+		t.Error("Expected failure")
+	}
+	if exec.Name != "run_command" {
+		t.Errorf("Expected run_command, got %s", exec.Name)
+	}
+}
+
+// Helper functions (restored)
+func hasPrefix(s, prefix string) bool {
+	return strings.HasPrefix(s, prefix)
 }
 
 func containsString(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(s, substr)
 }

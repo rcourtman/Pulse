@@ -5,20 +5,6 @@ import (
 	"time"
 )
 
-// mockThresholdProvider implements ThresholdProvider for testing
-type mockThresholdProvider struct {
-	nodeCPU    float64
-	nodeMemory float64
-	guestMem   float64
-	guestDisk  float64
-	storage    float64
-}
-
-func (m *mockThresholdProvider) GetNodeCPUThreshold() float64    { return m.nodeCPU }
-func (m *mockThresholdProvider) GetNodeMemoryThreshold() float64 { return m.nodeMemory }
-func (m *mockThresholdProvider) GetGuestMemoryThreshold() float64 { return m.guestMem }
-func (m *mockThresholdProvider) GetGuestDiskThreshold() float64   { return m.guestDisk }
-func (m *mockThresholdProvider) GetStorageThreshold() float64     { return m.storage }
 
 func TestDefaultPatrolThresholds(t *testing.T) {
 	thresholds := DefaultPatrolThresholds()
@@ -470,5 +456,498 @@ func TestPatrolStatus_Fields(t *testing.T) {
 	}
 	if status.IntervalMs != 900000 {
 		t.Errorf("Expected interval 900000ms, got %d", status.IntervalMs)
+	}
+}
+
+func TestFormatDurationPatrol(t *testing.T) {
+	tests := []struct {
+		input    time.Duration
+		expected string
+	}{
+		{30 * time.Minute, "30m"},
+		{59 * time.Minute, "59m"},
+		{60 * time.Minute, "1h"},
+		{90 * time.Minute, "1h"},    // Less than 24h, shows hours
+		{2 * time.Hour, "2h"},
+		{23 * time.Hour, "23h"},
+		{24 * time.Hour, "1d"},
+		{48 * time.Hour, "2d"},
+		{7 * 24 * time.Hour, "7d"},
+	}
+
+	for _, tt := range tests {
+		result := formatDurationPatrol(tt.input)
+		if result != tt.expected {
+			t.Errorf("formatDurationPatrol(%v) = %s, want %s", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestFormatBytes(t *testing.T) {
+	tests := []struct {
+		input    uint64
+		expected string
+	}{
+		{0, "0 B"},
+		{100, "100 B"},
+		{1023, "1023 B"},
+		{1024, "1.0 KB"},
+		{1536, "1.5 KB"},
+		{1048576, "1.0 MB"},
+		{1073741824, "1.0 GB"},
+		{1099511627776, "1.0 TB"},
+	}
+
+	for _, tt := range tests {
+		result := formatBytes(tt.input)
+		if result != tt.expected {
+			t.Errorf("formatBytes(%d) = %s, want %s", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestFormatBytesInt64(t *testing.T) {
+	tests := []struct {
+		input    int64
+		expected string
+	}{
+		{-100, "0 B"},     // Negative values return "0 B"
+		{0, "0 B"},
+		{1024, "1.0 KB"},
+		{1073741824, "1.0 GB"},
+	}
+
+	for _, tt := range tests {
+		result := formatBytesInt64(tt.input)
+		if result != tt.expected {
+			t.Errorf("formatBytesInt64(%d) = %s, want %s", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestPatrolService_ParseAIFindings(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Test with valid findings
+	response := `Here's my analysis:
+
+[FINDING]
+SEVERITY: warning
+CATEGORY: performance
+RESOURCE: vm-100
+RESOURCE_TYPE: vm
+TITLE: High CPU usage
+DESCRIPTION: VM is running at 95% CPU for extended period
+RECOMMENDATION: Consider adding more vCPUs
+EVIDENCE: CPU: 95%
+[/FINDING]
+
+[FINDING]
+SEVERITY: critical
+CATEGORY: reliability
+RESOURCE: node-1
+RESOURCE_TYPE: node
+TITLE: Node offline
+DESCRIPTION: Node is not responding to health checks
+RECOMMENDATION: Check network connectivity
+EVIDENCE: Status: offline
+[/FINDING]
+
+Everything else looks good.`
+
+	findings := ps.parseAIFindings(response)
+
+	if len(findings) != 2 {
+		t.Errorf("Expected 2 findings, got %d", len(findings))
+	}
+
+	if len(findings) >= 1 {
+		if findings[0].Title != "High CPU usage" {
+			t.Errorf("Expected title 'High CPU usage', got '%s'", findings[0].Title)
+		}
+		if findings[0].Severity != FindingSeverityWarning {
+			t.Errorf("Expected severity warning, got %v", findings[0].Severity)
+		}
+	}
+
+	if len(findings) >= 2 {
+		if findings[1].Title != "Node offline" {
+			t.Errorf("Expected title 'Node offline', got '%s'", findings[1].Title)
+		}
+		if findings[1].Severity != FindingSeverityCritical {
+			t.Errorf("Expected severity critical, got %v", findings[1].Severity)
+		}
+	}
+}
+
+func TestPatrolService_ParseAIFindings_NoFindings(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	response := `Everything looks healthy. No issues detected.`
+
+	findings := ps.parseAIFindings(response)
+
+	if len(findings) != 0 {
+		t.Errorf("Expected 0 findings, got %d", len(findings))
+	}
+}
+
+func TestPatrolService_ParseFindingBlock(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	block := `
+SEVERITY: warning
+CATEGORY: capacity
+RESOURCE: storage-1
+RESOURCE_TYPE: storage
+TITLE: Storage filling up
+DESCRIPTION: Storage is at 90% capacity
+RECOMMENDATION: Clean up old backups
+EVIDENCE: Usage: 90%
+`
+
+	finding := ps.parseFindingBlock(block)
+
+	if finding == nil {
+		t.Fatal("Expected non-nil finding")
+	}
+	if finding.Severity != FindingSeverityWarning {
+		t.Errorf("Expected severity warning, got %v", finding.Severity)
+	}
+	if finding.Category != FindingCategoryCapacity {
+		t.Errorf("Expected category capacity, got %v", finding.Category)
+	}
+	if finding.Title != "Storage filling up" {
+		t.Errorf("Expected title 'Storage filling up', got '%s'", finding.Title)
+	}
+	if finding.ResourceID != "storage-1" {
+		t.Errorf("Expected resource 'storage-1', got '%s'", finding.ResourceID)
+	}
+}
+
+func TestPatrolService_ParseFindingBlock_MissingRequiredFields(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Missing title and description
+	block := `
+SEVERITY: warning
+CATEGORY: capacity
+RESOURCE: storage-1
+`
+
+	finding := ps.parseFindingBlock(block)
+
+	if finding != nil {
+		t.Error("Expected nil finding when required fields are missing")
+	}
+}
+
+func TestPatrolService_ParseFindingBlock_AllSeverities(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	tests := []struct {
+		severity string
+		expected FindingSeverity
+	}{
+		{"critical", FindingSeverityCritical},
+		{"warning", FindingSeverityWarning},
+		{"watch", FindingSeverityWatch},
+		{"info", FindingSeverityInfo},
+		{"unknown", FindingSeverityInfo}, // Unknown defaults to info
+	}
+
+	for _, tt := range tests {
+		block := "SEVERITY: " + tt.severity + "\nTITLE: Test\nDESCRIPTION: Test description"
+		finding := ps.parseFindingBlock(block)
+		if finding == nil {
+			t.Fatalf("Expected finding for severity %s", tt.severity)
+		}
+		if finding.Severity != tt.expected {
+			t.Errorf("Severity %s: expected %v, got %v", tt.severity, tt.expected, finding.Severity)
+		}
+	}
+}
+
+func TestPatrolService_ParseFindingBlock_AllCategories(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	tests := []struct {
+		category string
+		expected FindingCategory
+	}{
+		{"performance", FindingCategoryPerformance},
+		{"reliability", FindingCategoryReliability},
+		{"security", FindingCategorySecurity},
+		{"capacity", FindingCategoryCapacity},
+		{"configuration", FindingCategoryGeneral},
+		{"unknown", FindingCategoryPerformance}, // Unknown defaults to performance
+	}
+
+	for _, tt := range tests {
+		block := "CATEGORY: " + tt.category + "\nTITLE: Test\nDESCRIPTION: Test description"
+		finding := ps.parseFindingBlock(block)
+		if finding == nil {
+			t.Fatalf("Expected finding for category %s", tt.category)
+		}
+		if finding.Category != tt.expected {
+			t.Errorf("Category %s: expected %v, got %v", tt.category, tt.expected, finding.Category)
+		}
+	}
+}
+
+func TestPatrolService_GetFindingsForResource(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Add findings for specific resources
+	f1 := &Finding{
+		ID:           "f1",
+		ResourceID:   "res-1",
+		ResourceName: "Resource 1",
+		Severity:     FindingSeverityWarning,
+		Title:        "Finding 1",
+	}
+	f2 := &Finding{
+		ID:           "f2",
+		ResourceID:   "res-1",
+		ResourceName: "Resource 1",
+		Severity:     FindingSeverityCritical,
+		Title:        "Finding 2",
+	}
+	f3 := &Finding{
+		ID:           "f3",
+		ResourceID:   "res-2",
+		ResourceName: "Resource 2",
+		Severity:     FindingSeverityWarning,
+		Title:        "Finding 3",
+	}
+
+	ps.findings.Add(f1)
+	ps.findings.Add(f2)
+	ps.findings.Add(f3)
+
+	// Get findings for res-1
+	res1Findings := ps.GetFindingsForResource("res-1")
+	if len(res1Findings) != 2 {
+		t.Errorf("Expected 2 findings for res-1, got %d", len(res1Findings))
+	}
+
+	// Get findings for res-2
+	res2Findings := ps.GetFindingsForResource("res-2")
+	if len(res2Findings) != 1 {
+		t.Errorf("Expected 1 finding for res-2, got %d", len(res2Findings))
+	}
+}
+
+func TestPatrolService_GetFindingsSummary(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Add findings
+	ps.findings.Add(&Finding{ID: "f1", Severity: FindingSeverityCritical, Title: "Critical"})
+	ps.findings.Add(&Finding{ID: "f2", Severity: FindingSeverityWarning, Title: "Warning"})
+	ps.findings.Add(&Finding{ID: "f3", Severity: FindingSeverityWatch, Title: "Watch"})
+
+	summary := ps.GetFindingsSummary()
+
+	if summary.Critical != 1 {
+		t.Errorf("Expected 1 critical, got %d", summary.Critical)
+	}
+	if summary.Warning != 1 {
+		t.Errorf("Expected 1 warning, got %d", summary.Warning)
+	}
+	if summary.Watch != 1 {
+		t.Errorf("Expected 1 watch, got %d", summary.Watch)
+	}
+}
+
+func TestPatrolService_GetRunHistory(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Add some run records
+	ps.runHistoryStore.Add(PatrolRunRecord{ID: "run-1", Status: "completed"})
+	ps.runHistoryStore.Add(PatrolRunRecord{ID: "run-2", Status: "completed"})
+	ps.runHistoryStore.Add(PatrolRunRecord{ID: "run-3", Status: "completed"})
+
+	// Get all
+	allRuns := ps.GetRunHistory(0)
+	if len(allRuns) != 3 {
+		t.Errorf("Expected 3 runs, got %d", len(allRuns))
+	}
+
+	// Get limited
+	limitedRuns := ps.GetRunHistory(2)
+	if len(limitedRuns) != 2 {
+		t.Errorf("Expected 2 runs (limited), got %d", len(limitedRuns))
+	}
+}
+
+func TestPatrolService_GetPatternDetector(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Initially nil
+	if ps.GetPatternDetector() != nil {
+		t.Error("Expected nil PatternDetector initially")
+	}
+
+	// Set pattern detector
+	detector := NewPatternDetector(DefaultPatternConfig())
+	ps.SetPatternDetector(detector)
+
+	if ps.GetPatternDetector() != detector {
+		t.Error("Expected GetPatternDetector to return the set detector")
+	}
+}
+
+func TestPatrolService_GetCorrelationDetector(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Initially nil
+	if ps.GetCorrelationDetector() != nil {
+		t.Error("Expected nil CorrelationDetector initially")
+	}
+
+	// Set correlation detector
+	detector := NewCorrelationDetector(DefaultCorrelationConfig())
+	ps.SetCorrelationDetector(detector)
+
+	if ps.GetCorrelationDetector() != detector {
+		t.Error("Expected GetCorrelationDetector to return the set detector")
+	}
+}
+
+func TestPatrolService_GetBaselineStore(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Initially nil
+	if ps.GetBaselineStore() != nil {
+		t.Error("Expected nil BaselineStore initially")
+	}
+
+	// Set baseline store
+	store := NewBaselineStore(DefaultBaselineConfig())
+	ps.SetBaselineStore(store)
+
+	if ps.GetBaselineStore() != store {
+		t.Error("Expected GetBaselineStore to return the set store")
+	}
+}
+
+func TestPatrolService_SetMetricsHistoryProvider(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Set a nil provider (should not panic)
+	ps.SetMetricsHistoryProvider(nil)
+
+	// Verify it was set (field is internal, just checking no panic)
+}
+
+func TestJoinParts(t *testing.T) {
+	tests := []struct {
+		input    []string
+		expected string
+	}{
+		{[]string{}, ""},
+		{[]string{"one"}, "one"},
+		{[]string{"one", "two"}, "one and two"},
+		{[]string{"one", "two", "three"}, "[one two], and three"},
+	}
+
+	for _, tt := range tests {
+		result := joinParts(tt.input)
+		if result != tt.expected {
+			t.Errorf("joinParts(%v) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestPatrolService_GetAllFindings(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Add findings with different severities
+	ps.findings.Add(&Finding{
+		ID:         "f1",
+		Severity:   FindingSeverityInfo,
+		Title:      "Info finding",
+		DetectedAt: time.Now().Add(-3 * time.Hour),
+	})
+	ps.findings.Add(&Finding{
+		ID:         "f2",
+		Severity:   FindingSeverityCritical,
+		Title:      "Critical finding",
+		DetectedAt: time.Now().Add(-1 * time.Hour),
+	})
+	ps.findings.Add(&Finding{
+		ID:         "f3",
+		Severity:   FindingSeverityWarning,
+		Title:      "Warning finding",
+		DetectedAt: time.Now().Add(-2 * time.Hour),
+	})
+
+	findings := ps.GetAllFindings()
+
+	if len(findings) != 3 {
+		t.Fatalf("Expected 3 findings, got %d", len(findings))
+	}
+
+	// Should be sorted by severity (critical first)
+	if findings[0].Severity != FindingSeverityCritical {
+		t.Errorf("Expected first finding to be critical, got %s", findings[0].Severity)
+	}
+	if findings[1].Severity != FindingSeverityWarning {
+		t.Errorf("Expected second finding to be warning, got %s", findings[1].Severity)
+	}
+	if findings[2].Severity != FindingSeverityInfo {
+		t.Errorf("Expected third finding to be info, got %s", findings[2].Severity)
+	}
+}
+
+func TestPatrolService_GetFindingsHistory(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	now := time.Now()
+
+	// Add findings at different times
+	ps.findings.Add(&Finding{
+		ID:         "f1",
+		Title:      "Old finding",
+		DetectedAt: now.Add(-48 * time.Hour),
+	})
+	ps.findings.Add(&Finding{
+		ID:         "f2",
+		Title:      "Recent finding",
+		DetectedAt: now.Add(-1 * time.Hour),
+	})
+
+	// Get all findings history
+	allHistory := ps.GetFindingsHistory(nil)
+	if len(allHistory) != 2 {
+		t.Errorf("Expected 2 findings in history, got %d", len(allHistory))
+	}
+
+	// Should be sorted by detected time (newest first)
+	if allHistory[0].ID != "f2" {
+		t.Errorf("Expected newest finding first, got %s", allHistory[0].ID)
+	}
+
+	// Get filtered history (only last 24 hours)
+	startTime := now.Add(-24 * time.Hour)
+	filteredHistory := ps.GetFindingsHistory(&startTime)
+	if len(filteredHistory) != 1 {
+		t.Errorf("Expected 1 finding in filtered history, got %d", len(filteredHistory))
+	}
+}
+
+func TestPatrolService_ResolveFinding_Errors(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Test empty ID
+	err := ps.ResolveFinding("", "resolved")
+	if err == nil {
+		t.Error("Expected error for empty finding ID")
+	}
+
+	// Test non-existent finding
+	err = ps.ResolveFinding("nonexistent", "resolved")
+	if err == nil {
+		t.Error("Expected error for non-existent finding")
 	}
 }

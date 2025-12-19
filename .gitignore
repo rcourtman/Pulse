@@ -35,6 +35,7 @@ Thumbs.db
 *.dylib
 *.test
 *.out
+coverage.html
 vendor/
 test-pulse
 

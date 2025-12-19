@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -174,76 +175,660 @@ func TestFindingsStore_Unsnooze(t *testing.T) {
 	}
 }
 
-func TestFindingsStore_SnoozeResolvedFinding(t *testing.T) {
+func TestFindingsStore_Acknowledge(t *testing.T) {
 	store := NewFindingsStore()
-
-	// Add a finding
-	finding := &Finding{
-		ID:           "finding-1",
-		Severity:     FindingSeverityWarning,
-		ResourceID:   "res-1",
-		ResourceName: "test-resource",
-		Title:        "Test Finding",
-	}
+	finding := &Finding{ID: "f1", Severity: FindingSeverityWarning, ResourceID: "r1", ResourceName: "res1", Title: "Test"}
 	store.Add(finding)
 
-	// Resolve it
-	store.Resolve("finding-1", false)
+	if !store.Acknowledge("f1") {
+		t.Fatal("Acknowledge should return true")
+	}
 
-	// Try to snooze a resolved finding - should fail
-	if store.Snooze("finding-1", 1*time.Hour) {
-		t.Error("Should not be able to snooze a resolved finding")
+	f := store.Get("f1")
+	if f.AcknowledgedAt == nil {
+		t.Error("AcknowledgedAt should be set")
+	}
+
+	// Double acknowledge
+	if !store.Acknowledge("f1") {
+		t.Error("Acknowledge should still return true (noop)")
 	}
 }
 
-func TestFindingsStore_SummaryConsistentWithActive(t *testing.T) {
+func TestFindingsStore_Dismiss(t *testing.T) {
+	store := NewFindingsStore()
+	finding := &Finding{ID: "f1", Severity: FindingSeverityWarning, ResourceID: "r1", ResourceName: "res1", Title: "Test", Category: FindingCategoryPerformance}
+	store.Add(finding)
+
+	if !store.Dismiss("f1", "not_an_issue", "Custom note") {
+		t.Fatal("Dismiss should return true")
+	}
+
+	f := store.Get("f1")
+	if !f.IsDismissed() {
+		t.Error("Finding should be dismissed")
+	}
+	if f.DismissedReason != "not_an_issue" {
+		t.Errorf("Expected reason not_an_issue, got %s", f.DismissedReason)
+	}
+	if f.UserNote != "Custom note" {
+		t.Errorf("Expected note 'Custom note', got %s", f.UserNote)
+	}
+
+	// Verify it's not active anymore
+	active := store.GetActive(FindingSeverityInfo)
+	if len(active) != 0 {
+		t.Error("Dismissed finding should not be active")
+	}
+}
+
+func TestFindingsStore_SetUserNote(t *testing.T) {
+	store := NewFindingsStore()
+	finding := &Finding{ID: "f1", Severity: FindingSeverityWarning, ResourceID: "r1", ResourceName: "res1", Title: "Test"}
+	store.Add(finding)
+
+	if !store.SetUserNote("f1", "New note") {
+		t.Fatal("SetUserNote should return true")
+	}
+
+	f := store.Get("f1")
+	if f.UserNote != "New note" {
+		t.Errorf("Expected note 'New note', got %s", f.UserNote)
+	}
+}
+
+func TestFindingsStore_Suppression(t *testing.T) {
+	store := NewFindingsStore()
+	
+	// Add a finding
+	finding := &Finding{
+		ID:           "f1",
+		Severity:     FindingSeverityWarning,
+		ResourceID:   "res-1",
+		ResourceName: "Resource 1",
+		Title:        "High CPU",
+		Category:     FindingCategoryPerformance,
+	}
+	store.Add(finding)
+
+	// Suppress it
+	if !store.Suppress("f1") {
+		t.Fatal("Suppress should return true")
+	}
+
+	// Verify it's suppressed and dismissed
+	f := store.Get("f1")
+	if !f.IsDismissed() || f.DismissedReason != "suppressed" {
+		t.Error("Finding should be auto-dismissed when suppressed")
+	}
+
+	if !store.IsSuppressed("res-1", FindingCategoryPerformance) {
+		t.Error("Provider+Category should be reported as suppressed")
+	}
+
+	// Add a NEW finding for the SAME resource and category
+	finding2 := &Finding{
+		ID:           "f2",
+		Severity:     FindingSeverityWarning,
+		ResourceID:   "res-1",
+		ResourceName: "Resource 1",
+		Title:        "Another High CPU",
+		Category:     FindingCategoryPerformance,
+	}
+	isNew := store.Add(finding2)
+	
+	if isNew {
+		t.Error("Expected Add to return false for suppressed finding")
+	}
+
+	f2 := store.Get("f2")
+	if f2 != nil {
+		t.Error("Suppressed finding should not be stored")
+	}
+
+	// Test clearing suppression
+	rules := store.GetSuppressionRules()
+	if len(rules) == 0 {
+		t.Fatal("Should have at least one suppression rule")
+	}
+	
+	if !store.DeleteSuppressionRule(rules[0].ID) {
+		t.Fatal("DeleteSuppressionRule should return true")
+	}
+
+	if store.IsSuppressed("res-1", FindingCategoryPerformance) {
+		t.Error("Should no longer be suppressed after rule deletion")
+	}
+}
+
+func TestFindingsStore_AddSuppressionRule(t *testing.T) {
+	store := NewFindingsStore()
+	
+	rule := store.AddSuppressionRule("res-1", "Res 1", FindingCategoryCapacity, "Manual suppression")
+	if rule == nil {
+		t.Fatal("AddSuppressionRule returned nil")
+	}
+
+	if !store.IsSuppressed("res-1", FindingCategoryCapacity) {
+		t.Error("Resource+Category should be suppressed")
+	}
+
+	// Verify rules list
+	rules := store.GetSuppressionRules()
+	found := false
+	for _, r := range rules {
+		if r.ID == rule.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Manual rule not found in GetSuppressionRules")
+	}
+}
+
+func TestFindingsStore_Cleanup(t *testing.T) {
+	store := NewFindingsStore()
+	
+	now := time.Now()
+	
+	// Add an active finding (should NOT be cleaned up)
+	store.Add(&Finding{ID: "active", Title: "Active"})
+	
+	// Add an old resolved finding (should BE cleaned up)
+	resolvedOld := &Finding{
+		ID:         "resolved-old",
+		Title:      "Resolved Old",
+		ResolvedAt: timePtr(now.Add(-48 * time.Hour)),
+	}
+	store.Add(resolvedOld)
+	
+	// Add a recent resolved finding (should NOT be cleaned up if maxAge is 24h)
+	resolvedRecent := &Finding{
+		ID:         "resolved-recent",
+		Title:      "Resolved Recent",
+		ResolvedAt: timePtr(now.Add(-1 * time.Hour)),
+	}
+	store.Add(resolvedRecent)
+
+	removed := store.Cleanup(24 * time.Hour)
+	if removed != 1 {
+		t.Errorf("Expected 1 finding removed, got %d", removed)
+	}
+
+	if store.Get("resolved-old") != nil {
+		t.Error("resolved-old should have been removed")
+	}
+	if store.Get("active") == nil {
+		t.Error("active should NOT have been removed")
+	}
+	if store.Get("resolved-recent") == nil {
+		t.Error("resolved-recent should NOT have been removed")
+	}
+}
+
+func TestFindingsStore_GetDismissedForContext(t *testing.T) {
+	store := NewFindingsStore()
+	
+	// Add dismissed finding
+	finding1 := &Finding{
+		ID:              "f1",
+		Title:           "High CPU on web-1",
+		ResourceID:      "web-1",
+		ResourceName:    "web-1",
+		Category:        FindingCategoryPerformance,
+		DismissedReason: "not_an_issue",
+		UserNote:        "Expected during backup",
+	}
+	store.Add(finding1)
+	store.Dismiss("f1", "not_an_issue", "Expected during backup")
+
+	// Add suppressed finding
+	finding2 := &Finding{
+		ID:           "f2",
+		Title:        "Disk nearly full on db-1",
+		ResourceID:   "db-1",
+		ResourceName: "db-1",
+		Category:     FindingCategoryCapacity,
+	}
+	store.Add(finding2)
+	store.Suppress("f2")
+
+	ctx := store.GetDismissedForContext()
+	
+	if !strings.Contains(ctx, "High CPU on web-1") {
+		t.Error("Context should contain dismissed finding title")
+	}
+	if !strings.Contains(ctx, "Disk nearly full on db-1") {
+		t.Error("Context should contain suppressed finding title")
+	}
+	if !strings.Contains(ctx, "Expected during backup") {
+		t.Error("Context should contain user note")
+	}
+	if !strings.Contains(ctx, "Permanently Suppressed") {
+		t.Error("Context should label suppressed findings")
+	}
+}
+
+func TestFindingsStore_Persistence(t *testing.T) {
+	store := NewFindingsStore()
+	mockP := &mockPersistence{}
+	
+	err := store.SetPersistence(mockP)
+	if err != nil {
+		t.Fatalf("SetPersistence failed: %v", err)
+	}
+
+	// Add a finding - should trigger save (debounced, but we can ForceSave)
+	store.Add(&Finding{ID: "f1", Title: "Persist me"})
+	
+	err = store.ForceSave()
+	if err != nil {
+		t.Fatalf("ForceSave failed: %v", err)
+	}
+
+	if mockP.savedCount != 1 {
+		t.Errorf("Expected 1 save, got %d", mockP.savedCount)
+	}
+}
+
+func TestFindingsStore_Add_UpdateExisting(t *testing.T) {
 	store := NewFindingsStore()
 
-	// Add mixed severity findings
-	store.Add(&Finding{ID: "f1", Severity: FindingSeverityCritical, ResourceID: "r1", ResourceName: "res1", Title: "Critical"})
-	store.Add(&Finding{ID: "f2", Severity: FindingSeverityWarning, ResourceID: "r2", ResourceName: "res2", Title: "Warning"})
-	store.Add(&Finding{ID: "f3", Severity: FindingSeverityWatch, ResourceID: "r3", ResourceName: "res3", Title: "Watch"})
-
-	// Verify initial consistency
-	active := store.GetActive(FindingSeverityInfo)
-	summary := store.GetSummary()
-
-	if len(active) != summary.Critical+summary.Warning+summary.Watch+summary.Info {
-		t.Errorf("Mismatch: %d active findings, summary totals %d", len(active), summary.Critical+summary.Warning+summary.Watch+summary.Info)
+	// Add initial finding
+	f1 := &Finding{
+		ID:          "f1",
+		ResourceID:  "res-1",
+		Severity:    FindingSeverityWarning,
+		Title:       "Initial Title",
+		Description: "Initial Description",
+	}
+	isNew := store.Add(f1)
+	if !isNew {
+		t.Error("Expected new finding on first add")
 	}
 
-	// Resolve the warning finding
-	store.Resolve("f2", false)
-
-	// Verify consistency after resolution
-	active = store.GetActive(FindingSeverityInfo)
-	summary = store.GetSummary()
-
-	if len(active) != 2 {
-		t.Fatalf("Expected 2 active findings after resolution, got %d", len(active))
+	// Add same finding again (should update, not create new)
+	f1Updated := &Finding{
+		ID:          "f1",
+		ResourceID:  "res-1",
+		Severity:    FindingSeverityWarning,
+		Title:       "Updated Title",
+		Description: "Updated Description",
+	}
+	isNew = store.Add(f1Updated)
+	if isNew {
+		t.Error("Expected update, not new finding")
 	}
 
-	if summary.Warning != 0 {
-		t.Errorf("Summary shows %d warnings but should be 0 after resolution", summary.Warning)
+	// Verify update happened
+	stored := store.Get("f1")
+	if stored.Title != "Updated Title" {
+		t.Errorf("Expected 'Updated Title', got %s", stored.Title)
+	}
+	if stored.TimesRaised != 1 {
+		t.Errorf("Expected TimesRaised=1, got %d", stored.TimesRaised)
+	}
+}
+
+func TestFindingsStore_Add_SeverityEscalation(t *testing.T) {
+	store := NewFindingsStore()
+
+	// Add and dismiss a warning finding
+	f1 := &Finding{
+		ID:         "f1",
+		ResourceID: "res-1",
+		Severity:   FindingSeverityWarning,
+		Title:      "Warning",
+	}
+	store.Add(f1)
+	store.Dismiss("f1", "not_an_issue", "It's fine")
+
+	// Verify it's dismissed
+	dismissed := store.Get("f1")
+	if !dismissed.IsDismissed() {
+		t.Fatal("Finding should be dismissed")
 	}
 
-	if summary.Critical != 1 {
-		t.Errorf("Summary shows %d critical but should be 1", summary.Critical)
+	// Now add the same finding with HIGHER severity (critical)
+	f1Escalated := &Finding{
+		ID:         "f1",
+		ResourceID: "res-1",
+		Severity:   FindingSeverityCritical,
+		Title:      "Now Critical!",
+	}
+	store.Add(f1Escalated)
+
+	// Severity escalation should clear the dismissal
+	reactivated := store.Get("f1")
+	if reactivated.IsDismissed() {
+		t.Error("Finding should be reactivated after severity escalation")
+	}
+	if reactivated.Severity != FindingSeverityCritical {
+		t.Error("Severity should be updated to critical")
+	}
+}
+
+func TestFindingsStore_Add_SuppressedExisting(t *testing.T) {
+	store := NewFindingsStore()
+
+	// Add and suppress a finding
+	f1 := &Finding{
+		ID:         "f1",
+		ResourceID: "res-1",
+		Severity:   FindingSeverityWarning,
+		Title:      "Suppressed Finding",
+		Category:   FindingCategoryPerformance,
+	}
+	store.Add(f1)
+	store.Suppress("f1")
+
+	// Verify it's suppressed
+	suppressed := store.Get("f1")
+	if !suppressed.Suppressed {
+		t.Fatal("Finding should be suppressed")
 	}
 
-	// Snooze the critical finding
-	store.Snooze("f1", 1*time.Hour)
+	// Try to add the same finding again
+	f1Updated := &Finding{
+		ID:         "f1",
+		ResourceID: "res-1",
+		Severity:   FindingSeverityCritical,
+		Title:      "Updated Title",
+		Category:   FindingCategoryPerformance,
+	}
+	isNew := store.Add(f1Updated)
 
-	// Verify consistency after snooze
-	active = store.GetActive(FindingSeverityInfo)
-	summary = store.GetSummary()
-
-	if len(active) != 1 {
-		t.Errorf("Expected 1 active finding after snooze, got %d", len(active))
+	// Should not update suppressed finding
+	if isNew {
+		t.Error("Suppressed finding should not be updated")
 	}
 
-	if summary.Critical != 0 {
-		t.Errorf("Summary shows %d critical but should be 0 after snooze", summary.Critical)
+	// Verify the finding wasn't updated
+	stillSuppressed := store.Get("f1")
+	if stillSuppressed.Title != "Suppressed Finding" {
+		t.Error("Suppressed finding title should not change")
+	}
+}
+
+func TestFindingsStore_Add_DismissedSameSeverity(t *testing.T) {
+	store := NewFindingsStore()
+
+	// Add and dismiss a finding
+	f1 := &Finding{
+		ID:         "f1",
+		ResourceID: "res-1",
+		Severity:   FindingSeverityWarning,
+		Title:      "Warning",
+	}
+	store.Add(f1)
+	store.Dismiss("f1", "expected_behavior", "Known issue")
+
+	// Add same finding with SAME severity
+	f1Same := &Finding{
+		ID:         "f1",
+		ResourceID: "res-1",
+		Severity:   FindingSeverityWarning,
+		Title:      "Still Warning",
+	}
+	store.Add(f1Same)
+
+	// Should stay dismissed (same severity doesn't reactivate)
+	stillDismissed := store.Get("f1")
+	if !stillDismissed.IsDismissed() {
+		t.Error("Finding should stay dismissed with same severity")
+	}
+	// But TimesRaised should increment
+	if stillDismissed.TimesRaised < 1 {
+		t.Error("TimesRaised should increment even for dismissed findings")
+	}
+}
+
+func TestFindingsStore_GetByResource(t *testing.T) {
+	store := NewFindingsStore()
+
+	// Add findings for different resources
+	f1 := &Finding{
+		ID:           "f1",
+		ResourceID:   "res-1",
+		ResourceName: "Resource 1",
+		Severity:     FindingSeverityWarning,
+		Title:        "Finding 1",
+	}
+	f2 := &Finding{
+		ID:           "f2",
+		ResourceID:   "res-1",
+		ResourceName: "Resource 1",
+		Severity:     FindingSeverityCritical,
+		Title:        "Finding 2",
+	}
+	f3 := &Finding{
+		ID:           "f3",
+		ResourceID:   "res-2",
+		ResourceName: "Resource 2",
+		Severity:     FindingSeverityWarning,
+		Title:        "Finding 3",
+	}
+
+	store.Add(f1)
+	store.Add(f2)
+	store.Add(f3)
+
+	// Get findings for res-1
+	res1Findings := store.GetByResource("res-1")
+	if len(res1Findings) != 2 {
+		t.Errorf("Expected 2 findings for res-1, got %d", len(res1Findings))
+	}
+
+	// Get findings for res-2
+	res2Findings := store.GetByResource("res-2")
+	if len(res2Findings) != 1 {
+		t.Errorf("Expected 1 finding for res-2, got %d", len(res2Findings))
+	}
+
+	// Get findings for non-existent resource
+	noFindings := store.GetByResource("non-existent")
+	if len(noFindings) != 0 {
+		t.Errorf("Expected 0 findings for non-existent resource, got %d", len(noFindings))
+	}
+
+	// Resolve one finding and verify it's excluded from GetByResource
+	store.Resolve("f1", false)
+	res1FindingsAfterResolve := store.GetByResource("res-1")
+	if len(res1FindingsAfterResolve) != 1 {
+		t.Errorf("Expected 1 active finding for res-1 after resolve, got %d", len(res1FindingsAfterResolve))
+	}
+}
+
+func TestFindingsStore_GetAll(t *testing.T) {
+	store := NewFindingsStore()
+
+	now := time.Now()
+
+	// Add findings at different times
+	f1 := &Finding{
+		ID:         "f1",
+		ResourceID: "res-1",
+		Title:      "Finding 1",
+		DetectedAt: now.Add(-48 * time.Hour),
+	}
+	f2 := &Finding{
+		ID:         "f2",
+		ResourceID: "res-1",
+		Title:      "Finding 2",
+		DetectedAt: now.Add(-12 * time.Hour),
+	}
+	f3 := &Finding{
+		ID:         "f3",
+		ResourceID: "res-2",
+		Title:      "Finding 3",
+		DetectedAt: now.Add(-1 * time.Hour),
+	}
+
+	store.Add(f1)
+	store.Add(f2)
+	store.Add(f3)
+
+	// Get all findings without filter
+	allFindings := store.GetAll(nil)
+	if len(allFindings) != 3 {
+		t.Errorf("Expected 3 findings, got %d", len(allFindings))
+	}
+
+	// Get findings after 24 hours ago
+	startTime := now.Add(-24 * time.Hour)
+	recentFindings := store.GetAll(&startTime)
+	if len(recentFindings) != 2 {
+		t.Errorf("Expected 2 findings after 24h ago, got %d", len(recentFindings))
+	}
+
+	// Resolve a finding and verify it's still in GetAll (includes resolved)
+	store.Resolve("f1", false)
+	allAfterResolve := store.GetAll(nil)
+	if len(allAfterResolve) != 3 {
+		t.Errorf("Expected 3 findings (including resolved), got %d", len(allAfterResolve))
+	}
+}
+
+type mockPersistence struct {
+	savedCount int
+}
+
+func (m *mockPersistence) SaveFindings(findings map[string]*Finding) error {
+	m.savedCount++
+	return nil
+}
+
+func (m *mockPersistence) LoadFindings() (map[string]*Finding, error) {
+	return make(map[string]*Finding), nil
+}
+
+func TestFindingsSummary_HasIssues(t *testing.T) {
+	tests := []struct {
+		name     string
+		summary  FindingsSummary
+		expected bool
+	}{
+		{
+			name:     "no issues",
+			summary:  FindingsSummary{Info: 1, Watch: 1},
+			expected: false,
+		},
+		{
+			name:     "has warning",
+			summary:  FindingsSummary{Warning: 1},
+			expected: true,
+		},
+		{
+			name:     "has critical",
+			summary:  FindingsSummary{Critical: 1},
+			expected: true,
+		},
+		{
+			name:     "has both",
+			summary:  FindingsSummary{Critical: 2, Warning: 3},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.summary.HasIssues(); got != tt.expected {
+				t.Errorf("HasIssues() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFindingsStore_GetDismissedFindings(t *testing.T) {
+	store := NewFindingsStore()
+
+	// Add normal finding
+	f1 := &Finding{
+		ID:         "f1",
+		ResourceID: "res-1",
+		Title:      "Normal Finding",
+		Severity:   FindingSeverityWarning,
+	}
+	store.Add(f1)
+
+	// Add dismissed finding
+	f2 := &Finding{
+		ID:         "f2",
+		ResourceID: "res-2",
+		Title:      "Dismissed Finding",
+		Severity:   FindingSeverityWarning,
+	}
+	store.Add(f2)
+	store.Dismiss("f2", "not_an_issue", "Ignore this")
+
+	// Add suppressed finding
+	f3 := &Finding{
+		ID:         "f3",
+		ResourceID: "res-3",
+		Title:      "Suppressed Finding",
+		Severity:   FindingSeverityWarning,
+	}
+	store.Add(f3)
+	store.Suppress("f3")
+
+	dismissed := store.GetDismissedFindings()
+	if len(dismissed) != 2 {
+		t.Errorf("Expected 2 dismissed/suppressed findings, got %d", len(dismissed))
+	}
+
+	// Verify the dismissed findings are the right ones
+	dismissedIDs := make(map[string]bool)
+	for _, f := range dismissed {
+		dismissedIDs[f.ID] = true
+	}
+
+	if !dismissedIDs["f2"] {
+		t.Error("Expected f2 to be in dismissed findings")
+	}
+	if !dismissedIDs["f3"] {
+		t.Error("Expected f3 to be in dismissed findings")
+	}
+	if dismissedIDs["f1"] {
+		t.Error("f1 should NOT be in dismissed findings")
+	}
+}
+
+func TestFindingsStore_MatchesSuppressionRule(t *testing.T) {
+	store := NewFindingsStore()
+
+	// Add a suppression rule for specific resource+category
+	store.AddSuppressionRule("res-1", "Resource 1", FindingCategoryPerformance, "Known issue")
+
+	// Should match
+	if !store.MatchesSuppressionRule("res-1", FindingCategoryPerformance) {
+		t.Error("Should match exact resource+category")
+	}
+
+	// Should not match different resource
+	if store.MatchesSuppressionRule("res-2", FindingCategoryPerformance) {
+		t.Error("Should NOT match different resource")
+	}
+
+	// Should not match different category
+	if store.MatchesSuppressionRule("res-1", FindingCategoryCapacity) {
+		t.Error("Should NOT match different category")
+	}
+
+	// Add a wildcard rule (any resource for capacity)
+	store.AddSuppressionRule("", "Any", FindingCategoryCapacity, "All capacity")
+
+	// Should match any resource for capacity
+	if !store.MatchesSuppressionRule("any-resource", FindingCategoryCapacity) {
+		t.Error("Wildcard resource rule should match any resource")
+	}
+
+	// Add a wildcard rule (res-3 for any category)
+	store.AddSuppressionRule("res-3", "Resource 3", "", "All categories for res-3")
+
+	// Should match res-3 for any category
+	if !store.MatchesSuppressionRule("res-3", FindingCategoryReliability) {
+		t.Error("Wildcard category rule should match any category for that resource")
 	}
 }
 

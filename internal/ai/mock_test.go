@@ -1,0 +1,179 @@
+package ai
+
+import (
+	"context"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
+)
+
+// mockProvider implements providers.Provider for testing
+type mockProvider struct {
+	chatFunc           func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error)
+	testConnectionFunc func(ctx context.Context) error
+	nameFunc           func() string
+	listModelsFunc     func(ctx context.Context) ([]providers.ModelInfo, error)
+}
+
+func (m *mockProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+	if m.chatFunc != nil {
+		return m.chatFunc(ctx, req)
+	}
+	return &providers.ChatResponse{Content: "Default mock response"}, nil
+}
+
+func (m *mockProvider) TestConnection(ctx context.Context) error {
+	if m.testConnectionFunc != nil {
+		return m.testConnectionFunc(ctx)
+	}
+	return nil
+}
+
+func (m *mockProvider) Name() string {
+	if m.nameFunc != nil {
+		return m.nameFunc()
+	}
+	return "mock"
+}
+
+func (m *mockProvider) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
+	if m.listModelsFunc != nil {
+		return m.listModelsFunc(ctx)
+	}
+	return nil, nil
+}
+
+// mockThresholdProvider implements patrol.ThresholdProvider for testing
+type mockThresholdProvider struct {
+	nodeCPU    float64
+	nodeMemory float64
+	guestMem   float64
+	guestDisk  float64
+	storage    float64
+}
+
+func (m *mockThresholdProvider) GetNodeCPUThreshold() float64    { return m.nodeCPU }
+func (m *mockThresholdProvider) GetNodeMemoryThreshold() float64 { return m.nodeMemory }
+func (m *mockThresholdProvider) GetGuestCPUThreshold() float64    { return 0 }
+func (m *mockThresholdProvider) GetGuestMemoryThreshold() float64 { return m.guestMem }
+func (m *mockThresholdProvider) GetGuestDiskThreshold() float64   { return m.guestDisk }
+func (m *mockThresholdProvider) GetStorageThreshold() float64     { return m.storage }
+
+type mockResourceProvider struct {
+	ResourceProvider
+	getAllFunc          func() []resources.Resource
+	getStatsFunc        func() resources.StoreStats
+	getSummaryFunc      func() resources.ResourceSummary
+	getInfrastructureFunc func() []resources.Resource
+	getWorkloadsFunc    func() []resources.Resource
+}
+
+func (m *mockResourceProvider) GetAll() []resources.Resource {
+	if m.getAllFunc != nil {
+		return m.getAllFunc()
+	}
+	return nil
+}
+func (m *mockResourceProvider) GetStats() resources.StoreStats {
+	if m.getStatsFunc != nil {
+		return m.getStatsFunc()
+	}
+	return resources.StoreStats{}
+}
+func (m *mockResourceProvider) GetResourceSummary() resources.ResourceSummary {
+	if m.getSummaryFunc != nil {
+		return m.getSummaryFunc()
+	}
+	return resources.ResourceSummary{}
+}
+func (m *mockResourceProvider) GetInfrastructure() []resources.Resource {
+	if m.getInfrastructureFunc != nil {
+		return m.getInfrastructureFunc()
+	}
+	return nil
+}
+func (m *mockResourceProvider) GetWorkloads() []resources.Resource {
+	if m.getWorkloadsFunc != nil {
+		return m.getWorkloadsFunc()
+	}
+	return nil
+}
+func (m *mockResourceProvider) GetType(t resources.ResourceType) []resources.Resource { return nil }
+func (m *mockResourceProvider) GetTopByCPU(limit int, types []resources.ResourceType) []resources.Resource {
+	return nil
+}
+func (m *mockResourceProvider) GetTopByMemory(limit int, types []resources.ResourceType) []resources.Resource {
+	return nil
+}
+func (m *mockResourceProvider) GetTopByDisk(limit int, types []resources.ResourceType) []resources.Resource {
+	return nil
+}
+func (m *mockResourceProvider) GetRelated(resourceID string) map[string][]resources.Resource {
+	return nil
+}
+func (m *mockResourceProvider) FindContainerHost(containerNameOrID string) string { return "" }
+
+type mockAgentServer struct {
+	agents        []agentexec.ConnectedAgent
+	executeFunc   func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error)
+}
+
+func (m *mockAgentServer) GetConnectedAgents() []agentexec.ConnectedAgent {
+	return m.agents
+}
+
+func (m *mockAgentServer) ExecuteCommand(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+	if m.executeFunc != nil {
+		return m.executeFunc(ctx, agentID, cmd)
+	}
+	return &agentexec.CommandResultPayload{Success: true, Stdout: "Mock output"}, nil
+}
+
+type mockPolicy struct {
+	decision agentexec.PolicyDecision
+}
+
+func (m *mockPolicy) Evaluate(command string) agentexec.PolicyDecision {
+	return m.decision
+}
+
+type mockMetadataProvider struct {
+	lastGuestID   string
+	lastGuestURL  string
+	lastDockerID  string
+	lastDockerURL string
+	lastHostID    string
+	lastHostURL   string
+}
+
+func (m *mockMetadataProvider) SetGuestURL(id, url string) error {
+	m.lastGuestID = id
+	m.lastGuestURL = url
+	return nil
+}
+
+func (m *mockMetadataProvider) SetDockerURL(id, url string) error {
+	m.lastDockerID = id
+	m.lastDockerURL = url
+	return nil
+}
+
+func (m *mockMetadataProvider) SetHostURL(id, url string) error {
+	m.lastHostID = id
+	m.lastHostURL = url
+	return nil
+}
+
+type mockLicenseStore struct {
+	features map[string]bool
+	state    string
+	valid    bool
+}
+
+func (m *mockLicenseStore) HasFeature(feature string) bool {
+	return m.features[feature]
+}
+
+func (m *mockLicenseStore) GetLicenseStateString() (string, bool) {
+	return m.state, m.valid
+}

@@ -65,9 +65,9 @@ type Finding struct {
 	Suppressed      bool   `json:"suppressed"`                 // Permanently suppress similar findings for this resource
 }
 
-// IsActive returns true if the finding is still active (not resolved, not snoozed, not suppressed)
+// IsActive returns true if the finding is still active (not resolved, not snoozed, not suppressed, not dismissed)
 func (f *Finding) IsActive() bool {
-	return f.ResolvedAt == nil && !f.IsSnoozed() && !f.Suppressed
+	return f.ResolvedAt == nil && !f.IsSnoozed() && !f.Suppressed && f.DismissedReason == ""
 }
 
 // IsDismissed returns true if the user has dismissed this finding with a reason
