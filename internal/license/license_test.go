@@ -1,6 +1,9 @@
 package license
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
+	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -10,6 +13,7 @@ import (
 func init() {
 	os.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 }
+
 
 func TestTierHasFeature(t *testing.T) {
 	tests := []struct {
@@ -178,6 +182,8 @@ func TestServiceFeatureGating(t *testing.T) {
 	}
 
 	// Activate test license
+	SetPublicKey(nil)
+	os.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 	testKey, err := GenerateLicenseForTesting("test@example.com", TierPro, 30*24*time.Hour)
 	if err != nil {
 		t.Fatalf("Failed to generate test license: %v", err)
@@ -233,6 +239,7 @@ func TestValidateLicenseMalformed(t *testing.T) {
 		{"two parts", "part1.part2"},
 		{"bad base64 header", "!!!.part2.part3"},
 		{"bad base64 payload", "eyJhbGciOiJFZERTQSJ9.!!!.part3"},
+		{"bad base64 signature", "eyJhbGciOiJFZERTQSJ9.eyJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20ifQ.!!!"},
 	}
 
 	for _, tt := range tests {
@@ -242,6 +249,56 @@ func TestValidateLicenseMalformed(t *testing.T) {
 				t.Error("Expected error for malformed license")
 			}
 		})
+	}
+}
+
+func TestValidateLicense_RequiredFields(t *testing.T) {
+	os.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+	defer os.Unsetenv("PULSE_LICENSE_DEV_MODE")
+
+	tests := []struct {
+		name   string
+		claims map[string]interface{}
+	}{
+		{"missing id", map[string]interface{}{"email": "t@e.c", "tier": "pro"}},
+		{"missing email", map[string]interface{}{"lid": "test", "tier": "pro"}},
+		{"missing tier", map[string]interface{}{"lid": "test", "email": "t@e.c"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA","typ":"JWT"}`))
+			payloadBytes, _ := json.Marshal(tt.claims)
+			payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+			key := header + "." + payload + ".fake-sig"
+
+			_, err := ValidateLicense(key)
+			if err == nil {
+				t.Error("Expected error for missing required fields")
+			}
+		})
+	}
+}
+
+func TestValidateLicense_ExpiredPastGrace(t *testing.T) {
+	os.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+	defer os.Unsetenv("PULSE_LICENSE_DEV_MODE")
+
+	claims := Claims{
+		LicenseID: "test-expired",
+		Email:     "t@e.c",
+		Tier:      TierPro,
+		ExpiresAt: time.Now().Add(-10 * 24 * time.Hour).Unix(), // 10 days ago (past 7-day grace)
+	}
+
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA","typ":"JWT"}`))
+	payloadBytes, _ := json.Marshal(claims)
+	payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	key := header + "." + payload + ".fake-sig"
+
+	_, err := ValidateLicense(key)
+	if err == nil {
+		t.Error("Expected error for license past grace period")
 	}
 }
 
@@ -259,8 +316,12 @@ func TestLicenseStatus(t *testing.T) {
 
 	// Activate license
 	SetPublicKey(nil) // Skip signature check for testing
+	os.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 	testKey, _ := GenerateLicenseForTesting("test@example.com", TierLifetime, 0)
-	_, _ = service.Activate(testKey)
+	_, err := service.Activate(testKey)
+	if err != nil {
+		t.Fatalf("Failed to activate test license: %v", err)
+	}
 
 	status = service.Status()
 	if !status.Valid {
@@ -378,5 +439,282 @@ func TestStatusSetsGracePeriodDynamically(t *testing.T) {
 	// Verify HasFeature also works during grace
 	if !service.HasFeature(FeatureAIPatrol) {
 		t.Error("HasFeature should return true during grace period")
+	}
+}
+
+func TestServiceCurrent(t *testing.T) {
+	service := NewService()
+
+	// No license - Current() returns nil
+	if service.Current() != nil {
+		t.Error("Current() should return nil when no license")
+	}
+
+	// Activate license
+	SetPublicKey(nil)
+	os.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+	testKey, err := GenerateLicenseForTesting("test@example.com", TierPro, 30*24*time.Hour)
+	if err != nil {
+		t.Fatalf("Failed to generate test license: %v", err)
+	}
+
+	_, err = service.Activate(testKey)
+	if err != nil {
+		t.Fatalf("Failed to activate: %v", err)
+	}
+
+	// Current() should return the license
+	lic := service.Current()
+	if lic == nil {
+		t.Fatal("Current() should return license after activation")
+	}
+	if lic.Claims.Email != "test@example.com" {
+		t.Errorf("Expected email 'test@example.com', got %q", lic.Claims.Email)
+	}
+
+	// Clear and verify Current() returns nil again
+	service.Clear()
+	if service.Current() != nil {
+		t.Error("Current() should return nil after Clear()")
+	}
+}
+
+func TestServiceGetLicenseState(t *testing.T) {
+	t.Run("no license", func(t *testing.T) {
+		service := NewService()
+		state, lic := service.GetLicenseState()
+		if state != LicenseStateNone {
+			t.Errorf("Expected state 'none', got %q", state)
+		}
+		if lic != nil {
+			t.Error("Expected nil license")
+		}
+	})
+
+	t.Run("active license", func(t *testing.T) {
+		service := NewService()
+		SetPublicKey(nil)
+		os.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+
+		testKey, _ := GenerateLicenseForTesting("test@example.com", TierPro, 30*24*time.Hour)
+		_, err := service.Activate(testKey)
+		if err != nil {
+			t.Fatalf("Failed to activate: %v", err)
+		}
+
+		state, lic := service.GetLicenseState()
+		if state != LicenseStateActive {
+			t.Errorf("Expected state 'active', got %q", state)
+		}
+		if lic == nil {
+			t.Error("Expected license to be returned")
+		}
+	})
+
+	t.Run("expired license in grace period", func(t *testing.T) {
+		service := NewService()
+
+		// Create an expired license within grace period (3 days ago)
+		expiredAt := time.Now().Add(-3 * 24 * time.Hour)
+		lic := &License{
+			Claims: Claims{
+				LicenseID: "test_expired",
+				Email:     "test@example.com",
+				Tier:      TierPro,
+				IssuedAt:  time.Now().Add(-33 * 24 * time.Hour).Unix(),
+				ExpiresAt: expiredAt.Unix(),
+			},
+			ValidatedAt: time.Now().Add(-33 * 24 * time.Hour),
+		}
+
+		service.mu.Lock()
+		service.license = lic
+		service.mu.Unlock()
+
+		state, returnedLic := service.GetLicenseState()
+		if state != LicenseStateGracePeriod {
+			t.Errorf("Expected state 'grace_period', got %q", state)
+		}
+		if returnedLic == nil {
+			t.Error("Expected license to be returned")
+		}
+		// Should have set grace period end
+		if returnedLic.GracePeriodEnd == nil {
+			t.Error("Expected GracePeriodEnd to be set")
+		}
+	})
+
+	t.Run("expired license past grace period", func(t *testing.T) {
+		service := NewService()
+
+		// Create an expired license past grace period (10 days ago)
+		expiredAt := time.Now().Add(-10 * 24 * time.Hour)
+		gracePeriodEnd := expiredAt.Add(7 * 24 * time.Hour) // Grace ended 3 days ago
+		lic := &License{
+			Claims: Claims{
+				LicenseID: "test_expired_past",
+				Email:     "test@example.com",
+				Tier:      TierPro,
+				IssuedAt:  time.Now().Add(-40 * 24 * time.Hour).Unix(),
+				ExpiresAt: expiredAt.Unix(),
+			},
+			ValidatedAt:    time.Now().Add(-40 * 24 * time.Hour),
+			GracePeriodEnd: &gracePeriodEnd,
+		}
+
+		service.mu.Lock()
+		service.license = lic
+		service.mu.Unlock()
+
+		state, returnedLic := service.GetLicenseState()
+		if state != LicenseStateExpired {
+			t.Errorf("Expected state 'expired', got %q", state)
+		}
+		if returnedLic == nil {
+			t.Error("Expected license to be returned")
+		}
+	})
+}
+
+func TestServiceGetLicenseStateString(t *testing.T) {
+	t.Run("no license", func(t *testing.T) {
+		service := NewService()
+		stateStr, hasFeatures := service.GetLicenseStateString()
+		if stateStr != "none" {
+			t.Errorf("Expected state string 'none', got %q", stateStr)
+		}
+		if hasFeatures {
+			t.Error("Expected hasFeatures to be false for no license")
+		}
+	})
+
+	t.Run("active license", func(t *testing.T) {
+		service := NewService()
+		SetPublicKey(nil)
+		os.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+
+		testKey, _ := GenerateLicenseForTesting("test@example.com", TierPro, 30*24*time.Hour)
+		service.Activate(testKey)
+
+		stateStr, hasFeatures := service.GetLicenseStateString()
+		if stateStr != "active" {
+			t.Errorf("Expected state string 'active', got %q", stateStr)
+		}
+		if !hasFeatures {
+			t.Error("Expected hasFeatures to be true for active license")
+		}
+	})
+
+	t.Run("grace period", func(t *testing.T) {
+		service := NewService()
+
+		expiredAt := time.Now().Add(-3 * 24 * time.Hour)
+		lic := &License{
+			Claims: Claims{
+				LicenseID: "test_grace",
+				Email:     "test@example.com",
+				Tier:      TierPro,
+				ExpiresAt: expiredAt.Unix(),
+			},
+		}
+
+		service.mu.Lock()
+		service.license = lic
+		service.mu.Unlock()
+
+		stateStr, hasFeatures := service.GetLicenseStateString()
+		if stateStr != "grace_period" {
+			t.Errorf("Expected state string 'grace_period', got %q", stateStr)
+		}
+		if !hasFeatures {
+			t.Error("Expected hasFeatures to be true during grace period")
+		}
+	})
+}
+
+func TestServiceSetLicenseChangeCallback(t *testing.T) {
+	service := NewService()
+
+	var callbackLicense *License
+	callbackCalled := false
+
+	service.SetLicenseChangeCallback(func(lic *License) {
+		callbackCalled = true
+		callbackLicense = lic
+	})
+
+	// Activate license - should trigger callback
+	SetPublicKey(nil)
+	os.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+	testKey, _ := GenerateLicenseForTesting("callback@example.com", TierPro, 30*24*time.Hour)
+	_, err := service.Activate(testKey)
+	if err != nil {
+		t.Fatalf("Failed to activate: %v", err)
+	}
+
+	if !callbackCalled {
+		t.Error("Callback should have been called on Activate")
+	}
+	if callbackLicense == nil {
+		t.Error("Callback should receive the license")
+	}
+	if callbackLicense != nil && callbackLicense.Claims.Email != "callback@example.com" {
+		t.Errorf("Callback received wrong license, email: %q", callbackLicense.Claims.Email)
+	}
+
+	// Reset for Clear test
+	callbackCalled = false
+	callbackLicense = nil
+
+	// Clear license - should trigger callback with nil
+	service.Clear()
+
+	if !callbackCalled {
+		t.Error("Callback should have been called on Clear")
+	}
+	if callbackLicense != nil {
+		t.Error("Callback should receive nil on Clear")
+	}
+}
+
+func TestValidateLicense_RealSignature(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(nil)
+	SetPublicKey(pub)
+	defer SetPublicKey(nil)
+
+	os.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+	defer os.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+
+	claims := Claims{
+		LicenseID: "test-sig",
+		Email:     "t@e.c",
+		Tier:      TierPro,
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(30 * 24 * time.Hour).Unix(),
+	}
+
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA","typ":"JWT"}`))
+	payloadBytes, _ := json.Marshal(claims)
+	payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	
+	signedData := header + "." + payload
+	signature := ed25519.Sign(priv, []byte(signedData))
+	sigEncoded := base64.RawURLEncoding.EncodeToString(signature)
+
+	key := signedData + "." + sigEncoded
+
+	lic, err := ValidateLicense(key)
+	if err != nil {
+		t.Fatalf("Failed to validate license with real signature: %v", err)
+	}
+	if lic.Claims.Email != "t@e.c" {
+		t.Error("Email mismatch in validated license")
+	}
+
+	// Test invalid signature
+	badKey := signedData + "." + base64.RawURLEncoding.EncodeToString([]byte("invalid-signature-length-must-be-64-bytes-long-12345678901234567890"))
+	_, err = ValidateLicense(badKey)
+	if err == nil {
+		t.Error("Expected error for invalid signature")
 	}
 }

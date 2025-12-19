@@ -1,0 +1,677 @@
+package config
+
+import (
+	"testing"
+	"time"
+)
+
+func TestAIConfig_IsConfigured(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   AIConfig
+		expected bool
+	}{
+		{
+			name:     "disabled config",
+			config:   AIConfig{Enabled: false},
+			expected: false,
+		},
+		{
+			name: "enabled with anthropic key",
+			config: AIConfig{
+				Enabled:         true,
+				AnthropicAPIKey: "sk-ant-123",
+			},
+			expected: true,
+		},
+		{
+			name: "enabled with openai key",
+			config: AIConfig{
+				Enabled:      true,
+				OpenAIAPIKey: "sk-openai-123",
+			},
+			expected: true,
+		},
+		{
+			name: "enabled with gemini key",
+			config: AIConfig{
+				Enabled:      true,
+				GeminiAPIKey: "gemini-123",
+			},
+			expected: true,
+		},
+		{
+			name: "enabled with ollama url",
+			config: AIConfig{
+				Enabled:       true,
+				OllamaBaseURL: "http://localhost:11434",
+			},
+			expected: true,
+		},
+		{
+			name: "enabled with oauth",
+			config: AIConfig{
+				Enabled:          true,
+				AuthMethod:       AuthMethodOAuth,
+				OAuthAccessToken: "oauth-token",
+			},
+			expected: true,
+		},
+		{
+			name: "enabled but no credentials",
+			config: AIConfig{
+				Enabled: true,
+			},
+			expected: false,
+		},
+		{
+			name: "legacy provider with api key",
+			config: AIConfig{
+				Enabled:  true,
+				Provider: AIProviderAnthropic,
+				APIKey:   "legacy-key",
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.config.IsConfigured()
+			if result != tt.expected {
+				t.Errorf("IsConfigured() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestAIConfig_HasProvider(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   AIConfig
+		provider string
+		expected bool
+	}{
+		{
+			name:     "no anthropic configured",
+			config:   AIConfig{},
+			provider: AIProviderAnthropic,
+			expected: false,
+		},
+		{
+			name:     "anthropic with api key",
+			config:   AIConfig{AnthropicAPIKey: "key"},
+			provider: AIProviderAnthropic,
+			expected: true,
+		},
+		{
+			name: "anthropic with oauth",
+			config: AIConfig{
+				AuthMethod:       AuthMethodOAuth,
+				OAuthAccessToken: "token",
+			},
+			provider: AIProviderAnthropic,
+			expected: true,
+		},
+		{
+			name:     "openai configured",
+			config:   AIConfig{OpenAIAPIKey: "key"},
+			provider: AIProviderOpenAI,
+			expected: true,
+		},
+		{
+			name:     "deepseek configured",
+			config:   AIConfig{DeepSeekAPIKey: "key"},
+			provider: AIProviderDeepSeek,
+			expected: true,
+		},
+		{
+			name:     "gemini configured",
+			config:   AIConfig{GeminiAPIKey: "key"},
+			provider: AIProviderGemini,
+			expected: true,
+		},
+		{
+			name:     "ollama configured",
+			config:   AIConfig{OllamaBaseURL: "http://localhost:11434"},
+			provider: AIProviderOllama,
+			expected: true,
+		},
+		{
+			name:     "unknown provider",
+			config:   AIConfig{},
+			provider: "unknown",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.config.HasProvider(tt.provider)
+			if result != tt.expected {
+				t.Errorf("HasProvider(%q) = %v, want %v", tt.provider, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestAIConfig_GetConfiguredProviders(t *testing.T) {
+	tests := []struct {
+		name   string
+		config AIConfig
+		count  int
+	}{
+		{
+			name:   "no providers",
+			config: AIConfig{},
+			count:  0,
+		},
+		{
+			name: "one provider",
+			config: AIConfig{
+				AnthropicAPIKey: "key",
+			},
+			count: 1,
+		},
+		{
+			name: "multiple providers",
+			config: AIConfig{
+				AnthropicAPIKey: "key1",
+				OpenAIAPIKey:    "key2",
+				GeminiAPIKey:    "key3",
+			},
+			count: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			providers := tt.config.GetConfiguredProviders()
+			if len(providers) != tt.count {
+				t.Errorf("GetConfiguredProviders() returned %d providers, want %d", len(providers), tt.count)
+			}
+		})
+	}
+}
+
+func TestAIConfig_GetAPIKeyForProvider(t *testing.T) {
+	config := AIConfig{
+		AnthropicAPIKey: "anthropic-key",
+		OpenAIAPIKey:    "openai-key",
+		DeepSeekAPIKey:  "deepseek-key",
+		GeminiAPIKey:    "gemini-key",
+	}
+
+	tests := []struct {
+		provider string
+		expected string
+	}{
+		{AIProviderAnthropic, "anthropic-key"},
+		{AIProviderOpenAI, "openai-key"},
+		{AIProviderDeepSeek, "deepseek-key"},
+		{AIProviderGemini, "gemini-key"},
+		{AIProviderOllama, ""},
+		{"unknown", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			result := config.GetAPIKeyForProvider(tt.provider)
+			if result != tt.expected {
+				t.Errorf("GetAPIKeyForProvider(%q) = %q, want %q", tt.provider, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestAIConfig_GetBaseURLForProvider(t *testing.T) {
+	config := AIConfig{
+		OllamaBaseURL: "http://custom:11434",
+		OpenAIBaseURL: "https://custom-openai.com",
+	}
+
+	tests := []struct {
+		provider string
+		expected string
+	}{
+		{AIProviderOllama, "http://custom:11434"},
+		{AIProviderOpenAI, "https://custom-openai.com"},
+		{AIProviderDeepSeek, DefaultDeepSeekBaseURL},
+		{AIProviderGemini, DefaultGeminiBaseURL},
+		{"unknown", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			result := config.GetBaseURLForProvider(tt.provider)
+			if result != tt.expected {
+				t.Errorf("GetBaseURLForProvider(%q) = %q, want %q", tt.provider, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestAIConfig_IsUsingOAuth(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   AIConfig
+		expected bool
+	}{
+		{
+			name:     "not using oauth",
+			config:   AIConfig{AuthMethod: AuthMethodAPIKey},
+			expected: false,
+		},
+		{
+			name: "oauth method but no token",
+			config: AIConfig{
+				AuthMethod: AuthMethodOAuth,
+			},
+			expected: false,
+		},
+		{
+			name: "using oauth with token",
+			config: AIConfig{
+				AuthMethod:       AuthMethodOAuth,
+				OAuthAccessToken: "token",
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.config.IsUsingOAuth()
+			if result != tt.expected {
+				t.Errorf("IsUsingOAuth() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseModelString(t *testing.T) {
+	tests := []struct {
+		model        string
+		wantProvider string
+		wantModel    string
+	}{
+		// Explicit prefixes
+		{"anthropic:claude-3-opus", AIProviderAnthropic, "claude-3-opus"},
+		{"openai:gpt-4o", AIProviderOpenAI, "gpt-4o"},
+		{"ollama:llama3", AIProviderOllama, "llama3"},
+		{"deepseek:deepseek-chat", AIProviderDeepSeek, "deepseek-chat"},
+		{"gemini:gemini-1.5-pro", AIProviderGemini, "gemini-1.5-pro"},
+		// Detection by name
+		{"claude-3-opus", AIProviderAnthropic, "claude-3-opus"},
+		{"gpt-4o", AIProviderOpenAI, "gpt-4o"},
+		{"o1-preview", AIProviderOpenAI, "o1-preview"},
+		{"deepseek-chat", AIProviderDeepSeek, "deepseek-chat"},
+		{"gemini-1.5-pro", AIProviderGemini, "gemini-1.5-pro"},
+		// Unknown models default to Ollama
+		{"llama3", AIProviderOllama, "llama3"},
+		{"mistral", AIProviderOllama, "mistral"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			provider, model := ParseModelString(tt.model)
+			if provider != tt.wantProvider {
+				t.Errorf("ParseModelString(%q) provider = %q, want %q", tt.model, provider, tt.wantProvider)
+			}
+			if model != tt.wantModel {
+				t.Errorf("ParseModelString(%q) model = %q, want %q", tt.model, model, tt.wantModel)
+			}
+		})
+	}
+}
+
+func TestFormatModelString(t *testing.T) {
+	result := FormatModelString(AIProviderAnthropic, "claude-3-opus")
+	if result != "anthropic:claude-3-opus" {
+		t.Errorf("FormatModelString() = %q, want %q", result, "anthropic:claude-3-opus")
+	}
+}
+
+func TestAIConfig_GetBaseURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   AIConfig
+		expected string
+	}{
+		{
+			name: "custom base url",
+			config: AIConfig{
+				BaseURL: "https://custom.url",
+			},
+			expected: "https://custom.url",
+		},
+		{
+			name: "ollama default",
+			config: AIConfig{
+				Provider: AIProviderOllama,
+			},
+			expected: DefaultOllamaBaseURL,
+		},
+		{
+			name: "deepseek default",
+			config: AIConfig{
+				Provider: AIProviderDeepSeek,
+			},
+			expected: DefaultDeepSeekBaseURL,
+		},
+		{
+			name: "gemini default",
+			config: AIConfig{
+				Provider: AIProviderGemini,
+			},
+			expected: DefaultGeminiBaseURL,
+		},
+		{
+			name: "anthropic no URL",
+			config: AIConfig{
+				Provider: AIProviderAnthropic,
+			},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.config.GetBaseURL()
+			if result != tt.expected {
+				t.Errorf("GetBaseURL() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestAIConfig_GetModel(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   AIConfig
+		expected string
+	}{
+		{
+			name:     "explicit model set",
+			config:   AIConfig{Model: "custom-model"},
+			expected: "custom-model",
+		},
+		{
+			name: "single provider configured",
+			config: AIConfig{
+				AnthropicAPIKey: "key",
+			},
+			expected: DefaultAIModelAnthropic,
+		},
+		{
+			name: "legacy provider fallback",
+			config: AIConfig{
+				Provider: AIProviderOpenAI,
+			},
+			expected: DefaultAIModelOpenAI,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.config.GetModel()
+			if result != tt.expected {
+				t.Errorf("GetModel() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestAIConfig_GetChatModel(t *testing.T) {
+	t.Run("explicit chat model", func(t *testing.T) {
+		config := AIConfig{
+			Model:     "default-model",
+			ChatModel: "chat-model",
+		}
+		if result := config.GetChatModel(); result != "chat-model" {
+			t.Errorf("GetChatModel() = %q, want 'chat-model'", result)
+		}
+	})
+
+	t.Run("fallback to main model", func(t *testing.T) {
+		config := AIConfig{
+			Model: "main-model",
+		}
+		if result := config.GetChatModel(); result != "main-model" {
+			t.Errorf("GetChatModel() = %q, want 'main-model'", result)
+		}
+	})
+}
+
+func TestAIConfig_GetPatrolModel(t *testing.T) {
+	t.Run("explicit patrol model", func(t *testing.T) {
+		config := AIConfig{
+			Model:       "default-model",
+			PatrolModel: "patrol-model",
+		}
+		if result := config.GetPatrolModel(); result != "patrol-model" {
+			t.Errorf("GetPatrolModel() = %q, want 'patrol-model'", result)
+		}
+	})
+
+	t.Run("fallback to main model", func(t *testing.T) {
+		config := AIConfig{
+			Model: "main-model",
+		}
+		if result := config.GetPatrolModel(); result != "main-model" {
+			t.Errorf("GetPatrolModel() = %q, want 'main-model'", result)
+		}
+	})
+}
+
+func TestAIConfig_GetAutoFixModel(t *testing.T) {
+	t.Run("explicit autofix model", func(t *testing.T) {
+		config := AIConfig{
+			AutoFixModel: "autofix-model",
+		}
+		if result := config.GetAutoFixModel(); result != "autofix-model" {
+			t.Errorf("GetAutoFixModel() = %q, want 'autofix-model'", result)
+		}
+	})
+
+	t.Run("fallback to patrol model", func(t *testing.T) {
+		config := AIConfig{
+			PatrolModel: "patrol-model",
+		}
+		if result := config.GetAutoFixModel(); result != "patrol-model" {
+			t.Errorf("GetAutoFixModel() = %q, want 'patrol-model'", result)
+		}
+	})
+}
+
+func TestAIConfig_ClearOAuthTokens(t *testing.T) {
+	config := AIConfig{
+		OAuthAccessToken:  "access",
+		OAuthRefreshToken: "refresh",
+		OAuthExpiresAt:    time.Now(),
+	}
+
+	config.ClearOAuthTokens()
+
+	if config.OAuthAccessToken != "" {
+		t.Error("OAuthAccessToken should be cleared")
+	}
+	if config.OAuthRefreshToken != "" {
+		t.Error("OAuthRefreshToken should be cleared")
+	}
+	if !config.OAuthExpiresAt.IsZero() {
+		t.Error("OAuthExpiresAt should be zero")
+	}
+}
+
+func TestAIConfig_ClearAPIKey(t *testing.T) {
+	config := AIConfig{APIKey: "key"}
+	config.ClearAPIKey()
+	if config.APIKey != "" {
+		t.Error("APIKey should be cleared")
+	}
+}
+
+func TestAIConfig_GetPatrolInterval(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   AIConfig
+		expected time.Duration
+	}{
+		{
+			name:     "15min preset",
+			config:   AIConfig{PatrolSchedulePreset: "15min"},
+			expected: 15 * time.Minute,
+		},
+		{
+			name:     "1hr preset",
+			config:   AIConfig{PatrolSchedulePreset: "1hr"},
+			expected: 1 * time.Hour,
+		},
+		{
+			name:     "6hr preset",
+			config:   AIConfig{PatrolSchedulePreset: "6hr"},
+			expected: 6 * time.Hour,
+		},
+		{
+			name:     "12hr preset",
+			config:   AIConfig{PatrolSchedulePreset: "12hr"},
+			expected: 12 * time.Hour,
+		},
+		{
+			name:     "daily preset",
+			config:   AIConfig{PatrolSchedulePreset: "daily"},
+			expected: 24 * time.Hour,
+		},
+		{
+			name:     "disabled preset",
+			config:   AIConfig{PatrolSchedulePreset: "disabled"},
+			expected: 0,
+		},
+		{
+			name:     "custom minutes",
+			config:   AIConfig{PatrolIntervalMinutes: 30},
+			expected: 30 * time.Minute,
+		},
+		{
+			name:     "old 15min default migrated to 6hr",
+			config:   AIConfig{PatrolIntervalMinutes: 15},
+			expected: 6 * time.Hour,
+		},
+		{
+			name:     "default 6hr",
+			config:   AIConfig{},
+			expected: 6 * time.Hour,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.config.GetPatrolInterval()
+			if result != tt.expected {
+				t.Errorf("GetPatrolInterval() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestPresetToMinutes(t *testing.T) {
+	tests := []struct {
+		preset   string
+		expected int
+	}{
+		{"15min", 15},
+		{"1hr", 60},
+		{"6hr", 360},
+		{"12hr", 720},
+		{"daily", 1440},
+		{"disabled", 0},
+		{"unknown", 360}, // default
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.preset, func(t *testing.T) {
+			result := PresetToMinutes(tt.preset)
+			if result != tt.expected {
+				t.Errorf("PresetToMinutes(%q) = %d, want %d", tt.preset, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestAIConfig_IsPatrolEnabled(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   AIConfig
+		expected bool
+	}{
+		{
+			name:     "patrol disabled by preset",
+			config:   AIConfig{PatrolEnabled: true, PatrolSchedulePreset: "disabled"},
+			expected: false,
+		},
+		{
+			name:     "patrol enabled",
+			config:   AIConfig{PatrolEnabled: true},
+			expected: true,
+		},
+		{
+			name:     "patrol disabled by flag",
+			config:   AIConfig{PatrolEnabled: false},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.config.IsPatrolEnabled()
+			if result != tt.expected {
+				t.Errorf("IsPatrolEnabled() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestAIConfig_IsAlertTriggeredAnalysisEnabled(t *testing.T) {
+	t.Run("enabled", func(t *testing.T) {
+		config := AIConfig{AlertTriggeredAnalysis: true}
+		if !config.IsAlertTriggeredAnalysisEnabled() {
+			t.Error("expected true")
+		}
+	})
+
+	t.Run("disabled", func(t *testing.T) {
+		config := AIConfig{AlertTriggeredAnalysis: false}
+		if config.IsAlertTriggeredAnalysisEnabled() {
+			t.Error("expected false")
+		}
+	})
+}
+
+func TestGetAvailableModels(t *testing.T) {
+	// This function is deprecated and should return nil
+	result := GetAvailableModels(AIProviderAnthropic)
+	if result != nil {
+		t.Error("GetAvailableModels should return nil (deprecated)")
+	}
+}
+
+func TestNewDefaultAIConfig(t *testing.T) {
+	config := NewDefaultAIConfig()
+
+	if config.Enabled {
+		t.Error("Default should not be enabled")
+	}
+	if config.Provider != AIProviderAnthropic {
+		t.Errorf("Default provider should be anthropic, got %q", config.Provider)
+	}
+	if config.PatrolIntervalMinutes != 360 {
+		t.Errorf("Default patrol interval should be 360, got %d", config.PatrolIntervalMinutes)
+	}
+	if !config.PatrolEnabled {
+		t.Error("Default patrol should be enabled")
+	}
+	if !config.AlertTriggeredAnalysis {
+		t.Error("Default alert triggered analysis should be enabled")
+	}
+}

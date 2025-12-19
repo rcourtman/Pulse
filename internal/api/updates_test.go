@@ -2,8 +2,245 @@ package api
 
 import (
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 )
+
+func TestUpdateHandlers_HandleCheckUpdates_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	handlers := &UpdateHandlers{}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/updates/check", nil)
+	rec := httptest.NewRecorder()
+
+	handlers.HandleCheckUpdates(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestUpdateHandlers_HandleApplyUpdate_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	handlers := &UpdateHandlers{}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/updates/apply", nil)
+	rec := httptest.NewRecorder()
+
+	handlers.HandleApplyUpdate(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestUpdateHandlers_HandleApplyUpdate_InvalidJSONBody(t *testing.T) {
+	t.Parallel()
+
+	handlers := &UpdateHandlers{}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/updates/apply", strings.NewReader("invalid json"))
+	rec := httptest.NewRecorder()
+
+	handlers.HandleApplyUpdate(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestUpdateHandlers_HandleApplyUpdate_MissingDownloadURL(t *testing.T) {
+	t.Parallel()
+
+	handlers := &UpdateHandlers{}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/updates/apply", strings.NewReader(`{}`))
+	rec := httptest.NewRecorder()
+
+	handlers.HandleApplyUpdate(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestUpdateHandlers_HandleUpdateStatus_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	handlers := &UpdateHandlers{}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/updates/status", nil)
+	rec := httptest.NewRecorder()
+
+	handlers.HandleUpdateStatus(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestUpdateHandlers_HandleUpdateStream_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	handlers := &UpdateHandlers{}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/updates/stream", nil)
+	rec := httptest.NewRecorder()
+
+	handlers.HandleUpdateStream(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestUpdateHandlers_HandleGetUpdatePlan_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	handlers := &UpdateHandlers{}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/updates/plan", nil)
+	rec := httptest.NewRecorder()
+
+	handlers.HandleGetUpdatePlan(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestUpdateHandlers_HandleListUpdateHistory_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	handlers := &UpdateHandlers{}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/updates/history", nil)
+	rec := httptest.NewRecorder()
+
+	handlers.HandleListUpdateHistory(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestUpdateHandlers_HandleListUpdateHistory_NoHistory(t *testing.T) {
+	t.Parallel()
+
+	handlers := &UpdateHandlers{
+		history: nil,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/updates/history", nil)
+	rec := httptest.NewRecorder()
+
+	handlers.HandleListUpdateHistory(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+}
+
+func TestUpdateHandlers_HandleListUpdateHistory_Success(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	history, _ := updates.NewUpdateHistory(tmp)
+
+	handlers := &UpdateHandlers{
+		history: history,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/updates/history", nil)
+	rec := httptest.NewRecorder()
+
+	handlers.HandleListUpdateHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected content-type application/json, got %q", ct)
+	}
+}
+
+func TestUpdateHandlers_HandleGetUpdateHistoryEntry_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	handlers := &UpdateHandlers{}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/updates/history/123", nil)
+	rec := httptest.NewRecorder()
+
+	handlers.HandleGetUpdateHistoryEntry(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestUpdateHandlers_HandleGetUpdateHistoryEntry_NoHistory(t *testing.T) {
+	t.Parallel()
+
+	handlers := &UpdateHandlers{
+		history: nil,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/updates/history/123", nil)
+	rec := httptest.NewRecorder()
+
+	handlers.HandleGetUpdateHistoryEntry(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+}
+
+func TestUpdateHandlers_HandleGetUpdateHistoryEntry_MissingID(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	history, _ := updates.NewUpdateHistory(tmp)
+
+	handlers := &UpdateHandlers{
+		history: history,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/updates/history/entry", nil)
+	rec := httptest.NewRecorder()
+
+	handlers.HandleGetUpdateHistoryEntry(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestUpdateHandlers_HandleGetUpdateHistoryEntry_NotFound(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	history, _ := updates.NewUpdateHistory(tmp)
+
+	handlers := &UpdateHandlers{
+		history: history,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/updates/history/entry?id=nonexistent", nil)
+	rec := httptest.NewRecorder()
+
+	handlers.HandleGetUpdateHistoryEntry(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+}
 
 func TestGetClientIP(t *testing.T) {
 	tests := []struct {
