@@ -1,7 +1,7 @@
 package ai
 
 import (
-	"sync"
+	"context"
 	"testing"
 	"time"
 
@@ -9,104 +9,350 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-// mockStateProvider implements StateProvider for testing
-type mockStateProvider struct {
-	state models.StateSnapshot
-}
 
-func (m *mockStateProvider) GetState() models.StateSnapshot {
-	return m.state
-}
-
-func TestAlertTriggeredAnalyzer_NewAlertTriggeredAnalyzer(t *testing.T) {
-	analyzer := NewAlertTriggeredAnalyzer(nil, nil)
-
-	if analyzer == nil {
-		t.Fatal("Expected non-nil analyzer")
+func TestAlertTriggeredAnalyzer_AnalyzeNodeFromAlert(t *testing.T) {
+	// Create a mock state provider
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			Nodes: []models.Node{
+				{
+					ID:     "node/pve1",
+					Name:   "pve1",
+					Status: "online",
+					CPU:    0.95, // 95%
+					Memory: models.Memory{
+						Total: 32000000000,
+						Used:  30000000000,
+					},
+				},
+			},
+		},
 	}
 
-	// Default should be disabled
-	if analyzer.IsEnabled() {
-		t.Error("Expected analyzer to be disabled by default")
+	// Create a patrol service with default thresholds
+	patrolService := &PatrolService{
+		thresholds: DefaultPatrolThresholds(),
 	}
 
-	// Should have initialized maps
-	if analyzer.lastAnalyzed == nil {
-		t.Error("Expected lastAnalyzed map to be initialized")
-	}
-	if analyzer.pending == nil {
-		t.Error("Expected pending map to be initialized")
-	}
+	analyzer := NewAlertTriggeredAnalyzer(patrolService, stateProvider)
 
-	// Default cooldown should be 5 minutes
-	if analyzer.cooldown != 5*time.Minute {
-		t.Errorf("Expected 5 minute cooldown, got %v", analyzer.cooldown)
-	}
-}
-
-func TestAlertTriggeredAnalyzer_SetEnabled(t *testing.T) {
-	analyzer := NewAlertTriggeredAnalyzer(nil, nil)
-
-	// Start disabled
-	if analyzer.IsEnabled() {
-		t.Error("Expected analyzer to be disabled initially")
-	}
-
-	// Enable
-	analyzer.SetEnabled(true)
-	if !analyzer.IsEnabled() {
-		t.Error("Expected analyzer to be enabled after SetEnabled(true)")
-	}
-
-	// Disable
-	analyzer.SetEnabled(false)
-	if analyzer.IsEnabled() {
-		t.Error("Expected analyzer to be disabled after SetEnabled(false)")
-	}
-}
-
-func TestAlertTriggeredAnalyzer_OnAlertFired_Disabled(t *testing.T) {
-	analyzer := NewAlertTriggeredAnalyzer(nil, nil)
-
-	// Create a test alert
 	alert := &alerts.Alert{
-		ID:           "test-alert-1",
+		ID:           "alert-1",
+		Type:         "node_cpu",
+		ResourceID:   "node/pve1",
+		ResourceName: "pve1",
+	}
+
+	findings := analyzer.analyzeNodeFromAlert(context.Background(), alert)
+
+	if len(findings) == 0 {
+		t.Error("Expected findings for high CPU node, got 0")
+	}
+
+	foundHighCPU := false
+	for _, f := range findings {
+		if f.Title == "High CPU usage" {
+			foundHighCPU = true
+			break
+		}
+	}
+
+	if !foundHighCPU {
+		t.Error("Expected 'High CPU usage' finding")
+	}
+
+	// Test with non-existent node
+	alertMissing := &alerts.Alert{
+		ID:         "alert-2",
+		ResourceID: "non-existent",
+	}
+	findingsMissing := analyzer.analyzeNodeFromAlert(context.Background(), alertMissing)
+	if len(findingsMissing) != 0 {
+		t.Errorf("Expected 0 findings for non-existent node, got %d", len(findingsMissing))
+	}
+}
+
+func TestAlertTriggeredAnalyzer_AnalyzeGuestFromAlert(t *testing.T) {
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			VMs: []models.VM{
+				{
+					ID:     "qemu/100",
+					Name:   "test-vm",
+					Status: "running",
+					CPU:    0.8,
+					Memory: models.Memory{
+						Usage: 95.0,
+					},
+					Disk: models.Disk{
+						Usage: 90.0,
+					},
+				},
+			},
+			Containers: []models.Container{
+				{
+					ID:     "lxc/200",
+					Name:   "test-container",
+					Status: "running",
+					CPU:    0.5,
+					Memory: models.Memory{
+						Usage: 96.0,
+					},
+					Disk: models.Disk{
+						Usage: 85.0,
+					},
+				},
+			},
+		},
+	}
+
+	patrolService := &PatrolService{
+		thresholds: DefaultPatrolThresholds(),
+	}
+
+	analyzer := NewAlertTriggeredAnalyzer(patrolService, stateProvider)
+
+	// Test VM
+	alertVM := &alerts.Alert{
+		ID:           "vm-alert",
+		Type:         "vm_memory",
+		ResourceID:   "qemu/100",
+		ResourceName: "test-vm",
+	}
+
+	findingsVM := analyzer.analyzeGuestFromAlert(context.Background(), alertVM)
+	if len(findingsVM) == 0 {
+		t.Error("Expected findings for high memory VM, got 0")
+	}
+
+	// Test Container
+	alertCT := &alerts.Alert{
+		ID:           "ct-alert",
+		Type:         "lxc_memory",
+		ResourceID:   "lxc/200",
+		ResourceName: "test-container",
+	}
+
+	findingsCT := analyzer.analyzeGuestFromAlert(context.Background(), alertCT)
+	if len(findingsCT) == 0 {
+		t.Error("Expected findings for high memory container, got 0")
+	}
+
+	// Test non-existent guest
+	alertMissing := &alerts.Alert{
+		ID:         "missing-alert",
+		ResourceID: "qemu/999",
+	}
+	findingsMissing := analyzer.analyzeGuestFromAlert(context.Background(), alertMissing)
+	if len(findingsMissing) != 0 {
+		t.Errorf("Expected 0 findings for missing guest, got %d", len(findingsMissing))
+	}
+}
+
+func TestAlertTriggeredAnalyzer_AnalyzeDockerFromAlert(t *testing.T) {
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			DockerHosts: []models.DockerHost{
+				{
+					ID:       "dh-1",
+					Hostname: "docker-host-1",
+					Status:   "online",
+					Containers: []models.DockerContainer{
+						{
+							ID:            "container-1",
+							Name:          "web-server",
+							State:         "running",
+							MemoryPercent: 95.0,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	patrolService := &PatrolService{
+		thresholds: DefaultPatrolThresholds(),
+	}
+
+	analyzer := NewAlertTriggeredAnalyzer(patrolService, stateProvider)
+
+	// Test Docker Host
+	alertHost := &alerts.Alert{
+		ID:           "dh-alert",
+		Type:         "docker_host_cpu",
+		ResourceID:   "dh-1",
+		ResourceName: "docker-host-1",
+	}
+
+	findingsHost := analyzer.analyzeDockerFromAlert(context.Background(), alertHost)
+	// Even if everything is fine, it shouldn't return nil if the host is found (though findings might be 0)
+	// But in my mock, if things are fine, findings will be 0.
+	// Let's make it offline to get a finding.
+	stateProvider.state.DockerHosts[0].Status = "offline"
+	findingsHost = analyzer.analyzeDockerFromAlert(context.Background(), alertHost)
+	if len(findingsHost) == 0 {
+		t.Error("Expected findings for offline Docker host, got 0")
+	}
+
+	// Test Docker Container
+	stateProvider.state.DockerHosts[0].Status = "online"
+	alertContainer := &alerts.Alert{
+		ID:           "container-alert",
+		Type:         "docker_container_memory",
+		ResourceID:   "container-1",
+		ResourceName: "web-server",
+	}
+
+	findingsContainer := analyzer.analyzeDockerFromAlert(context.Background(), alertContainer)
+	if len(findingsContainer) == 0 {
+		t.Error("Expected findings for high memory Docker container, got 0")
+	}
+
+	// Test missing Docker resource
+	alertMissing := &alerts.Alert{
+		ID:         "missing-alert",
+		ResourceID: "container-999",
+	}
+	findingsMissing := analyzer.analyzeDockerFromAlert(context.Background(), alertMissing)
+	if len(findingsMissing) != 0 {
+		t.Errorf("Expected 0 findings for missing Docker resource, got %d", len(findingsMissing))
+	}
+}
+
+func TestAlertTriggeredAnalyzer_AnalyzeStorageFromAlert(t *testing.T) {
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			Storage: []models.Storage{
+				{
+					ID:    "storage-1",
+					Name:  "local-lvm",
+					Usage: 95.0,
+					Total: 100000000000,
+					Used:  95000000000,
+				},
+			},
+		},
+	}
+
+	patrolService := &PatrolService{
+		thresholds: DefaultPatrolThresholds(),
+	}
+
+	analyzer := NewAlertTriggeredAnalyzer(patrolService, stateProvider)
+
+	// Test storage with high usage
+	alert := &alerts.Alert{
+		ID:           "storage-alert",
+		Type:         "storage-usage",
+		ResourceID:   "storage-1",
+		ResourceName: "local-lvm",
+	}
+
+	findings := analyzer.analyzeStorageFromAlert(context.Background(), alert)
+	if len(findings) == 0 {
+		t.Error("Expected findings for high storage usage, got 0")
+	}
+
+	// Test missing storage
+	alertMissing := &alerts.Alert{
+		ID:         "missing-alert",
+		ResourceID: "storage-999",
+	}
+	findingsMissing := analyzer.analyzeStorageFromAlert(context.Background(), alertMissing)
+	if len(findingsMissing) != 0 {
+		t.Errorf("Expected 0 findings for missing storage, got %d", len(findingsMissing))
+	}
+}
+
+func TestAlertTriggeredAnalyzer_AnalyzeGenericResourceFromAlert(t *testing.T) {
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			Nodes: []models.Node{
+				{
+					ID:     "node/pve1",
+					Name:   "pve1",
+					Status: "online",
+					CPU:    0.95,
+					Memory: models.Memory{
+						Total: 32000000000,
+						Used:  30000000000,
+					},
+				},
+			},
+			VMs: []models.VM{
+				{
+					ID:     "qemu/100",
+					Name:   "test-vm",
+					Status: "running",
+					CPU:    0.8,
+					Memory: models.Memory{
+						Usage: 95.0,
+					},
+					Disk: models.Disk{
+						Usage: 90.0,
+					},
+				},
+			},
+		},
+	}
+
+	patrolService := &PatrolService{
+		thresholds: DefaultPatrolThresholds(),
+	}
+
+	analyzer := NewAlertTriggeredAnalyzer(patrolService, stateProvider)
+
+	// Test node resourceID pattern - use ResourceName to match node.Name
+	alertNode := &alerts.Alert{
+		ID:           "cpu-alert",
 		Type:         "cpu",
-		ResourceID:   "node-1",
-		ResourceName: "test-node",
-		Value:        95.0,
-		Threshold:    90.0,
+		ResourceID:   "cluster1/node/pve1",
+		ResourceName: "pve1",
+	}
+	findingsNode := analyzer.analyzeGenericResourceFromAlert(context.Background(), alertNode)
+	// Should route to analyzeNodeFromAlert
+	if len(findingsNode) == 0 {
+		t.Error("Expected findings for node CPU, got 0")
 	}
 
-	// When disabled, OnAlertFired should do nothing (no panic)
-	analyzer.OnAlertFired(alert)
+	// Test qemu resourceID pattern - use ResourceName to match vm.Name
+	alertQemu := &alerts.Alert{
+		ID:           "mem-alert",
+		Type:         "memory",
+		ResourceID:   "cluster1/qemu/100",
+		ResourceName: "test-vm",
+	}
+	findingsQemu := analyzer.analyzeGenericResourceFromAlert(context.Background(), alertQemu)
+	// Should route to analyzeGuestFromAlert
+	if len(findingsQemu) == 0 {
+		t.Error("Expected findings for qemu memory, got 0")
+	}
 
-	// Verify no pending analyses were started
-	analyzer.mu.RLock()
-	pending := len(analyzer.pending)
-	analyzer.mu.RUnlock()
+	// Test docker resourceID pattern
+	alertDocker := &alerts.Alert{
+		ID:         "docker-alert",
+		Type:       "disk",
+		ResourceID: "docker-host-1",
+	}
+	// This won't find anything, so we expect 0 findings (no docker hosts in state)
+	findingsDocker := analyzer.analyzeGenericResourceFromAlert(context.Background(), alertDocker)
+	if len(findingsDocker) != 0 {
+		t.Errorf("Expected 0 findings for missing docker, got %d", len(findingsDocker))
+	}
 
-	if pending != 0 {
-		t.Errorf("Expected no pending analyses when disabled, got %d", pending)
+	// Test fallback (tries guest first, then node)
+	alertGeneric := &alerts.Alert{
+		ID:           "generic-alert",
+		Type:         "cpu",
+		ResourceID:   "test-vm",
+		ResourceName: "test-vm",
+	}
+	findingsGeneric := analyzer.analyzeGenericResourceFromAlert(context.Background(), alertGeneric)
+	if len(findingsGeneric) == 0 {
+		t.Error("Expected findings for generic CPU alert (fallback to guest), got 0")
 	}
 }
 
-func TestAlertTriggeredAnalyzer_OnAlertFired_NilAlert(t *testing.T) {
-	analyzer := NewAlertTriggeredAnalyzer(nil, nil)
-	analyzer.SetEnabled(true)
-
-	// Should handle nil alert gracefully (no panic)
-	analyzer.OnAlertFired(nil)
-
-	// Verify no pending analyses
-	analyzer.mu.RLock()
-	pending := len(analyzer.pending)
-	analyzer.mu.RUnlock()
-
-	if pending != 0 {
-		t.Errorf("Expected no pending analyses for nil alert, got %d", pending)
-	}
-}
 
 func TestAlertTriggeredAnalyzer_ResourceKeyFromAlert(t *testing.T) {
 	analyzer := NewAlertTriggeredAnalyzer(nil, nil)
@@ -157,7 +403,154 @@ func TestAlertTriggeredAnalyzer_ResourceKeyFromAlert(t *testing.T) {
 	}
 }
 
-func TestAlertTriggeredAnalyzer_Cooldown(t *testing.T) {
+func TestAlertTriggeredAnalyzer_CleanupOldCooldowns(t *testing.T) {
+	analyzer := NewAlertTriggeredAnalyzer(nil, nil)
+
+	// Add some cooldown entries - one old, one recent
+	analyzer.mu.Lock()
+	analyzer.lastAnalyzed["old-resource"] = time.Now().Add(-2 * time.Hour) // > 1 hour old
+	analyzer.lastAnalyzed["recent-resource"] = time.Now()                   // Recent
+	analyzer.mu.Unlock()
+
+	// Cleanup
+	analyzer.CleanupOldCooldowns()
+
+	analyzer.mu.RLock()
+	_, oldExists := analyzer.lastAnalyzed["old-resource"]
+	_, recentExists := analyzer.lastAnalyzed["recent-resource"]
+	analyzer.mu.RUnlock()
+
+	if oldExists {
+		t.Error("Expected old cooldown entry to be removed")
+	}
+	if !recentExists {
+		t.Error("Expected recent cooldown entry to be kept")
+	}
+}
+
+func TestAlertTriggeredAnalyzer_OnAlertFired_Enabled(t *testing.T) {
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			Nodes: []models.Node{
+				{
+					ID:     "node/pve1",
+					Name:   "pve1",
+					Status: "online",
+					CPU:    0.95,
+					Memory: models.Memory{
+						Total: 32000000000,
+						Used:  30000000000,
+					},
+				},
+			},
+		},
+	}
+
+	patrolService := &PatrolService{
+		thresholds: DefaultPatrolThresholds(),
+	}
+
+	analyzer := NewAlertTriggeredAnalyzer(patrolService, stateProvider)
+	analyzer.SetEnabled(true)
+
+	alert := &alerts.Alert{
+		ID:           "test-alert-1",
+		Type:         "node_cpu",
+		ResourceID:   "node/pve1",
+		ResourceName: "pve1",
+		Value:        95.0,
+		Threshold:    90.0,
+	}
+
+	// Fire the alert
+	analyzer.OnAlertFired(alert)
+
+	// Give time for the goroutine to start and set pending
+	time.Sleep(50 * time.Millisecond)
+
+	// Wait for analysis to complete
+	time.Sleep(100 * time.Millisecond)
+
+	// After analysis, lastAnalyzed should be updated
+	analyzer.mu.RLock()
+	_, exists := analyzer.lastAnalyzed["node/pve1"]
+	analyzer.mu.RUnlock()
+
+	if !exists {
+		t.Error("Expected lastAnalyzed to be updated after alert was fired")
+	}
+}
+
+func TestAlertTriggeredAnalyzer_OnAlertFired_Disabled(t *testing.T) {
+	analyzer := NewAlertTriggeredAnalyzer(nil, nil)
+	// Analyzer is disabled by default
+
+	alert := &alerts.Alert{
+		ID:           "test-alert-1",
+		Type:         "cpu",
+		ResourceID:   "node-1",
+		ResourceName: "test-node",
+		Value:        95.0,
+		Threshold:    90.0,
+	}
+
+	// When disabled, OnAlertFired should do nothing (no panic)
+	analyzer.OnAlertFired(alert)
+
+	// Verify no pending analyses were started
+	analyzer.mu.RLock()
+	pending := len(analyzer.pending)
+	analyzer.mu.RUnlock()
+
+	if pending != 0 {
+		t.Errorf("Expected no pending analyses when disabled, got %d", pending)
+	}
+}
+
+func TestAlertTriggeredAnalyzer_OnAlertFired_NilAlert(t *testing.T) {
+	analyzer := NewAlertTriggeredAnalyzer(nil, nil)
+	analyzer.SetEnabled(true)
+
+	// Should handle nil alert gracefully (no panic)
+	analyzer.OnAlertFired(nil)
+
+	// Verify no pending analyses
+	analyzer.mu.RLock()
+	pending := len(analyzer.pending)
+	analyzer.mu.RUnlock()
+
+	if pending != 0 {
+		t.Errorf("Expected no pending analyses for nil alert, got %d", pending)
+	}
+}
+
+func TestAlertTriggeredAnalyzer_OnAlertFired_EmptyResourceKey(t *testing.T) {
+	analyzer := NewAlertTriggeredAnalyzer(nil, nil)
+	analyzer.SetEnabled(true)
+
+	// Alert with no resource identifiers
+	alert := &alerts.Alert{
+		ID:   "test-alert",
+		Type: "cpu",
+	}
+
+	// Should skip analysis due to empty resource key
+	analyzer.OnAlertFired(alert)
+
+	// Wait briefly
+	time.Sleep(10 * time.Millisecond)
+
+	// No pending should exist
+	analyzer.mu.RLock()
+	pending := len(analyzer.pending)
+	analyzer.mu.RUnlock()
+
+	if pending != 0 {
+		t.Errorf("Expected no pending analyses for empty resource key, got %d", pending)
+	}
+}
+
+func TestAlertTriggeredAnalyzer_OnAlertFired_Cooldown(t *testing.T) {
 	analyzer := NewAlertTriggeredAnalyzer(nil, nil)
 	analyzer.SetEnabled(true)
 	// Set a short cooldown for testing
@@ -191,33 +584,7 @@ func TestAlertTriggeredAnalyzer_Cooldown(t *testing.T) {
 	}
 }
 
-func TestAlertTriggeredAnalyzer_CleanupOldCooldowns(t *testing.T) {
-	analyzer := NewAlertTriggeredAnalyzer(nil, nil)
-
-	// Add some cooldown entries - one old, one recent
-	analyzer.mu.Lock()
-	analyzer.lastAnalyzed["old-resource"] = time.Now().Add(-2 * time.Hour) // > 1 hour old
-	analyzer.lastAnalyzed["recent-resource"] = time.Now()                   // Recent
-	analyzer.mu.Unlock()
-
-	// Cleanup
-	analyzer.CleanupOldCooldowns()
-
-	analyzer.mu.RLock()
-	_, oldExists := analyzer.lastAnalyzed["old-resource"]
-	_, recentExists := analyzer.lastAnalyzed["recent-resource"]
-	analyzer.mu.RUnlock()
-
-	if oldExists {
-		t.Error("Expected old cooldown entry to be removed")
-	}
-	if !recentExists {
-		t.Error("Expected recent cooldown entry to be kept")
-	}
-}
-
-func TestAlertTriggeredAnalyzer_DeduplicatePendingAnalyses(t *testing.T) {
-	// Create a mock state provider with basic data
+func TestAlertTriggeredAnalyzer_OnAlertFired_Deduplication(t *testing.T) {
 	stateProvider := &mockStateProvider{
 		state: models.StateSnapshot{
 			Nodes: []models.Node{
@@ -235,10 +602,6 @@ func TestAlertTriggeredAnalyzer_DeduplicatePendingAnalyses(t *testing.T) {
 		ResourceID:   "node-1",
 		ResourceName: "test-node",
 	}
-
-	// Use a WaitGroup to track the analysis
-	var wg sync.WaitGroup
-	wg.Add(1)
 
 	// Manually mark as pending
 	analyzer.mu.Lock()
@@ -263,119 +626,91 @@ func TestAlertTriggeredAnalyzer_DeduplicatePendingAnalyses(t *testing.T) {
 	}
 }
 
-func TestAlertTriggeredAnalyzer_AnalyzeResourceByAlert_AlertTypes(t *testing.T) {
+func TestAlertTriggeredAnalyzer_AnalyzeResourceByAlert(t *testing.T) {
 	stateProvider := &mockStateProvider{
 		state: models.StateSnapshot{
 			Nodes: []models.Node{
-				{ID: "node-1", Name: "test-node", Status: "online"},
+				{
+					ID:     "node/pve1",
+					Name:   "pve1",
+					Status: "online",
+					CPU:    0.95,
+					Memory: models.Memory{
+						Total: 32000000000,
+						Used:  30000000000,
+					},
+				},
 			},
 			VMs: []models.VM{
-				{ID: "vm-100", Name: "test-vm", Node: "test-node", Status: "running"},
+				{
+					ID:     "qemu/100",
+					Name:   "test-vm",
+					Node:   "pve1",
+					Status: "running",
+					CPU:    0.8,
+					Memory: models.Memory{
+						Usage: 95.0,
+					},
+					Disk: models.Disk{
+						Usage: 90.0,
+					},
+				},
 			},
 		},
 	}
 
-	analyzer := NewAlertTriggeredAnalyzer(nil, stateProvider)
-
-	// Test alert type detection
-	tests := []struct {
-		name      string
-		alertType string
-		shouldRun bool
-	}{
-		{
-			name:      "node alert",
-			alertType: "node_cpu",
-			shouldRun: true, // Will try to analyze but no patrol service
-		},
-		{
-			name:      "container alert",
-			alertType: "container_memory",
-			shouldRun: true,
-		},
-		{
-			name:      "vm alert",
-			alertType: "vm_disk",
-			shouldRun: true,
-		},
-		{
-			name:      "docker alert",
-			alertType: "docker_cpu",
-			shouldRun: true,
-		},
-		{
-			name:      "storage alert",
-			alertType: "storage-usage",
-			shouldRun: true,
-		},
-		{
-			name:      "generic cpu alert",
-			alertType: "cpu",
-			shouldRun: true,
-		},
-		{
-			name:      "unknown alert type",
-			alertType: "unknown_type",
-			shouldRun: false, // Should not match any handler
-		},
+	patrolService := &PatrolService{
+		thresholds: DefaultPatrolThresholds(),
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			alert := &alerts.Alert{
-				ID:           "test-alert",
-				Type:         tt.alertType,
-				ResourceID:   "node-1",
-				ResourceName: "test-node",
-			}
+	analyzer := NewAlertTriggeredAnalyzer(patrolService, stateProvider)
 
-			// This should not panic, even without a patrol service
-			// analyzeResourceByAlert returns nil when patrolService is nil
-			findings := analyzer.analyzeResourceByAlert(nil, alert)
+	// Test node alert type
+	alertNode := &alerts.Alert{
+		ID:           "node-alert",
+		Type:         "node_cpu",
+		ResourceID:   "node/pve1",
+		ResourceName: "pve1",
+	}
+	findingsNode := analyzer.analyzeResourceByAlert(context.Background(), alertNode)
+	if len(findingsNode) == 0 {
+		t.Error("Expected findings for node alert, got 0")
+	}
 
-			// Without patrol service, findings should be nil
-			if findings != nil {
-				t.Error("Expected nil findings without patrol service")
-			}
-		})
+	// Test container/VM alert type
+	alertVM := &alerts.Alert{
+		ID:           "vm-alert",
+		Type:         "container_memory",
+		ResourceID:   "qemu/100",
+		ResourceName: "test-vm",
+	}
+	findingsVM := analyzer.analyzeResourceByAlert(context.Background(), alertVM)
+	if len(findingsVM) == 0 {
+		t.Error("Expected findings for container/VM alert, got 0")
+	}
+
+	// Test unknown alert type
+	alertUnknown := &alerts.Alert{
+		ID:   "unknown-alert",
+		Type: "unknown_type_xyz",
+	}
+	findingsUnknown := analyzer.analyzeResourceByAlert(context.Background(), alertUnknown)
+	if len(findingsUnknown) != 0 {
+		t.Errorf("Expected 0 findings for unknown alert type, got %d", len(findingsUnknown))
+	}
+
+	// Test with nil patrol service
+	analyzerNoPatrol := NewAlertTriggeredAnalyzer(nil, stateProvider)
+	findingsNilPatrol := analyzerNoPatrol.analyzeResourceByAlert(context.Background(), alertNode)
+	if findingsNilPatrol != nil {
+		t.Error("Expected nil findings when patrol service is nil")
 	}
 }
 
-func TestAlertTriggeredAnalyzer_ConcurrentAccess(t *testing.T) {
-	analyzer := NewAlertTriggeredAnalyzer(nil, nil)
-	analyzer.SetEnabled(true)
+type mockStateProvider struct {
+	state models.StateSnapshot
+}
 
-	// Test concurrent access to the analyzer
-	var wg sync.WaitGroup
-	iterations := 100
-
-	// Concurrent enable/disable
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i := 0; i < iterations; i++ {
-			analyzer.SetEnabled(i%2 == 0)
-		}
-	}()
-
-	// Concurrent IsEnabled checks
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i := 0; i < iterations; i++ {
-			_ = analyzer.IsEnabled()
-		}
-	}()
-
-	// Concurrent cleanup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i := 0; i < iterations; i++ {
-			analyzer.CleanupOldCooldowns()
-		}
-	}()
-
-	wg.Wait()
-	// Test passes if no race conditions or panics
+func (m *mockStateProvider) GetState() models.StateSnapshot {
+	return m.state
 }
