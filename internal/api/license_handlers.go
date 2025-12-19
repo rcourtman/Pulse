@@ -67,6 +67,37 @@ func (h *LicenseHandlers) HandleLicenseStatus(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(status)
 }
 
+// LicenseFeaturesResponse provides a minimal, non-admin license view for feature gating.
+type LicenseFeaturesResponse struct {
+	LicenseStatus string          `json:"license_status"`
+	Features      map[string]bool `json:"features"`
+	UpgradeURL    string          `json:"upgrade_url"`
+}
+
+// HandleLicenseFeatures handles GET /api/license/features
+// Returns license state and feature availability for authenticated users.
+func (h *LicenseHandlers) HandleLicenseFeatures(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	state, _ := h.service.GetLicenseState()
+	response := LicenseFeaturesResponse{
+		LicenseStatus: string(state),
+		Features: map[string]bool{
+			license.FeatureAIPatrol:     h.service.HasFeature(license.FeatureAIPatrol),
+			license.FeatureAIAlerts:     h.service.HasFeature(license.FeatureAIAlerts),
+			license.FeatureAIAutoFix:    h.service.HasFeature(license.FeatureAIAutoFix),
+			license.FeatureKubernetesAI: h.service.HasFeature(license.FeatureKubernetesAI),
+		},
+		UpgradeURL: "https://pulsemonitor.app/pro",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 // ActivateLicenseRequest is the request body for activating a license.
 type ActivateLicenseRequest struct {
 	LicenseKey string `json:"license_key"`

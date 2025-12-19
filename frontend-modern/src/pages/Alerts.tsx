@@ -17,6 +17,7 @@ import { showSuccess, showError } from '@/utils/toast';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
+import { LicenseAPI, type LicenseFeatureStatus } from '@/api/license';
 import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, State, VM, Container, DockerHost, DockerContainer, Host } from '@/types/api';
@@ -2077,6 +2078,19 @@ function OverviewTab(props: {
   const [newRuleResource, setNewRuleResource] = createSignal('');
   const [newRuleCategory, setNewRuleCategory] = createSignal('');
   const [newRuleDescription, setNewRuleDescription] = createSignal('');
+  const [licenseFeatures, setLicenseFeatures] = createSignal<LicenseFeatureStatus | null>(null);
+  const [licenseLoading, setLicenseLoading] = createSignal(false);
+  const hasAIAlertsFeature = createMemo(() => {
+    const status = licenseFeatures();
+    if (!status) return true;
+    return Boolean(status.features?.['ai_alerts']);
+  });
+  const showAIAlertsUpgrade = createMemo(() => {
+    const status = licenseFeatures();
+    if (!status) return false;
+    return !status.features?.['ai_alerts'];
+  });
+  const aiAlertsUpgradeURL = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulsemonitor.app/pro');
   // Live streaming state for running patrol
   const [expandedLiveStream, setExpandedLiveStream] = createSignal(false);
   // Track streaming blocks for sequential display (like AI chat)
@@ -2187,6 +2201,23 @@ function OverviewTab(props: {
       liveStreamUnsubscribe();
       liveStreamUnsubscribe = null;
     }
+  });
+
+  const loadLicenseStatus = async () => {
+    setLicenseLoading(true);
+    try {
+      const status = await LicenseAPI.getFeatures();
+      setLicenseFeatures(status);
+    } catch (err) {
+      logger.debug('Failed to load license status for AI alerts gating', err);
+      setLicenseFeatures(null);
+    } finally {
+      setLicenseLoading(false);
+    }
+  };
+
+  onMount(() => {
+    void loadLicenseStatus();
   });
 
   // Fetch AI data - extracted for reuse
@@ -3364,6 +3395,22 @@ function OverviewTab(props: {
       }>
         <div>
           <SectionHeader title="Active Alerts" size="md" class="mb-3" />
+          <Show when={showAIAlertsUpgrade()}>
+            <div class="mb-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
+              <p class="font-medium">AI alert investigation requires Pulse Pro</p>
+              <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                Upgrade to unlock one-click AI analysis for active alerts.
+              </p>
+              <a
+                class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-amber-800 dark:text-amber-200 hover:underline"
+                href={aiAlertsUpgradeURL()}
+                target="_blank"
+                rel="noreferrer"
+              >
+                View Pulse Pro plans
+              </a>
+            </div>
+          </Show>
           <Show
             when={Object.keys(props.activeAlerts).length > 0}
             fallback={
@@ -3602,6 +3649,7 @@ function OverviewTab(props: {
                           alert={alert}
                           variant="text"
                           size="sm"
+                          licenseLocked={!hasAIAlertsFeature() && !licenseLoading()}
                         />
                       </div>
                     </div>
@@ -5105,6 +5153,13 @@ function ScheduleTab(props: ScheduleTabProps) {
 // History Tab - Comprehensive alert table
 function HistoryTab() {
   const { state, activeAlerts } = useWebSocket();
+  const [licenseFeatures, setLicenseFeatures] = createSignal<LicenseFeatureStatus | null>(null);
+  const [licenseLoading, setLicenseLoading] = createSignal(false);
+  const hasAIAlertsFeature = createMemo(() => {
+    const status = licenseFeatures();
+    if (!status) return true;
+    return Boolean(status.features?.['ai_alerts']);
+  });
 
   // Filter states with localStorage persistence
   const [timeFilter, setTimeFilter] = usePersistentSignal<'24h' | '7d' | '30d' | 'all'>(
@@ -5138,6 +5193,21 @@ function HistoryTab() {
     Intl.DateTimeFormat().resolvedOptions().locale ||
     (typeof navigator !== 'undefined' ? navigator.language : undefined) ||
     'en-US';
+
+  onMount(() => {
+    void (async () => {
+      setLicenseLoading(true);
+      try {
+        const status = await LicenseAPI.getFeatures();
+        setLicenseFeatures(status);
+      } catch (err) {
+        logger.debug('Failed to load license status for AI alerts gating', err);
+        setLicenseFeatures(null);
+      } finally {
+        setLicenseLoading(false);
+      }
+    })();
+  });
 
   const buildHistoryParams = (range: string) => {
     const params: { limit?: number; startTime?: string } = {};
@@ -6313,6 +6383,7 @@ function HistoryTab() {
                                       }}
                                       variant="icon"
                                       size="sm"
+                                      licenseLocked={!hasAIAlertsFeature() && !licenseLoading()}
                                     />
                                   </Show>
                                 </td>

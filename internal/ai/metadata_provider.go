@@ -42,20 +42,15 @@ func (s *Service) SetResourceURL(resourceType, resourceID, customURL string) err
 
 	// Validate and normalize the URL
 	if customURL != "" {
+		// If no scheme, default to http
+		if !strings.Contains(customURL, "://") {
+			customURL = "http://" + customURL
+		}
+
 		// Try to parse the URL
 		parsedURL, err := url.Parse(customURL)
 		if err != nil {
 			return fmt.Errorf("invalid URL format: %w", err)
-		}
-
-		// Ensure scheme is present
-		if parsedURL.Scheme == "" {
-			// Default to http if no scheme provided
-			customURL = "http://" + customURL
-			parsedURL, err = url.Parse(customURL)
-			if err != nil {
-				return fmt.Errorf("invalid URL format: %w", err)
-			}
 		}
 
 		// Validate scheme

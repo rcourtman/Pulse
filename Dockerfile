@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.7-labs
 ARG BUILD_AGENT=1
+ARG PULSE_LICENSE_PUBLIC_KEY
 
 # Build stage for frontend (must be built first for embedding)
 FROM node:20-alpine AS frontend-builder
@@ -22,6 +23,7 @@ RUN --mount=type=cache,id=pulse-npm-cache,target=/root/.npm \
 FROM golang:1.24-alpine AS backend-builder
 
 ARG BUILD_AGENT
+ARG PULSE_LICENSE_PUBLIC_KEY
 WORKDIR /app
 
 # Install build dependencies
@@ -49,8 +51,12 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     VERSION="v$(cat VERSION | tr -d '\n')" && \
     BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ") && \
     GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
+    LICENSE_LDFLAGS="" && \
+    if [ -n "${PULSE_LICENSE_PUBLIC_KEY}" ]; then \
+      LICENSE_LDFLAGS="-X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=${PULSE_LICENSE_PUBLIC_KEY}"; \
+    fi && \
     CGO_ENABLED=0 GOOS=linux go build \
-      -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT} -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
+      -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT} -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION} ${LICENSE_LDFLAGS}" \
       -trimpath \
       -o pulse ./cmd/pulse
 
