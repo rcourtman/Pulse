@@ -52,7 +52,9 @@ jobs:
       - name: Build Docker images for test environment
         run: |
           docker build -t pulse-mock-github:test ./tests/integration/mock-github-server
-          docker build -t pulse:test -f Dockerfile .
+          docker build -t pulse:test -f Dockerfile --build-arg PULSE_LICENSE_PUBLIC_KEY="$PULSE_LICENSE_PUBLIC_KEY" .
+        env:
+          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
 
       - name: Start test containers
         working-directory: tests/integration
@@ -95,4 +97,3 @@ jobs:
           name: test-failures
           path: tests/integration/test-results/
           retention-days: 7
-
