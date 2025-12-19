@@ -647,7 +647,10 @@ func TestTemperatureCollector_ConcurrentCollectTemperature(t *testing.T) {
 	stub := &stubTemperatureProxy{
 		responseFunc: func(int) stubProxyResponse {
 			n := atomic.AddInt32(&callCounter, 1)
-			if n%2 == 1 {
+			// Only fail every 5th call to avoid hitting the consecutive failure threshold (3)
+			// due to concurrent execution ordering. n%2 was causing flaky failures where
+			// 3 failures could happen before a success reset the counter.
+			if n%5 == 0 {
 				return stubProxyResponse{
 					err: &tempproxy.ProxyError{Type: tempproxy.ErrorTypeTransport, Message: "transient transport error"},
 				}
