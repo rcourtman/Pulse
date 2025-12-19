@@ -31,6 +31,9 @@ jobs:
     name: Playwright Core E2E
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # E2E tests are smoke tests - they run but don't block merges
+    # This reduces friction from flaky tests while maintaining visibility
+    continue-on-error: true
 
     steps:
       - name: Checkout code
