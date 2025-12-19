@@ -12,6 +12,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { getNodeStatusIndicator, getPBSStatusIndicator } from '@/utils/status';
 import { ResponsiveMetricCell, MetricText } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
+import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -636,14 +637,32 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
                     {/* Disk */}
                     <td class={tdClass} style={metricColumnStyle}>
-                      <ResponsiveMetricCell
-                        value={diskPercentValue}
-                        type="disk"
-                        resourceId={metricsKey}
-                        sublabel={diskSublabel}
-                        isRunning={online}
-                        showMobile={isMobile()}
-                      />
+                      <Show when={isMobile()}>
+                        <div class="md:hidden h-4 flex items-center justify-center">
+                          <MetricText value={diskPercentValue} type="disk" />
+                        </div>
+                      </Show>
+                      <div class="hidden md:block h-4">
+                        <Show when={isPVEItem} fallback={
+                          <ResponsiveMetricCell
+                            value={diskPercentValue}
+                            type="disk"
+                            resourceId={metricsKey}
+                            sublabel={diskSublabel}
+                            isRunning={online}
+                            showMobile={false}
+                          />
+                        }>
+                          <StackedDiskBar
+                            aggregateDisk={{
+                              total: node!.disk?.total || 0,
+                              used: node!.disk?.used || 0,
+                              free: (node!.disk?.total || 0) - (node!.disk?.used || 0),
+                              usage: node!.disk?.total ? (node!.disk.used / node!.disk.total) : 0
+                            }}
+                          />
+                        </Show>
+                      </div>
                     </td>
 
                     {/* Temperature */}
