@@ -99,12 +99,16 @@ detect_docker() {
         # Try to connect to Docker daemon
         if docker info &>/dev/null 2>&1; then
             return 0
+        else
+            log_warn "Docker binary found ($(command -v docker)) but 'docker info' failed. Is the daemon running?"
         fi
     fi
     # Also check for Podman (Docker-compatible)
     if command -v podman &>/dev/null; then
         if podman info &>/dev/null 2>&1; then
             return 0
+        else
+            log_warn "Podman binary found but 'podman info' failed."
         fi
     fi
     return 1
