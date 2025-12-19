@@ -79,6 +79,7 @@ type Config struct {
 	DataPath     string `envconfig:"DATA_PATH" default:"/var/lib/pulse"`
 	AppRoot      string `json:"-"`                                // Root directory of the application (where binary lives)
 	PublicURL    string `envconfig:"PULSE_PUBLIC_URL" default:""` // Full URL to access Pulse (e.g., http://192.168.1.100:7655)
+	AgentConnectURL string `envconfig:"PULSE_AGENT_CONNECT_URL" default:""` // Dedicated direct connect URL for agents (e.g. http://192.168.1.5:7655)
 
 	// Proxmox VE connections
 	PVEInstances []PVEInstance
@@ -582,6 +583,7 @@ func Load() (*Config, error) {
 		TemperatureMonitoringEnabled:    true,
 		EnableSensorProxy:               false,
 		EnvOverrides:                    make(map[string]bool),
+		AgentConnectURL:                 "",
 		OIDC:                            NewOIDCConfig(),
 		// Metrics retention defaults (tiered)
 		MetricsRetentionRawHours:    2,  // 2 hours of raw ~5s data
@@ -1226,6 +1228,12 @@ func Load() (*Config, error) {
 	if tlsKeyFile := os.Getenv("TLS_KEY_FILE"); tlsKeyFile != "" {
 		cfg.TLSKeyFile = tlsKeyFile
 		log.Debug().Str("key_file", tlsKeyFile).Msg("TLS key file from env var")
+	}
+
+	if agentConnectURL := utils.GetenvTrim("PULSE_AGENT_CONNECT_URL"); agentConnectURL != "" {
+		cfg.AgentConnectURL = agentConnectURL
+		cfg.EnvOverrides["PULSE_AGENT_CONNECT_URL"] = true
+		log.Info().Str("url", agentConnectURL).Msg("Using dedicated agent connect URL from environment")
 	}
 
 	// REMOVED: Update channel, auto-update, connection timeout, and allowed origins env vars
