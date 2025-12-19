@@ -54,11 +54,31 @@ jobs:
           docker build -t pulse-mock-github:test ./tests/integration/mock-github-server
           docker build -t pulse:test -f Dockerfile .
 
+      - name: Start test containers
+        working-directory: tests/integration
+        env:
+          PULSE_E2E_BOOTSTRAP_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef
+          PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL: "true"
+        run: node scripts/pretest.mjs
+
       - name: Run E2E suite
         working-directory: tests/integration
         env:
           PULSE_E2E_BOOTSTRAP_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef
+          PULSE_E2E_SKIP_DOCKER: "true"
+          PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL: "true"
         run: npm test
+
+      - name: Collect container logs
+        if: always()
+        working-directory: tests/integration
+        run: |
+          echo "=== Docker containers ==="
+          docker ps -a
+          echo "=== Pulse test server logs ==="
+          docker logs pulse-test-server 2>&1 || echo "No pulse-test-server container"
+          echo "=== Mock GitHub server logs ==="
+          docker logs pulse-mock-github 2>&1 || echo "No pulse-mock-github container"
 
       - name: Upload Playwright report
         if: always()

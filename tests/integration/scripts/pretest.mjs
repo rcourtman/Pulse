@@ -65,11 +65,42 @@ const composeArgs = ['compose', '-f', 'docker-compose.test.yml', 'up', '-d'];
 const legacyComposeArgs = ['-f', 'docker-compose.test.yml', 'up', '-d'];
 const useDockerCompose = !(await canRun('docker', ['compose', 'version']));
 
-if (useDockerCompose) {
-  await run('docker-compose', legacyComposeArgs);
-} else {
-  await run('docker', composeArgs);
+console.log('[pretest] Starting docker compose...');
+try {
+  if (useDockerCompose) {
+    console.log('[pretest] Using legacy docker-compose command');
+    await run('docker-compose', legacyComposeArgs);
+  } else {
+    console.log('[pretest] Using modern docker compose command');
+    await run('docker', composeArgs);
+  }
+  console.log('[pretest] Docker compose completed successfully');
+} catch (error) {
+  console.error('[pretest] Docker compose failed:', error.message);
+  // Try to get container logs for debugging
+  try {
+    await run('docker', ['logs', 'pulse-test-server'], { stdio: 'inherit' });
+  } catch {
+    // ignore
+  }
+  process.exit(1);
 }
 
 const baseURL = (process.env.PULSE_BASE_URL || 'http://localhost:7655').replace(/\/+$/, '');
-await waitForHealth(`${baseURL}/api/health`);
+console.log(`[pretest] Waiting for health check at ${baseURL}/api/health...`);
+
+try {
+  await waitForHealth(`${baseURL}/api/health`);
+  console.log('[pretest] Health check passed!');
+} catch (error) {
+  console.error('[pretest] Health check failed:', error.message);
+  // Try to get container logs for debugging
+  console.log('[pretest] Attempting to retrieve container logs...');
+  try {
+    console.log('[pretest] === pulse-test-server logs ===');
+    await run('docker', ['logs', 'pulse-test-server'], { stdio: 'inherit' });
+  } catch {
+    console.log('[pretest] Could not retrieve pulse-test-server logs');
+  }
+  process.exit(1);
+}
