@@ -1,5 +1,24 @@
 import { spawn } from 'node:child_process';
 
+// Add signal handlers to debug unexpected termination
+const signals = ['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGPIPE', 'SIGQUIT'];
+signals.forEach(sig => {
+  process.on(sig, () => {
+    console.error(`[pretest] Received signal: ${sig}`);
+    process.exit(128 + (process[sig] || 1));
+  });
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[pretest] Uncaught exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[pretest] Unhandled rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
 const truthy = (value) => {
   if (!value) return false;
   return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase());
@@ -12,6 +31,7 @@ const DEFAULT_E2E_BOOTSTRAP_TOKEN = '0123456789abcdef0123456789abcdef0123456789a
 if (!process.env.PULSE_E2E_BOOTSTRAP_TOKEN) {
   process.env.PULSE_E2E_BOOTSTRAP_TOKEN = DEFAULT_E2E_BOOTSTRAP_TOKEN;
 }
+
 
 const run = (command, args, options = {}) =>
   new Promise((resolve, reject) => {
@@ -35,18 +55,30 @@ const canRun = async (command, args) => {
 };
 
 const waitForHealth = async (healthURL, timeoutMs = 120_000) => {
+  console.log(`[pretest] Starting health check loop for ${healthURL}`);
   const startedAt = Date.now();
+  let attempt = 0;
   while (Date.now() - startedAt < timeoutMs) {
+    attempt++;
+    console.log(`[pretest] Health check attempt ${attempt}...`);
     try {
+      console.log(`[pretest] Calling fetch...`);
       const res = await fetch(healthURL, { method: 'GET' });
-      if (res.ok) return;
-    } catch {
+      console.log(`[pretest] Fetch returned status ${res.status}`);
+      if (res.ok) {
+        console.log(`[pretest] Health check succeeded!`);
+        return;
+      }
+    } catch (error) {
+      console.log(`[pretest] Fetch error: ${error.code || error.message}`);
       // ignore and retry
     }
+    console.log(`[pretest] Sleeping 1s before retry...`);
     await new Promise((r) => setTimeout(r, 1000));
   }
   throw new Error(`Timed out waiting for ${healthURL}`);
 };
+
 
 if (truthy(process.env.PULSE_E2E_INSECURE_TLS)) {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
