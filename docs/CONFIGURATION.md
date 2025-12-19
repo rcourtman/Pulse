@@ -100,7 +100,10 @@ Environment variables take precedence over `system.json`.
 | `debug` | Verbose output including per-guest/storage polling details |
 
 > **Tip**: If your syslog is being flooded with Pulse messages, set `LOG_LEVEL=warn` to significantly reduce log volume while still capturing important events.
-| `PULSE_PUBLIC_URL` | Public URL for notifications/OIDC | `""` |
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PULSE_PUBLIC_URL` | URL for agent install commands, notifications, and OIDC. **Important for reverse proxy setups**: Set this to your internal Pulse URL (e.g., `http://192.168.1.10:7655`) so agents connect directly instead of through the proxy. | Auto-detected |
 | `ALLOWED_ORIGINS` | CORS allowed domains | `""` (Same origin) |
 | `DISCOVERY_ENABLED` | Auto-discover nodes | `false` |
 | `PULSE_ENABLE_SENSOR_PROXY` | Enable legacy `pulse-sensor-proxy` endpoints (deprecated, unsupported) | `false` |

@@ -123,6 +123,7 @@ export interface SecurityStatus {
   deprecatedDisableAuth?: boolean;
   message?: string;
   hideLocalLogin?: boolean; // Hide local login form
+  agentUrl?: string; // URL for agent install commands (from PULSE_PUBLIC_URL or auto-detected)
 }
 
 /**
