@@ -338,6 +338,9 @@ func (h *DockerAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Broadcast updated state to ensure the frontend reflects the change
+	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
 		"hostId":  hostID,

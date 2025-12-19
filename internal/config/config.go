@@ -1230,6 +1230,14 @@ func Load() (*Config, error) {
 		log.Debug().Str("key_file", tlsKeyFile).Msg("TLS key file from env var")
 	}
 
+	// Support PULSE_AGENT_URL as an alias for PULSE_AGENT_CONNECT_URL
+	// (Check this first so standard PULSE_AGENT_CONNECT_URL takes precedence if both set)
+	if agentURL := utils.GetenvTrim("PULSE_AGENT_URL"); agentURL != "" {
+		cfg.AgentConnectURL = agentURL
+		cfg.EnvOverrides["PULSE_AGENT_CONNECT_URL"] = true
+		log.Info().Str("url", agentURL).Msg("Using dedicated agent connect URL from PULSE_AGENT_URL")
+	}
+
 	if agentConnectURL := utils.GetenvTrim("PULSE_AGENT_CONNECT_URL"); agentConnectURL != "" {
 		cfg.AgentConnectURL = agentConnectURL
 		cfg.EnvOverrides["PULSE_AGENT_CONNECT_URL"] = true
