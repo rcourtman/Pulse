@@ -136,6 +136,7 @@ func UniversalRateLimitMiddleware(next http.Handler) http.Handler {
 		skipPaths := []string{
 			"/api/state",           // Real-time state updates
 			"/api/guests/metadata", // Guest metadata (polled frequently)
+			"/ws",                  // WebSocket connections (authenticated, reconnections are normal)
 		}
 		for _, path := range skipPaths {
 			if strings.Contains(r.URL.Path, path) {
