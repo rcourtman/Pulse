@@ -549,7 +549,7 @@ func (r *Router) setupRoutes() {
 				"configuredButPendingRestart": configuredButPendingRestart,
 				"hasAuditLogging":             hasAuditLogging,
 				"credentialsEncrypted":        credentialsEncrypted,
-				"hasHTTPS":                    req.TLS != nil,
+				"hasHTTPS":                    req.TLS != nil || strings.EqualFold(req.Header.Get("X-Forwarded-Proto"), "https"),
 				"clientIP":                    clientIP,
 				"isPrivateNetwork":            isPrivateNetwork,
 				"isTrustedNetwork":            isTrustedNetwork,
