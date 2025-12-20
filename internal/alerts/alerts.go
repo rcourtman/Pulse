@@ -1195,25 +1195,35 @@ func normalizeNodeDefaults(config *AlertConfig) {
 }
 
 // normalizeHostDefaults ensures host agent threshold defaults exist
+// Trigger=0 is allowed and means "disable alerting for this metric"
 func normalizeHostDefaults(config *AlertConfig) {
-	if config.HostDefaults.CPU == nil || config.HostDefaults.CPU.Trigger <= 0 {
+	if config.HostDefaults.CPU == nil || config.HostDefaults.CPU.Trigger < 0 {
 		config.HostDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	} else if config.HostDefaults.CPU.Trigger == 0 {
+		// Trigger=0 means disabled, set Clear=0 too
+		config.HostDefaults.CPU.Clear = 0
 	} else if config.HostDefaults.CPU.Clear <= 0 {
 		config.HostDefaults.CPU.Clear = config.HostDefaults.CPU.Trigger - 5
 		if config.HostDefaults.CPU.Clear <= 0 {
 			config.HostDefaults.CPU.Clear = 75
 		}
 	}
-	if config.HostDefaults.Memory == nil || config.HostDefaults.Memory.Trigger <= 0 {
+	if config.HostDefaults.Memory == nil || config.HostDefaults.Memory.Trigger < 0 {
 		config.HostDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+	} else if config.HostDefaults.Memory.Trigger == 0 {
+		// Trigger=0 means disabled, set Clear=0 too
+		config.HostDefaults.Memory.Clear = 0
 	} else if config.HostDefaults.Memory.Clear <= 0 {
 		config.HostDefaults.Memory.Clear = config.HostDefaults.Memory.Trigger - 5
 		if config.HostDefaults.Memory.Clear <= 0 {
 			config.HostDefaults.Memory.Clear = 80
 		}
 	}
-	if config.HostDefaults.Disk == nil || config.HostDefaults.Disk.Trigger <= 0 {
+	if config.HostDefaults.Disk == nil || config.HostDefaults.Disk.Trigger < 0 {
 		config.HostDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
+	} else if config.HostDefaults.Disk.Trigger == 0 {
+		// Trigger=0 means disabled, set Clear=0 too
+		config.HostDefaults.Disk.Clear = 0
 	} else if config.HostDefaults.Disk.Clear <= 0 {
 		config.HostDefaults.Disk.Clear = config.HostDefaults.Disk.Trigger - 5
 		if config.HostDefaults.Disk.Clear <= 0 {
