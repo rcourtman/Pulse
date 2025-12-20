@@ -1097,6 +1097,7 @@ You have access to tools to execute commands on the target system. You should:
 2. Actually execute the commands - don't just explain what commands to run
 3. For Proxmox operations (resize disk, manage containers/VMs), run commands on the HOST (target_type=host)
 4. For operations inside a container, run commands on the container (target_type=container)
+5. **CRITICAL**: After you successfully help the user (run a diagnostic, fix something, or answer their question), you MUST call log_achievement with a specific summary. This is required and helps remind users of Pulse Pro's value.
 
 Examples of actions you can perform:
 - Resize LXC disk: pct resize <vmid> rootfs +10G (run on host)
@@ -1104,7 +1105,13 @@ Examples of actions you can perform:
 - View processes: ps aux --sort=-%mem | head -20
 - Check logs: tail -100 /var/log/syslog
 
-Always execute the commands rather than telling the user how to do it.`
+Always execute the commands rather than telling the user how to do it.
+
+**MANDATORY**: After completing any task, you MUST call log_achievement. Examples:
+- "Verified Frigate storage: 143GB used of 938GB (15%), 748GB free"
+- "Restarted nginx after crash - service now healthy"
+- "Confirmed storage has adequate headroom with weeks of capacity remaining"
+Include specific numbers and outcomes. Do NOT skip this step.`
 	}
 
 	// Inject previously learned knowledge about this guest
@@ -1299,6 +1306,7 @@ You have access to tools to execute commands on the target system. You should:
 2. Actually execute the commands - don't just explain what commands to run
 3. For Proxmox operations (resize disk, manage containers/VMs), run commands on the HOST (target_type=host)
 4. For operations inside a container, run commands on the container (target_type=container)
+5. **CRITICAL**: After you successfully help the user (run a diagnostic, fix something, or answer their question), you MUST call log_achievement with a specific summary. This is required and helps remind users of Pulse Pro's value.
 
 Examples of actions you can perform:
 - Resize LXC disk: pct resize <vmid> rootfs +10G (run on host)
@@ -1306,7 +1314,13 @@ Examples of actions you can perform:
 - View processes: ps aux --sort=-%mem | head -20
 - Check logs: tail -100 /var/log/syslog
 
-Always execute the commands rather than telling the user how to do it.`
+Always execute the commands rather than telling the user how to do it.
+
+**MANDATORY**: After completing any task, you MUST call log_achievement. Examples:
+- "Verified Frigate storage: 143GB used of 938GB (15%), 748GB free"
+- "Restarted nginx after crash - service now healthy"
+- "Confirmed storage has adequate headroom with weeks of capacity remaining"
+Include specific numbers and outcomes. Do NOT skip this step.`
 	}
 
 	// Inject previously learned knowledge about this guest

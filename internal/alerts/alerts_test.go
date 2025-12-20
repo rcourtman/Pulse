@@ -1355,6 +1355,143 @@ func TestDockerServiceAlertUsesClampedCriticalGap(t *testing.T) {
 	}
 }
 
+// TestNormalizeHostDefaultsPreservesZeroTrigger verifies that setting
+// Host Agent thresholds to 0 is preserved (fixes GitHub issue #864).
+// Setting a threshold to 0 should disable alerting for that metric.
+func TestNormalizeHostDefaultsPreservesZeroTrigger(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil HostDefaults get factory defaults", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		cfg := AlertConfig{
+			Enabled:      true,
+			HostDefaults: ThresholdConfig{}, // Empty - needs defaults
+		}
+
+		m.UpdateConfig(cfg)
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if m.config.HostDefaults.CPU == nil {
+			t.Fatal("CPU defaults should be set")
+		}
+		if m.config.HostDefaults.CPU.Trigger != 80 {
+			t.Errorf("CPU trigger = %v, want 80", m.config.HostDefaults.CPU.Trigger)
+		}
+		if m.config.HostDefaults.Memory == nil {
+			t.Fatal("Memory defaults should be set")
+		}
+		if m.config.HostDefaults.Memory.Trigger != 85 {
+			t.Errorf("Memory trigger = %v, want 85", m.config.HostDefaults.Memory.Trigger)
+		}
+		if m.config.HostDefaults.Disk == nil {
+			t.Fatal("Disk defaults should be set")
+		}
+		if m.config.HostDefaults.Disk.Trigger != 90 {
+			t.Errorf("Disk trigger = %v, want 90", m.config.HostDefaults.Disk.Trigger)
+		}
+	})
+
+	t.Run("Trigger=0 preserved to disable alerting", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		// Set Memory to 0 to disable memory alerting for host agents
+		cfg := AlertConfig{
+			Enabled: true,
+			HostDefaults: ThresholdConfig{
+				CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+				Memory: &HysteresisThreshold{Trigger: 0, Clear: 0}, // Disabled
+				Disk:   &HysteresisThreshold{Trigger: 90, Clear: 85},
+			},
+		}
+
+		m.UpdateConfig(cfg)
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		// Memory threshold should remain at 0 (disabled), not reset to default
+		if m.config.HostDefaults.Memory == nil {
+			t.Fatal("Memory defaults should be preserved (not nil)")
+		}
+		if m.config.HostDefaults.Memory.Trigger != 0 {
+			t.Errorf("Memory trigger = %v, want 0 (disabled)", m.config.HostDefaults.Memory.Trigger)
+		}
+		if m.config.HostDefaults.Memory.Clear != 0 {
+			t.Errorf("Memory clear = %v, want 0 (disabled)", m.config.HostDefaults.Memory.Clear)
+		}
+
+		// CPU and Disk should still have their values
+		if m.config.HostDefaults.CPU.Trigger != 80 {
+			t.Errorf("CPU trigger = %v, want 80", m.config.HostDefaults.CPU.Trigger)
+		}
+		if m.config.HostDefaults.Disk.Trigger != 90 {
+			t.Errorf("Disk trigger = %v, want 90", m.config.HostDefaults.Disk.Trigger)
+		}
+	})
+
+	t.Run("Trigger=0 sets Clear=0 automatically", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		// Set CPU to 0 with a non-zero Clear - Clear should be normalized to 0
+		cfg := AlertConfig{
+			Enabled: true,
+			HostDefaults: ThresholdConfig{
+				CPU:    &HysteresisThreshold{Trigger: 0, Clear: 50}, // Clear should become 0
+				Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
+				Disk:   &HysteresisThreshold{Trigger: 0, Clear: 75}, // Clear should become 0
+			},
+		}
+
+		m.UpdateConfig(cfg)
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if m.config.HostDefaults.CPU.Clear != 0 {
+			t.Errorf("CPU clear = %v, want 0 when trigger is 0", m.config.HostDefaults.CPU.Clear)
+		}
+		if m.config.HostDefaults.Disk.Clear != 0 {
+			t.Errorf("Disk clear = %v, want 0 when trigger is 0", m.config.HostDefaults.Disk.Clear)
+		}
+	})
+
+	t.Run("missing Clear computed from Trigger", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		cfg := AlertConfig{
+			Enabled: true,
+			HostDefaults: ThresholdConfig{
+				CPU:    &HysteresisThreshold{Trigger: 90, Clear: 0}, // Clear should be computed
+				Memory: &HysteresisThreshold{Trigger: 95, Clear: 0}, // Clear should be computed
+				Disk:   &HysteresisThreshold{Trigger: 92, Clear: 0}, // Clear should be computed
+			},
+		}
+
+		m.UpdateConfig(cfg)
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		// Clear should be Trigger - 5
+		if m.config.HostDefaults.CPU.Clear != 85 {
+			t.Errorf("CPU clear = %v, want 85", m.config.HostDefaults.CPU.Clear)
+		}
+		if m.config.HostDefaults.Memory.Clear != 90 {
+			t.Errorf("Memory clear = %v, want 90", m.config.HostDefaults.Memory.Clear)
+		}
+		if m.config.HostDefaults.Disk.Clear != 87 {
+			t.Errorf("Disk clear = %v, want 87", m.config.HostDefaults.Disk.Clear)
+		}
+	})
+}
+
 func TestNormalizeDockerIgnoredPrefixes(t *testing.T) {
 	t.Parallel()
 
