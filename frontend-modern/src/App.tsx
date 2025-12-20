@@ -497,16 +497,9 @@ function App() {
 
     // Check if we just logged out - if so, always show login page
     const justLoggedOut = localStorage.getItem('just_logged_out');
-    if (justLoggedOut) {
-      localStorage.removeItem('just_logged_out');
-      logger.debug('[App] User logged out, showing login page');
-      setHasAuth(true); // Force showing login instead of setup
-      setNeedsAuth(true);
-      setIsLoading(false);
-      return;
-    }
 
     // First check security status to see if auth is configured
+    // We need this for ALL paths to properly set hideLocalLogin, oidcEnabled, etc.
     try {
       const securityRes = await apiFetch('/api/security/status');
 
@@ -520,8 +513,34 @@ function App() {
         } catch (clearError) {
           logger.warn('[App] Failed to clear stored auth after 401', clearError);
         }
+        // Still try to parse security data from 401 response for OIDC settings
+        // If not available, Login component will fetch it on mount
         setHasAuth(false);
         setNeedsAuth(true);
+        setIsLoading(false);
+        return;
+      }
+
+      // Handle just_logged_out AFTER we have security status
+      if (justLoggedOut) {
+        localStorage.removeItem('just_logged_out');
+        logger.debug('[App] User logged out, showing login page');
+        // Parse security data to get hideLocalLogin, oidcEnabled, etc.
+        if (securityRes.ok) {
+          const securityData = await securityRes.json();
+          setSecurityStatus({
+            hasAuthentication: securityData.hasAuthentication || false,
+            oidcEnabled: securityData.oidcEnabled,
+            oidcIssuer: securityData.oidcIssuer,
+            oidcClientId: securityData.oidcClientId,
+            oidcEnvOverrides: securityData.oidcEnvOverrides,
+            hideLocalLogin: securityData.hideLocalLogin,
+            deprecatedDisableAuth: securityData.deprecatedDisableAuth,
+          });
+        }
+        setHasAuth(true); // Force showing login instead of setup
+        setNeedsAuth(true);
+        setIsLoading(false);
         return;
       }
 
