@@ -10,6 +10,22 @@ log_info() { printf "\033[0;34m[hot-dev]\033[0m %s\n" "$1"; }
 log_warn() { printf "\033[0;33m[hot-dev] WARNING:\033[0m %s\n" "$1"; }
 log_error() { printf "\033[0;31m[hot-dev] ERROR:\033[0m %s\n" "$1"; }
 
+detect_encrypted_files() {
+    local data_dir=$1
+    local patterns=(nodes.enc* email.enc* webhooks.enc* oidc.enc* ai.enc*)
+    local files=()
+
+    for pattern in "${patterns[@]}"; do
+        for path in "${data_dir}/${pattern}"; do
+            if [[ -s "${path}" ]]; then
+                files+=("$(basename "${path}")")
+            fi
+        done
+    done
+
+    printf '%s\n' "${files[@]}"
+}
+
 check_dependencies() {
     local missing=0
     for cmd in go npm lsof; do
@@ -268,6 +284,13 @@ else
         elif [[ ${PULSE_DATA_DIR} == "${ROOT_DIR}/tmp/dev-config" ]]; then
             DEV_KEY_FILE="${PULSE_DATA_DIR}/.encryption.key"
             if [[ ! -f "${DEV_KEY_FILE}" ]]; then
+                mapfile -t ENCRYPTED_FILES < <(detect_encrypted_files "${PULSE_DATA_DIR}")
+                if [[ ${#ENCRYPTED_FILES[@]} -gt 0 ]]; then
+                    log_error "Encryption key is missing but encrypted data exists."
+                    log_error "Restore ${DEV_KEY_FILE} from backup before continuing."
+                    log_error "Encrypted files: ${ENCRYPTED_FILES[*]}"
+                    exit 1
+                fi
                 openssl rand -base64 32 > "${DEV_KEY_FILE}"
                 chmod 600 "${DEV_KEY_FILE}"
                 log_info "Generated dev encryption key at ${DEV_KEY_FILE}"
@@ -275,6 +298,13 @@ else
             export PULSE_ENCRYPTION_KEY="$(<"${DEV_KEY_FILE}")"
         elif [[ ${HOT_DEV_USE_PROD_DATA:-false} == "true" ]]; then
             # Production data mode but no key - generate one to prevent orphaned encrypted data
+            mapfile -t ENCRYPTED_FILES < <(detect_encrypted_files "${PULSE_DATA_DIR}")
+            if [[ ${#ENCRYPTED_FILES[@]} -gt 0 ]]; then
+                log_error "Encryption key is missing but encrypted data exists."
+                log_error "Restore ${PULSE_DATA_DIR}/.encryption.key from backup before continuing."
+                log_error "Encrypted files: ${ENCRYPTED_FILES[*]}"
+                exit 1
+            fi
             log_warn "No encryption key found for ${PULSE_DATA_DIR}. Generating new key..."
             openssl rand -base64 32 > "${PULSE_DATA_DIR}/.encryption.key"
             chmod 600 "${PULSE_DATA_DIR}/.encryption.key"
