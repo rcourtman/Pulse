@@ -15,6 +15,7 @@ import type {
   CorrelationsResponse,
   ChangesResponse,
   BaselinesResponse,
+  RemediationsResponse,
 } from '@/types/aiIntelligence';
 
 export class AIAPI {
@@ -102,6 +103,22 @@ export class AIAPI {
     return apiFetchJSON(`${this.baseUrl}/ai/intelligence/baselines${params}`) as Promise<BaselinesResponse>;
   }
 
+  // Get remediation history
+  static async getRemediations(options?: {
+    resourceId?: string;
+    findingId?: string;
+    hours?: number;
+    limit?: number;
+  }): Promise<RemediationsResponse> {
+    const params = new URLSearchParams();
+    if (options?.resourceId) params.set('resource_id', options.resourceId);
+    if (options?.findingId) params.set('finding_id', options.findingId);
+    if (options?.hours) params.set('hours', String(options.hours));
+    if (options?.limit) params.set('limit', String(options.limit));
+    const query = params.toString();
+    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/remediations${query ? `?${query}` : ''}`) as Promise<RemediationsResponse>;
+  }
+
 
   // Start OAuth flow for Claude Pro/Max subscription
   // Returns the authorization URL to redirect the user to
@@ -132,6 +149,14 @@ export class AIAPI {
     return apiFetchJSON(`${this.baseUrl}/ai/execute`, {
       method: 'POST',
       body: JSON.stringify(request),
+    }) as Promise<AIExecuteResponse>;
+  }
+
+  // Analyze a Kubernetes cluster with AI
+  static async analyzeKubernetesCluster(clusterId: string): Promise<AIExecuteResponse> {
+    return apiFetchJSON(`${this.baseUrl}/ai/kubernetes/analyze`, {
+      method: 'POST',
+      body: JSON.stringify({ cluster_id: clusterId }),
     }) as Promise<AIExecuteResponse>;
   }
 

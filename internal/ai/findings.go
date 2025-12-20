@@ -37,6 +37,7 @@ const (
 // Finding represents an AI-discovered insight about infrastructure
 type Finding struct {
 	ID             string          `json:"id"`
+	Key            string          `json:"key,omitempty"` // Stable issue key for runbook matching
 	Severity       FindingSeverity `json:"severity"`
 	Category       FindingCategory `json:"category"`
 	ResourceID     string          `json:"resource_id"`
@@ -200,7 +201,7 @@ func (s *FindingsStore) ForceSave() error {
 		s.saveTimer.Stop()
 	}
 	s.savePending = false
-	
+
 	findingsCopy := make(map[string]*Finding, len(s.findings))
 	for id, f := range s.findings {
 		copy := *f
@@ -229,7 +230,7 @@ func (s *FindingsStore) Add(f *Finding) bool {
 			s.mu.Unlock()
 			return false
 		}
-		
+
 		// Check if dismissed - only update if severity has escalated
 		if existing.DismissedReason != "" {
 			severityOrder := map[FindingSeverity]int{
@@ -251,7 +252,7 @@ func (s *FindingsStore) Add(f *Finding) bool {
 			existing.UserNote = "" // Clear note since situation changed
 			existing.AcknowledgedAt = nil
 		}
-		
+
 		// Update existing finding
 		existing.LastSeenAt = time.Now()
 		existing.Description = f.Description
@@ -448,7 +449,7 @@ func (s *FindingsStore) isSuppressedInternal(resourceID string, category Finding
 			}
 		}
 	}
-	
+
 	// Also check manual suppression rules
 	for _, rule := range s.suppressionRules {
 		resourceMatches := rule.ResourceID == "" || rule.ResourceID == resourceID
@@ -457,7 +458,7 @@ func (s *FindingsStore) isSuppressedInternal(resourceID string, category Finding
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -586,7 +587,7 @@ func (s *FindingsStore) Cleanup(maxAge time.Duration) int {
 	return removed
 }
 
-// GetDismissedForContext returns findings that the user has dismissed/acknowledged, 
+// GetDismissedForContext returns findings that the user has dismissed/acknowledged,
 // formatted for injection into LLM prompts. This is the core of the "memory" system -
 // it tells the LLM what not to re-raise.
 func (s *FindingsStore) GetDismissedForContext() string {
@@ -594,51 +595,51 @@ func (s *FindingsStore) GetDismissedForContext() string {
 	defer s.mu.RUnlock()
 
 	var suppressed, dismissed, snoozed []string
-	
+
 	for _, f := range s.findings {
 		// Skip very old findings (more than 30 days)
 		if time.Since(f.LastSeenAt) > 30*24*time.Hour {
 			continue
 		}
-		
+
 		// Collect suppressed findings
 		if f.Suppressed {
 			note := ""
 			if f.UserNote != "" {
 				note = " - User note: " + f.UserNote
 			}
-			suppressed = append(suppressed, 
+			suppressed = append(suppressed,
 				fmt.Sprintf("- %s on %s: %s%s", f.Title, f.ResourceName, f.DismissedReason, note))
 			continue
 		}
-		
+
 		// Collect dismissed/acknowledged findings
 		if f.DismissedReason != "" {
 			note := ""
 			if f.UserNote != "" {
 				note = " - User note: " + f.UserNote
 			}
-			dismissed = append(dismissed, 
+			dismissed = append(dismissed,
 				fmt.Sprintf("- %s on %s (%s)%s", f.Title, f.ResourceName, f.DismissedReason, note))
 			continue
 		}
-		
-		// Collect snoozed findings  
+
+		// Collect snoozed findings
 		if f.IsSnoozed() {
-			snoozed = append(snoozed, 
-				fmt.Sprintf("- %s on %s (snoozed until %s)", 
+			snoozed = append(snoozed,
+				fmt.Sprintf("- %s on %s (snoozed until %s)",
 					f.Title, f.ResourceName, f.SnoozedUntil.Format("Jan 2")))
 		}
 	}
-	
+
 	if len(suppressed) == 0 && len(dismissed) == 0 && len(snoozed) == 0 {
 		return ""
 	}
-	
+
 	var result strings.Builder
 	result.WriteString("\n## Previous Findings - User Feedback\n")
 	result.WriteString("The following findings have been addressed by the user. Do NOT re-raise these unless the situation has significantly worsened:\n\n")
-	
+
 	if len(suppressed) > 0 {
 		result.WriteString("### Permanently Suppressed (never re-raise):\n")
 		for _, s := range suppressed {
@@ -646,7 +647,7 @@ func (s *FindingsStore) GetDismissedForContext() string {
 		}
 		result.WriteString("\n")
 	}
-	
+
 	if len(dismissed) > 0 {
 		result.WriteString("### Dismissed by User:\n")
 		for _, d := range dismissed {
@@ -654,14 +655,14 @@ func (s *FindingsStore) GetDismissedForContext() string {
 		}
 		result.WriteString("\n")
 	}
-	
+
 	if len(snoozed) > 0 {
 		result.WriteString("### Temporarily Snoozed:\n")
 		for _, s := range snoozed {
 			result.WriteString(s + "\n")
 		}
 	}
-	
+
 	return result.String()
 }
 

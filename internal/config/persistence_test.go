@@ -183,6 +183,56 @@ func TestSaveAlertConfig_NormalizesHostDefaultsClear(t *testing.T) {
 	}
 }
 
+// TestSaveAlertConfig_HostDefaultsZeroDisablesAlerting verifies that setting
+// Host Agent thresholds to 0 is preserved (fixes GitHub issue #864).
+// Setting a threshold to 0 should disable alerting for that metric.
+func TestSaveAlertConfig_HostDefaultsZeroDisablesAlerting(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Config with Memory=0 to disable memory alerting for host agents
+	cfg := alerts.AlertConfig{
+		Enabled:        true,
+		StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
+		HostDefaults: alerts.ThresholdConfig{
+			CPU:    &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
+			Memory: &alerts.HysteresisThreshold{Trigger: 0, Clear: 0}, // Disabled
+			Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
+		},
+	}
+
+	if err := cp.SaveAlertConfig(cfg); err != nil {
+		t.Fatalf("SaveAlertConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadAlertConfig()
+	if err != nil {
+		t.Fatalf("LoadAlertConfig: %v", err)
+	}
+
+	// Memory threshold should remain at 0 (disabled), not reset to default
+	if loaded.HostDefaults.Memory == nil {
+		t.Fatal("Memory defaults should be preserved (not nil)")
+	}
+	if loaded.HostDefaults.Memory.Trigger != 0 {
+		t.Errorf("Memory trigger = %v, want 0 (disabled)", loaded.HostDefaults.Memory.Trigger)
+	}
+	if loaded.HostDefaults.Memory.Clear != 0 {
+		t.Errorf("Memory clear = %v, want 0 (disabled)", loaded.HostDefaults.Memory.Clear)
+	}
+
+	// CPU and Disk should still have their values
+	if loaded.HostDefaults.CPU.Trigger != 80 {
+		t.Errorf("CPU trigger = %v, want 80", loaded.HostDefaults.CPU.Trigger)
+	}
+	if loaded.HostDefaults.Disk.Trigger != 90 {
+		t.Errorf("Disk trigger = %v, want 90", loaded.HostDefaults.Disk.Trigger)
+	}
+}
+
 func TestAlertConfigPersistenceNormalizesDockerIgnoredPrefixes(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)

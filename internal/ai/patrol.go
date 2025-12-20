@@ -34,10 +34,10 @@ type ThresholdProvider interface {
 // PatrolThresholds holds calculated thresholds for patrol (derived from alert thresholds)
 type PatrolThresholds struct {
 	// Node thresholds
-	NodeCPUWatch    float64 // CPU % to flag as "watch" (typically alertThreshold - 15)
-	NodeCPUWarning  float64 // CPU % to flag as "warning" (typically alertThreshold - 5)
-	NodeMemWatch    float64
-	NodeMemWarning  float64
+	NodeCPUWatch   float64 // CPU % to flag as "watch" (typically alertThreshold - 15)
+	NodeCPUWarning float64 // CPU % to flag as "warning" (typically alertThreshold - 5)
+	NodeMemWatch   float64
+	NodeMemWarning float64
 	// Guest thresholds (VMs/containers)
 	GuestMemWatch   float64
 	GuestMemWarning float64
@@ -53,11 +53,11 @@ type PatrolThresholds struct {
 // DefaultPatrolThresholds returns fallback thresholds when no provider is set
 func DefaultPatrolThresholds() PatrolThresholds {
 	return PatrolThresholds{
-		NodeCPUWatch:    75, NodeCPUWarning: 85,
-		NodeMemWatch:    75, NodeMemWarning: 85,
-		GuestMemWatch:   80, GuestMemWarning: 88,
-		GuestDiskWatch:  75, GuestDiskWarn: 85, GuestDiskCrit: 92,
-		StorageWatch:    70, StorageWarning: 80, StorageCritical: 90,
+		NodeCPUWatch: 75, NodeCPUWarning: 85,
+		NodeMemWatch: 75, NodeMemWarning: 85,
+		GuestMemWatch: 80, GuestMemWarning: 88,
+		GuestDiskWatch: 75, GuestDiskWarn: 85, GuestDiskCrit: 92,
+		StorageWatch: 70, StorageWarning: 80, StorageCritical: 90,
 	}
 }
 
@@ -143,14 +143,14 @@ func (c PatrolConfig) GetInterval() time.Duration {
 // DefaultPatrolConfig returns sensible defaults
 func DefaultPatrolConfig() PatrolConfig {
 	return PatrolConfig{
-		Enabled:       true,
-		Interval:      15 * time.Minute,
-		AnalyzeNodes:  true,
-		AnalyzeGuests: true,
-		AnalyzeDocker: true,
+		Enabled:        true,
+		Interval:       15 * time.Minute,
+		AnalyzeNodes:   true,
+		AnalyzeGuests:  true,
+		AnalyzeDocker:  true,
 		AnalyzeStorage: true,
-		AnalyzePBS:    true,
-		AnalyzeHosts:  true,
+		AnalyzePBS:     true,
+		AnalyzeHosts:   true,
 	}
 }
 
@@ -177,18 +177,19 @@ type PatrolRunRecord struct {
 	Type             string        `json:"type"` // Always "patrol" now (kept for backwards compat)
 	ResourcesChecked int           `json:"resources_checked"`
 	// Breakdown by resource type
-	NodesChecked     int `json:"nodes_checked"`
-	GuestsChecked    int `json:"guests_checked"`
-	DockerChecked    int `json:"docker_checked"`
-	StorageChecked   int `json:"storage_checked"`
-	HostsChecked     int `json:"hosts_checked"`
-	PBSChecked       int `json:"pbs_checked"`
+	NodesChecked   int `json:"nodes_checked"`
+	GuestsChecked  int `json:"guests_checked"`
+	DockerChecked  int `json:"docker_checked"`
+	StorageChecked int `json:"storage_checked"`
+	HostsChecked   int `json:"hosts_checked"`
+	PBSChecked     int `json:"pbs_checked"`
 	// Findings from this run
 	NewFindings      int      `json:"new_findings"`
 	ExistingFindings int      `json:"existing_findings"`
 	ResolvedFindings int      `json:"resolved_findings"`
-	FindingsSummary  string   `json:"findings_summary"`   // e.g., "All healthy" or "2 warnings, 1 critical"
-	FindingIDs       []string `json:"finding_ids"`        // IDs of findings from this run
+	AutoFixCount     int      `json:"auto_fix_count,omitempty"`
+	FindingsSummary  string   `json:"findings_summary"` // e.g., "All healthy" or "2 warnings, 1 critical"
+	FindingIDs       []string `json:"finding_ids"`      // IDs of findings from this run
 	ErrorCount       int      `json:"error_count"`
 	Status           string   `json:"status"` // "healthy", "issues_found", "error"
 	// AI Analysis details
@@ -209,13 +210,13 @@ type PatrolService struct {
 	thresholdProvider   ThresholdProvider
 	config              PatrolConfig
 	findings            *FindingsStore
-	knowledgeStore      *knowledge.Store // For per-resource notes in patrol context
+	knowledgeStore      *knowledge.Store       // For per-resource notes in patrol context
 	metricsHistory      MetricsHistoryProvider // For trend analysis and predictions
-	baselineStore       *baseline.Store  // For anomaly detection via learned baselines
-	changeDetector      *ChangeDetector  // For tracking infrastructure changes
-	remediationLog      *RemediationLog  // For tracking remediation actions
-	patternDetector     *PatternDetector // For failure prediction from historical patterns
-	correlationDetector *CorrelationDetector // For multi-resource correlation
+	baselineStore       *baseline.Store        // For anomaly detection via learned baselines
+	changeDetector      *ChangeDetector        // For tracking infrastructure changes
+	remediationLog      *RemediationLog        // For tracking remediation actions
+	patternDetector     *PatternDetector       // For failure prediction from historical patterns
+	correlationDetector *CorrelationDetector   // For multi-resource correlation
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds PatrolThresholds
@@ -241,10 +242,10 @@ type PatrolService struct {
 
 // PatrolStreamEvent represents a streaming update from the patrol
 type PatrolStreamEvent struct {
-	Type    string `json:"type"`    // "start", "content", "phase", "complete", "error"
+	Type    string `json:"type"` // "start", "content", "phase", "complete", "error"
 	Content string `json:"content,omitempty"`
-	Phase   string `json:"phase,omitempty"`   // Current phase description
-	Tokens  int    `json:"tokens,omitempty"`  // Token count so far
+	Phase   string `json:"phase,omitempty"`  // Current phase description
+	Tokens  int    `json:"tokens,omitempty"` // Token count so far
 }
 
 // NewPatrolService creates a new patrol service
@@ -666,6 +667,7 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		errors           int
 		aiAnalysis       *AIAnalysisResult // Stores the AI's analysis for the run record
 	}
+	var newFindings []*Finding
 
 	// Get current state
 	if p.stateProvider == nil {
@@ -680,6 +682,7 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		isNew := p.findings.Add(f)
 		if isNew {
 			runStats.newFindings++
+			newFindings = append(newFindings, f)
 			log.Info().
 				Str("finding_id", f.ID).
 				Str("severity", string(f.Severity)).
@@ -700,15 +703,18 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 	runStats.storageChecked = len(state.Storage)
 	runStats.pbsChecked = len(state.PBSInstances)
 	runStats.hostsChecked = len(state.Hosts)
-	runStats.resourceCount = runStats.nodesChecked + runStats.guestsChecked + 
+	runStats.resourceCount = runStats.nodesChecked + runStats.guestsChecked +
 		runStats.dockerChecked + runStats.storageChecked + runStats.pbsChecked + runStats.hostsChecked
 
+	hasPatrolFeature := p.aiService == nil || p.aiService.HasLicenseFeature(FeatureAIPatrol)
 	// Check license before running LLM analysis (Pro feature)
-	if p.aiService != nil && !p.aiService.HasLicenseFeature(FeatureAIPatrol) {
-		log.Debug().Msg("AI Patrol: Skipping LLM analysis - requires Pulse Pro license")
-		// No LLM analysis for free users - patrol just tracks resource counts
+	if !hasPatrolFeature {
+		log.Debug().Msg("AI Patrol: Running heuristic analysis only - requires Pulse Pro license for LLM analysis")
+		for _, f := range p.runHeuristicAnalysis(state) {
+			trackFinding(f)
+		}
 	} else {
-		// Run AI analysis using the LLM - this is the ONLY analysis method
+		// Run AI analysis using the LLM - this is the ONLY analysis method for Pro users
 		// The LLM analyzes the infrastructure and identifies issues
 		aiResult, aiErr := p.runAIAnalysis(ctx, state)
 		if aiErr != nil {
@@ -722,18 +728,35 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		}
 	}
 
-	// Auto-resolve findings that weren't seen in this patrol run
-	// Only do this if we have a license - otherwise preserve existing findings
-	var resolvedCount int
-	if p.aiService != nil && p.aiService.HasLicenseFeature(FeatureAIPatrol) {
-		resolvedCount = p.autoResolveStaleFindings(start)
+	// Auto-fix with runbooks when enabled (Pro only)
+	var runbookResolved int
+	autoFixEnabled := false
+	if p.aiService != nil {
+		if aiCfg := p.aiService.GetAIConfig(); aiCfg != nil {
+			autoFixEnabled = aiCfg.PatrolAutoFix
+		}
+	}
+	if hasPatrolFeature && autoFixEnabled && p.aiService.HasLicenseFeature(FeatureAIAutoFix) {
+		runbookResolved = p.AutoFixWithRunbooks(ctx, newFindings)
+		if runbookResolved > 0 {
+			log.Info().Int("resolved", runbookResolved).Msg("AI Patrol: Auto-fix runbooks resolved findings")
+		}
+	}
 
-		// Cleanup old resolved findings (only when licensed to modify findings)
+	// Auto-resolve findings that weren't seen in this patrol run
+	var resolvedCount int
+	if hasPatrolFeature {
+		resolvedCount = p.autoResolveStaleFindings(start, nil)
+
+		// Cleanup old resolved findings (only when licensed to modify AI findings)
 		cleaned := p.findings.Cleanup(24 * time.Hour)
 		if cleaned > 0 {
 			log.Debug().Int("cleaned", cleaned).Msg("AI Patrol: Cleaned up old findings")
 		}
+	} else {
+		resolvedCount = p.autoResolveStaleFindings(start, map[string]bool{"heuristic": true})
 	}
+	resolvedCount += runbookResolved
 
 	duration := time.Since(start)
 	completedAt := time.Now()
@@ -785,6 +808,7 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		NewFindings:      runStats.newFindings,
 		ExistingFindings: runStats.existingFindings,
 		ResolvedFindings: resolvedCount,
+		AutoFixCount:     runbookResolved,
 		FindingsSummary:  findingsSummaryStr,
 		FindingIDs:       runStats.findingIDs,
 		ErrorCount:       runStats.errors,
@@ -838,7 +862,7 @@ func joinParts(parts []string) string {
 	if len(parts) == 2 {
 		return parts[0] + " and " + parts[1]
 	}
-	return fmt.Sprintf("%s, and %s", 
+	return fmt.Sprintf("%s, and %s",
 		fmt.Sprintf("%s", parts[0:len(parts)-1]),
 		parts[len(parts)-1])
 }
@@ -847,6 +871,77 @@ func joinParts(parts []string) string {
 func generateFindingID(resourceID, category, issue string) string {
 	hash := sha256.Sum256([]byte(fmt.Sprintf("%s:%s:%s", resourceID, category, issue)))
 	return fmt.Sprintf("%x", hash[:8])
+}
+
+func (p *PatrolService) runHeuristicAnalysis(state models.StateSnapshot) []*Finding {
+	p.mu.RLock()
+	cfg := p.config
+	p.mu.RUnlock()
+
+	var findings []*Finding
+
+	if cfg.AnalyzeNodes {
+		for _, node := range state.Nodes {
+			findings = append(findings, p.analyzeNode(node)...)
+		}
+	}
+
+	if cfg.AnalyzeGuests {
+		for _, vm := range state.VMs {
+			var lastBackup *time.Time
+			if !vm.LastBackup.IsZero() {
+				lastBackup = &vm.LastBackup
+			}
+			findings = append(findings, p.analyzeGuest(
+				vm.ID, vm.Name, "vm", vm.Node, vm.Status,
+				vm.CPU, vm.Memory.Usage, vm.Disk.Usage,
+				lastBackup, vm.Template,
+			)...)
+		}
+		for _, ct := range state.Containers {
+			var lastBackup *time.Time
+			if !ct.LastBackup.IsZero() {
+				lastBackup = &ct.LastBackup
+			}
+			findings = append(findings, p.analyzeGuest(
+				ct.ID, ct.Name, "container", ct.Node, ct.Status,
+				ct.CPU, ct.Memory.Usage, ct.Disk.Usage,
+				lastBackup, ct.Template,
+			)...)
+		}
+	}
+
+	if cfg.AnalyzeDocker {
+		for _, host := range state.DockerHosts {
+			findings = append(findings, p.analyzeDockerHost(host)...)
+		}
+	}
+
+	if cfg.AnalyzeStorage {
+		for _, storage := range state.Storage {
+			findings = append(findings, p.analyzeStorage(storage)...)
+		}
+	}
+
+	if cfg.AnalyzePBS {
+		for _, pbs := range state.PBSInstances {
+			findings = append(findings, p.analyzePBSInstance(pbs, state.PBSBackups)...)
+		}
+	}
+
+	if cfg.AnalyzeHosts {
+		for _, host := range state.Hosts {
+			findings = append(findings, p.analyzeHost(host)...)
+		}
+	}
+
+	for _, finding := range findings {
+		if finding != nil && finding.Source == "" {
+			finding.Source = "heuristic"
+		}
+	}
+
+	return findings
 }
 
 // analyzeNode checks a Proxmox node for issues
@@ -866,6 +961,7 @@ func (p *PatrolService) analyzeNode(node models.Node) []*Finding {
 	if node.Status == "offline" || node.Status == "unknown" {
 		findings = append(findings, &Finding{
 			ID:             generateFindingID(node.ID, "reliability", "offline"),
+			Key:            "node-offline",
 			Severity:       FindingSeverityCritical,
 			Category:       FindingCategoryReliability,
 			ResourceID:     node.ID,
@@ -885,6 +981,7 @@ func (p *PatrolService) analyzeNode(node models.Node) []*Finding {
 		}
 		findings = append(findings, &Finding{
 			ID:             generateFindingID(node.ID, "performance", "high-cpu"),
+			Key:            "high-cpu",
 			Severity:       severity,
 			Category:       FindingCategoryPerformance,
 			ResourceID:     node.ID,
@@ -905,6 +1002,7 @@ func (p *PatrolService) analyzeNode(node models.Node) []*Finding {
 		}
 		findings = append(findings, &Finding{
 			ID:             generateFindingID(node.ID, "performance", "high-memory"),
+			Key:            "high-memory",
 			Severity:       severity,
 			Category:       FindingCategoryPerformance,
 			ResourceID:     node.ID,
@@ -943,6 +1041,7 @@ func (p *PatrolService) analyzeGuest(id, name, guestType, node, status string,
 		}
 		findings = append(findings, &Finding{
 			ID:             generateFindingID(id, "performance", "high-memory"),
+			Key:            "high-memory",
 			Severity:       severity,
 			Category:       FindingCategoryPerformance,
 			ResourceID:     id,
@@ -967,6 +1066,7 @@ func (p *PatrolService) analyzeGuest(id, name, guestType, node, status string,
 		}
 		findings = append(findings, &Finding{
 			ID:             generateFindingID(id, "capacity", "high-disk"),
+			Key:            "high-disk",
 			Severity:       severity,
 			Category:       FindingCategoryCapacity,
 			ResourceID:     id,
@@ -990,6 +1090,7 @@ func (p *PatrolService) analyzeGuest(id, name, guestType, node, status string,
 			}
 			findings = append(findings, &Finding{
 				ID:             generateFindingID(id, "backup", "stale"),
+				Key:            "backup-stale",
 				Severity:       severity,
 				Category:       FindingCategoryBackup,
 				ResourceID:     id,
@@ -1005,6 +1106,7 @@ func (p *PatrolService) analyzeGuest(id, name, guestType, node, status string,
 	} else if status == "running" && lastBackup == nil {
 		findings = append(findings, &Finding{
 			ID:             generateFindingID(id, "backup", "never"),
+			Key:            "backup-never",
 			Severity:       FindingSeverityWarning,
 			Category:       FindingCategoryBackup,
 			ResourceID:     id,
@@ -1033,6 +1135,7 @@ func (p *PatrolService) analyzeDockerHost(host models.DockerHost) []*Finding {
 	if host.Status != "online" && host.Status != "connected" {
 		findings = append(findings, &Finding{
 			ID:             generateFindingID(host.ID, "reliability", "offline"),
+			Key:            "docker-host-offline",
 			Severity:       FindingSeverityCritical,
 			Category:       FindingCategoryReliability,
 			ResourceID:     host.ID,
@@ -1050,6 +1153,7 @@ func (p *PatrolService) analyzeDockerHost(host models.DockerHost) []*Finding {
 		if c.State == "restarting" || c.RestartCount > 3 {
 			findings = append(findings, &Finding{
 				ID:             generateFindingID(c.ID, "reliability", "restart-loop"),
+				Key:            "restart-loop",
 				Severity:       FindingSeverityWarning,
 				Category:       FindingCategoryReliability,
 				ResourceID:     c.ID,
@@ -1067,6 +1171,7 @@ func (p *PatrolService) analyzeDockerHost(host models.DockerHost) []*Finding {
 		if c.MemoryPercent > 90 {
 			findings = append(findings, &Finding{
 				ID:             generateFindingID(c.ID, "performance", "high-memory"),
+				Key:            "high-memory",
 				Severity:       FindingSeverityWatch,
 				Category:       FindingCategoryPerformance,
 				ResourceID:     c.ID,
@@ -1107,6 +1212,7 @@ func (p *PatrolService) analyzeStorage(storage models.Storage) []*Finding {
 
 		findings = append(findings, &Finding{
 			ID:             generateFindingID(storage.ID, "capacity", "high-usage"),
+			Key:            "storage-high-usage",
 			Severity:       severity,
 			Category:       FindingCategoryCapacity,
 			ResourceID:     storage.ID,
@@ -1125,12 +1231,17 @@ func (p *PatrolService) analyzeStorage(storage models.Storage) []*Finding {
 // autoResolveHealthyResources marks findings as resolved when they weren't seen in the current patrol
 // patrolStartTime is used to determine which findings are stale (LastSeenAt < patrolStartTime)
 // Returns the count of findings that were resolved
-func (p *PatrolService) autoResolveStaleFindings(patrolStartTime time.Time) int {
+func (p *PatrolService) autoResolveStaleFindings(patrolStartTime time.Time, sourceAllowlist map[string]bool) int {
 	// Get all active findings and check if they're stale
 	activeFindings := p.findings.GetActive(FindingSeverityInfo)
 	resolvedCount := 0
-	
+
 	for _, f := range activeFindings {
+		if sourceAllowlist != nil {
+			if !sourceAllowlist[f.Source] {
+				continue
+			}
+		}
 		// If the finding wasn't updated during this patrol (LastSeenAt is before patrol started),
 		// it means the condition that caused it has been resolved
 		if f.LastSeenAt.Before(patrolStartTime) {
@@ -1198,7 +1309,7 @@ func (p *PatrolService) GetRunHistory(limit int) []PatrolRunRecord {
 // GetAllFindings returns all active findings sorted by severity
 func (p *PatrolService) GetAllFindings() []*Finding {
 	findings := p.findings.GetActive(FindingSeverityInfo)
-	
+
 	// Sort by severity (critical first) then by time
 	severityOrder := map[FindingSeverity]int{
 		FindingSeverityCritical: 0,
@@ -1206,14 +1317,14 @@ func (p *PatrolService) GetAllFindings() []*Finding {
 		FindingSeverityWatch:    2,
 		FindingSeverityInfo:     3,
 	}
-	
+
 	sort.Slice(findings, func(i, j int) bool {
 		if severityOrder[findings[i].Severity] != severityOrder[findings[j].Severity] {
 			return severityOrder[findings[i].Severity] < severityOrder[findings[j].Severity]
 		}
 		return findings[i].DetectedAt.After(findings[j].DetectedAt)
 	})
-	
+
 	return findings
 }
 
@@ -1221,12 +1332,12 @@ func (p *PatrolService) GetAllFindings() []*Finding {
 // Optionally filter by startTime
 func (p *PatrolService) GetFindingsHistory(startTime *time.Time) []*Finding {
 	findings := p.findings.GetAll(startTime)
-	
+
 	// Sort by detected time (newest first)
 	sort.Slice(findings, func(i, j int) bool {
 		return findings[i].DetectedAt.After(findings[j].DetectedAt)
 	})
-	
+
 	return findings
 }
 
@@ -1250,6 +1361,7 @@ func (p *PatrolService) analyzePBSInstance(pbs models.PBSInstance, allBackups []
 	if pbs.Status != "online" && pbs.Status != "connected" && pbs.Status != "" {
 		findings = append(findings, &Finding{
 			ID:             generateFindingID(pbs.ID, "reliability", "offline"),
+			Key:            "pbs-offline",
 			Severity:       FindingSeverityCritical,
 			Category:       FindingCategoryReliability,
 			ResourceID:     pbs.ID,
@@ -1281,6 +1393,7 @@ func (p *PatrolService) analyzePBSInstance(pbs models.PBSInstance, allBackups []
 
 			findings = append(findings, &Finding{
 				ID:             generateFindingID(pbs.ID+":"+ds.Name, "capacity", "high-usage"),
+				Key:            "pbs-datastore-high-usage",
 				Severity:       severity,
 				Category:       FindingCategoryCapacity,
 				ResourceID:     pbs.ID + ":" + ds.Name,
@@ -1297,6 +1410,7 @@ func (p *PatrolService) analyzePBSInstance(pbs models.PBSInstance, allBackups []
 		if ds.Error != "" {
 			findings = append(findings, &Finding{
 				ID:             generateFindingID(pbs.ID+":"+ds.Name, "reliability", "error"),
+				Key:            "pbs-datastore-error",
 				Severity:       FindingSeverityCritical,
 				Category:       FindingCategoryReliability,
 				ResourceID:     pbs.ID + ":" + ds.Name,
@@ -1325,13 +1439,14 @@ func (p *PatrolService) analyzePBSInstance(pbs models.PBSInstance, allBackups []
 
 	for _, ds := range pbs.Datastores {
 		lastBackup, hasBackups := datastoreLastBackup[ds.Name]
-		
+
 		if !hasBackups {
 			// No backups found for this datastore - might be intentional (empty datastore)
 			// Only warn if datastore has actual content
 			if ds.Used > 0 {
 				findings = append(findings, &Finding{
 					ID:             generateFindingID(pbs.ID+":"+ds.Name, "backup", "no-recent"),
+					Key:            "pbs-backup-no-recent",
 					Severity:       FindingSeverityWatch,
 					Category:       FindingCategoryBackup,
 					ResourceID:     pbs.ID + ":" + ds.Name,
@@ -1357,6 +1472,7 @@ func (p *PatrolService) analyzePBSInstance(pbs models.PBSInstance, allBackups []
 
 			findings = append(findings, &Finding{
 				ID:             generateFindingID(pbs.ID+":"+ds.Name, "backup", "stale"),
+				Key:            "pbs-backup-stale",
 				Severity:       severity,
 				Category:       FindingCategoryBackup,
 				ResourceID:     pbs.ID + ":" + ds.Name,
@@ -1375,6 +1491,7 @@ func (p *PatrolService) analyzePBSInstance(pbs models.PBSInstance, allBackups []
 		if job.Status == "error" || job.Error != "" {
 			findings = append(findings, &Finding{
 				ID:             generateFindingID(pbs.ID+":job:"+job.ID, "backup", "job-failed"),
+				Key:            "pbs-job-failed",
 				Severity:       FindingSeverityWarning,
 				Category:       FindingCategoryBackup,
 				ResourceID:     pbs.ID + ":job:" + job.ID,
@@ -1392,6 +1509,7 @@ func (p *PatrolService) analyzePBSInstance(pbs models.PBSInstance, allBackups []
 		if job.Status == "error" || job.Error != "" {
 			findings = append(findings, &Finding{
 				ID:             generateFindingID(pbs.ID+":verify:"+job.ID, "backup", "verify-failed"),
+				Key:            "pbs-verify-failed",
 				Severity:       FindingSeverityWarning,
 				Category:       FindingCategoryBackup,
 				ResourceID:     pbs.ID + ":verify:" + job.ID,
@@ -1421,6 +1539,7 @@ func (p *PatrolService) analyzeHost(host models.Host) []*Finding {
 	if host.Status != "online" && host.Status != "connected" && host.Status != "" {
 		findings = append(findings, &Finding{
 			ID:             generateFindingID(host.ID, "reliability", "offline"),
+			Key:            "host-offline",
 			Severity:       FindingSeverityCritical,
 			Category:       FindingCategoryReliability,
 			ResourceID:     host.ID,
@@ -1444,6 +1563,7 @@ func (p *PatrolService) analyzeHost(host models.Host) []*Finding {
 		case "degraded", "DEGRADED":
 			findings = append(findings, &Finding{
 				ID:             generateFindingID(host.ID+":"+raid.Device, "reliability", "raid-degraded"),
+				Key:            "raid-degraded",
 				Severity:       FindingSeverityCritical,
 				Category:       FindingCategoryReliability,
 				ResourceID:     host.ID + ":" + raid.Device,
@@ -1462,6 +1582,7 @@ func (p *PatrolService) analyzeHost(host models.Host) []*Finding {
 			}
 			findings = append(findings, &Finding{
 				ID:             generateFindingID(host.ID+":"+raid.Device, "reliability", "raid-rebuilding"),
+				Key:            "raid-rebuilding",
 				Severity:       severity,
 				Category:       FindingCategoryReliability,
 				ResourceID:     host.ID + ":" + raid.Device,
@@ -1476,6 +1597,7 @@ func (p *PatrolService) analyzeHost(host models.Host) []*Finding {
 		case "inactive", "INACTIVE":
 			findings = append(findings, &Finding{
 				ID:             generateFindingID(host.ID+":"+raid.Device, "reliability", "raid-inactive"),
+				Key:            "raid-inactive",
 				Severity:       FindingSeverityCritical,
 				Category:       FindingCategoryReliability,
 				ResourceID:     host.ID + ":" + raid.Device,
@@ -1492,6 +1614,7 @@ func (p *PatrolService) analyzeHost(host models.Host) []*Finding {
 		if raid.FailedDevices > 0 && raid.State != "degraded" {
 			findings = append(findings, &Finding{
 				ID:             generateFindingID(host.ID+":"+raid.Device, "reliability", "raid-failed-devices"),
+				Key:            "raid-failed-devices",
 				Severity:       FindingSeverityWarning,
 				Category:       FindingCategoryReliability,
 				ResourceID:     host.ID + ":" + raid.Device,
@@ -1515,6 +1638,7 @@ func (p *PatrolService) analyzeHost(host models.Host) []*Finding {
 				}
 				findings = append(findings, &Finding{
 					ID:             generateFindingID(host.ID+":temp:"+sensorName, "reliability", "high-temp"),
+					Key:            "high-temp",
 					Severity:       severity,
 					Category:       FindingCategoryReliability,
 					ResourceID:     host.ID + ":temp:" + sensorName,
@@ -1588,7 +1712,7 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 			}
 		}
 	})
-	
+
 	if err != nil {
 		p.setStreamPhase("idle")
 		p.broadcast(PatrolStreamEvent{Type: "error", Content: err.Error()})
@@ -1642,6 +1766,7 @@ IMPORTANT: You must respond in a specific structured format so findings can be p
 For each issue you identify, output a finding block like this:
 
 [FINDING]
+KEY: <stable issue key>
 SEVERITY: critical|warning|watch|info
 CATEGORY: performance|reliability|security|capacity|configuration
 RESOURCE: <resource name or ID>
@@ -1653,6 +1778,7 @@ EVIDENCE: <specific data that supports this finding>
 [/FINDING]
 
 Guidelines:
+- Use KEY as a stable identifier for the issue type (examples: high-cpu, high-memory, high-disk, backup-stale, backup-never, restart-loop, storage-high-usage, pbs-datastore-high-usage, pbs-job-failed, node-offline). Use "general" if nothing fits.
 - CRITICAL: Immediate action required (data loss risk, service down)
 - WARNING: Should be addressed soon (degraded performance, nearing limits)  
 - WATCH: Worth monitoring (trends, minor inefficiencies)
@@ -1778,7 +1904,7 @@ func (p *PatrolService) buildInfrastructureSummary(state models.StateSnapshot) s
 				dh.Hostname, dh.Status, len(dh.Containers)))
 			for _, c := range dh.Containers {
 				sb.WriteString(fmt.Sprintf("  - %s: State=%s, CPU=%.1f%%, Memory=%.1f%%, Restarts=%d\n",
-				c.Name, c.State, c.CPUPercent, c.MemoryPercent, c.RestartCount))
+					c.Name, c.State, c.CPUPercent, c.MemoryPercent, c.RestartCount))
 			}
 		}
 		sb.WriteString("\n")
@@ -1811,7 +1937,7 @@ func (p *PatrolService) buildEnrichedContext(state models.StateSnapshot) string 
 	if knowledgeStore != nil {
 		builder = builder.WithKnowledge(&knowledgeShim{store: knowledgeStore})
 	}
-	
+
 	// Add baseline provider for anomaly detection if available
 	if baselineStore != nil {
 		adapter := NewBaselineStoreAdapter(baselineStore)
@@ -1829,39 +1955,39 @@ func (p *PatrolService) buildEnrichedContext(state models.StateSnapshot) string 
 
 	// Format for AI consumption
 	formatted := aicontext.FormatInfrastructureContext(infraCtx)
-	
+
 	// Append recent changes if change detector is available
 	if changeDetector != nil {
 		// Detect any new changes from current state
 		snapshots := stateToSnapshots(state)
 		newChanges := changeDetector.DetectChanges(snapshots)
-		
+
 		// Get summary of recent changes (last 24 hours)
 		since := time.Now().Add(-24 * time.Hour)
 		changesSummary := changeDetector.GetChangesSummary(since, 20)
-		
+
 		if changesSummary != "" {
 			formatted += "\n## Recent Infrastructure Changes (24h)\n\n" + changesSummary
 		}
-		
+
 		if len(newChanges) > 0 {
 			log.Debug().Int("new_changes", len(newChanges)).Msg("AI Patrol: Detected infrastructure changes")
 		}
 	}
-	
+
 	// Append failure predictions if pattern detector is available
 	p.mu.RLock()
 	patternDetector := p.patternDetector
 	correlationDetector := p.correlationDetector
 	p.mu.RUnlock()
-	
+
 	if patternDetector != nil {
 		predictionsContext := patternDetector.FormatForContext("")
 		if predictionsContext != "" {
 			formatted += predictionsContext
 		}
 	}
-	
+
 	// Append resource correlations if correlation detector is available
 	if correlationDetector != nil {
 		correlationsContext := correlationDetector.FormatForContext("")
@@ -1882,7 +2008,7 @@ func (p *PatrolService) buildEnrichedContext(state models.StateSnapshot) string 
 // stateToSnapshots converts state to resource snapshots for change detection
 func stateToSnapshots(state models.StateSnapshot) []ResourceSnapshot {
 	var snapshots []ResourceSnapshot
-	
+
 	for _, node := range state.Nodes {
 		snapshots = append(snapshots, ResourceSnapshot{
 			ID:          node.ID,
@@ -1893,7 +2019,7 @@ func stateToSnapshots(state models.StateSnapshot) []ResourceSnapshot {
 			MemoryBytes: node.Memory.Total,
 		})
 	}
-	
+
 	for _, vm := range state.VMs {
 		if vm.Template {
 			continue
@@ -1910,7 +2036,7 @@ func stateToSnapshots(state models.StateSnapshot) []ResourceSnapshot {
 			LastBackup:  vm.LastBackup,
 		})
 	}
-	
+
 	for _, ct := range state.Containers {
 		if ct.Template {
 			continue
@@ -1927,7 +2053,7 @@ func stateToSnapshots(state models.StateSnapshot) []ResourceSnapshot {
 			LastBackup:  ct.LastBackup,
 		})
 	}
-	
+
 	return snapshots
 }
 
@@ -2049,7 +2175,7 @@ func convertToContextMetricsMap(metricsMap map[string][]MetricPoint) map[string]
 func (p *PatrolService) buildPatrolPrompt(summary string) string {
 	// Get user feedback context (dismissed/snoozed findings)
 	feedbackContext := p.findings.GetDismissedForContext()
-	
+
 	// Get resource notes from knowledge store (per-resource user notes)
 	var knowledgeContext string
 	p.mu.RLock()
@@ -2058,7 +2184,7 @@ func (p *PatrolService) buildPatrolPrompt(summary string) string {
 	if knowledgeStore != nil {
 		knowledgeContext = knowledgeStore.FormatAllForContext()
 	}
-	
+
 	basePrompt := fmt.Sprintf(`Please perform a comprehensive analysis of the following infrastructure and identify any issues, potential problems, or optimization opportunities.
 
 %s
@@ -2080,14 +2206,14 @@ If predictions show a resource will be full within 7 days, flag it as high prior
 If everything looks healthy with stable trends, say so briefly.`, summary)
 
 	var contextAdditions strings.Builder
-	
+
 	// Append knowledge context (user notes about resources)
 	if knowledgeContext != "" {
 		contextAdditions.WriteString("\n\n")
 		contextAdditions.WriteString(knowledgeContext)
 		contextAdditions.WriteString("\nIMPORTANT: Consider the user's saved notes above when analyzing. If a user has noted that a resource behaves a certain way (e.g., 'runs hot for transcoding'), do not flag it as an issue.\n")
 	}
-	
+
 	// Append user feedback context (dismissed/snoozed findings)
 	if feedbackContext != "" {
 		contextAdditions.WriteString("\n\n")
@@ -2101,11 +2227,11 @@ IMPORTANT: Respect the user's feedback above. Do NOT re-raise findings that are:
 
 Only report NEW issues or issues where the severity has clearly escalated.`)
 	}
-	
+
 	if contextAdditions.Len() > 0 {
 		return basePrompt + contextAdditions.String()
 	}
-	
+
 	return basePrompt
 }
 
@@ -2145,6 +2271,10 @@ func (p *PatrolService) parseFindingBlock(block string) *Finding {
 
 	severity := extract("SEVERITY")
 	category := extract("CATEGORY")
+	key := extract("KEY")
+	if key == "" {
+		key = extract("FINDING_KEY")
+	}
 	resource := extract("RESOURCE")
 	resourceType := extract("RESOURCE_TYPE")
 	title := extract("TITLE")
@@ -2194,6 +2324,7 @@ func (p *PatrolService) parseFindingBlock(block string) *Finding {
 
 	return &Finding{
 		ID:             id,
+		Key:            normalizeFindingKey(key),
 		Severity:       sev,
 		Category:       cat,
 		ResourceID:     resource,
@@ -2205,6 +2336,25 @@ func (p *PatrolService) parseFindingBlock(block string) *Finding {
 		Evidence:       evidence,
 		Source:         "ai-analysis", // Mark as coming from AI
 	}
+}
+
+func normalizeFindingKey(key string) string {
+	if key == "" {
+		return ""
+	}
+	key = strings.TrimSpace(strings.ToLower(key))
+	if key == "" {
+		return ""
+	}
+	key = strings.ReplaceAll(key, "_", "-")
+	key = strings.ReplaceAll(key, " ", "-")
+	var b strings.Builder
+	for _, r := range key {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			b.WriteRune(r)
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
 
 // formatDurationPatrol formats a duration as a human-readable string for patrol

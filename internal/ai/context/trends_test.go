@@ -355,3 +355,89 @@ func TestComputeTrend_LongTimeSpanNoChange(t *testing.T) {
 	}
 }
 
+// ========================================
+// intToString tests
+// ========================================
+
+func TestIntToString(t *testing.T) {
+	tests := []struct {
+		input    int
+		expected string
+	}{
+		{0, "0"},
+		{1, "1"},
+		{9, "9"},
+		{10, "10"},
+		{123, "123"},
+		{1000, "1000"},
+		{-1, "-1"},
+		{-99, "-99"},
+		{-123, "-123"},
+	}
+
+	for _, tt := range tests {
+		result := intToString(tt.input)
+		if result != tt.expected {
+			t.Errorf("intToString(%d) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+// ========================================
+// floatToString tests
+// ========================================
+
+func TestFloatToString(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     float64
+		precision int
+		expected  string
+	}{
+		{"zero precision positive", 5.7, 0, "6"},
+		{"zero precision negative", -5.7, 0, "-6"},
+		{"one precision", 5.43, 1, "5.4"}, // 5.43 rounds down to 5.4
+		{"one precision round up", 5.48, 1, "5.5"},
+		{"two precision", 3.14159, 2, "3.14"},
+		{"three precision", 3.14159, 3, "3.142"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := floatToString(tt.value, tt.precision)
+			if result != tt.expected {
+				t.Errorf("floatToString(%.4f, %d) = %q, want %q", tt.value, tt.precision, result, tt.expected)
+			}
+		})
+	}
+}
+
+// ========================================
+// trimTrailingZeros tests
+// ========================================
+
+func TestTrimTrailingZeros(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"123", "123"},
+		{"12.00", "12"},
+		{"12.30", "12.3"},
+		{"12.34", "12.34"},
+		{"100.0", "100"},
+		{"100.100", "100.1"},
+		{"0.00", "0"},
+		{"0.50", "0.5"},
+	}
+
+	for _, tt := range tests {
+		result := trimTrailingZeros(tt.input)
+		if result != tt.expected {
+			t.Errorf("trimTrailingZeros(%q) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+

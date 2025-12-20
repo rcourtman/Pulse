@@ -532,11 +532,11 @@ export const AISettings: Component = () => {
         class="overflow-hidden border border-gray-200 dark:border-gray-700"
         border={false}
       >
-        <div class="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div class="flex items-center gap-3">
-            <div class="p-2 bg-purple-100 dark:bg-purple-900/40 rounded-lg">
+            <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
               <svg
-                class="w-5 h-5 text-purple-600 dark:text-purple-300"
+                class="w-5 h-5 text-blue-600 dark:text-blue-300"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -598,7 +598,7 @@ export const AISettings: Component = () => {
           </div>
         </div>
 
-        <form class="p-5 space-y-4" onSubmit={handleSave}>
+        <form class="p-6 space-y-6" onSubmit={handleSave}>
           <Show when={loading()}>
             <div class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
               <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -607,7 +607,7 @@ export const AISettings: Component = () => {
           </Show>
 
           <Show when={!loading()}>
-            <div class="space-y-4">
+            <div class="space-y-6">
               {/* Default Model Selection - Always visible */}
               <div class={formField}>
                 <div class="flex items-center justify-between mb-1">
@@ -619,7 +619,7 @@ export const AISettings: Component = () => {
                     type="button"
                     onClick={loadModels}
                     disabled={modelsLoading()}
-                    class="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 disabled:opacity-50 flex items-center gap-1"
+                    class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50 flex items-center gap-1"
                     title="Refresh model list from all configured providers"
                   >
                     <svg class={`w-3 h-3 ${modelsLoading() ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -702,7 +702,7 @@ export const AISettings: Component = () => {
                     </svg>
                     <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Advanced Model Selection</span>
                     <Show when={form.chatModel || form.patrolModel}>
-                      <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded">Customized</span>
+                      <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Customized</span>
                     </Show>
                   </div>
                   <svg class={`w-4 h-4 text-gray-500 transition-transform ${showAdvancedModels() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -791,10 +791,10 @@ export const AISettings: Component = () => {
               </div>
 
               {/* AI Provider Configuration - Configure API keys for all providers */}
-              <div class={`${formField} p-4 rounded-lg border bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-purple-200 dark:border-purple-800`}>
+              <div class={`${formField} p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40`}>
                 <div class="mb-3">
                   <h4 class="font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                    <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
                     AI Provider Configuration
@@ -841,7 +841,7 @@ export const AISettings: Component = () => {
                         />
                         <div class="flex items-center justify-between">
                           <p class="text-xs text-gray-500">
-                            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
+                            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
                           </p>
                           <Show when={settings()?.anthropic_configured}>
                             <div class="flex gap-1">
@@ -917,7 +917,7 @@ export const AISettings: Component = () => {
                         />
                         <div class="flex items-center justify-between">
                           <p class="text-xs text-gray-500">
-                            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
+                            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
                           </p>
                           <Show when={settings()?.openai_configured}>
                             <div class="flex gap-1">
@@ -985,7 +985,7 @@ export const AISettings: Component = () => {
                         />
                         <div class="flex items-center justify-between">
                           <p class="text-xs text-gray-500">
-                            <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
+                            <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
                           </p>
                           <Show when={settings()?.deepseek_configured}>
                             <div class="flex gap-1">
@@ -1053,7 +1053,7 @@ export const AISettings: Component = () => {
                         />
                         <div class="flex items-center justify-between">
                           <p class="text-xs text-gray-500">
-                            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Get API key →</a>
+                            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
                           </p>
                           <Show when={settings()?.gemini_configured}>
                             <div class="flex gap-1">
@@ -1121,7 +1121,7 @@ export const AISettings: Component = () => {
                         />
                         <div class="flex items-center justify-between">
                           <p class="text-xs text-gray-500">
-                            <a href="https://ollama.ai" target="_blank" rel="noopener" class="text-purple-600 hover:underline">Learn about Ollama →</a>
+                            <a href="https://ollama.ai" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Learn about Ollama →</a>
                             <span class="text-gray-400"> · Free & local</span>
                           </p>
                           <Show when={settings()?.ollama_configured}>
@@ -1426,11 +1426,11 @@ export const AISettings: Component = () => {
             </Show>
 
             {/* Actions - sticky at bottom for easy access */}
-            <div class="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 -mx-6 px-6 py-4 mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 -mx-6 px-6 py-4 mt-6 flex flex-wrap items-center justify-between gap-3">
               <Show when={settings()?.api_key_set || settings()?.oauth_connected}>
                 <button
                   type="button"
-                  class="px-4 py-2 text-sm border border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300 rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="px-4 py-2 text-sm border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleTest}
                   disabled={testing() || saving() || loading()}
                 >
@@ -1448,7 +1448,7 @@ export const AISettings: Component = () => {
                 </button>
                 <button
                   type="submit"
-                  class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={saving() || loading()}
                 >
                   {saving() ? 'Saving...' : 'Save changes'}

@@ -239,3 +239,92 @@ func TestSummaryTargetsRollup(t *testing.T) {
 		t.Fatalf("expected pricing known with positive USD: %+v", got)
 	}
 }
+
+// mockPersistence implements Persistence for testing
+type mockPersistence struct {
+	events []UsageEvent
+	saved  []UsageEvent
+}
+
+func (m *mockPersistence) LoadUsageHistory() ([]UsageEvent, error) {
+	return m.events, nil
+}
+
+func (m *mockPersistence) SaveUsageHistory(events []UsageEvent) error {
+	m.saved = events
+	return nil
+}
+
+func TestSetPersistence_NilPersistence(t *testing.T) {
+	store := NewStore(30)
+
+	// Setting nil persistence should be a no-op
+	err := store.SetPersistence(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSetPersistence_LoadsExistingHistory(t *testing.T) {
+	store := NewStore(30)
+	now := time.Now()
+
+	// Create mock persistence with pre-existing events
+	mock := &mockPersistence{
+		events: []UsageEvent{
+			{
+				Timestamp:    now.Add(-1 * time.Hour),
+				Provider:     "openai",
+				RequestModel: "openai:gpt-4o",
+				InputTokens:  500,
+				OutputTokens: 250,
+				UseCase:      "chat",
+			},
+		},
+	}
+
+	// Set persistence - should load existing events
+	err := store.SetPersistence(mock)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify events were loaded
+	summary := store.GetSummary(7)
+	if len(summary.ProviderModels) != 1 {
+		t.Fatalf("expected 1 provider model from loaded events, got %d", len(summary.ProviderModels))
+	}
+	if summary.ProviderModels[0].InputTokens != 500 {
+		t.Fatalf("expected 500 input tokens from loaded events, got %d", summary.ProviderModels[0].InputTokens)
+	}
+}
+
+func TestSetPersistence_TrimsOldEventsOnLoad(t *testing.T) {
+	store := NewStore(1) // 1 day retention
+	now := time.Now()
+
+	// Create mock with old events (beyond retention)
+	mock := &mockPersistence{
+		events: []UsageEvent{
+			{
+				Timestamp:    now.Add(-72 * time.Hour), // 3 days old
+				Provider:     "openai",
+				RequestModel: "openai:gpt-4o",
+				InputTokens:  1000,
+				OutputTokens: 500,
+			},
+		},
+	}
+
+	err := store.SetPersistence(mock)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Old events should be trimmed
+	summary := store.GetSummary(7)
+	if len(summary.ProviderModels) != 0 {
+		t.Fatalf("expected old events to be trimmed, got %d provider models", len(summary.ProviderModels))
+	}
+}
+

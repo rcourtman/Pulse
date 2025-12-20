@@ -153,3 +153,178 @@ func countOccurrences(s, substr string) int {
 	}
 	return count
 }
+
+func TestNewStore(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	store, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	if store == nil {
+		t.Fatal("Expected non-nil store")
+	}
+}
+
+func TestGetKnowledge_NotExists(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	store, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Get knowledge for non-existent guest
+	knowledge, err := store.GetKnowledge("non-existent-guest")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Should return empty knowledge (not nil)
+	if knowledge == nil {
+		t.Fatal("Expected empty knowledge, got nil")
+	}
+	if len(knowledge.Notes) != 0 {
+		t.Errorf("Expected 0 notes, got %d", len(knowledge.Notes))
+	}
+}
+
+func TestGetKnowledge_AfterSave(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	store, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Save a note
+	err = store.SaveNote("test-guest", "TestGuest", "vm", "service", "WebServer", "http://localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Get knowledge
+	knowledge, err := store.GetKnowledge("test-guest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(knowledge.Notes) != 1 {
+		t.Errorf("Expected 1 note, got %d", len(knowledge.Notes))
+	}
+	if knowledge.GuestName != "TestGuest" {
+		t.Errorf("Expected guest name 'TestGuest', got '%s'", knowledge.GuestName)
+	}
+}
+
+func TestFormatForContext_SingleGuest(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	store, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Save notes
+	err = store.SaveNote("test-guest", "TestGuest", "vm", "service", "WebServer", "nginx on port 80")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	context := store.FormatForContext("test-guest")
+
+	if context == "" {
+		t.Error("Expected non-empty context")
+	}
+	if !contains(context, "nginx") {
+		t.Errorf("Expected context to contain 'nginx', got: %s", context)
+	}
+}
+
+func TestDeleteNote(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	store, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Save a note
+	err = store.SaveNote("test-guest", "TestGuest", "vm", "config", "Setting", "value")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Get knowledge to find note ID
+	knowledge, _ := store.GetKnowledge("test-guest")
+	if len(knowledge.Notes) == 0 {
+		t.Fatal("Expected notes to be saved")
+	}
+	noteID := knowledge.Notes[0].ID
+
+	// Delete the note
+	err = store.DeleteNote("test-guest", noteID)
+	if err != nil {
+		t.Fatalf("Failed to delete note: %v", err)
+	}
+
+	// Verify note is deleted
+	knowledge, _ = store.GetKnowledge("test-guest")
+	if len(knowledge.Notes) != 0 {
+		t.Errorf("Expected 0 notes after delete, got %d", len(knowledge.Notes))
+	}
+}
+
+func TestGetNotesByCategory(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	store, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Save multiple notes with different categories
+	store.SaveNote("test-guest", "TestGuest", "vm", "service", "WebServer", "nginx")
+	store.SaveNote("test-guest", "TestGuest", "vm", "config", "Setting", "value")
+	store.SaveNote("test-guest", "TestGuest", "vm", "service", "Database", "postgres")
+
+	// Get service notes
+	serviceNotes, err := store.GetNotesByCategory("test-guest", "service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(serviceNotes) != 2 {
+		t.Errorf("Expected 2 service notes, got %d", len(serviceNotes))
+	}
+
+	// Get config notes
+	configNotes, err := store.GetNotesByCategory("test-guest", "config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(configNotes) != 1 {
+		t.Errorf("Expected 1 config note, got %d", len(configNotes))
+	}
+}
+
+func TestListGuests(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	store, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Save notes for different guests
+	store.SaveNote("guest-1", "Guest1", "vm", "service", "Note", "content")
+	store.SaveNote("guest-2", "Guest2", "vm", "service", "Note", "content")
+
+	guests, err := store.ListGuests()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(guests) != 2 {
+		t.Errorf("Expected 2 guests, got %d", len(guests))
+	}
+}
+

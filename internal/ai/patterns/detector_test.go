@@ -204,3 +204,115 @@ func containsHelper(s, substr string) bool {
 	}
 	return false
 }
+
+func TestFormatDays(t *testing.T) {
+	tests := []struct {
+		name     string
+		days     float64
+		expected string
+	}{
+		{
+			name:     "less than an hour",
+			days:     0.01, // about 14 minutes
+			expected: "less than an hour",
+		},
+		{
+			name:     "a few hours",
+			days:     0.25, // 6 hours
+			expected: "6 hours",
+		},
+		{
+			name:     "half a day",
+			days:     0.5, // 12 hours
+			expected: "12 hours",
+		},
+		{
+			name:     "one day",
+			days:     1.0,
+			expected: "1 day",
+		},
+		{
+			name:     "just under two days",
+			days:     1.9,
+			expected: "1 day",
+		},
+		{
+			name:     "two days",
+			days:     2.0,
+			expected: "2 days",
+		},
+		{
+			name:     "seven days",
+			days:     7.0,
+			expected: "7 days",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatDays(tt.days)
+			if result != tt.expected {
+				t.Errorf("formatDays(%.2f) = %q, want %q", tt.days, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestAverageDuration(t *testing.T) {
+	tests := []struct {
+		name      string
+		durations []time.Duration
+		expected  time.Duration
+	}{
+		{
+			name:      "empty slice",
+			durations: []time.Duration{},
+			expected:  0,
+		},
+		{
+			name:      "single duration",
+			durations: []time.Duration{10 * time.Hour},
+			expected:  10 * time.Hour,
+		},
+		{
+			name:      "multiple durations",
+			durations: []time.Duration{6 * time.Hour, 12 * time.Hour, 18 * time.Hour},
+			expected:  12 * time.Hour, // average of 6, 12, 18 is 12
+		},
+		{
+			name:      "mixed durations",
+			durations: []time.Duration{24 * time.Hour, 48 * time.Hour},
+			expected:  36 * time.Hour, // average of 1 and 2 days is 1.5 days
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := averageDuration(tt.durations)
+			if result != tt.expected {
+				t.Errorf("averageDuration() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIntToStr(t *testing.T) {
+	tests := []struct {
+		input    int
+		expected string
+	}{
+		{0, "0"},
+		{1, "1"},
+		{10, "10"},
+		{100, "100"},
+		{999, "999"},
+	}
+
+	for _, tt := range tests {
+		result := intToStr(tt.input)
+		if result != tt.expected {
+			t.Errorf("intToStr(%d) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+

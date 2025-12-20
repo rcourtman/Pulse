@@ -30,7 +30,8 @@ type RemediationRecord struct {
 	ResourceType string        `json:"resource_type,omitempty"`
 	ResourceName string        `json:"resource_name,omitempty"`
 	FindingID    string        `json:"finding_id,omitempty"` // Linked AI finding if any
-	Problem      string        `json:"problem"`              // What was wrong
+	Problem      string        `json:"problem"`              // What was wrong (user's original message)
+	Summary      string        `json:"summary,omitempty"`    // AI-generated summary of what was achieved
 	Action       string        `json:"action"`               // What was done (command or action)
 	Output       string        `json:"output,omitempty"`     // Command output if any
 	Outcome      Outcome       `json:"outcome"`              // Did it work?
@@ -219,6 +220,46 @@ func (r *RemediationLog) GetRecentRemediations(limit int, since time.Time) []Rem
 		}
 	}
 	return result
+}
+
+// GetRecentRemediationStats returns remediation stats for actions since the given time.
+func (r *RemediationLog) GetRecentRemediationStats(since time.Time) map[string]int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	stats := map[string]int{
+		"total":     0,
+		"resolved":  0,
+		"partial":   0,
+		"failed":    0,
+		"unknown":   0,
+		"automatic": 0,
+		"manual":    0,
+	}
+
+	for _, rec := range r.records {
+		if rec.Timestamp.Before(since) {
+			continue
+		}
+		stats["total"]++
+		switch rec.Outcome {
+		case OutcomeResolved:
+			stats["resolved"]++
+		case OutcomePartial:
+			stats["partial"]++
+		case OutcomeFailed:
+			stats["failed"]++
+		default:
+			stats["unknown"]++
+		}
+		if rec.Automatic {
+			stats["automatic"]++
+		} else {
+			stats["manual"]++
+		}
+	}
+
+	return stats
 }
 
 // FormatForContext creates AI-consumable summary of remediation history

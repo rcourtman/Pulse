@@ -7,6 +7,7 @@ import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
 import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButton';
 import type { RawOverrideConfig, PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
 import { Card } from '@/components/shared/Card';
+import { AIOverviewTable } from '@/components/shared/AIOverviewTable';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
@@ -17,10 +18,12 @@ import { showSuccess, showError } from '@/utils/toast';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
+import { AIAPI } from '@/api/ai';
 import { LicenseAPI, type LicenseFeatureStatus } from '@/api/license';
 import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, State, VM, Container, DockerHost, DockerContainer, Host } from '@/types/api';
+import type { RemediationRecord } from '@/types/aiIntelligence';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { logger } from '@/utils/logger';
@@ -29,7 +32,7 @@ import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
 import Send from 'lucide-solid/icons/send';
 import Calendar from 'lucide-solid/icons/calendar';
-import { getPatrolStatus, getFindings, getFindingsHistory, getPatrolRunHistory, forcePatrol, subscribeToPatrolStream, dismissFinding, suppressFinding, getSuppressionRules, addSuppressionRule, deleteSuppressionRule, type Finding, type PatrolStatus, type PatrolRunRecord, type SuppressionRule, severityColors, formatTimestamp, categoryLabels } from '@/api/patrol';
+import { getPatrolStatus, getFindings, getFindingsHistory, getPatrolRunHistory, forcePatrol, subscribeToPatrolStream, dismissFinding, suppressFinding, getSuppressionRules, addSuppressionRule, deleteSuppressionRule, getRunbooksForFinding, executeRunbook, type Finding, type PatrolStatus, type PatrolRunRecord, type SuppressionRule, type RunbookInfo, type RunbookExecutionResult, severityColors, formatTimestamp, categoryLabels } from '@/api/patrol';
 import { aiChatStore } from '@/stores/aiChat';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
@@ -2080,10 +2083,26 @@ function OverviewTab(props: {
   const [newRuleDescription, setNewRuleDescription] = createSignal('');
   const [licenseFeatures, setLicenseFeatures] = createSignal<LicenseFeatureStatus | null>(null);
   const [licenseLoading, setLicenseLoading] = createSignal(false);
+  const [runbooksByFinding, setRunbooksByFinding] = createSignal<Record<string, RunbookInfo[]>>({});
+  const [runbookLoadingByFinding, setRunbookLoadingByFinding] = createSignal<Record<string, boolean>>({});
+  const [runbookSelection, setRunbookSelection] = createSignal<Record<string, string>>({});
+  const [runbookResults, setRunbookResults] = createSignal<Record<string, RunbookExecutionResult | null>>({});
+  const [runbookErrors, setRunbookErrors] = createSignal<Record<string, string>>({});
+  const [expandedRunbookFinding, setExpandedRunbookFinding] = createSignal<string | null>(null);
+  const [remediationsByFinding, setRemediationsByFinding] = createSignal<Record<string, RemediationRecord[]>>({});
+  const [remediationLoadingByFinding, setRemediationLoadingByFinding] = createSignal<Record<string, boolean>>({});
+  const [remediationErrorsByFinding, setRemediationErrorsByFinding] = createSignal<Record<string, string>>({});
+  const [remediationLockedByFinding, setRemediationLockedByFinding] = createSignal<Record<string, boolean>>({});
+  const [remediationUpgradeURLByFinding, setRemediationUpgradeURLByFinding] = createSignal<Record<string, string>>({});
   const hasAIAlertsFeature = createMemo(() => {
     const status = licenseFeatures();
     if (!status) return true;
     return Boolean(status.features?.['ai_alerts']);
+  });
+  const hasAutoFixFeature = createMemo(() => {
+    const status = licenseFeatures();
+    if (!status) return false;
+    return Boolean(status.features?.['ai_autofix']);
   });
   const showAIAlertsUpgrade = createMemo(() => {
     const status = licenseFeatures();
@@ -2091,6 +2110,7 @@ function OverviewTab(props: {
     return !status.features?.['ai_alerts'];
   });
   const aiAlertsUpgradeURL = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulsemonitor.app/pro');
+  const autoFixUpgradeURL = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulsemonitor.app/pro');
   // Live streaming state for running patrol
   const [expandedLiveStream, setExpandedLiveStream] = createSignal(false);
   // Track streaming blocks for sequential display (like AI chat)
@@ -2251,6 +2271,73 @@ function OverviewTab(props: {
       }
     } catch (_e) {
       // AI patrol may not be enabled - silently fail
+    }
+  };
+
+  const loadRunbooks = async (findingId: string) => {
+    setRunbookLoadingByFinding((prev) => ({ ...prev, [findingId]: true }));
+    setRunbookErrors((prev) => ({ ...prev, [findingId]: '' }));
+    try {
+      const runbooks = await getRunbooksForFinding(findingId);
+      setRunbooksByFinding((prev) => ({ ...prev, [findingId]: runbooks }));
+      if (runbooks.length > 0 && !runbookSelection()[findingId]) {
+        setRunbookSelection((prev) => ({ ...prev, [findingId]: runbooks[0].id }));
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load runbooks';
+      setRunbookErrors((prev) => ({ ...prev, [findingId]: message }));
+    } finally {
+      setRunbookLoadingByFinding((prev) => ({ ...prev, [findingId]: false }));
+    }
+  };
+
+  const toggleRunbookPanel = (findingId: string) => {
+    setExpandedRunbookFinding((prev) => (prev === findingId ? null : findingId));
+    if (!runbooksByFinding()[findingId] && !runbookLoadingByFinding()[findingId]) {
+      void loadRunbooks(findingId);
+    }
+  };
+
+  const loadRemediationsForFinding = async (findingId: string) => {
+    setRemediationLoadingByFinding((prev) => ({ ...prev, [findingId]: true }));
+    setRemediationErrorsByFinding((prev) => ({ ...prev, [findingId]: '' }));
+    try {
+      const response = await AIAPI.getRemediations({ findingId, limit: 3 });
+      const locked = Boolean(response.license_required);
+      setRemediationLockedByFinding((prev) => ({ ...prev, [findingId]: locked }));
+      if (response.upgrade_url) {
+        setRemediationUpgradeURLByFinding((prev) => ({ ...prev, [findingId]: response.upgrade_url || '' }));
+      }
+      setRemediationsByFinding((prev) => ({ ...prev, [findingId]: locked ? [] : (response.remediations || []) }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load remediation history';
+      setRemediationErrorsByFinding((prev) => ({ ...prev, [findingId]: message }));
+    } finally {
+      setRemediationLoadingByFinding((prev) => ({ ...prev, [findingId]: false }));
+    }
+  };
+
+  const runSelectedRunbook = async (findingId: string) => {
+    const runbookId = runbookSelection()[findingId];
+    if (!runbookId) {
+      setRunbookErrors((prev) => ({ ...prev, [findingId]: 'Select a runbook to execute.' }));
+      return;
+    }
+    setRunbookErrors((prev) => ({ ...prev, [findingId]: '' }));
+    setRunbookResults((prev) => ({ ...prev, [findingId]: null }));
+    setRunbookLoadingByFinding((prev) => ({ ...prev, [findingId]: true }));
+    try {
+      const result = await executeRunbook(findingId, runbookId);
+      setRunbookResults((prev) => ({ ...prev, [findingId]: result }));
+      if (result.resolved) {
+        fetchAiData();
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Runbook execution failed';
+      setRunbookErrors((prev) => ({ ...prev, [findingId]: message }));
+    } finally {
+      setRunbookLoadingByFinding((prev) => ({ ...prev, [findingId]: false }));
+      void loadRemediationsForFinding(findingId);
     }
   };
 
@@ -2582,6 +2669,63 @@ function OverviewTab(props: {
               </div>
             </Show>
           </div>
+
+          <div class="mb-4">
+            <AIOverviewTable showWhenEmpty />
+          </div>
+
+          <Show when={patrolRequiresLicense()}>
+            <div class="space-y-2">
+              <div class="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
+                <span>Preview findings (details locked)</span>
+                <span>{aiFindings().length} detected</span>
+              </div>
+              <Show
+                when={aiFindings().length > 0}
+                fallback={
+                  <div class="text-sm text-gray-500 dark:text-gray-400 italic">
+                    No preview findings yet. Enable Patrol to generate a preview.
+                  </div>
+                }
+              >
+                <For each={aiFindings().slice(0, 3)}>
+                  {(finding) => (
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/40">
+                      <div class="flex items-center gap-2 px-3 pt-3">
+                        <span class="px-2 py-0.5 text-[10px] rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 capitalize">
+                          {finding.severity}
+                        </span>
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {finding.title || 'Potential issue detected'}
+                        </span>
+                        <span class="ml-auto text-[10px] text-amber-600 dark:text-amber-300 uppercase tracking-wide">Locked</span>
+                      </div>
+                      <div class="relative px-3 pb-3 pt-2">
+                        <div class="blur-sm text-xs text-gray-600 dark:text-gray-400">
+                          {finding.description || 'Upgrade to view full analysis.'}
+                        </div>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                          <a
+                            class="text-[11px] font-medium text-amber-700 dark:text-amber-200 underline decoration-dotted"
+                            href={patrolUpgradeURL()}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Upgrade to view details
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </For>
+                <Show when={aiFindings().length > 3}>
+                  <div class="text-[11px] text-gray-500 dark:text-gray-400">
+                    +{aiFindings().length - 3} more findings hidden
+                  </div>
+                </Show>
+              </Show>
+            </div>
+          </Show>
           <Show when={!patrolRequiresLicense()}>
             <div class="space-y-2">
               <Show
@@ -2611,239 +2755,496 @@ function OverviewTab(props: {
                           'border-color': colors.border,
                         }}
                       >
-                      {/* Compact header - always visible, clickable */}
-                      <div
-                        class="flex items-center gap-3 p-3 cursor-pointer hover:opacity-80"
-                        onClick={() => setIsExpanded(!isExpanded())}
-                      >
-                        {/* Expand chevron */}
-                        <svg
-                          class={`w-4 h-4 text-gray-500 transition-transform flex-shrink-0 ${isExpanded() ? 'rotate-90' : ''}`}
-                          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        {/* Compact header - always visible, clickable */}
+                        <div
+                          class="flex items-center gap-3 p-3 cursor-pointer hover:opacity-80"
+                          onClick={() => {
+                            const nextExpanded = !isExpanded();
+                            setIsExpanded(nextExpanded);
+                            if (nextExpanded && remediationsByFinding()[finding.id] === undefined && !remediationLoadingByFinding()[finding.id]) {
+                              void loadRemediationsForFinding(finding.id);
+                            }
+                          }}
                         >
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                        </svg>
-                        {/* Severity badge */}
-                        <span
-                          class="px-2 py-0.5 text-xs rounded capitalize font-medium flex-shrink-0"
-                          style={{ 'background-color': colors.border, color: colors.text }}
-                        >
-                          {finding.severity}
-                        </span>
-                        {/* Title (main info) */}
-                        <span class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate flex-1">
-                          {finding.title}
-                        </span>
-                        {/* Recurrence badge - show if raised multiple times */}
-                        <Show when={finding.times_raised > 1}>
-                          <span
-                            class="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 flex-shrink-0"
-                            title={`This issue has been detected ${finding.times_raised} times`}
+                          {/* Expand chevron */}
+                          <svg
+                            class={`w-4 h-4 text-gray-500 transition-transform flex-shrink-0 ${isExpanded() ? 'rotate-90' : ''}`}
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
                           >
-                            ×{finding.times_raised}
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                          </svg>
+                          {/* Severity badge */}
+                          <span
+                            class="px-2 py-0.5 text-xs rounded capitalize font-medium flex-shrink-0"
+                            style={{ 'background-color': colors.border, color: colors.text }}
+                          >
+                            {finding.severity}
                           </span>
-                        </Show>
-                        {/* Dismissed status badge */}
-                        <Show when={finding.dismissed_reason}>
-                          <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 flex-shrink-0">
-                            {finding.dismissed_reason === 'not_an_issue' && '✓ Dismissed'}
-                            {finding.dismissed_reason === 'expected_behavior' && '✓ Expected'}
-                            {finding.dismissed_reason === 'will_fix_later' && '⏱ Noted'}
+                          {/* Title (main info) */}
+                          <span class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate flex-1">
+                            {finding.title}
                           </span>
-                        </Show>
-                        {/* Suppressed badge */}
-                        <Show when={finding.suppressed}>
-                          <span class="text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex-shrink-0">
-                            🔇 Suppressed
+                          {/* Recurrence badge - show if raised multiple times */}
+                          <Show when={finding.times_raised > 1}>
+                            <span
+                              class="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 flex-shrink-0"
+                              title={`This issue has been detected ${finding.times_raised} times`}
+                            >
+                              ×{finding.times_raised}
+                            </span>
+                          </Show>
+                          {/* Dismissed status badge */}
+                          <Show when={finding.dismissed_reason}>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 flex-shrink-0">
+                              {finding.dismissed_reason === 'not_an_issue' && '✓ Dismissed'}
+                              {finding.dismissed_reason === 'expected_behavior' && '✓ Expected'}
+                              {finding.dismissed_reason === 'will_fix_later' && '⏱ Noted'}
+                            </span>
+                          </Show>
+                          {/* Suppressed badge */}
+                          <Show when={finding.suppressed}>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex-shrink-0">
+                              🔇 Suppressed
+                            </span>
+                          </Show>
+                          {/* Resource name pill */}
+                          <span class="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 flex-shrink-0 hidden sm:inline">
+                            {finding.resource_name}
                           </span>
-                        </Show>
-                        {/* Resource name pill */}
-                        <span class="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 flex-shrink-0 hidden sm:inline">
-                          {finding.resource_name}
-                        </span>
-                        {/* AI badge */}
-                        <span
-                          class="inline-flex items-center justify-center w-5 h-5 rounded text-[9px] font-bold flex-shrink-0"
-                          style={{ 'background-color': colors.border, color: colors.text }}
-                        >
-                          AI
-                        </span>
-                      </div>
+                          {/* AI badge */}
+                          <span
+                            class="inline-flex items-center justify-center w-5 h-5 rounded text-[9px] font-bold flex-shrink-0"
+                            style={{ 'background-color': colors.border, color: colors.text }}
+                          >
+                            AI
+                          </span>
+                        </div>
 
-                      {/* Expanded details */}
-                      <Show when={isExpanded()}>
-                        <div class="px-4 pb-4 pt-1 border-t" style={{ 'border-color': colors.border }}>
-                          {/* Resource and category info */}
-                          <div class="flex flex-wrap items-center gap-2 mb-2">
-                            <span class="text-sm font-medium" style={{ color: colors.text }}>
-                              {finding.resource_name}
-                            </span>
-                            <span class="text-xs text-gray-600 dark:text-gray-400">
-                              ({finding.category})
-                            </span>
-                            <Show when={finding.node}>
-                              <span class="text-xs text-gray-500 dark:text-gray-500">
-                                on {finding.node}
+                        {/* Expanded details */}
+                        <Show when={isExpanded()}>
+                          <div class="px-4 pb-4 pt-1 border-t" style={{ 'border-color': colors.border }}>
+                            {/* Resource and category info */}
+                            <div class="flex flex-wrap items-center gap-2 mb-2">
+                              <span class="text-sm font-medium" style={{ color: colors.text }}>
+                                {finding.resource_name}
                               </span>
-                            </Show>
-                          </div>
-
-                          {/* Description */}
-                          <p class="text-sm text-gray-600 dark:text-gray-400">
-                            {finding.description}
-                          </p>
-
-                          {/* Recommendation */}
-                          <Show when={finding.recommendation}>
-                            <p class="text-xs text-gray-500 dark:text-gray-500 mt-2 italic">
-                              Suggested: {finding.recommendation}
-                            </p>
-                          </Show>
-
-                          {/* User note if present */}
-                          <Show when={finding.user_note}>
-                            <div class="mt-2 p-2 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                              <p class="text-xs text-blue-700 dark:text-blue-300">
-                                <span class="font-medium">Your note:</span> {finding.user_note}
-                              </p>
+                              <span class="text-xs text-gray-600 dark:text-gray-400">
+                                ({finding.category})
+                              </span>
+                              <Show when={finding.node}>
+                                <span class="text-xs text-gray-500 dark:text-gray-500">
+                                  on {finding.node}
+                                </span>
+                              </Show>
                             </div>
-                          </Show>
 
-                          {/* Footer with time and actions */}
-                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-3 pt-2 border-t border-gray-200 dark:border-gray-600">
-                            <p class="text-xs text-gray-500 dark:text-gray-500">
-                              Detected: {formatTimestamp(finding.detected_at)}
+                            {/* Description */}
+                            <p class="text-sm text-gray-600 dark:text-gray-400">
+                              {finding.description}
                             </p>
-                            <div class="flex items-center gap-2">
-                              {/* Get Help with AI button */}
-                              <button
-                                class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/50 flex items-center gap-1.5"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  aiChatStore.openWithPrompt(
-                                    `Help me fix this issue on ${finding.resource_name}: ${finding.title}\n\nDescription: ${finding.description}\n\nSuggested fix: ${finding.recommendation || 'None provided'}\n\nPlease guide me through applying this fix. When you've successfully fixed the issue, use the resolve_finding tool to mark it as resolved.`,
-                                    { findingId: finding.id }
-                                  );
-                                }}
-                              >
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                </svg>
-                                Get Help
-                              </button>
-                              {/* I Fixed It button - hides until next patrol verifies */}
-                              <button
-                                class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50 flex items-center gap-1.5"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setPendingFixFindings(prev => {
-                                    const next = new Set(prev);
-                                    next.add(finding.id);
-                                    return next;
-                                  });
-                                }}
-                                title="Hide until next patrol verifies the fix"
-                              >
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                </svg>
-                                I Fixed It
-                              </button>
-                              {/* Not an Issue dropdown - LLM memory system */}
-                              <div class="relative group">
+
+                            {/* Recommendation */}
+                            <Show when={finding.recommendation}>
+                              <p class="text-xs text-gray-500 dark:text-gray-500 mt-2 italic">
+                                Suggested: {finding.recommendation}
+                              </p>
+                            </Show>
+
+                            {/* User note if present */}
+                            <Show when={finding.user_note}>
+                              <div class="mt-2 p-2 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                                <p class="text-xs text-blue-700 dark:text-blue-300">
+                                  <span class="font-medium">Your note:</span> {finding.user_note}
+                                </p>
+                              </div>
+                            </Show>
+
+                            {/* Footer with time and actions */}
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-3 pt-2 border-t border-gray-200 dark:border-gray-600">
+                              <p class="text-xs text-gray-500 dark:text-gray-500">
+                                Detected: {formatTimestamp(finding.detected_at)}
+                              </p>
+                              <div class="flex items-center gap-2">
+                                {/* Get Help with AI button */}
                                 <button
-                                  class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-1.5"
-                                  onClick={(e) => e.stopPropagation()}
-                                  title="Dismiss this finding - AI won't re-raise it"
+                                  class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/50 flex items-center gap-1.5"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    aiChatStore.openWithPrompt(
+                                      `Help me fix this issue on ${finding.resource_name}: ${finding.title}\n\nDescription: ${finding.description}\n\nSuggested fix: ${finding.recommendation || 'None provided'}\n\nPlease guide me through applying this fix. When you've successfully fixed the issue, use the resolve_finding tool to mark it as resolved.`,
+                                      { findingId: finding.id }
+                                    );
+                                  }}
                                 >
                                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                                   </svg>
-                                  Dismiss
-                                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                                  </svg>
+                                  Get Help
                                 </button>
-                                {/* Dropdown menu - pt-2 creates visual gap while maintaining hover area */}
-                                <div class="absolute right-0 top-full pt-1 w-48 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                                  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-                                    <button
-                                      class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded-t-lg transition-colors"
-                                      onClick={async (e) => {
-                                        e.stopPropagation();
-                                        try {
-                                          await dismissFinding(finding.id, 'not_an_issue');
-                                          showSuccess('Dismissed - AI will not raise this again');
-                                          fetchAiData();
-                                        } catch (_err) {
-                                          showError('Failed to dismiss finding');
-                                        }
-                                      }}
+                                <Show
+                                  when={hasAutoFixFeature()}
+                                  fallback={
+                                    <a
+                                      class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-700 flex items-center gap-1.5"
+                                      href={autoFixUpgradeURL()}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      title="Pulse Pro required for runbooks"
+                                      onClick={(e) => e.stopPropagation()}
                                     >
-                                      <span class="font-medium text-gray-700 dark:text-gray-300">Not an Issue</span>
-                                      <p class="text-gray-500 dark:text-gray-500 mt-0.5">This isn't actually a problem</p>
-                                    </button>
-                                    <button
-                                      class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                      onClick={async (e) => {
-                                        e.stopPropagation();
-                                        const note = prompt('Why is this expected? (optional - helps AI understand your environment)');
-                                        try {
-                                          await dismissFinding(finding.id, 'expected_behavior', note || undefined);
-                                          showSuccess('Dismissed - AI will not raise this again');
-                                          fetchAiData();
-                                        } catch (_err) {
-                                          showError('Failed to dismiss finding');
-                                        }
-                                      }}
-                                    >
-                                      <span class="font-medium text-gray-700 dark:text-gray-300">Expected Behavior</span>
-                                      <p class="text-gray-500 dark:text-gray-500 mt-0.5">This is intentional/by design</p>
-                                    </button>
-                                    <button
-                                      class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                      onClick={async (e) => {
-                                        e.stopPropagation();
-                                        try {
-                                          await dismissFinding(finding.id, 'will_fix_later');
-                                          showSuccess('Acknowledged - AI will check again later');
-                                          fetchAiData();
-                                        } catch (_err) {
-                                          showError('Failed to dismiss finding');
-                                        }
-                                      }}
-                                    >
-                                      <span class="font-medium text-gray-700 dark:text-gray-300">Will Fix Later</span>
-                                      <p class="text-gray-500 dark:text-gray-500 mt-0.5">I know about it, will address</p>
-                                    </button>
-                                    <div class="border-t border-gray-200 dark:border-gray-700">
+                                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11V7a4 4 0 118 0v4m-6 4h6a2 2 0 012 2v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5a2 2 0 012-2h2" />
+                                      </svg>
+                                      Runbook
+                                    </a>
+                                  }
+                                >
+                                  <button
+                                    class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50 flex items-center gap-1.5"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleRunbookPanel(finding.id);
+                                    }}
+                                    title="Run a vetted remediation runbook"
+                                  >
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 4H7a2 2 0 01-2-2V6a2 2 0 012-2h6l4 4v10a2 2 0 01-2 2z" />
+                                    </svg>
+                                    Runbook
+                                  </button>
+                                </Show>
+                                {/* I Fixed It button - hides until next patrol verifies */}
+                                <button
+                                  class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50 flex items-center gap-1.5"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPendingFixFindings(prev => {
+                                      const next = new Set(prev);
+                                      next.add(finding.id);
+                                      return next;
+                                    });
+                                  }}
+                                  title="Hide until next patrol verifies the fix"
+                                >
+                                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  I Fixed It
+                                </button>
+                                {/* Not an Issue dropdown - LLM memory system */}
+                                <div class="relative group">
+                                  <button
+                                    class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-1.5"
+                                    onClick={(e) => e.stopPropagation()}
+                                    title="Dismiss this finding - AI won't re-raise it"
+                                  >
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                    </svg>
+                                    Dismiss
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                  </button>
+                                  {/* Dropdown menu - pt-2 creates visual gap while maintaining hover area */}
+                                  <div class="absolute right-0 top-full pt-1 w-48 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
                                       <button
-                                        class="w-full px-3 py-2 text-left text-xs hover:bg-red-50 dark:hover:bg-red-900/30 rounded-b-lg transition-colors text-red-600 dark:text-red-400"
+                                        class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded-t-lg transition-colors"
                                         onClick={async (e) => {
                                           e.stopPropagation();
-                                          if (confirm('Permanently suppress this type of finding for this resource?\n\nThe AI will never raise this issue again.')) {
-                                            try {
-                                              await suppressFinding(finding.id);
-                                              showSuccess('Suppressed - AI will never raise this again');
-                                              fetchAiData();
-                                            } catch (_err) {
-                                              showError('Failed to suppress finding');
-                                            }
+                                          try {
+                                            await dismissFinding(finding.id, 'not_an_issue');
+                                            showSuccess('Dismissed - AI will not raise this again');
+                                            fetchAiData();
+                                          } catch (_err) {
+                                            showError('Failed to dismiss finding');
                                           }
                                         }}
                                       >
-                                        <span class="font-medium">Never Alert Again</span>
-                                        <p class="text-red-500/80 dark:text-red-400/80 mt-0.5">Permanently suppress for this resource</p>
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Not an Issue</span>
+                                        <p class="text-gray-500 dark:text-gray-500 mt-0.5">This isn't actually a problem</p>
                                       </button>
+                                      <button
+                                        class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          const note = prompt('Why is this expected? (optional - helps AI understand your environment)');
+                                          try {
+                                            await dismissFinding(finding.id, 'expected_behavior', note || undefined);
+                                            showSuccess('Dismissed - AI will not raise this again');
+                                            fetchAiData();
+                                          } catch (_err) {
+                                            showError('Failed to dismiss finding');
+                                          }
+                                        }}
+                                      >
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Expected Behavior</span>
+                                        <p class="text-gray-500 dark:text-gray-500 mt-0.5">This is intentional/by design</p>
+                                      </button>
+                                      <button
+                                        class="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          try {
+                                            await dismissFinding(finding.id, 'will_fix_later');
+                                            showSuccess('Acknowledged - AI will check again later');
+                                            fetchAiData();
+                                          } catch (_err) {
+                                            showError('Failed to dismiss finding');
+                                          }
+                                        }}
+                                      >
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Will Fix Later</span>
+                                        <p class="text-gray-500 dark:text-gray-500 mt-0.5">I know about it, will address</p>
+                                      </button>
+                                      <div class="border-t border-gray-200 dark:border-gray-700">
+                                        <button
+                                          class="w-full px-3 py-2 text-left text-xs hover:bg-red-50 dark:hover:bg-red-900/30 rounded-b-lg transition-colors text-red-600 dark:text-red-400"
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            if (confirm('Permanently suppress this type of finding for this resource?\n\nThe AI will never raise this issue again.')) {
+                                              try {
+                                                await suppressFinding(finding.id);
+                                                showSuccess('Suppressed - AI will never raise this again');
+                                                fetchAiData();
+                                              } catch (_err) {
+                                                showError('Failed to suppress finding');
+                                              }
+                                            }
+                                          }}
+                                        >
+                                          <span class="font-medium">Never Alert Again</span>
+                                          <p class="text-red-500/80 dark:text-red-400/80 mt-0.5">Permanently suppress for this resource</p>
+                                        </button>
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
                               </div>
+
+                              <Show when={expandedRunbookFinding() === finding.id}>
+                                <div class="mt-3 p-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-900/10">
+                                  <div class="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                                    Runbook Execution
+                                  </div>
+                                  <Show when={runbookLoadingByFinding()[finding.id]}>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                                      <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                      Loading or executing runbook...
+                                    </div>
+                                  </Show>
+                                  <Show when={runbookErrors()[finding.id]}>
+                                    <div class="text-xs text-red-600 dark:text-red-400">
+                                      {runbookErrors()[finding.id]}
+                                    </div>
+                                  </Show>
+                                  <Show when={!runbookLoadingByFinding()[finding.id]}>
+                                    <Show when={(runbooksByFinding()[finding.id] || []).length > 0} fallback={
+                                      <div class="text-xs text-gray-500 dark:text-gray-400">
+                                        No runbooks available for this finding yet.
+                                      </div>
+                                    }>
+                                      <div class="flex flex-wrap items-center gap-2">
+                                        <select
+                                          value={runbookSelection()[finding.id] || ''}
+                                          onChange={(e) => {
+                                            const value = e.currentTarget.value;
+                                            setRunbookSelection((prev) => ({ ...prev, [finding.id]: value }));
+                                          }}
+                                          class="px-2 py-1 text-xs rounded border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200"
+                                        >
+                                          <For each={runbooksByFinding()[finding.id]}>
+                                            {(runbook) => (
+                                              <option value={runbook.id}>{runbook.title}</option>
+                                            )}
+                                          </For>
+                                        </select>
+                                        <button
+                                          class="px-2.5 py-1 text-xs font-medium rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            runSelectedRunbook(finding.id);
+                                          }}
+                                        >
+                                          Run
+                                        </button>
+                                      </div>
+                                      {(() => {
+                                        const runbooks = runbooksByFinding()[finding.id] || [];
+                                        const selected = runbooks.find((rb) => rb.id === runbookSelection()[finding.id]);
+                                        if (!selected) return null;
+                                        const riskStyles = {
+                                          low: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+                                          medium: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+                                          high: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+                                        } as const;
+                                        const riskStyle = riskStyles[selected.risk] || riskStyles.medium;
+                                        return (
+                                          <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-600 dark:text-gray-300">
+                                            <span class={`px-1.5 py-0.5 rounded-full font-semibold ${riskStyle}`}>
+                                              {selected.risk} risk
+                                            </span>
+                                            <span>{selected.description}</span>
+                                          </div>
+                                        );
+                                      })()}
+                                    </Show>
+                                  </Show>
+
+                                  <Show when={runbookResults()[finding.id]}>
+                                    {(result) => (
+                                      <div class="mt-3 text-xs text-gray-600 dark:text-gray-300 space-y-2">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                          <span class="font-medium text-gray-700 dark:text-gray-200">
+                                            Outcome:
+                                          </span>
+                                          <span class={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${result.outcome === 'resolved'
+                                            ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                            : result.outcome === 'partial'
+                                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                              : result.outcome === 'failed'
+                                                ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                            }`}>
+                                            {result.outcome}
+                                          </span>
+                                          <span class="text-gray-500 dark:text-gray-400">{result.message}</span>
+                                        </div>
+                                        <Show when={result.steps?.length}>
+                                          <div class="space-y-1">
+                                            <For each={result.steps}>
+                                              {(step) => (
+                                                <div class="flex flex-wrap items-center gap-2">
+                                                  <span class={`text-[10px] px-1.5 py-0.5 rounded ${step.success ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
+                                                    {step.success ? 'OK' : 'FAIL'}
+                                                  </span>
+                                                  <span class="text-gray-600 dark:text-gray-300">{step.name}</span>
+                                                </div>
+                                              )}
+                                            </For>
+                                          </div>
+                                        </Show>
+                                        <Show when={result.verification}>
+                                          <div class="text-gray-500 dark:text-gray-400">
+                                            Verification: {result.verification.name}
+                                          </div>
+                                        </Show>
+                                      </div>
+                                    )}
+                                  </Show>
+                                </div>
+                              </Show>
+
+                              <Show when={remediationLoadingByFinding()[finding.id] || remediationErrorsByFinding()[finding.id] || remediationsByFinding()[finding.id] !== undefined}>
+                                <div class="mt-3 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-900/10">
+                                  <div class="text-xs font-medium text-emerald-700 dark:text-emerald-300 mb-2">
+                                    Pulse Fix Receipts
+                                  </div>
+                                  <Show when={remediationLoadingByFinding()[finding.id]}>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                                      <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                      Loading fix history...
+                                    </div>
+                                  </Show>
+                                  <Show when={remediationErrorsByFinding()[finding.id]}>
+                                    <div class="text-xs text-red-600 dark:text-red-400">
+                                      {remediationErrorsByFinding()[finding.id]}
+                                    </div>
+                                  </Show>
+                                  <Show when={!remediationLoadingByFinding()[finding.id]}>
+                                    <Show when={remediationLockedByFinding()[finding.id]}>
+                                      <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-2 text-xs text-amber-800 dark:text-amber-200">
+                                        <div class="flex items-center justify-between gap-2">
+                                          <div>
+                                            <p class="font-medium">Pulse Pro required</p>
+                                            <p class="text-[11px] text-amber-700 dark:text-amber-300 mt-1">
+                                              Upgrade to view detailed fix receipts for this finding.
+                                            </p>
+                                          </div>
+                                          <a
+                                            class="text-[11px] font-medium text-amber-800 dark:text-amber-200 underline"
+                                            href={remediationUpgradeURLByFinding()[finding.id] || patrolUpgradeURL()}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                          >
+                                            Upgrade
+                                          </a>
+                                        </div>
+                                      </div>
+                                    </Show>
+                                    <Show when={!remediationLockedByFinding()[finding.id] && (remediationsByFinding()[finding.id] || []).length > 0} fallback={
+                                      <Show when={!remediationLockedByFinding()[finding.id]}>
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                                          No fixes logged for this finding yet.
+                                        </div>
+                                      </Show>
+                                    }>
+                                      <div class="space-y-2">
+                                        <For each={remediationsByFinding()[finding.id]}>
+                                          {(remediation) => {
+                                            const [showEvidence, setShowEvidence] = createSignal(false);
+                                            const hasEvidence = Boolean(remediation.output && remediation.output.trim());
+                                            return (
+                                              <div class="rounded-md border border-emerald-100 dark:border-emerald-800 bg-white/70 dark:bg-gray-900/40 p-2 text-xs">
+                                                <div class="flex flex-wrap items-center gap-2">
+                                                  <span class={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${remediation.outcome === 'resolved'
+                                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                                    : remediation.outcome === 'partial'
+                                                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                                      : remediation.outcome === 'failed'
+                                                        ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                                        : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                                    }`}>
+                                                    {remediation.outcome}
+                                                  </span>
+                                                  <Show when={remediation.automatic}>
+                                                    <span class="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                                      Auto-Fix
+                                                    </span>
+                                                  </Show>
+                                                  <span class="text-gray-500 dark:text-gray-400">
+                                                    {formatTimestamp(remediation.timestamp)}
+                                                  </span>
+                                                  <Show when={hasEvidence}>
+                                                    <button
+                                                      class="ml-auto text-[10px] font-medium text-emerald-700 dark:text-emerald-300 underline"
+                                                      onClick={() => setShowEvidence(!showEvidence())}
+                                                      type="button"
+                                                    >
+                                                      {showEvidence() ? 'Hide evidence' : 'Show evidence'}
+                                                    </button>
+                                                  </Show>
+                                                </div>
+                                                <div class="text-gray-700 dark:text-gray-200 font-medium mt-1">
+                                                  {remediation.action}
+                                                </div>
+                                                <div class="text-gray-500 dark:text-gray-400">
+                                                  {remediation.problem}
+                                                </div>
+                                                <Show when={remediation.note}>
+                                                  <div class="text-gray-500 dark:text-gray-400 mt-1">
+                                                    {remediation.note}
+                                                  </div>
+                                                </Show>
+                                                <Show when={showEvidence() && hasEvidence}>
+                                                  <pre class="mt-2 text-[11px] text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800/60 rounded p-2 whitespace-pre-wrap">
+                                                    {remediation.output}
+                                                  </pre>
+                                                </Show>
+                                              </div>
+                                            );
+                                          }}
+                                        </For>
+                                      </div>
+                                    </Show>
+                                  </Show>
+                                </div>
+                              </Show>
                             </div>
                           </div>
-                        </div>
-                      </Show>
-                    </div>
+                        </Show>
+                      </div>
                     );
                   }}
                 </For>
@@ -2877,129 +3278,129 @@ function OverviewTab(props: {
                 </button>
               </div>
 
-            {/* Add rule form */}
-            <Show when={showAddRuleForm()}>
-              <div class="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                <p class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-3">
-                  Add a suppression rule to prevent alerts
-                </p>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                  <input
-                    type="text"
-                    class="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    placeholder="Resource ID (or leave empty for any)"
-                    value={newRuleResource()}
-                    onInput={(e) => setNewRuleResource(e.currentTarget.value)}
-                  />
-                  <select
-                    class="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    value={newRuleCategory()}
-                    onChange={(e) => setNewRuleCategory(e.currentTarget.value)}
-                  >
-                    <option value="">Any category</option>
-                    <option value="performance">Performance</option>
-                    <option value="capacity">Capacity</option>
-                    <option value="reliability">Reliability</option>
-                    <option value="backup">Backup</option>
-                    <option value="security">Security</option>
-                    <option value="general">General</option>
-                  </select>
-                  <input
-                    type="text"
-                    class="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    placeholder="Reason (e.g., 'Dev container runs hot')"
-                    value={newRuleDescription()}
-                    onInput={(e) => setNewRuleDescription(e.currentTarget.value)}
-                  />
-                </div>
-                <div class="flex gap-2">
-                  <button
-                    class="px-3 py-1.5 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
-                    disabled={!newRuleDescription()}
-                    onClick={async () => {
-                      try {
-                        await addSuppressionRule(
-                          newRuleResource(),
-                          newRuleResource() || 'Any resource',
-                          (newRuleCategory() as 'performance' | 'capacity' | 'reliability' | 'backup' | 'security' | 'general' | ''),
-                          newRuleDescription()
-                        );
-                        showSuccess('Suppression rule created');
-                        setShowAddRuleForm(false);
-                        setNewRuleResource('');
-                        setNewRuleCategory('');
-                        setNewRuleDescription('');
-                        fetchAiData();
-                      } catch (_err) {
-                        showError('Failed to create rule');
-                      }
-                    }}
-                  >
-                    Create Rule
-                  </button>
-                  <button
-                    class="px-3 py-1.5 text-sm font-medium rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                    onClick={() => setShowAddRuleForm(false)}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </Show>
-
-            {/* Rules list */}
-            <Show when={showSuppressionRules()}>
-              <div class="mt-3 space-y-2">
-                <Show when={suppressionRules().length === 0}>
-                  <p class="text-sm text-gray-500 dark:text-gray-500 italic">
-                    No suppression rules. Dismiss findings or add rules to prevent unwanted alerts.
+              {/* Add rule form */}
+              <Show when={showAddRuleForm()}>
+                <div class="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <p class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-3">
+                    Add a suppression rule to prevent alerts
                   </p>
-                </Show>
-                <For each={suppressionRules()}>
-                  {(rule) => (
-                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2 text-sm">
-                          <span class="font-medium text-gray-800 dark:text-gray-200">
-                            {rule.resource_name || rule.resource_id || 'Any resource'}
-                          </span>
-                          <Show when={rule.category}>
-                            <span class="px-2 py-0.5 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-                              {categoryLabels[rule.category!] || rule.category}
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                    <input
+                      type="text"
+                      class="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      placeholder="Resource ID (or leave empty for any)"
+                      value={newRuleResource()}
+                      onInput={(e) => setNewRuleResource(e.currentTarget.value)}
+                    />
+                    <select
+                      class="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      value={newRuleCategory()}
+                      onChange={(e) => setNewRuleCategory(e.currentTarget.value)}
+                    >
+                      <option value="">Any category</option>
+                      <option value="performance">Performance</option>
+                      <option value="capacity">Capacity</option>
+                      <option value="reliability">Reliability</option>
+                      <option value="backup">Backup</option>
+                      <option value="security">Security</option>
+                      <option value="general">General</option>
+                    </select>
+                    <input
+                      type="text"
+                      class="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      placeholder="Reason (e.g., 'Dev container runs hot')"
+                      value={newRuleDescription()}
+                      onInput={(e) => setNewRuleDescription(e.currentTarget.value)}
+                    />
+                  </div>
+                  <div class="flex gap-2">
+                    <button
+                      class="px-3 py-1.5 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                      disabled={!newRuleDescription()}
+                      onClick={async () => {
+                        try {
+                          await addSuppressionRule(
+                            newRuleResource(),
+                            newRuleResource() || 'Any resource',
+                            (newRuleCategory() as 'performance' | 'capacity' | 'reliability' | 'backup' | 'security' | 'general' | ''),
+                            newRuleDescription()
+                          );
+                          showSuccess('Suppression rule created');
+                          setShowAddRuleForm(false);
+                          setNewRuleResource('');
+                          setNewRuleCategory('');
+                          setNewRuleDescription('');
+                          fetchAiData();
+                        } catch (_err) {
+                          showError('Failed to create rule');
+                        }
+                      }}
+                    >
+                      Create Rule
+                    </button>
+                    <button
+                      class="px-3 py-1.5 text-sm font-medium rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                      onClick={() => setShowAddRuleForm(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </Show>
+
+              {/* Rules list */}
+              <Show when={showSuppressionRules()}>
+                <div class="mt-3 space-y-2">
+                  <Show when={suppressionRules().length === 0}>
+                    <p class="text-sm text-gray-500 dark:text-gray-500 italic">
+                      No suppression rules. Dismiss findings or add rules to prevent unwanted alerts.
+                    </p>
+                  </Show>
+                  <For each={suppressionRules()}>
+                    {(rule) => (
+                      <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center gap-2 text-sm">
+                            <span class="font-medium text-gray-800 dark:text-gray-200">
+                              {rule.resource_name || rule.resource_id || 'Any resource'}
                             </span>
-                          </Show>
-                          <Show when={!rule.category}>
-                            <span class="px-2 py-0.5 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-                              Any category
+                            <Show when={rule.category}>
+                              <span class="px-2 py-0.5 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                                {categoryLabels[rule.category!] || rule.category}
+                              </span>
+                            </Show>
+                            <Show when={!rule.category}>
+                              <span class="px-2 py-0.5 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                                Any category
+                              </span>
+                            </Show>
+                            <span class="px-1.5 py-0.5 text-xs rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                              {rule.created_from === 'finding' ? 'From Finding' : 'Manual'}
                             </span>
-                          </Show>
-                          <span class="px-1.5 py-0.5 text-xs rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                            {rule.created_from === 'finding' ? 'From Finding' : 'Manual'}
-                          </span>
+                          </div>
+                          <p class="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
+                            {rule.description || 'No description'}
+                          </p>
                         </div>
-                        <p class="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
-                          {rule.description || 'No description'}
-                        </p>
+                        <button
+                          class="ml-3 px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
+                          onClick={async () => {
+                            try {
+                              await deleteSuppressionRule(rule.id);
+                              showSuccess('Rule deleted');
+                              fetchAiData();
+                            } catch (_err) {
+                              showError('Failed to delete rule');
+                            }
+                          }}
+                          title="Delete this rule"
+                        >
+                          Delete
+                        </button>
                       </div>
-                      <button
-                        class="ml-3 px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
-                        onClick={async () => {
-                          try {
-                            await deleteSuppressionRule(rule.id);
-                            showSuccess('Rule deleted');
-                            fetchAiData();
-                          } catch (_err) {
-                            showError('Failed to delete rule');
-                          }
-                        }}
-                        title="Delete this rule"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </For>
-              </div>
+                    )}
+                  </For>
+                </div>
               </Show>
             </div>
           </Show>
@@ -3026,364 +3427,376 @@ function OverviewTab(props: {
                   </Show>
                 </button>
 
-              {/* Next Patrol Timer */}
-              <Show when={nextPatrolIn()}>
-                <span class="text-xs text-gray-500 dark:text-gray-400">
-                  Next patrol in <span class="font-mono font-medium text-purple-600 dark:text-purple-400">{nextPatrolIn()}</span>
-                </span>
-              </Show>
-            </div>
+                {/* Next Patrol Timer */}
+                <Show when={nextPatrolIn()}>
+                  <span class="text-xs text-gray-500 dark:text-gray-400">
+                    Next patrol in <span class="font-mono font-medium text-purple-600 dark:text-purple-400">{nextPatrolIn()}</span>
+                  </span>
+                </Show>
+              </div>
 
-            <Show when={showRunHistory()}>
-              <div class="mt-3">
-                {/* Time Filter + Mini Health Chart */}
-                <div class="flex flex-wrap items-center gap-3 mb-3">
-                  <div class="flex gap-1">
-                    <button
-                      class={`px-2 py-1 text-xs rounded transition-colors ${historyTimeFilter() === '24h' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                      onClick={() => setHistoryTimeFilter('24h')}
-                    >
-                      24h
-                    </button>
-                    <button
-                      class={`px-2 py-1 text-xs rounded transition-colors ${historyTimeFilter() === '7d' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                      onClick={() => setHistoryTimeFilter('7d')}
-                    >
-                      7d
-                    </button>
-                    <button
-                      class={`px-2 py-1 text-xs rounded transition-colors ${historyTimeFilter() === 'all' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                      onClick={() => setHistoryTimeFilter('all')}
-                    >
-                      All
-                    </button>
+              <Show when={showRunHistory()}>
+                <div class="mt-3">
+                  {/* Time Filter + Mini Health Chart */}
+                  <div class="flex flex-wrap items-center gap-3 mb-3">
+                    <div class="flex gap-1">
+                      <button
+                        class={`px-2 py-1 text-xs rounded transition-colors ${historyTimeFilter() === '24h' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                        onClick={() => setHistoryTimeFilter('24h')}
+                      >
+                        24h
+                      </button>
+                      <button
+                        class={`px-2 py-1 text-xs rounded transition-colors ${historyTimeFilter() === '7d' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                        onClick={() => setHistoryTimeFilter('7d')}
+                      >
+                        7d
+                      </button>
+                      <button
+                        class={`px-2 py-1 text-xs rounded transition-colors ${historyTimeFilter() === 'all' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                        onClick={() => setHistoryTimeFilter('all')}
+                      >
+                        All
+                      </button>
+                    </div>
+
+                    {/* Mini Health Chart */}
+                    <Show when={filteredPatrolHistory().length > 0}>
+                      <div class="flex items-center gap-0.5 h-4">
+                        <For each={filteredPatrolHistory().slice(0, 20).reverse()}>
+                          {(run) => (
+                            <div
+                              class={`w-1.5 h-full rounded-sm transition-all hover:opacity-75 ${run.status === 'healthy' ? 'bg-green-400 dark:bg-green-500' :
+                                run.status === 'critical' || run.status === 'error' ? 'bg-red-400 dark:bg-red-500' :
+                                  'bg-yellow-400 dark:bg-yellow-500'
+                                }`}
+                              title={`${formatTimestamp(run.completed_at)}: ${run.findings_summary}`}
+                            />
+                          )}
+                        </For>
+                        <span class="ml-1.5 text-[10px] text-gray-400">← newest</span>
+                      </div>
+                    </Show>
                   </div>
 
-                  {/* Mini Health Chart */}
-                  <Show when={filteredPatrolHistory().length > 0}>
-                    <div class="flex items-center gap-0.5 h-4">
-                      <For each={filteredPatrolHistory().slice(0, 20).reverse()}>
-                        {(run) => (
-                          <div
-                            class={`w-1.5 h-full rounded-sm transition-all hover:opacity-75 ${run.status === 'healthy' ? 'bg-green-400 dark:bg-green-500' :
-                              run.status === 'critical' || run.status === 'error' ? 'bg-red-400 dark:bg-red-500' :
-                                'bg-yellow-400 dark:bg-yellow-500'
-                              }`}
-                            title={`${formatTimestamp(run.completed_at)}: ${run.findings_summary}`}
-                          />
-                        )}
-                      </For>
-                      <span class="ml-1.5 text-[10px] text-gray-400">← newest</span>
+                  <Show
+                    when={filteredPatrolHistory().length > 0}
+                    fallback={
+                      <p class="text-sm text-gray-500 dark:text-gray-400 italic py-4">No patrol runs in selected time range.</p>
+                    }
+                  >
+                    <div class="border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+                      <table class="w-full text-xs sm:text-sm">
+                        <thead>
+                          <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+                            <th class="p-1.5 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-4"></th>
+                            <th class="p-1.5 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Time</th>
+                            <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Type</th>
+                            <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Status</th>
+                            <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Resources</th>
+                            <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">New</th>
+                            <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Resolved</th>
+                            <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Auto-Fix</th>
+                            <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Duration</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {/* Show "Currently Running" row when patrol is in progress */}
+                          <Show when={patrolStatus()?.running}>
+                            <tr
+                              class="border-b border-gray-200 dark:border-gray-600 bg-purple-50 dark:bg-purple-900/20 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/30"
+                              onClick={() => setExpandedLiveStream(!expandedLiveStream())}
+                            >
+                              <td class="p-1.5 px-2 text-purple-500">
+                                <svg class={`w-3 h-3 transition-transform ${expandedLiveStream() ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                </svg>
+                              </td>
+                              <td class="p-1.5 px-2 text-purple-600 dark:text-purple-400 font-mono whitespace-nowrap">
+                                <div class="flex items-center gap-1.5">
+                                  <svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                  </svg>
+                                  Now
+                                </div>
+                              </td>
+                              <td class="p-1.5 px-2 text-center">
+                                <span class="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
+                                  Running
+                                </span>
+                              </td>
+                              <td class="p-1.5 px-2 text-center" colspan="6">
+                                <span class="text-xs text-purple-600 dark:text-purple-400">
+                                  {expandedLiveStream() ? 'Click to collapse' : 'Click to view live AI analysis'}
+                                </span>
+                              </td>
+                            </tr>
+                            {/* Expanded Live Stream Row */}
+                            <Show when={expandedLiveStream()}>
+                              <tr class="bg-purple-50 dark:bg-purple-900/10 border-b border-gray-200 dark:border-gray-600">
+                                <td colspan="9" class="p-3">
+                                  <div class="flex items-center justify-between mb-3">
+                                    <span class="text-[10px] text-purple-500 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+                                      <svg class="w-3 h-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                      </svg>
+                                      Live AI Analysis
+                                    </span>
+                                    <span class="text-[9px] text-purple-400 dark:text-purple-500">
+                                      Streaming in real-time...
+                                    </span>
+                                  </div>
+                                  {/* Sequential blocks display - like AI chat */}
+                                  <div class="space-y-2 max-h-80 overflow-y-auto">
+                                    {/* Rendered blocks */}
+                                    <For each={liveStreamBlocks()}>
+                                      {(block) => (
+                                        <Show
+                                          when={block.type === 'phase'}
+                                          fallback={
+                                            /* Thinking block */
+                                            <div class="px-3 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-gray-700 dark:text-gray-300 rounded-lg border-l-2 border-blue-400 whitespace-pre-wrap font-mono leading-relaxed">
+                                              {block.text.length > 800 ? block.text.substring(0, 800) + '...' : block.text}
+                                            </div>
+                                          }
+                                        >
+                                          {/* Phase marker */}
+                                          <div class="flex items-center gap-2 px-2 py-1">
+                                            <Show
+                                              when={block.text === 'Analysis complete'}
+                                              fallback={
+                                                <svg class="w-3 h-3 animate-spin text-purple-500" viewBox="0 0 24 24" fill="none">
+                                                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                                </svg>
+                                              }
+                                            >
+                                              <svg class="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                              </svg>
+                                            </Show>
+                                            <span class="text-[10px] font-medium text-purple-600 dark:text-purple-400">
+                                              {block.text}
+                                            </span>
+                                          </div>
+                                        </Show>
+                                      )}
+                                    </For>
+                                    {/* Currently streaming content */}
+                                    <Show when={currentThinking()}>
+                                      <div class="px-3 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-gray-700 dark:text-gray-300 rounded-lg border-l-2 border-blue-400 whitespace-pre-wrap font-mono leading-relaxed">
+                                        {currentThinking().length > 500 ? currentThinking().substring(0, 500) + '...' : currentThinking()}
+                                        <span class="inline-block w-1.5 h-3 bg-blue-500 ml-0.5 animate-pulse" />
+                                      </div>
+                                    </Show>
+                                    {/* Empty state */}
+                                    <Show when={liveStreamBlocks().length === 0 && !currentThinking()}>
+                                      <div class="flex items-center gap-2 px-2 py-3 text-xs text-gray-500 dark:text-gray-400">
+                                        <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                        </svg>
+                                        <span class="italic">Waiting for AI response...</span>
+                                      </div>
+                                    </Show>
+                                  </div>
+                                </td>
+                              </tr>
+                            </Show>
+                          </Show>
+                          <For each={filteredPatrolHistory()}>
+                            {(run) => {
+                              const statusStyles = {
+                                healthy: 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300',
+                                issues_found: 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300',
+                                critical: 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
+                                error: 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
+                              };
+                              const statusStyle = statusStyles[run.status] || statusStyles.healthy;
+                              const hasDetails = run.nodes_checked > 0 || run.guests_checked > 0 || run.docker_checked > 0 || run.storage_checked > 0 || run.ai_analysis;
+
+                              return (
+                                <>
+                                  <tr
+                                    class={`border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${hasDetails ? 'cursor-pointer' : ''}`}
+                                    onClick={() => hasDetails && setExpandedRunId(expandedRunId() === run.id ? null : run.id)}
+                                  >
+                                    <td class="p-1.5 px-2 text-gray-400">
+                                      <Show when={hasDetails}>
+                                        <svg class={`w-3 h-3 transition-transform ${expandedRunId() === run.id ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                        </svg>
+                                      </Show>
+                                    </td>
+                                    <td class="p-1.5 px-2 text-gray-600 dark:text-gray-400 font-mono whitespace-nowrap">
+                                      {formatTimestamp(run.completed_at)}
+                                    </td>
+                                    <td class="p-1.5 px-2 text-center">
+                                      <span class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${run.type === 'deep'
+                                        ? 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300'
+                                        : 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300'
+                                        }`}>
+                                        {run.type === 'deep' ? 'Deep' : 'Quick'}
+                                      </span>
+                                    </td>
+                                    <td class="p-1.5 px-2 text-center">
+                                      <span class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusStyle}`}>
+                                        {run.findings_summary}
+                                      </span>
+                                    </td>
+                                    <td class="p-1.5 px-2 text-center text-gray-700 dark:text-gray-300">
+                                      {run.resources_checked}
+                                    </td>
+                                    <td class="p-1.5 px-2 text-center">
+                                      <Show when={run.new_findings > 0} fallback={<span class="text-gray-400">-</span>}>
+                                        <span class="text-yellow-600 dark:text-yellow-400 font-medium">{run.new_findings}</span>
+                                      </Show>
+                                    </td>
+                                    <td class="p-1.5 px-2 text-center">
+                                      <Show when={run.resolved_findings > 0} fallback={<span class="text-gray-400">-</span>}>
+                                        <span class="text-green-600 dark:text-green-400 font-medium">{run.resolved_findings}</span>
+                                      </Show>
+                                    </td>
+                                    <td class="p-1.5 px-2 text-center">
+                                      <Show when={(run.auto_fix_count || 0) > 0} fallback={<span class="text-gray-400">-</span>}>
+                                        <span class="text-blue-600 dark:text-blue-400 font-medium">{run.auto_fix_count}</span>
+                                      </Show>
+                                    </td>
+                                    <td class="p-1.5 px-2 text-center text-gray-500 dark:text-gray-400 font-mono">
+                                      {(() => {
+                                        const totalSeconds = Math.round(run.duration_ms / 1000000000);
+                                        if (totalSeconds < 60) {
+                                          return `${totalSeconds}s`;
+                                        }
+                                        const minutes = Math.floor(totalSeconds / 60);
+                                        const seconds = totalSeconds % 60;
+                                        return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+                                      })()}
+                                    </td>
+                                  </tr>
+                                  {/* Expanded Details Row */}
+                                  <Show when={expandedRunId() === run.id}>
+                                    <tr class="bg-gray-50 dark:bg-gray-800/50">
+                                      <td colspan="9" class="p-3">
+                                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                          <Show when={run.nodes_checked > 0}>
+                                            <div class="flex items-center gap-2">
+                                              <span class="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-[10px]">Nodes</span>
+                                              <span class="font-medium">{run.nodes_checked}</span>
+                                            </div>
+                                          </Show>
+                                          <Show when={run.guests_checked > 0}>
+                                            <div class="flex items-center gap-2">
+                                              <span class="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded text-[10px]">VMs/CTs</span>
+                                              <span class="font-medium">{run.guests_checked}</span>
+                                            </div>
+                                          </Show>
+                                          <Show when={run.docker_checked > 0}>
+                                            <div class="flex items-center gap-2">
+                                              <span class="px-1.5 py-0.5 bg-cyan-100 dark:bg-cyan-900/50 text-cyan-700 dark:text-cyan-300 rounded text-[10px]">Docker</span>
+                                              <span class="font-medium">{run.docker_checked}</span>
+                                            </div>
+                                          </Show>
+                                          <Show when={run.storage_checked > 0}>
+                                            <div class="flex items-center gap-2">
+                                              <span class="px-1.5 py-0.5 bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 rounded text-[10px]">Storage</span>
+                                              <span class="font-medium">{run.storage_checked}</span>
+                                            </div>
+                                          </Show>
+                                          <Show when={run.hosts_checked > 0}>
+                                            <div class="flex items-center gap-2">
+                                              <span class="px-1.5 py-0.5 bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 rounded text-[10px]">Hosts</span>
+                                              <span class="font-medium">{run.hosts_checked}</span>
+                                            </div>
+                                          </Show>
+                                          <Show when={run.pbs_checked > 0}>
+                                            <div class="flex items-center gap-2">
+                                              <span class="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded text-[10px]">PBS</span>
+                                              <span class="font-medium">{run.pbs_checked}</span>
+                                            </div>
+                                          </Show>
+                                          <Show when={(run.auto_fix_count || 0) > 0}>
+                                            <div class="flex items-center gap-2">
+                                              <span class="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-[10px]">Auto-Fix</span>
+                                              <span class="font-medium">{run.auto_fix_count}</span>
+                                            </div>
+                                          </Show>
+                                        </div>
+                                        {/* Only show findings section if we have active findings to display */}
+                                        {(() => {
+                                          const activeFindings = (run.finding_ids || [])
+                                            .map(id => aiFindings().find(f => f.id === id))
+                                            .filter(f => f !== undefined);
+                                          const resolvedCount = (run.finding_ids?.length || 0) - activeFindings.length;
+
+                                          if (activeFindings.length === 0 && resolvedCount === 0) return null;
+
+                                          return (
+                                            <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                              <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                Findings from this run:
+                                              </span>
+                                              <div class="flex flex-col gap-1 mt-1">
+                                                <For each={activeFindings}>
+                                                  {(finding) => (
+                                                    <div class="flex items-center gap-2 text-xs">
+                                                      <span class={`px-1.5 py-0.5 rounded text-[10px] ${finding!.severity === 'critical' ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' :
+                                                        finding!.severity === 'warning' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                                                          'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                                                        }`}>
+                                                        {finding!.severity}
+                                                      </span>
+                                                      <span class="font-medium text-gray-700 dark:text-gray-300">{finding!.title}</span>
+                                                      <span class="text-gray-500 dark:text-gray-400">on {finding!.resource_name}</span>
+                                                    </div>
+                                                  )}
+                                                </For>
+                                                <Show when={resolvedCount > 0}>
+                                                  <div class="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                    {resolvedCount} finding{resolvedCount > 1 ? 's' : ''} since resolved
+                                                  </div>
+                                                </Show>
+                                              </div>
+                                            </div>
+                                          );
+                                        })()}
+                                        {/* AI Analysis Section */}
+                                        <Show when={run.ai_analysis}>
+                                          <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                            <div class="flex items-center justify-between mb-2">
+                                              <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                <svg class="w-3 h-3 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                                </svg>
+                                                AI Analysis
+                                              </span>
+                                              <Show when={run.input_tokens || run.output_tokens}>
+                                                <span class="text-[9px] text-gray-400 dark:text-gray-500">
+                                                  {run.input_tokens?.toLocaleString()} in / {run.output_tokens?.toLocaleString()} out tokens
+                                                </span>
+                                              </Show>
+                                            </div>
+                                            <div class="bg-gray-100 dark:bg-gray-900 rounded-lg p-3 max-h-64 overflow-y-auto">
+                                              <pre class="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">{run.ai_analysis}</pre>
+                                            </div>
+                                          </div>
+                                        </Show>
+                                      </td>
+                                    </tr>
+                                  </Show>
+                                </>
+                              );
+                            }}
+                          </For>
+                        </tbody>
+                      </table>
                     </div>
                   </Show>
                 </div>
-
-                <Show
-                  when={filteredPatrolHistory().length > 0}
-                  fallback={
-                    <p class="text-sm text-gray-500 dark:text-gray-400 italic py-4">No patrol runs in selected time range.</p>
-                  }
-                >
-                  <div class="border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
-                    <table class="w-full text-xs sm:text-sm">
-                      <thead>
-                        <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
-                          <th class="p-1.5 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-4"></th>
-                          <th class="p-1.5 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Time</th>
-                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Type</th>
-                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Status</th>
-                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Resources</th>
-                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">New</th>
-                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Resolved</th>
-                          <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Duration</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {/* Show "Currently Running" row when patrol is in progress */}
-                        <Show when={patrolStatus()?.running}>
-                          <tr
-                            class="border-b border-gray-200 dark:border-gray-600 bg-purple-50 dark:bg-purple-900/20 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/30"
-                            onClick={() => setExpandedLiveStream(!expandedLiveStream())}
-                          >
-                            <td class="p-1.5 px-2 text-purple-500">
-                              <svg class={`w-3 h-3 transition-transform ${expandedLiveStream() ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                              </svg>
-                            </td>
-                            <td class="p-1.5 px-2 text-purple-600 dark:text-purple-400 font-mono whitespace-nowrap">
-                              <div class="flex items-center gap-1.5">
-                                <svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                </svg>
-                                Now
-                              </div>
-                            </td>
-                            <td class="p-1.5 px-2 text-center">
-                              <span class="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
-                                Running
-                              </span>
-                            </td>
-                            <td class="p-1.5 px-2 text-center" colspan="5">
-                              <span class="text-xs text-purple-600 dark:text-purple-400">
-                                {expandedLiveStream() ? 'Click to collapse' : 'Click to view live AI analysis'}
-                              </span>
-                            </td>
-                          </tr>
-                          {/* Expanded Live Stream Row */}
-                          <Show when={expandedLiveStream()}>
-                            <tr class="bg-purple-50 dark:bg-purple-900/10 border-b border-gray-200 dark:border-gray-600">
-                              <td colspan="8" class="p-3">
-                                <div class="flex items-center justify-between mb-3">
-                                  <span class="text-[10px] text-purple-500 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
-                                    <svg class="w-3 h-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                    </svg>
-                                    Live AI Analysis
-                                  </span>
-                                  <span class="text-[9px] text-purple-400 dark:text-purple-500">
-                                    Streaming in real-time...
-                                  </span>
-                                </div>
-                                {/* Sequential blocks display - like AI chat */}
-                                <div class="space-y-2 max-h-80 overflow-y-auto">
-                                  {/* Rendered blocks */}
-                                  <For each={liveStreamBlocks()}>
-                                    {(block) => (
-                                      <Show
-                                        when={block.type === 'phase'}
-                                        fallback={
-                                          /* Thinking block */
-                                          <div class="px-3 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-gray-700 dark:text-gray-300 rounded-lg border-l-2 border-blue-400 whitespace-pre-wrap font-mono leading-relaxed">
-                                            {block.text.length > 800 ? block.text.substring(0, 800) + '...' : block.text}
-                                          </div>
-                                        }
-                                      >
-                                        {/* Phase marker */}
-                                        <div class="flex items-center gap-2 px-2 py-1">
-                                          <Show
-                                            when={block.text === 'Analysis complete'}
-                                            fallback={
-                                              <svg class="w-3 h-3 animate-spin text-purple-500" viewBox="0 0 24 24" fill="none">
-                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                              </svg>
-                                            }
-                                          >
-                                            <svg class="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                            </svg>
-                                          </Show>
-                                          <span class="text-[10px] font-medium text-purple-600 dark:text-purple-400">
-                                            {block.text}
-                                          </span>
-                                        </div>
-                                      </Show>
-                                    )}
-                                  </For>
-                                  {/* Currently streaming content */}
-                                  <Show when={currentThinking()}>
-                                    <div class="px-3 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-gray-700 dark:text-gray-300 rounded-lg border-l-2 border-blue-400 whitespace-pre-wrap font-mono leading-relaxed">
-                                      {currentThinking().length > 500 ? currentThinking().substring(0, 500) + '...' : currentThinking()}
-                                      <span class="inline-block w-1.5 h-3 bg-blue-500 ml-0.5 animate-pulse" />
-                                    </div>
-                                  </Show>
-                                  {/* Empty state */}
-                                  <Show when={liveStreamBlocks().length === 0 && !currentThinking()}>
-                                    <div class="flex items-center gap-2 px-2 py-3 text-xs text-gray-500 dark:text-gray-400">
-                                      <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                      </svg>
-                                      <span class="italic">Waiting for AI response...</span>
-                                    </div>
-                                  </Show>
-                                </div>
-                              </td>
-                            </tr>
-                          </Show>
-                        </Show>
-                        <For each={filteredPatrolHistory()}>
-                          {(run) => {
-                            const statusStyles = {
-                              healthy: 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300',
-                              issues_found: 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300',
-                              critical: 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
-                              error: 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
-                            };
-                            const statusStyle = statusStyles[run.status] || statusStyles.healthy;
-                            const hasDetails = run.nodes_checked > 0 || run.guests_checked > 0 || run.docker_checked > 0 || run.storage_checked > 0 || run.ai_analysis;
-
-                            return (
-                              <>
-                                <tr
-                                  class={`border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${hasDetails ? 'cursor-pointer' : ''}`}
-                                  onClick={() => hasDetails && setExpandedRunId(expandedRunId() === run.id ? null : run.id)}
-                                >
-                                  <td class="p-1.5 px-2 text-gray-400">
-                                    <Show when={hasDetails}>
-                                      <svg class={`w-3 h-3 transition-transform ${expandedRunId() === run.id ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                      </svg>
-                                    </Show>
-                                  </td>
-                                  <td class="p-1.5 px-2 text-gray-600 dark:text-gray-400 font-mono whitespace-nowrap">
-                                    {formatTimestamp(run.completed_at)}
-                                  </td>
-                                  <td class="p-1.5 px-2 text-center">
-                                    <span class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${run.type === 'deep'
-                                      ? 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300'
-                                      : 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300'
-                                      }`}>
-                                      {run.type === 'deep' ? 'Deep' : 'Quick'}
-                                    </span>
-                                  </td>
-                                  <td class="p-1.5 px-2 text-center">
-                                    <span class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusStyle}`}>
-                                      {run.findings_summary}
-                                    </span>
-                                  </td>
-                                  <td class="p-1.5 px-2 text-center text-gray-700 dark:text-gray-300">
-                                    {run.resources_checked}
-                                  </td>
-                                  <td class="p-1.5 px-2 text-center">
-                                    <Show when={run.new_findings > 0} fallback={<span class="text-gray-400">-</span>}>
-                                      <span class="text-yellow-600 dark:text-yellow-400 font-medium">{run.new_findings}</span>
-                                    </Show>
-                                  </td>
-                                  <td class="p-1.5 px-2 text-center">
-                                    <Show when={run.resolved_findings > 0} fallback={<span class="text-gray-400">-</span>}>
-                                      <span class="text-green-600 dark:text-green-400 font-medium">{run.resolved_findings}</span>
-                                    </Show>
-                                  </td>
-                                  <td class="p-1.5 px-2 text-center text-gray-500 dark:text-gray-400 font-mono">
-                                    {(() => {
-                                      const totalSeconds = Math.round(run.duration_ms / 1000000000);
-                                      if (totalSeconds < 60) {
-                                        return `${totalSeconds}s`;
-                                      }
-                                      const minutes = Math.floor(totalSeconds / 60);
-                                      const seconds = totalSeconds % 60;
-                                      return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
-                                    })()}
-                                  </td>
-                                </tr>
-                                {/* Expanded Details Row */}
-                                <Show when={expandedRunId() === run.id}>
-                                  <tr class="bg-gray-50 dark:bg-gray-800/50">
-                                    <td colspan="8" class="p-3">
-                                      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                                        <Show when={run.nodes_checked > 0}>
-                                          <div class="flex items-center gap-2">
-                                            <span class="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-[10px]">Nodes</span>
-                                            <span class="font-medium">{run.nodes_checked}</span>
-                                          </div>
-                                        </Show>
-                                        <Show when={run.guests_checked > 0}>
-                                          <div class="flex items-center gap-2">
-                                            <span class="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded text-[10px]">VMs/CTs</span>
-                                            <span class="font-medium">{run.guests_checked}</span>
-                                          </div>
-                                        </Show>
-                                        <Show when={run.docker_checked > 0}>
-                                          <div class="flex items-center gap-2">
-                                            <span class="px-1.5 py-0.5 bg-cyan-100 dark:bg-cyan-900/50 text-cyan-700 dark:text-cyan-300 rounded text-[10px]">Docker</span>
-                                            <span class="font-medium">{run.docker_checked}</span>
-                                          </div>
-                                        </Show>
-                                        <Show when={run.storage_checked > 0}>
-                                          <div class="flex items-center gap-2">
-                                            <span class="px-1.5 py-0.5 bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 rounded text-[10px]">Storage</span>
-                                            <span class="font-medium">{run.storage_checked}</span>
-                                          </div>
-                                        </Show>
-                                        <Show when={run.hosts_checked > 0}>
-                                          <div class="flex items-center gap-2">
-                                            <span class="px-1.5 py-0.5 bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 rounded text-[10px]">Hosts</span>
-                                            <span class="font-medium">{run.hosts_checked}</span>
-                                          </div>
-                                        </Show>
-                                        <Show when={run.pbs_checked > 0}>
-                                          <div class="flex items-center gap-2">
-                                            <span class="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded text-[10px]">PBS</span>
-                                            <span class="font-medium">{run.pbs_checked}</span>
-                                          </div>
-                                        </Show>
-                                      </div>
-                                      {/* Only show findings section if we have active findings to display */}
-                                      {(() => {
-                                        const activeFindings = (run.finding_ids || [])
-                                          .map(id => aiFindings().find(f => f.id === id))
-                                          .filter(f => f !== undefined);
-                                        const resolvedCount = (run.finding_ids?.length || 0) - activeFindings.length;
-
-                                        if (activeFindings.length === 0 && resolvedCount === 0) return null;
-
-                                        return (
-                                          <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                                            <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                              Findings from this run:
-                                            </span>
-                                            <div class="flex flex-col gap-1 mt-1">
-                                              <For each={activeFindings}>
-                                                {(finding) => (
-                                                  <div class="flex items-center gap-2 text-xs">
-                                                    <span class={`px-1.5 py-0.5 rounded text-[10px] ${finding!.severity === 'critical' ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' :
-                                                      finding!.severity === 'warning' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
-                                                        'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                                                      }`}>
-                                                      {finding!.severity}
-                                                    </span>
-                                                    <span class="font-medium text-gray-700 dark:text-gray-300">{finding!.title}</span>
-                                                    <span class="text-gray-500 dark:text-gray-400">on {finding!.resource_name}</span>
-                                                  </div>
-                                                )}
-                                              </For>
-                                              <Show when={resolvedCount > 0}>
-                                                <div class="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
-                                                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                                  </svg>
-                                                  {resolvedCount} finding{resolvedCount > 1 ? 's' : ''} since resolved
-                                                </div>
-                                              </Show>
-                                            </div>
-                                          </div>
-                                        );
-                                      })()}
-                                      {/* AI Analysis Section */}
-                                      <Show when={run.ai_analysis}>
-                                        <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                                          <div class="flex items-center justify-between mb-2">
-                                            <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                                              <svg class="w-3 h-3 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                              </svg>
-                                              AI Analysis
-                                            </span>
-                                            <Show when={run.input_tokens || run.output_tokens}>
-                                              <span class="text-[9px] text-gray-400 dark:text-gray-500">
-                                                {run.input_tokens?.toLocaleString()} in / {run.output_tokens?.toLocaleString()} out tokens
-                                              </span>
-                                            </Show>
-                                          </div>
-                                          <div class="bg-gray-100 dark:bg-gray-900 rounded-lg p-3 max-h-64 overflow-y-auto">
-                                            <pre class="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">{run.ai_analysis}</pre>
-                                          </div>
-                                        </div>
-                                      </Show>
-                                    </td>
-                                  </tr>
-                                </Show>
-                              </>
-                            );
-                          }}
-                        </For>
-                      </tbody>
-                    </table>
-                  </div>
-                </Show>
-              </div>
               </Show>
             </div>
           </Show>

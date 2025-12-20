@@ -6,23 +6,42 @@ import type { FailurePrediction, ResourceCorrelation } from '@/types/aiIntellige
  * AIInsightsPanel displays AI-learned predictions and correlations
  * Shows failure predictions with confidence levels and resource dependencies
  */
-export const AIInsightsPanel: Component<{ resourceId?: string }> = (props) => {
+export const AIInsightsPanel: Component<{ resourceId?: string; showWhenEmpty?: boolean }> = (props) => {
     const [predictions, setPredictions] = createSignal<FailurePrediction[]>([]);
     const [correlations, setCorrelations] = createSignal<ResourceCorrelation[]>([]);
     const [loading, setLoading] = createSignal(false);
     const [expanded, setExpanded] = createSignal(false);
+    const [locked, setLocked] = createSignal(false);
+    const [lockedCount, setLockedCount] = createSignal(0);
+    const [upgradeUrl, setUpgradeUrl] = createSignal('https://pulsemonitor.app/pro');
+    const [error, setError] = createSignal('');
+    const showWhenEmpty = () => Boolean(props.showWhenEmpty);
 
     const loadData = async () => {
         setLoading(true);
+        setError('');
         try {
             const [predResp, corrResp] = await Promise.all([
                 AIAPI.getPredictions(props.resourceId),
                 AIAPI.getCorrelations(props.resourceId),
             ]);
-            setPredictions(predResp.predictions || []);
-            setCorrelations(corrResp.correlations || []);
+            const licenseLocked = Boolean(predResp.license_required || corrResp.license_required);
+            setLocked(licenseLocked);
+            setUpgradeUrl(predResp.upgrade_url || corrResp.upgrade_url || 'https://pulsemonitor.app/pro');
+            if (licenseLocked) {
+                const predCount = predResp.count || 0;
+                const corrCount = corrResp.count || 0;
+                setLockedCount(predCount + corrCount);
+                setPredictions([]);
+                setCorrelations([]);
+            } else {
+                setLockedCount(0);
+                setPredictions(predResp.predictions || []);
+                setCorrelations(corrResp.correlations || []);
+            }
         } catch (e) {
             console.error('Failed to load AI insights:', e);
+            setError('Failed to load AI insights.');
         } finally {
             setLoading(false);
         }
@@ -33,6 +52,8 @@ export const AIInsightsPanel: Component<{ resourceId?: string }> = (props) => {
     });
 
     const totalInsights = () => predictions().length + correlations().length;
+    const displayedCount = () => (locked() ? lockedCount() : totalInsights());
+    const shouldShow = () => showWhenEmpty() || loading() || displayedCount() > 0;
 
     // Format days until in a human-readable way
     const formatDaysUntil = (days: number) => {
@@ -61,11 +82,23 @@ export const AIInsightsPanel: Component<{ resourceId?: string }> = (props) => {
             unresponsive: 'Unresponsive',
             backup_failed: 'Backup Failure',
         };
-        return names[eventType] || eventType;
+        if (names[eventType]) {
+            return names[eventType];
+        }
+        return eventType
+            .split(/[_-]/)
+            .map((part) => {
+                if (part === 'cpu') return 'CPU';
+                if (part === 'vm') return 'VM';
+                if (part === 'pbs') return 'PBS';
+                if (part === 'raid') return 'RAID';
+                return part.charAt(0).toUpperCase() + part.slice(1);
+            })
+            .join(' ');
     };
 
     return (
-        <Show when={totalInsights() > 0 || loading()}>
+        <Show when={shouldShow()}>
             <div class="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-700 rounded-lg overflow-hidden">
                 {/* Header */}
                 <button
@@ -80,9 +113,14 @@ export const AIInsightsPanel: Component<{ resourceId?: string }> = (props) => {
                         <span class="font-medium text-purple-900 dark:text-purple-100">
                             AI Insights
                         </span>
-                        <Show when={totalInsights() > 0}>
+                        <Show when={displayedCount() > 0}>
                             <span class="px-2 py-0.5 text-xs font-medium bg-purple-200 dark:bg-purple-700 text-purple-800 dark:text-purple-200 rounded-full">
-                                {totalInsights()}
+                                {displayedCount()}
+                            </span>
+                        </Show>
+                        <Show when={locked()}>
+                            <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 rounded-full">
+                                Locked
                             </span>
                         </Show>
                     </div>
@@ -107,8 +145,35 @@ export const AIInsightsPanel: Component<{ resourceId?: string }> = (props) => {
                             </div>
                         </Show>
 
+                        <Show when={error() && !loading()}>
+                            <div class="text-sm text-red-600 dark:text-red-400">
+                                {error()}
+                            </div>
+                        </Show>
+
+                        <Show when={locked() && !loading()}>
+                            <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
+                                <div class="flex items-center justify-between gap-3">
+                                    <div>
+                                        <p class="font-medium">Pulse Pro required</p>
+                                        <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                                            Predictive intelligence is available with Pulse Pro. {lockedCount() || 0} insights are ready to review.
+                                        </p>
+                                    </div>
+                                    <a
+                                        class="text-xs font-medium text-amber-800 dark:text-amber-200 underline"
+                                        href={upgradeUrl()}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                    >
+                                        Upgrade
+                                    </a>
+                                </div>
+                            </div>
+                        </Show>
+
                         {/* Predictions */}
-                        <Show when={predictions().length > 0}>
+                        <Show when={!locked() && predictions().length > 0}>
                             <div>
                                 <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -146,7 +211,7 @@ export const AIInsightsPanel: Component<{ resourceId?: string }> = (props) => {
                         </Show>
 
                         {/* Correlations */}
-                        <Show when={correlations().length > 0}>
+                        <Show when={!locked() && correlations().length > 0}>
                             <div>
                                 <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -184,7 +249,7 @@ export const AIInsightsPanel: Component<{ resourceId?: string }> = (props) => {
                         </Show>
 
                         {/* Empty state */}
-                        <Show when={!loading() && totalInsights() === 0}>
+                        <Show when={!loading() && !locked() && totalInsights() === 0}>
                             <p class="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
                                 No predictions or correlations detected yet. The AI will learn patterns over time.
                             </p>

@@ -442,11 +442,11 @@ func (s *Service) StartPatrol(ctx context.Context) {
 
 	// Configure patrol from AI config
 	patrolCfg := PatrolConfig{
-		Enabled:       true,
-		Interval:      cfg.GetPatrolInterval(),
-		AnalyzeNodes:  cfg.PatrolAnalyzeNodes,
-		AnalyzeGuests: cfg.PatrolAnalyzeGuests,
-		AnalyzeDocker: cfg.PatrolAnalyzeDocker,
+		Enabled:        true,
+		Interval:       cfg.GetPatrolInterval(),
+		AnalyzeNodes:   cfg.PatrolAnalyzeNodes,
+		AnalyzeGuests:  cfg.PatrolAnalyzeGuests,
+		AnalyzeDocker:  cfg.PatrolAnalyzeDocker,
 		AnalyzeStorage: cfg.PatrolAnalyzeStorage,
 	}
 	patrol.SetConfig(patrolCfg)
@@ -494,11 +494,11 @@ func (s *Service) ReconfigurePatrol() {
 
 	// Update patrol configuration
 	patrolCfg := PatrolConfig{
-		Enabled:       cfg.IsPatrolEnabled(),
-		Interval:      cfg.GetPatrolInterval(),
-		AnalyzeNodes:  cfg.PatrolAnalyzeNodes,
-		AnalyzeGuests: cfg.PatrolAnalyzeGuests,
-		AnalyzeDocker: cfg.PatrolAnalyzeDocker,
+		Enabled:        cfg.IsPatrolEnabled(),
+		Interval:       cfg.GetPatrolInterval(),
+		AnalyzeNodes:   cfg.PatrolAnalyzeNodes,
+		AnalyzeGuests:  cfg.PatrolAnalyzeGuests,
+		AnalyzeDocker:  cfg.PatrolAnalyzeDocker,
 		AnalyzeStorage: cfg.PatrolAnalyzeStorage,
 	}
 	patrol.SetConfig(patrolCfg)
@@ -1668,6 +1668,10 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 		problem = problem[:200] + "..."
 	}
 
+	// Generate a meaningful summary from the command that describes what was achieved
+	// This is what gets displayed in the Pulse AI Impact section
+	summary := generateRemediationSummary(command, req.TargetType, req.Context)
+
 	// Get resource name from context if available
 	resourceName := ""
 	if req.Context != nil {
@@ -1689,6 +1693,7 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 		ResourceName: resourceName,
 		FindingID:    req.FindingID,
 		Problem:      problem,
+		Summary:      summary,
 		Action:       command,
 		Output:       truncatedOutput,
 		Outcome:      outcome,
@@ -1698,8 +1703,168 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 	log.Debug().
 		Str("resource_id", req.TargetID).
 		Str("command", command).
+		Str("summary", summary).
 		Bool("success", success).
 		Msg("Logged remediation action to operational memory")
+}
+
+// generateRemediationSummary creates a human-readable summary of what a command achieved
+// This is used to display meaningful descriptions in the Pulse AI Impact section
+func generateRemediationSummary(command string, targetType string, context map[string]interface{}) string {
+	cmd := strings.TrimSpace(command)
+	
+	// Extract target name from context
+	targetName := ""
+	if context != nil {
+		if name, ok := context["name"].(string); ok && name != "" {
+			targetName = name
+		} else if name, ok := context["containerName"].(string); ok && name != "" {
+			targetName = name
+		} else if name, ok := context["guestName"].(string); ok && name != "" {
+			targetName = name
+		}
+	}
+	
+	// Extract meaningful path or service from command
+	extractPath := func() string {
+		// Look for common path patterns
+		pathPatterns := []string{
+			`/[\w/._-]+`, // Unix paths
+		}
+		for _, pattern := range pathPatterns {
+			re := regexp.MustCompile(pattern)
+			if match := re.FindString(cmd); match != "" {
+				// Extract the meaningful part (last 2 segments)
+				parts := strings.Split(strings.Trim(match, "/"), "/")
+				if len(parts) > 2 {
+					parts = parts[len(parts)-2:]
+				}
+				return "/" + strings.Join(parts, "/")
+			}
+		}
+		return ""
+	}
+	
+	// Extract container/service name from docker commands
+	extractDockerTarget := func() string {
+		// docker ps --filter name=XXX
+		if match := regexp.MustCompile(`name[=:]\s*(\w+)`).FindStringSubmatch(cmd); len(match) > 1 {
+			return match[1]
+		}
+		// docker restart XXX, docker start XXX, etc.
+		if match := regexp.MustCompile(`docker\s+(?:restart|start|stop|logs)\s+(\w+)`).FindStringSubmatch(cmd); len(match) > 1 {
+			return match[1]
+		}
+		return ""
+	}
+	
+	path := extractPath()
+	dockerTarget := extractDockerTarget()
+	
+	// Generate summary based on command type
+	switch {
+	case strings.Contains(cmd, "docker restart") || strings.Contains(cmd, "docker start"):
+		if dockerTarget != "" {
+			return fmt.Sprintf("Restarted %s container", dockerTarget)
+		}
+		return "Restarted container"
+		
+	case strings.Contains(cmd, "docker stop"):
+		if dockerTarget != "" {
+			return fmt.Sprintf("Stopped %s container", dockerTarget)
+		}
+		return "Stopped container"
+		
+	case strings.Contains(cmd, "docker ps"):
+		if dockerTarget != "" {
+			return fmt.Sprintf("Verified %s container is running", dockerTarget)
+		}
+		return "Checked container status"
+		
+	case strings.Contains(cmd, "docker logs"):
+		if dockerTarget != "" {
+			return fmt.Sprintf("Retrieved %s logs", dockerTarget)
+		}
+		return "Retrieved container logs"
+		
+	case strings.Contains(cmd, "systemctl restart"):
+		if match := regexp.MustCompile(`systemctl\s+restart\s+(\S+)`).FindStringSubmatch(cmd); len(match) > 1 {
+			return fmt.Sprintf("Restarted %s service", match[1])
+		}
+		return "Restarted system service"
+		
+	case strings.Contains(cmd, "systemctl status"):
+		if match := regexp.MustCompile(`systemctl\s+status\s+(\S+)`).FindStringSubmatch(cmd); len(match) > 1 {
+			return fmt.Sprintf("Checked %s service status", match[1])
+		}
+		return "Checked service status"
+		
+	case strings.Contains(cmd, "df ") || strings.Contains(cmd, "du "):
+		if path != "" {
+			// Check for known services in path
+			pathLower := strings.ToLower(path)
+			if strings.Contains(pathLower, "frigate") {
+				return "Analyzed Frigate storage usage"
+			}
+			if strings.Contains(pathLower, "plex") {
+				return "Analyzed Plex storage usage"
+			}
+			if strings.Contains(pathLower, "recordings") {
+				return "Analyzed recordings storage"
+			}
+			return fmt.Sprintf("Analyzed %s storage", path)
+		}
+		return "Analyzed disk usage"
+		
+	case strings.Contains(cmd, "grep") && (strings.Contains(cmd, "config") || strings.Contains(cmd, ".yml") || strings.Contains(cmd, ".yaml")):
+		if path != "" && strings.Contains(strings.ToLower(path), "frigate") {
+			return "Inspected Frigate configuration"
+		}
+		if path != "" {
+			return fmt.Sprintf("Inspected %s configuration", path)
+		}
+		return "Inspected configuration"
+		
+	case strings.Contains(cmd, "tail") || strings.Contains(cmd, "journalctl"):
+		if targetName != "" {
+			return fmt.Sprintf("Reviewed %s logs", targetName)
+		}
+		return "Reviewed system logs"
+		
+	case strings.Contains(cmd, "pct resize"):
+		if match := regexp.MustCompile(`pct\s+resize\s+(\d+)`).FindStringSubmatch(cmd); len(match) > 1 {
+			return fmt.Sprintf("Resized container %s disk", match[1])
+		}
+		return "Resized container disk"
+		
+	case strings.Contains(cmd, "qm resize"):
+		if match := regexp.MustCompile(`qm\s+resize\s+(\d+)`).FindStringSubmatch(cmd); len(match) > 1 {
+			return fmt.Sprintf("Resized VM %s disk", match[1])
+		}
+		return "Resized VM disk"
+		
+	case strings.Contains(cmd, "ping") || strings.Contains(cmd, "curl"):
+		return "Tested network connectivity"
+		
+	case strings.Contains(cmd, "free") || strings.Contains(cmd, "meminfo"):
+		return "Checked memory usage"
+		
+	case strings.Contains(cmd, "ps aux") || strings.Contains(cmd, "top"):
+		return "Analyzed running processes"
+		
+	case strings.Contains(cmd, "rm "):
+		return "Cleaned up files"
+		
+	case strings.Contains(cmd, "chmod") || strings.Contains(cmd, "chown"):
+		return "Fixed file permissions"
+		
+	default:
+		// Generic fallback - try to use target name if available
+		if targetName != "" {
+			return fmt.Sprintf("Ran diagnostics on %s", targetName)
+		}
+		return "Ran system diagnostics"
+	}
 }
 
 // hasAgentForTarget checks if we have an agent connection for the given target.
@@ -1865,6 +2030,25 @@ func (s *Service) getTools() []providers.Tool {
 					},
 				},
 				"required": []string{"finding_id", "resolution_note"},
+			},
+		},
+		{
+			Name:        "log_achievement",
+			Description: "Log a meaningful achievement to remind the user what Pulse Pro accomplished for them. Call this when you've successfully helped the user with something valuable - like diagnosing an issue, fixing a problem, or answering their question with actionable information. Write a clear, specific summary that will be useful to the user in 2 weeks when they review what Pulse Pro has done for them. Examples: 'Verified Frigate is retaining 7 days of recordings with 45GB storage used', 'Restarted nginx service after detecting crash - service now healthy', 'Confirmed disk has 120GB free after cleanup'.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"achievement": map[string]interface{}{
+						"type":        "string",
+						"description": "A clear, specific summary of what was accomplished. Be specific with numbers, names, and outcomes. This will be shown to the user as a reminder of value delivered.",
+					},
+					"category": map[string]interface{}{
+						"type":        "string",
+						"description": "Category of the achievement",
+						"enum":        []string{"diagnosis", "fix", "verification", "discovery", "optimization"},
+					},
+				},
+				"required": []string{"achievement"},
 			},
 		},
 	}
@@ -2067,6 +2251,68 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		}
 
 		execution.Output = fmt.Sprintf("Finding resolved! The AI Insight has been marked as fixed.\nID: %s\nResolution: %s", findingID, resolutionNote)
+		execution.Success = true
+		return execution.Output, execution
+
+	case "log_achievement":
+		achievement, _ := tc.Input["achievement"].(string)
+		category, _ := tc.Input["category"].(string)
+		execution.Input = fmt.Sprintf("achievement: %s, category: %s", achievement, category)
+
+		if achievement == "" {
+			execution.Output = "Error: achievement is required. Please describe what was accomplished."
+			return execution.Output, execution
+		}
+
+		if category == "" {
+			category = "general" // Default category
+		}
+
+		// Log the achievement to the remediation log
+		s.mu.RLock()
+		patrol := s.patrolService
+		s.mu.RUnlock()
+
+		if patrol == nil {
+			execution.Output = "Error: Patrol service not available"
+			return execution.Output, execution
+		}
+
+		remLog := patrol.GetRemediationLog()
+		if remLog == nil {
+			execution.Output = "Error: Remediation log not available"
+			return execution.Output, execution
+		}
+
+		// Get resource name from context if available
+		resourceName := ""
+		if req.Context != nil {
+			if name, ok := req.Context["name"].(string); ok {
+				resourceName = name
+			}
+		}
+
+		// Log as an achievement - use Summary field prominently, Action as "achievement"
+		remLog.Log(RemediationRecord{
+			ResourceID:   req.TargetID,
+			ResourceType: req.TargetType,
+			ResourceName: resourceName,
+			FindingID:    req.FindingID,
+			Problem:      req.Prompt, // Keep original prompt for context
+			Summary:      achievement, // THIS is the key field - user-facing summary
+			Action:       "[achievement:" + category + "]", // Mark as achievement, not a command
+			Outcome:      OutcomeResolved,
+			Automatic:    req.UseCase == "patrol",
+		})
+
+		log.Info().
+			Str("resource_id", req.TargetID).
+			Str("resource_name", resourceName).
+			Str("category", category).
+			Str("achievement", achievement).
+			Msg("Logged AI achievement to operational memory")
+
+		execution.Output = fmt.Sprintf("Achievement logged! This will be shown to the user as a reminder of what Pulse Pro accomplished.\nAchievement: %s\nCategory: %s", achievement, category)
 		execution.Success = true
 		return execution.Output, execution
 
@@ -2457,7 +2703,7 @@ func (s *Service) RunCommand(ctx context.Context, req RunCommandRequest) (*RunCo
 
 // buildSystemPrompt creates the system prompt based on the request context
 func (s *Service) buildSystemPrompt(req ExecuteRequest) string {
-	prompt := `You are Pulse's diagnostic assistant - a built-in tool for investigating Proxmox and Docker homelab issues.
+	prompt := `You are Pulse's diagnostic assistant - a built-in tool for investigating Proxmox, Docker, and Kubernetes homelab issues.
 
 ## Response Style
 - Be DIRECT and CONCISE. No greetings, no "I'll help you", no "Let me check"
