@@ -308,22 +308,22 @@ export const DiagnosticsPanel: Component = () => {
                 class="overflow-hidden border border-gray-200 dark:border-gray-700"
                 border={false}
             >
-                <div class={`bg-gradient-to-r ${healthColor()} px-6 py-5`}>
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-4">
-                            <div class="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                                <Activity class="w-6 h-6 text-white" />
+                <div class={`bg-gradient-to-r ${healthColor()} px-4 sm:px-6 py-4 sm:py-5`}>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div class="flex items-center gap-3 sm:gap-4">
+                            <div class="p-2 sm:p-3 bg-white/20 rounded-xl backdrop-blur-sm flex-shrink-0">
+                                <Activity class="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                             </div>
-                            <div>
-                                <h2 class="text-lg font-bold text-white">System Diagnostics</h2>
-                                <p class="text-sm text-white/80">
+                            <div class="min-w-0">
+                                <h2 class="text-base sm:text-lg font-bold text-white">System Diagnostics</h2>
+                                <p class="text-xs sm:text-sm text-white/80 hidden sm:block">
                                     Connection health, configuration status, and troubleshooting tools
                                 </p>
                             </div>
                         </div>
-                        <div class="flex items-center gap-3">
+                        <div class="flex items-center justify-between sm:justify-end gap-3 flex-wrap">
                             <Show when={diagnosticsData()}>
-                                <div class="text-right text-white/80 text-xs">
+                                <div class="text-left sm:text-right text-white/80 text-xs">
                                     <div>Version {diagnosticsData()?.version}</div>
                                     <div>Uptime: {formatUptime(diagnosticsData()?.uptime || 0)}</div>
                                 </div>
@@ -332,22 +332,23 @@ export const DiagnosticsPanel: Component = () => {
                                 type="button"
                                 onClick={runDiagnostics}
                                 disabled={loading()}
-                                class="flex items-center gap-2 px-4 py-2.5 bg-white/20 hover:bg-white/30 text-white rounded-lg font-medium text-sm transition-all disabled:opacity-50 backdrop-blur-sm"
+                                class="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-white/20 hover:bg-white/30 text-white rounded-lg font-medium text-xs sm:text-sm transition-all disabled:opacity-50 backdrop-blur-sm whitespace-nowrap"
                             >
                                 <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
-                                {loading() ? 'Running...' : 'Run Diagnostics'}
+                                <span class="sm:hidden">{loading() ? '...' : 'Run'}</span>
+                                <span class="hidden sm:inline">{loading() ? 'Running...' : 'Run Diagnostics'}</span>
                             </button>
                         </div>
                     </div>
                 </div>
 
                 {/* Quick Actions */}
-                <div class="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <div class="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <p class="text-xs text-gray-500 dark:text-gray-400">
                         Test all connections and inspect runtime configuration
                     </p>
                     <Show when={diagnosticsData()}>
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 flex-wrap">
                             <button
                                 type="button"
                                 onClick={() => exportDiagnostics(false)}
@@ -355,7 +356,7 @@ export const DiagnosticsPanel: Component = () => {
                                 class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
                             >
                                 <Download class="w-3.5 h-3.5" />
-                                Export Full
+                                Full
                             </button>
                             <button
                                 type="button"
@@ -364,7 +365,7 @@ export const DiagnosticsPanel: Component = () => {
                                 class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
                             >
                                 <Download class="w-3.5 h-3.5" />
-                                Export for GitHub
+                                GitHub
                             </button>
                         </div>
                     </Show>
