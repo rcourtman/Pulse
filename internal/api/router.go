@@ -2680,6 +2680,48 @@ func (r *Router) establishSession(w http.ResponseWriter, req *http.Request, user
 	return nil
 }
 
+// establishOIDCSession creates a session with OIDC token information for refresh token support
+func (r *Router) establishOIDCSession(w http.ResponseWriter, req *http.Request, username string, oidcTokens *OIDCTokenInfo) error {
+	token := generateSessionToken()
+	if token == "" {
+		return fmt.Errorf("failed to generate session token")
+	}
+
+	userAgent := req.Header.Get("User-Agent")
+	clientIP := GetClientIP(req)
+
+	// Create session with OIDC tokens
+	GetSessionStore().CreateOIDCSession(token, 24*time.Hour, userAgent, clientIP, oidcTokens)
+
+	if username != "" {
+		TrackUserSession(username, token)
+	}
+
+	csrfToken := generateCSRFToken(token)
+	isSecure, sameSitePolicy := getCookieSettings(req)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "pulse_session",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   isSecure,
+		SameSite: sameSitePolicy,
+		MaxAge:   86400,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "pulse_csrf",
+		Value:    csrfToken,
+		Path:     "/",
+		Secure:   isSecure,
+		SameSite: sameSitePolicy,
+		MaxAge:   86400,
+	})
+
+	return nil
+}
+
 // handleLogin handles login requests and provides detailed feedback about lockouts
 func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {

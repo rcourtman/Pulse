@@ -32,6 +32,23 @@ Restrict access to specific users or groups:
 *   **Allowed Domains**: Restrict to specific email domains (e.g., `example.com`).
 *   **Allowed Emails**: Allow specific email addresses.
 
+### Long-Lived Sessions with `offline_access`
+For persistent sessions that don't require frequent re-authentication:
+
+1. **Add `offline_access` scope**: Include `offline_access` in your OIDC scopes (e.g., `openid profile email offline_access`).
+2. **Configure your IdP**: Ensure your identity provider issues refresh tokens when `offline_access` is requested.
+
+**How it works:**
+- When you login with `offline_access`, Pulse stores the refresh token alongside your session.
+- When your access token expires, Pulse automatically refreshes it using the stored refresh token.
+- Your session remains valid as long as the refresh token is valid (typically 30-90 days depending on your IdP).
+- If the IdP revokes access (user disabled, token revoked), Pulse detects this on the next refresh attempt and logs you out.
+
+**Security considerations:**
+- Refresh tokens are stored encrypted at rest.
+- If the IdP configuration changes, existing sessions with mismatched issuers are automatically invalidated.
+- Failed refresh attempts immediately invalidate the session.
+
 ## 📚 Provider Examples
 
 ### Authentik

@@ -210,6 +210,58 @@ func (s *OIDCService) contextWithHTTPClient(ctx context.Context) context.Context
 	return oidc.ClientContext(ctx, s.httpClient)
 }
 
+// OIDCRefreshResult contains the result of a token refresh operation
+type OIDCRefreshResult struct {
+	AccessToken  string
+	RefreshToken string
+	Expiry       time.Time
+}
+
+// RefreshToken uses the refresh token to obtain new access and refresh tokens from the IdP
+func (s *OIDCService) RefreshToken(ctx context.Context, refreshToken string) (*OIDCRefreshResult, error) {
+	if refreshToken == "" {
+		return nil, errors.New("no refresh token provided")
+	}
+
+	ctx = s.contextWithHTTPClient(ctx)
+
+	// Create a token source from the refresh token
+	token := &oauth2.Token{
+		RefreshToken: refreshToken,
+		// Set expiry in the past to force refresh
+		Expiry: time.Now().Add(-time.Hour),
+	}
+
+	tokenSource := s.oauth2Cfg.TokenSource(ctx, token)
+
+	// This will trigger a refresh since the token is expired
+	newToken, err := tokenSource.Token()
+	if err != nil {
+		log.Warn().Err(err).Msg("OIDC token refresh failed")
+		return nil, fmt.Errorf("failed to refresh token: %w", err)
+	}
+
+	result := &OIDCRefreshResult{
+		AccessToken: newToken.AccessToken,
+		Expiry:      newToken.Expiry,
+	}
+
+	// The new refresh token might be the same or different depending on the IdP
+	if newToken.RefreshToken != "" {
+		result.RefreshToken = newToken.RefreshToken
+	} else {
+		// Keep the old refresh token if a new one wasn't issued
+		result.RefreshToken = refreshToken
+	}
+
+	log.Debug().
+		Time("new_expiry", result.Expiry).
+		Bool("new_refresh_token", newToken.RefreshToken != "").
+		Msg("OIDC token refresh successful")
+
+	return result, nil
+}
+
 func newOIDCHTTPClient(caBundle string) (*http.Client, string, error) {
 	transport, ok := http.DefaultTransport.(*http.Transport)
 	var clone *http.Transport

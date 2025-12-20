@@ -33,6 +33,12 @@ type sessionPersisted struct {
 	UserAgent        string        `json:"user_agent,omitempty"`
 	IP               string        `json:"ip,omitempty"`
 	OriginalDuration time.Duration `json:"original_duration,omitempty"`
+	// OIDC token fields for refresh token support
+	OIDCRefreshToken    string    `json:"oidc_refresh_token,omitempty"`
+	OIDCAccessTokenExp  time.Time `json:"oidc_access_token_exp,omitempty"`
+	OIDCIssuer          string    `json:"oidc_issuer,omitempty"`
+	OIDCClientID        string    `json:"oidc_client_id,omitempty"`
+	OIDCTokenRefreshing bool      `json:"-"` // transient, not persisted
 }
 
 // SessionData represents a user session
@@ -42,6 +48,12 @@ type SessionData struct {
 	UserAgent        string        `json:"user_agent,omitempty"`
 	IP               string        `json:"ip,omitempty"`
 	OriginalDuration time.Duration `json:"original_duration,omitempty"` // Track original duration for sliding expiration
+	// OIDC token fields for refresh token support
+	OIDCRefreshToken    string    `json:"oidc_refresh_token,omitempty"`    // Encrypted at rest
+	OIDCAccessTokenExp  time.Time `json:"oidc_access_token_exp,omitempty"` // When the access token expires
+	OIDCIssuer          string    `json:"oidc_issuer,omitempty"`           // IdP issuer URL
+	OIDCClientID        string    `json:"oidc_client_id,omitempty"`        // OIDC client ID
+	OIDCTokenRefreshing bool      `json:"-"`                               // Prevents concurrent refresh attempts
 }
 
 // NewSessionStore creates a new persistent session store
@@ -92,6 +104,96 @@ func (s *SessionStore) CreateSession(token string, duration time.Duration, userA
 
 	// Save immediately for important operations
 	s.saveUnsafe()
+}
+
+// OIDCTokenInfo contains OAuth2 token information from the IdP
+type OIDCTokenInfo struct {
+	RefreshToken   string
+	AccessTokenExp time.Time
+	Issuer         string
+	ClientID       string
+}
+
+// CreateOIDCSession creates a new session with OIDC token information
+func (s *SessionStore) CreateOIDCSession(token string, duration time.Duration, userAgent, ip string, oidc *OIDCTokenInfo) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := sessionHash(token)
+	session := &SessionData{
+		ExpiresAt:        time.Now().Add(duration),
+		CreatedAt:        time.Now(),
+		UserAgent:        userAgent,
+		IP:               ip,
+		OriginalDuration: duration,
+	}
+
+	if oidc != nil {
+		session.OIDCRefreshToken = oidc.RefreshToken
+		session.OIDCAccessTokenExp = oidc.AccessTokenExp
+		session.OIDCIssuer = oidc.Issuer
+		session.OIDCClientID = oidc.ClientID
+	}
+
+	s.sessions[key] = session
+
+	// Save immediately for important operations
+	s.saveUnsafe()
+}
+
+// GetSession returns a copy of the session data for the given token
+func (s *SessionStore) GetSession(token string) *SessionData {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	session, exists := s.sessions[sessionHash(token)]
+	if !exists {
+		return nil
+	}
+
+	// Return a copy to avoid race conditions
+	copy := *session
+	return &copy
+}
+
+// UpdateOIDCTokens updates the OIDC tokens for a session after a successful refresh
+func (s *SessionStore) UpdateOIDCTokens(token string, refreshToken string, accessTokenExp time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := sessionHash(token)
+	session, exists := s.sessions[key]
+	if !exists {
+		return
+	}
+
+	session.OIDCRefreshToken = refreshToken
+	session.OIDCAccessTokenExp = accessTokenExp
+	session.OIDCTokenRefreshing = false
+
+	// Also extend the session expiry since the token is still valid
+	if session.OriginalDuration > 0 {
+		session.ExpiresAt = time.Now().Add(session.OriginalDuration)
+	}
+
+	// Save immediately after token refresh
+	s.saveUnsafe()
+}
+
+// InvalidateSession removes a session (used when OIDC refresh fails)
+func (s *SessionStore) InvalidateSession(token string) {
+	s.DeleteSession(token)
+}
+
+// SetTokenRefreshing marks a session as currently refreshing tokens
+func (s *SessionStore) SetTokenRefreshing(token string, refreshing bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := sessionHash(token)
+	if session, exists := s.sessions[key]; exists {
+		session.OIDCTokenRefreshing = refreshing
+	}
 }
 
 // ValidateSession checks if a session is valid
@@ -176,12 +278,16 @@ func (s *SessionStore) saveUnsafe() {
 	persisted := make([]sessionPersisted, 0, len(s.sessions))
 	for key, session := range s.sessions {
 		persisted = append(persisted, sessionPersisted{
-			Key:              key,
-			ExpiresAt:        session.ExpiresAt,
-			CreatedAt:        session.CreatedAt,
-			UserAgent:        session.UserAgent,
-			IP:               session.IP,
-			OriginalDuration: session.OriginalDuration,
+			Key:                key,
+			ExpiresAt:          session.ExpiresAt,
+			CreatedAt:          session.CreatedAt,
+			UserAgent:          session.UserAgent,
+			IP:                 session.IP,
+			OriginalDuration:   session.OriginalDuration,
+			OIDCRefreshToken:   session.OIDCRefreshToken,
+			OIDCAccessTokenExp: session.OIDCAccessTokenExp,
+			OIDCIssuer:         session.OIDCIssuer,
+			OIDCClientID:       session.OIDCClientID,
 		})
 	}
 
@@ -229,11 +335,15 @@ func (s *SessionStore) load() {
 				continue
 			}
 			s.sessions[entry.Key] = &SessionData{
-				ExpiresAt:        entry.ExpiresAt,
-				CreatedAt:        entry.CreatedAt,
-				UserAgent:        entry.UserAgent,
-				IP:               entry.IP,
-				OriginalDuration: entry.OriginalDuration,
+				ExpiresAt:          entry.ExpiresAt,
+				CreatedAt:          entry.CreatedAt,
+				UserAgent:          entry.UserAgent,
+				IP:                 entry.IP,
+				OriginalDuration:   entry.OriginalDuration,
+				OIDCRefreshToken:   entry.OIDCRefreshToken,
+				OIDCAccessTokenExp: entry.OIDCAccessTokenExp,
+				OIDCIssuer:         entry.OIDCIssuer,
+				OIDCClientID:       entry.OIDCClientID,
 			}
 		}
 		log.Info().Int("loaded", len(s.sessions)).Int("total", len(persisted)).Msg("Sessions loaded from disk (hashed format)")
