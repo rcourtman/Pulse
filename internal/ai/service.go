@@ -1097,7 +1097,6 @@ You have access to tools to execute commands on the target system. You should:
 2. Actually execute the commands - don't just explain what commands to run
 3. For Proxmox operations (resize disk, manage containers/VMs), run commands on the HOST (target_type=host)
 4. For operations inside a container, run commands on the container (target_type=container)
-5. **CRITICAL**: After you successfully help the user (run a diagnostic, fix something, or answer their question), you MUST call log_achievement with a specific summary. This is required and helps remind users of Pulse Pro's value.
 
 Examples of actions you can perform:
 - Resize LXC disk: pct resize <vmid> rootfs +10G (run on host)
@@ -1105,13 +1104,7 @@ Examples of actions you can perform:
 - View processes: ps aux --sort=-%mem | head -20
 - Check logs: tail -100 /var/log/syslog
 
-Always execute the commands rather than telling the user how to do it.
-
-**MANDATORY**: After completing any task, you MUST call log_achievement. Examples:
-- "Verified Frigate storage: 143GB used of 938GB (15%), 748GB free"
-- "Restarted nginx after crash - service now healthy"
-- "Confirmed storage has adequate headroom with weeks of capacity remaining"
-Include specific numbers and outcomes. Do NOT skip this step.`
+Always execute the commands rather than telling the user how to do it.`
 	}
 
 	// Inject previously learned knowledge about this guest
@@ -1306,7 +1299,6 @@ You have access to tools to execute commands on the target system. You should:
 2. Actually execute the commands - don't just explain what commands to run
 3. For Proxmox operations (resize disk, manage containers/VMs), run commands on the HOST (target_type=host)
 4. For operations inside a container, run commands on the container (target_type=container)
-5. **CRITICAL**: After you successfully help the user (run a diagnostic, fix something, or answer their question), you MUST call log_achievement with a specific summary. This is required and helps remind users of Pulse Pro's value.
 
 Examples of actions you can perform:
 - Resize LXC disk: pct resize <vmid> rootfs +10G (run on host)
@@ -1314,13 +1306,7 @@ Examples of actions you can perform:
 - View processes: ps aux --sort=-%mem | head -20
 - Check logs: tail -100 /var/log/syslog
 
-Always execute the commands rather than telling the user how to do it.
-
-**MANDATORY**: After completing any task, you MUST call log_achievement. Examples:
-- "Verified Frigate storage: 143GB used of 938GB (15%), 748GB free"
-- "Restarted nginx after crash - service now healthy"
-- "Confirmed storage has adequate headroom with weeks of capacity remaining"
-Include specific numbers and outcomes. Do NOT skip this step.`
+Always execute the commands rather than telling the user how to do it.`
 	}
 
 	// Inject previously learned knowledge about this guest
@@ -1654,7 +1640,18 @@ func (s *Service) getToolInputDisplay(tc providers.ToolCall) string {
 
 // logRemediation logs a tool execution to the remediation log for operational memory
 // This enables learning from past fix attempts
+// ONLY logs commands that perform actual ACTIONS (restarts, resizes, cleanups, fixes)
+// Skips diagnostic commands (df, grep, cat, tail, ps) to avoid noise
 func (s *Service) logRemediation(req ExecuteRequest, command, output string, success bool) {
+	// First, check if this is an actionable command worth logging
+	// Diagnostic/read-only commands don't provide value in the achievement log
+	if !isActionableCommand(command) {
+		log.Debug().
+			Str("command", command).
+			Msg("Skipping diagnostic command - not logging to remediation history")
+		return
+	}
+
 	s.mu.RLock()
 	patrol := s.patrolService
 	s.mu.RUnlock()
@@ -1714,12 +1711,55 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 		Automatic:    req.UseCase == "patrol", // Patrol runs are automatic
 	})
 
-	log.Debug().
+	log.Info().
 		Str("resource_id", req.TargetID).
+		Str("resource_name", resourceName).
 		Str("command", command).
 		Str("summary", summary).
 		Bool("success", success).
-		Msg("Logged remediation action to operational memory")
+		Msg("Logged ACTION to Pulse AI Impact")
+}
+
+// isActionableCommand returns true if the command performs an actual action
+// that's worth logging as an achievement, false for read-only diagnostics
+func isActionableCommand(cmd string) bool {
+	cmd = strings.TrimSpace(cmd)
+	
+	// Strip [host] or [hostname] prefix if present
+	if strings.HasPrefix(cmd, "[") {
+		if idx := strings.Index(cmd, "]"); idx != -1 {
+			cmd = strings.TrimSpace(cmd[idx+1:])
+		}
+	}
+	
+	// Commands that PERFORM ACTIONS (should be logged)
+	actionPatterns := []string{
+		"docker restart", "docker start", "docker stop", "docker rm",
+		"docker compose up", "docker compose down", "docker compose restart",
+		"systemctl restart", "systemctl start", "systemctl stop", "systemctl enable", "systemctl disable",
+		"service restart", "service start", "service stop",
+		"pct resize", "pct start", "pct stop", "pct shutdown", "pct reboot",
+		"qm resize", "qm start", "qm stop", "qm shutdown", "qm reboot",
+		"rm -", "rm /",           // File deletion/cleanup
+		"chmod", "chown",         // Permission fixes
+		"mkdir",                  // Creating directories
+		"mv ", "cp ",             // File operations
+		"echo >", "tee ",         // Writing to files
+		"apt install", "apt upgrade", "apt remove",
+		"yum install", "dnf install",
+		"pip install", "npm install",
+		"kill ", "pkill ", "killall ",
+		"reboot", "shutdown",
+	}
+	
+	for _, pattern := range actionPatterns {
+		if strings.Contains(cmd, pattern) {
+			return true
+		}
+	}
+	
+	// Everything else is diagnostic (df, grep, cat, tail, ps, ls, etc.)
+	return false
 }
 
 // generateRemediationSummary creates a human-readable summary of what a command achieved
@@ -2046,25 +2086,6 @@ func (s *Service) getTools() []providers.Tool {
 				"required": []string{"finding_id", "resolution_note"},
 			},
 		},
-		{
-			Name:        "log_achievement",
-			Description: "Log a meaningful achievement to remind the user what Pulse Pro accomplished for them. Call this when you've successfully helped the user with something valuable - like diagnosing an issue, fixing a problem, or answering their question with actionable information. Write a clear, specific summary that will be useful to the user in 2 weeks when they review what Pulse Pro has done for them. Examples: 'Verified Frigate is retaining 7 days of recordings with 45GB storage used', 'Restarted nginx service after detecting crash - service now healthy', 'Confirmed disk has 120GB free after cleanup'.",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"achievement": map[string]interface{}{
-						"type":        "string",
-						"description": "A clear, specific summary of what was accomplished. Be specific with numbers, names, and outcomes. This will be shown to the user as a reminder of value delivered.",
-					},
-					"category": map[string]interface{}{
-						"type":        "string",
-						"description": "Category of the achievement",
-						"enum":        []string{"diagnosis", "fix", "verification", "discovery", "optimization"},
-					},
-				},
-				"required": []string{"achievement"},
-			},
-		},
 	}
 
 	// Add web search tool for Anthropic provider
@@ -2265,68 +2286,6 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		}
 
 		execution.Output = fmt.Sprintf("Finding resolved! The AI Insight has been marked as fixed.\nID: %s\nResolution: %s", findingID, resolutionNote)
-		execution.Success = true
-		return execution.Output, execution
-
-	case "log_achievement":
-		achievement, _ := tc.Input["achievement"].(string)
-		category, _ := tc.Input["category"].(string)
-		execution.Input = fmt.Sprintf("achievement: %s, category: %s", achievement, category)
-
-		if achievement == "" {
-			execution.Output = "Error: achievement is required. Please describe what was accomplished."
-			return execution.Output, execution
-		}
-
-		if category == "" {
-			category = "general" // Default category
-		}
-
-		// Log the achievement to the remediation log
-		s.mu.RLock()
-		patrol := s.patrolService
-		s.mu.RUnlock()
-
-		if patrol == nil {
-			execution.Output = "Error: Patrol service not available"
-			return execution.Output, execution
-		}
-
-		remLog := patrol.GetRemediationLog()
-		if remLog == nil {
-			execution.Output = "Error: Remediation log not available"
-			return execution.Output, execution
-		}
-
-		// Get resource name from context if available
-		resourceName := ""
-		if req.Context != nil {
-			if name, ok := req.Context["name"].(string); ok {
-				resourceName = name
-			}
-		}
-
-		// Log as an achievement - use Summary field prominently, Action as "achievement"
-		remLog.Log(RemediationRecord{
-			ResourceID:   req.TargetID,
-			ResourceType: req.TargetType,
-			ResourceName: resourceName,
-			FindingID:    req.FindingID,
-			Problem:      req.Prompt, // Keep original prompt for context
-			Summary:      achievement, // THIS is the key field - user-facing summary
-			Action:       "[achievement:" + category + "]", // Mark as achievement, not a command
-			Outcome:      OutcomeResolved,
-			Automatic:    req.UseCase == "patrol",
-		})
-
-		log.Info().
-			Str("resource_id", req.TargetID).
-			Str("resource_name", resourceName).
-			Str("category", category).
-			Str("achievement", achievement).
-			Msg("Logged AI achievement to operational memory")
-
-		execution.Output = fmt.Sprintf("Achievement logged! This will be shown to the user as a reminder of what Pulse Pro accomplished.\nAchievement: %s\nCategory: %s", achievement, category)
 		execution.Success = true
 		return execution.Output, execution
 

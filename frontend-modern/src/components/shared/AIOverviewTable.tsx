@@ -168,49 +168,46 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
             });
         }
 
-        // Remediations - ONLY show high-value entries:
-        // 1. Achievements logged via log_achievement tool (have summary field or [achievement:] action)
-        // 2. Records with explicit summary field (new backend generates these)
-        // Skip: Low-value diagnostic commands without summaries
-        const achievements = remediations().filter(rem => {
-            // Has an AI-generated summary - always show
-            if (rem.summary && rem.summary.trim() !== '') return true;
-            // Is an explicit achievement logged via the tool
-            if (rem.action.startsWith('[achievement:')) return true;
-            // Skip everything else - no more generic "Checked disk usage" entries
-            return false;
-        });
+        // Remediations - ONLY show actual ACTIONS (restarts, resizes, cleanups, fixes)
+        // Skip diagnostic commands (df, grep, cat, tail, ps) - they don't provide lasting value
+        const isActionableCommand = (action: string): boolean => {
+            const cmd = action.trim().replace(/^\[[^\]]+\]\s*/, ''); // Strip [host] prefix
+            const actionPatterns = [
+                'docker restart', 'docker start', 'docker stop', 'docker rm',
+                'docker compose up', 'docker compose down', 'docker compose restart',
+                'systemctl restart', 'systemctl start', 'systemctl stop', 'systemctl enable', 'systemctl disable',
+                'service restart', 'service start', 'service stop',
+                'pct resize', 'pct start', 'pct stop', 'pct shutdown', 'pct reboot',
+                'qm resize', 'qm start', 'qm stop', 'qm shutdown', 'qm reboot',
+                'rm -', 'rm /',
+                'chmod', 'chown',
+                'mkdir',
+                'mv ', 'cp ',
+                'apt install', 'apt upgrade', 'apt remove',
+                'yum install', 'dnf install',
+                'pip install', 'npm install',
+                'kill ', 'pkill ', 'killall ',
+                'reboot', 'shutdown',
+            ];
+            return actionPatterns.some(pattern => cmd.includes(pattern));
+        };
 
-        for (const rem of achievements) {
-            const categoryBadgeClass: Record<string, string> = {
-                diagnosis: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-                fix: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-                verification: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
-                discovery: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
-                optimization: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-            };
+        const actionableRemediations = remediations().filter(rem => isActionableCommand(rem.action));
 
-            // Extract category from [achievement:category] action
-            const categoryMatch = rem.action.match(/\[achievement:(\w+)\]/);
-            const category = categoryMatch ? categoryMatch[1] : 'general';
-
-            // Format category for display
-            const categoryLabels: Record<string, string> = {
-                diagnosis: 'Diagnosed',
-                fix: 'Fixed',
-                verification: 'Verified',
-                discovery: 'Discovered',
-                optimization: 'Optimized',
-                general: 'Helped',
+        for (const rem of actionableRemediations) {
+            const outcomeBadgeClass: Record<string, string> = {
+                resolved: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+                partial: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+                failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
             };
 
             rows.push({
                 id: `rem-${rem.finding_id}-${rem.timestamp}`,
                 type: 'impact',
-                typeBadge: categoryLabels[category] || 'Helped',
-                typeBadgeClass: categoryBadgeClass[category] || 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-                title: rem.summary || rem.problem, // Summary is the key field
-                subtitle: rem.resource_name || '', // Show resource name if available
+                typeBadge: rem.outcome === 'resolved' ? 'Fixed' : rem.outcome === 'failed' ? 'Failed' : 'Action',
+                typeBadgeClass: outcomeBadgeClass[rem.outcome] || 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
+                title: rem.summary || summarizeValue(rem.problem, rem.action), // Use backend summary or fallback
+                subtitle: rem.resource_name || '',
                 timestamp: formatRelativeTime(rem.timestamp),
                 locked: false,
                 badgeClass: 'text-emerald-600 dark:text-emerald-400',

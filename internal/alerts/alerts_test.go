@@ -1492,6 +1492,221 @@ func TestNormalizeHostDefaultsPreservesZeroTrigger(t *testing.T) {
 	})
 }
 
+// TestNormalizeStorageDefaultsPreservesZeroTrigger verifies that setting
+// StorageDefault threshold to 0 is preserved to disable storage alerting.
+func TestNormalizeStorageDefaultsPreservesZeroTrigger(t *testing.T) {
+	t.Parallel()
+
+	t.Run("negative trigger gets factory defaults", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		cfg := AlertConfig{
+			Enabled:        true,
+			StorageDefault: HysteresisThreshold{Trigger: -1, Clear: 0},
+		}
+
+		m.UpdateConfig(cfg)
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if m.config.StorageDefault.Trigger != 85 {
+			t.Errorf("StorageDefault trigger = %v, want 85", m.config.StorageDefault.Trigger)
+		}
+		if m.config.StorageDefault.Clear != 80 {
+			t.Errorf("StorageDefault clear = %v, want 80", m.config.StorageDefault.Clear)
+		}
+	})
+
+	t.Run("Trigger=0 preserved to disable storage alerting", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		cfg := AlertConfig{
+			Enabled:        true,
+			StorageDefault: HysteresisThreshold{Trigger: 0, Clear: 0},
+		}
+
+		m.UpdateConfig(cfg)
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if m.config.StorageDefault.Trigger != 0 {
+			t.Errorf("StorageDefault trigger = %v, want 0 (disabled)", m.config.StorageDefault.Trigger)
+		}
+		if m.config.StorageDefault.Clear != 0 {
+			t.Errorf("StorageDefault clear = %v, want 0 (disabled)", m.config.StorageDefault.Clear)
+		}
+	})
+
+	t.Run("missing Clear computed from Trigger", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		cfg := AlertConfig{
+			Enabled:        true,
+			StorageDefault: HysteresisThreshold{Trigger: 90, Clear: 0},
+		}
+
+		m.UpdateConfig(cfg)
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if m.config.StorageDefault.Trigger != 90 {
+			t.Errorf("StorageDefault trigger = %v, want 90", m.config.StorageDefault.Trigger)
+		}
+		if m.config.StorageDefault.Clear != 85 {
+			t.Errorf("StorageDefault clear = %v, want 85 (trigger - 5)", m.config.StorageDefault.Clear)
+		}
+	})
+}
+
+// TestNormalizeNodeDefaultsTemperaturePreservesZeroTrigger verifies that setting
+// NodeDefaults.Temperature threshold to 0 is preserved to disable temperature alerting.
+func TestNormalizeNodeDefaultsTemperaturePreservesZeroTrigger(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil Temperature gets factory defaults", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		cfg := AlertConfig{
+			Enabled:      true,
+			NodeDefaults: ThresholdConfig{}, // Empty - Temperature needs defaults
+		}
+
+		m.UpdateConfig(cfg)
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if m.config.NodeDefaults.Temperature == nil {
+			t.Fatal("Temperature defaults should be set")
+		}
+		if m.config.NodeDefaults.Temperature.Trigger != 80 {
+			t.Errorf("Temperature trigger = %v, want 80", m.config.NodeDefaults.Temperature.Trigger)
+		}
+		if m.config.NodeDefaults.Temperature.Clear != 75 {
+			t.Errorf("Temperature clear = %v, want 75", m.config.NodeDefaults.Temperature.Clear)
+		}
+	})
+
+	t.Run("Trigger=0 preserved to disable temperature alerting", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		cfg := AlertConfig{
+			Enabled: true,
+			NodeDefaults: ThresholdConfig{
+				Temperature: &HysteresisThreshold{Trigger: 0, Clear: 0},
+			},
+		}
+
+		m.UpdateConfig(cfg)
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if m.config.NodeDefaults.Temperature == nil {
+			t.Fatal("Temperature should be preserved (not nil)")
+		}
+		if m.config.NodeDefaults.Temperature.Trigger != 0 {
+			t.Errorf("Temperature trigger = %v, want 0 (disabled)", m.config.NodeDefaults.Temperature.Trigger)
+		}
+		if m.config.NodeDefaults.Temperature.Clear != 0 {
+			t.Errorf("Temperature clear = %v, want 0 (disabled)", m.config.NodeDefaults.Temperature.Clear)
+		}
+	})
+
+	t.Run("missing Clear computed from Trigger", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		cfg := AlertConfig{
+			Enabled: true,
+			NodeDefaults: ThresholdConfig{
+				Temperature: &HysteresisThreshold{Trigger: 85, Clear: 0},
+			},
+		}
+
+		m.UpdateConfig(cfg)
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if m.config.NodeDefaults.Temperature.Trigger != 85 {
+			t.Errorf("Temperature trigger = %v, want 85", m.config.NodeDefaults.Temperature.Trigger)
+		}
+		if m.config.NodeDefaults.Temperature.Clear != 80 {
+			t.Errorf("Temperature clear = %v, want 80 (trigger - 5)", m.config.NodeDefaults.Temperature.Clear)
+		}
+	})
+}
+
+// TestNormalizeDockerThresholdPreservesZeroTrigger verifies that Docker
+// container thresholds can be set to 0 to disable alerting.
+func TestNormalizeDockerThresholdPreservesZeroTrigger(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Trigger=0 disables Docker CPU alerting", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		cfg := AlertConfig{
+			Enabled: true,
+			DockerDefaults: DockerThresholdConfig{
+				CPU:    HysteresisThreshold{Trigger: 0, Clear: 0},
+				Memory: HysteresisThreshold{Trigger: 85, Clear: 80},
+				Disk:   HysteresisThreshold{Trigger: 85, Clear: 80},
+			},
+		}
+
+		m.UpdateConfig(cfg)
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if m.config.DockerDefaults.CPU.Trigger != 0 {
+			t.Errorf("Docker CPU trigger = %v, want 0 (disabled)", m.config.DockerDefaults.CPU.Trigger)
+		}
+		if m.config.DockerDefaults.Memory.Trigger != 85 {
+			t.Errorf("Docker Memory trigger = %v, want 85", m.config.DockerDefaults.Memory.Trigger)
+		}
+	})
+
+	t.Run("negative trigger replaced with defaults", func(t *testing.T) {
+		t.Parallel()
+		m := newTestManager(t)
+
+		cfg := AlertConfig{
+			Enabled: true,
+			DockerDefaults: DockerThresholdConfig{
+				CPU:    HysteresisThreshold{Trigger: -5, Clear: 0},
+				Memory: HysteresisThreshold{Trigger: -10, Clear: 0},
+				Disk:   HysteresisThreshold{Trigger: -1, Clear: 0},
+			},
+		}
+
+		m.UpdateConfig(cfg)
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if m.config.DockerDefaults.CPU.Trigger != 80 {
+			t.Errorf("Docker CPU trigger = %v, want 80 (default)", m.config.DockerDefaults.CPU.Trigger)
+		}
+		if m.config.DockerDefaults.Memory.Trigger != 85 {
+			t.Errorf("Docker Memory trigger = %v, want 85 (default)", m.config.DockerDefaults.Memory.Trigger)
+		}
+		if m.config.DockerDefaults.Disk.Trigger != 85 {
+			t.Errorf("Docker Disk trigger = %v, want 85 (default)", m.config.DockerDefaults.Disk.Trigger)
+		}
+	})
+}
+
 func TestNormalizeDockerIgnoredPrefixes(t *testing.T) {
 	t.Parallel()
 

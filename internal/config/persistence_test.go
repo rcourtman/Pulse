@@ -233,6 +233,128 @@ func TestSaveAlertConfig_HostDefaultsZeroDisablesAlerting(t *testing.T) {
 	}
 }
 
+// TestSaveAlertConfig_StorageDefaultZeroDisablesAlerting verifies that setting
+// StorageDefault threshold to 0 is preserved to disable storage alerting.
+func TestSaveAlertConfig_StorageDefaultZeroDisablesAlerting(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Config with StorageDefault.Trigger=0 to disable storage alerting
+	cfg := alerts.AlertConfig{
+		Enabled:        true,
+		StorageDefault: alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
+	}
+
+	if err := cp.SaveAlertConfig(cfg); err != nil {
+		t.Fatalf("SaveAlertConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadAlertConfig()
+	if err != nil {
+		t.Fatalf("LoadAlertConfig: %v", err)
+	}
+
+	// Storage threshold should remain at 0 (disabled), not reset to default
+	if loaded.StorageDefault.Trigger != 0 {
+		t.Errorf("StorageDefault trigger = %v, want 0 (disabled)", loaded.StorageDefault.Trigger)
+	}
+	if loaded.StorageDefault.Clear != 0 {
+		t.Errorf("StorageDefault clear = %v, want 0 (disabled)", loaded.StorageDefault.Clear)
+	}
+}
+
+// TestSaveAlertConfig_NodeTemperatureZeroDisablesAlerting verifies that setting
+// NodeDefaults.Temperature threshold to 0 is preserved to disable temperature alerting.
+func TestSaveAlertConfig_NodeTemperatureZeroDisablesAlerting(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Config with Temperature=0 to disable temperature alerting
+	cfg := alerts.AlertConfig{
+		Enabled:        true,
+		StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
+		NodeDefaults: alerts.ThresholdConfig{
+			Temperature: &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
+		},
+	}
+
+	if err := cp.SaveAlertConfig(cfg); err != nil {
+		t.Fatalf("SaveAlertConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadAlertConfig()
+	if err != nil {
+		t.Fatalf("LoadAlertConfig: %v", err)
+	}
+
+	// Temperature threshold should remain at 0 (disabled), not reset to default
+	if loaded.NodeDefaults.Temperature == nil {
+		t.Fatal("Temperature should be preserved (not nil)")
+	}
+	if loaded.NodeDefaults.Temperature.Trigger != 0 {
+		t.Errorf("Temperature trigger = %v, want 0 (disabled)", loaded.NodeDefaults.Temperature.Trigger)
+	}
+	if loaded.NodeDefaults.Temperature.Clear != 0 {
+		t.Errorf("Temperature clear = %v, want 0 (disabled)", loaded.NodeDefaults.Temperature.Clear)
+	}
+}
+
+// TestSaveAlertConfig_AllThresholdsZeroDisablesAlerting is a comprehensive test
+// verifying that all threshold types can be set to 0 to disable alerting.
+func TestSaveAlertConfig_AllThresholdsZeroDisablesAlerting(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Config with all thresholds set to 0 to disable all alerting
+	cfg := alerts.AlertConfig{
+		Enabled:        true,
+		StorageDefault: alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
+		NodeDefaults: alerts.ThresholdConfig{
+			Temperature: &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
+		},
+		HostDefaults: alerts.ThresholdConfig{
+			CPU:    &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
+			Memory: &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
+			Disk:   &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
+		},
+	}
+
+	if err := cp.SaveAlertConfig(cfg); err != nil {
+		t.Fatalf("SaveAlertConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadAlertConfig()
+	if err != nil {
+		t.Fatalf("LoadAlertConfig: %v", err)
+	}
+
+	// All thresholds should remain at 0
+	if loaded.StorageDefault.Trigger != 0 {
+		t.Errorf("StorageDefault trigger = %v, want 0", loaded.StorageDefault.Trigger)
+	}
+	if loaded.NodeDefaults.Temperature == nil || loaded.NodeDefaults.Temperature.Trigger != 0 {
+		t.Errorf("Temperature trigger = %v, want 0", loaded.NodeDefaults.Temperature)
+	}
+	if loaded.HostDefaults.CPU == nil || loaded.HostDefaults.CPU.Trigger != 0 {
+		t.Errorf("HostDefaults.CPU trigger = %v, want 0", loaded.HostDefaults.CPU)
+	}
+	if loaded.HostDefaults.Memory == nil || loaded.HostDefaults.Memory.Trigger != 0 {
+		t.Errorf("HostDefaults.Memory trigger = %v, want 0", loaded.HostDefaults.Memory)
+	}
+	if loaded.HostDefaults.Disk == nil || loaded.HostDefaults.Disk.Trigger != 0 {
+		t.Errorf("HostDefaults.Disk trigger = %v, want 0", loaded.HostDefaults.Disk)
+	}
+}
+
 func TestAlertConfigPersistenceNormalizesDockerIgnoredPrefixes(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
@@ -291,7 +413,8 @@ func TestLoadAlertConfigAppliesDefaults(t *testing.T) {
 			CriticalDays: 8,
 		},
 		NodeDefaults: alerts.ThresholdConfig{
-			Temperature: &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
+			// Use negative value to test "unset" case (negative means unset, 0 means disabled)
+			Temperature: &alerts.HysteresisThreshold{Trigger: -1, Clear: 0},
 		},
 	}
 
@@ -321,6 +444,7 @@ func TestLoadAlertConfigAppliesDefaults(t *testing.T) {
 	if loaded.NodeDefaults.Temperature == nil {
 		t.Fatalf("expected node temperature defaults to be set")
 	}
+	// Negative trigger should be replaced with defaults (80/75)
 	if loaded.NodeDefaults.Temperature.Trigger != 80 || loaded.NodeDefaults.Temperature.Clear != 75 {
 		t.Fatalf("expected temperature defaults 80/75, got %+v", loaded.NodeDefaults.Temperature)
 	}
