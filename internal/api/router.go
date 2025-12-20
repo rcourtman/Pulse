@@ -1756,6 +1756,9 @@ func (r *Router) reloadSystemSettings() {
 		r.cachedAllowEmbedding = systemSettings.AllowEmbedding
 		r.cachedAllowedOrigins = systemSettings.AllowedEmbedOrigins
 
+		// Update HideLocalLogin so it takes effect immediately without restart
+		r.config.HideLocalLogin = systemSettings.HideLocalLogin
+
 		// Update webhook allowed private CIDRs in notification manager
 		if r.monitor != nil {
 			if nm := r.monitor.GetNotificationManager(); nm != nil {
