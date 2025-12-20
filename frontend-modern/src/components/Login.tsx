@@ -1,5 +1,6 @@
 import { Component, createSignal, Show, onMount, lazy, Suspense } from 'solid-js';
 import { logger } from '@/utils/logger';
+import { apiClient } from '@/utils/apiClient';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
 const SetupWizard = lazy(() =>
@@ -196,7 +197,7 @@ export const Login: Component<LoginProps> = (props) => {
 
     try {
       // Use the new login endpoint for better feedback
-      const response = await fetch('/api/login', {
+      const response = await apiClient.fetch('/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -207,7 +208,7 @@ export const Login: Component<LoginProps> = (props) => {
           password: password(),
           rememberMe: rememberMe(),
         }),
-        credentials: 'include', // Important for session cookie
+        skipAuth: true,
       });
 
       const data = await response.json();
