@@ -209,6 +209,15 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 			if ValidateSession(cookie.Value) {
 				// Check if this is an OIDC session
 				if username := GetSessionUsername(cookie.Value); username != "" {
+					// Check if OIDC tokens need refresh
+					session := GetSessionStore().GetSession(cookie.Value)
+					if session != nil && session.OIDCRefreshToken != "" {
+						// Check if access token is expired or about to expire (5 min buffer)
+						if time.Now().Add(5 * time.Minute).After(session.OIDCAccessTokenExp) {
+							// Token needs refresh - attempt it asynchronously
+							go refreshOIDCSessionTokens(cfg, cookie.Value, session)
+						}
+					}
 					w.Header().Set("X-Authenticated-User", username)
 					w.Header().Set("X-Auth-Method", "oidc")
 					return true
@@ -688,4 +697,78 @@ func adminBypassEnabled() bool {
 		adminBypassState.declined = true
 	})
 	return adminBypassState.enabled
+}
+
+// oidcRefreshMutex prevents concurrent refresh attempts for the same session
+var oidcRefreshMutex sync.Map
+
+// refreshOIDCSessionTokens refreshes OIDC tokens for a session in the background
+// If refresh fails, the session is invalidated and the user will need to re-login
+func refreshOIDCSessionTokens(cfg *config.Config, sessionToken string, session *SessionData) {
+	// Prevent concurrent refresh attempts for the same session
+	if _, loaded := oidcRefreshMutex.LoadOrStore(sessionToken, true); loaded {
+		return // Another goroutine is already refreshing this session
+	}
+	defer oidcRefreshMutex.Delete(sessionToken)
+
+	// Mark session as refreshing to prevent duplicate attempts
+	GetSessionStore().SetTokenRefreshing(sessionToken, true)
+	defer GetSessionStore().SetTokenRefreshing(sessionToken, false)
+
+	log.Debug().
+		Str("issuer", session.OIDCIssuer).
+		Time("token_expiry", session.OIDCAccessTokenExp).
+		Msg("Attempting OIDC token refresh")
+
+	// Create a context with timeout for the refresh operation
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Get or create OIDC service for this session's issuer
+	oidcCfg := cfg.OIDC
+	if oidcCfg == nil || !oidcCfg.Enabled {
+		log.Warn().Msg("OIDC not enabled, cannot refresh tokens")
+		return
+	}
+
+	// Verify the session's issuer matches our config
+	if oidcCfg.IssuerURL != session.OIDCIssuer {
+		log.Warn().
+			Str("session_issuer", session.OIDCIssuer).
+			Str("config_issuer", oidcCfg.IssuerURL).
+			Msg("OIDC issuer mismatch, cannot refresh tokens")
+		GetSessionStore().InvalidateSession(sessionToken)
+		return
+	}
+
+	// Create a temporary OIDC service for refreshing
+	service, err := NewOIDCService(ctx, oidcCfg)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create OIDC service for token refresh")
+		return
+	}
+
+	// Attempt to refresh the token
+	result, err := service.RefreshToken(ctx, session.OIDCRefreshToken)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("issuer", session.OIDCIssuer).
+			Msg("OIDC token refresh failed - invalidating session")
+
+		// Token refresh failed - this usually means the refresh token was revoked
+		// or expired. Invalidate the session to force re-login.
+		GetSessionStore().InvalidateSession(sessionToken)
+		LogAuditEvent("oidc_token_refresh", "", "", "", false, "Token refresh failed: "+err.Error())
+		return
+	}
+
+	// Update the session with new tokens
+	GetSessionStore().UpdateOIDCTokens(sessionToken, result.RefreshToken, result.Expiry)
+
+	log.Info().
+		Time("new_expiry", result.Expiry).
+		Msg("OIDC token refresh successful - session extended")
+
+	LogAuditEvent("oidc_token_refresh", "", "", "", true, "Token refreshed successfully")
 }

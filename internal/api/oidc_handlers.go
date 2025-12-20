@@ -218,7 +218,22 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 		log.Debug().Msg("User group membership verified")
 	}
 
-	if err := r.establishSession(w, req, username); err != nil {
+	// Prepare OIDC token info for session storage (enables refresh token support)
+	var oidcTokens *OIDCTokenInfo
+	if token.RefreshToken != "" {
+		oidcTokens = &OIDCTokenInfo{
+			RefreshToken:   token.RefreshToken,
+			AccessTokenExp: token.Expiry,
+			Issuer:         cfg.IssuerURL,
+			ClientID:       cfg.ClientID,
+		}
+		log.Debug().
+			Time("access_token_expiry", token.Expiry).
+			Bool("has_refresh_token", true).
+			Msg("OIDC tokens will be stored for session refresh")
+	}
+
+	if err := r.establishOIDCSession(w, req, username, oidcTokens); err != nil {
 		log.Error().Err(err).Msg("Failed to establish session after OIDC login")
 		LogAuditEvent("oidc_login", username, GetClientIP(req), req.URL.Path, false, "Session creation failed")
 		r.redirectOIDCError(w, req, entry.ReturnTo, "session_failed")
