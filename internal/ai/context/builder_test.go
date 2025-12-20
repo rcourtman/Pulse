@@ -378,3 +378,107 @@ func containsSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+func TestFilterRecentPoints_Empty(t *testing.T) {
+	points := []MetricPoint{}
+	result := filterRecentPoints(points, time.Hour)
+
+	if len(result) != 0 {
+		t.Errorf("Expected empty result, got %d points", len(result))
+	}
+}
+
+func TestFilterRecentPoints_AllRecent(t *testing.T) {
+	now := time.Now()
+	points := []MetricPoint{
+		{Timestamp: now.Add(-30 * time.Minute), Value: 1.0},
+		{Timestamp: now.Add(-15 * time.Minute), Value: 2.0},
+		{Timestamp: now.Add(-5 * time.Minute), Value: 3.0},
+	}
+
+	result := filterRecentPoints(points, time.Hour)
+
+	if len(result) != 3 {
+		t.Errorf("Expected 3 points, got %d", len(result))
+	}
+}
+
+func TestFilterRecentPoints_FilterOld(t *testing.T) {
+	now := time.Now()
+	points := []MetricPoint{
+		{Timestamp: now.Add(-3 * time.Hour), Value: 1.0}, // Old
+		{Timestamp: now.Add(-2 * time.Hour), Value: 2.0}, // Old
+		{Timestamp: now.Add(-30 * time.Minute), Value: 3.0}, // Recent
+	}
+
+	result := filterRecentPoints(points, time.Hour)
+
+	if len(result) != 1 {
+		t.Errorf("Expected 1 recent point, got %d", len(result))
+	}
+	if result[0].Value != 3.0 {
+		t.Errorf("Expected value 3.0, got %f", result[0].Value)
+	}
+}
+
+func TestFormatAnomalyDescription(t *testing.T) {
+	tests := []struct {
+		name      string
+		metric    string
+		current   float64
+		mean      float64
+		stddev    float64
+		severity  string
+		direction string
+		wantContains []string
+	}{
+		{
+			name:      "cpu high",
+			metric:    "cpu",
+			current:   95.0,
+			mean:      50.0,
+			stddev:    10.0,
+			severity:  "significantly",
+			direction: "above",
+			wantContains: []string{"Cpu", "significantly", "above", "95%", "50%"},
+		},
+		{
+			name:      "memory low",
+			metric:    "memory",
+			current:   20.0,
+			mean:      60.0,
+			stddev:    15.0,
+			severity:  "slightly",
+			direction: "below",
+			wantContains: []string{"Memory", "slightly", "below", "20%", "60%"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatAnomalyDescription(tt.metric, tt.current, tt.mean, tt.stddev, tt.severity, tt.direction)
+			for _, want := range tt.wantContains {
+				if !containsSubstring(result, want) {
+					t.Errorf("formatAnomalyDescription() = %q, want to contain %q", result, want)
+				}
+			}
+		})
+	}
+}
+
+func TestFormatPredictionBasis(t *testing.T) {
+	trend := Trend{
+		RatePerDay: 2.5,
+		Period:     7 * 24 * time.Hour, // 7 days
+	}
+
+	result := formatPredictionBasis(trend)
+
+	if !containsSubstring(result, "Growing") {
+		t.Errorf("Expected 'Growing' in result, got %q", result)
+	}
+	if !containsSubstring(result, "based on") {
+		t.Errorf("Expected 'based on' in result, got %q", result)
+	}
+}
+

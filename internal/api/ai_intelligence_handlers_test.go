@@ -274,6 +274,51 @@ func TestHandleGetRecentChanges_NoPatrolService(t *testing.T) {
 	}
 }
 
+// TestHandleGetRemediations tests the remediations endpoint
+func TestHandleGetRemediations_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	handler := createTestAIHandler(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/intelligence/remediations", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetRemediations(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d for POST, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestHandleGetRemediations_NoPatrolService(t *testing.T) {
+	t.Parallel()
+	handler := createTestAIHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/remediations", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetRemediations(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	remediations, ok := resp["remediations"].([]interface{})
+	if !ok {
+		t.Fatal("expected remediations array in response")
+	}
+	if len(remediations) != 0 {
+		t.Fatalf("expected empty remediations, got %d", len(remediations))
+	}
+	if resp["message"] != "Patrol service not initialized" {
+		t.Fatalf("unexpected message: %v", resp["message"])
+	}
+}
+
 // TestHandleGetBaselines tests the baselines endpoint
 func TestHandleGetBaselines_MethodNotAllowed(t *testing.T) {
 	t.Parallel()

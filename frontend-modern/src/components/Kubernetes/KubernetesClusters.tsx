@@ -1,5 +1,7 @@
 import type { Component } from 'solid-js';
-import { For, Show, createMemo, createSignal, createEffect } from 'solid-js';
+import { For, Show, createMemo, createSignal, createEffect, onMount } from 'solid-js';
+import { AIAPI } from '@/api/ai';
+import { LicenseAPI, type LicenseFeatureStatus } from '@/api/license';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useColumnVisibility, type ColumnDef } from '@/hooks/useColumnVisibility';
@@ -9,6 +11,7 @@ import type {
   KubernetesNode,
   KubernetesPod,
 } from '@/types/api';
+import type { AISettings } from '@/types/ai';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
@@ -148,6 +151,15 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
   const [statusFilter, setStatusFilter] = createSignal<StatusFilter>('all');
   const [showHidden, setShowHidden] = createSignal(false);
   const [namespaceFilter, setNamespaceFilter] = createSignal<string>('all');
+  const [licenseFeatures, setLicenseFeatures] = createSignal<LicenseFeatureStatus | null>(null);
+  const [licenseLoading, setLicenseLoading] = createSignal(true);
+  const [aiSettings, setAiSettings] = createSignal<AISettings | null>(null);
+  const [aiLoading, setAiLoading] = createSignal(true);
+  const [analysisClusterId, setAnalysisClusterId] = createSignal('');
+  const [analysisLoading, setAnalysisLoading] = createSignal(false);
+  const [analysisResult, setAnalysisResult] = createSignal('');
+  const [analysisError, setAnalysisError] = createSignal('');
+  const [analysisMeta, setAnalysisMeta] = createSignal<{ model: string; inputTokens: number; outputTokens: number } | null>(null);
 
   // Column visibility for pods table
   const podColumns = useColumnVisibility('k8s-pod-columns', POD_COLUMNS);
@@ -198,6 +210,100 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   });
+
+  const kubernetesAiEnabled = createMemo(() => licenseFeatures()?.features?.kubernetes_ai === true);
+  const aiConfigured = createMemo(() => aiSettings()?.configured === true);
+  const upgradeUrl = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulsemonitor.app/pro');
+
+  const clustersForAnalysis = createMemo(() => props.clusters ?? []);
+
+  const getClusterOptionLabel = (cluster: KubernetesCluster): string => {
+    const base = getClusterDisplayName(cluster);
+    if (cluster.pendingUninstall) return `${base} (pending uninstall)`;
+    if (cluster.hidden) return `${base} (hidden)`;
+    return base;
+  };
+
+  const loadLicenseStatus = async () => {
+    setLicenseLoading(true);
+    try {
+      const status = await LicenseAPI.getFeatures();
+      setLicenseFeatures(status);
+    } catch (_err) {
+      setLicenseFeatures(null);
+    } finally {
+      setLicenseLoading(false);
+    }
+  };
+
+  const loadAiSettings = async () => {
+    setAiLoading(true);
+    try {
+      const settings = await AIAPI.getSettings();
+      setAiSettings(settings);
+    } catch (_err) {
+      setAiSettings(null);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  onMount(() => {
+    void loadLicenseStatus();
+    void loadAiSettings();
+  });
+
+  createEffect(() => {
+    const clusters = clustersForAnalysis();
+    if (clusters.length === 0) {
+      setAnalysisClusterId('');
+      return;
+    }
+    if (!clusters.some((cluster) => cluster.id === analysisClusterId())) {
+      setAnalysisClusterId(clusters[0].id);
+    }
+  });
+
+  createEffect(() => {
+    analysisClusterId();
+    setAnalysisError('');
+    setAnalysisResult('');
+    setAnalysisMeta(null);
+  });
+
+  const handleAnalyzeCluster = async () => {
+    if (!analysisClusterId()) {
+      setAnalysisError('Select a cluster to analyze.');
+      return;
+    }
+    if (!aiConfigured()) {
+      setAnalysisError('AI is not configured. Configure it in Settings -> AI.');
+      return;
+    }
+    if (!kubernetesAiEnabled()) {
+      setAnalysisError('Pulse Pro is required for Kubernetes AI analysis.');
+      return;
+    }
+
+    setAnalysisLoading(true);
+    setAnalysisError('');
+    setAnalysisResult('');
+    setAnalysisMeta(null);
+    try {
+      const response = await AIAPI.analyzeKubernetesCluster(analysisClusterId());
+      setAnalysisResult(response.content || '');
+      setAnalysisMeta({
+        model: response.model,
+        inputTokens: response.input_tokens,
+        outputTokens: response.output_tokens,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to analyze cluster';
+      setAnalysisError(message);
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
 
   // Get all unique namespaces for the filter dropdown
   const allNamespaces = createMemo(() => {
@@ -445,6 +551,103 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
 
   return (
     <div class="space-y-4">
+      <Show when={clustersForAnalysis().length > 0}>
+        <Card padding="sm">
+          <div class="flex flex-col gap-3">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Kubernetes AI Analysis
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                  Generate a health summary and next actions for a cluster.
+                </div>
+              </div>
+              <Show when={!licenseLoading() && !kubernetesAiEnabled()}>
+                <a
+                  href={upgradeUrl()}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-300 hover:text-blue-700 dark:hover:text-blue-200"
+                >
+                  Upgrade to Pro
+                </a>
+              </Show>
+            </div>
+
+            <Show when={licenseLoading() || aiLoading()}>
+              <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                Loading AI and license status...
+              </div>
+            </Show>
+
+            <Show when={!licenseLoading() && !kubernetesAiEnabled()}>
+              <div class="text-sm text-gray-600 dark:text-gray-300">
+                Kubernetes AI analysis requires Pulse Pro.
+              </div>
+            </Show>
+
+            <Show when={!licenseLoading() && kubernetesAiEnabled()}>
+              <div class="flex flex-col gap-2">
+                <div class="flex flex-wrap items-center gap-2">
+                  <select
+                    value={analysisClusterId()}
+                    onChange={(e) => setAnalysisClusterId(e.currentTarget.value)}
+                    class="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  >
+                    <For each={clustersForAnalysis()}>
+                      {(cluster) => (
+                        <option value={cluster.id}>{getClusterOptionLabel(cluster)}</option>
+                      )}
+                    </For>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleAnalyzeCluster}
+                    disabled={analysisLoading() || !analysisClusterId() || !aiConfigured()}
+                    class={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                      analysisLoading() || !analysisClusterId() || !aiConfigured()
+                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                  >
+                    {analysisLoading() ? 'Analyzing...' : 'Analyze'}
+                  </button>
+                  <Show when={analysisLoading()}>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">Running analysis...</span>
+                  </Show>
+                </div>
+
+                <Show when={!aiLoading() && !aiConfigured()}>
+                  <div class="text-xs text-amber-600 dark:text-amber-400">
+                    AI is not configured. Configure it in Settings -> AI.
+                  </div>
+                </Show>
+
+                <Show when={analysisError()}>
+                  <div class="text-xs text-red-600 dark:text-red-400">
+                    {analysisError()}
+                  </div>
+                </Show>
+
+                <Show when={analysisResult()}>
+                  <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+                    <Show when={analysisMeta()}>
+                      <div class="text-[11px] text-gray-500 dark:text-gray-400 mb-2">
+                        Model: {analysisMeta()!.model} · Tokens: {analysisMeta()!.inputTokens + analysisMeta()!.outputTokens}
+                      </div>
+                    </Show>
+                    <div class="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">
+                      {analysisResult()}
+                    </div>
+                  </div>
+                </Show>
+              </div>
+            </Show>
+          </div>
+        </Card>
+      </Show>
       {/* Filter Bar */}
       <Card padding="sm">
         <div class="flex flex-col gap-3">

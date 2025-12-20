@@ -10,6 +10,7 @@ export type FindingCategory = 'performance' | 'capacity' | 'reliability' | 'back
 
 export interface Finding {
     id: string;
+    key?: string;
     severity: FindingSeverity;
     category: FindingCategory;
     resource_id: string;
@@ -32,6 +33,32 @@ export interface Finding {
     user_note?: string;
     times_raised: number;
     suppressed: boolean;
+}
+
+export interface RunbookInfo {
+    id: string;
+    title: string;
+    description: string;
+    risk: 'low' | 'medium' | 'high';
+}
+
+export interface RunbookStepResult {
+    name: string;
+    command: string;
+    output: string;
+    success: boolean;
+}
+
+export interface RunbookExecutionResult {
+    runbook_id: string;
+    outcome: 'resolved' | 'partial' | 'failed' | 'unknown';
+    message: string;
+    steps: RunbookStepResult[];
+    verification?: RunbookStepResult;
+    resolved: boolean;
+    executed_at: string;
+    finding_id: string;
+    finding_key?: string;
 }
 
 export interface FindingsSummary {
@@ -79,6 +106,7 @@ export interface PatrolRunRecord {
     new_findings: number;
     existing_findings: number;
     resolved_findings: number;
+    auto_fix_count?: number;
     findings_summary: string;
     finding_ids: string[];
     error_count: number;
@@ -195,6 +223,24 @@ export async function resolveFinding(findingId: string): Promise<{ success: bool
     return apiFetchJSON('/api/ai/patrol/resolve', {
         method: 'POST',
         body: JSON.stringify({ finding_id: findingId }),
+    });
+}
+
+export async function getRunbooksForFinding(findingId: string): Promise<RunbookInfo[]> {
+    const url = `/api/ai/runbooks?finding_id=${encodeURIComponent(findingId)}`;
+    const resp = await fetch(url, {
+        credentials: 'include',
+    });
+    if (!resp.ok) {
+        throw new Error(`Failed to get runbooks: ${resp.status}`);
+    }
+    return resp.json();
+}
+
+export async function executeRunbook(findingId: string, runbookId: string): Promise<RunbookExecutionResult> {
+    return apiFetchJSON('/api/ai/runbooks/execute', {
+        method: 'POST',
+        body: JSON.stringify({ finding_id: findingId, runbook_id: runbookId }),
     });
 }
 

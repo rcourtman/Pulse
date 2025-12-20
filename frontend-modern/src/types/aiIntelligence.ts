@@ -60,29 +60,68 @@ export interface ResourceBaseline {
     last_update: string;
 }
 
+export interface RemediationRecord {
+    id: string;
+    timestamp: string;
+    resource_id: string;
+    resource_type: string;
+    resource_name: string;
+    finding_id?: string;
+    problem: string;
+    summary?: string;  // AI-generated summary of what was achieved
+    action: string;
+    output?: string;
+    outcome: string;
+    duration_ms?: number;
+    note?: string;
+    automatic: boolean;
+}
+
+export interface RemediationStats {
+    total: number;
+    resolved: number;
+    partial: number;
+    failed: number;
+    unknown: number;
+    automatic: number;
+    manual: number;
+}
+
 // API response types
-export interface PatternsResponse {
+interface LicenseGatedResponse {
+    license_required?: boolean;
+    upgrade_url?: string;
+    message?: string;
+}
+
+export interface PatternsResponse extends LicenseGatedResponse {
     patterns: FailurePattern[];
     count: number;
 }
 
-export interface PredictionsResponse {
+export interface PredictionsResponse extends LicenseGatedResponse {
     predictions: FailurePrediction[];
     count: number;
 }
 
-export interface CorrelationsResponse {
+export interface CorrelationsResponse extends LicenseGatedResponse {
     correlations: ResourceCorrelation[];
     count: number;
 }
 
-export interface ChangesResponse {
+export interface ChangesResponse extends LicenseGatedResponse {
     changes: InfrastructureChange[];
     count: number;
     hours: number;
 }
 
-export interface BaselinesResponse {
+export interface BaselinesResponse extends LicenseGatedResponse {
     baselines: ResourceBaseline[];
     count: number;
+}
+
+export interface RemediationsResponse extends LicenseGatedResponse {
+    remediations: RemediationRecord[];
+    count: number;
+    stats?: RemediationStats;
 }

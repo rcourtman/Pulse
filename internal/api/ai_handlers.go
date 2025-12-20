@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -724,6 +725,15 @@ type AIExecuteResponse struct {
 	PendingApprovals []ai.ApprovalNeededData `json:"pending_approvals,omitempty"` // Commands that require approval (non-streaming)
 }
 
+type AIKubernetesAnalyzeRequest struct {
+	ClusterID string `json:"cluster_id"`
+}
+
+type AIRunbookExecuteRequest struct {
+	FindingID string `json:"finding_id"`
+	RunbookID string `json:"runbook_id"`
+}
+
 // HandleExecute executes an AI prompt (POST /api/ai/execute)
 func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -800,6 +810,153 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to write AI execute response")
+	}
+}
+
+// HandleAnalyzeKubernetesCluster analyzes a Kubernetes cluster with AI (POST /api/ai/kubernetes/analyze)
+func (h *AISettingsHandler) HandleAnalyzeKubernetesCluster(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require authentication
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	if !h.aiService.IsEnabled() {
+		http.Error(w, "AI is not enabled or configured", http.StatusBadRequest)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	var req AIKubernetesAnalyzeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if strings.TrimSpace(req.ClusterID) == "" {
+		http.Error(w, "cluster_id is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 180*time.Second)
+	defer cancel()
+
+	resp, err := h.aiService.AnalyzeKubernetesCluster(ctx, req.ClusterID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ai.ErrKubernetesClusterNotFound):
+			http.Error(w, "Kubernetes cluster not found", http.StatusNotFound)
+			return
+		case errors.Is(err, ai.ErrKubernetesStateUnavailable):
+			http.Error(w, "Kubernetes state not available", http.StatusServiceUnavailable)
+			return
+		default:
+			log.Error().Err(err).Str("cluster_id", req.ClusterID).Msg("Kubernetes AI analysis failed")
+			http.Error(w, "AI request failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	response := AIExecuteResponse{
+		Content:          resp.Content,
+		Model:            resp.Model,
+		InputTokens:      resp.InputTokens,
+		OutputTokens:     resp.OutputTokens,
+		ToolCalls:        resp.ToolCalls,
+		PendingApprovals: resp.PendingApprovals,
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write Kubernetes AI response")
+	}
+}
+
+// HandleGetRunbooksForFinding returns available runbooks for a finding (GET /api/ai/runbooks)
+func (h *AISettingsHandler) HandleGetRunbooksForFinding(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	findingID := strings.TrimSpace(r.URL.Query().Get("finding_id"))
+	if findingID == "" {
+		http.Error(w, "finding_id is required", http.StatusBadRequest)
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		http.Error(w, "AI patrol not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	runbooks, err := patrol.GetRunbooksForFinding(findingID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	if err := utils.WriteJSONResponse(w, runbooks); err != nil {
+		log.Error().Err(err).Msg("Failed to write runbooks response")
+	}
+}
+
+// HandleExecuteRunbook executes a runbook for a finding (POST /api/ai/runbooks/execute)
+func (h *AISettingsHandler) HandleExecuteRunbook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	var req AIRunbookExecuteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if strings.TrimSpace(req.FindingID) == "" || strings.TrimSpace(req.RunbookID) == "" {
+		http.Error(w, "finding_id and runbook_id are required", http.StatusBadRequest)
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		http.Error(w, "AI patrol not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 300*time.Second)
+	defer cancel()
+
+	result, err := patrol.ExecuteRunbook(ctx, req.FindingID, req.RunbookID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ai.ErrRunbookNotFound):
+			http.Error(w, "Runbook not found", http.StatusNotFound)
+		case errors.Is(err, ai.ErrRunbookNotApplicable):
+			http.Error(w, "Runbook does not apply to finding", http.StatusBadRequest)
+		default:
+			log.Error().Err(err).Str("runbook_id", req.RunbookID).Msg("Runbook execution failed")
+			http.Error(w, "Runbook execution failed: "+err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if err := utils.WriteJSONResponse(w, result); err != nil {
+		log.Error().Err(err).Msg("Failed to write runbook execution response")
 	}
 }
 
@@ -2081,6 +2238,97 @@ func (h *AISettingsHandler) HandlePatrolStream(w http.ResponseWriter, r *http.Re
 	}
 }
 
+func previewTitle(category ai.FindingCategory) string {
+	switch category {
+	case ai.FindingCategoryPerformance:
+		return "Performance issue detected"
+	case ai.FindingCategoryCapacity:
+		return "Capacity issue detected"
+	case ai.FindingCategoryReliability:
+		return "Reliability issue detected"
+	case ai.FindingCategoryBackup:
+		return "Backup issue detected"
+	case ai.FindingCategorySecurity:
+		return "Security issue detected"
+	default:
+		return "Potential issue detected"
+	}
+}
+
+func previewResourceName(resourceType string) string {
+	switch resourceType {
+	case "node":
+		return "Node"
+	case "vm":
+		return "VM"
+	case "container", "oci_container":
+		return "Container"
+	case "docker_host":
+		return "Docker host"
+	case "docker_container":
+		return "Docker container"
+	case "storage":
+		return "Storage"
+	case "pbs":
+		return "PBS server"
+	case "pbs_datastore":
+		return "PBS datastore"
+	case "pbs_job":
+		return "PBS job"
+	case "host":
+		return "Host"
+	case "host_raid":
+		return "RAID array"
+	case "host_sensor":
+		return "Host sensor"
+	default:
+		return "Resource"
+	}
+}
+
+func redactFindingsForPreview(findings []*ai.Finding) []*ai.Finding {
+	redacted := make([]*ai.Finding, 0, len(findings))
+	for _, finding := range findings {
+		if finding == nil {
+			continue
+		}
+		copy := *finding
+		copy.Key = ""
+		copy.ResourceID = ""
+		copy.ResourceName = previewResourceName(finding.ResourceType)
+		copy.Node = ""
+		copy.Title = previewTitle(finding.Category)
+		copy.Description = "Upgrade to view full analysis."
+		copy.Recommendation = ""
+		copy.Evidence = ""
+		copy.AlertID = ""
+		copy.AcknowledgedAt = nil
+		copy.SnoozedUntil = nil
+		copy.ResolvedAt = nil
+		copy.AutoResolved = false
+		copy.DismissedReason = ""
+		copy.UserNote = ""
+		copy.TimesRaised = 0
+		copy.Suppressed = false
+		copy.Source = "preview"
+		redacted = append(redacted, &copy)
+	}
+	return redacted
+}
+
+func redactPatrolRunHistory(runs []ai.PatrolRunRecord) []ai.PatrolRunRecord {
+	redacted := make([]ai.PatrolRunRecord, len(runs))
+	for i, run := range runs {
+		copy := run
+		copy.AIAnalysis = ""
+		copy.InputTokens = 0
+		copy.OutputTokens = 0
+		copy.FindingIDs = nil
+		redacted[i] = copy
+	}
+	return redacted
+}
+
 // HandleGetPatrolFindings returns all active findings (GET /api/ai/patrol/findings)
 func (h *AISettingsHandler) HandleGetPatrolFindings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -2104,6 +2352,12 @@ func (h *AISettingsHandler) HandleGetPatrolFindings(w http.ResponseWriter, r *ht
 		findings = patrol.GetFindingsForResource(resourceID)
 	} else {
 		findings = patrol.GetAllFindings()
+	}
+
+	if !h.aiService.HasLicenseFeature(license.FeatureAIPatrol) {
+		w.Header().Set("X-License-Required", "true")
+		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
+		findings = redactFindingsForPreview(findings)
 	}
 
 	if err := utils.WriteJSONResponse(w, findings); err != nil {
@@ -2479,6 +2733,12 @@ func (h *AISettingsHandler) HandleGetFindingsHistory(w http.ResponseWriter, r *h
 
 	findings := patrol.GetFindingsHistory(startTime)
 
+	if !h.aiService.HasLicenseFeature(license.FeatureAIPatrol) {
+		w.Header().Set("X-License-Required", "true")
+		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
+		findings = redactFindingsForPreview(findings)
+	}
+
 	if err := utils.WriteJSONResponse(w, findings); err != nil {
 		log.Error().Err(err).Msg("Failed to write findings history response")
 	}
@@ -2511,6 +2771,12 @@ func (h *AISettingsHandler) HandleGetPatrolRunHistory(w http.ResponseWriter, r *
 	}
 
 	runs := patrol.GetRunHistory(limit)
+
+	if !h.aiService.HasLicenseFeature(license.FeatureAIPatrol) {
+		w.Header().Set("X-License-Required", "true")
+		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
+		runs = redactPatrolRunHistory(runs)
+	}
 
 	if err := utils.WriteJSONResponse(w, runs); err != nil {
 		log.Error().Err(err).Msg("Failed to write patrol run history response")

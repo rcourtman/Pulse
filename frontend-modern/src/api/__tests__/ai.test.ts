@@ -59,6 +59,10 @@ describe('AIAPI', () => {
     apiFetchJSONMock.mockResolvedValueOnce({} as any);
     await AIAPI.getRecentChanges(12);
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/intelligence/changes?hours=12');
+
+    apiFetchJSONMock.mockResolvedValueOnce({} as any);
+    await AIAPI.getRemediations({ resourceId: 'vm:101', hours: 72, limit: 5 });
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/intelligence/remediations?resource_id=vm%3A101&hours=72&limit=5');
   });
 
   it('sanitizes runCommand payload consistently', async () => {
@@ -127,4 +131,3 @@ describe('AIAPI', () => {
     ).rejects.toThrow('No response body');
   });
 });
-

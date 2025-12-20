@@ -29,9 +29,9 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
@@ -1131,6 +1131,9 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/models", RequireAuth(r.config, r.aiSettingsHandler.HandleListModels))
 	r.mux.HandleFunc("/api/ai/execute", RequireAuth(r.config, r.aiSettingsHandler.HandleExecute))
 	r.mux.HandleFunc("/api/ai/execute/stream", RequireAuth(r.config, r.aiSettingsHandler.HandleExecuteStream))
+	r.mux.HandleFunc("/api/ai/kubernetes/analyze", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureKubernetesAI, r.aiSettingsHandler.HandleAnalyzeKubernetesCluster)))
+	r.mux.HandleFunc("/api/ai/runbooks", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIAutoFix, r.aiSettingsHandler.HandleGetRunbooksForFinding)))
+	r.mux.HandleFunc("/api/ai/runbooks/execute", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIAutoFix, r.aiSettingsHandler.HandleExecuteRunbook)))
 	r.mux.HandleFunc("/api/ai/investigate-alert", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIAlerts, r.aiSettingsHandler.HandleInvestigateAlert)))
 	r.mux.HandleFunc("/api/ai/run-command", RequireAuth(r.config, r.aiSettingsHandler.HandleRunCommand))
 	r.mux.HandleFunc("/api/ai/knowledge", RequireAuth(r.config, r.aiSettingsHandler.HandleGetGuestKnowledge))
@@ -1152,19 +1155,19 @@ func (r *Router) setupRoutes() {
 
 	// AI Patrol routes for background monitoring
 	// Note: Status remains accessible so UI can show license/upgrade state
-	// Read endpoints (findings, history, runs) return empty data with license_required flag
+	// Read endpoints (findings, history, runs) return redacted preview data when unlicensed
 	// Mutation endpoints (run, acknowledge, dismiss, etc.) return 402 to prevent unauthorized actions
 	r.mux.HandleFunc("/api/ai/patrol/status", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolStatus))
 	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandlePatrolStream)))
-	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, LicenseGatedEmptyResponse(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleGetPatrolFindings)))
-	r.mux.HandleFunc("/api/ai/patrol/history", RequireAuth(r.config, LicenseGatedEmptyResponse(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleGetFindingsHistory)))
+	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolFindings))
+	r.mux.HandleFunc("/api/ai/patrol/history", RequireAuth(r.config, r.aiSettingsHandler.HandleGetFindingsHistory))
 	r.mux.HandleFunc("/api/ai/patrol/run", RequireAdmin(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleForcePatrol)))
 	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleAcknowledgeFinding)))
 	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleDismissFinding)))
 	r.mux.HandleFunc("/api/ai/patrol/suppress", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleSuppressFinding)))
 	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleSnoozeFinding)))
 	r.mux.HandleFunc("/api/ai/patrol/resolve", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleResolveFinding)))
-	r.mux.HandleFunc("/api/ai/patrol/runs", RequireAuth(r.config, LicenseGatedEmptyResponse(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleGetPatrolRunHistory)))
+	r.mux.HandleFunc("/api/ai/patrol/runs", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolRunHistory))
 	// Suppression rules management (also Pro-only since they control LLM behavior)
 	// GET returns empty array for unlicensed, POST returns 402
 	r.mux.HandleFunc("/api/ai/patrol/suppressions", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
@@ -1206,6 +1209,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/intelligence/correlations", RequireAuth(r.config, r.aiSettingsHandler.HandleGetCorrelations))
 	r.mux.HandleFunc("/api/ai/intelligence/changes", RequireAuth(r.config, r.aiSettingsHandler.HandleGetRecentChanges))
 	r.mux.HandleFunc("/api/ai/intelligence/baselines", RequireAuth(r.config, r.aiSettingsHandler.HandleGetBaselines))
+	r.mux.HandleFunc("/api/ai/intelligence/remediations", RequireAuth(r.config, r.aiSettingsHandler.HandleGetRemediations))
 
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)

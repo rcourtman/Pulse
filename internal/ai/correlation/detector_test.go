@@ -244,3 +244,93 @@ func contains(s, substr string) bool {
 	}
 	return false
 }
+
+func TestFormatDuration(t *testing.T) {
+	tests := []struct {
+		name     string
+		duration time.Duration
+		expected string
+	}{
+		{
+			name:     "seconds",
+			duration: 30 * time.Second,
+			expected: "seconds",
+		},
+		{
+			name:     "one minute",
+			duration: 1 * time.Minute,
+			expected: "1 minute",
+		},
+		{
+			name:     "multiple minutes",
+			duration: 30 * time.Minute,
+			expected: "30 minutes",
+		},
+		{
+			name:     "just under an hour",
+			duration: 59 * time.Minute,
+			expected: "59 minutes",
+		},
+		{
+			name:     "one hour",
+			duration: 1 * time.Hour,
+			expected: "1 hour",
+		},
+		{
+			name:     "multiple hours",
+			duration: 5 * time.Hour,
+			expected: "5 hours",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatDuration(tt.duration)
+			if result != tt.expected {
+				t.Errorf("formatDuration(%v) = %q, want %q", tt.duration, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFormatConfidence(t *testing.T) {
+	tests := []struct {
+		confidence float64
+		expected   string
+	}{
+		{0.0, "0%"},
+		{0.5, "50%"},
+		{0.75, "75%"},
+		{1.0, "100%"},
+		{0.333, "33%"},
+	}
+
+	for _, tt := range tests {
+		result := formatConfidence(tt.confidence)
+		if result != tt.expected {
+			t.Errorf("formatConfidence(%.2f) = %q, want %q", tt.confidence, result, tt.expected)
+		}
+	}
+}
+
+func TestIntToStr(t *testing.T) {
+	tests := []struct {
+		input    int
+		expected string
+	}{
+		{0, "0"},
+		{1, "1"},
+		{10, "10"},
+		{100, "100"},
+		{999, "999"},
+		{12345, "12345"},
+	}
+
+	for _, tt := range tests {
+		result := intToStr(tt.input)
+		if result != tt.expected {
+			t.Errorf("intToStr(%d) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+

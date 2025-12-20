@@ -46,6 +46,7 @@ func (a *PatrolHistoryPersistenceAdapter) SavePatrolRunHistory(runs []PatrolRunR
 			NewFindings:      r.NewFindings,
 			ExistingFindings: r.ExistingFindings,
 			ResolvedFindings: r.ResolvedFindings,
+			AutoFixCount:     r.AutoFixCount,
 			FindingsSummary:  r.FindingsSummary,
 			FindingIDs:       r.FindingIDs,
 			ErrorCount:       r.ErrorCount,
@@ -84,6 +85,7 @@ func (a *PatrolHistoryPersistenceAdapter) LoadPatrolRunHistory() ([]PatrolRunRec
 			NewFindings:      r.NewFindings,
 			ExistingFindings: r.ExistingFindings,
 			ResolvedFindings: r.ResolvedFindings,
+			AutoFixCount:     r.AutoFixCount,
 			FindingsSummary:  r.FindingsSummary,
 			FindingIDs:       r.FindingIDs,
 			ErrorCount:       r.ErrorCount,
@@ -153,7 +155,7 @@ func (s *PatrolRunHistoryStore) Add(run PatrolRunRecord) {
 
 	// Prepend (newest first)
 	s.runs = append([]PatrolRunRecord{run}, s.runs...)
-	
+
 	// Trim to max
 	if len(s.runs) > s.maxRuns {
 		s.runs = s.runs[:s.maxRuns]
@@ -167,7 +169,7 @@ func (s *PatrolRunHistoryStore) Add(run PatrolRunRecord) {
 func (s *PatrolRunHistoryStore) GetAll() []PatrolRunRecord {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	result := make([]PatrolRunRecord, len(s.runs))
 	copy(result, s.runs)
 	return result
@@ -177,11 +179,11 @@ func (s *PatrolRunHistoryStore) GetAll() []PatrolRunRecord {
 func (s *PatrolRunHistoryStore) GetRecent(n int) []PatrolRunRecord {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	if n <= 0 || n > len(s.runs) {
 		n = len(s.runs)
 	}
-	
+
 	result := make([]PatrolRunRecord, n)
 	copy(result, s.runs[:n])
 	return result

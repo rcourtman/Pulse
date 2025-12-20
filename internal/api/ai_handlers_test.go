@@ -43,9 +43,9 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 	// Update settings to enable AI via Ollama.
 	{
 		body, _ := json.Marshal(AISettingsUpdateRequest{
-			Enabled:      ptr(true),
-			Provider:     ptr("ollama"),
-			Model:        ptr("ollama:llama3"),
+			Enabled:       ptr(true),
+			Provider:      ptr("ollama"),
+			Model:         ptr("ollama:llama3"),
 			OllamaBaseURL: ptr("http://localhost:11434"),
 		})
 		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
@@ -159,8 +159,8 @@ func TestAISettingsHandler_Execute_Ollama(t *testing.T) {
 					"role":    "assistant",
 					"content": "hello from ollama",
 				},
-				"done":             true,
-				"done_reason":      "stop",
+				"done":              true,
+				"done_reason":       "stop",
 				"prompt_eval_count": 3,
 				"eval_count":        5,
 			})
@@ -300,3 +300,861 @@ func TestAISettingsHandler_TestProvider_Ollama(t *testing.T) {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
 }
+
+// ========================================
+// HandleGetAICostSummary tests
+// ========================================
+
+func TestHandleGetAICostSummary_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/cost/summary", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAICostSummary(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestHandleGetAICostSummary_NoAIService(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAICostSummary(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp struct {
+		Days        int    `json:"days"`
+		PricingAsOf string `json:"pricing_as_of"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Days != 30 {
+		t.Fatalf("expected Days=30 default, got %d", resp.Days)
+	}
+}
+
+func TestHandleGetAICostSummary_CustomDays(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary?days=7", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAICostSummary(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp struct {
+		Days int `json:"days"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Days != 7 {
+		t.Fatalf("expected Days=7, got %d", resp.Days)
+	}
+}
+
+func TestHandleGetAICostSummary_MaxDays(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	// Test that days > 365 is capped at 365
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary?days=1000", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAICostSummary(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp struct {
+		Days int `json:"days"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Days != 365 {
+		t.Fatalf("expected Days=365 (capped), got %d", resp.Days)
+	}
+}
+
+// ========================================
+// HandleResetAICostHistory tests
+// ========================================
+
+func TestHandleResetAICostHistory_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/reset", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleResetAICostHistory(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestHandleResetAICostHistory_Success(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/cost/reset", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleResetAICostHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp struct {
+		Ok bool `json:"ok"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !resp.Ok {
+		t.Fatalf("expected ok=true")
+	}
+}
+
+// ========================================
+// HandleExportAICostHistory tests
+// ========================================
+
+func TestHandleExportAICostHistory_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/cost/export", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleExportAICostHistory(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+// ========================================
+// HandleGetSuppressionRules tests
+// ========================================
+
+func TestHandleGetSuppressionRules_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/suppressions", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetSuppressionRules(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+// ========================================
+// HandleAddSuppressionRule tests
+// ========================================
+
+func TestHandleAddSuppressionRule_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/suppressions", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleAddSuppressionRule(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+// ========================================
+// HandleDeleteSuppressionRule tests
+// ========================================
+
+func TestHandleDeleteSuppressionRule_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/suppressions/rule-123", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleDeleteSuppressionRule(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+// ========================================
+// HandleGetDismissedFindings tests
+// ========================================
+
+func TestHandleGetDismissedFindings_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/dismissed", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetDismissedFindings(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+// ========================================
+// HandleGetGuestKnowledge tests
+// ========================================
+
+func TestHandleGetGuestKnowledge_MissingGuestID(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/knowledge", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+// ========================================
+// HandleSaveGuestNote tests
+// ========================================
+
+func TestHandleSaveGuestNote_InvalidBody(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge", bytes.NewReader([]byte(`{invalid json}`)))
+	rec := httptest.NewRecorder()
+	handler.HandleSaveGuestNote(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleSaveGuestNote_MissingFields(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	body := []byte(`{"guest_id": "vm-100"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleSaveGuestNote(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+// ========================================
+// HandleDeleteGuestNote tests
+// ========================================
+
+func TestHandleDeleteGuestNote_InvalidBody(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/delete", bytes.NewReader([]byte(`{invalid json}`)))
+	rec := httptest.NewRecorder()
+	handler.HandleDeleteGuestNote(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleDeleteGuestNote_MissingFields(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	body := []byte(`{"guest_id": "vm-100"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/delete", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleDeleteGuestNote(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+// ========================================
+// HandleClearGuestKnowledge tests
+// ========================================
+
+func TestHandleClearGuestKnowledge_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/knowledge/clear", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleClearGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestHandleClearGuestKnowledge_MissingGuestID(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	body := []byte(`{}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/clear", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleClearGuestKnowledge(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+// ========================================
+// HandleDebugContext tests
+// ========================================
+
+func TestHandleDebugContext_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/debug/context", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleDebugContext(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+// ========================================
+// HandleGetConnectedAgents tests
+// ========================================
+
+func TestHandleGetConnectedAgents_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/agents", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetConnectedAgents(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestHandleGetConnectedAgents_NoAgentServer(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	// handler created with nil agentServer
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/agents", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetConnectedAgents(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp struct {
+		Count int    `json:"count"`
+		Note  string `json:"note"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Count != 0 {
+		t.Fatalf("expected count=0, got %d", resp.Count)
+	}
+	if resp.Note == "" {
+		t.Fatalf("expected note to be present")
+	}
+}
+
+// ========================================
+// HandleRunCommand tests
+// ========================================
+
+func TestHandleRunCommand_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/run-command", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleRunCommand(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestHandleRunCommand_InvalidBody(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader([]byte(`{invalid json}`)))
+	rec := httptest.NewRecorder()
+	handler.HandleRunCommand(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+// ========================================
+// HandleAnalyzeKubernetesCluster tests
+// ========================================
+
+func TestHandleAnalyzeKubernetesCluster_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/kubernetes/analyze", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleAnalyzeKubernetesCluster(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestHandleAnalyzeKubernetesCluster_InvalidBody(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/kubernetes/analyze", bytes.NewReader([]byte(`{invalid json}`)))
+	rec := httptest.NewRecorder()
+	handler.HandleAnalyzeKubernetesCluster(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+// ========================================
+// HandleGetRunbooksForFinding tests
+// ========================================
+
+func TestHandleGetRunbooksForFinding_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/runbooks", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetRunbooksForFinding(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestHandleGetRunbooksForFinding_MissingFindingID(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/runbooks", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetRunbooksForFinding(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+// ========================================
+// HandleExecuteRunbook tests
+// ========================================
+
+func TestHandleExecuteRunbook_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/runbooks/execute", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleExecuteRunbook(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestHandleExecuteRunbook_InvalidBody(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/runbooks/execute", bytes.NewReader([]byte(`{invalid json}`)))
+	rec := httptest.NewRecorder()
+	handler.HandleExecuteRunbook(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+// ========================================
+// HandleInvestigateAlert tests
+// ========================================
+
+func TestHandleInvestigateAlert_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/investigate", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleInvestigateAlert(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestHandleInvestigateAlert_InvalidBody(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader([]byte(`{invalid json}`)))
+	rec := httptest.NewRecorder()
+	handler.HandleInvestigateAlert(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleInvestigateAlert_MissingAlertID(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	body := []byte(`{}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleInvestigateAlert(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+// ========================================
+// AISettingsHandler setter method tests
+// ========================================
+
+func TestAISettingsHandler_SetConfig(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	// SetConfig with nil should be a no-op
+	handler.SetConfig(nil)
+
+	// SetConfig with new config should update the handler's config
+	newCfg := &config.Config{DataPath: tmp, BackendPort: 9999}
+	handler.SetConfig(newCfg)
+	// No assertion needed - just verifying it doesn't panic
+}
+
+func TestAISettingsHandler_StopPatrol(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	// StopPatrol should be safe to call even when patrol is not running
+	handler.StopPatrol()
+	// No assertion needed - just verifying it doesn't panic
+}
+
+func TestAISettingsHandler_GetAlertTriggeredAnalyzer(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	// Should return the analyzer (may be nil if not initialized)
+	analyzer := handler.GetAlertTriggeredAnalyzer()
+	// Just verify it doesn't panic and returns something
+	_ = analyzer
+}
+
+func TestAISettingsHandler_StartPatrol(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	// Start patrol with a cancellable context
+	ctx, cancel := context.WithCancel(context.Background())
+	handler.StartPatrol(ctx)
+
+	// Give it a brief moment then stop
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+	handler.StopPatrol()
+}
+
+func TestAISettingsHandler_SetPatrolFindingsPersistence(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	// Set nil persistence should not panic
+	err := handler.SetPatrolFindingsPersistence(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestAISettingsHandler_SetPatrolRunHistoryPersistence(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	// Set nil persistence should not panic
+	err := handler.SetPatrolRunHistoryPersistence(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestAISettingsHandler_SetPatrolThresholdProvider(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	// Set nil threshold provider should not panic
+	handler.SetPatrolThresholdProvider(nil)
+}
+
+func TestAISettingsHandler_SetMetricsHistoryProvider(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	// Set nil metrics provider should not panic
+	handler.SetMetricsHistoryProvider(nil)
+}
+
+func TestAISettingsHandler_SetBaselineStore(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	// Set nil baseline store should not panic
+	handler.SetBaselineStore(nil)
+}
+
+func TestAISettingsHandler_SetChangeDetector(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	// Set nil change detector should not panic
+	handler.SetChangeDetector(nil)
+}
+
+func TestAISettingsHandler_SetRemediationLog(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	// Set nil remediation log should not panic
+	handler.SetRemediationLog(nil)
+}
+
+func TestAISettingsHandler_SetPatternDetector(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	// Set nil pattern detector should not panic
+	handler.SetPatternDetector(nil)
+}
+
+func TestAISettingsHandler_SetCorrelationDetector(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := NewAISettingsHandler(cfg, persistence, nil)
+
+	// Set nil correlation detector should not panic
+	handler.SetCorrelationDetector(nil)
+}
+

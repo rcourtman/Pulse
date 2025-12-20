@@ -6,9 +6,12 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
+
+const aiIntelligenceUpgradeURL = "https://pulsemonitor.app/pro"
 
 // HandleGetPatterns returns detected failure patterns (GET /api/ai/intelligence/patterns)
 func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Request) {
@@ -41,10 +44,10 @@ func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Req
 
 	// Get resource filter if provided
 	resourceID := r.URL.Query().Get("resource_id")
-	
+
 	patterns := detector.GetPatterns()
 	var result []map[string]interface{}
-	
+
 	for key, pattern := range patterns {
 		if resourceID != "" && pattern.ResourceID != resourceID {
 			continue
@@ -61,9 +64,22 @@ func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Req
 		})
 	}
 
+	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
+	if locked {
+		w.Header().Set("X-License-Required", "true")
+		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
+	}
+
+	count := len(result)
+	if locked {
+		result = []map[string]interface{}{}
+	}
+
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
-		"patterns": result,
-		"count":    len(result),
+		"patterns":         result,
+		"count":            count,
+		"license_required": locked,
+		"upgrade_url":      aiIntelligenceUpgradeURL,
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write patterns response")
 	}
@@ -100,7 +116,7 @@ func (h *AISettingsHandler) HandleGetPredictions(w http.ResponseWriter, r *http.
 
 	// Get resource filter if provided
 	resourceID := r.URL.Query().Get("resource_id")
-	
+
 	var predictions []ai.FailurePrediction
 	if resourceID != "" {
 		predictions = detector.GetPredictionsForResource(resourceID)
@@ -122,9 +138,22 @@ func (h *AISettingsHandler) HandleGetPredictions(w http.ResponseWriter, r *http.
 		})
 	}
 
+	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
+	if locked {
+		w.Header().Set("X-License-Required", "true")
+		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
+	}
+
+	count := len(result)
+	if locked {
+		result = []map[string]interface{}{}
+	}
+
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
-		"predictions": result,
-		"count":       len(result),
+		"predictions":      result,
+		"count":            count,
+		"license_required": locked,
+		"upgrade_url":      aiIntelligenceUpgradeURL,
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write predictions response")
 	}
@@ -161,7 +190,7 @@ func (h *AISettingsHandler) HandleGetCorrelations(w http.ResponseWriter, r *http
 
 	// Get resource filter if provided
 	resourceID := r.URL.Query().Get("resource_id")
-	
+
 	var correlations []*ai.Correlation
 	if resourceID != "" {
 		correlations = detector.GetCorrelationsForResource(resourceID)
@@ -187,9 +216,22 @@ func (h *AISettingsHandler) HandleGetCorrelations(w http.ResponseWriter, r *http
 		})
 	}
 
+	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
+	if locked {
+		w.Header().Set("X-License-Required", "true")
+		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
+	}
+
+	count := len(result)
+	if locked {
+		result = []map[string]interface{}{}
+	}
+
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
-		"correlations": result,
-		"count":        len(result),
+		"correlations":     result,
+		"count":            count,
+		"license_required": locked,
+		"upgrade_url":      aiIntelligenceUpgradeURL,
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write correlations response")
 	}
@@ -232,7 +274,7 @@ func (h *AISettingsHandler) HandleGetRecentChanges(w http.ResponseWriter, r *htt
 			hours = h
 		}
 	}
-	
+
 	since := time.Now().Add(-time.Duration(hours) * time.Hour)
 	changes := detector.GetRecentChanges(100, since)
 
@@ -251,10 +293,23 @@ func (h *AISettingsHandler) HandleGetRecentChanges(w http.ResponseWriter, r *htt
 		})
 	}
 
+	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
+	if locked {
+		w.Header().Set("X-License-Required", "true")
+		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
+	}
+
+	count := len(result)
+	if locked {
+		result = []map[string]interface{}{}
+	}
+
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
-		"changes": result,
-		"count":   len(result),
-		"hours":   hours,
+		"changes":          result,
+		"count":            count,
+		"hours":            hours,
+		"license_required": locked,
+		"upgrade_url":      aiIntelligenceUpgradeURL,
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write changes response")
 	}
@@ -291,10 +346,10 @@ func (h *AISettingsHandler) HandleGetBaselines(w http.ResponseWriter, r *http.Re
 
 	// Get resource filter if provided
 	resourceID := r.URL.Query().Get("resource_id")
-	
+
 	baselines := store.GetAllBaselines()
 	var result []map[string]interface{}
-	
+
 	for key, baseline := range baselines {
 		if resourceID != "" && baseline.ResourceID != resourceID {
 			continue
@@ -312,10 +367,165 @@ func (h *AISettingsHandler) HandleGetBaselines(w http.ResponseWriter, r *http.Re
 		})
 	}
 
+	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
+	if locked {
+		w.Header().Set("X-License-Required", "true")
+		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
+	}
+
+	count := len(result)
+	if locked {
+		result = []map[string]interface{}{}
+	}
+
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
-		"baselines": result,
-		"count":     len(result),
+		"baselines":        result,
+		"count":            count,
+		"license_required": locked,
+		"upgrade_url":      aiIntelligenceUpgradeURL,
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write baselines response")
 	}
+}
+
+// HandleGetRemediations returns remediation history (GET /api/ai/intelligence/remediations)
+func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"remediations": []interface{}{},
+			"message":      "Patrol service not initialized",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write remediations response")
+		}
+		return
+	}
+
+	remediationLog := patrol.GetRemediationLog()
+	if remediationLog == nil {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"remediations": []interface{}{},
+			"message":      "Remediation log not initialized",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write remediations response")
+		}
+		return
+	}
+
+	resourceID := r.URL.Query().Get("resource_id")
+	findingID := r.URL.Query().Get("finding_id")
+
+	limit := 20
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	hours := 168
+	if hoursStr := r.URL.Query().Get("hours"); hoursStr != "" {
+		if parsed, err := strconv.Atoi(hoursStr); err == nil && parsed > 0 {
+			hours = parsed
+		}
+	}
+	since := time.Now().Add(-time.Duration(hours) * time.Hour)
+
+	var records []ai.RemediationRecord
+	switch {
+	case findingID != "":
+		records = remediationLog.GetForFinding(findingID, limit)
+	case resourceID != "":
+		records = remediationLog.GetForResource(resourceID, limit)
+	default:
+		records = remediationLog.GetRecentRemediations(limit, since)
+	}
+
+	stats := remediationStatsFromRecords(records)
+	if findingID == "" && resourceID == "" {
+		stats = remediationLog.GetRecentRemediationStats(since)
+	}
+
+	result := make([]map[string]interface{}, 0, len(records))
+	for _, rec := range records {
+		durationMs := int64(0)
+		if rec.Duration > 0 {
+			durationMs = rec.Duration.Milliseconds()
+		}
+		result = append(result, map[string]interface{}{
+			"id":            rec.ID,
+			"timestamp":     rec.Timestamp,
+			"resource_id":   rec.ResourceID,
+			"resource_type": rec.ResourceType,
+			"resource_name": rec.ResourceName,
+			"finding_id":    rec.FindingID,
+			"problem":       rec.Problem,
+			"action":        rec.Action,
+			"output":        rec.Output,
+			"outcome":       rec.Outcome,
+			"duration_ms":   durationMs,
+			"note":          rec.Note,
+			"automatic":     rec.Automatic,
+		})
+	}
+
+	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
+	if locked {
+		w.Header().Set("X-License-Required", "true")
+		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
+	}
+
+	count := len(result)
+	if locked {
+		result = []map[string]interface{}{}
+	}
+
+	if err := utils.WriteJSONResponse(w, map[string]interface{}{
+		"remediations":     result,
+		"count":            count,
+		"stats":            stats,
+		"license_required": locked,
+		"upgrade_url":      aiIntelligenceUpgradeURL,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to write remediations response")
+	}
+}
+
+func remediationStatsFromRecords(records []ai.RemediationRecord) map[string]int {
+	stats := map[string]int{
+		"total":     len(records),
+		"resolved":  0,
+		"partial":   0,
+		"failed":    0,
+		"unknown":   0,
+		"automatic": 0,
+		"manual":    0,
+	}
+
+	for _, rec := range records {
+		switch rec.Outcome {
+		case ai.OutcomeResolved:
+			stats["resolved"]++
+		case ai.OutcomePartial:
+			stats["partial"]++
+		case ai.OutcomeFailed:
+			stats["failed"]++
+		default:
+			stats["unknown"]++
+		}
+		if rec.Automatic {
+			stats["automatic"]++
+		} else {
+			stats["manual"]++
+		}
+	}
+
+	return stats
 }

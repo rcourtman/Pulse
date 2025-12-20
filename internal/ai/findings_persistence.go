@@ -22,6 +22,7 @@ func (a *FindingsPersistenceAdapter) SaveFindings(findings map[string]*Finding) 
 	for id, f := range findings {
 		records[id] = &config.AIFindingRecord{
 			ID:             f.ID,
+			Key:            f.Key,
 			Severity:       string(f.Severity),
 			Category:       string(f.Category),
 			ResourceID:     f.ResourceID,
@@ -56,6 +57,7 @@ func (a *FindingsPersistenceAdapter) LoadFindings() (map[string]*Finding, error)
 	for id, r := range data.Findings {
 		findings[id] = &Finding{
 			ID:             r.ID,
+			Key:            r.Key,
 			Severity:       FindingSeverity(r.Severity),
 			Category:       FindingCategory(r.Category),
 			ResourceID:     r.ResourceID,

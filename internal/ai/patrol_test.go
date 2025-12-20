@@ -951,3 +951,109 @@ func TestPatrolService_ResolveFinding_Errors(t *testing.T) {
 		t.Error("Expected error for non-existent finding")
 	}
 }
+
+func TestPatrolService_SetFindingsPersistence_Nil(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Setting nil persistence should not error
+	err := ps.SetFindingsPersistence(nil)
+	if err != nil {
+		t.Errorf("Expected no error with nil persistence, got: %v", err)
+	}
+}
+
+func TestPatrolService_SetRunHistoryPersistence_Nil(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Setting nil persistence should not error
+	err := ps.SetRunHistoryPersistence(nil)
+	if err != nil {
+		t.Errorf("Expected no error with nil persistence, got: %v", err)
+	}
+}
+
+func TestPatrolService_SetKnowledgeStore(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Setting nil knowledge store should not panic
+	ps.SetKnowledgeStore(nil)
+
+	// Verify it was set (field is internal, just checking no panic)
+}
+
+// ========================================
+// normalizeFindingKey tests
+// ========================================
+
+func TestNormalizeFindingKey(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "whitespace only",
+			input:    "   ",
+			expected: "",
+		},
+		{
+			name:     "simple lowercase",
+			input:    "high-cpu-usage",
+			expected: "high-cpu-usage",
+		},
+		{
+			name:     "uppercase to lowercase",
+			input:    "High-CPU-Usage",
+			expected: "high-cpu-usage",
+		},
+		{
+			name:     "underscores to dashes",
+			input:    "high_cpu_usage",
+			expected: "high-cpu-usage",
+		},
+		{
+			name:     "spaces to dashes",
+			input:    "high cpu usage",
+			expected: "high-cpu-usage",
+		},
+		{
+			name:     "mixed separators",
+			input:    "high_cpu usage-warning",
+			expected: "high-cpu-usage-warning",
+		},
+		{
+			name:     "special characters removed",
+			input:    "cpu@100%!warning",
+			expected: "cpu100warning",
+		},
+		{
+			name:     "leading/trailing whitespace",
+			input:    "  high-cpu  ",
+			expected: "high-cpu",
+		},
+		{
+			name:     "with numbers",
+			input:    "vm-123-cpu-high",
+			expected: "vm-123-cpu-high",
+		},
+		{
+			name:     "leading/trailing dashes trimmed",
+			input:    "-high-cpu-",
+			expected: "high-cpu",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := normalizeFindingKey(tt.input)
+			if result != tt.expected {
+				t.Errorf("normalizeFindingKey(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}

@@ -230,3 +230,107 @@ func TestChangeDetector_GetRecentChanges(t *testing.T) {
 		t.Error("Expected at least 1 recent change")
 	}
 }
+
+func TestRemediationLog_GetRecentRemediationStats(t *testing.T) {
+	r := NewRemediationLog(RemediationLogConfig{MaxRecords: 100})
+
+	// Log some remediations with different outcomes
+	now := time.Now()
+
+	r.Log(RemediationRecord{
+		Timestamp:  now.Add(-1 * time.Hour),
+		Problem:    "p1",
+		Action:     "a1",
+		Outcome:    OutcomeResolved,
+		Automatic:  true,
+	})
+	r.Log(RemediationRecord{
+		Timestamp:  now.Add(-2 * time.Hour),
+		Problem:    "p2",
+		Action:     "a2",
+		Outcome:    OutcomePartial,
+		Automatic:  false,
+	})
+	r.Log(RemediationRecord{
+		Timestamp:  now.Add(-30 * time.Minute),
+		Problem:    "p3",
+		Action:     "a3",
+		Outcome:    OutcomeFailed,
+		Automatic:  true,
+	})
+	r.Log(RemediationRecord{
+		Timestamp:  now.Add(-48 * time.Hour),
+		Problem:    "old",
+		Action:     "old",
+		Outcome:    OutcomeResolved,
+		Automatic:  false,
+	})
+
+	// Get stats for last 24 hours
+	since := now.Add(-24 * time.Hour)
+	stats := r.GetRecentRemediationStats(since)
+
+	if stats["total"] != 3 {
+		t.Errorf("Expected 3 total (last 24h), got %d", stats["total"])
+	}
+	if stats["resolved"] != 1 {
+		t.Errorf("Expected 1 resolved, got %d", stats["resolved"])
+	}
+	if stats["partial"] != 1 {
+		t.Errorf("Expected 1 partial, got %d", stats["partial"])
+	}
+	if stats["failed"] != 1 {
+		t.Errorf("Expected 1 failed, got %d", stats["failed"])
+	}
+	if stats["automatic"] != 2 {
+		t.Errorf("Expected 2 automatic, got %d", stats["automatic"])
+	}
+	if stats["manual"] != 1 {
+		t.Errorf("Expected 1 manual, got %d", stats["manual"])
+	}
+}
+
+func TestRemediationLog_AutomaticVsManual(t *testing.T) {
+	r := NewRemediationLog(RemediationLogConfig{MaxRecords: 100})
+
+	r.Log(RemediationRecord{
+		Problem:   "auto problem",
+		Action:    "auto action",
+		Outcome:   OutcomeResolved,
+		Automatic: true,
+	})
+	r.Log(RemediationRecord{
+		Problem:   "manual problem",
+		Action:    "manual action",
+		Outcome:   OutcomeResolved,
+		Automatic: false,
+	})
+
+	stats := r.GetRemediationStats()
+	// Verify both are counted
+	if stats["total"] != 2 {
+		t.Errorf("Expected 2 total, got %d", stats["total"])
+	}
+}
+
+func TestChangeDetector_Limit(t *testing.T) {
+	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 5})
+
+	// Create many changes to exceed limit
+	for i := 0; i < 10; i++ {
+		d.DetectChanges([]ResourceSnapshot{
+			{ID: "vm-100", Name: "web", Type: "vm", Status: "running", Node: "node1"},
+		})
+		// Alternate status to create changes
+		d.DetectChanges([]ResourceSnapshot{
+			{ID: "vm-100", Name: "web", Type: "vm", Status: "stopped", Node: "node1"},
+		})
+	}
+
+	// Should have limited records
+	allChanges := d.GetRecentChanges(100, time.Time{})
+	if len(allChanges) > 5 {
+		t.Errorf("Expected max 5 changes due to limit, got %d", len(allChanges))
+	}
+}
+

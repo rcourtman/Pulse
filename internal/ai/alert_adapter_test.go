@@ -107,3 +107,74 @@ func TestAlertManagerAdapter_ConvertsAndFilters(t *testing.T) {
 	}
 }
 
+func TestInferResourceType(t *testing.T) {
+	tests := []struct {
+		name      string
+		alertType string
+		metadata  map[string]interface{}
+		expected  string
+	}{
+		{"node_offline", "node_offline", nil, "node"},
+		{"node_cpu", "node_cpu", nil, "node"},
+		{"node_memory", "node_memory", nil, "node"},
+		{"node_temperature", "node_temperature", nil, "node"},
+		{"storage_usage", "storage_usage", nil, "storage"},
+		{"storage", "storage", nil, "storage"},
+		{"docker_cpu", "docker_cpu", nil, "docker"},
+		{"docker_memory", "docker_memory", nil, "docker"},
+		{"docker_restart", "docker_restart", nil, "docker"},
+		{"docker_offline", "docker_offline", nil, "docker"},
+		{"host_cpu", "host_cpu", nil, "host"},
+		{"host_memory", "host_memory", nil, "host"},
+		{"host_offline", "host_offline", nil, "host"},
+		{"host_disk", "host_disk", nil, "host"},
+		{"pmg", "pmg", nil, "pmg"},
+		{"pmg_queue", "pmg_queue", nil, "pmg"},
+		{"pmg_quarantine", "pmg_quarantine", nil, "pmg"},
+		{"backup", "backup", nil, "backup"},
+		{"backup_missing", "backup_missing", nil, "backup"},
+		{"snapshot", "snapshot", nil, "snapshot"},
+		{"snapshot_age", "snapshot_age", nil, "snapshot"},
+		{"unknown_type", "unknown_type", nil, "guest"},
+		{"with_metadata", "unknown", map[string]interface{}{"resourceType": "custom"}, "custom"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := inferResourceType(tt.alertType, tt.metadata)
+			if result != tt.expected {
+				t.Errorf("inferResourceType(%q, %v) = %q, want %q", tt.alertType, tt.metadata, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFormatDuration(t *testing.T) {
+	tests := []struct {
+		name     string
+		duration time.Duration
+		expected string
+	}{
+		{"less_than_minute", 30 * time.Second, "< 1 min"},
+		{"one_minute", 1 * time.Minute, "1 min"},
+		{"5_minutes", 5 * time.Minute, "5 mins"},
+		{"59_minutes", 59 * time.Minute, "59 mins"},
+		{"one_hour", 1 * time.Hour, "1 hour"},
+		{"2_hours", 2 * time.Hour, "2 hours"},
+		{"1h_30m", 90 * time.Minute, "1h 30m"},
+		{"one_day", 24 * time.Hour, "1 day"},
+		{"2_days", 48 * time.Hour, "2 days"},
+		{"1d_12h", 36 * time.Hour, "1d 12h"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatDuration(tt.duration)
+			if result != tt.expected {
+				t.Errorf("formatDuration(%v) = %q, want %q", tt.duration, result, tt.expected)
+			}
+		})
+	}
+}
+
+
