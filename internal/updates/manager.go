@@ -620,7 +620,13 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 			Str("channel", channel).
 			Str("rateLimitRemaining", resp.Header.Get("X-RateLimit-Remaining")).
 			Str("rateLimitReset", resp.Header.Get("X-RateLimit-Reset")).
-			Msg("GitHub API rate limit encountered while fetching releases")
+			Msg("GitHub API rate limit encountered, trying RSS fallback")
+
+		// Try RSS/Atom feed as fallback - doesn't count against rate limits
+		if feedRelease, err := m.getLatestReleaseFromFeed(ctx, channel); err == nil {
+			log.Info().Str("version", feedRelease.TagName).Msg("Got release info from RSS feed fallback")
+			return feedRelease, nil
+		}
 
 		detail := strings.TrimSpace(string(body))
 		if detail == "" {
@@ -774,6 +780,87 @@ func (m *Manager) resolveChannel(requested string, currentInfo *VersionInfo) str
 		return currentInfo.Channel
 	}
 	return "stable"
+}
+
+// getLatestReleaseFromFeed fetches the latest release from GitHub's Atom feed
+// This is used as a fallback when the API is rate-limited, as the Atom feed
+// doesn't count against API rate limits.
+func (m *Manager) getLatestReleaseFromFeed(ctx context.Context, channel string) (*ReleaseInfo, error) {
+	feedURL := "https://github.com/rcourtman/Pulse/releases.atom"
+
+	req, err := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create feed request: %w", err)
+	}
+
+	req.Header.Set("User-Agent", "Pulse-Update-Checker")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch feed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("feed returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read feed: %w", err)
+	}
+
+	// Parse the Atom feed to extract version tags
+	// The feed format includes entries like: <title>Pulse v5.0.0</title>
+	// We use simple string parsing rather than a full XML parser for minimal deps
+	content := string(body)
+
+	// Find all version tags in the feed (format: "Pulse vX.Y.Z" or "Pulse vX.Y.Z-rc.N")
+	versionRegex := regexp.MustCompile(`<title>Pulse (v\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)</title>`)
+	matches := versionRegex.FindAllStringSubmatch(content, -1)
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no version tags found in feed")
+	}
+
+	// Filter based on channel
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		tagName := match[1]
+
+		// Parse the version to check if it's a prerelease
+		ver, err := ParseVersion(tagName)
+		if err != nil {
+			continue
+		}
+
+		isPrerelease := ver.IsPrerelease()
+
+		// For stable channel, skip prereleases
+		if channel == "stable" && isPrerelease {
+			continue
+		}
+
+		// Found a valid release for this channel
+		log.Debug().
+			Str("tag", tagName).
+			Bool("prerelease", isPrerelease).
+			Str("channel", channel).
+			Msg("Found release from feed")
+
+		return &ReleaseInfo{
+			TagName:    tagName,
+			Name:       "Pulse " + tagName,
+			Prerelease: isPrerelease,
+			// Note: Feed doesn't include full release notes or asset info
+			// This is just for version checking - actual download still uses known URL patterns
+		}, nil
+	}
+
+	return nil, fmt.Errorf("no suitable release found for channel %s", channel)
 }
 
 func (m *Manager) createHistoryEntry(ctx context.Context, entry UpdateHistoryEntry) string {
