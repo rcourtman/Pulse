@@ -1173,7 +1173,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
 
     const guests = (props.allGuests() ?? []).map((guest) => {
-      const guestId = guest.id || `${guest.instance}-${guest.vmid}`;
+      // Use canonical format: instance:node:vmid
+      const guestId = guest.id || `${guest.instance}:${guest.node}:${guest.vmid}`;
       const override = overridesMap.get(guestId);
       const overrideSeverity = override?.poweredOffSeverity;
 

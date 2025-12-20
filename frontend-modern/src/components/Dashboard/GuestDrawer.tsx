@@ -21,8 +21,8 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     const [newAnnotation, setNewAnnotation] = createSignal('');
     const [saving, setSaving] = createSignal(false);
 
-    // Build guest ID for metadata
-    const guestId = () => props.guest.id || `${props.guest.instance}-${props.guest.vmid}`;
+    // Build guest ID for metadata - use canonical format: instance:node:vmid
+    const guestId = () => props.guest.id || `${props.guest.instance}:${props.guest.node}:${props.guest.vmid}`;
 
     // Check if AI is enabled and load annotations on mount
     createEffect(() => {
@@ -103,19 +103,23 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
             uptime: guest.uptime ? formatUptime(guest.uptime) : 'Not running',
         };
 
-        // CPU info
+        // CPU info - include both formatted and raw values
+        // Raw values enable backend baseline comparison
         if (guest.cpu !== undefined) {
-            context.cpu_usage = formatPercent(guest.cpu * 100);
+            const cpuPercent = guest.cpu * 100;
+            context.cpu_usage = formatPercent(cpuPercent);
+            context.cpu_usage_raw = cpuPercent; // For baseline comparison
         }
         if (guest.cpus) {
             context.cpu_cores = guest.cpus;
         }
 
-        // Memory info
+        // Memory info - include both formatted and raw values
         if (guest.memory) {
             context.memory_used = formatBytes(guest.memory.used || 0);
             context.memory_total = formatBytes(guest.memory.total || 0);
             context.memory_usage = formatPercent(guest.memory.usage || 0);
+            context.memory_usage_raw = guest.memory.usage || 0; // For baseline comparison
             if (guest.memory.balloon && guest.memory.balloon !== guest.memory.total) {
                 context.memory_balloon = formatBytes(guest.memory.balloon);
             }
@@ -125,11 +129,13 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
             }
         }
 
-        // Disk info
+        // Disk info - include both formatted and raw values
         if (guest.disk && guest.disk.total > 0) {
+            const diskPercent = (guest.disk.used / guest.disk.total) * 100;
             context.disk_used = formatBytes(guest.disk.used || 0);
             context.disk_total = formatBytes(guest.disk.total || 0);
-            context.disk_usage = formatPercent((guest.disk.used / guest.disk.total) * 100);
+            context.disk_usage = formatPercent(diskPercent);
+            context.disk_usage_raw = diskPercent; // For baseline comparison
         }
 
         // I/O rates
@@ -185,7 +191,8 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
     const handleAskAI = () => {
         const guestType = props.guest.type === 'qemu' ? 'vm' : 'container';
-        const guestId = props.guest.id || `${props.guest.instance}-${props.guest.vmid}`;
+        // Use canonical format: instance:node:vmid
+        const guestId = props.guest.id || `${props.guest.instance}:${props.guest.node}:${props.guest.vmid}`;
 
         aiChatStore.openForTarget(guestType, guestId, {
             guestName: props.guest.name,

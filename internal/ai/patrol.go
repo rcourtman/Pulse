@@ -364,6 +364,13 @@ func (p *PatrolService) GetBaselineStore() *baseline.Store {
 	return p.baselineStore
 }
 
+// GetMetricsHistoryProvider returns the metrics history provider for trend analysis
+func (p *PatrolService) GetMetricsHistoryProvider() MetricsHistoryProvider {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.metricsHistory
+}
+
 // SetChangeDetector sets the change detector for tracking infrastructure changes
 func (p *PatrolService) SetChangeDetector(detector *ChangeDetector) {
 	p.mu.Lock()
