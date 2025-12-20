@@ -1015,10 +1015,19 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 }
 
 // normalizeStorageDefaults ensures storage default thresholds are set
+// Trigger=0 is allowed and means "disable storage alerting"
 func normalizeStorageDefaults(config *AlertConfig) {
-	if config.StorageDefault.Trigger <= 0 {
+	if config.StorageDefault.Trigger < 0 {
 		config.StorageDefault.Trigger = 85
 		config.StorageDefault.Clear = 80
+	} else if config.StorageDefault.Trigger == 0 {
+		// Trigger=0 means disabled, set Clear=0 too
+		config.StorageDefault.Clear = 0
+	} else if config.StorageDefault.Clear <= 0 {
+		config.StorageDefault.Clear = config.StorageDefault.Trigger - 5
+		if config.StorageDefault.Clear < 0 {
+			config.StorageDefault.Clear = 0
+		}
 	}
 }
 
@@ -1182,10 +1191,14 @@ func normalizeBackupDefaults(config *AlertConfig) {
 }
 
 // normalizeNodeDefaults ensures node threshold defaults exist
+// Trigger=0 is allowed for Temperature and means "disable temperature alerting"
 func normalizeNodeDefaults(config *AlertConfig) {
 	// Ensure temperature defaults exist for nodes so high temps alert out of the box
-	if config.NodeDefaults.Temperature == nil || config.NodeDefaults.Temperature.Trigger <= 0 {
+	if config.NodeDefaults.Temperature == nil || config.NodeDefaults.Temperature.Trigger < 0 {
 		config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	} else if config.NodeDefaults.Temperature.Trigger == 0 {
+		// Trigger=0 means disabled, set Clear=0 too
+		config.NodeDefaults.Temperature.Clear = 0
 	} else if config.NodeDefaults.Temperature.Clear <= 0 {
 		config.NodeDefaults.Temperature.Clear = config.NodeDefaults.Temperature.Trigger - 5
 		if config.NodeDefaults.Temperature.Clear <= 0 {

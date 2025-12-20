@@ -206,9 +206,17 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	defer c.mu.Unlock()
 
 	// Ensure critical defaults are set before saving
-	if config.StorageDefault.Trigger <= 0 {
+	// Storage: Allow Trigger=0 to disable storage alerting
+	if config.StorageDefault.Trigger < 0 {
 		config.StorageDefault.Trigger = 85
 		config.StorageDefault.Clear = 80
+	} else if config.StorageDefault.Trigger == 0 {
+		config.StorageDefault.Clear = 0
+	} else if config.StorageDefault.Clear <= 0 {
+		config.StorageDefault.Clear = config.StorageDefault.Trigger - 5
+		if config.StorageDefault.Clear < 0 {
+			config.StorageDefault.Clear = 0
+		}
 	}
 	if config.MinimumDelta <= 0 {
 		margin := config.HysteresisMargin
@@ -409,9 +417,17 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	if string(data) == "{}" {
 		config.Enabled = true
 	}
-	if config.StorageDefault.Trigger <= 0 {
+	// Storage: Allow Trigger=0 to disable storage alerting
+	if config.StorageDefault.Trigger < 0 {
 		config.StorageDefault.Trigger = 85
 		config.StorageDefault.Clear = 80
+	} else if config.StorageDefault.Trigger == 0 {
+		config.StorageDefault.Clear = 0
+	} else if config.StorageDefault.Clear <= 0 {
+		config.StorageDefault.Clear = config.StorageDefault.Trigger - 5
+		if config.StorageDefault.Clear < 0 {
+			config.StorageDefault.Clear = 0
+		}
 	}
 	if config.MinimumDelta <= 0 {
 		config.MinimumDelta = 2.0
@@ -422,8 +438,16 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	if config.HysteresisMargin <= 0 {
 		config.HysteresisMargin = 5.0
 	}
-	if config.NodeDefaults.Temperature == nil || config.NodeDefaults.Temperature.Trigger <= 0 {
+	// NodeDefaults.Temperature: Allow Trigger=0 to disable temperature alerting
+	if config.NodeDefaults.Temperature == nil || config.NodeDefaults.Temperature.Trigger < 0 {
 		config.NodeDefaults.Temperature = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	} else if config.NodeDefaults.Temperature.Trigger == 0 {
+		config.NodeDefaults.Temperature.Clear = 0
+	} else if config.NodeDefaults.Temperature.Clear <= 0 {
+		config.NodeDefaults.Temperature.Clear = config.NodeDefaults.Temperature.Trigger - 5
+		if config.NodeDefaults.Temperature.Clear <= 0 {
+			config.NodeDefaults.Temperature.Clear = 75
+		}
 	}
 	// Host Defaults: Allow Trigger=0 to disable specific alerts
 	if config.HostDefaults.CPU == nil || config.HostDefaults.CPU.Trigger < 0 {
