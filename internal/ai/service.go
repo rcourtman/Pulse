@@ -2935,6 +2935,10 @@ This is a 3-command job. Don't over-investigate.`
 				prompt += fmt.Sprintf("\n- %s: %v", formatContextKey(k), v)
 			}
 		}
+
+		// Add enriched historical context (baselines, trends, predictions)
+		// This is the Pulse Pro value-add that Claude Code can't replicate
+		prompt += s.buildEnrichedResourceContext(req.TargetID, req.TargetType, req.Context)
 	}
 
 	return prompt
@@ -3260,4 +3264,284 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+// buildEnrichedResourceContext adds historical intelligence to regular AI chat
+// This is what makes Pulse Pro valuable - context that Claude Code can't have:
+// - Baseline comparisons ("this is 2x normal")
+// - Trend analysis ("memory growing 5%/day")
+// - Predictions ("disk full in 12 days")
+// - Recent changes ("config changed 2 hours ago")
+func (s *Service) buildEnrichedResourceContext(resourceID, resourceType string, currentMetrics map[string]interface{}) string {
+	s.mu.RLock()
+	patrol := s.patrolService
+	s.mu.RUnlock()
+
+	if patrol == nil {
+		return ""
+	}
+
+	var sections []string
+
+	// Get baseline store for comparisons
+	baselineStore := patrol.GetBaselineStore()
+	if baselineStore != nil {
+		var baselineInfo []string
+
+		// Helper to get raw numeric value from context
+		// Prefers _raw fields, falls back to regular fields
+		getRawValue := func(rawKey, formattedKey string) (float64, bool) {
+			// Try raw value first
+			if val, ok := currentMetrics[rawKey].(float64); ok && val > 0 {
+				return val, true
+			}
+			// Fallback to formatted value if it's already a float
+			if val, ok := currentMetrics[formattedKey].(float64); ok && val > 0 {
+				return val, true
+			}
+			return 0, false
+		}
+
+		// Check CPU baseline
+		if cpuVal, ok := getRawValue("cpu_usage_raw", "cpu_usage"); ok {
+			if bl, exists := baselineStore.GetBaseline(resourceID, "cpu"); exists && bl.SampleCount >= 10 {
+				ratio := cpuVal / bl.Mean
+				if ratio > 1.5 {
+					baselineInfo = append(baselineInfo, fmt.Sprintf("CPU %.0f%% is **%.1fx higher** than baseline %.0f%% (σ=%.1f)", cpuVal, ratio, bl.Mean, bl.StdDev))
+				} else if ratio < 0.5 {
+					baselineInfo = append(baselineInfo, fmt.Sprintf("CPU %.0f%% is **%.1fx lower** than baseline %.0f%%", cpuVal, 1/ratio, bl.Mean))
+				}
+			}
+		}
+
+		// Check memory baseline
+		if memVal, ok := getRawValue("memory_usage_raw", "memory_usage"); ok {
+			if bl, exists := baselineStore.GetBaseline(resourceID, "memory"); exists && bl.SampleCount >= 10 {
+				ratio := memVal / bl.Mean
+				if ratio > 1.3 {
+					baselineInfo = append(baselineInfo, fmt.Sprintf("Memory %.0f%% is **%.1fx higher** than baseline %.0f%%", memVal, ratio, bl.Mean))
+				}
+			}
+		}
+
+		// Check disk baseline
+		if diskVal, ok := getRawValue("disk_usage_raw", "disk_usage"); ok {
+			if bl, exists := baselineStore.GetBaseline(resourceID, "disk"); exists && bl.SampleCount >= 10 {
+				ratio := diskVal / bl.Mean
+				if ratio > 1.2 { // More sensitive for disk
+					baselineInfo = append(baselineInfo, fmt.Sprintf("Disk %.0f%% is **%.1fx higher** than baseline %.0f%%", diskVal, ratio, bl.Mean))
+				}
+			}
+		}
+
+		if len(baselineInfo) > 0 {
+			sections = append(sections, "### Baseline Comparisons\n"+strings.Join(baselineInfo, "\n"))
+		}
+	}
+
+	// Compute trends from metrics history (this works immediately, no learning period)
+	metricsHistory := patrol.GetMetricsHistoryProvider()
+	if metricsHistory != nil {
+		var trendInfo []string
+		duration := 24 * time.Hour // Last 24 hours
+
+		// Get metrics for this resource
+		// Try guest metrics first, then node metrics
+		allMetrics := metricsHistory.GetAllGuestMetrics(resourceID, duration)
+		if len(allMetrics) == 0 {
+			// Try as node
+			cpuPoints := metricsHistory.GetNodeMetrics(resourceID, "cpu", duration)
+			memPoints := metricsHistory.GetNodeMetrics(resourceID, "memory", duration)
+			if len(cpuPoints) > 0 {
+				allMetrics["cpu"] = cpuPoints
+			}
+			if len(memPoints) > 0 {
+				allMetrics["memory"] = memPoints
+			}
+		}
+
+		// Analyze trends for each metric
+		for metric, points := range allMetrics {
+			if len(points) < 3 { // Need at least 3 points for trends
+				continue
+			}
+
+			// Get first and last values
+			first := points[0].Value
+			last := points[len(points)-1].Value
+			duration := points[len(points)-1].Timestamp.Sub(points[0].Timestamp)
+
+			if duration < 30*time.Minute { // Need at least 30min of data
+				continue
+			}
+
+			// Calculate rate of change per day
+			change := last - first
+			hoursSpan := duration.Hours()
+			ratePerDay := change * (24 / hoursSpan)
+
+			// Only report significant trends
+			if metric == "disk" && ratePerDay > 0.5 { // Growing by >0.5GB/day
+				trendInfo = append(trendInfo, fmt.Sprintf("**Disk** growing %.1f GB/day over last %.0fh", 
+					ratePerDay, hoursSpan))
+			} else if metric == "memory" && absFloat(ratePerDay) > 2 { // >2% change per day
+				direction := "growing"
+				if ratePerDay < 0 {
+					direction = "declining"
+				}
+				trendInfo = append(trendInfo, fmt.Sprintf("**Memory** %s %.1f%%/day over last %.0fh", 
+					direction, absFloat(ratePerDay), hoursSpan))
+			} else if metric == "cpu" && absFloat(ratePerDay) > 5 { // >5% change per day
+				direction := "increasing"
+				if ratePerDay < 0 {
+					direction = "decreasing"
+				}
+				trendInfo = append(trendInfo, fmt.Sprintf("**CPU** %s %.1f%%/day over last %.0fh", 
+					direction, absFloat(ratePerDay), hoursSpan))
+			}
+		}
+
+		if len(trendInfo) > 0 {
+			sections = append(sections, "### Trends (24h)\n"+strings.Join(trendInfo, "\n"))
+		}
+	}
+
+	// Get pattern detector for predictions
+	patternDetector := patrol.GetPatternDetector()
+	if patternDetector != nil {
+		predictions := patternDetector.GetPredictionsForResource(resourceID)
+		if len(predictions) > 0 {
+			var predInfo []string
+			for _, pred := range predictions {
+				if pred.DaysUntil < 30 { // Only show predictions within 30 days
+					predInfo = append(predInfo, fmt.Sprintf("**%s** predicted in %.0f days (%.0f%% confidence)", 
+						pred.EventType, pred.DaysUntil, pred.Confidence*100))
+				}
+			}
+			if len(predInfo) > 0 {
+				sections = append(sections, "### Predictions\n"+strings.Join(predInfo, "\n"))
+			}
+		}
+	}
+
+	// Get change detector for recent changes
+	changeDetector := patrol.GetChangeDetector()
+	if changeDetector != nil {
+		changes := changeDetector.GetChangesForResource(resourceID, 5)
+		if len(changes) > 0 {
+			var changeInfo []string
+			for _, c := range changes {
+				if len(changeInfo) >= 3 { // Limit to 3 recent changes
+					break
+				}
+				ago := time.Since(c.DetectedAt).Truncate(time.Minute)
+				changeInfo = append(changeInfo, fmt.Sprintf("**%s** %s (%s ago)", c.ChangeType, c.Description, ago))
+			}
+			if len(changeInfo) > 0 {
+				sections = append(sections, "### Recent Changes\n"+strings.Join(changeInfo, "\n"))
+			}
+		}
+	}
+
+	// Get correlation detector for related resources
+	correlationDetector := patrol.GetCorrelationDetector()
+	if correlationDetector != nil {
+		correlations := correlationDetector.GetCorrelationsForResource(resourceID)
+		if len(correlations) > 0 {
+			var corrInfo []string
+			limit := 2
+			if len(correlations) < limit {
+				limit = len(correlations)
+			}
+			for _, corr := range correlations[:limit] {
+				corrInfo = append(corrInfo, fmt.Sprintf("Correlated with **%s**: %s", corr.TargetName, corr.Description))
+			}
+			if len(corrInfo) > 0 {
+				sections = append(sections, "### Related Resources\n"+strings.Join(corrInfo, "\n"))
+			}
+		}
+	}
+
+	// Get alert history for this resource (this works immediately, uses existing alert data)
+	s.mu.RLock()
+	alertProvider := s.alertProvider
+	s.mu.RUnlock()
+
+	if alertProvider != nil {
+		// Get active alerts for this resource
+		activeAlerts := alertProvider.GetAlertsByResource(resourceID)
+		
+		// Get historical alerts (last 20)
+		historicalAlerts := alertProvider.GetAlertHistory(resourceID, 20)
+
+		if len(activeAlerts) > 0 || len(historicalAlerts) > 0 {
+			var alertInfo []string
+
+			if len(activeAlerts) > 0 {
+				alertInfo = append(alertInfo, fmt.Sprintf("**%d active alert(s)** right now", len(activeAlerts)))
+				for _, a := range activeAlerts {
+					alertInfo = append(alertInfo, fmt.Sprintf("- %s %s: %s (active %s)", 
+						strings.ToUpper(a.Level), a.Type, a.Message, a.Duration))
+				}
+			}
+
+			if len(historicalAlerts) > 0 {
+				// Count alerts by type in the last 30 days
+				alertsByType := make(map[string]int)
+				cutoff := time.Now().Add(-30 * 24 * time.Hour)
+				for _, a := range historicalAlerts {
+					if a.ResolvedTime.After(cutoff) {
+						alertsByType[a.Type]++
+					}
+				}
+
+				if len(alertsByType) > 0 {
+					var typeCounts []string
+					for alertType, count := range alertsByType {
+						typeCounts = append(typeCounts, fmt.Sprintf("%d %s", count, alertType))
+					}
+					alertInfo = append(alertInfo, fmt.Sprintf("**Past 30 days:** %s alerts", strings.Join(typeCounts, ", ")))
+				}
+			}
+
+			if len(alertInfo) > 0 {
+				sections = append(sections, "### Alert History\n"+strings.Join(alertInfo, "\n"))
+			}
+		}
+	}
+
+	// If no sections but baseline store exists, show learning status
+	if len(sections) == 0 {
+		baselineStore := patrol.GetBaselineStore()
+		if baselineStore != nil {
+			// Check if we're still learning baselines for this resource
+			if rb, exists := baselineStore.GetResourceBaseline(resourceID); exists {
+				// Count metrics with enough samples
+				ready := 0
+				learning := 0
+				for _, mb := range rb.Metrics {
+					if mb.SampleCount >= 10 {
+						ready++
+					} else if mb.SampleCount > 0 {
+						learning++
+					}
+				}
+				
+				if learning > 0 && ready == 0 {
+					return "\n\n## Historical Intelligence (Pulse Pro)\n*Learning baselines for this resource... Trends and anomaly detection will be available after more data is collected.*"
+				}
+			}
+		}
+		return ""
+	}
+
+	return "\n\n## Historical Intelligence (Pulse Pro)\n" + strings.Join(sections, "\n\n")
+}
+
+// absFloat returns the absolute value of a float64
+func absFloat(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
 }

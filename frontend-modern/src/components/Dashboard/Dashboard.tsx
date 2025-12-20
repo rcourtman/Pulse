@@ -922,7 +922,8 @@ export function Dashboard(props: DashboardProps) {
     // Only enable if AI is configured
     if (!aiChatStore.enabled) return;
 
-    const guestId = guest.id || `${guest.instance}-${guest.vmid}`;
+    // Use canonical format: instance:node:vmid
+    const guestId = guest.id || `${guest.instance}:${guest.node}:${guest.vmid}`;
     const guestType = guest.type === 'qemu' ? 'vm' : 'container';
     const isOCI = guest.type === 'oci' || ('isOci' in guest && guest.isOci === true);
 
@@ -1172,12 +1173,13 @@ export function Dashboard(props: DashboardProps) {
                           </Show>
                           <For each={guests} fallback={<></>}>
                             {(guest, index) => {
-                              const guestId = guest.id || `${guest.instance}-${guest.vmid}`;
+                              // Use canonical format: instance:node:vmid
+                              const guestId = guest.id || `${guest.instance}:${guest.node}:${guest.vmid}`;
                               // Create a getter function for metadata to ensure reactivity
                               // Accessing guestMetadata() in a plain variable breaks SolidJS reactivity
                               const getMetadata = () =>
                                 guestMetadata()[guestId] ||
-                                guestMetadata()[`${guest.node}-${guest.vmid}`];
+                                guestMetadata()[`${guest.instance}:${guest.node}:${guest.vmid}`];
                               // PERFORMANCE: Use pre-computed parent node map instead of resolveParentNode
                               const parentNode = node ?? guestParentNodeMap().get(guestId);
                               const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
@@ -1185,8 +1187,8 @@ export function Dashboard(props: DashboardProps) {
                               // Get adjacent guest IDs for merged AI context borders
                               const prevGuest = guests[index() - 1];
                               const nextGuest = guests[index() + 1];
-                              const prevGuestId = prevGuest ? (prevGuest.id || `${prevGuest.instance}-${prevGuest.vmid}`) : null;
-                              const nextGuestId = nextGuest ? (nextGuest.id || `${nextGuest.instance}-${nextGuest.vmid}`) : null;
+                              const prevGuestId = prevGuest ? (prevGuest.id || `${prevGuest.instance}:${prevGuest.node}:${prevGuest.vmid}`) : null;
+                              const nextGuestId = nextGuest ? (nextGuest.id || `${nextGuest.instance}:${nextGuest.node}:${nextGuest.vmid}`) : null;
 
                               return (
                                 <ComponentErrorBoundary name="GuestRow">

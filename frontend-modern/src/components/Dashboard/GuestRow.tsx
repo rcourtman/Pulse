@@ -43,7 +43,8 @@ const DEFAULT_FIRST_CELL_INDENT = 'pl-4';
 
 const buildGuestId = (guest: Guest) => {
   if (guest.id) return guest.id;
-  return `${guest.instance}-${guest.vmid}`;
+  // Canonical format: instance:node:vmid
+  return `${guest.instance}:${guest.node}:${guest.vmid}`;
 };
 
 // Type guard for VM vs Container
