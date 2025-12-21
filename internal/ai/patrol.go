@@ -872,7 +872,8 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 	summary := p.findings.GetSummary()
 	var findingsSummaryStr string
 	var status string
-	totalActive := summary.Critical + summary.Warning + summary.Watch
+	// Only count critical and warning as active issues (watch/info are filtered from UI)
+	totalActive := summary.Critical + summary.Warning
 	if totalActive == 0 {
 		findingsSummaryStr = "All healthy"
 		status = "healthy"
@@ -883,9 +884,6 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		}
 		if summary.Warning > 0 {
 			parts = append(parts, fmt.Sprintf("%d warning", summary.Warning))
-		}
-		if summary.Watch > 0 {
-			parts = append(parts, fmt.Sprintf("%d watch", summary.Watch))
 		}
 		findingsSummaryStr = fmt.Sprintf("%s", joinParts(parts))
 		if summary.Critical > 0 {
