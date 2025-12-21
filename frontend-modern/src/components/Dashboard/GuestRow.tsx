@@ -522,9 +522,7 @@ export function GuestRow(props: GuestRowProps) {
   const cpuAnomaly = useAnomalyForMetric(() => props.guest.id, () => 'cpu');
   const memoryAnomaly = useAnomalyForMetric(() => props.guest.id, () => 'memory');
   const diskAnomaly = useAnomalyForMetric(() => props.guest.id, () => 'disk');
-  // TODO: Wire memoryAnomaly and diskAnomaly to StackedMemoryBar and StackedDiskBar
-  void memoryAnomaly; // Prepared for future use
-  void diskAnomaly;   // Prepared for future use
+
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
 
@@ -960,6 +958,7 @@ export function GuestRow(props: GuestRowProps) {
                       swapUsed={props.guest.memory?.swapUsed || 0}
                       swapTotal={props.guest.memory?.swapTotal || 0}
                       resourceId={metricsKey()}
+                      anomaly={memoryAnomaly()}
                     />
                   }
                 >
@@ -1002,6 +1001,7 @@ export function GuestRow(props: GuestRowProps) {
                     <StackedDiskBar
                       disks={props.guest.disks}
                       aggregateDisk={props.guest.disk}
+                      anomaly={diskAnomaly()}
                     />
                   }
                 >
