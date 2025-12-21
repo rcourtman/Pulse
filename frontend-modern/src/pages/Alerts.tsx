@@ -3027,39 +3027,8 @@ function OverviewTab(props: {
                                   </svg>
                                   Get Help
                                 </button>
-                                <Show
-                                  when={hasAutoFixFeature()}
-                                  fallback={
-                                    <a
-                                      class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-700 flex items-center gap-1.5"
-                                      href={autoFixUpgradeURL()}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      title="Pulse Pro required for runbooks"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11V7a4 4 0 118 0v4m-6 4h6a2 2 0 012 2v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5a2 2 0 012-2h2" />
-                                      </svg>
-                                      Runbook
-                                    </a>
-                                  }
-                                >
-                                  <button
-                                    class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50 flex items-center gap-1.5"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleRunbookPanel(finding.id);
-                                    }}
-                                    title="Run a vetted remediation runbook"
-                                  >
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 4H7a2 2 0 01-2-2V6a2 2 0 012-2h6l4 4v10a2 2 0 01-2 2z" />
-                                    </svg>
-                                    Runbook
-                                  </button>
-                                </Show>
-                                {/* I Fixed It button - hides until next patrol verifies */}
+                                {/* Runbook button removed - feature was removed */}
+
                                 <button
                                   class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50 flex items-center gap-1.5"
                                   onClick={(e) => {
@@ -3169,118 +3138,9 @@ function OverviewTab(props: {
                                 </div>
                               </div>
 
-                              <Show when={expandedRunbookFinding() === finding.id}>
-                                <div class="mt-3 p-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-900/10">
-                                  <div class="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
-                                    Runbook Execution
-                                  </div>
-                                  <Show when={runbookLoadingByFinding()[finding.id]}>
-                                    <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                                      <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                      Loading or executing runbook...
-                                    </div>
-                                  </Show>
-                                  <Show when={runbookErrors()[finding.id]}>
-                                    <div class="text-xs text-red-600 dark:text-red-400">
-                                      {runbookErrors()[finding.id]}
-                                    </div>
-                                  </Show>
-                                  <Show when={!runbookLoadingByFinding()[finding.id]}>
-                                    <Show when={(runbooksByFinding()[finding.id] || []).length > 0} fallback={
-                                      <div class="text-xs text-gray-500 dark:text-gray-400">
-                                        No runbooks available for this finding yet.
-                                      </div>
-                                    }>
-                                      <div class="flex flex-wrap items-center gap-2">
-                                        <select
-                                          value={runbookSelection()[finding.id] || ''}
-                                          onChange={(e) => {
-                                            const value = e.currentTarget.value;
-                                            setRunbookSelection((prev) => ({ ...prev, [finding.id]: value }));
-                                          }}
-                                          class="px-2 py-1 text-xs rounded border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200"
-                                        >
-                                          <For each={runbooksByFinding()[finding.id]}>
-                                            {(runbook) => (
-                                              <option value={runbook.id}>{runbook.title}</option>
-                                            )}
-                                          </For>
-                                        </select>
-                                        <button
-                                          class="px-2.5 py-1 text-xs font-medium rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            runSelectedRunbook(finding.id);
-                                          }}
-                                        >
-                                          Run
-                                        </button>
-                                      </div>
-                                      {(() => {
-                                        const runbooks = runbooksByFinding()[finding.id] || [];
-                                        const selected = runbooks.find((rb) => rb.id === runbookSelection()[finding.id]);
-                                        if (!selected) return null;
-                                        const riskStyles = {
-                                          low: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-                                          medium: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-                                          high: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-                                        } as const;
-                                        const riskStyle = riskStyles[selected.risk] || riskStyles.medium;
-                                        return (
-                                          <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-600 dark:text-gray-300">
-                                            <span class={`px-1.5 py-0.5 rounded-full font-semibold ${riskStyle}`}>
-                                              {selected.risk} risk
-                                            </span>
-                                            <span>{selected.description}</span>
-                                          </div>
-                                        );
-                                      })()}
-                                    </Show>
-                                  </Show>
+                              {/* Runbook Execution section removed - feature was removed */}
 
-                                  <Show when={runbookResults()[finding.id]}>
-                                    {(result) => (
-                                      <div class="mt-3 text-xs text-gray-600 dark:text-gray-300 space-y-2">
-                                        <div class="flex flex-wrap items-center gap-2">
-                                          <span class="font-medium text-gray-700 dark:text-gray-200">
-                                            Outcome:
-                                          </span>
-                                          <span class={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${result.outcome === 'resolved'
-                                            ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                                            : result.outcome === 'partial'
-                                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                                              : result.outcome === 'failed'
-                                                ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                                            }`}>
-                                            {result.outcome}
-                                          </span>
-                                          <span class="text-gray-500 dark:text-gray-400">{result.message}</span>
-                                        </div>
-                                        <Show when={result.steps?.length}>
-                                          <div class="space-y-1">
-                                            <For each={result.steps}>
-                                              {(step) => (
-                                                <div class="flex flex-wrap items-center gap-2">
-                                                  <span class={`text-[10px] px-1.5 py-0.5 rounded ${step.success ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
-                                                    {step.success ? 'OK' : 'FAIL'}
-                                                  </span>
-                                                  <span class="text-gray-600 dark:text-gray-300">{step.name}</span>
-                                                </div>
-                                              )}
-                                            </For>
-                                          </div>
-                                        </Show>
-                                        <Show when={result.verification}>
-                                          <div class="text-gray-500 dark:text-gray-400">
-                                            Verification: {result.verification.name}
-                                          </div>
-                                        </Show>
-                                      </div>
-                                    )}
-                                  </Show>
-                                </div>
-                              </Show>
+
 
                               {/* Fix Receipts section removed - was showing "No fixes logged" without runbooks */}
 
