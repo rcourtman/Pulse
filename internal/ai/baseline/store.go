@@ -66,11 +66,12 @@ type StoreConfig struct {
 // DefaultConfig returns sensible defaults
 func DefaultConfig() StoreConfig {
 	return StoreConfig{
-		LearningWindow:  7 * 24 * time.Hour, // 7 days
+		LearningWindow:  14 * 24 * time.Hour, // 14 days to capture weekly patterns
 		MinSamples:      50,
 		UpdateInterval:  1 * time.Hour,
 	}
 }
+
 
 // NewStore creates a new baseline store
 func NewStore(cfg StoreConfig) *Store {
@@ -295,13 +296,45 @@ func (s *Store) CheckResourceAnomalies(resourceID string, metrics map[string]flo
 			// Compute ratio: current value / baseline mean
 			ratio := value / baseline.Mean
 			
-			// Filter out statistically significant but practically meaningless anomalies
-			// Users don't care about small deviations from baseline
-			// Require at least 2x above baseline OR 0.5x below to be truly actionable
-			if ratio >= 0.5 && ratio <= 2.0 {
-				continue // Too close to baseline to be actionable
+			// Apply metric-specific filters to reduce noise
+			// Different metrics have different thresholds for what's "actionable"
+			shouldReport := false
+			
+			switch metric {
+			case "disk":
+				// Disk is critical - report if:
+				// 1. Usage is above 85% (absolute threshold), OR
+				// 2. Usage increased by more than 15 percentage points from baseline
+				if value >= 85.0 || (value - baseline.Mean) >= 15.0 {
+					shouldReport = true
+				}
+				
+			case "cpu":
+				// CPU fluctuates a lot - only report if:
+				// 1. Current usage is above 70% (actually busy), AND
+				// 2. It's at least 2x above baseline
+				if value >= 70.0 && ratio >= 2.0 {
+					shouldReport = true
+				}
+				
+			case "memory":
+				// Memory is more stable - report if:
+				// 1. Current usage is above 80% (getting tight), OR
+				// 2. It's at least 1.5x above baseline AND above 60%
+				if value >= 80.0 || (ratio >= 1.5 && value >= 60.0) {
+					shouldReport = true
+				}
+				
+			default:
+				// For other metrics (network, etc), use 2x threshold
+				if ratio >= 2.0 || ratio <= 0.5 {
+					shouldReport = true
+				}
 			}
-
+			
+			if !shouldReport {
+				continue
+			}
 			
 			report := AnomalyReport{
 				ResourceID:   resourceID,
@@ -327,6 +360,7 @@ func (s *Store) CheckResourceAnomalies(resourceID string, metrics map[string]flo
 	return anomalies
 
 }
+
 
 // formatAnomalyDescription generates a human-readable anomaly description
 func formatAnomalyDescription(metric string, ratio float64, direction string, severity AnomalySeverity) string {
