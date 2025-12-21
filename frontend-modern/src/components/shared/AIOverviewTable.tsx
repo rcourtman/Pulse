@@ -58,22 +58,25 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
         setLoading(true);
         setError('');
         try {
-            // Fetch all Pro features together
-            const [predResp, corrResp, remResp, changesResp] = await Promise.all([
+            // Use allSettled so one failing endpoint doesn't break everything
+            const results = await Promise.allSettled([
                 AIAPI.getPredictions(),
                 AIAPI.getCorrelations(),
                 AIAPI.getRemediations({ hours: 168, limit: 6 }),
                 AIAPI.getRecentChanges(24),
+                AIAPI.getAnomalies(),
             ]);
 
-            // Fetch anomalies separately (FREE feature - don't let failures break Pro features)
-            try {
-                const anomalyResp = await AIAPI.getAnomalies();
-                setAnomalies(anomalyResp.anomalies || []);
-            } catch {
-                // Anomalies endpoint may fail if patrol not initialized - that's OK
-                setAnomalies([]);
-            }
+            // Extract results with fallbacks for failed requests
+            const predResp = results[0].status === 'fulfilled' ? results[0].value : { predictions: [], license_required: false, count: 0, upgrade_url: '' };
+            const corrResp = results[1].status === 'fulfilled' ? results[1].value : { correlations: [], license_required: false, count: 0, upgrade_url: '' };
+            const remResp = results[2].status === 'fulfilled' ? results[2].value : { remediations: [], license_required: false, stats: null, upgrade_url: '' };
+            const changesResp = results[3].status === 'fulfilled' ? results[3].value : { changes: [], license_required: false, count: 0, upgrade_url: '' };
+            const anomalyResp = results[4].status === 'fulfilled' ? results[4].value : { anomalies: [], count: 0, severity_counts: { critical: 0, high: 0, medium: 0, low: 0 } };
+
+
+            // Handle anomalies (FREE - no license required)
+            setAnomalies(anomalyResp.anomalies || []);
 
 
             // Handle insights lock
