@@ -486,9 +486,9 @@ func (b *Builder) computeGuestMetricSamples(guestID string) map[string][]MetricP
 		if len(points) < 3 {
 			continue
 		}
-		// Downsample to ~12 points (roughly every 2 hours over 24h)
-		// This gives the LLM a compact view of recent trends
-		sampled := DownsampleMetrics(points, 12)
+		// Downsample to ~24 points (roughly hourly over 24h)
+		// This gives the LLM good resolution to spot patterns and spikes
+		sampled := DownsampleMetrics(points, 24)
 		if len(sampled) >= 3 {
 			samples[metric] = sampled
 		}
