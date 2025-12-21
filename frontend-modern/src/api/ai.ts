@@ -16,6 +16,7 @@ import type {
   ChangesResponse,
   BaselinesResponse,
   RemediationsResponse,
+  AnomaliesResponse,
   IntelligenceSummary,
   ResourceIntelligence,
 } from '@/types/aiIntelligence';
@@ -119,6 +120,13 @@ export class AIAPI {
     if (options?.limit) params.set('limit', String(options.limit));
     const query = params.toString();
     return apiFetchJSON(`${this.baseUrl}/ai/intelligence/remediations${query ? `?${query}` : ''}`) as Promise<RemediationsResponse>;
+  }
+
+  // Get current anomalies (real-time baseline deviation detection)
+  // Returns metrics that are currently deviating significantly from learned baselines
+  static async getAnomalies(resourceId?: string): Promise<AnomaliesResponse> {
+    const params = resourceId ? `?resource_id=${encodeURIComponent(resourceId)}` : '';
+    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/anomalies${params}`) as Promise<AnomaliesResponse>;
   }
 
   // ============================================
