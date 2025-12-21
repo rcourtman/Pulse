@@ -835,3 +835,190 @@ func TestFindingsStore_MatchesSuppressionRule(t *testing.T) {
 func timePtr(t time.Time) *time.Time {
 	return &t
 }
+
+func TestFindingsStore_DeleteSuppressionRule_NotFound(t *testing.T) {
+	store := NewFindingsStore()
+	
+	// Try to delete non-existent rule
+	if store.DeleteSuppressionRule("nonexistent-id") {
+		t.Error("DeleteSuppressionRule should return false for non-existent rule")
+	}
+}
+
+func TestFindingsStore_SetPersistence_Nil(t *testing.T) {
+	store := NewFindingsStore()
+	
+	// Setting nil persistence should succeed (disables persistence)
+	err := store.SetPersistence(nil)
+	if err != nil {
+		t.Errorf("SetPersistence(nil) should succeed, got: %v", err)
+	}
+}
+
+func TestFindingsStore_Acknowledge_NotFound(t *testing.T) {
+	store := NewFindingsStore()
+	
+	if store.Acknowledge("nonexistent") {
+		t.Error("Acknowledge should return false for non-existent finding")
+	}
+}
+
+func TestFindingsStore_Dismiss_NotFound(t *testing.T) {
+	store := NewFindingsStore()
+	
+	if store.Dismiss("nonexistent", "reason", "note") {
+		t.Error("Dismiss should return false for non-existent finding")
+	}
+}
+
+func TestFindingsStore_SetUserNote_NotFound(t *testing.T) {
+	store := NewFindingsStore()
+	
+	if store.SetUserNote("nonexistent", "note") {
+		t.Error("SetUserNote should return false for non-existent finding")
+	}
+}
+
+func TestFindingsStore_Suppress_NotFound(t *testing.T) {
+	store := NewFindingsStore()
+	
+	if store.Suppress("nonexistent") {
+		t.Error("Suppress should return false for non-existent finding")
+	}
+}
+
+func TestFindingsStore_Resolve_NotFound(t *testing.T) {
+	store := NewFindingsStore()
+	
+	if store.Resolve("nonexistent", false) {
+		t.Error("Resolve should return false for non-existent finding")
+	}
+}
+
+func TestFindingsStore_Resolve_AlreadyResolved(t *testing.T) {
+	store := NewFindingsStore()
+	
+	finding := &Finding{
+		ID:         "f1",
+		ResourceID: "res-1",
+		Severity:   FindingSeverityWarning,
+		Title:      "Test",
+	}
+	store.Add(finding)
+	store.Resolve("f1", false)
+	
+	// Verify it's resolved
+	f := store.Get("f1")
+	if !f.IsResolved() {
+		t.Error("Finding should be resolved after Resolve call")
+	}
+	
+	// Try to resolve again - should return false
+	if store.Resolve("f1", false) {
+		t.Error("Resolve should return false for already-resolved finding")
+	}
+}
+
+func TestFindingsStore_GetActive_Empty(t *testing.T) {
+	store := NewFindingsStore()
+	
+	active := store.GetActive(FindingSeverityInfo)
+	if len(active) != 0 {
+		t.Errorf("Expected 0 active findings from empty store, got %d", len(active))
+	}
+}
+
+func TestFindingsStore_GetSummary(t *testing.T) {
+	store := NewFindingsStore()
+	
+	// Add findings of each severity
+	store.Add(&Finding{ID: "crit", Severity: FindingSeverityCritical, ResourceID: "r1", Title: "Critical"})
+	store.Add(&Finding{ID: "warn", Severity: FindingSeverityWarning, ResourceID: "r2", Title: "Warning"})
+	store.Add(&Finding{ID: "watch", Severity: FindingSeverityWatch, ResourceID: "r3", Title: "Watch"})
+	store.Add(&Finding{ID: "info", Severity: FindingSeverityInfo, ResourceID: "r4", Title: "Info"})
+	
+	summary := store.GetSummary()
+	
+	if summary.Critical != 1 {
+		t.Errorf("Expected 1 critical, got %d", summary.Critical)
+	}
+	if summary.Warning != 1 {
+		t.Errorf("Expected 1 warning, got %d", summary.Warning)
+	}
+	if summary.Watch != 1 {
+		t.Errorf("Expected 1 watch, got %d", summary.Watch)
+	}
+	if summary.Info != 1 {
+		t.Errorf("Expected 1 info, got %d", summary.Info)
+	}
+	if summary.Total != 4 {
+		t.Errorf("Expected 4 total, got %d", summary.Total)
+	}
+	if !summary.HasIssues() {
+		t.Error("HasIssues should be true with critical/warning findings")
+	}
+}
+
+func TestFindingsStore_GetDismissedForContext_Empty(t *testing.T) {
+	store := NewFindingsStore()
+	
+	ctx := store.GetDismissedForContext()
+	if ctx != "" {
+		t.Errorf("Expected empty context for empty store, got: %s", ctx)
+	}
+}
+
+func TestFinding_Status(t *testing.T) {
+	// Test IsResolved
+	resolved := Finding{
+		ID:         "resolved",
+		ResolvedAt: timePtr(time.Now()),
+	}
+	if !resolved.IsResolved() {
+		t.Error("Finding with ResolvedAt set should be resolved")
+	}
+	
+	notResolved := Finding{ID: "not-resolved"}
+	if notResolved.IsResolved() {
+		t.Error("Finding without ResolvedAt should not be resolved")
+	}
+	
+	// Test IsDismissed
+	dismissed := Finding{
+		ID:              "dismissed",
+		DismissedReason: "not_an_issue",
+	}
+	if !dismissed.IsDismissed() {
+		t.Error("Finding with DismissedReason should be dismissed")
+	}
+}
+
+// Note: Add(nil) panics in current implementation - not testing
+
+func TestFindingsStore_Add_EmptyID(t *testing.T) {
+	store := NewFindingsStore()
+	
+	finding := &Finding{
+		ResourceID: "res-1",
+		Title:      "Test",
+	}
+	
+	// Should generate ID if empty
+	store.Add(finding)
+	
+	// Verify something was added
+	all := store.GetAll(nil)
+	if len(all) != 1 {
+		t.Error("Finding should be added even with empty ID")
+	}
+}
+
+func TestFindingsStore_GetSuppressionRules_Empty(t *testing.T) {
+	store := NewFindingsStore()
+	
+	rules := store.GetSuppressionRules()
+	if len(rules) != 0 {
+		t.Errorf("Expected 0 rules from new store, got %d", len(rules))
+	}
+}
+
