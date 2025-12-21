@@ -296,11 +296,12 @@ func (s *Store) CheckResourceAnomalies(resourceID string, metrics map[string]flo
 			ratio := value / baseline.Mean
 			
 			// Filter out statistically significant but practically meaningless anomalies
-			// Users don't care about "1.0x baseline" or small deviations
-			// Require at least 50% deviation from baseline to report
-			if ratio >= 0.5 && ratio <= 1.5 {
+			// Users don't care about small deviations from baseline
+			// Require at least 2x above baseline OR 0.5x below to be truly actionable
+			if ratio >= 0.5 && ratio <= 2.0 {
 				continue // Too close to baseline to be actionable
 			}
+
 			
 			report := AnomalyReport{
 				ResourceID:   resourceID,

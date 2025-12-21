@@ -271,6 +271,12 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
             : actionableRemediations.slice(0, ACTION_LIMIT);
 
         for (const rem of visibleRemediations) {
+            // Get the title - skip if it's just the generic fallback
+            const title = rem.summary || summarizeValue(rem.problem, rem.action);
+            if (title === 'Ran diagnostic' || title === 'Executed command') {
+                continue; // Skip generic fallbacks - not actionable
+            }
+
             const outcomeBadgeClass: Record<string, string> = {
                 resolved: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
                 partial: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
@@ -282,13 +288,14 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
                 type: 'impact',
                 typeBadge: rem.outcome === 'resolved' ? 'Fixed' : rem.outcome === 'failed' ? 'Failed' : 'Action',
                 typeBadgeClass: outcomeBadgeClass[rem.outcome] || 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
-                title: rem.summary || summarizeValue(rem.problem, rem.action), // Use backend summary or fallback
+                title: title,
                 subtitle: rem.resource_name || '',
                 timestamp: formatRelativeTime(rem.timestamp),
                 locked: false,
                 badgeClass: 'text-emerald-600 dark:text-emerald-400',
             });
         }
+
 
 
         // Changes - only show meaningful changes, not noise
