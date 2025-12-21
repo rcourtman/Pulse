@@ -217,6 +217,11 @@ func TestEncryptionUniqueness(t *testing.T) {
 }
 
 func TestNewCryptoManagerRefusesOrphanedData(t *testing.T) {
+	// Skip if production key exists - migration code will always find and use it
+	if _, err := os.Stat("/etc/pulse/.encryption.key"); err == nil {
+		t.Skip("Skipping: production encryption key exists at /etc/pulse/.encryption.key - migration will find it")
+	}
+
 	tmpDir := t.TempDir()
 
 	// Create an encrypted data file without a key
