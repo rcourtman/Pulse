@@ -135,16 +135,33 @@ func DefaultPolicy() *CommandPolicy {
 			// journalctl maintenance (modifies logs / persistent state)
 			`^journalctl\s+--vacuum`,
 			`^journalctl\s+--rotate`,
+
+			// Temp file cleanup (safe with approval)
+			`^rm\s+(-rf?|-fr?)\s+/var/tmp/`,
+			`^rm\s+(-rf?|-fr?)\s+/tmp/`,
 		},
 
 		Blocked: []string{
-			// Destructive filesystem operations
-			`rm\s+-rf\s+/`,
+			// Destructive filesystem operations - block root and critical paths
+			// Note: /var/tmp and /tmp cleanup is allowed with approval (see RequireApproval)
+			`rm\s+-rf\s+/$`,               // rm -rf / (root)
+			`rm\s+-rf\s+/\*`,              // rm -rf /* (root wildcard)
+			`rm\s+-rf\s+/home($|\s|/)`,    // rm -rf /home
+			`rm\s+-rf\s+/etc($|\s|/)`,     // rm -rf /etc
+			`rm\s+-rf\s+/usr($|\s|/)`,     // rm -rf /usr
+			`rm\s+-rf\s+/var/lib($|\s|/)`, // rm -rf /var/lib
+			`rm\s+-rf\s+/boot($|\s|/)`,    // rm -rf /boot
+			`rm\s+-rf\s+/root($|\s|/)`,    // rm -rf /root (root home)
+			`rm\s+-rf\s+/bin($|\s|/)`,     // rm -rf /bin
+			`rm\s+-rf\s+/sbin($|\s|/)`,    // rm -rf /sbin
+			`rm\s+-rf\s+/lib($|\s|/)`,     // rm -rf /lib
+			`rm\s+-rf\s+/opt($|\s|/)`,     // rm -rf /opt
 			`rm\s+--no-preserve-root`,
 			`mkfs`,
 			`dd\s+.*of=/dev/`,
 			`>\s*/dev/sd`,
 			`>\s*/dev/nvme`,
+
 
 			// System destruction
 			`shutdown`,
