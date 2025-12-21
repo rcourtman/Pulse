@@ -125,3 +125,118 @@ export interface RemediationsResponse extends LicenseGatedResponse {
     count: number;
     stats?: RemediationStats;
 }
+
+// ============================================================================
+// Unified Intelligence Types (for /api/ai/intelligence endpoint)
+// ============================================================================
+
+export type HealthGrade = 'A' | 'B' | 'C' | 'D' | 'F';
+export type HealthTrend = 'improving' | 'stable' | 'declining';
+
+export interface HealthFactor {
+    name: string;
+    impact: number;  // -1 to 1, negative is bad, positive is good
+    description: string;
+    category: string;  // "finding", "prediction", "baseline", "learning"
+}
+
+export interface HealthScore {
+    score: number;  // 0-100
+    grade: HealthGrade;
+    trend: HealthTrend;
+    factors: HealthFactor[];
+    prediction?: string;  // AI-predicted future state
+}
+
+export interface FindingsCounts {
+    total: number;
+    critical: number;
+    warning: number;
+    watch: number;
+    info: number;
+}
+
+export interface LearningStats {
+    resources_with_knowledge: number;
+    total_notes: number;
+    resources_with_baselines: number;
+    patterns_detected: number;
+    correlations_learned: number;
+    incidents_tracked: number;
+}
+
+export interface ResourceRiskSummary {
+    resource_id: string;
+    resource_name: string;
+    resource_type: string;
+    health: HealthScore;
+    top_issue: string;
+}
+
+// System-wide intelligence summary
+export interface IntelligenceSummary {
+    timestamp: string;
+    overall_health: HealthScore;
+
+    // Findings overview
+    findings_count: FindingsCounts;
+    top_findings?: unknown[];  // Top N findings by severity
+
+    // Predictions overview
+    predictions_count: number;
+    upcoming_risks?: FailurePrediction[];
+
+    // Recent activity
+    recent_changes_count: number;
+    recent_remediations?: RemediationRecord[];
+
+    // Learning progress
+    learning: LearningStats;
+
+    // Resources needing attention
+    resources_at_risk?: ResourceRiskSummary[];
+}
+
+// Per-resource intelligence
+export interface ResourceIntelligence {
+    resource_id: string;
+    resource_name: string;
+    resource_type: string;
+
+    // Health score for this resource
+    health: HealthScore;
+
+    // Active findings for this resource
+    active_findings?: unknown[];
+
+    // Predictions for this resource
+    predictions?: FailurePrediction[];
+
+    // Correlations involving this resource
+    correlations?: ResourceCorrelation[];
+    dependencies?: string[];  // Resources this depends on
+    dependents?: string[];    // Resources that depend on this
+
+    // Baselines for this resource
+    baselines?: Record<string, ResourceBaseline>;
+
+    // Current anomalies
+    anomalies?: AnomalyReport[];
+
+    // Recent incidents
+    recent_incidents?: unknown[];
+
+    // Knowledge/notes
+    knowledge?: unknown;
+    note_count: number;
+}
+
+export interface AnomalyReport {
+    metric: string;
+    current_value: number;
+    baseline_mean: number;
+    z_score: number;
+    severity: string;  // "critical", "high", "medium", "low"
+    description: string;
+}
+

@@ -26,21 +26,21 @@ func TestService_Remediation(t *testing.T) {
 	remLog := NewRemediationLog(RemediationLogConfig{DataDir: tmpDir})
 	svc.SetRemediationLog(remLog)
 
-	// Test logRemediation
+	// Test logRemediation - use an actionable command (not diagnostic)
 	req := ExecuteRequest{
 		TargetID:   "vm-101",
 		TargetType: "vm",
 		Prompt:     "High CPU",
 	}
-	svc.logRemediation(req, "top", "output", true)
+	svc.logRemediation(req, "systemctl restart myservice", "output", true)
 
 	// Verify it was logged
 	history := remLog.GetForResource("vm-101", 5)
 	if len(history) != 1 {
 		t.Fatalf("Expected 1 remediation record, got %d", len(history))
 	}
-	if history[0].Action != "top" {
-		t.Errorf("Expected action 'top', got %s", history[0].Action)
+	if history[0].Action != "systemctl restart myservice" {
+		t.Errorf("Expected action 'systemctl restart myservice', got %s", history[0].Action)
 	}
 
 	// Test buildRemediationContext
@@ -48,7 +48,7 @@ func TestService_Remediation(t *testing.T) {
 	if !containsString(ctx, "Remediation History for This Resource") {
 		t.Error("Expected remediation history section in context")
 	}
-	if !containsString(ctx, "top") {
+	if !containsString(ctx, "systemctl restart myservice") {
 		t.Error("Expected logged action in context")
 	}
 
