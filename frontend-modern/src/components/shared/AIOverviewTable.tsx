@@ -1,6 +1,6 @@
 import { Component, createEffect, createSignal, For, Show } from 'solid-js';
 import { AIAPI } from '@/api/ai';
-import type { FailurePrediction, InfrastructureChange, RemediationRecord, RemediationStats, ResourceCorrelation, AnomalyReport } from '@/types/aiIntelligence';
+import type { FailurePrediction, InfrastructureChange, RemediationRecord, RemediationStats, AnomalyReport } from '@/types/aiIntelligence';
 
 const DEFAULT_UPGRADE_URL = 'https://pulsemonitor.app/pro';
 
@@ -23,7 +23,6 @@ interface InsightRow {
  */
 export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) => {
     const [predictions, setPredictions] = createSignal<FailurePrediction[]>([]);
-    const [correlations, setCorrelations] = createSignal<ResourceCorrelation[]>([]);
     const [remediations, setRemediations] = createSignal<RemediationRecord[]>([]);
     const [remediationStats, setRemediationStats] = createSignal<RemediationStats | null>(null);
     const [changes, setChanges] = createSignal<InfrastructureChange[]>([]);
@@ -42,12 +41,10 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
     const [memoryLockedCount, setMemoryLockedCount] = createSignal(0);
 
     // Section expand/collapse state - default limits prevent overwhelming list
-    const [showAllDependencies, setShowAllDependencies] = createSignal(false);
     const [showAllActions, setShowAllActions] = createSignal(false);
     const [showAllChanges, setShowAllChanges] = createSignal(false);
 
     // Limits for each section (when not expanded)
-    const DEPENDENCY_LIMIT = 5;
     const ACTION_LIMIT = 5;
     const CHANGE_LIMIT = 5;
 
@@ -87,11 +84,9 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
                 const corrCount = corrResp.count || 0;
                 setInsightsLockedCount(predCount + corrCount);
                 setPredictions([]);
-                setCorrelations([]);
             } else {
                 setInsightsLockedCount(0);
                 setPredictions(predResp.predictions || []);
-                setCorrelations(corrResp.correlations || []);
             }
 
             // Handle impact lock
@@ -752,14 +747,6 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
                 <Show when={!loading() && anyHidden()}>
                     <div class="px-4 py-2 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/30">
                         <div class="flex flex-wrap items-center gap-3 text-xs">
-                            <Show when={hiddenDependencies() > 0}>
-                                <button
-                                    class="text-indigo-600 dark:text-indigo-400 hover:underline"
-                                    onClick={() => setShowAllDependencies(true)}
-                                >
-                                    + {hiddenDependencies()} more dependencies
-                                </button>
-                            </Show>
                             <Show when={hiddenActions() > 0}>
                                 <button
                                     class="text-emerald-600 dark:text-emerald-400 hover:underline"
