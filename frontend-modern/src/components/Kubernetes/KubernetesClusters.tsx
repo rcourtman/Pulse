@@ -606,11 +606,10 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                     type="button"
                     onClick={handleAnalyzeCluster}
                     disabled={analysisLoading() || !analysisClusterId() || !aiConfigured()}
-                    class={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                      analysisLoading() || !analysisClusterId() || !aiConfigured()
+                    class={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${analysisLoading() || !analysisClusterId() || !aiConfigured()
                         ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                         : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
+                      }`}
                   >
                     {analysisLoading() ? 'Analyzing...' : 'Analyze'}
                   </button>
@@ -621,7 +620,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
 
                 <Show when={!aiLoading() && !aiConfigured()}>
                   <div class="text-xs text-amber-600 dark:text-amber-400">
-                    AI is not configured. Configure it in Settings -> AI.
+                    AI is not configured. Configure it in Settings → AI.
                   </div>
                 </Show>
 
