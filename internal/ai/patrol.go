@@ -777,6 +777,44 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		if aiErr != nil {
 			log.Warn().Err(aiErr).Msg("AI Patrol: LLM analysis failed")
 			runStats.errors++
+
+			// Create a finding to surface this error to the user
+			errMsg := aiErr.Error()
+			var title, description, recommendation string
+			if strings.Contains(errMsg, "Insufficient Balance") || strings.Contains(errMsg, "402") {
+				title = "AI Patrol: Insufficient API credits"
+				description = "The AI patrol cannot analyze your infrastructure because your AI provider account has insufficient credits."
+				recommendation = "Add credits to your AI provider account (DeepSeek, OpenAI, etc.) or switch to a different provider in AI Settings."
+			} else if strings.Contains(errMsg, "401") || strings.Contains(errMsg, "Unauthorized") {
+				title = "AI Patrol: Invalid API key"
+				description = "The AI patrol cannot analyze your infrastructure because the API key is invalid or expired."
+				recommendation = "Check your API key in AI Settings and verify it is correct."
+			} else if strings.Contains(errMsg, "rate limit") || strings.Contains(errMsg, "429") {
+				title = "AI Patrol: Rate limited"
+				description = "The AI patrol is being rate limited by your AI provider. Analysis will be retried on the next patrol run."
+				recommendation = "Wait for the rate limit to reset, or consider upgrading your API plan for higher limits."
+			} else {
+				title = "AI Patrol: Analysis failed"
+				description = fmt.Sprintf("The AI patrol encountered an error while analyzing your infrastructure: %s", errMsg)
+				recommendation = "Check your AI settings and API key. If the problem persists, check the logs for more details."
+			}
+
+			errorFinding := &Finding{
+				ID:           generateFindingID("ai-service", "reliability", "ai-patrol-error"),
+				Key:          "ai-patrol-error",
+				Severity:     "warning",
+				Category:     "reliability",
+				ResourceID:   "ai-service",
+				ResourceName: "AI Patrol Service",
+				ResourceType: "service",
+				Title:        title,
+				Description:  description,
+				Recommendation: recommendation,
+				Evidence:     fmt.Sprintf("Error: %s", errMsg),
+				DetectedAt:   time.Now(),
+				LastSeenAt:   time.Now(),
+			}
+			trackFinding(errorFinding)
 		} else if aiResult != nil {
 			runStats.aiAnalysis = aiResult
 			for _, f := range aiResult.Findings {
