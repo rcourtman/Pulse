@@ -493,6 +493,14 @@ func (b *Builder) computeGuestMetricSamples(guestID string) map[string][]MetricP
 		}
 	}
 
+	// Debug: log if we're returning samples
+	if len(samples) > 0 {
+		log.Debug().
+			Str("guestID", guestID).
+			Int("metricCount", len(samples)).
+			Msg("AI Context: Built metric samples for LLM")
+	}
+
 	return samples
 }
 
