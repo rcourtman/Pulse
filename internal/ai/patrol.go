@@ -1359,8 +1359,10 @@ func (p *PatrolService) GetRunHistory(limit int) []PatrolRunRecord {
 }
 
 // GetAllFindings returns all active findings sorted by severity
+// Only returns critical and warning findings - watch/info are filtered out as noise
 func (p *PatrolService) GetAllFindings() []*Finding {
-	findings := p.findings.GetActive(FindingSeverityInfo)
+	findings := p.findings.GetActive(FindingSeverityWarning)
+
 
 	// Sort by severity (critical first) then by time
 	severityOrder := map[FindingSeverity]int{
