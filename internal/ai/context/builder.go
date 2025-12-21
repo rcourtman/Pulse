@@ -112,6 +112,7 @@ func (b *Builder) BuildForInfrastructure(state models.StateSnapshot) *Infrastruc
 		trends := b.computeGuestTrends(vm.ID)
 		resourceCtx := FormatGuestForContext(
 			vm.ID, vm.Name, vm.Node, "vm", vm.Status,
+			vm.VMID,
 			vm.CPU, vm.Memory.Usage, vm.Disk.Usage,
 			vm.Uptime, vm.LastBackup, trends,
 		)
@@ -137,6 +138,7 @@ func (b *Builder) BuildForInfrastructure(state models.StateSnapshot) *Infrastruc
 		
 		resourceCtx := FormatGuestForContext(
 			ct.ID, ct.Name, ct.Node, containerType, ct.Status,
+			ct.VMID,
 			ct.CPU, ct.Memory.Usage, ct.Disk.Usage,
 			ct.Uptime, ct.LastBackup, trends,
 		)

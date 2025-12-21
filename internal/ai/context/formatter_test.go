@@ -385,6 +385,7 @@ func TestFormatGuestForContext(t *testing.T) {
 		"pve-1",
 		"vm",
 		"running",
+		100,   // VMID
 		0.35,  // CPU (0-1)
 		65.0,  // Memory (0-100)
 		45.0,  // Disk (0-100)

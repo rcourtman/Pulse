@@ -15,8 +15,11 @@ func FormatResourceContext(ctx ResourceContext) string {
 	// Header with resource identity
 	typeLabel := formatResourceType(ctx.ResourceType)
 	sb.WriteString(fmt.Sprintf("### %s: %s", typeLabel, ctx.ResourceName))
+	if ctx.VMID > 0 {
+		sb.WriteString(fmt.Sprintf(" (VMID %d)", ctx.VMID))
+	}
 	if ctx.Node != "" && ctx.ResourceType != "node" {
-		sb.WriteString(fmt.Sprintf(" (on %s)", ctx.Node))
+		sb.WriteString(fmt.Sprintf(" on %s", ctx.Node))
 	}
 	sb.WriteString("\n")
 
@@ -471,6 +474,7 @@ func FormatNodeForContext(node models.Node, trends map[string]Trend) ResourceCon
 // Note: cpu is 0-1 ratio from Proxmox API, memUsage and diskUsage are already 0-100 percentages
 func FormatGuestForContext(
 	id, name, node, guestType, status string,
+	vmid int,
 	cpu, memUsage, diskUsage float64,
 	uptime int64,
 	lastBackup time.Time,
@@ -481,6 +485,7 @@ func FormatGuestForContext(
 		ResourceType:  guestType,
 		ResourceName:  name,
 		Node:          node,
+		VMID:          vmid,
 		CurrentCPU:    cpu * 100,  // Convert from 0-1 to percentage
 		CurrentMemory: memUsage,   // Already 0-100 percentage from Memory.Usage
 		CurrentDisk:   diskUsage,  // Already 0-100 percentage from Disk.Usage
