@@ -43,15 +43,15 @@ type AIConfig struct {
 	PatrolEnabled         bool   `json:"patrol_enabled"`                    // Enable background AI health patrol
 	PatrolIntervalMinutes int    `json:"patrol_interval_minutes,omitempty"` // How often to run quick patrols (default: 360 = 6 hours)
 	PatrolSchedulePreset  string `json:"patrol_schedule_preset,omitempty"`  // User-friendly preset: "15min", "1hr", "6hr", "12hr", "daily", "disabled"
-	PatrolAnalyzeNodes    bool   `json:"patrol_analyze_nodes,omitempty"`    // Include Proxmox nodes in patrol
-	PatrolAnalyzeGuests   bool   `json:"patrol_analyze_guests,omitempty"`   // Include VMs/containers in patrol
-	PatrolAnalyzeDocker   bool   `json:"patrol_analyze_docker,omitempty"`   // Include Docker hosts in patrol
-	PatrolAnalyzeStorage  bool   `json:"patrol_analyze_storage,omitempty"`  // Include storage in patrol
+	PatrolAnalyzeNodes    bool   `json:"patrol_analyze_nodes"`              // Include Proxmox nodes in patrol
+	PatrolAnalyzeGuests   bool   `json:"patrol_analyze_guests"`             // Include VMs/containers in patrol
+	PatrolAnalyzeDocker   bool   `json:"patrol_analyze_docker"`             // Include Docker hosts in patrol
+	PatrolAnalyzeStorage  bool   `json:"patrol_analyze_storage"`            // Include storage in patrol
 	PatrolAutoFix         bool   `json:"patrol_auto_fix,omitempty"`         // When true, patrol can attempt automatic remediation (default: false, observe only)
 	AutoFixModel          string `json:"auto_fix_model,omitempty"`          // Model for automatic remediation (defaults to PatrolModel, may want more capable model)
 
 	// Alert-triggered AI analysis - analyze specific resources when alerts fire
-	AlertTriggeredAnalysis bool `json:"alert_triggered_analysis,omitempty"` // Enable AI analysis when alerts fire (token-efficient)
+	AlertTriggeredAnalysis bool `json:"alert_triggered_analysis"` // Enable AI analysis when alerts fire (token-efficient)
 
 	// AI cost controls
 	// Budget is expressed as an estimated USD amount over a 30-day window (pro-rated in UI for other ranges).

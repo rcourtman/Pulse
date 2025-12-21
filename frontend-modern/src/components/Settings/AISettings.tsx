@@ -653,7 +653,7 @@ export const AISettings: Component = () => {
                         <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
                           <For each={models}>
                             {(model) => (
-                              <option value={model.id}>
+                              <option value={model.id} selected={model.id === form.model}>
                                 {model.name || model.id.split(':').pop()}
                               </option>
                             )}
@@ -667,7 +667,7 @@ export const AISettings: Component = () => {
                         <optgroup label={`⚠️ ${PROVIDER_DISPLAY_NAMES[provider] || provider} (not configured)`}>
                           <For each={models}>
                             {(model) => (
-                              <option value={model.id} class="text-gray-400">
+                              <option value={model.id} selected={model.id === form.model} class="text-gray-400">
                                 {model.name || model.id.split(':').pop()}
                               </option>
                             )}
