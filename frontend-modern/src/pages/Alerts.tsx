@@ -3490,7 +3490,7 @@ function OverviewTab(props: {
                                         ? 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300'
                                         : 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300'
                                         }`}>
-                                        {run.type === 'deep' ? 'Deep' : 'Quick'}
+                                        {run.type === 'deep' ? 'Deep' : 'Patrol'}
                                       </span>
                                     </td>
                                     <td class="p-1.5 px-2 text-center">

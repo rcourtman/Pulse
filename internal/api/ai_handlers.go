@@ -489,6 +489,8 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		Bool("enabled", settings.Enabled).
 		Str("provider", settings.Provider).
 		Str("model", settings.GetModel()).
+		Str("chatModel", settings.ChatModel).
+		Str("patrolModel", settings.PatrolModel).
 		Str("patrolPreset", settings.PatrolSchedulePreset).
 		Bool("alertTriggeredAnalysis", settings.AlertTriggeredAnalysis).
 		Msg("AI settings updated")

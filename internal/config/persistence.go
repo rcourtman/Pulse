@@ -1452,7 +1452,7 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 		settings.PatrolIntervalMinutes = 15
 	}
 
-	log.Info().Str("file", c.aiFile).Bool("enabled", settings.Enabled).Bool("patrol_enabled", settings.PatrolEnabled).Msg("AI configuration loaded")
+	log.Info().Str("file", c.aiFile).Bool("enabled", settings.Enabled).Bool("patrol_enabled", settings.PatrolEnabled).Bool("alert_triggered_analysis", settings.AlertTriggeredAnalysis).Msg("AI configuration loaded")
 	return settings, nil
 }
 
