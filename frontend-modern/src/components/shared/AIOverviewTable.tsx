@@ -1,12 +1,12 @@
 import { Component, createEffect, createSignal, For, Show } from 'solid-js';
 import { AIAPI } from '@/api/ai';
-import type { FailurePrediction, InfrastructureChange, RemediationRecord, RemediationStats, ResourceCorrelation } from '@/types/aiIntelligence';
+import type { FailurePrediction, InfrastructureChange, RemediationRecord, RemediationStats, ResourceCorrelation, AnomalyReport } from '@/types/aiIntelligence';
 
 const DEFAULT_UPGRADE_URL = 'https://pulsemonitor.app/pro';
 
 interface InsightRow {
     id: string;
-    type: 'prediction' | 'impact' | 'memory';
+    type: 'prediction' | 'impact' | 'memory' | 'anomaly';
     typeBadge: string;
     typeBadgeClass: string;
     title: string;
@@ -27,6 +27,7 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
     const [remediations, setRemediations] = createSignal<RemediationRecord[]>([]);
     const [remediationStats, setRemediationStats] = createSignal<RemediationStats | null>(null);
     const [changes, setChanges] = createSignal<InfrastructureChange[]>([]);
+    const [anomalies, setAnomalies] = createSignal<AnomalyReport[]>([]);
     const [loading, setLoading] = createSignal(false);
     const [error, setError] = createSignal('');
 
@@ -46,12 +47,16 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
         setLoading(true);
         setError('');
         try {
-            const [predResp, corrResp, remResp, changesResp] = await Promise.all([
+            const [predResp, corrResp, remResp, changesResp, anomalyResp] = await Promise.all([
                 AIAPI.getPredictions(),
                 AIAPI.getCorrelations(),
                 AIAPI.getRemediations({ hours: 168, limit: 6 }),
                 AIAPI.getRecentChanges(24),
+                AIAPI.getAnomalies(),
             ]);
+
+            // Handle anomalies (FREE - no license required)
+            setAnomalies(anomalyResp.anomalies || []);
 
             // Handle insights lock
             const insightsLockedState = Boolean(predResp.license_required || corrResp.license_required);
@@ -127,6 +132,39 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
     // Build unified rows
     const unifiedRows = (): InsightRow[] => {
         const rows: InsightRow[] = [];
+
+        // Anomalies (FREE - show at top since they're real-time)
+        for (const anomaly of anomalies()) {
+            const severityClasses: Record<string, string> = {
+                critical: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+                high: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+                medium: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+                low: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+            };
+            const badgeColors: Record<string, string> = {
+                critical: 'text-red-600 dark:text-red-400',
+                high: 'text-orange-600 dark:text-orange-400',
+                medium: 'text-amber-600 dark:text-amber-400',
+                low: 'text-blue-600 dark:text-blue-400',
+            };
+
+            // Format the deviation ratio
+            const ratio = anomaly.baseline_mean > 0
+                ? (anomaly.current_value / anomaly.baseline_mean).toFixed(1)
+                : 'N/A';
+
+            rows.push({
+                id: `anomaly-${anomaly.resource_id}-${anomaly.metric}`,
+                type: 'anomaly',
+                typeBadge: `${anomaly.severity.charAt(0).toUpperCase() + anomaly.severity.slice(1)} Anomaly`,
+                typeBadgeClass: severityClasses[anomaly.severity] || severityClasses.low,
+                title: `${anomaly.resource_name || anomaly.resource_id}: ${anomaly.metric.toUpperCase()} at ${ratio}x baseline`,
+                subtitle: anomaly.description || `Current: ${anomaly.current_value.toFixed(1)}%, Baseline: ${anomaly.baseline_mean.toFixed(1)}%`,
+                timestamp: 'Now',
+                locked: false,
+                badgeClass: badgeColors[anomaly.severity] || badgeColors.low,
+            });
+        }
 
         // Predictions
         for (const pred of predictions()) {
