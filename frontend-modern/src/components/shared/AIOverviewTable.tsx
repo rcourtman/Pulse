@@ -41,7 +41,18 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
     const [insightsLockedCount, setInsightsLockedCount] = createSignal(0);
     const [memoryLockedCount, setMemoryLockedCount] = createSignal(0);
 
+    // Section expand/collapse state - default limits prevent overwhelming list
+    const [showAllDependencies, setShowAllDependencies] = createSignal(false);
+    const [showAllActions, setShowAllActions] = createSignal(false);
+    const [showAllChanges, setShowAllChanges] = createSignal(false);
+
+    // Limits for each section (when not expanded)
+    const DEPENDENCY_LIMIT = 5;
+    const ACTION_LIMIT = 5;
+    const CHANGE_LIMIT = 5;
+
     const showWhenEmpty = () => Boolean(props.showWhenEmpty);
+
 
     const loadData = async () => {
         setLoading(true);
@@ -190,8 +201,13 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
             });
         }
 
-        // Correlations
-        for (const corr of correlations()) {
+        // Correlations - sorted by confidence, limited unless expanded
+        const sortedCorrelations = [...correlations()].sort((a, b) => b.confidence - a.confidence);
+        const visibleCorrelations = showAllDependencies()
+            ? sortedCorrelations
+            : sortedCorrelations.slice(0, DEPENDENCY_LIMIT);
+
+        for (const corr of visibleCorrelations) {
             rows.push({
                 id: `corr-${corr.source_id}-${corr.target_id}`,
                 type: 'prediction',
@@ -205,6 +221,7 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
                 badgeClass: 'text-indigo-600 dark:text-indigo-400',
             });
         }
+
 
         // Remediations - ONLY show actual ACTIONS (restarts, resizes, cleanups, fixes)
         // Skip diagnostic commands (df, grep, cat, tail, ps) - they don't provide lasting value
@@ -231,8 +248,11 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
         };
 
         const actionableRemediations = remediations().filter(rem => isActionableCommand(rem.action));
+        const visibleRemediations = showAllActions()
+            ? actionableRemediations
+            : actionableRemediations.slice(0, ACTION_LIMIT);
 
-        for (const rem of actionableRemediations) {
+        for (const rem of visibleRemediations) {
             const outcomeBadgeClass: Record<string, string> = {
                 resolved: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
                 partial: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
@@ -252,11 +272,16 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
             });
         }
 
+
         // Changes - only show meaningful changes, not just "created" (infrastructure detection)
         // Valuable changes: config, status, migrated, restarted, deleted, backed_up
         // Skip: created (just means AI patrol discovered the resource)
         const meaningfulChanges = changes().filter(c => c.change_type !== 'created');
-        for (const change of meaningfulChanges.slice(0, 6)) {
+        const visibleChanges = showAllChanges()
+            ? meaningfulChanges
+            : meaningfulChanges.slice(0, CHANGE_LIMIT);
+
+        for (const change of visibleChanges) {
             const changeTypeBadgeClass: Record<string, string> = {
                 deleted: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
                 config: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
@@ -278,6 +303,7 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
                 badgeClass: 'text-teal-600 dark:text-teal-400',
             });
         }
+
 
         return rows;
     };
@@ -522,6 +548,25 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
         return stats;
     };
 
+    // Calculate hidden items per section
+    const hiddenDependencies = () => {
+        const total = correlations().length;
+        return showAllDependencies() ? 0 : Math.max(0, total - DEPENDENCY_LIMIT);
+    };
+    const hiddenActions = () => {
+        const actionable = remediations().filter(rem => {
+            const cmd = rem.action.trim().replace(/^\[[^\]]+\]\s*/, '');
+            const patterns = ['docker restart', 'docker start', 'systemctl restart', 'pct resize', 'qm resize', 'rm -', 'chmod', 'chown', 'reboot'];
+            return patterns.some(p => cmd.includes(p));
+        });
+        return showAllActions() ? 0 : Math.max(0, actionable.length - ACTION_LIMIT);
+    };
+    const hiddenChanges = () => {
+        const meaningful = changes().filter(c => c.change_type !== 'created');
+        return showAllChanges() ? 0 : Math.max(0, meaningful.length - CHANGE_LIMIT);
+    };
+    const anyHidden = () => hiddenDependencies() > 0 || hiddenActions() > 0 || hiddenChanges() > 0;
+
     return (
         <Show when={shouldShow()}>
             <div class="bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden shadow-sm">
@@ -668,7 +713,40 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
                     </Show>
                 </Show>
 
+                {/* Show more buttons (if any hidden) */}
+                <Show when={!loading() && anyHidden()}>
+                    <div class="px-4 py-2 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/30">
+                        <div class="flex flex-wrap items-center gap-3 text-xs">
+                            <Show when={hiddenDependencies() > 0}>
+                                <button
+                                    class="text-indigo-600 dark:text-indigo-400 hover:underline"
+                                    onClick={() => setShowAllDependencies(true)}
+                                >
+                                    + {hiddenDependencies()} more dependencies
+                                </button>
+                            </Show>
+                            <Show when={hiddenActions() > 0}>
+                                <button
+                                    class="text-emerald-600 dark:text-emerald-400 hover:underline"
+                                    onClick={() => setShowAllActions(true)}
+                                >
+                                    + {hiddenActions()} more actions
+                                </button>
+                            </Show>
+                            <Show when={hiddenChanges() > 0}>
+                                <button
+                                    class="text-teal-600 dark:text-teal-400 hover:underline"
+                                    onClick={() => setShowAllChanges(true)}
+                                >
+                                    + {hiddenChanges()} more changes
+                                </button>
+                            </Show>
+                        </div>
+                    </div>
+                </Show>
+
                 {/* Section locked notices (partial lock) */}
+
                 <Show when={!loading() && anyLocked() && !(insightsLocked() && impactLocked() && memoryLocked())}>
                     <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-amber-50/50 dark:bg-amber-900/10">
                         <div class="flex flex-wrap items-center gap-4 text-xs">
