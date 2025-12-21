@@ -32,7 +32,7 @@ import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
 import Send from 'lucide-solid/icons/send';
 import Calendar from 'lucide-solid/icons/calendar';
-import { getPatrolStatus, getFindings, getFindingsHistory, getPatrolRunHistory, forcePatrol, subscribeToPatrolStream, dismissFinding, suppressFinding, getSuppressionRules, addSuppressionRule, deleteSuppressionRule, getRunbooksForFinding, executeRunbook, type Finding, type PatrolStatus, type PatrolRunRecord, type SuppressionRule, type RunbookInfo, type RunbookExecutionResult, severityColors, formatTimestamp, categoryLabels } from '@/api/patrol';
+import { getPatrolStatus, getFindings, getFindingsHistory, getPatrolRunHistory, forcePatrol, subscribeToPatrolStream, dismissFinding, suppressFinding, getSuppressionRules, addSuppressionRule, deleteSuppressionRule, type Finding, type PatrolStatus, type PatrolRunRecord, type SuppressionRule, severityColors, formatTimestamp, categoryLabels } from '@/api/patrol';
 import { aiChatStore } from '@/stores/aiChat';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
@@ -2178,26 +2178,12 @@ function OverviewTab(props: {
   const [newRuleDescription, setNewRuleDescription] = createSignal('');
   const [licenseFeatures, setLicenseFeatures] = createSignal<LicenseFeatureStatus | null>(null);
   const [licenseLoading, setLicenseLoading] = createSignal(false);
-  const [runbooksByFinding, setRunbooksByFinding] = createSignal<Record<string, RunbookInfo[]>>({});
-  const [runbookLoadingByFinding, setRunbookLoadingByFinding] = createSignal<Record<string, boolean>>({});
-  const [runbookSelection, setRunbookSelection] = createSignal<Record<string, string>>({});
-  const [runbookResults, setRunbookResults] = createSignal<Record<string, RunbookExecutionResult | null>>({});
-  const [runbookErrors, setRunbookErrors] = createSignal<Record<string, string>>({});
-  const [expandedRunbookFinding, setExpandedRunbookFinding] = createSignal<string | null>(null);
   const [remediationsByFinding, setRemediationsByFinding] = createSignal<Record<string, RemediationRecord[]>>({});
   const [remediationLoadingByFinding, setRemediationLoadingByFinding] = createSignal<Record<string, boolean>>({});
-  const [remediationErrorsByFinding, setRemediationErrorsByFinding] = createSignal<Record<string, string>>({});
-  const [remediationLockedByFinding, setRemediationLockedByFinding] = createSignal<Record<string, boolean>>({});
-  const [remediationUpgradeURLByFinding, setRemediationUpgradeURLByFinding] = createSignal<Record<string, string>>({});
   const hasAIAlertsFeature = createMemo(() => {
     const status = licenseFeatures();
     if (!status) return true;
     return Boolean(status.features?.['ai_alerts']);
-  });
-  const hasAutoFixFeature = createMemo(() => {
-    const status = licenseFeatures();
-    if (!status) return false;
-    return Boolean(status.features?.['ai_autofix']);
   });
   const showAIAlertsUpgrade = createMemo(() => {
     const status = licenseFeatures();
@@ -2205,7 +2191,6 @@ function OverviewTab(props: {
     return !status.features?.['ai_alerts'];
   });
   const aiAlertsUpgradeURL = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulsemonitor.app/pro');
-  const autoFixUpgradeURL = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulsemonitor.app/pro');
   // Live streaming state for running patrol
   const [expandedLiveStream, setExpandedLiveStream] = createSignal(false);
   // Track streaming blocks for sequential display (like AI chat)
@@ -2421,70 +2406,15 @@ function OverviewTab(props: {
     }
   };
 
-  const loadRunbooks = async (findingId: string) => {
-    setRunbookLoadingByFinding((prev) => ({ ...prev, [findingId]: true }));
-    setRunbookErrors((prev) => ({ ...prev, [findingId]: '' }));
-    try {
-      const runbooks = await getRunbooksForFinding(findingId);
-      setRunbooksByFinding((prev) => ({ ...prev, [findingId]: runbooks }));
-      if (runbooks.length > 0 && !runbookSelection()[findingId]) {
-        setRunbookSelection((prev) => ({ ...prev, [findingId]: runbooks[0].id }));
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load runbooks';
-      setRunbookErrors((prev) => ({ ...prev, [findingId]: message }));
-    } finally {
-      setRunbookLoadingByFinding((prev) => ({ ...prev, [findingId]: false }));
-    }
-  };
-
-  const toggleRunbookPanel = (findingId: string) => {
-    setExpandedRunbookFinding((prev) => (prev === findingId ? null : findingId));
-    if (!runbooksByFinding()[findingId] && !runbookLoadingByFinding()[findingId]) {
-      void loadRunbooks(findingId);
-    }
-  };
-
   const loadRemediationsForFinding = async (findingId: string) => {
     setRemediationLoadingByFinding((prev) => ({ ...prev, [findingId]: true }));
-    setRemediationErrorsByFinding((prev) => ({ ...prev, [findingId]: '' }));
     try {
       const response = await AIAPI.getRemediations({ findingId, limit: 3 });
-      const locked = Boolean(response.license_required);
-      setRemediationLockedByFinding((prev) => ({ ...prev, [findingId]: locked }));
-      if (response.upgrade_url) {
-        setRemediationUpgradeURLByFinding((prev) => ({ ...prev, [findingId]: response.upgrade_url || '' }));
-      }
-      setRemediationsByFinding((prev) => ({ ...prev, [findingId]: locked ? [] : (response.remediations || []) }));
+      setRemediationsByFinding((prev) => ({ ...prev, [findingId]: response.remediations || [] }));
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load remediation history';
-      setRemediationErrorsByFinding((prev) => ({ ...prev, [findingId]: message }));
+      console.error('Failed to load remediation history', err);
     } finally {
       setRemediationLoadingByFinding((prev) => ({ ...prev, [findingId]: false }));
-    }
-  };
-
-  const runSelectedRunbook = async (findingId: string) => {
-    const runbookId = runbookSelection()[findingId];
-    if (!runbookId) {
-      setRunbookErrors((prev) => ({ ...prev, [findingId]: 'Select a runbook to execute.' }));
-      return;
-    }
-    setRunbookErrors((prev) => ({ ...prev, [findingId]: '' }));
-    setRunbookResults((prev) => ({ ...prev, [findingId]: null }));
-    setRunbookLoadingByFinding((prev) => ({ ...prev, [findingId]: true }));
-    try {
-      const result = await executeRunbook(findingId, runbookId);
-      setRunbookResults((prev) => ({ ...prev, [findingId]: result }));
-      if (result.resolved) {
-        fetchAiData();
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Runbook execution failed';
-      setRunbookErrors((prev) => ({ ...prev, [findingId]: message }));
-    } finally {
-      setRunbookLoadingByFinding((prev) => ({ ...prev, [findingId]: false }));
-      void loadRemediationsForFinding(findingId);
     }
   };
 
@@ -5826,7 +5756,7 @@ function HistoryTab() {
       return;
     }
     setResourceIncidentPanel({ resourceId, resourceName });
-    setExpandedResourceIncidentIds(new Set());
+    setExpandedResourceIncidentIds(new Set<string>());
     if (!(resourceId in resourceIncidents())) {
       await loadResourceIncidents(resourceId);
     }
