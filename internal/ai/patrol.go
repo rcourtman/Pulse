@@ -1836,19 +1836,29 @@ EVIDENCE: <specific data that supports this finding>
 
 Guidelines:
 - Use KEY as a stable identifier for the issue type (examples: high-cpu, high-memory, high-disk, backup-stale, backup-never, restart-loop, storage-high-usage, pbs-datastore-high-usage, pbs-job-failed, node-offline). Use "general" if nothing fits.
-- CRITICAL: Immediate action required (data loss risk, service down)
-- WARNING: Should be addressed soon (degraded performance, nearing limits)  
-- WATCH: Worth monitoring (trends, minor inefficiencies)
-- INFO: Informational observations
+
+SEVERITY GUIDELINES (be conservative - fewer findings are better than noisy alerts):
+- CRITICAL: Immediate action required (data loss risk, service down, disk >95%)
+- WARNING: Should be addressed soon (disk >85%, memory >90%, consistent failures)  
+- WATCH: Only use for SIGNIFICANT trends that project to hit critical in <7 days
+- INFO: Informational observations for context (stopped services, config notes)
+
+IMPORTANT - DO NOT REPORT:
+- Small baseline deviations (CPU at 7% vs typical 4% is NORMAL variance)
+- Low absolute utilization (anything under 50% CPU or 60% memory is fine)
+- Stopped containers UNLESS they should be running (check autostart)
+- "Elevated" metrics that are still well under limits
+
+Only flag something if an operator would actually need to take action.
 
 Focus on:
-1. Resource utilization patterns and anomalies
-2. Potential capacity issues before they become problems
-3. Configuration issues or inefficiencies
-4. Correlation between resources (e.g., multiple VMs on an overloaded node)
-5. Missing best practices (no backups, no HA, etc.)
+1. Capacity issues that will become critical soon (projected disk full, memory exhaustion)
+2. Actual failures or errors (service crashes, backup failures)
+3. Configuration problems (missing backups, insecure settings)
+4. Correlation between resources when it indicates a root cause
 
-If everything looks healthy, you can say so briefly without any FINDING blocks.`
+If everything looks healthy, respond with NO findings. Users prefer silence to noise.`
+
 
 	if autoFix {
 		return basePrompt + `
