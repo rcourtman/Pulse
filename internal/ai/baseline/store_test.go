@@ -207,3 +207,100 @@ func TestComputeStats(t *testing.T) {
 		t.Errorf("Expected stddev ~2.14, got %f", stddev)
 	}
 }
+
+func TestCalculateTrend_InsufficientData(t *testing.T) {
+	// Less than 5 samples should return nil
+	samples := []float64{10, 20, 30}
+	result := CalculateTrend(samples, 30)
+	if result != nil {
+		t.Error("Expected nil for insufficient data")
+	}
+}
+
+func TestCalculateTrend_IncreasingTrend(t *testing.T) {
+	// Simulate hourly samples increasing by 1% per hour
+	// 24 samples = 1 day, so 24% increase per day
+	samples := make([]float64, 48) // 2 days of data
+	for i := 0; i < 48; i++ {
+		samples[i] = 50 + float64(i) // 50, 51, 52, ...
+	}
+	
+	result := CalculateTrend(samples, 97) // Currently at 97%
+	if result == nil {
+		t.Fatal("Expected non-nil result for increasing trend")
+	}
+	
+	// Should be trending toward full
+	if result.DaysToFull <= 0 {
+		t.Errorf("Expected positive DaysToFull for increasing trend, got %d", result.DaysToFull)
+	}
+	
+	// With 24% increase per day and 3% remaining, should be full very soon
+	if result.Severity != "critical" && result.Severity != "warning" {
+		t.Errorf("Expected critical or warning severity, got %s", result.Severity)
+	}
+}
+
+func TestCalculateTrend_DecreasingTrend(t *testing.T) {
+	// Simulate hourly samples decreasing
+	samples := make([]float64, 48)
+	for i := 0; i < 48; i++ {
+		samples[i] = 80 - float64(i)*0.5 // 80, 79.5, 79, ...
+	}
+	
+	result := CalculateTrend(samples, 56)
+	if result == nil {
+		t.Fatal("Expected non-nil result for decreasing trend")
+	}
+	
+	// Should indicate decreasing (DaysToFull = -1)
+	if result.DaysToFull != -1 {
+		t.Errorf("Expected DaysToFull=-1 for decreasing trend, got %d", result.DaysToFull)
+	}
+	
+	if result.Severity != "info" {
+		t.Errorf("Expected info severity for decreasing trend, got %s", result.Severity)
+	}
+}
+
+func TestCalculateTrend_StableTrend(t *testing.T) {
+	// Simulate stable usage around 50%
+	samples := make([]float64, 48)
+	for i := 0; i < 48; i++ {
+		samples[i] = 50 + float64(i%3-1)*0.01 // Tiny fluctuations
+	}
+	
+	result := CalculateTrend(samples, 50)
+	if result == nil {
+		t.Fatal("Expected non-nil result for stable trend")
+	}
+	
+	// Should indicate stable (DaysToFull = -1)
+	if result.DaysToFull != -1 {
+		t.Errorf("Expected DaysToFull=-1 for stable trend, got %d", result.DaysToFull)
+	}
+}
+
+func TestFormatDays(t *testing.T) {
+	testCases := []struct {
+		days     int
+		expected string
+	}{
+		{0, "now"},
+		{1, "1 day"},
+		{5, "5 days"},
+		{7, "~1 week"},
+		{14, "~2 weeks"},
+		{30, "~1 month"},
+		{60, "~2 months"},
+		{400, ">1 year"},
+	}
+	
+	for _, tc := range testCases {
+		result := formatDays(tc.days)
+		if result != tc.expected {
+			t.Errorf("formatDays(%d): expected %q, got %q", tc.days, tc.expected, result)
+		}
+	}
+}
+
