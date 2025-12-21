@@ -722,13 +722,6 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	// License gating
-	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
-	if locked {
-		w.Header().Set("X-License-Required", "true")
-		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
-	}
-
 	count := len(result)
 	
 	// Count by severity for summary
@@ -744,18 +737,88 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	if locked {
-		result = []map[string]interface{}{}
-	}
+	// NOTE: Anomaly detection is FREE (no license required)
+	// It's purely deterministic statistical analysis with no LLM costs
+	// This provides value to all users and encourages Pro upgrades for patrol
 
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
 		"anomalies":        result,
 		"count":            count,
 		"severity_counts":  severityCounts,
-		"license_required": locked,
-		"upgrade_url":      aiIntelligenceUpgradeURL,
+		"license_required": false,
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write anomalies response")
 	}
 }
 
+// HandleGetLearningStatus returns the current state of baseline learning (GET /api/ai/intelligence/learning)
+// This is FREE (no license required) and shows users how much the system has learned
+func (h *AISettingsHandler) HandleGetLearningStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"resources_baselined": 0,
+			"total_metrics":       0,
+			"status":              "patrol_not_initialized",
+			"message":             "Baseline learning requires AI Patrol to be initialized",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write learning status response")
+		}
+		return
+	}
+
+	baselineStore := patrol.GetBaselineStore()
+	if baselineStore == nil {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"resources_baselined": 0,
+			"total_metrics":       0,
+			"status":              "baseline_store_not_initialized",
+			"message":             "Baseline store not yet initialized",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write learning status response")
+		}
+		return
+	}
+
+	// Get all baselines and count metrics
+	baselines := baselineStore.GetAllBaselines()
+	resourceCount := baselineStore.ResourceCount()
+	
+	// Count unique resources and total metrics
+	resourceIDs := make(map[string]bool)
+	totalMetrics := 0
+	metricCounts := make(map[string]int) // cpu, memory, disk counts
+	
+	for _, baseline := range baselines {
+		resourceIDs[baseline.ResourceID] = true
+		totalMetrics++
+		metricCounts[baseline.Metric]++
+	}
+
+	// Determine status
+	status := "learning"
+	message := "Actively learning baseline patterns"
+	if resourceCount == 0 {
+		status = "waiting"
+		message = "Waiting for metric data to learn from"
+	} else if resourceCount >= 5 {
+		status = "active"
+		message = "Baselines established and anomaly detection is active"
+	}
+
+	if err := utils.WriteJSONResponse(w, map[string]interface{}{
+		"resources_baselined": resourceCount,
+		"total_metrics":       totalMetrics,
+		"metric_breakdown":    metricCounts,
+		"status":              status,
+		"message":             message,
+		"license_required":    false,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to write learning status response")
+	}
+}
