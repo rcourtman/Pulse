@@ -663,3 +663,134 @@ func containsStr(s, substr string) bool {
 	}
 	return false
 }
+
+func TestFormatMetricSamples_StepChange(t *testing.T) {
+	// Simulate a step change: stable at 26%, then jump to 31%, then stable at 31%
+	now := time.Now()
+	points := []MetricPoint{
+		{Value: 26.2, Timestamp: now.Add(-6 * time.Hour)},
+		{Value: 26.1, Timestamp: now.Add(-5 * time.Hour)},
+		{Value: 26.3, Timestamp: now.Add(-4 * time.Hour)},
+		{Value: 30.7, Timestamp: now.Add(-2 * time.Hour)}, // Jump
+		{Value: 30.8, Timestamp: now.Add(-1 * time.Hour)},
+		{Value: 30.7, Timestamp: now},
+	}
+
+	result := formatMetricSamples("disk", points)
+
+	// Should show the step change: 26→31 (deduped)
+	if !containsStr(result, "Disk:") {
+		t.Error("Expected result to contain 'Disk:'")
+	}
+	// Should show the progression, not just the rate
+	if !containsStr(result, "26") || !containsStr(result, "31") {
+		t.Errorf("Expected result to show both values (26 and 31), got: %s", result)
+	}
+}
+
+func TestFormatMetricSamples_Stable(t *testing.T) {
+	// All values the same
+	now := time.Now()
+	points := []MetricPoint{
+		{Value: 50.0, Timestamp: now.Add(-3 * time.Hour)},
+		{Value: 50.1, Timestamp: now.Add(-2 * time.Hour)},
+		{Value: 49.9, Timestamp: now.Add(-1 * time.Hour)},
+		{Value: 50.0, Timestamp: now},
+	}
+
+	result := formatMetricSamples("memory", points)
+
+	// All values round to 50, should show "stable at 50%"
+	if !containsStr(result, "stable at 50%") {
+		t.Errorf("Expected 'stable at 50%%' for consistent values, got: %s", result)
+	}
+}
+
+func TestFormatMetricSamples_InsufficientData(t *testing.T) {
+	points := []MetricPoint{
+		{Value: 50.0, Timestamp: time.Now()},
+	}
+
+	result := formatMetricSamples("cpu", points)
+
+	if result != "" {
+		t.Errorf("Expected empty string for insufficient data, got: %s", result)
+	}
+}
+
+func TestDownsampleMetrics(t *testing.T) {
+	now := time.Now()
+	
+	// Create 100 points
+	points := make([]MetricPoint, 100)
+	for i := 0; i < 100; i++ {
+		points[i] = MetricPoint{
+			Value:     float64(i),
+			Timestamp: now.Add(time.Duration(-100+i) * time.Minute),
+		}
+	}
+
+	// Downsample to 10
+	sampled := DownsampleMetrics(points, 10)
+
+	// Should have roughly 10-11 points (plus potentially the last one)
+	if len(sampled) < 10 || len(sampled) > 15 {
+		t.Errorf("Expected ~10-15 samples, got %d", len(sampled))
+	}
+
+	// Last point should be included
+	if sampled[len(sampled)-1].Timestamp != points[99].Timestamp {
+		t.Error("Expected last point to be included")
+	}
+
+	// First point should be included
+	if sampled[0].Timestamp != points[0].Timestamp {
+		t.Error("Expected first point to be included")
+	}
+}
+
+func TestDownsampleMetrics_SmallInput(t *testing.T) {
+	now := time.Now()
+	
+	// Create 5 points - less than target
+	points := []MetricPoint{
+		{Value: 10, Timestamp: now.Add(-4 * time.Minute)},
+		{Value: 20, Timestamp: now.Add(-3 * time.Minute)},
+		{Value: 30, Timestamp: now.Add(-2 * time.Minute)},
+		{Value: 40, Timestamp: now.Add(-1 * time.Minute)},
+		{Value: 50, Timestamp: now},
+	}
+
+	// Downsample to 10 should return all 5
+	sampled := DownsampleMetrics(points, 10)
+
+	if len(sampled) != 5 {
+		t.Errorf("Expected all 5 points when target > input, got %d", len(sampled))
+	}
+}
+
+func TestFormatResourceContext_WithMetricSamples(t *testing.T) {
+	now := time.Now()
+	ctx := ResourceContext{
+		ResourceID:    "ct-105",
+		ResourceType:  "container",
+		ResourceName:  "frigate",
+		Status:        "running",
+		CurrentDisk:   30.7,
+		MetricSamples: map[string][]MetricPoint{
+			"disk": {
+				{Value: 26.2, Timestamp: now.Add(-3 * time.Hour)},
+				{Value: 30.7, Timestamp: now.Add(-1 * time.Hour)},
+				{Value: 30.7, Timestamp: now},
+			},
+		},
+	}
+
+	result := FormatResourceContext(ctx)
+
+	// Should contain the History section with sampled data
+	if !containsStr(result, "History") {
+		t.Error("Expected result to contain History section with metric samples")
+	}
+}
+

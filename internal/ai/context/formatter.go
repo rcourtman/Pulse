@@ -42,7 +42,7 @@ func FormatResourceContext(ctx ResourceContext) string {
 		sb.WriteString("**Current**: " + strings.Join(metrics, " | ") + "\n")
 	}
 
-	// Trends section (the differentiating context)
+	// Trends section (computed summaries - kept for backwards compatibility)
 	if len(ctx.Trends) > 0 {
 		var trendLines []string
 		for metric, trend := range ctx.Trends {
@@ -59,6 +59,25 @@ func FormatResourceContext(ctx ResourceContext) string {
 			sb.WriteString(strings.Join(trendLines, " | "))
 			sb.WriteString("\n")
 		}
+	}
+
+	// Raw metric samples - let the LLM interpret patterns directly
+	// This is more reliable than pre-computed trends for edge cases
+	if len(ctx.MetricSamples) > 0 {
+		sb.WriteString("**History (7d sampled, oldest→newest)**: ")
+		var sampleLines []string
+		for metric, points := range ctx.MetricSamples {
+			if len(points) >= 3 {
+				line := formatMetricSamples(metric, points)
+				if line != "" {
+					sampleLines = append(sampleLines, line)
+				}
+			}
+		}
+		if len(sampleLines) > 0 {
+			sb.WriteString(strings.Join(sampleLines, " | "))
+		}
+		sb.WriteString("\n")
 	}
 
 	// Anomalies (high value - what's unusual)
@@ -155,6 +174,68 @@ func formatRate(ratePerDay float64) string {
 		return fmt.Sprintf("%.1f/hr", ratePerHour)
 	}
 	return "slow"
+}
+
+// formatMetricSamples creates a compact representation of sampled values
+// Example output: "Disk: 26→26→26→31→31→31" (shows step change visually)
+// This lets the LLM interpret patterns directly rather than relying on computed rates
+func formatMetricSamples(metric string, points []MetricPoint) string {
+	if len(points) < 3 {
+		return ""
+	}
+
+	metricLabel := strings.Title(metric)
+	
+	// Build compact arrow-separated value list
+	var values []string
+	prevValue := -1.0
+	for _, p := range points {
+		roundedValue := float64(int(p.Value + 0.5)) // Round to nearest integer
+		// Skip consecutive duplicates for compactness
+		if roundedValue == prevValue && len(values) > 0 {
+			continue
+		}
+		values = append(values, fmt.Sprintf("%.0f", roundedValue))
+		prevValue = roundedValue
+	}
+
+	// If all values are the same, just show "stable at X%"
+	if len(values) == 1 {
+		return fmt.Sprintf("%s: stable at %.0f%%", metricLabel, prevValue)
+	}
+
+	// Join with arrows to show progression
+	return fmt.Sprintf("%s: %s%%", metricLabel, strings.Join(values, "→"))
+}
+
+// DownsampleMetrics takes raw metric points and returns a smaller set for LLM consumption
+// It aims for about 10-15 samples across the time range, picking representative values
+func DownsampleMetrics(points []MetricPoint, targetSamples int) []MetricPoint {
+	if len(points) <= targetSamples {
+		return points
+	}
+
+	if targetSamples < 3 {
+		targetSamples = 3
+	}
+
+	// Calculate step size
+	step := len(points) / targetSamples
+	if step < 1 {
+		step = 1
+	}
+
+	var sampled []MetricPoint
+	for i := 0; i < len(points); i += step {
+		sampled = append(sampled, points[i])
+	}
+
+	// Always include the last point (current value)
+	if len(sampled) > 0 && sampled[len(sampled)-1].Timestamp != points[len(points)-1].Timestamp {
+		sampled = append(sampled, points[len(points)-1])
+	}
+
+	return sampled
 }
 
 // FormatInfrastructureContext formats full infrastructure context for AI

@@ -32,7 +32,7 @@ import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
 import Send from 'lucide-solid/icons/send';
 import Calendar from 'lucide-solid/icons/calendar';
-import { getPatrolStatus, getFindings, getFindingsHistory, getPatrolRunHistory, forcePatrol, subscribeToPatrolStream, dismissFinding, suppressFinding, getSuppressionRules, addSuppressionRule, deleteSuppressionRule, type Finding, type PatrolStatus, type PatrolRunRecord, type SuppressionRule, severityColors, formatTimestamp, categoryLabels } from '@/api/patrol';
+import { getPatrolStatus, getFindings, getFindingsHistory, getPatrolRunHistory, forcePatrol, subscribeToPatrolStream, dismissFinding, suppressFinding, resolveFinding, getSuppressionRules, addSuppressionRule, deleteSuppressionRule, type Finding, type PatrolStatus, type PatrolRunRecord, type SuppressionRule, severityColors, formatTimestamp, categoryLabels } from '@/api/patrol';
 import { aiChatStore } from '@/stores/aiChat';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
@@ -2180,6 +2180,8 @@ function OverviewTab(props: {
   const [licenseLoading, setLicenseLoading] = createSignal(false);
   const [remediationsByFinding, setRemediationsByFinding] = createSignal<Record<string, RemediationRecord[]>>({});
   const [remediationLoadingByFinding, setRemediationLoadingByFinding] = createSignal<Record<string, boolean>>({});
+  // Track which findings are expanded - lifted to parent to persist across API updates
+  const [expandedFindingIds, setExpandedFindingIds] = createSignal<Set<string>>(new Set());
   const hasAIAlertsFeature = createMemo(() => {
     const status = licenseFeatures();
     if (!status) return true;
@@ -2822,7 +2824,22 @@ function OverviewTab(props: {
                 <For each={aiFindings().filter(f => !pendingFixFindings().has(f.id))}>
                   {(finding) => {
                     const colors = severityColors[finding.severity];
-                    const [isExpanded, setIsExpanded] = createSignal(false);
+                    const isExpanded = () => expandedFindingIds().has(finding.id);
+                    const toggleExpanded = () => {
+                      setExpandedFindingIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(finding.id)) {
+                          next.delete(finding.id);
+                        } else {
+                          next.add(finding.id);
+                          // Load remediations when expanding (if not already loaded)
+                          if (remediationsByFinding()[finding.id] === undefined && !remediationLoadingByFinding()[finding.id]) {
+                            void loadRemediationsForFinding(finding.id);
+                          }
+                        }
+                        return next;
+                      });
+                    };
                     return (
                       <div
                         class="border rounded-lg transition-all"
@@ -2834,13 +2851,7 @@ function OverviewTab(props: {
                         {/* Compact header - always visible, clickable */}
                         <div
                           class="flex items-center gap-3 p-3 cursor-pointer hover:opacity-80"
-                          onClick={() => {
-                            const nextExpanded = !isExpanded();
-                            setIsExpanded(nextExpanded);
-                            if (nextExpanded && remediationsByFinding()[finding.id] === undefined && !remediationLoadingByFinding()[finding.id]) {
-                              void loadRemediationsForFinding(finding.id);
-                            }
-                          }}
+                          onClick={toggleExpanded}
                         >
                           {/* Expand chevron */}
                           <svg
@@ -2961,15 +2972,24 @@ function OverviewTab(props: {
 
                                 <button
                                   class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50 flex items-center gap-1.5"
-                                  onClick={(e) => {
+                                  onClick={async (e) => {
                                     e.stopPropagation();
+                                    // Immediately hide the finding locally
                                     setPendingFixFindings(prev => {
                                       const next = new Set(prev);
                                       next.add(finding.id);
                                       return next;
                                     });
+                                    try {
+                                      await resolveFinding(finding.id);
+                                      showSuccess('Marked as fixed - the next patrol will verify');
+                                      fetchAiData();
+                                    } catch (_err) {
+                                      // Still keep it hidden locally since user said they fixed it
+                                      showError('Failed to mark as fixed on server');
+                                    }
                                   }}
-                                  title="Hide until next patrol verifies the fix"
+                                  title="Mark as fixed - the next patrol will verify"
                                 >
                                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
