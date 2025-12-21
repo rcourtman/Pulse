@@ -304,3 +304,275 @@ func TestFormatDays(t *testing.T) {
 	}
 }
 
+func TestCheckResourceAnomalies_Disk(t *testing.T) {
+	store := NewStore(StoreConfig{MinSamples: 10})
+	
+	// Create stable data with mean ~60% disk usage
+	points := make([]MetricPoint, 100)
+	for i := 0; i < 100; i++ {
+		points[i] = MetricPoint{Value: 60 + float64(i%5) - 2} // 58-62
+	}
+	store.Learn("test-vm", "vm", "disk", points)
+	
+	// Test: disk above 85% should be reported
+	metrics := map[string]float64{"disk": 90}
+	anomalies := store.CheckResourceAnomalies("test-vm", metrics)
+	if len(anomalies) == 0 {
+		t.Error("Expected disk anomaly to be reported for 90% usage")
+	}
+	
+	// Test: disk increase >15 points from baseline should be reported
+	metrics = map[string]float64{"disk": 80}
+	anomalies = store.CheckResourceAnomalies("test-vm", metrics)
+	if len(anomalies) == 0 {
+		t.Error("Expected disk anomaly to be reported for 20 point increase from baseline")
+	}
+	
+	// Test: disk at baseline should not be reported (no significant deviation)
+	metrics = map[string]float64{"disk": 60}
+	anomalies = store.CheckResourceAnomalies("test-vm", metrics)
+	if len(anomalies) != 0 {
+		t.Errorf("Expected no anomaly for disk at baseline, got %d", len(anomalies))
+	}
+}
+
+func TestCheckResourceAnomalies_CPU(t *testing.T) {
+	store := NewStore(StoreConfig{MinSamples: 10})
+	
+	// Create stable data with mean ~20% CPU usage
+	points := make([]MetricPoint, 100)
+	for i := 0; i < 100; i++ {
+		points[i] = MetricPoint{Value: 20 + float64(i%3) - 1} // 19-21
+	}
+	store.Learn("test-vm", "vm", "cpu", points)
+	
+	// Test: CPU at 80% (above 70% and >2x baseline) should be reported
+	metrics := map[string]float64{"cpu": 80}
+	anomalies := store.CheckResourceAnomalies("test-vm", metrics)
+	if len(anomalies) == 0 {
+		t.Error("Expected CPU anomaly to be reported for 80% (>70% and 4x baseline)")
+	}
+	
+	// Test: CPU at 50% should NOT be reported (below 70% threshold)
+	metrics = map[string]float64{"cpu": 50}
+	anomalies = store.CheckResourceAnomalies("test-vm", metrics)
+	if len(anomalies) != 0 {
+		t.Errorf("Expected no anomaly for CPU at 50%%, got %d", len(anomalies))
+	}
+	
+	// Test: CPU at 20% (baseline) should not be reported
+	metrics = map[string]float64{"cpu": 20}
+	anomalies = store.CheckResourceAnomalies("test-vm", metrics)
+	if len(anomalies) != 0 {
+		t.Errorf("Expected no anomaly for CPU at baseline, got %d", len(anomalies))
+	}
+}
+
+func TestCheckResourceAnomalies_Memory(t *testing.T) {
+	store := NewStore(StoreConfig{MinSamples: 10})
+	
+	// Create stable data with mean ~40% memory usage
+	points := make([]MetricPoint, 100)
+	for i := 0; i < 100; i++ {
+		points[i] = MetricPoint{Value: 40 + float64(i%3) - 1} // 39-41
+	}
+	store.Learn("test-vm", "vm", "memory", points)
+	
+	// Test: Memory at 85% should be reported (above 80% threshold)
+	metrics := map[string]float64{"memory": 85}
+	anomalies := store.CheckResourceAnomalies("test-vm", metrics)
+	if len(anomalies) == 0 {
+		t.Error("Expected memory anomaly to be reported for 85% (above 80%)")
+	}
+	
+	// Test: Memory at 70% with 1.75x baseline should be reported (>1.5x and >60%)
+	metrics = map[string]float64{"memory": 70}
+	anomalies = store.CheckResourceAnomalies("test-vm", metrics)
+	if len(anomalies) == 0 {
+		t.Error("Expected memory anomaly to be reported for 70% (1.75x baseline, >60%)")
+	}
+	
+	// Test: Memory at 50% should NOT be reported (not >1.5x enough or >80%)
+	metrics = map[string]float64{"memory": 50}
+	anomalies = store.CheckResourceAnomalies("test-vm", metrics)
+	if len(anomalies) != 0 {
+		t.Errorf("Expected no anomaly for memory at 50%%, got %d", len(anomalies))
+	}
+}
+
+func TestCheckResourceAnomalies_OtherMetrics(t *testing.T) {
+	store := NewStore(StoreConfig{MinSamples: 10})
+	
+	// Create stable network data with mean ~100
+	points := make([]MetricPoint, 100)
+	for i := 0; i < 100; i++ {
+		points[i] = MetricPoint{Value: 100 + float64(i%5) - 2} // 98-102
+	}
+	store.Learn("test-vm", "vm", "network_in", points)
+	
+	// Test: network_in at 2x baseline should be reported
+	metrics := map[string]float64{"network_in": 250}
+	anomalies := store.CheckResourceAnomalies("test-vm", metrics)
+	if len(anomalies) == 0 {
+		t.Error("Expected network anomaly to be reported for 2.5x baseline")
+	}
+	
+	// Test: network_in at 0.3x baseline should be reported (below 0.5x)
+	metrics = map[string]float64{"network_in": 30}
+	anomalies = store.CheckResourceAnomalies("test-vm", metrics)
+	if len(anomalies) == 0 {
+		t.Error("Expected network anomaly to be reported for 0.3x baseline")
+	}
+}
+
+func TestCheckResourceAnomalies_NoBaseline(t *testing.T) {
+	store := NewStore(StoreConfig{MinSamples: 10})
+	
+	// No baselines learned - should return empty
+	metrics := map[string]float64{"cpu": 90, "memory": 85}
+	anomalies := store.CheckResourceAnomalies("unknown-vm", metrics)
+	if len(anomalies) != 0 {
+		t.Errorf("Expected no anomalies for unknown resource, got %d", len(anomalies))
+	}
+}
+
+func TestFormatRatio(t *testing.T) {
+	testCases := []struct {
+		ratio    float64
+		expected string
+	}{
+		{0.005, "near zero"},
+		{0.5, "significantly below"},
+		{0.8, "significantly below"},
+		{1.2, "slightly above"},
+		{1.4, "slightly above"},
+		{1.7, "1.5x"},
+		{2.5, "2x"},
+		{4.0, "3x"},
+		{6.0, "~6x"},
+	}
+	
+	for _, tc := range testCases {
+		result := formatRatio(tc.ratio)
+		if result != tc.expected {
+			t.Errorf("formatRatio(%f): expected %q, got %q", tc.ratio, tc.expected, result)
+		}
+	}
+}
+
+func TestFormatAnomalyDescription(t *testing.T) {
+	testCases := []struct {
+		metric    string
+		ratio     float64
+		direction string
+		severity  AnomalySeverity
+		contains  string
+	}{
+		{"cpu", 2.0, "above", AnomalyCritical, "Critical anomaly: CPU usage"},
+		{"memory", 1.5, "above", AnomalyHigh, "High anomaly: Memory usage"},
+		{"disk", 1.8, "above", AnomalyMedium, "Moderate anomaly: Disk usage"},
+		{"network_in", 2.0, "below", AnomalyLow, "Minor anomaly: Network inbound"},
+		{"network_out", 1.5, "above", AnomalyNone, "Network outbound"},
+	}
+	
+	for _, tc := range testCases {
+		result := formatAnomalyDescription(tc.metric, tc.ratio, tc.direction, tc.severity)
+		if !contains(result, tc.contains) {
+			t.Errorf("formatAnomalyDescription(%s, %f, %s, %s): expected to contain %q, got %q",
+				tc.metric, tc.ratio, tc.direction, tc.severity, tc.contains, result)
+		}
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+func TestGetAllAnomalies(t *testing.T) {
+	store := NewStore(StoreConfig{MinSamples: 10})
+	
+	// Learn baselines for multiple resources
+	points := make([]MetricPoint, 100)
+	for i := 0; i < 100; i++ {
+		points[i] = MetricPoint{Value: 20 + float64(i%3) - 1}
+	}
+	store.Learn("vm-1", "vm", "cpu", points)
+	store.Learn("vm-2", "vm", "cpu", points)
+	
+	diskPoints := make([]MetricPoint, 100)
+	for i := 0; i < 100; i++ {
+		diskPoints[i] = MetricPoint{Value: 50 + float64(i%3) - 1}
+	}
+	store.Learn("vm-1", "vm", "disk", diskPoints)
+	
+	// Create a metrics provider that returns anomalous values
+	metricsProvider := func(resourceID string) map[string]float64 {
+		switch resourceID {
+		case "vm-1":
+			return map[string]float64{"cpu": 80, "disk": 90} // CPU 4x baseline, disk high
+		case "vm-2":
+			return map[string]float64{"cpu": 25} // Normal
+		default:
+			return nil
+		}
+	}
+	
+	anomalies := store.GetAllAnomalies(metricsProvider)
+	
+	// Should have anomalies for vm-1 (cpu 4x baseline + disk at 90%)
+	if len(anomalies) < 1 {
+		t.Errorf("Expected at least 1 anomaly, got %d", len(anomalies))
+	}
+	
+	// vm-2 should not have anomalies
+	for _, a := range anomalies {
+		if a.ResourceID == "vm-2" {
+			t.Errorf("Did not expect anomaly for vm-2 with normal metrics")
+		}
+	}
+}
+
+func TestGetAllAnomalies_EmptyStore(t *testing.T) {
+	store := NewStore(StoreConfig{MinSamples: 10})
+	
+	metricsProvider := func(resourceID string) map[string]float64 {
+		return map[string]float64{"cpu": 90}
+	}
+	
+	anomalies := store.GetAllAnomalies(metricsProvider)
+	if len(anomalies) != 0 {
+		t.Errorf("Expected no anomalies from empty store, got %d", len(anomalies))
+	}
+}
+
+func TestFloatToStr(t *testing.T) {
+	testCases := []struct {
+		value     float64
+		precision int
+		expected  string
+	}{
+		{1.5, 1, "1.5"},
+		{2.0, 1, "2"},
+		{1.05, 2, "1.05"},
+		{3.0, 2, "3"},
+		{0.5, 1, "0.5"},
+		{0.05, 2, "0.05"},
+	}
+	
+	for _, tc := range testCases {
+		result := floatToStr(tc.value, tc.precision)
+		if result != tc.expected {
+			t.Errorf("floatToStr(%f, %d): expected %q, got %q", tc.value, tc.precision, tc.expected, result)
+		}
+	}
+}
+
