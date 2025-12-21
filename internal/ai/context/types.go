@@ -116,6 +116,7 @@ type ResourceContext struct {
 	ResourceType string // "node", "vm", "container", "oci_container", "storage", "docker_host"
 	ResourceName string
 	Node         string // Parent node (for guests)
+	VMID         int    // Proxmox VMID for VMs/containers (0 if not applicable)
 
 	// Current state (point-in-time)
 	CurrentCPU     float64
