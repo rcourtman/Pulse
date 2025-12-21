@@ -107,20 +107,27 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 					Msg("Successfully migrated encryption key to data directory")
 
 				// CRITICAL: This is the ONLY place in the codebase that deletes the encryption key!
-				log.Error().
+				// BUG FIX: Disabling key deletion to prevent key loss.
+				// Keeping both copies is safe - the old key at /etc/pulse will just be unused.
+				log.Info().
 					Str("oldKeyPath", oldKeyPath).
 					Str("newKeyPath", keyPath).
 					Str("dataDir", dataDir).
-					Msg("CRITICAL: ABOUT TO DELETE ENCRYPTION KEY FROM OLD LOCATION")
+					Msg("Key migration complete - PRESERVING old key at original location for safety")
 
-				// Try to remove old key (ignore errors as this is cleanup)
-				if err := os.Remove(oldKeyPath); err != nil {
-					log.Debug().Err(err).Msg("Could not remove old encryption key (may lack permissions)")
-				} else {
-					log.Error().
-						Str("deletedPath", oldKeyPath).
-						Msg("CRITICAL: ENCRYPTION KEY HAS BEEN DELETED")
-				}
+				// DISABLED: Key deletion was causing mysterious key loss bugs.
+				// The old key is now preserved. This is safe because:
+				// 1. We just successfully wrote the key to the new location
+				// 2. Future reads will use the new location (checked first)
+				// 3. Keeping the backup prevents data loss if something goes wrong
+				//
+				// if err := os.Remove(oldKeyPath); err != nil {
+				// 	log.Debug().Err(err).Msg("Could not remove old encryption key (may lack permissions)")
+				// } else {
+				// 	log.Error().
+				// 		Str("deletedPath", oldKeyPath).
+				// 		Msg("CRITICAL: ENCRYPTION KEY HAS BEEN DELETED")
+				// }
 				return key, nil
 			}
 		}
