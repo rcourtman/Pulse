@@ -9,7 +9,9 @@ import { createResource, Show, createMemo, onCleanup } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { getPatrolStatus, type PatrolStatus } from '../../api/patrol';
 import { useAllAnomalies } from '@/hooks/useAnomalies';
+import { useLearningStatus } from '@/hooks/useLearningStatus';
 import './AIStatusIndicator.css';
+
 
 export function AIStatusIndicator() {
     const navigate = useNavigate();
@@ -29,9 +31,13 @@ export function AIStatusIndicator() {
     // Get anomaly data (also polls every 30 seconds via the hook)
     const anomalyData = useAllAnomalies();
 
+    // Get learning status (polls every 60 seconds)
+    const learningStatus = useLearningStatus();
+
     // Refetch patrol status every 30 seconds with proper cleanup
     const intervalId = setInterval(() => refetch(), 30000);
     onCleanup(() => clearInterval(intervalId));
+
 
     // Count anomalies by severity
     const anomalyCounts = createMemo(() => {
@@ -96,8 +102,21 @@ export function AIStatusIndicator() {
             parts.push(`Anomalies: ${anomalyParts.join(', ')}`);
         }
 
+        // Learning status - show when healthy to indicate AI is working
+        const resourceCount = learningStatus.resourceCount();
+        if (parts.length === 0 && resourceCount > 0) {
+            // Show learning progress when healthy
+            return `AI: All healthy • ${resourceCount} resources baselined`;
+        }
+
         if (parts.length === 0) {
-            if (!s?.enabled) return 'AI Patrol disabled';
+            if (!s?.enabled) {
+                // Show baseline info even when patrol disabled
+                if (resourceCount > 0) {
+                    return `AI Learning: ${resourceCount} resources baselined`;
+                }
+                return 'AI Baseline Learning active';
+            }
             if (s?.license_required) {
                 if (s.license_status === 'active') {
                     return 'AI Patrol is not included in this license tier';
@@ -113,6 +132,7 @@ export function AIStatusIndicator() {
         return `AI Intelligence: ${parts.join(' | ')}`;
     });
 
+
     const statusClass = createMemo(() => {
         if (hasIssues() || hasAnomalies()) return 'ai-status--issues';
         if (hasWatch() || hasMildAnomalies()) return 'ai-status--watch';
@@ -127,10 +147,12 @@ export function AIStatusIndicator() {
     // Combined total for badge
     const badgeCount = createMemo(() => totalFindings() + totalAnomalies());
 
-    // Show indicator if patrol is enabled OR if we have anomalies (anomalies work without patrol)
+    // Show indicator if patrol is enabled, we have anomalies, OR we have learned baselines
+    // This makes the AI presence visible even before Patrol is configured
     const showIndicator = createMemo(() => {
         const s = status();
-        return s?.enabled || totalAnomalies() > 0;
+        const hasBaselines = learningStatus.resourceCount() > 0;
+        return s?.enabled || totalAnomalies() > 0 || hasBaselines;
     });
 
     return (
