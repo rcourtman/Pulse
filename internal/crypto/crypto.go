@@ -76,7 +76,15 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 	}
 
 	// Check for key in old location and migrate if found (only if paths differ)
+	// CRITICAL: This code deletes the encryption key at oldKeyPath after migrating it.
+	// Adding extensive logging to diagnose recurring key deletion bug.
 	if dataDir != "/etc/pulse" && keyPath != oldKeyPath {
+		log.Warn().
+			Str("dataDir", dataDir).
+			Str("keyPath", keyPath).
+			Str("oldKeyPath", oldKeyPath).
+			Msg("ENCRYPTION KEY MIGRATION: Checking if old key exists for migration (this code path CAN delete the key!)")
+
 		if data, err := os.ReadFile(oldKeyPath); err == nil {
 			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(data)))
 			n, err := base64.StdEncoding.Decode(decoded, data)
@@ -97,13 +105,31 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 					Str("from", oldKeyPath).
 					Str("to", keyPath).
 					Msg("Successfully migrated encryption key to data directory")
+
+				// CRITICAL: This is the ONLY place in the codebase that deletes the encryption key!
+				log.Error().
+					Str("oldKeyPath", oldKeyPath).
+					Str("newKeyPath", keyPath).
+					Str("dataDir", dataDir).
+					Msg("CRITICAL: ABOUT TO DELETE ENCRYPTION KEY FROM OLD LOCATION")
+
 				// Try to remove old key (ignore errors as this is cleanup)
 				if err := os.Remove(oldKeyPath); err != nil {
 					log.Debug().Err(err).Msg("Could not remove old encryption key (may lack permissions)")
+				} else {
+					log.Error().
+						Str("deletedPath", oldKeyPath).
+						Msg("CRITICAL: ENCRYPTION KEY HAS BEEN DELETED")
 				}
 				return key, nil
 			}
 		}
+	} else {
+		log.Debug().
+			Str("dataDir", dataDir).
+			Str("keyPath", keyPath).
+			Bool("sameAsOldPath", dataDir == "/etc/pulse").
+			Msg("Skipping key migration check (dataDir is /etc/pulse or paths match)")
 	}
 
 	// Before generating a new key, check if encrypted data exists OR if there are any backup/corrupted files
