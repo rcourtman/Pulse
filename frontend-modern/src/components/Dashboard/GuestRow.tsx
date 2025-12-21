@@ -21,6 +21,8 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
 import { aiChatStore } from '@/stores/aiChat';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import { useAnomalyForMetric } from '@/hooks/useAnomalies';
+
 
 type Guest = VM | Container;
 
@@ -516,6 +518,13 @@ export function GuestRow(props: GuestRowProps) {
     return buildMetricKey(kind, guestId());
   });
 
+  // Get anomalies for this guest's metrics (deterministic, no LLM)
+  const cpuAnomaly = useAnomalyForMetric(() => props.guest.id, () => 'cpu');
+  const memoryAnomaly = useAnomalyForMetric(() => props.guest.id, () => 'memory');
+  const diskAnomaly = useAnomalyForMetric(() => props.guest.id, () => 'disk');
+  // TODO: Wire memoryAnomaly and diskAnomaly to StackedMemoryBar and StackedDiskBar
+  void memoryAnomaly; // Prepared for future use
+  void diskAnomaly;   // Prepared for future use
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
 
@@ -918,6 +927,7 @@ export function GuestRow(props: GuestRowProps) {
                 usage={cpuPercent()}
                 cores={props.guest.cpus}
                 resourceId={metricsKey()}
+                anomaly={cpuAnomaly()}
               />
             </div>
           </td>
