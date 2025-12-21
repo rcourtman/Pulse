@@ -1,4 +1,4 @@
-import type { Alert } from '@/types/api';
+import type { Alert, Incident } from '@/types/api';
 import type { AlertConfig } from '@/types/alerts';
 import { apiFetchJSON } from '@/utils/apiClient';
 
@@ -27,6 +27,37 @@ export class AlertsAPI {
     }
 
     return apiFetchJSON(`${this.baseUrl}/history?${queryParams}`);
+  }
+
+  static async getIncidentTimeline(alertId: string, startedAt?: string): Promise<Incident | null> {
+    const query = new URLSearchParams({ alert_id: alertId });
+    if (startedAt) {
+      query.set('started_at', startedAt);
+    }
+    return apiFetchJSON(`${this.baseUrl}/incidents?${query.toString()}`) as Promise<Incident | null>;
+  }
+
+  static async getIncidentsForResource(resourceId: string, limit?: number): Promise<Incident[]> {
+    const query = new URLSearchParams({ resource_id: resourceId });
+    if (limit) query.set('limit', String(limit));
+    return apiFetchJSON(`${this.baseUrl}/incidents?${query.toString()}`) as Promise<Incident[]>;
+  }
+
+  static async addIncidentNote(params: {
+    alertId?: string;
+    incidentId?: string;
+    note: string;
+    user?: string;
+  }): Promise<{ success: boolean }> {
+    return apiFetchJSON(`${this.baseUrl}/incidents/note`, {
+      method: 'POST',
+      body: JSON.stringify({
+        alert_id: params.alertId,
+        incident_id: params.incidentId,
+        note: params.note,
+        user: params.user,
+      }),
+    }) as Promise<{ success: boolean }>;
   }
 
   static async acknowledge(alertId: string, user?: string): Promise<{ success: boolean }> {

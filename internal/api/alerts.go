@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
@@ -358,6 +359,130 @@ func (h *AlertHandlers) GetAlertHistory(w http.ResponseWriter, r *http.Request) 
 
 	if err := utils.WriteJSONResponse(w, filtered); err != nil {
 		log.Error().Err(err).Msg("Failed to write alert history response")
+	}
+}
+
+// GetAlertIncidentTimeline returns the incident timeline for an alert or resource.
+func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	store := h.monitor.GetIncidentStore()
+	if store == nil {
+		http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	query := r.URL.Query()
+	alertID := strings.TrimSpace(query.Get("alert_id"))
+	resourceID := strings.TrimSpace(query.Get("resource_id"))
+	startedAtRaw := strings.TrimSpace(query.Get("started_at"))
+	if startedAtRaw == "" {
+		startedAtRaw = strings.TrimSpace(query.Get("start_time"))
+	}
+	limit := 0
+	if rawLimit := strings.TrimSpace(query.Get("limit")); rawLimit != "" {
+		if parsed, err := strconv.Atoi(rawLimit); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	if alertID != "" {
+		if !validateAlertID(alertID) {
+			http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+			return
+		}
+		var startedAt time.Time
+		if startedAtRaw != "" {
+			parsed, err := time.Parse(time.RFC3339, startedAtRaw)
+			if err != nil {
+				http.Error(w, "Invalid started_at time", http.StatusBadRequest)
+				return
+			}
+			startedAt = parsed
+		}
+
+		var incident *memory.Incident
+		if !startedAt.IsZero() {
+			incident = store.GetTimelineByAlertAt(alertID, startedAt)
+		} else {
+			incident = store.GetTimelineByAlertID(alertID)
+		}
+		if err := utils.WriteJSONResponse(w, incident); err != nil {
+			log.Error().Err(err).Msg("Failed to write incident timeline response")
+		}
+		return
+	}
+
+	if resourceID != "" {
+		if len(resourceID) > 500 {
+			http.Error(w, "Invalid resource ID", http.StatusBadRequest)
+			return
+		}
+		incidents := store.ListIncidentsByResource(resourceID, limit)
+		if err := utils.WriteJSONResponse(w, incidents); err != nil {
+			log.Error().Err(err).Msg("Failed to write incident list response")
+		}
+		return
+	}
+
+	http.Error(w, "Missing alert_id or resource_id", http.StatusBadRequest)
+}
+
+// SaveAlertIncidentNote stores a user note in the incident timeline.
+func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	store := h.monitor.GetIncidentStore()
+	if store == nil {
+		http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
+	var req struct {
+		AlertID    string `json:"alert_id"`
+		IncidentID string `json:"incident_id"`
+		Note       string `json:"note"`
+		User       string `json:"user,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	req.AlertID = strings.TrimSpace(req.AlertID)
+	req.IncidentID = strings.TrimSpace(req.IncidentID)
+	req.Note = strings.TrimSpace(req.Note)
+	req.User = strings.TrimSpace(req.User)
+
+	if req.AlertID == "" && req.IncidentID == "" {
+		http.Error(w, "alert_id or incident_id is required", http.StatusBadRequest)
+		return
+	}
+	if req.AlertID != "" && !validateAlertID(req.AlertID) {
+		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+		return
+	}
+	if req.Note == "" {
+		http.Error(w, "note is required", http.StatusBadRequest)
+		return
+	}
+
+	if ok := store.RecordNote(req.AlertID, req.IncidentID, req.Note, req.User); !ok {
+		http.Error(w, "Failed to save note", http.StatusBadRequest)
+		return
+	}
+
+	if err := utils.WriteJSONResponse(w, map[string]interface{}{
+		"success": true,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to write incident note response")
 	}
 }
 
@@ -737,6 +862,16 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.GetAlertHistory(w, r)
+	case path == "incidents" && r.Method == http.MethodGet:
+		if !ensureScope(w, r, config.ScopeMonitoringRead) {
+			return
+		}
+		h.GetAlertIncidentTimeline(w, r)
+	case path == "incidents/note" && r.Method == http.MethodPost:
+		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
+		h.SaveAlertIncidentNote(w, r)
 	case path == "history" && r.Method == http.MethodDelete:
 		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
 			return

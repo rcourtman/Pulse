@@ -323,6 +323,10 @@ func (p *PatrolService) logRunbookExecution(finding *Finding, runbook Runbook, s
 	if err := p.remediationLog.Log(record); err != nil {
 		log.Warn().Err(err).Msg("Failed to log runbook execution")
 	}
+
+	if p.aiService != nil && finding != nil && finding.AlertID != "" {
+		p.aiService.RecordIncidentRunbook(finding.AlertID, runbook.ID, runbook.Title, outcome, automatic, message)
+	}
 }
 
 type runbookContext struct {

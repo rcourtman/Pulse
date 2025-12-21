@@ -20,6 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
@@ -604,6 +605,7 @@ type Monitor struct {
 	metricsHistory             *MetricsHistory
 	metricsStore               *metrics.Store // Persistent SQLite metrics storage
 	alertManager               *alerts.Manager
+	incidentStore              *memory.IncidentStore
 	notificationMgr            *notifications.NotificationManager
 	configPersist              *config.ConfigPersistence
 	discoveryService           *discovery.Service        // Background discovery service
@@ -3050,6 +3052,10 @@ func New(cfg *config.Config) (*Monitor, error) {
 			Msg("Persistent metrics store initialized with configurable retention")
 	}
 
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{
+		DataDir: cfg.DataPath,
+	})
+
 	m := &Monitor{
 		config:                     cfg,
 		state:                      models.NewState(),
@@ -3076,6 +3082,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		metricsHistory:             NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours
 		metricsStore:               metricsStore,                          // Persistent SQLite storage
 		alertManager:               alerts.NewManager(),
+		incidentStore:              incidentStore,
 		notificationMgr:            notifications.NewNotificationManager(cfg.PublicURL),
 		configPersist:              config.NewConfigPersistence(cfg.DataPath),
 		discoveryService:           nil, // Will be initialized in Start()
@@ -3756,24 +3763,18 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 
 	// Set up alert callbacks
 	m.alertManager.SetAlertCallback(func(alert *alerts.Alert) {
-		wsHub.BroadcastAlert(alert)
-		// Send notifications
-		log.Debug().
-			Str("alertID", alert.ID).
-			Str("level", string(alert.Level)).
-			Msg("Alert raised, sending to notification manager")
-		go m.notificationMgr.SendAlert(alert)
+		m.handleAlertFired(alert)
 	})
 	m.alertManager.SetResolvedCallback(func(alertID string) {
-		wsHub.BroadcastAlertResolved(alertID)
-		m.notificationMgr.CancelAlert(alertID)
-		if m.notificationMgr.GetNotifyOnResolve() {
-			if resolved := m.alertManager.GetResolvedAlert(alertID); resolved != nil {
-				go m.notificationMgr.SendResolvedAlert(resolved)
-			}
-		}
+		m.handleAlertResolved(alertID)
 		// Don't broadcast full state here - it causes a cascade with many guests.
 		// The frontend will get the updated alerts through the regular broadcast ticker.
+	})
+	m.alertManager.SetAcknowledgedCallback(func(alert *alerts.Alert, user string) {
+		m.handleAlertAcknowledged(alert, user)
+	})
+	m.alertManager.SetUnacknowledgedCallback(func(alert *alerts.Alert, user string) {
+		m.handleAlertUnacknowledged(alert, user)
 	})
 	m.alertManager.SetEscalateCallback(func(alert *alerts.Alert, level int) {
 		log.Info().
@@ -6355,7 +6356,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					}
 				}
 			}
-			
+
 			// Trigger guest metadata migration if old format exists
 			if m.guestMetadataStore != nil {
 				m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, res.Node, res.VMID)
@@ -7731,6 +7732,11 @@ func (m *Monitor) GetAlertManager() *alerts.Manager {
 	return m.alertManager
 }
 
+// GetIncidentStore returns the incident timeline store.
+func (m *Monitor) GetIncidentStore() *memory.IncidentStore {
+	return m.incidentStore
+}
+
 // SetAlertTriggeredAICallback sets an additional callback for AI analysis when alerts fire
 // This enables token-efficient, real-time AI insights on specific resources
 func (m *Monitor) SetAlertTriggeredAICallback(callback func(*alerts.Alert)) {
@@ -7738,31 +7744,67 @@ func (m *Monitor) SetAlertTriggeredAICallback(callback func(*alerts.Alert)) {
 		return
 	}
 
-	// Get the current callback
-	originalCallback := m.alertManager
-
 	// Wrap the existing callback to also call the AI callback
 	m.alertManager.SetAlertCallback(func(alert *alerts.Alert) {
-		// Broadcast to WebSocket (this happens via the callback set in Start())
-		if m.wsHub != nil {
-			m.wsHub.BroadcastAlert(alert)
-		}
-
-		// Send notifications
-		log.Debug().
-			Str("alertID", alert.ID).
-			Str("level", string(alert.Level)).
-			Msg("Alert raised, sending to notification manager")
-		go m.notificationMgr.SendAlert(alert)
+		m.handleAlertFired(alert)
 
 		// Trigger AI analysis
 		go callback(alert)
 	})
 
-	// Avoid unused variable warning
-	_ = originalCallback
-
 	log.Info().Msg("Alert-triggered AI callback registered")
+}
+
+func (m *Monitor) handleAlertFired(alert *alerts.Alert) {
+	if alert == nil {
+		return
+	}
+
+	if m.wsHub != nil {
+		m.wsHub.BroadcastAlert(alert)
+	}
+
+	log.Debug().
+		Str("alertID", alert.ID).
+		Str("level", string(alert.Level)).
+		Msg("Alert raised, sending to notification manager")
+	go m.notificationMgr.SendAlert(alert)
+
+	if m.incidentStore != nil {
+		m.incidentStore.RecordAlertFired(alert)
+	}
+}
+
+func (m *Monitor) handleAlertResolved(alertID string) {
+	if m.wsHub != nil {
+		m.wsHub.BroadcastAlertResolved(alertID)
+	}
+	m.notificationMgr.CancelAlert(alertID)
+	if m.notificationMgr.GetNotifyOnResolve() {
+		if resolved := m.alertManager.GetResolvedAlert(alertID); resolved != nil {
+			go m.notificationMgr.SendResolvedAlert(resolved)
+		}
+	}
+
+	if m.incidentStore != nil {
+		if resolved := m.alertManager.GetResolvedAlert(alertID); resolved != nil && resolved.Alert != nil {
+			m.incidentStore.RecordAlertResolved(resolved.Alert, resolved.ResolvedTime)
+		}
+	}
+}
+
+func (m *Monitor) handleAlertAcknowledged(alert *alerts.Alert, user string) {
+	if m.incidentStore == nil || alert == nil {
+		return
+	}
+	m.incidentStore.RecordAlertAcknowledged(alert, user)
+}
+
+func (m *Monitor) handleAlertUnacknowledged(alert *alerts.Alert, user string) {
+	if m.incidentStore == nil || alert == nil {
+		return
+	}
+	m.incidentStore.RecordAlertUnacknowledged(alert, user)
 }
 
 // SetResourceStore sets the resource store for polling optimization.

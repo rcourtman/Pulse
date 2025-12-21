@@ -161,6 +161,17 @@ func (a *AlertTriggeredAnalyzer) analyzeResource(alert *alerts.Alert, resourceKe
 			Dur("duration", duration).
 			Msg("Alert-triggered AI analysis completed with no additional findings")
 	}
+
+	if a.patrolService != nil && a.patrolService.aiService != nil {
+		summary := "Alert-triggered AI analysis completed"
+		if len(findings) > 0 {
+			summary = fmt.Sprintf("Alert-triggered AI analysis found %d findings", len(findings))
+		}
+		a.patrolService.aiService.RecordIncidentAnalysis(alert.ID, summary, map[string]interface{}{
+			"findings": len(findings),
+			"duration": duration.String(),
+		})
+	}
 }
 
 // analyzeResourceByAlert determines the resource type from the alert and analyzes it
