@@ -115,6 +115,8 @@ func (b *Builder) BuildForInfrastructure(state models.StateSnapshot) *Infrastruc
 			vm.CPU, vm.Memory.Usage, vm.Disk.Usage,
 			vm.Uptime, vm.LastBackup, trends,
 		)
+		// Add raw metric samples for LLM interpretation
+		resourceCtx.MetricSamples = b.computeGuestMetricSamples(vm.ID)
 		b.enrichWithNotes(&resourceCtx)
 		b.enrichWithAnomalies(&resourceCtx)
 		ctx.VMs = append(ctx.VMs, resourceCtx)
@@ -138,6 +140,10 @@ func (b *Builder) BuildForInfrastructure(state models.StateSnapshot) *Infrastruc
 			ct.CPU, ct.Memory.Usage, ct.Disk.Usage,
 			ct.Uptime, ct.LastBackup, trends,
 		)
+		
+		// Add raw metric samples for LLM interpretation
+		// This lets the LLM see actual patterns without pre-computed heuristics
+		resourceCtx.MetricSamples = b.computeGuestMetricSamples(ct.ID)
 		
 		// Add OCI image info for AI context
 		if ct.IsOCI && ct.OSTemplate != "" {
@@ -460,6 +466,34 @@ func formatAnomalyDescription(metric string, current, mean, stddev float64, seve
 	sb.WriteString(formatFloat(stddev, 1))
 	sb.WriteString("%)")
 	return sb.String()
+}
+
+// computeGuestMetricSamples gets downsampled raw metrics for LLM interpretation
+// Returns ~24 samples from the last 7 days, letting the LLM see patterns and determine if behavior is normal
+// With modern context windows (128k+ tokens), this is a small cost for much better insights
+func (b *Builder) computeGuestMetricSamples(guestID string) map[string][]MetricPoint {
+	samples := make(map[string][]MetricPoint)
+
+	if b.metricsHistory == nil {
+		return samples
+	}
+
+	// Get 7 days of data - enough to see weekly patterns and determine normalcy
+	allMetrics := b.metricsHistory.GetAllGuestMetrics(guestID, b.trendWindow7d)
+
+	for metric, points := range allMetrics {
+		if len(points) < 3 {
+			continue
+		}
+		// Downsample to ~24 points (roughly 3 per day over 7 days)
+		// This lets the LLM see: daily patterns, weekly cycles, and recent changes
+		sampled := DownsampleMetrics(points, 24)
+		if len(sampled) >= 3 {
+			samples[metric] = sampled
+		}
+	}
+
+	return samples
 }
 
 // filterRecentPoints filters points to only include those within duration

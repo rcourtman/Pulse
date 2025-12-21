@@ -129,6 +129,11 @@ type ResourceContext struct {
 	Baselines map[string]Baseline // metric -> baseline
 	Anomalies []Anomaly           // Current anomalies
 
+	// Raw metric samples - downsampled for LLM interpretation
+	// Key is metric name (cpu, memory, disk), value is sampled points
+	// This lets the LLM see actual patterns without pre-computed heuristics
+	MetricSamples map[string][]MetricPoint
+
 	// Predictions
 	Predictions []Prediction
 
