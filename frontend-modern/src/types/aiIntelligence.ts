@@ -153,6 +153,23 @@ export interface AnomaliesResponse extends LicenseGatedResponse {
     };
 }
 
+// Learning/baseline status for showing system intelligence state
+export type LearningStatus = 'waiting' | 'learning' | 'active';
+
+export interface LearningStatusResponse {
+    resources_baselined: number;
+    total_metrics: number;
+    metric_breakdown: {
+        cpu?: number;
+        memory?: number;
+        disk?: number;
+    };
+    status: LearningStatus;
+    message: string;
+    license_required: boolean;
+}
+
+
 // ============================================================================
 // Unified Intelligence Types (for /api/ai/intelligence endpoint)
 // ============================================================================

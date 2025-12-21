@@ -1217,6 +1217,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/intelligence/baselines", RequireAuth(r.config, r.aiSettingsHandler.HandleGetBaselines))
 	r.mux.HandleFunc("/api/ai/intelligence/remediations", RequireAuth(r.config, r.aiSettingsHandler.HandleGetRemediations))
 	r.mux.HandleFunc("/api/ai/intelligence/anomalies", RequireAuth(r.config, r.aiSettingsHandler.HandleGetAnomalies))
+	r.mux.HandleFunc("/api/ai/intelligence/learning", RequireAuth(r.config, r.aiSettingsHandler.HandleGetLearningStatus))
 
 	// Agent WebSocket for AI command execution
 	r.mux.HandleFunc("/api/agent/ws", r.handleAgentWebSocket)

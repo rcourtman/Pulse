@@ -17,9 +17,11 @@ import type {
   BaselinesResponse,
   RemediationsResponse,
   AnomaliesResponse,
+  LearningStatusResponse,
   IntelligenceSummary,
   ResourceIntelligence,
 } from '@/types/aiIntelligence';
+
 
 export class AIAPI {
   private static baseUrl = '/api';
@@ -127,6 +129,12 @@ export class AIAPI {
   static async getAnomalies(resourceId?: string): Promise<AnomaliesResponse> {
     const params = resourceId ? `?resource_id=${encodeURIComponent(resourceId)}` : '';
     return apiFetchJSON(`${this.baseUrl}/ai/intelligence/anomalies${params}`) as Promise<AnomaliesResponse>;
+  }
+
+  // Get learning/baseline status (FREE - no license required)
+  // Shows how many resources have been baselined and the overall learning state
+  static async getLearningStatus(): Promise<LearningStatusResponse> {
+    return apiFetchJSON(`${this.baseUrl}/ai/intelligence/learning`) as Promise<LearningStatusResponse>;
   }
 
   // ============================================
