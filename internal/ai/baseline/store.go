@@ -271,6 +271,131 @@ func (s *Store) CheckAnomaly(resourceID, metric string, value float64) (AnomalyS
 	return severity, zScore, baseline
 }
 
+// AnomalyReport represents a detected anomaly for a single metric
+type AnomalyReport struct {
+	ResourceID   string          `json:"resource_id"`
+	ResourceName string          `json:"resource_name,omitempty"`
+	ResourceType string          `json:"resource_type,omitempty"`
+	Metric       string          `json:"metric"`
+	CurrentValue float64         `json:"current_value"`
+	BaselineMean float64         `json:"baseline_mean"`
+	BaselineStdDev float64       `json:"baseline_std_dev"`
+	ZScore       float64         `json:"z_score"`
+	Severity     AnomalySeverity `json:"severity"`
+	Description  string          `json:"description"`
+}
+
+// CheckResourceAnomalies checks multiple metrics for a resource and returns all anomalies
+func (s *Store) CheckResourceAnomalies(resourceID string, metrics map[string]float64) []AnomalyReport {
+	var anomalies []AnomalyReport
+	
+	for metric, value := range metrics {
+		severity, zScore, baseline := s.CheckAnomaly(resourceID, metric, value)
+		if severity != AnomalyNone {
+			report := AnomalyReport{
+				ResourceID:   resourceID,
+				Metric:       metric,
+				CurrentValue: value,
+				ZScore:       zScore,
+				Severity:     severity,
+			}
+			
+			if baseline != nil {
+				report.BaselineMean = baseline.Mean
+				report.BaselineStdDev = baseline.StdDev
+				
+				// Generate human-readable description
+				ratio := value / baseline.Mean
+				direction := "above"
+				if zScore < 0 {
+					direction = "below"
+				}
+				report.Description = formatAnomalyDescription(metric, ratio, direction, severity)
+			}
+			
+			anomalies = append(anomalies, report)
+		}
+	}
+	
+	return anomalies
+}
+
+// formatAnomalyDescription generates a human-readable anomaly description
+func formatAnomalyDescription(metric string, ratio float64, direction string, severity AnomalySeverity) string {
+	metricLabel := metric
+	switch metric {
+	case "cpu":
+		metricLabel = "CPU usage"
+	case "memory":
+		metricLabel = "Memory usage"
+	case "disk":
+		metricLabel = "Disk usage"
+	case "network_in":
+		metricLabel = "Network inbound"
+	case "network_out":
+		metricLabel = "Network outbound"
+	}
+	
+	severityLabel := ""
+	switch severity {
+	case AnomalyCritical:
+		severityLabel = "Critical anomaly: "
+	case AnomalyHigh:
+		severityLabel = "High anomaly: "
+	case AnomalyMedium:
+		severityLabel = "Moderate anomaly: "
+	case AnomalyLow:
+		severityLabel = "Minor anomaly: "
+	}
+	
+	return severityLabel + metricLabel + " is " + formatRatio(ratio) + " " + direction + " normal baseline"
+}
+
+// formatRatio formats a ratio for display (e.g., 2.5 -> "2.5x")
+func formatRatio(ratio float64) string {
+	if ratio < 0.01 {
+		return "near zero"
+	}
+	if ratio < 1 {
+		return "significantly below"
+	}
+	if ratio < 1.5 {
+		return "slightly above"
+	}
+	if ratio < 2 {
+		return "1.5x"
+	}
+	if ratio < 3 {
+		return "2x"
+	}
+	if ratio < 5 {
+		return "3x"
+	}
+	return "~" + string([]byte{byte('0' + int(ratio))}) + "x"
+}
+
+// GetAllAnomalies checks all resources with current metrics and returns all anomalies
+// metricsProvider is a function that returns current metrics for a resource ID
+func (s *Store) GetAllAnomalies(metricsProvider func(resourceID string) map[string]float64) []AnomalyReport {
+	s.mu.RLock()
+	resourceIDs := make([]string, 0, len(s.baselines))
+	for id := range s.baselines {
+		resourceIDs = append(resourceIDs, id)
+	}
+	s.mu.RUnlock()
+	
+	var allAnomalies []AnomalyReport
+	for _, resourceID := range resourceIDs {
+		metrics := metricsProvider(resourceID)
+		if len(metrics) > 0 {
+			anomalies := s.CheckResourceAnomalies(resourceID, metrics)
+			allAnomalies = append(allAnomalies, anomalies...)
+		}
+	}
+	
+	return allAnomalies
+}
+
 // ResourceCount returns the number of resources with baselines
 func (s *Store) ResourceCount() int {
 	s.mu.RLock()

@@ -126,6 +126,33 @@ export interface RemediationsResponse extends LicenseGatedResponse {
     stats?: RemediationStats;
 }
 
+// Real-time anomaly detection types
+export type AnomalySeverity = 'low' | 'medium' | 'high' | 'critical';
+
+export interface AnomalyReport {
+    resource_id: string;
+    resource_name: string;
+    resource_type: string;
+    metric: string;
+    current_value: number;
+    baseline_mean: number;
+    baseline_std_dev: number;
+    z_score: number;
+    severity: AnomalySeverity;
+    description: string;
+}
+
+export interface AnomaliesResponse extends LicenseGatedResponse {
+    anomalies: AnomalyReport[];
+    count: number;
+    severity_counts: {
+        critical: number;
+        high: number;
+        medium: number;
+        low: number;
+    };
+}
+
 // ============================================================================
 // Unified Intelligence Types (for /api/ai/intelligence endpoint)
 // ============================================================================
@@ -229,14 +256,5 @@ export interface ResourceIntelligence {
     // Knowledge/notes
     knowledge?: unknown;
     note_count: number;
-}
-
-export interface AnomalyReport {
-    metric: string;
-    current_value: number;
-    baseline_mean: number;
-    z_score: number;
-    severity: string;  // "critical", "high", "medium", "low"
-    description: string;
 }
 

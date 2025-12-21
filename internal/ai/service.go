@@ -211,6 +211,13 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 	}
 }
 
+// GetStateProvider returns the state provider for infrastructure context
+func (s *Service) GetStateProvider() StateProvider {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.stateProvider
+}
+
 // GetPatrolService returns the patrol service for background monitoring
 func (s *Service) GetPatrolService() *PatrolService {
 	s.mu.RLock()

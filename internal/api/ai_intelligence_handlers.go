@@ -529,3 +529,233 @@ func remediationStatsFromRecords(records []ai.RemediationRecord) map[string]int 
 
 	return stats
 }
+
+// HandleGetAnomalies returns current baseline anomalies (GET /api/ai/intelligence/anomalies)
+// This compares live metrics against learned baselines to surface deviations.
+// Anomalies are deterministic (no LLM) - based on statistical z-score thresholds.
+func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"anomalies": []interface{}{},
+			"message":   "Patrol service not initialized",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write anomalies response")
+		}
+		return
+	}
+
+	baselineStore := patrol.GetBaselineStore()
+	if baselineStore == nil {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"anomalies": []interface{}{},
+			"message":   "Baseline store not initialized - baselines are still learning",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write anomalies response")
+		}
+		return
+	}
+
+	// Get current metrics from state provider
+	stateProvider := h.aiService.GetStateProvider()
+	if stateProvider == nil {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"anomalies": []interface{}{},
+			"message":   "State provider not available",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write anomalies response")
+		}
+		return
+	}
+
+	// Get resource filter if provided
+	resourceID := r.URL.Query().Get("resource_id")
+
+	// Collect anomalies
+	var result []map[string]interface{}
+
+	// Get all baselines and check current metrics
+	allBaselines := baselineStore.GetAllBaselines()
+	
+	// Group by resource ID
+	resourceMetrics := make(map[string]map[string]float64)
+	resourceInfo := make(map[string]struct{ name, rtype string })
+	
+	for _, baseline := range allBaselines {
+		if resourceID != "" && baseline.ResourceID != resourceID {
+			continue
+		}
+		if _, ok := resourceMetrics[baseline.ResourceID]; !ok {
+			resourceMetrics[baseline.ResourceID] = make(map[string]float64)
+		}
+	}
+
+	// Get current state to extract live metrics
+	state := stateProvider.GetState()
+	
+	// Check VMs
+	for _, vm := range state.VMs {
+		if vm.Template {
+			continue // Skip templates
+		}
+		
+		// Skip if we don't have baselines for this resource
+		if _, ok := resourceMetrics[vm.ID]; !ok {
+			if resourceID == "" {
+				continue
+			}
+			if vm.ID != resourceID {
+				continue
+			}
+		}
+		
+		metrics := map[string]float64{
+			"cpu":    vm.CPU * 100,      // CPU is already 0-1, convert to percentage
+			"memory": vm.Memory.Usage, // Memory.Usage is already in percentage
+		}
+		if vm.Disk.Usage > 0 {
+			metrics["disk"] = vm.Disk.Usage
+		}
+		
+		anomalies := baselineStore.CheckResourceAnomalies(vm.ID, metrics)
+		for _, anomaly := range anomalies {
+			result = append(result, map[string]interface{}{
+				"resource_id":      anomaly.ResourceID,
+				"resource_name":    vm.Name,
+				"resource_type":    "vm",
+				"metric":           anomaly.Metric,
+				"current_value":    anomaly.CurrentValue,
+				"baseline_mean":    anomaly.BaselineMean,
+				"baseline_std_dev": anomaly.BaselineStdDev,
+				"z_score":          anomaly.ZScore,
+				"severity":         anomaly.Severity,
+				"description":      anomaly.Description,
+			})
+		}
+		
+		// Store info for any additional processing
+		resourceInfo[vm.ID] = struct{ name, rtype string }{vm.Name, "vm"}
+	}
+	
+	// Check Containers
+	for _, ct := range state.Containers {
+		if ct.Template {
+			continue // Skip templates
+		}
+		
+		// Skip if we don't have baselines for this resource
+		if _, ok := resourceMetrics[ct.ID]; !ok {
+			if resourceID == "" {
+				continue
+			}
+			if ct.ID != resourceID {
+				continue
+			}
+		}
+		
+		metrics := map[string]float64{
+			"cpu":    ct.CPU * 100,      // CPU is already 0-1, convert to percentage
+			"memory": ct.Memory.Usage, // Memory.Usage is already in percentage
+		}
+		if ct.Disk.Usage > 0 {
+			metrics["disk"] = ct.Disk.Usage
+		}
+		
+		anomalies := baselineStore.CheckResourceAnomalies(ct.ID, metrics)
+		for _, anomaly := range anomalies {
+			result = append(result, map[string]interface{}{
+				"resource_id":      anomaly.ResourceID,
+				"resource_name":    ct.Name,
+				"resource_type":    "container",
+				"metric":           anomaly.Metric,
+				"current_value":    anomaly.CurrentValue,
+				"baseline_mean":    anomaly.BaselineMean,
+				"baseline_std_dev": anomaly.BaselineStdDev,
+				"z_score":          anomaly.ZScore,
+				"severity":         anomaly.Severity,
+				"description":      anomaly.Description,
+			})
+		}
+		
+		// Store info for any additional processing
+		resourceInfo[ct.ID] = struct{ name, rtype string }{ct.Name, "container"}
+	}
+	
+	// Check nodes
+	for _, node := range state.Nodes {
+		nodeID := node.ID
+		
+		// Skip if we don't have baselines for this resource
+		if _, ok := resourceMetrics[nodeID]; !ok {
+			if resourceID == "" {
+				continue
+			}
+			if nodeID != resourceID {
+				continue
+			}
+		}
+		
+		metrics := map[string]float64{
+			"cpu":    node.CPU * 100,      // CPU is already 0-1, convert to percentage
+			"memory": node.Memory.Usage, // Memory.Usage is already in percentage
+		}
+		
+		anomalies := baselineStore.CheckResourceAnomalies(nodeID, metrics)
+		for _, anomaly := range anomalies {
+			result = append(result, map[string]interface{}{
+				"resource_id":      anomaly.ResourceID,
+				"resource_name":    node.Name,
+				"resource_type":    "node",
+				"metric":           anomaly.Metric,
+				"current_value":    anomaly.CurrentValue,
+				"baseline_mean":    anomaly.BaselineMean,
+				"baseline_std_dev": anomaly.BaselineStdDev,
+				"z_score":          anomaly.ZScore,
+				"severity":         anomaly.Severity,
+				"description":      anomaly.Description,
+			})
+		}
+	}
+
+	// License gating
+	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
+	if locked {
+		w.Header().Set("X-License-Required", "true")
+		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
+	}
+
+	count := len(result)
+	
+	// Count by severity for summary
+	severityCounts := map[string]int{
+		"critical": 0,
+		"high":     0,
+		"medium":   0,
+		"low":      0,
+	}
+	for _, anomaly := range result {
+		if sev, ok := anomaly["severity"].(string); ok {
+			severityCounts[sev]++
+		}
+	}
+
+	if locked {
+		result = []map[string]interface{}{}
+	}
+
+	if err := utils.WriteJSONResponse(w, map[string]interface{}{
+		"anomalies":        result,
+		"count":            count,
+		"severity_counts":  severityCounts,
+		"license_required": locked,
+		"upgrade_url":      aiIntelligenceUpgradeURL,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to write anomalies response")
+	}
+}
+
