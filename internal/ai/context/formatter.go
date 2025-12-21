@@ -64,7 +64,7 @@ func FormatResourceContext(ctx ResourceContext) string {
 	// Raw metric samples - let the LLM interpret patterns directly
 	// This is more reliable than pre-computed trends for edge cases
 	if len(ctx.MetricSamples) > 0 {
-		sb.WriteString("**History (7d sampled, oldest→newest)**: ")
+		sb.WriteString("**History (24h sampled, oldest→newest)**: ")
 		var sampleLines []string
 		for metric, points := range ctx.MetricSamples {
 			if len(points) >= 3 {

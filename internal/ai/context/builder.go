@@ -478,16 +478,17 @@ func (b *Builder) computeGuestMetricSamples(guestID string) map[string][]MetricP
 		return samples
 	}
 
-	// Get 7 days of data - enough to see weekly patterns and determine normalcy
-	allMetrics := b.metricsHistory.GetAllGuestMetrics(guestID, b.trendWindow7d)
+	// Get 24 hours of data (matches in-memory retention)
+	// This lets the LLM see recent patterns and changes
+	allMetrics := b.metricsHistory.GetAllGuestMetrics(guestID, b.trendWindow24h)
 
 	for metric, points := range allMetrics {
 		if len(points) < 3 {
 			continue
 		}
-		// Downsample to ~24 points (roughly 3 per day over 7 days)
-		// This lets the LLM see: daily patterns, weekly cycles, and recent changes
-		sampled := DownsampleMetrics(points, 24)
+		// Downsample to ~12 points (roughly every 2 hours over 24h)
+		// This gives the LLM a compact view of recent trends
+		sampled := DownsampleMetrics(points, 12)
 		if len(sampled) >= 3 {
 			samples[metric] = sampled
 		}
