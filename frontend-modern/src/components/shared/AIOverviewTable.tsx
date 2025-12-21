@@ -211,30 +211,34 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
             });
         }
 
-        // Correlations - only show high-confidence (>=70%) to avoid noise
-        // Low confidence correlations are likely coincidental and not actionable
-        const MIN_CORRELATION_CONFIDENCE = 0.70;
-        const highConfidenceCorrelations = correlations().filter(c => c.confidence >= MIN_CORRELATION_CONFIDENCE);
-        const sortedCorrelations = [...highConfidenceCorrelations].sort((a, b) => b.confidence - a.confidence);
-        const visibleCorrelations = showAllDependencies()
-            ? sortedCorrelations
-            : sortedCorrelations.slice(0, DEPENDENCY_LIMIT);
+        // CORRELATIONS HIDDEN - they need more work to be genuinely useful
+        // Current state: "A and B alert together" (bidirectional) is not actionable
+        // Shows that correlated things are correlated - no root cause identification
+        // TODO: Re-enable when we can identify root cause chains (A causes B, not just A+B)
+        // 
+        // const MIN_CORRELATION_CONFIDENCE = 0.70;
+        // const highConfidenceCorrelations = correlations().filter(c => c.confidence >= MIN_CORRELATION_CONFIDENCE);
+        // const sortedCorrelations = [...highConfidenceCorrelations].sort((a, b) => b.confidence - a.confidence);
+        // const visibleCorrelations = showAllDependencies()
+        //     ? sortedCorrelations
+        //     : sortedCorrelations.slice(0, DEPENDENCY_LIMIT);
+        // 
+        // for (const corr of visibleCorrelations) {
+        //     rows.push({
+        //         id: `corr-${corr.source_id}-${corr.target_id}`,
+        //         type: 'prediction',
+        //         typeBadge: 'Dependency',
+        //         typeBadgeClass: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+        //         title: `${corr.source_name || corr.source_id} → ${corr.target_name || corr.target_id}`,
+        //         subtitle: corr.description || `${corr.event_pattern} (${corr.occurrences} observations)`,
+        //         timestamp: `Delay: ${corr.avg_delay}`,
+        //         confidence: corr.confidence,
+        //         locked: false,
+        //         badgeClass: 'text-indigo-600 dark:text-indigo-400',
+        //     });
+        // }
 
 
-        for (const corr of visibleCorrelations) {
-            rows.push({
-                id: `corr-${corr.source_id}-${corr.target_id}`,
-                type: 'prediction',
-                typeBadge: 'Dependency',
-                typeBadgeClass: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
-                title: `${corr.source_name || corr.source_id} → ${corr.target_name || corr.target_id}`,
-                subtitle: corr.description || `${corr.event_pattern} (${corr.occurrences} observations)`,
-                timestamp: `Delay: ${corr.avg_delay}`,
-                confidence: corr.confidence,
-                locked: false,
-                badgeClass: 'text-indigo-600 dark:text-indigo-400',
-            });
-        }
 
 
         // Remediations - ONLY show actual ACTIONS (restarts, resizes, cleanups, fixes)
@@ -564,10 +568,10 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
 
     // Calculate hidden items per section
     const hiddenDependencies = () => {
-        // Only count high-confidence correlations (>=70%)
-        const highConfidence = correlations().filter(c => c.confidence >= 0.70);
-        return showAllDependencies() ? 0 : Math.max(0, highConfidence.length - DEPENDENCY_LIMIT);
+        // Correlations hidden from display - always return 0
+        return 0;
     };
+
 
     const hiddenActions = () => {
         const actionable = remediations().filter(rem => {
