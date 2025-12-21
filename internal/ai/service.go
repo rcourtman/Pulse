@@ -529,7 +529,7 @@ func (s *Service) ReconfigurePatrol() {
 
 	log.Info().
 		Bool("enabled", patrolCfg.Enabled).
-		Dur("interval", patrolCfg.QuickCheckInterval).
+		Dur("interval", patrolCfg.Interval).
 		Msg("Patrol configuration updated")
 
 	// Update alert-triggered analyzer (re-check license on each config change)
