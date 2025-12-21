@@ -863,6 +863,7 @@ func TestPatrolService_GetAllFindings(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 
 	// Add findings with different severities
+	// Note: GetAllFindings now filters out info/watch findings (only returns warning+)
 	ps.findings.Add(&Finding{
 		ID:         "f1",
 		Severity:   FindingSeverityInfo,
@@ -884,8 +885,9 @@ func TestPatrolService_GetAllFindings(t *testing.T) {
 
 	findings := ps.GetAllFindings()
 
-	if len(findings) != 3 {
-		t.Fatalf("Expected 3 findings, got %d", len(findings))
+	// GetAllFindings filters out info/watch - only returns critical and warning
+	if len(findings) != 2 {
+		t.Fatalf("Expected 2 findings (critical+warning only), got %d", len(findings))
 	}
 
 	// Should be sorted by severity (critical first)
@@ -894,9 +896,6 @@ func TestPatrolService_GetAllFindings(t *testing.T) {
 	}
 	if findings[1].Severity != FindingSeverityWarning {
 		t.Errorf("Expected second finding to be warning, got %s", findings[1].Severity)
-	}
-	if findings[2].Severity != FindingSeverityInfo {
-		t.Errorf("Expected third finding to be info, got %s", findings[2].Severity)
 	}
 }
 
