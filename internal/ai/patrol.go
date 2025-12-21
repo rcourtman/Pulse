@@ -641,11 +641,28 @@ func (p *PatrolService) Stop() {
 
 // patrolLoop is the main background loop
 func (p *PatrolService) patrolLoop(ctx context.Context) {
-	// Run initial quick patrol shortly after startup
+	// Run initial patrol shortly after startup, but only if one hasn't run recently
 	initialDelay := 30 * time.Second
 	select {
 	case <-time.After(initialDelay):
-		p.runPatrol(ctx)
+		// Check if a patrol ran recently (within last hour) to avoid wasting tokens on restarts
+		runHistory := p.GetRunHistory(1)
+
+		skipInitial := false
+		if len(runHistory) > 0 {
+			lastRun := runHistory[0]
+			timeSinceLastRun := time.Since(lastRun.CompletedAt)
+			if timeSinceLastRun < 1*time.Hour {
+				log.Info().
+					Dur("time_since_last", timeSinceLastRun).
+					Msg("AI Patrol: Skipping initial patrol - recent run exists")
+				skipInitial = true
+			}
+		}
+
+		if !skipInitial {
+			p.runPatrol(ctx)
+		}
 	case <-p.stopCh:
 		return
 	case <-ctx.Done():
