@@ -167,14 +167,7 @@ interface HostProxySummary {
   ctid?: string;
 }
 
-interface HostProxyStatusResponse {
-  hostSocketPresent?: boolean;
-  containerSocketPresent?: boolean;
-  summary?: HostProxySummary | null;
-  reinstallCommand?: string;
-  installerURL?: string;
-  lastChecked?: string;
-}
+// HostProxyStatusResponse removed - pulse-sensor-proxy is deprecated in v5
 
 interface TemperatureProxyDiagnostic {
   legacySSHDetected: boolean;
@@ -634,7 +627,7 @@ const Settings: Component<SettingsProps> = (props) => {
   const [envOverrides, setEnvOverrides] = createSignal<Record<string, boolean>>({});
   const [temperatureMonitoringEnabled, setTemperatureMonitoringEnabled] = createSignal(true);
   const [savingTemperatureSetting, setSavingTemperatureSetting] = createSignal(false);
-  const [_hostProxyStatus, setHostProxyStatus] = createSignal<HostProxyStatusResponse | null>(null);
+  // hostProxyStatus removed - pulse-sensor-proxy is deprecated in v5
   const [hideLocalLogin, setHideLocalLogin] = createSignal(false);
   const [savingHideLocalLogin, setSavingHideLocalLogin] = createSignal(false);
 
@@ -966,16 +959,7 @@ const Settings: Component<SettingsProps> = (props) => {
       const diag = await response.json();
       setDiagnosticsData(diag);
       emitTemperatureProxyWarnings(diag);
-      setHostProxyStatus(
-        diag?.temperatureProxy?.hostProxySummary
-          ? {
-            hostSocketPresent: Boolean(diag.temperatureProxy?.socketFound),
-            containerSocketPresent:
-              diag.temperatureProxy?.hostProxySummary?.containerSocketPresent ?? undefined,
-            summary: diag.temperatureProxy?.hostProxySummary ?? undefined,
-          }
-          : null,
-      );
+      // hostProxyStatus removed - pulse-sensor-proxy is deprecated in v5
     } catch (err) {
       logger.error('Failed to fetch diagnostics', err);
       showError('Failed to run diagnostics');
@@ -984,27 +968,7 @@ const Settings: Component<SettingsProps> = (props) => {
     }
   };
 
-  const refreshHostProxyStatus = async (notify = false) => {
-    try {
-      const response = await apiFetch('/api/temperature-proxy/host-status');
-      if (response.status === 410) {
-        // pulse-sensor-proxy is deprecated and disabled by default in v5
-        setHostProxyStatus(null);
-        return;
-      }
-      if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`);
-      }
-      const status = (await response.json()) as HostProxyStatusResponse;
-      setHostProxyStatus(status);
-      if (notify) {
-        showSuccess('Host proxy status refreshed', undefined, 2000);
-      }
-    } catch (err) {
-      logger.error('Failed to refresh host proxy status', err);
-      showError('Failed to refresh host proxy status');
-    }
-  };
+  // refreshHostProxyStatus removed - pulse-sensor-proxy is deprecated in v5
 
   createEffect(() => {
     if (typeof window === 'undefined') {
@@ -1015,10 +979,8 @@ const Settings: Component<SettingsProps> = (props) => {
       return;
     }
     void runDiagnostics();
-    void refreshHostProxyStatus(false);
     const intervalId = window.setInterval(() => {
       void runDiagnostics();
-      void refreshHostProxyStatus(false);
     }, 60000);
     onCleanup(() => {
       window.clearInterval(intervalId);
