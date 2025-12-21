@@ -1920,7 +1920,7 @@ func TestService_LogRemediation_WithPatrolService(t *testing.T) {
 		UseCase: "patrol",
 	}
 	
-	svc.logRemediation(req, "top -bn1", "output data", true)
+	svc.logRemediation(req, "systemctl restart nginx", "output data", true)
 	
 	// Verify the log was created
 	history := remLog.GetForResource("vm-100-with-patrol", 10)
@@ -1964,7 +1964,7 @@ func TestService_LogRemediation_LongPromptTruncation(t *testing.T) {
 		Prompt:     longPrompt,
 	}
 	
-	svc.logRemediation(req, "command", "output", false)
+	svc.logRemediation(req, "docker restart app", "output", false)
 	
 	history := remLog.GetForResource("vm-100-truncation-test", 10)
 	if len(history) != 1 {

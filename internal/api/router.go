@@ -1207,6 +1207,9 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, LicenseGatedEmptyResponse(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleGetDismissedFindings)))
 
 	// AI Intelligence endpoints - expose learned patterns, correlations, and predictions
+	// Unified intelligence endpoint - aggregates all AI subsystems into a single view
+	r.mux.HandleFunc("/api/ai/intelligence", RequireAuth(r.config, r.aiSettingsHandler.HandleGetIntelligence))
+	// Individual sub-endpoints for specific intelligence layers
 	r.mux.HandleFunc("/api/ai/intelligence/patterns", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatterns))
 	r.mux.HandleFunc("/api/ai/intelligence/predictions", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPredictions))
 	r.mux.HandleFunc("/api/ai/intelligence/correlations", RequireAuth(r.config, r.aiSettingsHandler.HandleGetCorrelations))

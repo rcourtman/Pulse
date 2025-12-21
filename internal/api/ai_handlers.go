@@ -2212,6 +2212,64 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 	}
 }
 
+// HandleGetIntelligence returns the unified AI intelligence summary (GET /api/ai/intelligence)
+// This provides a single endpoint for system-wide AI insights including:
+// - Overall health score and grade
+// - Active findings summary
+// - Upcoming predictions
+// - Recent activity
+// - Learning progress
+// - Resources at risk
+func (h *AISettingsHandler) HandleGetIntelligence(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		// Return empty intelligence when not initialized
+		response := map[string]interface{}{
+			"error": "AI patrol service not available",
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		if err := utils.WriteJSONResponse(w, response); err != nil {
+			log.Error().Err(err).Msg("Failed to write intelligence response")
+		}
+		return
+	}
+
+	// Get unified intelligence facade
+	intel := patrol.GetIntelligence()
+	if intel == nil {
+		response := map[string]interface{}{
+			"error": "Intelligence not initialized",
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		if err := utils.WriteJSONResponse(w, response); err != nil {
+			log.Error().Err(err).Msg("Failed to write intelligence response")
+		}
+		return
+	}
+
+	// Check for resource_id query parameter for resource-specific intelligence
+	resourceID := r.URL.Query().Get("resource_id")
+	if resourceID != "" {
+		// Return resource-specific intelligence
+		resourceIntel := intel.GetResourceIntelligence(resourceID)
+		if err := utils.WriteJSONResponse(w, resourceIntel); err != nil {
+			log.Error().Err(err).Msg("Failed to write resource intelligence response")
+		}
+		return
+	}
+
+	// Return system-wide intelligence summary
+	summary := intel.GetSummary()
+	if err := utils.WriteJSONResponse(w, summary); err != nil {
+		log.Error().Err(err).Msg("Failed to write intelligence summary response")
+	}
+}
+
 // HandlePatrolStream streams real-time patrol analysis via SSE (GET /api/ai/patrol/stream)
 func (h *AISettingsHandler) HandlePatrolStream(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

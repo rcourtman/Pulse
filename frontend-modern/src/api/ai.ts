@@ -16,6 +16,8 @@ import type {
   ChangesResponse,
   BaselinesResponse,
   RemediationsResponse,
+  IntelligenceSummary,
+  ResourceIntelligence,
 } from '@/types/aiIntelligence';
 
 export class AIAPI {
@@ -117,6 +119,23 @@ export class AIAPI {
     if (options?.limit) params.set('limit', String(options.limit));
     const query = params.toString();
     return apiFetchJSON(`${this.baseUrl}/ai/intelligence/remediations${query ? `?${query}` : ''}`) as Promise<RemediationsResponse>;
+  }
+
+  // ============================================
+  // Unified Intelligence API
+  // Aggregates all AI subsystems into a single view
+  // ============================================
+
+  // Get system-wide intelligence summary
+  // Returns overall health, findings, predictions, recent activity, and learning progress
+  static async getIntelligenceSummary(): Promise<IntelligenceSummary> {
+    return apiFetchJSON(`${this.baseUrl}/ai/intelligence`) as Promise<IntelligenceSummary>;
+  }
+
+  // Get intelligence for a specific resource
+  // Returns health score, findings, predictions, correlations, and baselines for the resource
+  static async getResourceIntelligence(resourceId: string): Promise<ResourceIntelligence> {
+    return apiFetchJSON(`${this.baseUrl}/ai/intelligence?resource_id=${encodeURIComponent(resourceId)}`) as Promise<ResourceIntelligence>;
   }
 
 
@@ -235,7 +254,7 @@ export class AIAPI {
     let lastEventTime = Date.now();
 
     try {
-      for (;;) {
+      for (; ;) {
         if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
           console.warn('[AI] Alert investigation stream timeout');
           break;
@@ -330,7 +349,7 @@ export class AIAPI {
     logger.debug('[AI SSE] Starting to read stream');
 
     try {
-      for (;;) {
+      for (; ;) {
         // Check for stream timeout
         if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
           logger.warn('[AI SSE] Stream timeout', { seconds: STREAM_TIMEOUT_MS / 1000 });

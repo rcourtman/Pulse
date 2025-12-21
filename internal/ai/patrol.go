@@ -220,6 +220,9 @@ type PatrolService struct {
 	correlationDetector *CorrelationDetector   // For multi-resource correlation
 	incidentStore       *memory.IncidentStore  // For incident timeline capture
 
+	// Unified intelligence facade - aggregates all subsystems for unified view
+	intelligence *Intelligence
+
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds PatrolThresholds
 
@@ -457,6 +460,37 @@ func (p *PatrolService) GetConfig() PatrolConfig {
 // GetFindings returns the findings store
 func (p *PatrolService) GetFindings() *FindingsStore {
 	return p.findings
+}
+
+// GetIntelligence returns the unified intelligence facade that aggregates all AI subsystems.
+// This provides a single entry point for getting system-wide and resource-specific AI insights.
+// The facade is lazily initialized and wires together existing subsystems.
+func (p *PatrolService) GetIntelligence() *Intelligence {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Lazy initialization - build facade from existing subsystems
+	if p.intelligence == nil {
+		p.intelligence = NewIntelligence(IntelligenceConfig{})
+	}
+
+	// Always refresh subsystem pointers (they may have been set after intelligence was created)
+	p.intelligence.SetSubsystems(
+		p.findings,
+		p.patternDetector,
+		p.correlationDetector,
+		p.baselineStore,
+		p.incidentStore,
+		p.knowledgeStore,
+		p.changeDetector,
+		p.remediationLog,
+	)
+
+	if p.stateProvider != nil {
+		p.intelligence.SetStateProvider(p.stateProvider)
+	}
+
+	return p.intelligence
 }
 
 // GetStatus returns the current patrol status
