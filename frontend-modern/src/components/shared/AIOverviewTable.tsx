@@ -58,16 +58,23 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
         setLoading(true);
         setError('');
         try {
-            const [predResp, corrResp, remResp, changesResp, anomalyResp] = await Promise.all([
+            // Fetch all Pro features together
+            const [predResp, corrResp, remResp, changesResp] = await Promise.all([
                 AIAPI.getPredictions(),
                 AIAPI.getCorrelations(),
                 AIAPI.getRemediations({ hours: 168, limit: 6 }),
                 AIAPI.getRecentChanges(24),
-                AIAPI.getAnomalies(),
             ]);
 
-            // Handle anomalies (FREE - no license required)
-            setAnomalies(anomalyResp.anomalies || []);
+            // Fetch anomalies separately (FREE feature - don't let failures break Pro features)
+            try {
+                const anomalyResp = await AIAPI.getAnomalies();
+                setAnomalies(anomalyResp.anomalies || []);
+            } catch {
+                // Anomalies endpoint may fail if patrol not initialized - that's OK
+                setAnomalies([]);
+            }
+
 
             // Handle insights lock
             const insightsLockedState = Boolean(predResp.license_required || corrResp.license_required);
