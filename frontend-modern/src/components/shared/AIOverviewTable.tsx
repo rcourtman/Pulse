@@ -211,11 +211,15 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
             });
         }
 
-        // Correlations - sorted by confidence, limited unless expanded
-        const sortedCorrelations = [...correlations()].sort((a, b) => b.confidence - a.confidence);
+        // Correlations - only show high-confidence (>=70%) to avoid noise
+        // Low confidence correlations are likely coincidental and not actionable
+        const MIN_CORRELATION_CONFIDENCE = 0.70;
+        const highConfidenceCorrelations = correlations().filter(c => c.confidence >= MIN_CORRELATION_CONFIDENCE);
+        const sortedCorrelations = [...highConfidenceCorrelations].sort((a, b) => b.confidence - a.confidence);
         const visibleCorrelations = showAllDependencies()
             ? sortedCorrelations
             : sortedCorrelations.slice(0, DEPENDENCY_LIMIT);
+
 
         for (const corr of visibleCorrelations) {
             rows.push({
@@ -560,9 +564,11 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
 
     // Calculate hidden items per section
     const hiddenDependencies = () => {
-        const total = correlations().length;
-        return showAllDependencies() ? 0 : Math.max(0, total - DEPENDENCY_LIMIT);
+        // Only count high-confidence correlations (>=70%)
+        const highConfidence = correlations().filter(c => c.confidence >= 0.70);
+        return showAllDependencies() ? 0 : Math.max(0, highConfidence.length - DEPENDENCY_LIMIT);
     };
+
     const hiddenActions = () => {
         const actionable = remediations().filter(rem => {
             const cmd = rem.action.trim().replace(/^\[[^\]]+\]\s*/, '');
