@@ -2,13 +2,24 @@ import { Show, For, createMemo, createSignal, onMount, onCleanup } from 'solid-j
 import { Portal } from 'solid-js/web';
 import type { Disk } from '@/types/api';
 import { formatBytes, formatPercent } from '@/utils/format';
+import type { AnomalyReport } from '@/types/aiIntelligence';
 
 interface StackedDiskBarProps {
   /** Array of disk objects - if empty/undefined, falls back to aggregate */
   disks?: Disk[];
   /** Aggregate disk data (fallback when disks array unavailable) */
   aggregateDisk?: Disk;
+  /** Baseline anomaly if detected */
+  anomaly?: AnomalyReport | null;
 }
+
+// Anomaly severity colors
+const anomalySeverityClass: Record<string, string> = {
+  critical: 'text-red-400',
+  high: 'text-orange-400',
+  medium: 'text-yellow-400',
+  low: 'text-blue-400',
+};
 
 // Color palette for disk segments - distinct colors for visual differentiation
 const SEGMENT_COLORS = [
@@ -50,6 +61,15 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
 
     observer.observe(containerRef);
     onCleanup(() => observer.disconnect());
+  });
+
+  // Format anomaly ratio for display
+  const anomalyRatio = createMemo(() => {
+    if (!props.anomaly || props.anomaly.baseline_mean === 0) return null;
+    const ratio = props.anomaly.current_value / props.anomaly.baseline_mean;
+    if (ratio >= 2) return `${ratio.toFixed(1)}x`;
+    if (ratio >= 1.5) return '↑↑';
+    return '↑';
   });
 
   // Determine if we have multiple disks or should use aggregate
@@ -237,6 +257,15 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
             <Show when={hasMultipleDisks()}>
               <span class="text-[8px] font-normal text-gray-500 dark:text-gray-400">
                 [{props.disks?.length}]
+              </span>
+            </Show>
+            {/* Anomaly indicator */}
+            <Show when={props.anomaly && anomalyRatio()}>
+              <span
+                class={`ml-0.5 font-bold animate-pulse ${anomalySeverityClass[props.anomaly!.severity] || 'text-yellow-400'}`}
+                title={props.anomaly!.description}
+              >
+                {anomalyRatio()}
               </span>
             </Show>
           </span>

@@ -4,6 +4,7 @@ import { formatBytes, formatPercent } from '@/utils/format';
 import { Sparkline } from '@/components/shared/Sparkline';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
 import { getMetricHistoryForRange, getMetricsVersion } from '@/stores/metricsHistory';
+import type { AnomalyReport } from '@/types/aiIntelligence';
 
 interface StackedMemoryBarProps {
     used: number;
@@ -12,7 +13,16 @@ interface StackedMemoryBarProps {
     swapTotal?: number;
     balloon?: number;
     resourceId?: string; // Required for sparkline mode to fetch history
+    anomaly?: AnomalyReport | null;  // Baseline anomaly if detected
 }
+
+// Anomaly severity colors
+const anomalySeverityClass: Record<string, string> = {
+    critical: 'text-red-400',
+    high: 'text-orange-400',
+    medium: 'text-yellow-400',
+    low: 'text-blue-400',
+};
 
 // Colors for memory segments
 const MEMORY_COLORS = {
@@ -38,6 +48,15 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
         getMetricsVersion();
         if (viewMode() !== 'sparklines' || !props.resourceId) return [];
         return getMetricHistoryForRange(props.resourceId, timeRange());
+    });
+
+    // Format anomaly ratio for display
+    const anomalyRatio = createMemo(() => {
+        if (!props.anomaly || props.anomaly.baseline_mean === 0) return null;
+        const ratio = props.anomaly.current_value / props.anomaly.baseline_mean;
+        if (ratio >= 2) return `${ratio.toFixed(1)}x`;
+        if (ratio >= 1.5) return '↑↑';
+        return '↑';
     });
 
     const [containerWidth, setContainerWidth] = createSignal(100);
@@ -193,6 +212,15 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                                 <Show when={showSublabel()}>
                                     <span class="metric-sublabel font-normal text-gray-500 dark:text-gray-300">
                                         ({displaySublabel()})
+                                    </span>
+                                </Show>
+                                {/* Anomaly indicator */}
+                                <Show when={props.anomaly && anomalyRatio()}>
+                                    <span
+                                        class={`ml-0.5 font-bold animate-pulse ${anomalySeverityClass[props.anomaly!.severity] || 'text-yellow-400'}`}
+                                        title={props.anomaly!.description}
+                                    >
+                                        {anomalyRatio()}
                                     </span>
                                 </Show>
                             </span>
