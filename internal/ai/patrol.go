@@ -841,6 +841,10 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 	}
 	if runStats.errors > 0 {
 		status = "error"
+		// Don't claim "All healthy" if there were errors - the patrol didn't complete properly
+		if findingsSummaryStr == "All healthy" {
+			findingsSummaryStr = fmt.Sprintf("Analysis incomplete (%d errors)", runStats.errors)
+		}
 	}
 
 	// Create run record
