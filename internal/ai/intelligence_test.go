@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -457,3 +458,296 @@ func TestAbsFloatIntel(t *testing.T) {
 	}
 }
 
+func TestIntelligence_GetSummary_WithPatterns(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	
+	// Create pattern detector with predictions
+	patternDetector := patterns.NewDetector(patterns.DefaultConfig())
+	
+	// Set up the subsystems
+	intel.SetSubsystems(nil, patternDetector, nil, nil, nil, nil, nil, nil)
+	
+	summary := intel.GetSummary()
+	
+	// Predictions count should be available
+	if summary.PredictionsCount < 0 {
+		t.Error("PredictionsCount should not be negative")
+	}
+}
+
+func TestIntelligence_GetResourceIntelligence_WithBaselines(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	
+	// Create baseline store with learned data
+	baselineStore := baseline.NewStore(baseline.StoreConfig{MinSamples: 10})
+	
+	// Learn baseline for CPU
+	points := make([]baseline.MetricPoint, 100)
+	for i := 0; i < 100; i++ {
+		points[i] = baseline.MetricPoint{Value: 30 + float64(i%5) - 2}
+	}
+	baselineStore.Learn("vm-with-baseline", "vm", "cpu", points)
+	baselineStore.Learn("vm-with-baseline", "vm", "memory", points)
+	
+	intel.SetSubsystems(nil, nil, nil, baselineStore, nil, nil, nil, nil)
+	
+	resourceIntel := intel.GetResourceIntelligence("vm-with-baseline")
+	
+	// Should have baselines
+	if resourceIntel.Baselines == nil || len(resourceIntel.Baselines) == 0 {
+		t.Error("Expected baselines to be populated")
+	}
+	
+	// Check CPU baseline exists
+	if _, ok := resourceIntel.Baselines["cpu"]; !ok {
+		t.Error("Expected CPU baseline")
+	}
+	if _, ok := resourceIntel.Baselines["memory"]; !ok {
+		t.Error("Expected memory baseline")
+	}
+}
+
+func TestIntelligence_GetResourceIntelligence_WithIncidents(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	
+	// Create incident store with some incidents
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{
+		MaxIncidents: 10,
+	})
+	
+	// Record an incident for the resource
+	incidentStore.RecordAnalysis("alert-vm-500", "Analysis for vm-500", nil)
+	
+	intel.SetSubsystems(nil, nil, nil, nil, incidentStore, nil, nil, nil)
+	
+	resourceIntel := intel.GetResourceIntelligence("vm-500")
+	
+	// Should have the resource ID
+	if resourceIntel.ResourceID != "vm-500" {
+		t.Errorf("Expected resource ID 'vm-500', got %s", resourceIntel.ResourceID)
+	}
+}
+
+func TestIntelligence_calculateResourceHealth_WithAnomalies(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	
+	// Create resource intelligence with anomalies
+	resourceIntel := &ResourceIntelligence{
+		ResourceID: "test-vm",
+		Anomalies: []AnomalyReport{
+			{
+				Metric:       "cpu",
+				CurrentValue: 90,
+				BaselineMean: 30,
+				ZScore:       5.0,
+				Severity:     baseline.AnomalyCritical,
+				Description:  "CPU is 3x baseline",
+			},
+			{
+				Metric:       "memory",
+				CurrentValue: 80,
+				BaselineMean: 50,
+				ZScore:       3.0,
+				Severity:     baseline.AnomalyMedium,
+				Description:  "Memory is elevated",
+			},
+		},
+	}
+	
+	health := intel.calculateResourceHealth(resourceIntel)
+	
+	// Health should be reduced due to anomalies
+	if health.Score >= 100 {
+		t.Error("Expected reduced health score due to anomalies")
+	}
+	
+	// Should have factors for anomalies
+	hasAnomalyFactor := false
+	for _, f := range health.Factors {
+		if f.Category == "baseline" {
+			hasAnomalyFactor = true
+			break
+		}
+	}
+	if !hasAnomalyFactor {
+		t.Error("Expected baseline/anomaly factor in health factors")
+	}
+}
+
+func TestIntelligence_calculateResourceHealth_WithPredictions(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	
+	// Create resource intelligence with predictions
+	resourceIntel := &ResourceIntelligence{
+		ResourceID: "test-vm",
+		Predictions: []patterns.FailurePrediction{
+			{
+				ResourceID: "test-vm",
+				EventType:  patterns.EventHighCPU,
+				DaysUntil:  2.0,
+				Confidence: 0.8,
+				Basis:      "Pattern detected",
+			},
+		},
+	}
+	
+	health := intel.calculateResourceHealth(resourceIntel)
+	
+	// Health should be reduced due to predictions
+	if health.Score >= 100 {
+		t.Error("Expected reduced health score due to predictions")
+	}
+	
+	// Should have a prediction factor
+	hasPredictionFactor := false
+	for _, f := range health.Factors {
+		if f.Category == "prediction" {
+			hasPredictionFactor = true
+			break
+		}
+	}
+	if !hasPredictionFactor {
+		t.Error("Expected prediction factor in health factors")
+	}
+}
+
+func TestIntelligence_calculateResourceHealth_WithNotes(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	
+	// Create resource intelligence with notes (bonus for documentation)
+	resourceIntel := &ResourceIntelligence{
+		ResourceID: "test-vm",
+		NoteCount:  3,
+	}
+	
+	health := intel.calculateResourceHealth(resourceIntel)
+	
+	// Health should have a bonus for having notes
+	if health.Score < 100 {
+		t.Error("Expected health score >= 100 with only notes (bonus)")
+	}
+	
+	// Should have a learning factor
+	hasLearningFactor := false
+	for _, f := range health.Factors {
+		if f.Category == "learning" {
+			hasLearningFactor = true
+			break
+		}
+	}
+	if !hasLearningFactor {
+		t.Error("Expected learning factor for documented resource")
+	}
+}
+
+func TestIntelligence_GetSummary_WithLearningBonus(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	
+	// Create knowledge store with many resources
+	knowledgeStore, err := knowledge.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("Failed to create knowledge store: %v", err)
+	}
+	
+	// Add knowledge for 6+ resources to trigger learning bonus
+	for i := 0; i < 7; i++ {
+		resourceID := "vm-" + string(rune('A'+i))
+		knowledgeStore.SaveNote(resourceID, "VM "+string(rune('A'+i)), "vm", "general", "Note", "Content")
+	}
+	
+	intel.SetSubsystems(nil, nil, nil, nil, nil, knowledgeStore, nil, nil)
+	
+	summary := intel.GetSummary()
+	
+	// With 6+ resources learned, should have learning bonus factor
+	hasLearningFactor := false
+	for _, f := range summary.OverallHealth.Factors {
+		if f.Category == "learning" {
+			hasLearningFactor = true
+			break
+		}
+	}
+	if !hasLearningFactor {
+		t.Error("Expected learning factor with 6+ resources learned")
+	}
+}
+
+func TestIntelligence_FormatContext_WithCorrelation(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	
+	// Create correlation detector
+	correlationDetector := correlation.NewDetector(correlation.DefaultConfig())
+	
+	intel.SetSubsystems(nil, nil, correlationDetector, nil, nil, nil, nil, nil)
+	
+	// Should not panic even without correlations
+	ctx := intel.FormatContext("vm-test")
+	_ = ctx
+}
+
+func TestIntelligence_FormatContext_WithPatterns(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	
+	// Create pattern detector
+	patternDetector := patterns.NewDetector(patterns.DefaultConfig())
+	
+	intel.SetSubsystems(nil, patternDetector, nil, nil, nil, nil, nil, nil)
+	
+	// Should not panic
+	ctx := intel.FormatContext("vm-test")
+	_ = ctx
+}
+
+func TestIntelligence_FormatContext_WithIncidents(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	
+	// Create incident store
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{
+		MaxIncidents: 10,
+	})
+	
+	intel.SetSubsystems(nil, nil, nil, nil, incidentStore, nil, nil, nil)
+	
+	ctx := intel.FormatContext("vm-test")
+	_ = ctx
+}
+
+func TestIntelligence_FormatGlobalContext_Full(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	
+	// Set up all context-contributing subsystems
+	knowledgeStore, _ := knowledge.NewStore(t.TempDir())
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{MaxIncidents: 10})
+	correlationDetector := correlation.NewDetector(correlation.DefaultConfig())
+	patternDetector := patterns.NewDetector(patterns.DefaultConfig())
+	
+	intel.SetSubsystems(nil, patternDetector, correlationDetector, nil, incidentStore, knowledgeStore, nil, nil)
+	
+	ctx := intel.FormatGlobalContext()
+	// May be empty if no data, but shouldn't panic
+	_ = ctx
+}
+
+func TestIntelligence_generateHealthPrediction_Warnings(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	
+	health := HealthScore{
+		Score: 80,
+		Grade: HealthGradeB,
+	}
+	
+	summary := &IntelligenceSummary{
+		FindingsCount: FindingsCounts{
+			Warning: 3,
+		},
+	}
+	
+	prediction := intel.generateHealthPrediction(health, summary)
+	
+	if prediction == "" {
+		t.Error("Expected non-empty prediction")
+	}
+	if !strings.Contains(prediction, "warning") && !strings.Contains(prediction, "Warning") {
+		t.Errorf("Expected prediction to mention warnings, got: %s", prediction)
+	}
+}
