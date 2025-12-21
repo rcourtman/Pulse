@@ -735,11 +735,6 @@ type AIKubernetesAnalyzeRequest struct {
 	ClusterID string `json:"cluster_id"`
 }
 
-type AIRunbookExecuteRequest struct {
-	FindingID string `json:"finding_id"`
-	RunbookID string `json:"runbook_id"`
-}
-
 // HandleExecute executes an AI prompt (POST /api/ai/execute)
 func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -878,91 +873,6 @@ func (h *AISettingsHandler) HandleAnalyzeKubernetesCluster(w http.ResponseWriter
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to write Kubernetes AI response")
-	}
-}
-
-// HandleGetRunbooksForFinding returns available runbooks for a finding (GET /api/ai/runbooks)
-func (h *AISettingsHandler) HandleGetRunbooksForFinding(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if !CheckAuth(h.config, w, r) {
-		return
-	}
-
-	findingID := strings.TrimSpace(r.URL.Query().Get("finding_id"))
-	if findingID == "" {
-		http.Error(w, "finding_id is required", http.StatusBadRequest)
-		return
-	}
-
-	patrol := h.aiService.GetPatrolService()
-	if patrol == nil {
-		http.Error(w, "AI patrol not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	runbooks, err := patrol.GetRunbooksForFinding(findingID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	if err := utils.WriteJSONResponse(w, runbooks); err != nil {
-		log.Error().Err(err).Msg("Failed to write runbooks response")
-	}
-}
-
-// HandleExecuteRunbook executes a runbook for a finding (POST /api/ai/runbooks/execute)
-func (h *AISettingsHandler) HandleExecuteRunbook(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if !CheckAuth(h.config, w, r) {
-		return
-	}
-
-	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
-	var req AIRunbookExecuteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if strings.TrimSpace(req.FindingID) == "" || strings.TrimSpace(req.RunbookID) == "" {
-		http.Error(w, "finding_id and runbook_id are required", http.StatusBadRequest)
-		return
-	}
-
-	patrol := h.aiService.GetPatrolService()
-	if patrol == nil {
-		http.Error(w, "AI patrol not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 300*time.Second)
-	defer cancel()
-
-	result, err := patrol.ExecuteRunbook(ctx, req.FindingID, req.RunbookID)
-	if err != nil {
-		switch {
-		case errors.Is(err, ai.ErrRunbookNotFound):
-			http.Error(w, "Runbook not found", http.StatusNotFound)
-		case errors.Is(err, ai.ErrRunbookNotApplicable):
-			http.Error(w, "Runbook does not apply to finding", http.StatusBadRequest)
-		default:
-			log.Error().Err(err).Str("runbook_id", req.RunbookID).Msg("Runbook execution failed")
-			http.Error(w, "Runbook execution failed: "+err.Error(), http.StatusInternalServerError)
-		}
-		return
-	}
-
-	if err := utils.WriteJSONResponse(w, result); err != nil {
-		log.Error().Err(err).Msg("Failed to write runbook execution response")
 	}
 }
 
