@@ -2894,6 +2894,15 @@ function OverviewTab(props: {
                               🔇 Suppressed
                             </span>
                           </Show>
+                          {/* Alert-triggered badge - shows when finding came from alert-triggered analysis */}
+                          <Show when={finding.alert_id}>
+                            <span
+                              class="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex-shrink-0"
+                              title="This finding was discovered by alert-triggered analysis"
+                            >
+                              ⚡ Alert
+                            </span>
+                          </Show>
                           {/* Resource name pill */}
                           <span class="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 flex-shrink-0 hidden sm:inline">
                             {finding.resource_name}
