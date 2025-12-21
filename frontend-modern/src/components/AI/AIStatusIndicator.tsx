@@ -1,13 +1,14 @@
 /**
- * AIStatusIndicator - Subtle header component showing AI patrol health
+ * AIStatusIndicator - Subtle header component showing AI patrol health and anomalies
  * 
- * Design: Minimal presence when healthy, highlighted when issues detected.
+ * Design: Minimal presence when healthy, highlighted when issues or anomalies detected.
  * Clicking navigates to the Alerts page where AI Insights are displayed.
  */
 
 import { createResource, Show, createMemo, onCleanup } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { getPatrolStatus, type PatrolStatus } from '../../api/patrol';
+import { useAllAnomalies } from '@/hooks/useAnomalies';
 import './AIStatusIndicator.css';
 
 export function AIStatusIndicator() {
@@ -25,9 +26,24 @@ export function AIStatusIndicator() {
         { initialValue: undefined }
     );
 
-    // Refetch every 30 seconds with proper cleanup
+    // Get anomaly data (also polls every 30 seconds via the hook)
+    const anomalyData = useAllAnomalies();
+
+    // Refetch patrol status every 30 seconds with proper cleanup
     const intervalId = setInterval(() => refetch(), 30000);
     onCleanup(() => clearInterval(intervalId));
+
+    // Count anomalies by severity
+    const anomalyCounts = createMemo(() => {
+        const anomalies = anomalyData.anomalies();
+        const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+        for (const a of anomalies) {
+            counts[a.severity]++;
+        }
+        return counts;
+    });
+
+    const totalAnomalies = createMemo(() => anomalyData.count());
 
     const hasIssues = createMemo(() => {
         const s = status();
@@ -41,6 +57,16 @@ export function AIStatusIndicator() {
         return s.summary.watch > 0 && !hasIssues();
     });
 
+    const hasAnomalies = createMemo(() => {
+        const counts = anomalyCounts();
+        return counts.critical > 0 || counts.high > 0;
+    });
+
+    const hasMildAnomalies = createMemo(() => {
+        const counts = anomalyCounts();
+        return !hasAnomalies() && (counts.medium > 0 || counts.low > 0);
+    });
+
     const totalFindings = createMemo(() => {
         const s = status();
         if (!s) return 0;
@@ -48,32 +74,48 @@ export function AIStatusIndicator() {
     });
 
     const tooltipText = createMemo(() => {
-        const s = status();
-        if (!s) return 'AI Patrol status unavailable';
-        if (!s.enabled) return 'AI Patrol disabled';
-        if (s.license_required) {
-            if (s.license_status === 'active') {
-                return 'AI Patrol is not included in this license tier';
-            }
-            if (s.license_status === 'expired') {
-                return 'AI Patrol license expired - upgrade to restore';
-            }
-            return 'AI Patrol requires Pulse Pro';
-        }
-        if (!s.running) return 'AI Patrol not running';
-
         const parts: string[] = [];
-        if (s.summary.critical > 0) parts.push(`${s.summary.critical} critical`);
-        if (s.summary.warning > 0) parts.push(`${s.summary.warning} warning`);
-        if (s.summary.watch > 0) parts.push(`${s.summary.watch} watch`);
 
-        if (parts.length === 0) return 'AI: All systems healthy';
-        return `AI: ${parts.join(', ')}`;
+        // Patrol status
+        const s = status();
+        if (s?.enabled && s?.running) {
+            if (s.summary.critical > 0) parts.push(`${s.summary.critical} critical findings`);
+            if (s.summary.warning > 0) parts.push(`${s.summary.warning} warnings`);
+            if (s.summary.watch > 0) parts.push(`${s.summary.watch} watching`);
+        }
+
+        // Anomaly status
+        const counts = anomalyCounts();
+        const anomalyTotal = totalAnomalies();
+        if (anomalyTotal > 0) {
+            const anomalyParts: string[] = [];
+            if (counts.critical > 0) anomalyParts.push(`${counts.critical} critical`);
+            if (counts.high > 0) anomalyParts.push(`${counts.high} high`);
+            if (counts.medium > 0) anomalyParts.push(`${counts.medium} medium`);
+            if (counts.low > 0) anomalyParts.push(`${counts.low} low`);
+            parts.push(`Anomalies: ${anomalyParts.join(', ')}`);
+        }
+
+        if (parts.length === 0) {
+            if (!s?.enabled) return 'AI Patrol disabled';
+            if (s?.license_required) {
+                if (s.license_status === 'active') {
+                    return 'AI Patrol is not included in this license tier';
+                }
+                if (s.license_status === 'expired') {
+                    return 'AI Patrol license expired';
+                }
+                return 'AI Patrol requires Pulse Pro';
+            }
+            return 'AI: All systems healthy';
+        }
+
+        return `AI Intelligence: ${parts.join(' | ')}`;
     });
 
     const statusClass = createMemo(() => {
-        if (hasIssues()) return 'ai-status--issues';
-        if (hasWatch()) return 'ai-status--watch';
+        if (hasIssues() || hasAnomalies()) return 'ai-status--issues';
+        if (hasWatch() || hasMildAnomalies()) return 'ai-status--watch';
         return 'ai-status--healthy';
     });
 
@@ -82,16 +124,25 @@ export function AIStatusIndicator() {
         navigate('/alerts?subtab=ai-insights');
     };
 
+    // Combined total for badge
+    const badgeCount = createMemo(() => totalFindings() + totalAnomalies());
+
+    // Show indicator if patrol is enabled OR if we have anomalies (anomalies work without patrol)
+    const showIndicator = createMemo(() => {
+        const s = status();
+        return s?.enabled || totalAnomalies() > 0;
+    });
+
     return (
-        <Show when={status()?.enabled}>
+        <Show when={showIndicator()}>
             <button
                 class={`ai-status-indicator ${statusClass()}`}
                 onClick={handleClick}
                 title={tooltipText()}
             >
                 <span class="ai-status-icon">
-                    <Show when={hasIssues()} fallback={
-                        <Show when={hasWatch()} fallback={
+                    <Show when={hasIssues() || hasAnomalies()} fallback={
+                        <Show when={hasWatch() || hasMildAnomalies()} fallback={
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
                                 <path d="M9 12l2 2 4-4" />
@@ -112,8 +163,8 @@ export function AIStatusIndicator() {
                         </svg>
                     </Show>
                 </span>
-                <Show when={totalFindings() > 0}>
-                    <span class="ai-status-count">{totalFindings()}</span>
+                <Show when={badgeCount() > 0}>
+                    <span class="ai-status-count">{badgeCount()}</span>
                 </Show>
             </button>
         </Show>
@@ -121,3 +172,4 @@ export function AIStatusIndicator() {
 }
 
 export default AIStatusIndicator;
+
