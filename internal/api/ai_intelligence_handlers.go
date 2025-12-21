@@ -604,6 +604,11 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 			continue // Skip templates
 		}
 		
+		// Skip VMs that aren't running - stopped VMs with 0% usage is expected, not an anomaly
+		if vm.Status != "running" {
+			continue
+		}
+		
 		// Skip if we don't have baselines for this resource
 		if _, ok := resourceMetrics[vm.ID]; !ok {
 			if resourceID == "" {
@@ -613,6 +618,7 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 				continue
 			}
 		}
+
 		
 		metrics := map[string]float64{
 			"cpu":    vm.CPU * 100,      // CPU is already 0-1, convert to percentage
@@ -648,6 +654,11 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 			continue // Skip templates
 		}
 		
+		// Skip containers that aren't running - stopped containers with 0% usage is expected, not an anomaly
+		if ct.Status != "running" {
+			continue
+		}
+		
 		// Skip if we don't have baselines for this resource
 		if _, ok := resourceMetrics[ct.ID]; !ok {
 			if resourceID == "" {
@@ -657,6 +668,7 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 				continue
 			}
 		}
+
 		
 		metrics := map[string]float64{
 			"cpu":    ct.CPU * 100,      // CPU is already 0-1, convert to percentage
