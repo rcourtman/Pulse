@@ -1135,9 +1135,8 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/ai/execute", RequireAuth(r.config, r.aiSettingsHandler.HandleExecute))
 	r.mux.HandleFunc("/api/ai/execute/stream", RequireAuth(r.config, r.aiSettingsHandler.HandleExecuteStream))
 	r.mux.HandleFunc("/api/ai/kubernetes/analyze", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureKubernetesAI, r.aiSettingsHandler.HandleAnalyzeKubernetesCluster)))
-	r.mux.HandleFunc("/api/ai/runbooks", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIAutoFix, r.aiSettingsHandler.HandleGetRunbooksForFinding)))
-	r.mux.HandleFunc("/api/ai/runbooks/execute", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIAutoFix, r.aiSettingsHandler.HandleExecuteRunbook)))
 	r.mux.HandleFunc("/api/ai/investigate-alert", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIAlerts, r.aiSettingsHandler.HandleInvestigateAlert)))
+
 	r.mux.HandleFunc("/api/ai/run-command", RequireAuth(r.config, r.aiSettingsHandler.HandleRunCommand))
 	r.mux.HandleFunc("/api/ai/knowledge", RequireAuth(r.config, r.aiSettingsHandler.HandleGetGuestKnowledge))
 	r.mux.HandleFunc("/api/ai/knowledge/save", RequireAuth(r.config, r.aiSettingsHandler.HandleSaveGuestNote))

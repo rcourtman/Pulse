@@ -793,12 +793,7 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 			autoFixEnabled = aiCfg.PatrolAutoFix
 		}
 	}
-	if hasPatrolFeature && autoFixEnabled && p.aiService.HasLicenseFeature(FeatureAIAutoFix) {
-		runbookResolved = p.AutoFixWithRunbooks(ctx, newFindings)
-		if runbookResolved > 0 {
-			log.Info().Int("resolved", runbookResolved).Msg("AI Patrol: Auto-fix runbooks resolved findings")
-		}
-	}
+	_ = autoFixEnabled // Auto-fix via runbooks removed - dynamic AI remediation handles this
 
 	// Auto-resolve findings that weren't seen in this patrol run
 	var resolvedCount int
