@@ -1,9 +1,10 @@
 import { Show, createMemo, createSignal } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import { Portal } from 'solid-js/web'
 import { formatPercent } from '@/utils/format';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
 import { getMetricHistoryForRange, getMetricsVersion } from '@/stores/metricsHistory';
 import { Sparkline } from '@/components/shared/Sparkline';
+import type { AnomalyReport } from '@/types/aiIntelligence';
 
 interface EnhancedCPUBarProps {
     usage: number;          // CPU Usage % (0-100)
@@ -11,7 +12,16 @@ interface EnhancedCPUBarProps {
     cores?: number;         // Number of cores
     model?: string;         // CPU Model name (for tooltip)
     resourceId?: string;    // For sparkline history
+    anomaly?: AnomalyReport | null;  // Baseline anomaly if detected
 }
+
+// Anomaly severity colors
+const anomalySeverityClass: Record<string, string> = {
+    critical: 'text-red-400',
+    high: 'text-orange-400',
+    medium: 'text-yellow-400',
+    low: 'text-blue-400',
+};
 
 export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
     const [showTooltip, setShowTooltip] = createSignal(false);
@@ -23,6 +33,15 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
         if (props.usage >= 90) return 'bg-red-500/60 dark:bg-red-500/50';
         if (props.usage >= 80) return 'bg-yellow-500/60 dark:bg-yellow-500/50';
         return 'bg-green-500/60 dark:bg-green-500/50';
+    });
+
+    // Format anomaly ratio for display
+    const anomalyRatio = createMemo(() => {
+        if (!props.anomaly || props.anomaly.baseline_mean === 0) return null;
+        const ratio = props.anomaly.current_value / props.anomaly.baseline_mean;
+        if (ratio >= 2) return `${ratio.toFixed(1)}x`;
+        if (ratio >= 1.5) return '↑↑';
+        return '↑';
     });
 
     const handleMouseEnter = (e: MouseEvent) => {
@@ -63,11 +82,20 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
                             style={{ width: `${Math.min(props.usage, 100)}%` }}
                         />
 
-                        {/* Label */}
+                        {/* Label with optional anomaly indicator */}
                         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100 leading-none pointer-events-none">
                             {formatPercent(props.usage)}
                             <Show when={props.cores}>
                                 <span class="font-normal text-gray-500 dark:text-gray-300 ml-1">({props.cores} cores)</span>
+                            </Show>
+                            {/* Anomaly indicator */}
+                            <Show when={props.anomaly && anomalyRatio()}>
+                                <span
+                                    class={`ml-1 font-bold animate-pulse ${anomalySeverityClass[props.anomaly!.severity] || 'text-yellow-400'}`}
+                                    title={props.anomaly!.description}
+                                >
+                                    {anomalyRatio()}
+                                </span>
                             </Show>
                         </span>
                     </div>
