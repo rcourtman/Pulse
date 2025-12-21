@@ -1019,6 +1019,34 @@ export interface ResolvedAlert extends Alert {
   resolvedTime: string;
 }
 
+export interface IncidentEvent {
+  id: string;
+  type: string;
+  timestamp: string;
+  summary: string;
+  details?: Record<string, unknown>;
+}
+
+export interface Incident {
+  id: string;
+  alertId: string;
+  alertType: string;
+  level: string;
+  resourceId: string;
+  resourceName: string;
+  resourceType?: string;
+  node?: string;
+  instance?: string;
+  message?: string;
+  status: string;
+  openedAt: string;
+  closedAt?: string;
+  acknowledged: boolean;
+  ackUser?: string;
+  ackTime?: string;
+  events?: IncidentEvent[];
+}
+
 // WebSocket message types
 export type WSMessage =
   | { type: 'initialState'; data: State }

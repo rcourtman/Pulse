@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	aicontext "github.com/rcourtman/pulse-go-rewrite/internal/ai/context"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
@@ -217,6 +218,7 @@ type PatrolService struct {
 	remediationLog      *RemediationLog        // For tracking remediation actions
 	patternDetector     *PatternDetector       // For failure prediction from historical patterns
 	correlationDetector *CorrelationDetector   // For multi-resource correlation
+	incidentStore       *memory.IncidentStore  // For incident timeline capture
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds PatrolThresholds
@@ -261,6 +263,20 @@ func NewPatrolService(aiService *Service, stateProvider StateProvider) *PatrolSe
 		streamSubscribers: make(map[chan PatrolStreamEvent]struct{}),
 		streamPhase:       "idle",
 	}
+}
+
+// SetIncidentStore attaches an incident store for alert timeline capture.
+func (p *PatrolService) SetIncidentStore(store *memory.IncidentStore) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.incidentStore = store
+}
+
+// GetIncidentStore returns the incident store if configured.
+func (p *PatrolService) GetIncidentStore() *memory.IncidentStore {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.incidentStore
 }
 
 // SetConfig updates the patrol configuration
@@ -2185,11 +2201,16 @@ func (p *PatrolService) buildPatrolPrompt(summary string) string {
 
 	// Get resource notes from knowledge store (per-resource user notes)
 	var knowledgeContext string
+	var incidentContext string
 	p.mu.RLock()
 	knowledgeStore := p.knowledgeStore
+	incidentStore := p.incidentStore
 	p.mu.RUnlock()
 	if knowledgeStore != nil {
 		knowledgeContext = knowledgeStore.FormatAllForContext()
+	}
+	if incidentStore != nil {
+		incidentContext = incidentStore.FormatForPatrol(8)
 	}
 
 	basePrompt := fmt.Sprintf(`Please perform a comprehensive analysis of the following infrastructure and identify any issues, potential problems, or optimization opportunities.
@@ -2233,6 +2254,12 @@ IMPORTANT: Respect the user's feedback above. Do NOT re-raise findings that are:
 - Currently snoozed - only re-raise if the severity has significantly worsened
 
 Only report NEW issues or issues where the severity has clearly escalated.`)
+	}
+
+	if incidentContext != "" {
+		contextAdditions.WriteString("\n\n")
+		contextAdditions.WriteString(incidentContext)
+		contextAdditions.WriteString("\nIMPORTANT: Use incident memory to avoid repeating known issues and to build on successful past investigations.")
 	}
 
 	if contextAdditions.Len() > 0 {

@@ -58,7 +58,7 @@ const (
 	DefaultObservationWindow = 24  // hours
 
 	// Flapping detection
-	DefaultFlappingWindow   = 300 // seconds (5 minutes)
+	DefaultFlappingWindow    = 300 // seconds (5 minutes)
 	DefaultFlappingThreshold = 5   // state changes to trigger flapping
 	DefaultFlappingCooldown  = 15  // minutes
 
@@ -256,10 +256,10 @@ type GroupingConfig struct {
 // ScheduleConfig represents alerting schedule configuration
 type ScheduleConfig struct {
 	QuietHours      QuietHours       `json:"quietHours"`
-	Cooldown        int              `json:"cooldown"`        // minutes
+	Cooldown        int              `json:"cooldown"`                 // minutes
 	GroupingWindow  int              `json:"groupingWindow,omitempty"` // Deprecated: use Grouping.Window instead. Will be auto-migrated on config update.
-	MaxAlertsHour   int              `json:"maxAlertsHour"`   // max alerts per hour per resource
-	NotifyOnResolve bool             `json:"notifyOnResolve"` // Send notification when alert clears
+	MaxAlertsHour   int              `json:"maxAlertsHour"`            // max alerts per hour per resource
+	NotifyOnResolve bool             `json:"notifyOnResolve"`          // Send notification when alert clears
 	Escalation      EscalationConfig `json:"escalation"`
 	Grouping        GroupingConfig   `json:"grouping"`
 }
@@ -484,15 +484,17 @@ func SetMetricHooks(fired func(*Alert), resolved func(*Alert), suppressed func(s
 }
 
 type Manager struct {
-	mu             sync.RWMutex
-	config         AlertConfig
-	activeAlerts   map[string]*Alert
-	historyManager *HistoryManager
-	onAlert        func(alert *Alert)
-	onResolved     func(alertID string)
-	onEscalate     func(alert *Alert, level int)
-	escalationStop chan struct{}
-	alertRateLimit map[string][]time.Time // Track alert times for rate limiting
+	mu               sync.RWMutex
+	config           AlertConfig
+	activeAlerts     map[string]*Alert
+	historyManager   *HistoryManager
+	onAlert          func(alert *Alert)
+	onResolved       func(alertID string)
+	onAcknowledged   func(alert *Alert, user string)
+	onUnacknowledged func(alert *Alert, user string)
+	onEscalate       func(alert *Alert, level int)
+	escalationStop   chan struct{}
+	alertRateLimit   map[string][]time.Time // Track alert times for rate limiting
 	// New fields for deduplication and suppression
 	recentAlerts    map[string]*Alert    // Track recent alerts for deduplication
 	suppressedUntil map[string]time.Time // Track suppression windows
@@ -736,6 +738,20 @@ func (m *Manager) SetResolvedCallback(cb func(alertID string)) {
 	m.onResolved = cb
 }
 
+// SetAcknowledgedCallback sets the callback for acknowledged alerts.
+func (m *Manager) SetAcknowledgedCallback(cb func(alert *Alert, user string)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onAcknowledged = cb
+}
+
+// SetUnacknowledgedCallback sets the callback for unacknowledged alerts.
+func (m *Manager) SetUnacknowledgedCallback(cb func(alert *Alert, user string)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onUnacknowledged = cb
+}
+
 // SetEscalateCallback sets the callback for escalated alerts
 func (m *Manager) SetEscalateCallback(cb func(alert *Alert, level int)) {
 	m.mu.Lock()
@@ -766,6 +782,46 @@ func (m *Manager) safeCallResolvedCallback(alertID string, async bool) {
 	} else {
 		callbackFunc()
 	}
+}
+
+// safeCallAcknowledgedCallback invokes onAcknowledged with panic recovery and alert cloning.
+func (m *Manager) safeCallAcknowledgedCallback(alert *Alert, user string) {
+	if m.onAcknowledged == nil || alert == nil {
+		return
+	}
+
+	alertCopy := alert.Clone()
+	go func(a *Alert, u string) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Str("alertID", a.ID).
+					Msg("Panic in onAcknowledged callback")
+			}
+		}()
+		m.onAcknowledged(a, u)
+	}(alertCopy, user)
+}
+
+// safeCallUnacknowledgedCallback invokes onUnacknowledged with panic recovery and alert cloning.
+func (m *Manager) safeCallUnacknowledgedCallback(alert *Alert, user string) {
+	if m.onUnacknowledged == nil || alert == nil {
+		return
+	}
+
+	alertCopy := alert.Clone()
+	go func(a *Alert, u string) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Str("alertID", a.ID).
+					Msg("Panic in onUnacknowledged callback")
+			}
+		}()
+		m.onUnacknowledged(a, u)
+	}(alertCopy, user)
 }
 
 // safeCallEscalateCallback invokes onEscalate with panic recovery and alert cloning
@@ -2456,7 +2512,6 @@ func (m *Manager) hasHostAgentForNode(nodeName string) bool {
 	m.mu.RUnlock()
 	return exists
 }
-
 
 func hostResourceID(hostID string) string {
 	trimmed := strings.TrimSpace(hostID)
@@ -5767,10 +5822,10 @@ func abs(x float64) float64 {
 // AcknowledgeAlert acknowledges an alert
 func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	alert, exists := m.activeAlerts[alertID]
 	if !exists {
+		m.mu.Unlock()
 		return fmt.Errorf("alert not found: %s", alertID)
 	}
 
@@ -5787,22 +5842,26 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 		time:         now,
 	}
 
+	alertCopy := alert.Clone()
+	m.mu.Unlock()
+
 	log.Debug().
 		Str("alertID", alertID).
 		Str("user", user).
 		Time("ackTime", now).
 		Msg("Alert acknowledgment recorded")
 
+	m.safeCallAcknowledgedCallback(alertCopy, user)
 	return nil
 }
 
 // UnacknowledgeAlert removes the acknowledged status from an alert
 func (m *Manager) UnacknowledgeAlert(alertID string) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	alert, exists := m.activeAlerts[alertID]
 	if !exists {
+		m.mu.Unlock()
 		return fmt.Errorf("alert not found: %s", alertID)
 	}
 
@@ -5814,10 +5873,14 @@ func (m *Manager) UnacknowledgeAlert(alertID string) error {
 	m.activeAlerts[alertID] = alert
 	delete(m.ackState, alertID)
 
+	alertCopy := alert.Clone()
+	m.mu.Unlock()
+
 	log.Info().
 		Str("alertID", alertID).
 		Msg("Alert unacknowledged")
 
+	m.safeCallUnacknowledgedCallback(alertCopy, "")
 	return nil
 }
 
@@ -7593,9 +7656,8 @@ func (m *Manager) ClearAlert(alertID string) bool {
 // Cleanup removes old acknowledged alerts and cleans up tracking maps
 func (m *Manager) Cleanup(maxAge time.Duration) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	now := time.Now()
+	var autoAcked []*Alert
 
 	// Auto-acknowledge old alerts if configured
 	if m.config.AutoAcknowledgeAfterHours > 0 {
@@ -7610,6 +7672,7 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 				ackTime := now
 				alert.AckTime = &ackTime
 				alert.AckUser = "system-auto"
+				autoAcked = append(autoAcked, alert.Clone())
 
 				if recordAlertAcknowledged != nil {
 					recordAlertAcknowledged()
@@ -7775,6 +7838,12 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 				Time("lastSnapshot", lastSnapshot.Timestamp).
 				Msg("Cleaned up stale PMG quarantine history")
 		}
+	}
+
+	m.mu.Unlock()
+
+	for _, alert := range autoAcked {
+		m.safeCallAcknowledgedCallback(alert, "system-auto")
 	}
 }
 

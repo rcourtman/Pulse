@@ -19,6 +19,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
@@ -116,6 +117,11 @@ func (h *AISettingsHandler) SetChangeDetector(detector *ai.ChangeDetector) {
 // SetRemediationLog sets the remediation log for tracking fix attempts
 func (h *AISettingsHandler) SetRemediationLog(remLog *ai.RemediationLog) {
 	h.aiService.SetRemediationLog(remLog)
+}
+
+// SetIncidentStore sets the incident store for alert timelines.
+func (h *AISettingsHandler) SetIncidentStore(store *memory.IncidentStore) {
+	h.aiService.SetIncidentStore(store)
 }
 
 // SetPatternDetector sets the pattern detector for failure prediction
@@ -1767,11 +1773,29 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 	data, _ := json.Marshal(finalEvent)
 	safeWrite([]byte("data: " + string(data) + "\n\n"))
 
+	if req.AlertID != "" {
+		h.aiService.RecordIncidentAnalysis(req.AlertID, "AI alert investigation completed", map[string]interface{}{
+			"model":         resp.Model,
+			"tool_calls":    len(resp.ToolCalls),
+			"input_tokens":  resp.InputTokens,
+			"output_tokens": resp.OutputTokens,
+		})
+	}
+
 	log.Info().
 		Str("alert_id", req.AlertID).
 		Str("model", resp.Model).
 		Int("tool_calls", len(resp.ToolCalls)).
 		Msg("AI alert investigation completed")
+
+	if req.AlertID != "" {
+		h.aiService.RecordIncidentAnalysis(req.AlertID, "AI investigation completed", map[string]interface{}{
+			"model":         resp.Model,
+			"input_tokens":  resp.InputTokens,
+			"output_tokens": resp.OutputTokens,
+			"tool_calls":    len(resp.ToolCalls),
+		})
+	}
 }
 
 // SetAlertProvider sets the alert provider for AI context

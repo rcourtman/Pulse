@@ -1109,6 +1109,9 @@ func (r *Router) setupRoutes() {
 		if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
 			r.aiSettingsHandler.SetAlertProvider(ai.NewAlertManagerAdapter(alertManager))
 		}
+		if incidentStore := r.monitor.GetIncidentStore(); incidentStore != nil {
+			r.aiSettingsHandler.SetIncidentStore(incidentStore)
+		}
 	}
 	// Inject unified resource provider for Phase 2 AI context (cleaner, deduplicated view)
 	if r.resourceHandlers != nil {

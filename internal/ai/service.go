@@ -18,8 +18,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -73,9 +75,10 @@ type Service struct {
 	alertProvider    AlertProvider
 	knowledgeStore   *knowledge.Store
 	costStore        *cost.Store
-	resourceProvider ResourceProvider // Unified resource model provider (Phase 2)
-	patrolService    *PatrolService   // Background AI monitoring service
-	metadataProvider MetadataProvider // Enables AI to update resource URLs
+	resourceProvider ResourceProvider      // Unified resource model provider (Phase 2)
+	patrolService    *PatrolService        // Background AI monitoring service
+	metadataProvider MetadataProvider      // Enables AI to update resource URLs
+	incidentStore    *memory.IncidentStore // Incident timelines for alert memory
 
 	// Alert-triggered analysis - token-efficient real-time AI insights
 	alertTriggeredAnalyzer *AlertTriggeredAnalyzer
@@ -196,6 +199,9 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 		// Connect knowledge store to patrol for per-resource notes in context
 		if s.knowledgeStore != nil {
 			s.patrolService.SetKnowledgeStore(s.knowledgeStore)
+		}
+		if s.incidentStore != nil {
+			s.patrolService.SetIncidentStore(s.incidentStore)
 		}
 	}
 
@@ -347,6 +353,17 @@ func (s *Service) SetRemediationLog(remLog *RemediationLog) {
 
 	if patrol != nil {
 		patrol.SetRemediationLog(remLog)
+	}
+}
+
+// SetIncidentStore sets the incident store for alert timeline memory.
+func (s *Service) SetIncidentStore(store *memory.IncidentStore) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.incidentStore = store
+
+	if s.patrolService != nil {
+		s.patrolService.SetIncidentStore(store)
 	}
 }
 
@@ -1724,14 +1741,14 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 // that's worth logging as an achievement, false for read-only diagnostics
 func isActionableCommand(cmd string) bool {
 	cmd = strings.TrimSpace(cmd)
-	
+
 	// Strip [host] or [hostname] prefix if present
 	if strings.HasPrefix(cmd, "[") {
 		if idx := strings.Index(cmd, "]"); idx != -1 {
 			cmd = strings.TrimSpace(cmd[idx+1:])
 		}
 	}
-	
+
 	// Commands that PERFORM ACTIONS (should be logged)
 	actionPatterns := []string{
 		"docker restart", "docker start", "docker stop", "docker rm",
@@ -1740,24 +1757,24 @@ func isActionableCommand(cmd string) bool {
 		"service restart", "service start", "service stop",
 		"pct resize", "pct start", "pct stop", "pct shutdown", "pct reboot",
 		"qm resize", "qm start", "qm stop", "qm shutdown", "qm reboot",
-		"rm -", "rm /",           // File deletion/cleanup
-		"chmod", "chown",         // Permission fixes
-		"mkdir",                  // Creating directories
-		"mv ", "cp ",             // File operations
-		"echo >", "tee ",         // Writing to files
+		"rm -", "rm /", // File deletion/cleanup
+		"chmod", "chown", // Permission fixes
+		"mkdir",      // Creating directories
+		"mv ", "cp ", // File operations
+		"echo >", "tee ", // Writing to files
 		"apt install", "apt upgrade", "apt remove",
 		"yum install", "dnf install",
 		"pip install", "npm install",
 		"kill ", "pkill ", "killall ",
 		"reboot", "shutdown",
 	}
-	
+
 	for _, pattern := range actionPatterns {
 		if strings.Contains(cmd, pattern) {
 			return true
 		}
 	}
-	
+
 	// Everything else is diagnostic (df, grep, cat, tail, ps, ls, etc.)
 	return false
 }
@@ -1766,7 +1783,7 @@ func isActionableCommand(cmd string) bool {
 // This is used to display meaningful descriptions in the Pulse AI Impact section
 func generateRemediationSummary(command string, targetType string, context map[string]interface{}) string {
 	cmd := strings.TrimSpace(command)
-	
+
 	// Extract target name from context
 	targetName := ""
 	if context != nil {
@@ -1778,7 +1795,7 @@ func generateRemediationSummary(command string, targetType string, context map[s
 			targetName = name
 		}
 	}
-	
+
 	// Extract meaningful path or service from command
 	extractPath := func() string {
 		// Look for common path patterns
@@ -1798,7 +1815,7 @@ func generateRemediationSummary(command string, targetType string, context map[s
 		}
 		return ""
 	}
-	
+
 	// Extract container/service name from docker commands
 	extractDockerTarget := func() string {
 		// docker ps --filter name=XXX
@@ -1811,10 +1828,10 @@ func generateRemediationSummary(command string, targetType string, context map[s
 		}
 		return ""
 	}
-	
+
 	path := extractPath()
 	dockerTarget := extractDockerTarget()
-	
+
 	// Generate summary based on command type
 	switch {
 	case strings.Contains(cmd, "docker restart") || strings.Contains(cmd, "docker start"):
@@ -1822,37 +1839,37 @@ func generateRemediationSummary(command string, targetType string, context map[s
 			return fmt.Sprintf("Restarted %s container", dockerTarget)
 		}
 		return "Restarted container"
-		
+
 	case strings.Contains(cmd, "docker stop"):
 		if dockerTarget != "" {
 			return fmt.Sprintf("Stopped %s container", dockerTarget)
 		}
 		return "Stopped container"
-		
+
 	case strings.Contains(cmd, "docker ps"):
 		if dockerTarget != "" {
 			return fmt.Sprintf("Verified %s container is running", dockerTarget)
 		}
 		return "Checked container status"
-		
+
 	case strings.Contains(cmd, "docker logs"):
 		if dockerTarget != "" {
 			return fmt.Sprintf("Retrieved %s logs", dockerTarget)
 		}
 		return "Retrieved container logs"
-		
+
 	case strings.Contains(cmd, "systemctl restart"):
 		if match := regexp.MustCompile(`systemctl\s+restart\s+(\S+)`).FindStringSubmatch(cmd); len(match) > 1 {
 			return fmt.Sprintf("Restarted %s service", match[1])
 		}
 		return "Restarted system service"
-		
+
 	case strings.Contains(cmd, "systemctl status"):
 		if match := regexp.MustCompile(`systemctl\s+status\s+(\S+)`).FindStringSubmatch(cmd); len(match) > 1 {
 			return fmt.Sprintf("Checked %s service status", match[1])
 		}
 		return "Checked service status"
-		
+
 	case strings.Contains(cmd, "df ") || strings.Contains(cmd, "du "):
 		if path != "" {
 			// Check for known services in path
@@ -1869,7 +1886,7 @@ func generateRemediationSummary(command string, targetType string, context map[s
 			return fmt.Sprintf("Analyzed %s storage", path)
 		}
 		return "Analyzed disk usage"
-		
+
 	case strings.Contains(cmd, "grep") && (strings.Contains(cmd, "config") || strings.Contains(cmd, ".yml") || strings.Contains(cmd, ".yaml")):
 		if path != "" && strings.Contains(strings.ToLower(path), "frigate") {
 			return "Inspected Frigate configuration"
@@ -1878,40 +1895,40 @@ func generateRemediationSummary(command string, targetType string, context map[s
 			return fmt.Sprintf("Inspected %s configuration", path)
 		}
 		return "Inspected configuration"
-		
+
 	case strings.Contains(cmd, "tail") || strings.Contains(cmd, "journalctl"):
 		if targetName != "" {
 			return fmt.Sprintf("Reviewed %s logs", targetName)
 		}
 		return "Reviewed system logs"
-		
+
 	case strings.Contains(cmd, "pct resize"):
 		if match := regexp.MustCompile(`pct\s+resize\s+(\d+)`).FindStringSubmatch(cmd); len(match) > 1 {
 			return fmt.Sprintf("Resized container %s disk", match[1])
 		}
 		return "Resized container disk"
-		
+
 	case strings.Contains(cmd, "qm resize"):
 		if match := regexp.MustCompile(`qm\s+resize\s+(\d+)`).FindStringSubmatch(cmd); len(match) > 1 {
 			return fmt.Sprintf("Resized VM %s disk", match[1])
 		}
 		return "Resized VM disk"
-		
+
 	case strings.Contains(cmd, "ping") || strings.Contains(cmd, "curl"):
 		return "Tested network connectivity"
-		
+
 	case strings.Contains(cmd, "free") || strings.Contains(cmd, "meminfo"):
 		return "Checked memory usage"
-		
+
 	case strings.Contains(cmd, "ps aux") || strings.Contains(cmd, "top"):
 		return "Analyzed running processes"
-		
+
 	case strings.Contains(cmd, "rm "):
 		return "Cleaned up files"
-		
+
 	case strings.Contains(cmd, "chmod") || strings.Contains(cmd, "chown"):
 		return "Fixed file permissions"
-		
+
 	default:
 		// Generic fallback - try to use target name if available
 		if targetName != "" {
@@ -2183,11 +2200,34 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 
 		// Execute via agent
 		result, err := s.executeOnAgent(ctx, execReq, command)
+		recordIncident := func(success bool, output string) {
+			alertID := extractAlertID(req.Context)
+			if alertID == "" {
+				return
+			}
+			s.mu.RLock()
+			incidentStore := s.incidentStore
+			s.mu.RUnlock()
+			if incidentStore == nil {
+				return
+			}
+			details := map[string]interface{}{
+				"resource_id":   req.TargetID,
+				"resource_type": req.TargetType,
+				"run_on_host":   runOnHost,
+			}
+			if targetHost != "" {
+				details["target_host"] = targetHost
+			}
+			incidentStore.RecordCommand(alertID, command, success, output, details)
+		}
 		if err != nil {
+			recordIncident(false, result)
 			execution.Output = fmt.Sprintf("Error executing command: %s", err)
 			return execution.Output, execution
 		}
 
+		recordIncident(true, result)
 		execution.Output = result
 		execution.Success = true
 		return result, execution
@@ -2842,6 +2882,31 @@ This is a 3-command job. Don't over-investigate.`
 	// Add current alert status - this gives AI awareness of active issues
 	prompt += s.buildAlertContext()
 
+	// Add incident memory for alert or resource context
+	alertID := ""
+	resourceID := req.TargetID
+	if req.Context != nil {
+		if val, ok := req.Context["alertId"].(string); ok && val != "" {
+			alertID = val
+		} else if val, ok := req.Context["alert_id"].(string); ok && val != "" {
+			alertID = val
+		}
+
+		if resourceID == "" {
+			if val, ok := req.Context["resourceId"].(string); ok && val != "" {
+				resourceID = val
+			} else if val, ok := req.Context["resource_id"].(string); ok && val != "" {
+				resourceID = val
+			} else if val, ok := req.Context["guest_id"].(string); ok && val != "" {
+				resourceID = val
+			}
+		}
+	}
+
+	if incidentContext := s.buildIncidentContext(resourceID, alertID); incidentContext != "" {
+		prompt += incidentContext
+	}
+
 	// Add all saved knowledge when no specific target is selected
 	// This gives the AI context about everything learned from previous sessions
 	if req.TargetType == "" && s.knowledgeStore != nil {
@@ -2877,6 +2942,7 @@ This is a 3-command job. Don't over-investigate.`
 
 		// Add past remediation history for this resource
 		prompt += s.buildRemediationContext(req.TargetID, req.Prompt)
+
 	}
 
 	// Add any provided context in a structured way
@@ -3258,6 +3324,66 @@ func (s *Service) buildRemediationContext(resourceID, currentProblem string) str
 	return context
 }
 
+// buildIncidentContext adds incident timeline context for alerts/resources.
+func (s *Service) buildIncidentContext(resourceID, alertID string) string {
+	s.mu.RLock()
+	store := s.incidentStore
+	s.mu.RUnlock()
+
+	if store == nil {
+		return ""
+	}
+
+	if alertID != "" {
+		return store.FormatForAlert(alertID, 8)
+	}
+	if resourceID != "" {
+		return store.FormatForResource(resourceID, 4)
+	}
+	return ""
+}
+
+// RecordIncidentAnalysis stores an AI analysis event for an alert.
+func (s *Service) RecordIncidentAnalysis(alertID, summary string, details map[string]interface{}) {
+	if alertID == "" {
+		return
+	}
+	s.mu.RLock()
+	store := s.incidentStore
+	s.mu.RUnlock()
+	if store == nil {
+		return
+	}
+	store.RecordAnalysis(alertID, summary, details)
+}
+
+// RecordIncidentRunbook stores a runbook execution event for an alert.
+func (s *Service) RecordIncidentRunbook(alertID, runbookID, title string, outcome memory.Outcome, automatic bool, message string) {
+	if alertID == "" || runbookID == "" {
+		return
+	}
+	s.mu.RLock()
+	store := s.incidentStore
+	s.mu.RUnlock()
+	if store == nil {
+		return
+	}
+	store.RecordRunbook(alertID, runbookID, title, string(outcome), automatic, message)
+}
+
+func extractAlertID(ctx map[string]interface{}) string {
+	if ctx == nil {
+		return ""
+	}
+	if alertID, ok := ctx["alertId"].(string); ok && alertID != "" {
+		return alertID
+	}
+	if alertID, ok := ctx["alert_id"].(string); ok && alertID != "" {
+		return alertID
+	}
+	return ""
+}
+
 // truncateString truncates a string to maxLen characters
 func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
@@ -3302,40 +3428,51 @@ func (s *Service) buildEnrichedResourceContext(resourceID, resourceType string, 
 			return 0, false
 		}
 
-		// Check CPU baseline
+		// Helper to format baseline comparison with status
+		// ALWAYS shows baseline info when available - this is Pulse Pro's value-add
+		formatBaselineComparison := func(metric string, currentVal float64, bl *baseline.MetricBaseline) string {
+			if bl.SampleCount < 10 {
+				return fmt.Sprintf("- %s: %.1f%% (baseline learning: %d/10 samples)", metric, currentVal, bl.SampleCount)
+			}
+
+			ratio := currentVal / bl.Mean
+			status := "✓ normal"
+			if ratio > 2.0 {
+				status = "🔴 **ANOMALY**"
+			} else if ratio > 1.5 {
+				status = "🟡 elevated"
+			} else if ratio < 0.3 {
+				status = "🔵 unusually low"
+			} else if ratio < 0.5 {
+				status = "low"
+			}
+
+			return fmt.Sprintf("- %s: %.1f%% vs baseline %.1f%% (σ=%.1f) → %s", metric, currentVal, bl.Mean, bl.StdDev, status)
+		}
+
+		// Check CPU baseline - always show if we have data
 		if cpuVal, ok := getRawValue("cpu_usage_raw", "cpu_usage"); ok {
-			if bl, exists := baselineStore.GetBaseline(resourceID, "cpu"); exists && bl.SampleCount >= 10 {
-				ratio := cpuVal / bl.Mean
-				if ratio > 1.5 {
-					baselineInfo = append(baselineInfo, fmt.Sprintf("CPU %.0f%% is **%.1fx higher** than baseline %.0f%% (σ=%.1f)", cpuVal, ratio, bl.Mean, bl.StdDev))
-				} else if ratio < 0.5 {
-					baselineInfo = append(baselineInfo, fmt.Sprintf("CPU %.0f%% is **%.1fx lower** than baseline %.0f%%", cpuVal, 1/ratio, bl.Mean))
-				}
+			if bl, exists := baselineStore.GetBaseline(resourceID, "cpu"); exists {
+				baselineInfo = append(baselineInfo, formatBaselineComparison("CPU", cpuVal, bl))
 			}
 		}
 
-		// Check memory baseline
+		// Check memory baseline - always show if we have data
 		if memVal, ok := getRawValue("memory_usage_raw", "memory_usage"); ok {
-			if bl, exists := baselineStore.GetBaseline(resourceID, "memory"); exists && bl.SampleCount >= 10 {
-				ratio := memVal / bl.Mean
-				if ratio > 1.3 {
-					baselineInfo = append(baselineInfo, fmt.Sprintf("Memory %.0f%% is **%.1fx higher** than baseline %.0f%%", memVal, ratio, bl.Mean))
-				}
+			if bl, exists := baselineStore.GetBaseline(resourceID, "memory"); exists {
+				baselineInfo = append(baselineInfo, formatBaselineComparison("Memory", memVal, bl))
 			}
 		}
 
-		// Check disk baseline
+		// Check disk baseline - always show if we have data
 		if diskVal, ok := getRawValue("disk_usage_raw", "disk_usage"); ok {
-			if bl, exists := baselineStore.GetBaseline(resourceID, "disk"); exists && bl.SampleCount >= 10 {
-				ratio := diskVal / bl.Mean
-				if ratio > 1.2 { // More sensitive for disk
-					baselineInfo = append(baselineInfo, fmt.Sprintf("Disk %.0f%% is **%.1fx higher** than baseline %.0f%%", diskVal, ratio, bl.Mean))
-				}
+			if bl, exists := baselineStore.GetBaseline(resourceID, "disk"); exists {
+				baselineInfo = append(baselineInfo, formatBaselineComparison("Disk", diskVal, bl))
 			}
 		}
 
 		if len(baselineInfo) > 0 {
-			sections = append(sections, "### Baseline Comparisons\n"+strings.Join(baselineInfo, "\n"))
+			sections = append(sections, "### Learned Baselines (7-day patterns)\n"+strings.Join(baselineInfo, "\n"))
 		}
 	}
 
@@ -3382,21 +3519,21 @@ func (s *Service) buildEnrichedResourceContext(resourceID, resourceType string, 
 
 			// Only report significant trends
 			if metric == "disk" && ratePerDay > 0.5 { // Growing by >0.5GB/day
-				trendInfo = append(trendInfo, fmt.Sprintf("**Disk** growing %.1f GB/day over last %.0fh", 
+				trendInfo = append(trendInfo, fmt.Sprintf("**Disk** growing %.1f GB/day over last %.0fh",
 					ratePerDay, hoursSpan))
 			} else if metric == "memory" && absFloat(ratePerDay) > 2 { // >2% change per day
 				direction := "growing"
 				if ratePerDay < 0 {
 					direction = "declining"
 				}
-				trendInfo = append(trendInfo, fmt.Sprintf("**Memory** %s %.1f%%/day over last %.0fh", 
+				trendInfo = append(trendInfo, fmt.Sprintf("**Memory** %s %.1f%%/day over last %.0fh",
 					direction, absFloat(ratePerDay), hoursSpan))
 			} else if metric == "cpu" && absFloat(ratePerDay) > 5 { // >5% change per day
 				direction := "increasing"
 				if ratePerDay < 0 {
 					direction = "decreasing"
 				}
-				trendInfo = append(trendInfo, fmt.Sprintf("**CPU** %s %.1f%%/day over last %.0fh", 
+				trendInfo = append(trendInfo, fmt.Sprintf("**CPU** %s %.1f%%/day over last %.0fh",
 					direction, absFloat(ratePerDay), hoursSpan))
 			}
 		}
@@ -3414,7 +3551,7 @@ func (s *Service) buildEnrichedResourceContext(resourceID, resourceType string, 
 			var predInfo []string
 			for _, pred := range predictions {
 				if pred.DaysUntil < 30 { // Only show predictions within 30 days
-					predInfo = append(predInfo, fmt.Sprintf("**%s** predicted in %.0f days (%.0f%% confidence)", 
+					predInfo = append(predInfo, fmt.Sprintf("**%s** predicted in %.0f days (%.0f%% confidence)",
 						pred.EventType, pred.DaysUntil, pred.Confidence*100))
 				}
 			}
@@ -3470,7 +3607,7 @@ func (s *Service) buildEnrichedResourceContext(resourceID, resourceType string, 
 	if alertProvider != nil {
 		// Get active alerts for this resource
 		activeAlerts := alertProvider.GetAlertsByResource(resourceID)
-		
+
 		// Get historical alerts (last 20)
 		historicalAlerts := alertProvider.GetAlertHistory(resourceID, 20)
 
@@ -3480,7 +3617,7 @@ func (s *Service) buildEnrichedResourceContext(resourceID, resourceType string, 
 			if len(activeAlerts) > 0 {
 				alertInfo = append(alertInfo, fmt.Sprintf("**%d active alert(s)** right now", len(activeAlerts)))
 				for _, a := range activeAlerts {
-					alertInfo = append(alertInfo, fmt.Sprintf("- %s %s: %s (active %s)", 
+					alertInfo = append(alertInfo, fmt.Sprintf("- %s %s: %s (active %s)",
 						strings.ToUpper(a.Level), a.Type, a.Message, a.Duration))
 				}
 			}
@@ -3526,7 +3663,7 @@ func (s *Service) buildEnrichedResourceContext(resourceID, resourceType string, 
 						learning++
 					}
 				}
-				
+
 				if learning > 0 && ready == 0 {
 					return "\n\n## Historical Intelligence (Pulse Pro)\n*Learning baselines for this resource... Trends and anomaly detection will be available after more data is collected.*"
 				}
