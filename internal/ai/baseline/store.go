@@ -291,33 +291,40 @@ func (s *Store) CheckResourceAnomalies(resourceID string, metrics map[string]flo
 	
 	for metric, value := range metrics {
 		severity, zScore, baseline := s.CheckAnomaly(resourceID, metric, value)
-		if severity != AnomalyNone {
+		if severity != AnomalyNone && baseline != nil {
+			// Compute ratio: current value / baseline mean
+			ratio := value / baseline.Mean
+			
+			// Filter out statistically significant but practically meaningless anomalies
+			// Users don't care about "1.0x baseline" or small deviations
+			// Require at least 50% deviation from baseline to report
+			if ratio >= 0.5 && ratio <= 1.5 {
+				continue // Too close to baseline to be actionable
+			}
+			
 			report := AnomalyReport{
 				ResourceID:   resourceID,
 				Metric:       metric,
 				CurrentValue: value,
 				ZScore:       zScore,
 				Severity:     severity,
+				BaselineMean: baseline.Mean,
+				BaselineStdDev: baseline.StdDev,
 			}
 			
-			if baseline != nil {
-				report.BaselineMean = baseline.Mean
-				report.BaselineStdDev = baseline.StdDev
-				
-				// Generate human-readable description
-				ratio := value / baseline.Mean
-				direction := "above"
-				if zScore < 0 {
-					direction = "below"
-				}
-				report.Description = formatAnomalyDescription(metric, ratio, direction, severity)
+			// Generate human-readable description
+			direction := "above"
+			if zScore < 0 {
+				direction = "below"
 			}
+			report.Description = formatAnomalyDescription(metric, ratio, direction, severity)
 			
 			anomalies = append(anomalies, report)
 		}
 	}
 	
 	return anomalies
+
 }
 
 // formatAnomalyDescription generates a human-readable anomaly description

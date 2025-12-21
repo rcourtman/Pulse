@@ -291,13 +291,21 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
         }
 
 
-        // Changes - only show meaningful changes, not just "created" (infrastructure detection)
-        // Valuable changes: config, status, migrated, restarted, deleted, backed_up
-        // Skip: created (just means AI patrol discovered the resource)
-        const meaningfulChanges = changes().filter(c => c.change_type !== 'created');
+        // Changes - only show meaningful changes, not noise
+        // Skip: created (just patrol discovering resources)
+        // Skip: backed_up (backups have their own section, no need to duplicate here)
+        // Skip: status changes from "unknown" (just startup, not real state changes)
+        const meaningfulChanges = changes().filter(c => {
+            if (c.change_type === 'created') return false;
+            if (c.change_type === 'backed_up') return false;
+            // Filter out startup noise: "unknown → running" or "unknown → stopped"
+            if (c.change_type === 'status' && c.description?.includes('unknown →')) return false;
+            return true;
+        });
         const visibleChanges = showAllChanges()
             ? meaningfulChanges
             : meaningfulChanges.slice(0, CHANGE_LIMIT);
+
 
         for (const change of visibleChanges) {
             const changeTypeBadgeClass: Record<string, string> = {
