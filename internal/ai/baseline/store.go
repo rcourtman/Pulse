@@ -396,12 +396,186 @@ func (s *Store) GetAllAnomalies(metricsProvider func(resourceID string) map[stri
 	return allAnomalies
 }
 
+// TrendPrediction represents a forecast for when a resource might be exhausted
+type TrendPrediction struct {
+	ResourceID     string     `json:"resource_id"`
+	ResourceName   string     `json:"resource_name,omitempty"`
+	ResourceType   string     `json:"resource_type,omitempty"`
+	Metric         string     `json:"metric"`
+	CurrentValue   float64    `json:"current_value"`   // Current % usage
+	DailyChange    float64    `json:"daily_change"`    // Average change per day
+	DaysToFull     int        `json:"days_to_full"`    // Estimated days until 100% (or -1 if decreasing/stable)
+	Severity       string     `json:"severity"`        // "critical", "warning", "info"
+	Description    string     `json:"description"`
+	ConfidenceNote string     `json:"confidence_note,omitempty"`
+}
+
+// CalculateTrend analyzes a time series of values and predicts future exhaustion
+// samples should be ordered oldest to newest, with at least 2 days of data
+// currentValue is the current percentage usage (0-100)
+// capacity represents 100% (for percentage-based predictions)
+func CalculateTrend(samples []float64, currentValue float64) *TrendPrediction {
+	if len(samples) < 5 {
+		return nil // Not enough data for meaningful trend
+	}
+	
+	// Simple linear regression to find slope
+	n := float64(len(samples))
+	
+	// Calculate means
+	sumX := 0.0
+	sumY := 0.0
+	for i, v := range samples {
+		sumX += float64(i)
+		sumY += v
+	}
+	meanX := sumX / n
+	meanY := sumY / n
+	
+	// Calculate slope (least squares)
+	numerator := 0.0
+	denominator := 0.0
+	for i, v := range samples {
+		x := float64(i)
+		numerator += (x - meanX) * (v - meanY)
+		denominator += (x - meanX) * (x - meanX)
+	}
+	
+	if denominator == 0 {
+		return nil // Can't calculate slope
+	}
+	
+	slope := numerator / denominator
+	
+	// slope is change per sample, convert to daily change
+	// Assume samples are taken regularly; if 24 samples per day, divide by 24
+	// For now, assume hourly samples = 24 per day
+	samplesPerDay := 24.0
+	dailyChange := slope * samplesPerDay
+	
+	prediction := &TrendPrediction{
+		CurrentValue: currentValue,
+		DailyChange:  dailyChange,
+	}
+	
+	// Calculate days to full if trending upward
+	if dailyChange > 0.1 { // More than 0.1% increase per day
+		remaining := 100.0 - currentValue
+		if remaining > 0 {
+			daysToFull := remaining / dailyChange
+			prediction.DaysToFull = int(math.Ceil(daysToFull))
+			
+			// Set severity based on time to full
+			if prediction.DaysToFull <= 7 {
+				prediction.Severity = "critical"
+				prediction.Description = formatTrendDescription(prediction.DaysToFull, dailyChange, "critical")
+			} else if prediction.DaysToFull <= 30 {
+				prediction.Severity = "warning"
+				prediction.Description = formatTrendDescription(prediction.DaysToFull, dailyChange, "warning")
+			} else {
+				prediction.Severity = "info"
+				prediction.Description = formatTrendDescription(prediction.DaysToFull, dailyChange, "info")
+			}
+		} else {
+			prediction.DaysToFull = 0
+			prediction.Severity = "critical"
+			prediction.Description = "Resource at capacity"
+		}
+	} else if dailyChange < -0.1 {
+		// Decreasing trend
+		prediction.DaysToFull = -1
+		prediction.Severity = "info"
+		daysToEmpty := currentValue / (-dailyChange)
+		prediction.Description = "Usage declining - at current rate, will reach 0% in " + formatDays(int(math.Ceil(daysToEmpty)))
+	} else {
+		// Stable
+		prediction.DaysToFull = -1
+		prediction.Severity = "info"
+		prediction.Description = "Usage stable - no significant trend detected"
+	}
+	
+	return prediction
+}
+
+// formatTrendDescription creates human-readable trend descriptions
+func formatTrendDescription(daysToFull int, dailyChange float64, severity string) string {
+	timeFrame := formatDays(daysToFull)
+	changeDesc := ""
+	if dailyChange >= 1 {
+		changeDesc = " (+" + floatToStr(dailyChange, 1) + "% per day)"
+	} else {
+		changeDesc = " (+" + floatToStr(dailyChange, 2) + "% per day)"
+	}
+	
+	switch severity {
+	case "critical":
+		return "⚠️ Resource will be full in " + timeFrame + changeDesc
+	case "warning":
+		return "Resource approaching capacity - full in " + timeFrame + changeDesc
+	default:
+		return "Trending toward full in " + timeFrame + changeDesc
+	}
+}
+
+// formatDays converts days to human readable format
+func formatDays(days int) string {
+	if days <= 0 {
+		return "now"
+	}
+	if days == 1 {
+		return "1 day"
+	}
+	if days < 7 {
+		return string([]byte{'0' + byte(days)}) + " days"
+	}
+	if days < 14 {
+		return "~1 week"
+	}
+	if days < 30 {
+		weeks := days / 7
+		return "~" + string([]byte{'0' + byte(weeks)}) + " weeks"
+	}
+	months := days / 30
+	if months == 1 {
+		return "~1 month"
+	}
+	if months < 12 {
+		return "~" + string([]byte{'0' + byte(months)}) + " months"
+	}
+	return ">1 year"
+}
+
+// floatToStr converts float to string with given precision
+func floatToStr(f float64, precision int) string {
+	// Simple implementation for small numbers
+	intPart := int(f)
+	fracPart := f - float64(intPart)
+	
+	if precision == 1 {
+		fracPart = math.Round(fracPart*10) / 10
+		if fracPart < 0.1 {
+			return string([]byte{'0' + byte(intPart)})
+		}
+		d := byte('0' + int(fracPart*10))
+		return string([]byte{'0' + byte(intPart), '.', d})
+	}
+	
+	fracPart = math.Round(fracPart*100) / 100
+	if fracPart < 0.01 {
+		return string([]byte{'0' + byte(intPart)})
+	}
+	d1 := byte('0' + int(fracPart*10))
+	d2 := byte('0' + int(fracPart*100)%10)
+	return string([]byte{'0' + byte(intPart), '.', d1, d2})
+}
+
 // ResourceCount returns the number of resources with baselines
 func (s *Store) ResourceCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.baselines)
 }
+
 
 // FlatBaseline is a flattened representation of a single metric baseline for API responses
 type FlatBaseline struct {
