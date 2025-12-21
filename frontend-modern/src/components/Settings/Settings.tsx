@@ -158,16 +158,7 @@ type TemperatureSocketCooldownInfo = {
   lastError?: string;
 };
 
-interface HostProxySummary {
-  requested?: boolean;
-  installed?: boolean;
-  hostSocketPresent?: boolean;
-  containerSocketPresent?: boolean | null;
-  lastUpdated?: string;
-  ctid?: string;
-}
-
-// HostProxyStatusResponse removed - pulse-sensor-proxy is deprecated in v5
+// HostProxySummary removed - pulse-sensor-proxy is deprecated in v5
 
 interface TemperatureProxyDiagnostic {
   legacySSHDetected: boolean;

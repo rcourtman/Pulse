@@ -282,7 +282,8 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
     };
 
     // Summarize a shell command action into a human-readable description
-    const summarizeAction = (action: string): { title: string; subtitle: string } => {
+    // Prefixed with underscore - not currently used but kept for future expansion
+    const _summarizeAction = (action: string): { title: string; subtitle: string } => {
         const cmd = action.trim();
 
         // Common command patterns and their summaries
@@ -357,7 +358,7 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
         if (cmd.startsWith('[host]') || cmd.startsWith('[')) {
             // Agent command - extract the actual command
             const innerCmd = cmd.replace(/^\[[\w\s]+\]\s*/, '');
-            const inner = summarizeAction(innerCmd);
+            const inner = _summarizeAction(innerCmd);
             return {
                 title: inner.title,
                 subtitle: `${inner.subtitle} (via agent)`
