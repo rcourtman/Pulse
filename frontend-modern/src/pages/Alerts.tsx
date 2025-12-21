@@ -7,7 +7,7 @@ import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
 import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButton';
 import type { RawOverrideConfig, PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
 import { Card } from '@/components/shared/Card';
-import { AIOverviewTable } from '@/components/shared/AIOverviewTable';
+
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
@@ -2817,9 +2817,8 @@ function OverviewTab(props: {
             </Show>
           </div>
 
-          <div class="mb-4">
-            <AIOverviewTable showWhenEmpty />
-          </div>
+          {/* AI Intelligence Summary removed - patrol findings below provide the same value without noise */}
+
 
           <Show when={patrolRequiresLicense()}>
             <div class="space-y-2">
@@ -7250,260 +7249,260 @@ function HistoryTab() {
                               const rowKey = getIncidentRowKey(alert);
                               return (
                                 <>
-                                <tr
-                                  class={`border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 ${alert.status === 'active' ? 'bg-red-50 dark:bg-red-900/10' : ''
-                                    }`}
-                                >
-                                  {/* Timestamp */}
-                                  <td class="p-1 px-2 text-gray-600 dark:text-gray-400 font-mono">
-                                    {new Date(alert.startTime).toLocaleTimeString('en-US', {
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    })}
-                                  </td>
-
-                                  {/* Source */}
-                                  <td class="p-1 px-2 text-center">
-                                    <span
-                                      class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${alert.source === 'ai'
-                                        ? 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300'
-                                        : 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300'
-                                        }`}
-                                    >
-                                      {alert.source === 'ai' ? 'AI' : 'Alert'}
-                                    </span>
-                                  </td>
-
-                                  {/* Resource */}
-                                  <td class="p-1 px-2 font-medium text-gray-900 dark:text-gray-100 truncate max-w-[150px]">
-                                    {alert.resourceName}
-                                  </td>
-
-                                  {/* Type */}
-                                  <td class="p-1 px-2">
-                                    <span
-                                      class={`text-xs px-1 py-0.5 rounded ${alert.resourceType === 'VM'
-                                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                                        : alert.resourceType === 'CT'
-                                          ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
-                                          : alert.resourceType === 'Node'
-                                            ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
-                                            : alert.resourceType === 'Storage'
-                                              ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
-                                              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                        }`}
-                                    >
-                                      {alert.type}
-                                    </span>
-                                  </td>
-
-                                  {/* Severity */}
-                                  <td class="p-1 px-2 text-center">
-                                    <span
-                                      class={`text-xs px-2 py-0.5 rounded font-medium ${alert.level === 'critical'
-                                        ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
-                                        : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
-                                        }`}
-                                    >
-                                      {alert.level}
-                                    </span>
-                                  </td>
-
-                                  {/* Message */}
-                                  <td
-                                    class="p-1 px-2 text-gray-700 dark:text-gray-300 truncate max-w-[300px]"
-                                    title={alert.message}
+                                  <tr
+                                    class={`border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 ${alert.status === 'active' ? 'bg-red-50 dark:bg-red-900/10' : ''
+                                      }`}
                                   >
-                                    {alert.message}
-                                  </td>
+                                    {/* Timestamp */}
+                                    <td class="p-1 px-2 text-gray-600 dark:text-gray-400 font-mono">
+                                      {new Date(alert.startTime).toLocaleTimeString('en-US', {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })}
+                                    </td>
 
-                                  {/* Duration */}
-                                  <td class="p-1 px-2 text-center text-gray-600 dark:text-gray-400">
-                                    {alert.duration}
-                                  </td>
+                                    {/* Source */}
+                                    <td class="p-1 px-2 text-center">
+                                      <span
+                                        class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${alert.source === 'ai'
+                                          ? 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300'
+                                          : 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300'
+                                          }`}
+                                      >
+                                        {alert.source === 'ai' ? 'AI' : 'Alert'}
+                                      </span>
+                                    </td>
 
-                                  {/* Status */}
-                                  <td class="p-1 px-2 text-center">
-                                    <span
-                                      class={`text-xs px-2 py-0.5 rounded ${alert.status === 'active'
-                                        ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 font-medium'
-                                        : alert.status === 'acknowledged'
-                                          ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
-                                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                        }`}
+                                    {/* Resource */}
+                                    <td class="p-1 px-2 font-medium text-gray-900 dark:text-gray-100 truncate max-w-[150px]">
+                                      {alert.resourceName}
+                                    </td>
+
+                                    {/* Type */}
+                                    <td class="p-1 px-2">
+                                      <span
+                                        class={`text-xs px-1 py-0.5 rounded ${alert.resourceType === 'VM'
+                                          ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                                          : alert.resourceType === 'CT'
+                                            ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+                                            : alert.resourceType === 'Node'
+                                              ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
+                                              : alert.resourceType === 'Storage'
+                                                ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
+                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                          }`}
+                                      >
+                                        {alert.type}
+                                      </span>
+                                    </td>
+
+                                    {/* Severity */}
+                                    <td class="p-1 px-2 text-center">
+                                      <span
+                                        class={`text-xs px-2 py-0.5 rounded font-medium ${alert.level === 'critical'
+                                          ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                          : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                                          }`}
+                                      >
+                                        {alert.level}
+                                      </span>
+                                    </td>
+
+                                    {/* Message */}
+                                    <td
+                                      class="p-1 px-2 text-gray-700 dark:text-gray-300 truncate max-w-[300px]"
+                                      title={alert.message}
                                     >
-                                      {alert.status}
-                                    </span>
-                                  </td>
+                                      {alert.message}
+                                    </td>
 
-                                  {/* Node */}
-                                  <td class="p-1 px-2 text-gray-600 dark:text-gray-400 truncate">
-                                    {alert.node || '—'}
-                                  </td>
+                                    {/* Duration */}
+                                    <td class="p-1 px-2 text-center text-gray-600 dark:text-gray-400">
+                                      {alert.duration}
+                                    </td>
 
-                                  {/* Actions */}
-                                  <td class="p-1 px-2 text-center">
-                                    <div class="flex items-center justify-center gap-1">
-                                      <Show when={alert.source === 'alert'}>
-                                        <button
-                                          type="button"
-                                          class="px-2 py-1 text-[10px] border rounded-md border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                          onClick={() => {
-                                            void toggleIncidentTimeline(rowKey, alert.id, alert.startTime);
-                                          }}
-                                        >
-                                          {expandedIncidents().has(rowKey) ? 'Hide' : 'Timeline'}
-                                        </button>
-                                      </Show>
-                                      <Show when={alert.source === 'alert' && alert.resourceId}>
-                                        <button
-                                          type="button"
-                                          class="px-2 py-1 text-[10px] border rounded-md border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                          title="View incidents for this resource"
-                                          onClick={() => {
-                                            void openResourceIncidentPanel(alert.resourceId as string, alert.resourceName);
-                                          }}
-                                        >
-                                          Resource
-                                        </button>
-                                      </Show>
-                                      <Show when={alert.source === 'alert' && (alert.status === 'active' || alert.status === 'acknowledged')}>
-                                        <InvestigateAlertButton
-                                          alert={{
-                                            id: alert.id,
-                                            type: alert.type,
-                                            level: alert.level as 'warning' | 'critical',
-                                            resourceId: alert.resourceId || '',
-                                            resourceName: alert.resourceName,
-                                            node: alert.node || '',
-                                            instance: '',
-                                            message: alert.message || '',
-                                            value: 0,
-                                            threshold: 0,
-                                            startTime: alert.startTime,
-                                            lastSeen: alert.startTime,
-                                            acknowledged: alert.status === 'acknowledged',
-                                          }}
-                                          variant="icon"
-                                          size="sm"
-                                          licenseLocked={!hasAIAlertsFeature() && !licenseLoading()}
-                                        />
-                                      </Show>
-                                    </div>
-                                  </td>
-                                </tr>
-                                <Show when={alert.source === 'alert' && expandedIncidents().has(rowKey)}>
-                                  <tr class="bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700">
-                                    <td colspan="11" class="p-3">
-                                      <Show when={incidentLoading()[rowKey]}>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400">Loading timeline...</p>
-                                      </Show>
-                                      <Show when={!incidentLoading()[rowKey]}>
-                                        <Show when={incidentTimelines()[rowKey]}>
-                                          {(timeline) => (
-                                            <div class="space-y-3">
-                                              <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                                <span class="font-medium text-gray-700 dark:text-gray-200">Incident</span>
-                                                <span>{timeline().status}</span>
-                                                <Show when={timeline().acknowledged}>
-                                                  <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                                                    acknowledged
-                                                  </span>
-                                                </Show>
-                                                <Show when={timeline().openedAt}>
-                                                  <span>opened {new Date(timeline().openedAt).toLocaleString()}</span>
-                                                </Show>
-                                                <Show when={timeline().closedAt}>
-                                                  <span>closed {new Date(timeline().closedAt as string).toLocaleString()}</span>
-                                                </Show>
-                                              </div>
-                                              {(() => {
-                                                const events = timeline().events || [];
-                                                const filteredEvents = filterIncidentEvents(events, historyIncidentEventFilters());
-                                                return (
-                                                  <>
-                                                    <Show when={events.length > 0}>
-                                                      <IncidentEventFilters
-                                                        filters={historyIncidentEventFilters}
-                                                        setFilters={setHistoryIncidentEventFilters}
-                                                      />
-                                                    </Show>
-                                                    <Show when={filteredEvents.length > 0}>
-                                                      <div class="space-y-2">
-                                                        <For each={filteredEvents}>
-                                                          {(event) => (
-                                                            <div class="rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/30 p-2">
-                                                              <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                                                <span class="font-medium text-gray-800 dark:text-gray-200">
-                                                                  {event.summary}
-                                                                </span>
-                                                                <span>{new Date(event.timestamp).toLocaleString()}</span>
-                                                              </div>
-                                                              <Show when={event.details && (event.details as { note?: string }).note}>
-                                                                <p class="text-xs text-gray-700 dark:text-gray-300 mt-1">
-                                                                  {(event.details as { note?: string }).note}
-                                                                </p>
-                                                              </Show>
-                                                              <Show when={event.details && (event.details as { command?: string }).command}>
-                                                                <p class="text-xs text-gray-700 dark:text-gray-300 mt-1 font-mono">
-                                                                  {(event.details as { command?: string }).command}
-                                                                </p>
-                                                              </Show>
-                                                              <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
-                                                                <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                                                  {(event.details as { output_excerpt?: string }).output_excerpt}
-                                                                </p>
-                                                              </Show>
-                                                            </div>
-                                                          )}
-                                                        </For>
-                                                      </div>
-                                                    </Show>
-                                                    <Show when={events.length > 0 && filteredEvents.length === 0}>
-                                                      <p class="text-xs text-gray-500 dark:text-gray-400">
-                                                        No timeline events match the selected filters.
-                                                      </p>
-                                                    </Show>
-                                                    <Show when={events.length === 0}>
-                                                      <p class="text-xs text-gray-500 dark:text-gray-400">No timeline events yet.</p>
-                                                    </Show>
-                                                  </>
-                                                );
-                                              })()}
-                                              <div class="flex flex-col gap-2">
-                                                <textarea
-                                                  class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 p-2 text-xs text-gray-800 dark:text-gray-200"
-                                                  rows={2}
-                                                  placeholder="Add a note for this incident..."
-                                                  value={incidentNoteDrafts()[rowKey] || ''}
-                                                  onInput={(e) => {
-                                                    const value = e.currentTarget.value;
-                                                    setIncidentNoteDrafts((prev) => ({ ...prev, [rowKey]: value }));
-                                                  }}
-                                                />
-                                                <div class="flex justify-end">
-                                                  <button
-                                                    class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    disabled={incidentNoteSaving().has(rowKey) || !(incidentNoteDrafts()[rowKey] || '').trim()}
-                                                    onClick={() => {
-                                                      void saveIncidentNote(rowKey, alert.id, alert.startTime);
-                                                    }}
-                                                  >
-                                                    {incidentNoteSaving().has(rowKey) ? 'Saving...' : 'Save Note'}
-                                                  </button>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          )}
+                                    {/* Status */}
+                                    <td class="p-1 px-2 text-center">
+                                      <span
+                                        class={`text-xs px-2 py-0.5 rounded ${alert.status === 'active'
+                                          ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 font-medium'
+                                          : alert.status === 'acknowledged'
+                                            ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                          }`}
+                                      >
+                                        {alert.status}
+                                      </span>
+                                    </td>
+
+                                    {/* Node */}
+                                    <td class="p-1 px-2 text-gray-600 dark:text-gray-400 truncate">
+                                      {alert.node || '—'}
+                                    </td>
+
+                                    {/* Actions */}
+                                    <td class="p-1 px-2 text-center">
+                                      <div class="flex items-center justify-center gap-1">
+                                        <Show when={alert.source === 'alert'}>
+                                          <button
+                                            type="button"
+                                            class="px-2 py-1 text-[10px] border rounded-md border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                            onClick={() => {
+                                              void toggleIncidentTimeline(rowKey, alert.id, alert.startTime);
+                                            }}
+                                          >
+                                            {expandedIncidents().has(rowKey) ? 'Hide' : 'Timeline'}
+                                          </button>
                                         </Show>
-                                        <Show when={!incidentTimelines()[rowKey]}>
-                                          <p class="text-xs text-gray-500 dark:text-gray-400">No incident timeline available.</p>
+                                        <Show when={alert.source === 'alert' && alert.resourceId}>
+                                          <button
+                                            type="button"
+                                            class="px-2 py-1 text-[10px] border rounded-md border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                            title="View incidents for this resource"
+                                            onClick={() => {
+                                              void openResourceIncidentPanel(alert.resourceId as string, alert.resourceName);
+                                            }}
+                                          >
+                                            Resource
+                                          </button>
                                         </Show>
-                                      </Show>
+                                        <Show when={alert.source === 'alert' && (alert.status === 'active' || alert.status === 'acknowledged')}>
+                                          <InvestigateAlertButton
+                                            alert={{
+                                              id: alert.id,
+                                              type: alert.type,
+                                              level: alert.level as 'warning' | 'critical',
+                                              resourceId: alert.resourceId || '',
+                                              resourceName: alert.resourceName,
+                                              node: alert.node || '',
+                                              instance: '',
+                                              message: alert.message || '',
+                                              value: 0,
+                                              threshold: 0,
+                                              startTime: alert.startTime,
+                                              lastSeen: alert.startTime,
+                                              acknowledged: alert.status === 'acknowledged',
+                                            }}
+                                            variant="icon"
+                                            size="sm"
+                                            licenseLocked={!hasAIAlertsFeature() && !licenseLoading()}
+                                          />
+                                        </Show>
+                                      </div>
                                     </td>
                                   </tr>
-                                </Show>
-                              </>
+                                  <Show when={alert.source === 'alert' && expandedIncidents().has(rowKey)}>
+                                    <tr class="bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700">
+                                      <td colspan="11" class="p-3">
+                                        <Show when={incidentLoading()[rowKey]}>
+                                          <p class="text-xs text-gray-500 dark:text-gray-400">Loading timeline...</p>
+                                        </Show>
+                                        <Show when={!incidentLoading()[rowKey]}>
+                                          <Show when={incidentTimelines()[rowKey]}>
+                                            {(timeline) => (
+                                              <div class="space-y-3">
+                                                <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Incident</span>
+                                                  <span>{timeline().status}</span>
+                                                  <Show when={timeline().acknowledged}>
+                                                    <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                                      acknowledged
+                                                    </span>
+                                                  </Show>
+                                                  <Show when={timeline().openedAt}>
+                                                    <span>opened {new Date(timeline().openedAt).toLocaleString()}</span>
+                                                  </Show>
+                                                  <Show when={timeline().closedAt}>
+                                                    <span>closed {new Date(timeline().closedAt as string).toLocaleString()}</span>
+                                                  </Show>
+                                                </div>
+                                                {(() => {
+                                                  const events = timeline().events || [];
+                                                  const filteredEvents = filterIncidentEvents(events, historyIncidentEventFilters());
+                                                  return (
+                                                    <>
+                                                      <Show when={events.length > 0}>
+                                                        <IncidentEventFilters
+                                                          filters={historyIncidentEventFilters}
+                                                          setFilters={setHistoryIncidentEventFilters}
+                                                        />
+                                                      </Show>
+                                                      <Show when={filteredEvents.length > 0}>
+                                                        <div class="space-y-2">
+                                                          <For each={filteredEvents}>
+                                                            {(event) => (
+                                                              <div class="rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/30 p-2">
+                                                                <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                                                                  <span class="font-medium text-gray-800 dark:text-gray-200">
+                                                                    {event.summary}
+                                                                  </span>
+                                                                  <span>{new Date(event.timestamp).toLocaleString()}</span>
+                                                                </div>
+                                                                <Show when={event.details && (event.details as { note?: string }).note}>
+                                                                  <p class="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                                                                    {(event.details as { note?: string }).note}
+                                                                  </p>
+                                                                </Show>
+                                                                <Show when={event.details && (event.details as { command?: string }).command}>
+                                                                  <p class="text-xs text-gray-700 dark:text-gray-300 mt-1 font-mono">
+                                                                    {(event.details as { command?: string }).command}
+                                                                  </p>
+                                                                </Show>
+                                                                <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
+                                                                  <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                                                    {(event.details as { output_excerpt?: string }).output_excerpt}
+                                                                  </p>
+                                                                </Show>
+                                                              </div>
+                                                            )}
+                                                          </For>
+                                                        </div>
+                                                      </Show>
+                                                      <Show when={events.length > 0 && filteredEvents.length === 0}>
+                                                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                                                          No timeline events match the selected filters.
+                                                        </p>
+                                                      </Show>
+                                                      <Show when={events.length === 0}>
+                                                        <p class="text-xs text-gray-500 dark:text-gray-400">No timeline events yet.</p>
+                                                      </Show>
+                                                    </>
+                                                  );
+                                                })()}
+                                                <div class="flex flex-col gap-2">
+                                                  <textarea
+                                                    class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 p-2 text-xs text-gray-800 dark:text-gray-200"
+                                                    rows={2}
+                                                    placeholder="Add a note for this incident..."
+                                                    value={incidentNoteDrafts()[rowKey] || ''}
+                                                    onInput={(e) => {
+                                                      const value = e.currentTarget.value;
+                                                      setIncidentNoteDrafts((prev) => ({ ...prev, [rowKey]: value }));
+                                                    }}
+                                                  />
+                                                  <div class="flex justify-end">
+                                                    <button
+                                                      class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                      disabled={incidentNoteSaving().has(rowKey) || !(incidentNoteDrafts()[rowKey] || '').trim()}
+                                                      onClick={() => {
+                                                        void saveIncidentNote(rowKey, alert.id, alert.startTime);
+                                                      }}
+                                                    >
+                                                      {incidentNoteSaving().has(rowKey) ? 'Saving...' : 'Save Note'}
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </Show>
+                                          <Show when={!incidentTimelines()[rowKey]}>
+                                            <p class="text-xs text-gray-500 dark:text-gray-400">No incident timeline available.</p>
+                                          </Show>
+                                        </Show>
+                                      </td>
+                                    </tr>
+                                  </Show>
+                                </>
                               );
                             }}
                           </For>
