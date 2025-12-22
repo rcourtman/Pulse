@@ -2,16 +2,18 @@ package ai
 
 import (
 	"os"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
 )
 
 // IsDemoMode returns true if mock/demo mode is enabled
-// This checks the same MOCK_ENABLED env var used by the mock data system
+// This checks the PULSE_MOCK_MODE env var used by the mock data system
 func IsDemoMode() bool {
-	return os.Getenv("MOCK_ENABLED") == "true" || os.Getenv("MOCK_ENABLED") == "1"
+	return strings.EqualFold(os.Getenv("PULSE_MOCK_MODE"), "true")
 }
+
 
 // InjectDemoFindings populates the patrol service with realistic mock findings
 // This is used for demo instances to showcase AI features without actual AI API calls
