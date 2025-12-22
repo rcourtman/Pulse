@@ -1,7 +1,7 @@
 name: Publish Docker Images
 
-# Only triggered by create-release.yml after staging images are built
-# Removing release: published trigger prevents race conditions
+# Triggered by create-release.yml after staging images pass tests.
+# Builds multi-arch images (amd64+arm64) from source and publishes to Docker Hub and GHCR.
 on:
   workflow_dispatch:
     inputs:
@@ -17,29 +17,40 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60  # Increased for multi-arch builds with QEMU
     permissions:
       contents: read
       packages: write
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
       - name: Extract version from release tag
         id: version
         run: |
           TAG="${{ inputs.tag }}"
           VERSION="${TAG#v}"
-          
+
           # Detect if this is a prerelease (RC, alpha, beta)
           IS_PRERELEASE="false"
           if [[ "$VERSION" =~ -rc\.[0-9]+$ ]] || [[ "$VERSION" =~ -alpha\.[0-9]+$ ]] || [[ "$VERSION" =~ -beta\.[0-9]+$ ]]; then
             IS_PRERELEASE="true"
             echo "Detected prerelease version - will NOT update :latest tag"
           fi
-          
+
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
           echo "Publishing Docker images for ${TAG} (prerelease: ${IS_PRERELEASE})"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -54,93 +65,58 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Copy staging images to final tags
-        run: |
-          TAG="${{ steps.version.outputs.tag }}"
-          VERSION="${{ steps.version.outputs.version }}"
-          STAGING_TAG="staging-${TAG}"
+      - name: Build and push Pulse server image (multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache
+          build-args: |
+            PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+          tags: |
+            rcourtman/pulse:${{ steps.version.outputs.tag }}
+            rcourtman/pulse:${{ steps.version.outputs.version }}
+            ${{ steps.version.outputs.is_prerelease != 'true' && 'rcourtman/pulse:latest' || '' }}
+            ghcr.io/${{ github.repository_owner }}/pulse:${{ steps.version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/pulse:${{ steps.version.outputs.version }}
+            ${{ steps.version.outputs.is_prerelease != 'true' && format('ghcr.io/{0}/pulse:latest', github.repository_owner) || '' }}
 
-          # Retry function for transient Docker Hub failures
-          retry_push() {
-            local cmd="$1"
-            local max_attempts=3
-            local attempt=1
-            local delay=10
-
-            while [ $attempt -le $max_attempts ]; do
-              echo "Attempt $attempt of $max_attempts..."
-              if eval "$cmd"; then
-                return 0
-              fi
-              echo "Attempt $attempt failed"
-              if [ $attempt -lt $max_attempts ]; then
-                echo "Waiting ${delay}s before retry..."
-                sleep $delay
-                delay=$((delay * 2))
-              fi
-              attempt=$((attempt + 1))
-            done
-            echo "All $max_attempts attempts failed"
-            return 1
-          }
-
-          IS_PRERELEASE="${{ steps.version.outputs.is_prerelease }}"
-          
-          echo "Copying pulse staging image to final tags..."
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            # For prereleases, only tag with version - do NOT update :latest
-            retry_push "docker buildx imagetools create \
-              --tag rcourtman/pulse:${TAG} \
-              --tag rcourtman/pulse:${VERSION} \
-              --tag ghcr.io/${{ github.repository_owner }}/pulse:${TAG} \
-              --tag ghcr.io/${{ github.repository_owner }}/pulse:${VERSION} \
-              ghcr.io/${{ github.repository_owner }}/pulse:${STAGING_TAG}"
-          else
-            # For stable releases, also update :latest
-            retry_push "docker buildx imagetools create \
-              --tag rcourtman/pulse:${TAG} \
-              --tag rcourtman/pulse:${VERSION} \
-              --tag rcourtman/pulse:latest \
-              --tag ghcr.io/${{ github.repository_owner }}/pulse:${TAG} \
-              --tag ghcr.io/${{ github.repository_owner }}/pulse:${VERSION} \
-              --tag ghcr.io/${{ github.repository_owner }}/pulse:latest \
-              ghcr.io/${{ github.repository_owner }}/pulse:${STAGING_TAG}"
-          fi
-
-          echo "Copying pulse-docker-agent staging image to final tags..."
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            # For prereleases, only tag with version - do NOT update :latest
-            retry_push "docker buildx imagetools create \
-              --tag rcourtman/pulse-docker-agent:${TAG} \
-              --tag rcourtman/pulse-docker-agent:${VERSION} \
-              --tag ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${TAG} \
-              --tag ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${VERSION} \
-              ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${STAGING_TAG}"
-          else
-            # For stable releases, also update :latest
-            retry_push "docker buildx imagetools create \
-              --tag rcourtman/pulse-docker-agent:${TAG} \
-              --tag rcourtman/pulse-docker-agent:${VERSION} \
-              --tag rcourtman/pulse-docker-agent:latest \
-              --tag ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${TAG} \
-              --tag ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${VERSION} \
-              --tag ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:latest \
-              ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${STAGING_TAG}"
-          fi
+      - name: Build and push Pulse Docker agent image (multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: agent_runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache
+          build-args: |
+            PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+          tags: |
+            rcourtman/pulse-docker-agent:${{ steps.version.outputs.tag }}
+            rcourtman/pulse-docker-agent:${{ steps.version.outputs.version }}
+            ${{ steps.version.outputs.is_prerelease != 'true' && 'rcourtman/pulse-docker-agent:latest' || '' }}
+            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ steps.version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ steps.version.outputs.version }}
+            ${{ steps.version.outputs.is_prerelease != 'true' && format('ghcr.io/{0}/pulse-docker-agent:latest', github.repository_owner) || '' }}
 
       - name: Output image information
         run: |
           IS_PRERELEASE="${{ steps.version.outputs.is_prerelease }}"
           echo "✅ Docker images published successfully!"
           echo ""
-          echo "Server images:"
+          echo "Server images (linux/amd64, linux/arm64):"
           echo "  - rcourtman/pulse:${{ steps.version.outputs.tag }}"
           echo "  - rcourtman/pulse:${{ steps.version.outputs.version }}"
           if [ "$IS_PRERELEASE" != "true" ]; then
             echo "  - rcourtman/pulse:latest"
           fi
           echo ""
-          echo "Agent images:"
+          echo "Agent images (linux/amd64, linux/arm64):"
           echo "  - rcourtman/pulse-docker-agent:${{ steps.version.outputs.tag }}"
           echo "  - rcourtman/pulse-docker-agent:${{ steps.version.outputs.version }}"
           if [ "$IS_PRERELEASE" != "true" ]; then
