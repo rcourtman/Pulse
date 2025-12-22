@@ -14,6 +14,38 @@ func IsDemoMode() bool {
 	return strings.EqualFold(os.Getenv("PULSE_MOCK_MODE"), "true")
 }
 
+// mockResourcePatterns contains name patterns that indicate mock/demo resources
+var mockResourcePatterns = []string{
+	"pve1", "pve2", "pve3", "pve4", "pve5", "pve6", "pve7", // mock PVE nodes
+	"mock-cluster", "mock-",                                 // generic mock prefixes
+	"Ceres", "Atlas", "Nova", "Orion", "Vega", "Rigel",     // mock host agent names
+	"docker-host-", "k8s-cluster-",                          // mock Docker/K8s names
+	"demo-",                                                 // demo prefixes
+}
+
+// IsMockResource returns true if the resource name/ID appears to be mock data
+// This is used to filter out mock resources from heuristic analysis when not in demo mode
+func IsMockResource(resourceID, resourceName, node string) bool {
+	// If we're in demo mode, don't filter anything - we want mock resources
+	if IsDemoMode() {
+		return false
+	}
+	
+	// Check against mock patterns
+	toCheck := []string{resourceID, resourceName, node}
+	for _, value := range toCheck {
+		if value == "" {
+			continue
+		}
+		for _, pattern := range mockResourcePatterns {
+			if strings.Contains(value, pattern) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 
 // InjectDemoFindings populates the patrol service with realistic mock findings
 // This is used for demo instances to showcase AI features without actual AI API calls
