@@ -173,3 +173,6 @@ docs/internal/
 
 # Pulse Pro landing page (private)
 landing-page/
+
+# Local Gemini config
+.gemini/
