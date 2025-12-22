@@ -488,6 +488,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
             statsFilter={statsFilter()}
             selectedHostId={selectedHostId}
             dockerMetadata={dockerMetadata()}
+            dockerHostMetadata={dockerHostMetadata()}
             onCustomUrlUpdate={handleCustomUrlUpdate}
           />
         </Show>
