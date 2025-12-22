@@ -1,27 +1,50 @@
 # Pulse AI
 
-Pulse AI adds an optional assistant for troubleshooting, summarization, and proactive monitoring. It is **off by default** and can be enabled per instance.
+Pulse AI adds an optional assistant for troubleshooting and proactive monitoring. It is **off by default** and can be enabled per instance.
 
-## What Pulse AI Can Do
+## Immediate Value
 
-- **Interactive chat**: Ask questions about current cluster state and recent health signals.
-- **Patrol**: Background checks that generate findings on a schedule.
-- **Alert analysis**: Optional analysis when alerts fire (token-efficient).
-- **Command proposals and execution**: When enabled, Pulse can propose commands and (optionally) execute them via connected agents.
-- **Finding management**: Dismiss findings as expected behavior, resolve after fixing, with suppression rules to prevent recurrence.
-- **Cost tracking**: Tracks usage and supports a monthly budget target.
+Pulse AI Patrol monitors your infrastructure 24/7 and alerts you to issues that matter:
+
+### What Patrol Catches
+
+| Issue | Severity | Example |
+|-------|----------|---------|
+| **Node offline** | Critical | Proxmox node not responding |
+| **Disk filling up** | Warning/Critical | Storage at 85%+ capacity |
+| **Backup failures** | Warning | PBS job failed, no backup in 48+ hours |
+| **Service down** | Critical | Docker container crashed, agent offline |
+| **High resource usage** | Warning | Sustained memory >90%, CPU >85% |
+| **Storage issues** | Critical | PBS datastore errors, ZFS problems |
+
+### What Patrol Ignores (by design)
+
+Patrol is **intentionally conservative** to avoid noise:
+
+- Small baseline deviations ("CPU at 15% vs typical 10%")
+- Low utilization that's "elevated" but fine (disk at 40%)
+- Stopped VMs/containers that were intentionally stopped
+- Brief spikes that resolve on their own
+- Anything that doesn't require human action
+
+> **Philosophy**: If a finding wouldn't be worth waking someone up at 3am, Patrol won't create it.
+
+## Features
+
+- **Interactive chat**: Ask questions about current cluster state and get AI-assisted troubleshooting.
+- **Patrol**: Background checks every 15 minutes (configurable) that generate findings.
+- **Alert analysis**: Optional token-efficient analysis when alerts fire.
+- **Command execution**: When enabled, AI can run commands via connected agents.
+- **Finding management**: Dismiss, resolve, or suppress findings to prevent recurrence.
+- **Cost tracking**: Tracks token usage and supports monthly budget limits.
 
 ## Configuration
 
-Configure in the UI:
-
-- **Settings → AI**
+Configure in the UI: **Settings → AI**
 
 AI settings are stored encrypted at rest in `ai.enc` under the Pulse config directory (`/etc/pulse` for systemd installs, `/data` for Docker/Kubernetes).
 
 ### Supported Providers
-
-Pulse supports multiple providers configured independently:
 
 - **Anthropic** (API key or OAuth)
 - **OpenAI**
@@ -32,48 +55,45 @@ Pulse supports multiple providers configured independently:
 
 ### Models
 
-Pulse uses model identifiers in the form:
-
-- `provider:model-name`
+Pulse uses model identifiers in the form: `provider:model-name`
 
 You can set separate models for:
-
 - Chat (`chat_model`)
 - Patrol (`patrol_model`)
 - Auto-fix remediation (`auto_fix_model`)
 
-### Testing and Model Discovery
+### Testing
 
 - Test provider connectivity: `POST /api/ai/test` and `POST /api/ai/test/{provider}`
-- List available models (queried live from the provider): `GET /api/ai/models`
+- List available models: `GET /api/ai/models`
 
 ## Patrol Service
 
 Patrol runs automated health checks on a configurable schedule (default: 15 minutes). It analyzes:
 
 - Proxmox nodes, VMs, and containers
-- PBS backup status
-- Host agent metrics
+- PBS backup status and datastore health
+- Host agent metrics (RAID, sensors, services)
+- Docker/Podman containers
+- Kubernetes clusters
 - Resource utilization trends
 
 ### Finding Severity
 
-Patrol generates findings with severity levels:
+- **Critical**: Immediate attention required (service down, data at risk)
+- **Warning**: Should be addressed soon (disk filling, backup stale)
 
-- **Critical**: Immediate attention required
-- **Warning**: Should be addressed soon
-
-Note: `info` and `watch` level findings are filtered out by default to reduce noise.
+Note: `info` and `watch` level findings are filtered out to reduce noise.
 
 ### Managing Findings
 
 Findings can be managed via the UI or API:
 
+- **Get help**: Chat with AI to troubleshoot the issue
 - **Resolve**: Mark as fixed (finding will reappear if the issue resurfaces)
-- **Dismiss**: Mark as expected behavior with a reason (`not_an_issue`, `expected_behavior`, `will_fix_later`)
-- **Suppress**: Create a rule to prevent similar findings from recurring
+- **Dismiss**: Mark as expected behavior (creates suppression rule)
 
-Dismissed and resolved findings are persisted across Pulse restarts.
+Dismissed and resolved findings persist across Pulse restarts.
 
 ### AI-Assisted Remediation
 
@@ -81,22 +101,23 @@ When chatting with AI about a patrol finding, the AI can:
 - Run diagnostic commands on connected agents
 - Propose fixes with explanations
 - Automatically resolve findings after successful remediation
-- Dismiss findings it determines are expected behavior
 
 ## Safety Controls
 
 Pulse includes settings that control how "active" AI features are:
 
-- **Autonomous mode** (`autonomous_mode`): when enabled, AI may execute actions without a separate approval step in the UI.
-- **Patrol auto-fix** (`patrol_auto_fix`): allows patrol findings to trigger remediation attempts.
-- **Alert-triggered analysis** (`alert_triggered_analysis`): limits AI to analyzing specific events when alerts occur.
+- **Autonomous mode**: When enabled, AI may execute safe commands without approval.
+- **Patrol auto-fix**: Allows patrol to attempt automatic remediation.
+- **Alert-triggered analysis**: Limits AI to analyzing specific events when alerts occur.
 
-If you enable execution features, ensure agent tokens and scopes are appropriately restricted and that audit logging is enabled.
+If you enable execution features, ensure agent tokens and scopes are appropriately restricted.
 
 ## Troubleshooting
 
-- **AI not responding**: verify provider credentials in **Settings → AI** and confirm `GET /api/ai/models` works.
-- **OAuth issues (Anthropic)**: verify the OAuth flow is completing and that Pulse can reach the callback endpoint.
-- **No execution capability**: confirm at least one compatible agent is connected and that the instance has execution enabled.
-- **Findings not persisting**: check that Pulse has write access to its config directory.
-- **Too many findings**: Adjust patrol thresholds in Settings, which derive from your alert thresholds.
+| Issue | Solution |
+|-------|----------|
+| AI not responding | Verify provider credentials in **Settings → AI** |
+| No execution capability | Confirm at least one agent is connected |
+| Findings not persisting | Check Pulse has write access to config directory |
+| Too many findings | This shouldn't happen - please report if it does |
+
