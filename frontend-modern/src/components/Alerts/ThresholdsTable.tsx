@@ -244,6 +244,12 @@ interface ThresholdsTableProps {
   ) => void;
   dockerIgnoredPrefixes: () => string[];
   setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
+  ignoredGuestPrefixes: () => string[];
+  setIgnoredGuestPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
+  guestTagWhitelist: () => string[];
+  setGuestTagWhitelist: (value: string[] | ((prev: string[]) => string[])) => void;
+  guestTagBlacklist: () => string[];
+  setGuestTagBlacklist: (value: string[] | ((prev: string[]) => string[])) => void;
   storageDefault: () => number;
   setStorageDefault: (value: number) => void;
   resetGuestDefaults?: () => void;
@@ -429,6 +435,67 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       props.setDockerIgnoredPrefixes([]);
     }
     setDockerIgnoredInput('');
+    props.setHasUnsavedChanges(true);
+  };
+
+  const [ignoredGuestInput, setIgnoredGuestInput] = createSignal(
+    props.ignoredGuestPrefixes().join('\n'),
+  );
+  const [guestTagWhitelistInput, setGuestTagWhitelistInput] = createSignal(
+    props.guestTagWhitelist().join('\n'),
+  );
+  const [guestTagBlacklistInput, setGuestTagBlacklistInput] = createSignal(
+    props.guestTagBlacklist().join('\n'),
+  );
+
+  createEffect(() => {
+    const remote = props.ignoredGuestPrefixes();
+    const local = ignoredGuestInput();
+    const normalizedLocal = normalizeDockerIgnoredInput(local);
+    const isSynced =
+      remote.length === normalizedLocal.length &&
+      remote.every((val, i) => val === normalizedLocal[i]);
+    if (!isSynced) setIgnoredGuestInput(remote.join('\n'));
+  });
+
+  createEffect(() => {
+    const remote = props.guestTagWhitelist();
+    const local = guestTagWhitelistInput();
+    const normalizedLocal = normalizeDockerIgnoredInput(local);
+    const isSynced =
+      remote.length === normalizedLocal.length &&
+      remote.every((val, i) => val === normalizedLocal[i]);
+    if (!isSynced) setGuestTagWhitelistInput(remote.join('\n'));
+  });
+
+  createEffect(() => {
+    const remote = props.guestTagBlacklist();
+    const local = guestTagBlacklistInput();
+    const normalizedLocal = normalizeDockerIgnoredInput(local);
+    const isSynced =
+      remote.length === normalizedLocal.length &&
+      remote.every((val, i) => val === normalizedLocal[i]);
+    if (!isSynced) setGuestTagBlacklistInput(remote.join('\n'));
+  });
+
+  const handleIgnoredGuestChange = (value: string) => {
+    setIgnoredGuestInput(value);
+    const normalized = normalizeDockerIgnoredInput(value);
+    props.setIgnoredGuestPrefixes(normalized);
+    props.setHasUnsavedChanges(true);
+  };
+
+  const handleGuestTagWhitelistChange = (value: string) => {
+    setGuestTagWhitelistInput(value);
+    const normalized = normalizeDockerIgnoredInput(value);
+    props.setGuestTagWhitelist(normalized);
+    props.setHasUnsavedChanges(true);
+  };
+
+  const handleGuestTagBlacklistChange = (value: string) => {
+    setGuestTagBlacklistInput(value);
+    const normalized = normalizeDockerIgnoredInput(value);
+    props.setGuestTagBlacklist(normalized);
     props.setHasUnsavedChanges(true);
   };
 
@@ -2548,6 +2615,59 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   factoryDefaults={props.factoryGuestDefaults}
                   onResetDefaults={props.resetGuestDefaults}
                 />
+              </div>
+            </CollapsibleSection>
+          </Show>
+
+          <Show when={activeTab() === 'proxmox'}>
+            <CollapsibleSection
+              id="guest-filtering"
+              title="Guest Filtering"
+              collapsed={isCollapsed('guest-filtering')}
+              onToggle={() => toggleSection('guest-filtering')}
+              icon={<Monitor class="w-5 h-5" />}
+              emptyMessage="Configure guest filtering rules."
+            >
+              <div class="grid grid-cols-1 gap-6 p-4 xl:grid-cols-3">
+                <Card padding="md" tone="glass">
+                  <div class="mb-2">
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Ignored Prefixes</h3>
+                    <p class="text-xs text-gray-600 dark:text-gray-400">Skip metrics for guests starting with:</p>
+                  </div>
+                  <textarea
+                    value={ignoredGuestInput()}
+                    onInput={(e) => handleIgnoredGuestChange(e.currentTarget.value)}
+                    rows={6}
+                    class="w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                    placeholder="dev-"
+                  />
+                </Card>
+                <Card padding="md" tone="glass">
+                  <div class="mb-2">
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Tag Whitelist</h3>
+                    <p class="text-xs text-gray-600 dark:text-gray-400">Only monitor guests with at least one of these tags (leave empty to disable whitelist):</p>
+                  </div>
+                  <textarea
+                    value={guestTagWhitelistInput()}
+                    onInput={(e) => handleGuestTagWhitelistChange(e.currentTarget.value)}
+                    rows={6}
+                    class="w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                    placeholder="production"
+                  />
+                </Card>
+                <Card padding="md" tone="glass">
+                  <div class="mb-2">
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Tag Blacklist</h3>
+                    <p class="text-xs text-gray-600 dark:text-gray-400">Ignore guests with any of these tags:</p>
+                  </div>
+                  <textarea
+                    value={guestTagBlacklistInput()}
+                    onInput={(e) => handleGuestTagBlacklistChange(e.currentTarget.value)}
+                    rows={6}
+                    class="w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                    placeholder="maintenance"
+                  />
+                </Card>
               </div>
             </CollapsibleSection>
           </Show>
