@@ -462,6 +462,7 @@ type ClusterEndpoint struct {
 type PBSInstance struct {
 	Name                         string
 	Host                         string
+	GuestURL                     string // Optional guest-accessible URL (for navigation)
 	User                         string
 	Password                     string
 	TokenName                    string
@@ -485,6 +486,7 @@ type PBSInstance struct {
 type PMGInstance struct {
 	Name        string
 	Host        string
+	GuestURL    string // Optional guest-accessible URL (for navigation)
 	User        string
 	Password    string
 	TokenName   string

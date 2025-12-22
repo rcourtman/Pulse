@@ -635,6 +635,7 @@ export interface PBSInstance {
   id: string;
   name: string;
   host: string;
+  guestURL?: string; // Optional guest-accessible URL (for navigation)
   status: string;
   version: string;
   cpu: number;
@@ -656,6 +657,7 @@ export interface PMGInstance {
   id: string;
   name: string;
   host: string;
+  guestURL?: string; // Optional guest-accessible URL (for navigation)
   status: string;
   version: string;
   nodes?: PMGNodeStatus[];

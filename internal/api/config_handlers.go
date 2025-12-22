@@ -847,6 +847,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 			Type:                         "pbs",
 			Name:                         pbs.Name,
 			Host:                         pbs.Host,
+			GuestURL:                     pbs.GuestURL,
 			User:                         pbs.User,
 			HasPassword:                  pbs.Password != "",
 			TokenName:                    pbs.TokenName,
@@ -878,6 +879,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 			Type:                         "pmg",
 			Name:                         pmgInst.Name,
 			Host:                         pmgInst.Host,
+			GuestURL:                     pmgInst.GuestURL,
 			User:                         pmgInst.User,
 			HasPassword:                  pmgInst.Password != "",
 			TokenName:                    pmgInst.TokenName,
@@ -1486,6 +1488,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		pbs := config.PBSInstance{
 			Name:                         req.Name,
 			Host:                         host,
+			GuestURL:                     req.GuestURL,
 			User:                         pbsUser,
 			Password:                     pbsPassword,
 			TokenName:                    pbsTokenName,
@@ -1556,6 +1559,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		pmgInstance := config.PMGInstance{
 			Name:                         req.Name,
 			Host:                         host,
+			GuestURL:                     req.GuestURL,
 			User:                         pmgUser,
 			Password:                     pmgPassword,
 			TokenName:                    pmgTokenName,
@@ -2030,6 +2034,9 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		}
 		pbs.Host = host
 
+		// Update GuestURL if provided
+		pbs.GuestURL = req.GuestURL
+
 		// Handle authentication updates - only switch auth method if explicitly provided
 		if req.TokenName != "" && req.TokenValue != "" {
 			// Switching to token authentication
@@ -2109,6 +2116,9 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 			}
 			pmgInst.Host = host
 		}
+
+		// Update GuestURL if provided
+		pmgInst.GuestURL = req.GuestURL
 
 		// Handle authentication updates - only switch auth method if explicitly provided
 		if req.TokenName != "" && req.TokenValue != "" {

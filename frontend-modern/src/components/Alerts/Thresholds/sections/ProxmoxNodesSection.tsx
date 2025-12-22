@@ -119,12 +119,23 @@ const nodeToResource = (
  * Build management URL for a node
  */
 const buildNodeUrl = (node: Node): string | undefined => {
+    // Prioritize guestURL if available
+    const guestUrlValue = node.guestURL?.trim();
+    if (guestUrlValue) {
+        return guestUrlValue.startsWith('http')
+            ? guestUrlValue
+            : `https://${guestUrlValue}`;
+    }
+
+    // Fallback to host
     const hostValue = node.host?.trim();
     if (hostValue) {
         return hostValue.startsWith('http')
             ? hostValue
             : `https://${hostValue.includes(':') ? hostValue : `${hostValue}:8006`}`;
     }
+
+    // Final fallback to node name
     if (node.name) {
         return `https://${node.name.includes(':') ? node.name : `${node.name}:8006`}`;
     }
