@@ -2188,7 +2188,7 @@ function OverviewTab(props: {
   // Map of all findings by ID (including resolved) for displaying patrol run details
   const [allFindingsMap, setAllFindingsMap] = createSignal<Map<string, Finding>>(new Map());
   const [lastKnownPatrolAt, setLastKnownPatrolAt] = createSignal<string | null>(null);
-  const [showRunHistory, setShowRunHistory] = createSignal(false);
+  const [showRunHistory, setShowRunHistory] = createSignal(true); // Expanded by default - users on AI Insights want to see this
   const [forcePatrolLoading, setForcePatrolLoading] = createSignal(false);
   const [expandedRunId, setExpandedRunId] = createSignal<string | null>(null);
   const [historyTimeFilter, setHistoryTimeFilter] = createSignal<'24h' | '7d' | 'all'>('all');
@@ -2432,11 +2432,7 @@ function OverviewTab(props: {
         }
       });
       setAllFindingsMap(findingsMap);
-
-      // Auto-expand history if most recent run found issues
-      if (runHistory && runHistory.length > 0 && runHistory[0].status !== 'healthy') {
-        setShowRunHistory(true);
-      }
+      // History is expanded by default now, no need for auto-expand logic
     } catch (_e) {
       // AI patrol may not be enabled - silently fail
     }
@@ -3513,72 +3509,142 @@ function OverviewTab(props: {
                                   {/* Expanded Details Row */}
                                   <Show when={expandedRunId() === run.id}>
                                     <tr class="bg-gray-50 dark:bg-gray-800/50">
-                                      <td colspan="5" class="p-3">
-                                        {/* Show findings from this run */}
+                                      <td colspan="5" class="p-4">
                                         {(() => {
                                           const findingsMap = allFindingsMap();
-                                          const activeFindings: Finding[] = [];
-                                          const resolvedFindings: Finding[] = [];
 
-                                          // Only include warning+ severity findings (info/watch are filtered out)
-                                          const isDisplayableSeverity = (severity: string) =>
-                                            severity === 'warning' || severity === 'critical';
+                                          // Categorize ALL findings from this run (not just warning+)
+                                          const criticalFindings: Finding[] = [];
+                                          const warningFindings: Finding[] = [];
+                                          const infoFindings: Finding[] = [];
+                                          const resolvedFindings: Finding[] = [];
 
                                           (run.finding_ids || []).forEach(id => {
                                             const finding = findingsMap.get(id);
-                                            if (finding && isDisplayableSeverity(finding.severity)) {
+                                            if (finding) {
                                               if (finding.resolved_at) {
                                                 resolvedFindings.push(finding);
                                               } else {
-                                                activeFindings.push(finding);
+                                                switch (finding.severity) {
+                                                  case 'critical':
+                                                    criticalFindings.push(finding);
+                                                    break;
+                                                  case 'warning':
+                                                    warningFindings.push(finding);
+                                                    break;
+                                                  default:
+                                                    infoFindings.push(finding);
+                                                }
                                               }
                                             }
                                           });
 
-                                          if (activeFindings.length === 0 && resolvedFindings.length === 0) return null;
+                                          const hasActionableFindings = criticalFindings.length > 0 || warningFindings.length > 0;
+                                          const hasAnyFindings = hasActionableFindings || infoFindings.length > 0 || resolvedFindings.length > 0;
 
                                           return (
-                                            <div>
-                                              {/* Active findings */}
-                                              <Show when={activeFindings.length > 0}>
-                                                <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                  Active findings:
-                                                </span>
-                                                <div class="flex flex-col gap-1 mt-1">
-                                                  <For each={activeFindings}>
-                                                    {(finding) => (
-                                                      <div class="flex items-center gap-2 text-xs">
-                                                        <span class={`px-1.5 py-0.5 rounded text-[10px] ${finding.severity === 'critical' ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' :
-                                                          finding.severity === 'warning' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
-                                                            'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                                                          }`}>
-                                                          {finding.severity}
-                                                        </span>
-                                                        <span class="font-medium text-gray-700 dark:text-gray-300">{finding.title}</span>
-                                                        <span class="text-gray-500 dark:text-gray-400">on {finding.resource_name}</span>
-                                                      </div>
-                                                    )}
-                                                  </For>
+                                            <div class="space-y-4">
+                                              {/* Resource Breakdown & Stats Row */}
+                                              <div class="flex flex-wrap gap-4 text-xs text-gray-600 dark:text-gray-400">
+                                                <div class="flex items-center gap-1.5">
+                                                  <svg class="w-3.5 h-3.5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                                                  </svg>
+                                                  <span class="font-medium">{run.nodes_checked || 0}</span> nodes
+                                                </div>
+                                                <Show when={run.guests_checked > 0}>
+                                                  <div class="flex items-center gap-1.5">
+                                                    <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                                                    </svg>
+                                                    <span class="font-medium">{run.guests_checked}</span> VMs/CTs
+                                                  </div>
+                                                </Show>
+                                                <Show when={run.docker_checked > 0}>
+                                                  <div class="flex items-center gap-1.5">
+                                                    <svg class="w-3.5 h-3.5 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                                    </svg>
+                                                    <span class="font-medium">{run.docker_checked}</span> Docker
+                                                  </div>
+                                                </Show>
+                                                <Show when={run.storage_checked > 0}>
+                                                  <div class="flex items-center gap-1.5">
+                                                    <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                                                    </svg>
+                                                    <span class="font-medium">{run.storage_checked}</span> storage
+                                                  </div>
+                                                </Show>
+                                                <Show when={run.hosts_checked > 0}>
+                                                  <div class="flex items-center gap-1.5">
+                                                    <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                    </svg>
+                                                    <span class="font-medium">{run.hosts_checked}</span> hosts
+                                                  </div>
+                                                </Show>
+                                                {/* Token usage for transparency */}
+                                                <Show when={run.output_tokens}>
+                                                  <div class="flex items-center gap-1.5 ml-auto text-gray-400 dark:text-gray-500">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                    </svg>
+                                                    <span>{((run.input_tokens || 0) / 1000).toFixed(0)}k in / {((run.output_tokens || 0) / 1000).toFixed(1)}k out tokens</span>
+                                                  </div>
+                                                </Show>
+                                              </div>
+
+                                              {/* Critical & Warning Findings - Always show prominently */}
+                                              <Show when={criticalFindings.length > 0 || warningFindings.length > 0}>
+                                                <div class="space-y-2">
+                                                  <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">
+                                                    Findings Requiring Attention
+                                                  </span>
+                                                  <div class="space-y-1.5">
+                                                    <For each={[...criticalFindings, ...warningFindings]}>
+                                                      {(finding) => (
+                                                        <div class="flex items-start gap-2 text-xs p-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                                                          <span class={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium ${finding.severity === 'critical'
+                                                            ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                                            : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                                                            }`}>
+                                                            {finding.severity}
+                                                          </span>
+                                                          <div class="flex-1 min-w-0">
+                                                            <div class="font-medium text-gray-800 dark:text-gray-200">{finding.title}</div>
+                                                            <div class="text-gray-500 dark:text-gray-400 mt-0.5">
+                                                              {finding.resource_name}
+                                                              <Show when={finding.description}>
+                                                                <span class="mx-1">·</span>
+                                                                <span class="text-gray-400 dark:text-gray-500">{finding.description.substring(0, 100)}{finding.description.length > 100 ? '...' : ''}</span>
+                                                              </Show>
+                                                            </div>
+                                                          </div>
+                                                        </div>
+                                                      )}
+                                                    </For>
+                                                  </div>
                                                 </div>
                                               </Show>
 
-                                              {/* Resolved findings - show value delivered */}
-                                              <Show when={resolvedFindings.length > 0}>
-                                                <div class={activeFindings.length > 0 ? "mt-3 pt-2 border-t border-gray-200 dark:border-gray-700" : ""}>
-                                                  <span class="text-[10px] text-green-600 dark:text-green-400 uppercase tracking-wider flex items-center gap-1">
+                                              {/* Info/Watch Findings - Show with lower emphasis */}
+                                              <Show when={infoFindings.length > 0}>
+                                                <div class="space-y-2">
+                                                  <span class="text-[10px] text-blue-600 dark:text-blue-400 uppercase tracking-wider font-medium flex items-center gap-1">
                                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                     </svg>
-                                                    Resolved ({resolvedFindings.length})
+                                                    Observations ({infoFindings.length})
                                                   </span>
-                                                  <div class="flex flex-col gap-1 mt-1">
-                                                    <For each={resolvedFindings}>
+                                                  <div class="space-y-1">
+                                                    <For each={infoFindings}>
                                                       {(finding) => (
-                                                        <div class="flex items-center gap-2 text-xs opacity-70">
-                                                          <span class="px-1.5 py-0.5 rounded text-[10px] bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
-                                                            ✓ resolved
+                                                        <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 py-1">
+                                                          <span class="px-1.5 py-0.5 rounded text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
+                                                            {finding.severity}
                                                           </span>
-                                                          <span class="text-gray-600 dark:text-gray-400">{finding.title}</span>
+                                                          <span>{finding.title}</span>
                                                           <span class="text-gray-400 dark:text-gray-500">on {finding.resource_name}</span>
                                                         </div>
                                                       )}
@@ -3586,10 +3652,87 @@ function OverviewTab(props: {
                                                   </div>
                                                 </div>
                                               </Show>
+
+                                              {/* Resolved findings */}
+                                              <Show when={resolvedFindings.length > 0}>
+                                                <div class="space-y-2">
+                                                  <span class="text-[10px] text-green-600 dark:text-green-400 uppercase tracking-wider font-medium flex items-center gap-1">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                    Resolved Since Last Patrol ({resolvedFindings.length})
+                                                  </span>
+                                                  <div class="space-y-1">
+                                                    <For each={resolvedFindings}>
+                                                      {(finding) => (
+                                                        <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500 py-1">
+                                                          <span class="px-1.5 py-0.5 rounded text-[10px] bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400">
+                                                            ✓ fixed
+                                                          </span>
+                                                          <span class="line-through opacity-70">{finding.title}</span>
+                                                          <span class="opacity-50">on {finding.resource_name}</span>
+                                                        </div>
+                                                      )}
+                                                    </For>
+                                                  </div>
+                                                </div>
+                                              </Show>
+
+                                              {/* No findings case - show AI summary */}
+                                              <Show when={!hasAnyFindings}>
+                                                <div class="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                                                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                  </svg>
+                                                  <span class="font-medium">All clear!</span>
+                                                  <span class="text-gray-500 dark:text-gray-400">No issues detected in this patrol run.</span>
+                                                </div>
+                                              </Show>
+
+                                              {/* AI Analysis Summary - Collapsible for long content */}
+                                              <Show when={run.ai_analysis}>
+                                                {(() => {
+                                                  const [showFullAnalysis, setShowFullAnalysis] = createSignal(false);
+                                                  const analysis = run.ai_analysis || '';
+                                                  // Extract summary (first paragraph or first 300 chars)
+                                                  const summaryMatch = analysis.match(/^([^]*?)(?:\n\n|\[FINDING\]|$)/);
+                                                  const summary = summaryMatch ? summaryMatch[1].trim() : analysis.substring(0, 300);
+                                                  const hasMore = analysis.length > summary.length + 50;
+
+                                                  return (
+                                                    <div class="border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
+                                                      <div class="flex items-center justify-between mb-2">
+                                                        <span class="text-[10px] text-purple-600 dark:text-purple-400 uppercase tracking-wider font-medium flex items-center gap-1">
+                                                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                                          </svg>
+                                                          AI Analysis
+                                                        </span>
+                                                        <Show when={hasMore}>
+                                                          <button
+                                                            class="text-[10px] text-purple-600 dark:text-purple-400 hover:underline"
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              setShowFullAnalysis(!showFullAnalysis());
+                                                            }}
+                                                          >
+                                                            {showFullAnalysis() ? 'Show less' : 'Show full analysis'}
+                                                          </button>
+                                                        </Show>
+                                                      </div>
+                                                      <div class={`text-xs text-gray-600 dark:text-gray-400 whitespace-pre-wrap ${showFullAnalysis() ? 'max-h-96 overflow-y-auto' : ''}`}>
+                                                        {showFullAnalysis() ? analysis.replace(/\[FINDING\][\s\S]*?\[\/FINDING\]/g, '').trim() : summary}
+                                                        <Show when={hasMore && !showFullAnalysis()}>
+                                                          <span class="text-gray-400">...</span>
+                                                        </Show>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })()}
+                                              </Show>
                                             </div>
                                           );
                                         })()}
-
                                       </td>
                                     </tr>
                                   </Show>
