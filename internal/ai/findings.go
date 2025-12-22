@@ -176,9 +176,13 @@ func (s *FindingsStore) scheduleSave() {
 	s.saveTimer = time.AfterFunc(s.saveDebounce, func() {
 		s.mu.Lock()
 		s.savePending = false
-		// Make a copy for saving
+		// Make a copy for saving, excluding demo findings
 		findingsCopy := make(map[string]*Finding, len(s.findings))
 		for id, f := range s.findings {
+			// Skip demo findings - they should never be persisted
+			if strings.HasPrefix(id, "demo-") {
+				continue
+			}
 			copy := *f
 			findingsCopy[id] = &copy
 		}
@@ -204,6 +208,10 @@ func (s *FindingsStore) ForceSave() error {
 
 	findingsCopy := make(map[string]*Finding, len(s.findings))
 	for id, f := range s.findings {
+		// Skip demo findings - they should never be persisted
+		if strings.HasPrefix(id, "demo-") {
+			continue
+		}
 		copy := *f
 		findingsCopy[id] = &copy
 	}
