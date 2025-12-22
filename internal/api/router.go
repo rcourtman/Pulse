@@ -1193,7 +1193,7 @@ func (r *Router) setupRoutes() {
 					"error":       "license_required",
 					"message":     err.Error(),
 					"feature":     license.FeatureAIPatrol,
-					"upgrade_url": "https://pulsemonitor.app/pro",
+					"upgrade_url": "https://pulserelay.pro",
 				})
 				return
 			}

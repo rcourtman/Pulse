@@ -2,7 +2,7 @@ import { Component, createEffect, createSignal, For, Show } from 'solid-js';
 import { AIAPI } from '@/api/ai';
 import type { InfrastructureChange } from '@/types/aiIntelligence';
 
-const DEFAULT_UPGRADE_URL = 'https://pulsemonitor.app/pro';
+const DEFAULT_UPGRADE_URL = 'https://pulserelay.pro';
 
 export const AIRecentChangesPanel: Component<{ hours?: number; showWhenEmpty?: boolean }> = (props) => {
     const [changes, setChanges] = createSignal<InfrastructureChange[]>([]);

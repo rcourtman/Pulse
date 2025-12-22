@@ -2094,13 +2094,13 @@ func (s *Service) getTools() []providers.Tool {
 		},
 		{
 			Name:        "resolve_finding",
-			Description: "Mark an AI patrol finding as resolved after you have successfully fixed the underlying issue. Only use this after confirming the fix worked (e.g., by running a verification command). The finding ID is provided in your context when helping with a patrol finding.",
+			Description: "Mark an AI patrol finding as resolved after successfully fixing the issue. Use the finding ID shown in your Patrol Finding Context section. Call this after verifying the fix worked - do NOT ask the user for the finding ID.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"finding_id": map[string]interface{}{
 						"type":        "string",
-						"description": "The ID of the finding to resolve. Use the finding_id from the request context.",
+						"description": "The finding ID from your context (shown in ## Patrol Finding Context section).",
 					},
 					"resolution_note": map[string]interface{}{
 						"type":        "string",
@@ -2108,6 +2108,29 @@ func (s *Service) getTools() []providers.Tool {
 					},
 				},
 				"required": []string{"finding_id", "resolution_note"},
+			},
+		},
+		{
+			Name:        "dismiss_finding",
+			Description: "Dismiss an AI patrol finding when it's not actually an issue or is expected behavior. Use this instead of resolve_finding when the finding is a false positive or the configuration is intentional. This creates a suppression rule to prevent similar findings from being raised again.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"finding_id": map[string]interface{}{
+						"type":        "string",
+						"description": "The finding ID from your context (shown in ## Patrol Finding Context section).",
+					},
+					"reason": map[string]interface{}{
+						"type":        "string",
+						"description": "Why the finding is being dismissed.",
+						"enum":        []string{"not_an_issue", "expected_behavior", "will_fix_later"},
+					},
+					"note": map[string]interface{}{
+						"type":        "string",
+						"description": "Explanation of why this is not an issue or is expected behavior (e.g., 'PBS storage restricted to specific nodes is intentional').",
+					},
+				},
+				"required": []string{"finding_id", "reason", "note"},
 			},
 		},
 	}
@@ -2333,6 +2356,62 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		}
 
 		execution.Output = fmt.Sprintf("Finding resolved! The AI Insight has been marked as fixed.\nID: %s\nResolution: %s", findingID, resolutionNote)
+		execution.Success = true
+		return execution.Output, execution
+
+	case "dismiss_finding":
+		findingID, _ := tc.Input["finding_id"].(string)
+		reason, _ := tc.Input["reason"].(string)
+		note, _ := tc.Input["note"].(string)
+		execution.Input = fmt.Sprintf("finding: %s, reason: %s, note: %s", findingID, reason, note)
+
+		// If no finding ID provided by AI, check the request context
+		if findingID == "" {
+			findingID = req.FindingID
+		}
+
+		if findingID == "" {
+			execution.Output = "Error: finding_id is required. The finding ID should be provided in the request context when helping fix a patrol finding."
+			return execution.Output, execution
+		}
+
+		// Validate reason
+		validReasons := map[string]bool{"not_an_issue": true, "expected_behavior": true, "will_fix_later": true}
+		if !validReasons[reason] {
+			execution.Output = "Error: reason must be one of: not_an_issue, expected_behavior, will_fix_later"
+			return execution.Output, execution
+		}
+
+		if note == "" {
+			execution.Output = "Error: note is required. Please explain why this finding is being dismissed."
+			return execution.Output, execution
+		}
+
+		// Get the patrol service to dismiss the finding
+		s.mu.RLock()
+		patrolService := s.patrolService
+		s.mu.RUnlock()
+
+		if patrolService == nil {
+			execution.Output = "Error: Patrol service not available"
+			return execution.Output, execution
+		}
+
+		// Dismiss the finding (this will also create a suppression rule for expected_behavior/not_an_issue)
+		err := patrolService.DismissFinding(findingID, reason, note)
+		if err != nil {
+			execution.Output = fmt.Sprintf("Error dismissing finding: %s", err)
+			return execution.Output, execution
+		}
+
+		// Format a helpful response based on reason
+		var resultMsg string
+		if reason == "will_fix_later" {
+			resultMsg = fmt.Sprintf("Finding dismissed as '%s'. The AI will continue to monitor this issue.\nID: %s\nNote: %s", reason, findingID, note)
+		} else {
+			resultMsg = fmt.Sprintf("Finding dismissed as '%s' and suppression rule created. Similar findings for this resource will not be raised again.\nID: %s\nNote: %s", reason, findingID, note)
+		}
+		execution.Output = resultMsg
 		execution.Success = true
 		return execution.Output, execution
 
@@ -2950,6 +3029,19 @@ This is a 3-command job. Don't over-investigate.`
 		// Add past remediation history for this resource
 		prompt += s.buildRemediationContext(req.TargetID, req.Prompt)
 
+	}
+
+	// If we're helping fix a patrol finding, tell the AI the finding ID so it can resolve or dismiss it
+	if req.FindingID != "" {
+		prompt += fmt.Sprintf("\n\n## Patrol Finding Context\n"+
+			"You are helping with patrol finding **%s**.\n\n"+
+			"**After investigating, use ONE of these tools:**\n"+
+			"- `resolve_finding` - Use when you've actually FIXED the underlying issue\n"+
+			"- `dismiss_finding` - Use when the finding is a FALSE POSITIVE or EXPECTED BEHAVIOR\n\n"+
+			"**Examples:**\n"+
+			"- Issue fixed: `resolve_finding(finding_id=\"%s\", resolution_note=\"Restarted service\")`\n"+
+			"- False positive: `dismiss_finding(finding_id=\"%s\", reason=\"expected_behavior\", note=\"Storage restricted to specific node is intentional\")`\n",
+			req.FindingID, req.FindingID, req.FindingID)
 	}
 
 	// Add any provided context in a structured way

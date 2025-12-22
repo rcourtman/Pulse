@@ -752,11 +752,15 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 	state := p.stateProvider.GetState()
 
 	// Helper to track findings
+	// Note: Only warning+ severity findings count toward newFindings since watch/info are filtered from UI
 	trackFinding := func(f *Finding) bool {
 		isNew := p.findings.Add(f)
 		if isNew {
-			runStats.newFindings++
-			newFindings = append(newFindings, f)
+			// Only count warning+ findings as "new" for user-facing stats
+			if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
+				runStats.newFindings++
+				newFindings = append(newFindings, f)
+			}
 			log.Info().
 				Str("finding_id", f.ID).
 				Str("severity", string(f.Severity)).
@@ -1402,6 +1406,41 @@ func (p *PatrolService) ResolveFinding(findingID string, resolutionNote string) 
 		Str("finding_id", findingID).
 		Str("resolution_note", resolutionNote).
 		Msg("AI resolved finding")
+
+	return nil
+}
+
+// DismissFinding dismisses a finding with a reason and note
+// This is called when the AI determines the finding is not actually an issue
+// For reasons "expected_behavior" or "not_an_issue", a suppression rule is automatically created
+func (p *PatrolService) DismissFinding(findingID string, reason string, note string) error {
+	if findingID == "" {
+		return fmt.Errorf("finding ID is required")
+	}
+
+	// Validate reason
+	validReasons := map[string]bool{"not_an_issue": true, "expected_behavior": true, "will_fix_later": true}
+	if !validReasons[reason] {
+		return fmt.Errorf("invalid reason: %s", reason)
+	}
+
+	// Check that the finding exists
+	finding := p.findings.Get(findingID)
+	if finding == nil {
+		return fmt.Errorf("finding not found: %s", findingID)
+	}
+
+	// Dismiss the finding (this automatically creates a suppression rule for expected_behavior/not_an_issue)
+	if !p.findings.Dismiss(findingID, reason, note) {
+		return fmt.Errorf("failed to dismiss finding: %s", findingID)
+	}
+
+	log.Info().
+		Str("finding_id", findingID).
+		Str("reason", reason).
+		Str("note", note).
+		Bool("suppressed", reason == "expected_behavior" || reason == "not_an_issue").
+		Msg("AI dismissed finding")
 
 	return nil
 }
