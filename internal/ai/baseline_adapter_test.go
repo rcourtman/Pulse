@@ -33,11 +33,13 @@ func TestBaselineStoreAdapter(t *testing.T) {
 		t.Fatalf("unexpected baseline: mean=%v stddev=%v samples=%d", mean, stddev, samples)
 	}
 
-	severity, z, gotMean, gotStd, ok := adapter.CheckAnomaly("node:pve1", "cpu", 11)
+	severity, z, gotMean, gotStd, ok := adapter.CheckAnomaly("node:pve1", "cpu", 16)
 	if !ok {
 		t.Fatalf("expected anomaly check ok")
 	}
-	if severity != "critical" || z <= 0 || gotMean != 10 || gotStd != 0 {
+	// With new practical thresholds: 6 point difference from stable baseline (stddev=0)
+	// should be flagged as medium severity (not critical, since we don't have variance data)
+	if severity != "medium" || gotMean != 10 || gotStd != 0 {
 		t.Fatalf("unexpected anomaly: severity=%q z=%v mean=%v stddev=%v", severity, z, gotMean, gotStd)
 	}
 }

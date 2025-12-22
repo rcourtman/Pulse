@@ -210,15 +210,29 @@ func (s *Store) IsAnomaly(resourceID, metric string, value float64) (bool, float
 		return false, 0 // Not enough data to determine
 	}
 	
+	// Calculate absolute difference
+	absDiff := math.Abs(value - baseline.Mean)
+	
+	// Don't flag small absolute changes as anomalies
+	if absDiff < 3.0 {
+		return false, 0
+	}
+	
 	if baseline.StdDev == 0 {
-		// No variance - any different value is anomalous
-		if value != baseline.Mean {
-			return true, math.Inf(1)
+		// No variance - only flag if change is significant (> 5 percentage points)
+		if absDiff > 5.0 {
+			return true, 0 // No valid z-score when stddev is 0
 		}
 		return false, 0
 	}
 	
-	zScore := (value - baseline.Mean) / baseline.StdDev
+	// Apply minimum stddev floor
+	effectiveStdDev := baseline.StdDev
+	if effectiveStdDev < 1.0 {
+		effectiveStdDev = 1.0
+	}
+	
+	zScore := (value - baseline.Mean) / effectiveStdDev
 	
 	// Consider anything > 2 standard deviations as anomalous
 	// (covers ~95% of normal distribution)
@@ -245,15 +259,38 @@ func (s *Store) CheckAnomaly(resourceID, metric string, value float64) (AnomalyS
 		return AnomalyNone, 0, nil
 	}
 	
+	// Calculate absolute difference for threshold checks
+	absDiff := math.Abs(value - baseline.Mean)
+	
+	// Handle zero stddev case more intelligently
+	// When values have been completely stable, small variations aren't anomalies
 	if baseline.StdDev == 0 {
-		if value != baseline.Mean {
-			return AnomalyCritical, math.Inf(1), baseline
+		// Only flag as anomaly if the absolute difference is significant
+		// For percentage metrics (cpu, memory, disk), require > 5 percentage point change
+		// This prevents false positives from small floating point variations
+		if absDiff < 5.0 {
+			return AnomalyNone, 0, baseline
 		}
-		return AnomalyNone, 0, baseline
+		// Even with large difference, just flag as warning, not critical
+		// since we don't have historical variance data to judge severity
+		return AnomalyMedium, 0, baseline
 	}
 	
-	zScore := (value - baseline.Mean) / baseline.StdDev
+	// Apply minimum stddev floor to prevent tiny variations from appearing extreme
+	// If historical stddev is < 1%, use 1% as the floor for z-score calculation
+	effectiveStdDev := baseline.StdDev
+	if effectiveStdDev < 1.0 {
+		effectiveStdDev = 1.0
+	}
+	
+	zScore := (value - baseline.Mean) / effectiveStdDev
 	absZ := math.Abs(zScore)
+	
+	// Also require a minimum absolute difference for practical significance
+	// Don't flag anomalies for changes < 3 percentage points regardless of z-score
+	if absDiff < 3.0 {
+		return AnomalyNone, zScore, baseline
+	}
 	
 	var severity AnomalySeverity
 	switch {

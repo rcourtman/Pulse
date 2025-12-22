@@ -105,34 +105,75 @@ func TestIsAnomaly(t *testing.T) {
 func TestCheckAnomaly_Severity(t *testing.T) {
 	store := NewStore(StoreConfig{MinSamples: 10})
 	
-	// Create very stable data with known statistics
-	// Mean = 50, StdDev = 1
+	// Create data with larger stddev to allow meaningful tests
+	// Mean = 50, and we'll create values with wider variance
 	points := make([]MetricPoint, 100)
 	for i := 0; i < 100; i++ {
-		// Alternate between 49, 50, 51 for stddev ~1
-		points[i] = MetricPoint{Value: 50 + float64(i%3) - 1}
+		// Values from 45 to 55 to give stddev ~3
+		points[i] = MetricPoint{Value: 50 + float64(i%11) - 5}
 	}
 	
 	store.Learn("test-vm", "vm", "cpu", points)
 	baseline, _ := store.GetBaseline("test-vm", "cpu")
 	
+	// The stddev should be around 3.0
+	if baseline.StdDev < 2 || baseline.StdDev > 4 {
+		t.Logf("Stddev is %f (expected ~3)", baseline.StdDev)
+	}
+	
 	testCases := []struct {
 		value            float64
 		expectedSeverity AnomalySeverity
+		description      string
 	}{
-		{50, AnomalyNone},                     // Mean
-		{50 + baseline.StdDev*1.5, AnomalyNone}, // 1.5 std devs - normal
-		{50 + baseline.StdDev*2.2, AnomalyLow},  // 2.2 std devs
-		{50 + baseline.StdDev*2.7, AnomalyMedium}, // 2.7 std devs
-		{50 + baseline.StdDev*3.5, AnomalyHigh},   // 3.5 std devs
-		{50 + baseline.StdDev*4.5, AnomalyCritical}, // 4.5 std devs
+		// Values at or near mean - no anomaly
+		{50, AnomalyNone, "Mean value"},
+		{52, AnomalyNone, "Within 1 std dev and <3 point diff"},
+		
+		// Small statistical deviations but below minimum absolute threshold (3 points)
+		// should be filtered out
+		{52.5, AnomalyNone, "Small absolute difference"},
+		
+		// Larger deviations that meet both thresholds
+		// With stddev ~3.2: z-score = diff/stddev
+		// 44: 6pts/3.2 = 1.87z - below 2.0 threshold = None
+		{44, AnomalyNone, "~2 std devs - below anomaly threshold"},
+		// 42: 8pts/3.2 = 2.5z - low/medium range
+		{42, AnomalyLow, "2.5 std devs with 8 point diff"},
+		// 40: 10pts/3.2 = 3.1z - high range (3.0-4.0)
+		{40, AnomalyHigh, "3.1 std devs with 10 point diff"},
+		// 38: 12pts/3.2 = 3.75z - high range
+		{38, AnomalyHigh, "3.75 std devs with 12 point diff"},
+		// 35: 15pts/3.2 = 4.7z - critical range (>4.0)
+		{35, AnomalyCritical, ">4 std devs with 15 point diff"},
 	}
 	
 	for _, tc := range testCases {
-		severity, _, _ := store.CheckAnomaly("test-vm", "cpu", tc.value)
+		severity, zScore, _ := store.CheckAnomaly("test-vm", "cpu", tc.value)
 		if severity != tc.expectedSeverity {
-			t.Errorf("Value %f: expected severity %s, got %s", tc.value, tc.expectedSeverity, severity)
+			t.Errorf("%s: Value %f (z=%.2f): expected severity %s, got %s", 
+				tc.description, tc.value, zScore, tc.expectedSeverity, severity)
 		}
+	}
+	
+	// Test that small differences are filtered even with high z-scores
+	// Create very stable data (stddev near 0)
+	stablePoints := make([]MetricPoint, 100)
+	for i := 0; i < 100; i++ {
+		stablePoints[i] = MetricPoint{Value: 50}
+	}
+	store.Learn("stable-vm", "vm", "disk", stablePoints)
+	
+	// Small change from perfectly stable baseline should NOT be anomaly
+	severity, _, _ := store.CheckAnomaly("stable-vm", "disk", 51)
+	if severity != AnomalyNone {
+		t.Error("1% change from stable baseline should not be anomaly")
+	}
+	
+	// Larger change from stable baseline SHOULD be anomaly (medium severity)
+	severity, _, _ = store.CheckAnomaly("stable-vm", "disk", 56)
+	if severity == AnomalyNone {
+		t.Error("6% change from stable baseline should be anomaly")
 	}
 }
 

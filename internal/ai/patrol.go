@@ -2110,6 +2110,98 @@ type AIAnalysisResult struct {
 	OutputTokens int
 }
 
+// cleanThinkingTokens removes model-specific thinking markers from AI responses.
+// Different AI models use different markers for their internal reasoning:
+// - DeepSeek: <｜end▁of▁thinking｜> or similar unicode variants
+// - Other models may use <think></think> or similar markers
+func cleanThinkingTokens(content string) string {
+	if content == "" {
+		return content
+	}
+	
+	// Remove DeepSeek thinking markers and everything before them on the same line
+	// These appear as: <｜end▁of▁thinking｜> or <|end_of_thinking|>
+	thinkingMarkers := []string{
+		"<｜end▁of▁thinking｜>",  // DeepSeek Unicode variant
+		"<|end_of_thinking|>",    // ASCII variant
+		"<|end▁of▁thinking|>",   // Mixed variant
+		"</think>",               // Generic thinking block end
+	}
+	
+	for _, marker := range thinkingMarkers {
+		for strings.Contains(content, marker) {
+			idx := strings.Index(content, marker)
+			if idx >= 0 {
+				// Find start of the line containing the marker
+				lineStart := strings.LastIndex(content[:idx], "\n")
+				if lineStart == -1 {
+					lineStart = 0
+				}
+				// Find end of the line containing the marker
+				markerEnd := idx + len(marker)
+				lineEnd := strings.Index(content[markerEnd:], "\n")
+				if lineEnd == -1 {
+					lineEnd = len(content)
+				} else {
+					lineEnd = markerEnd + lineEnd
+				}
+				// Remove the entire line containing the marker
+				content = content[:lineStart] + content[lineEnd:]
+			}
+		}
+	}
+	
+	// Also remove any lines that look like internal reasoning
+	// These typically start with patterns like "Now, " or "Let's " after a blank line
+	lines := strings.Split(content, "\n")
+	var cleanedLines []string
+	skipUntilContent := false
+	
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		
+		// Skip lines that look like internal reasoning
+		if skipUntilContent {
+			// Resume when we hit actual content (markdown headers, findings, etc.)
+			if strings.HasPrefix(trimmed, "#") || 
+			   strings.HasPrefix(trimmed, "[FINDING]") ||
+			   strings.HasPrefix(trimmed, "**") ||
+			   strings.HasPrefix(trimmed, "-") ||
+			   strings.HasPrefix(trimmed, "1.") {
+				skipUntilContent = false
+			} else {
+				continue
+			}
+		}
+		
+		// Detect reasoning patterns (typically after empty lines)
+		if trimmed == "" && i+1 < len(lines) {
+			nextTrimmed := strings.TrimSpace(lines[i+1])
+			if strings.HasPrefix(nextTrimmed, "Now, ") ||
+			   strings.HasPrefix(nextTrimmed, "Let's ") ||
+			   strings.HasPrefix(nextTrimmed, "Let me ") ||
+			   strings.HasPrefix(nextTrimmed, "I should ") ||
+			   strings.HasPrefix(nextTrimmed, "I'll ") ||
+			   strings.HasPrefix(nextTrimmed, "I need to ") ||
+			   strings.HasPrefix(nextTrimmed, "Checking ") ||
+			   strings.HasPrefix(nextTrimmed, "Looking at ") {
+				skipUntilContent = true
+				continue
+			}
+		}
+		
+		cleanedLines = append(cleanedLines, line)
+	}
+	
+	// Clean up excessive blank lines
+	content = strings.Join(cleanedLines, "\n")
+	for strings.Contains(content, "\n\n\n") {
+		content = strings.ReplaceAll(content, "\n\n\n", "\n\n")
+	}
+	
+	return strings.TrimSpace(content)
+}
+
 
 // runAIAnalysis uses the LLM to analyze infrastructure and identify issues
 func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSnapshot) (*AIAnalysisResult, error) {
@@ -2148,10 +2240,11 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 				p.appendStreamContent(content)
 			}
 		case "thinking":
-			// Thinking chunks become separate blocks (like AI chat)
+			// Thinking chunks are for live streaming only - don't persist them
+			// They allow users to see the AI's reasoning in real-time, but the
+			// final stored analysis should only contain the actual findings
 			if thinking, ok := event.Data.(string); ok && thinking != "" {
-				contentBuffer.WriteString(thinking)
-				// Send as a "thinking" event type so frontend can style it differently
+				// Broadcast for live viewing ONLY - don't add to contentBuffer
 				p.broadcast(PatrolStreamEvent{
 					Type:    "thinking",
 					Content: thinking,
@@ -2171,6 +2264,10 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	if finalContent == "" {
 		finalContent = contentBuffer.String()
 	}
+	
+	// Clean any thinking tokens that might have leaked through from the provider
+	finalContent = cleanThinkingTokens(finalContent)
+	
 	inputTokens = resp.InputTokens
 	outputTokens = resp.OutputTokens
 
