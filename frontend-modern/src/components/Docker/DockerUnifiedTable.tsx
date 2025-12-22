@@ -6,6 +6,7 @@ import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { formatBytes, formatPercent, formatUptime, formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import type { DockerMetadata } from '@/api/dockerMetadata';
 import { DockerMetadataAPI } from '@/api/dockerMetadata';
+import type { DockerHostMetadata } from '@/api/dockerHostMetadata';
 import { resolveHostRuntime } from './runtimeDisplay';
 import { showSuccess, showError } from '@/utils/toast';
 import { logger } from '@/utils/logger';
@@ -71,6 +72,7 @@ interface DockerUnifiedTableProps {
   statsFilter?: StatsFilter;
   selectedHostId?: () => string | null;
   dockerMetadata?: Record<string, DockerMetadata>;
+  dockerHostMetadata?: Record<string, DockerHostMetadata>;
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
 }
 
@@ -738,6 +740,7 @@ const UNGROUPED_RESOURCE_INDENT = 'pl-4 sm:pl-5 lg:pl-6';
 const DockerHostGroupHeader: Component<{
   host: DockerHost;
   columnCount: number;
+  customUrl?: string;
 }> = (props) => {
   const displayName = getHostDisplayName(props.host);
   const hostStatus = () => getDockerHostStatusIndicator(props.host);
@@ -755,7 +758,24 @@ const DockerHostGroupHeader: Component<{
             ariaLabel={hostStatus().label}
             size="xs"
           />
-          <span>{displayName}</span>
+          <Show
+            when={props.customUrl}
+            fallback={<span>{displayName}</span>}
+          >
+            <a
+              href={props.customUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+              title={`Open ${props.customUrl}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span>{displayName}</span>
+              <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+            </a>
+          </Show>
           <Show when={props.host.displayName && props.host.displayName !== props.host.hostname}>
             <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">
               ({props.host.hostname})
@@ -2834,7 +2854,11 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                   <For each={orderedGroups()}>
                     {(group) => (
                       <>
-                        <DockerHostGroupHeader host={group.host} columnCount={DOCKER_COLUMNS.length} />
+                        <DockerHostGroupHeader
+                          host={group.host}
+                          columnCount={DOCKER_COLUMNS.length}
+                          customUrl={props.dockerHostMetadata?.[group.host.id]?.customUrl}
+                        />
                         <For each={group.rows}>{(row) => renderRow(row, true)}</For>
                       </>
                     )}
