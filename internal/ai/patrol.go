@@ -1072,6 +1072,18 @@ func (p *PatrolService) runHeuristicAnalysis(state models.StateSnapshot) []*Find
 		}
 	}
 
+	// Filter out findings from mock resources when not in demo mode
+	// This ensures clean separation between mock and real data
+	if !IsDemoMode() {
+		filtered := make([]*Finding, 0, len(findings))
+		for _, f := range findings {
+			if f != nil && !IsMockResource(f.ResourceID, f.ResourceName, f.Node) {
+				filtered = append(filtered, f)
+			}
+		}
+		findings = filtered
+	}
+
 	return findings
 }
 
