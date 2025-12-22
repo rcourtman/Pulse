@@ -282,6 +282,10 @@ func (a *Agent) process(ctx context.Context) error {
 		return fmt.Errorf("build report: %w", err)
 	}
 	if err := a.sendReport(ctx, report); err != nil {
+		if strings.Contains(err.Error(), "403 Forbidden") {
+			a.logger.Error().Msg("Failed to send host report (403 Forbidden). API token may lack 'Host agent reporting' scope. Set PULSE_ENABLE_HOST=false if host monitoring is not needed.")
+			return nil
+		}
 		a.logger.Warn().Err(err).Msg("Failed to send report, buffering")
 		a.reportBuffer.Push(report)
 		return nil
