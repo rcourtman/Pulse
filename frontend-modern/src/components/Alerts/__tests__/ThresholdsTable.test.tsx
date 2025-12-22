@@ -185,8 +185,8 @@ const renderThresholdsTable = (options?: {
       options?.includeReset === false
         ? undefined
         : vi.fn(() => {
-            setPrefixes([]);
-          });
+          setPrefixes([]);
+        });
 
     const base = baseProps();
 
@@ -206,8 +206,8 @@ const renderThresholdsTable = (options?: {
         value:
           | typeof DEFAULT_DOCKER_DEFAULTS
           | ((
-              prev: typeof DEFAULT_DOCKER_DEFAULTS,
-            ) => typeof DEFAULT_DOCKER_DEFAULTS),
+            prev: typeof DEFAULT_DOCKER_DEFAULTS,
+          ) => typeof DEFAULT_DOCKER_DEFAULTS),
       ) => {
         const next =
           typeof value === 'function'
@@ -303,6 +303,28 @@ describe('ThresholdsTable docker ignored prefixes', () => {
     expect(getPrefixes()).toEqual([]);
     expect(textarea).toHaveValue('');
     expect(setHasUnsavedChangesMock).toHaveBeenCalledWith(true);
+  });
+
+  it('preserves trailing newlines when typing', () => {
+    const { getPrefixes } = renderThresholdsTable({ includeReset: false });
+    const textarea = screen.getByPlaceholderText('runner-') as HTMLTextAreaElement;
+
+    // Simulate typing "abc"
+    fireEvent.input(textarea, { target: { value: 'abc' } });
+    expect(getPrefixes()).toEqual(['abc']);
+    expect(textarea).toHaveValue('abc');
+
+    // Simulate hitting Enter ("abc\n")
+    fireEvent.input(textarea, { target: { value: 'abc\n' } });
+    // Prop should still be ['abc'] as "abc" trimmed is "abc", "\n" trimmed is empty
+    expect(getPrefixes()).toEqual(['abc']);
+    // Value should NOT be reset to "abc" by the effect, it should remain "abc\n"
+    expect(textarea).toHaveValue('abc\n');
+
+    // Simulate typing "d" ("abc\nd")
+    fireEvent.input(textarea, { target: { value: 'abc\nd' } });
+    expect(getPrefixes()).toEqual(['abc', 'd']);
+    expect(textarea).toHaveValue('abc\nd');
   });
 });
 

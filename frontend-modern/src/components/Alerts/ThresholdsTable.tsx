@@ -349,7 +349,17 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const serviceCriticalInputId = 'docker-service-critical-gap';
 
   createEffect(() => {
-    setDockerIgnoredInput(props.dockerIgnoredPrefixes().join('\n'));
+    const remote = props.dockerIgnoredPrefixes();
+    const local = dockerIgnoredInput();
+    const normalizedLocal = normalizeDockerIgnoredInput(local);
+
+    const isSynced =
+      remote.length === normalizedLocal.length &&
+      remote.every((val, i) => val === normalizedLocal[i]);
+
+    if (!isSynced) {
+      setDockerIgnoredInput(remote.join('\n'));
+    }
   });
 
   const serviceGapValidationMessage = createMemo(() => {
