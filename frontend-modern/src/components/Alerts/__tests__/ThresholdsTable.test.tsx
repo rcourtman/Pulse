@@ -158,6 +158,12 @@ const baseProps = () => ({
   setDisableAllPMGOffline: vi.fn(),
   disableAllDockerHostsOffline: () => false,
   setDisableAllDockerHostsOffline: vi.fn(),
+  ignoredGuestPrefixes: () => [] as string[],
+  setIgnoredGuestPrefixes: vi.fn(),
+  guestTagWhitelist: () => [] as string[],
+  setGuestTagWhitelist: vi.fn(),
+  guestTagBlacklist: () => [] as string[],
+  setGuestTagBlacklist: vi.fn(),
 });
 
 const renderThresholdsTable = (options?: {
