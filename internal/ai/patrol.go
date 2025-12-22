@@ -770,7 +770,10 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		} else {
 			runStats.existingFindings++
 		}
-		runStats.findingIDs = append(runStats.findingIDs, f.ID)
+		// Only track warning+ severity finding IDs in the run record
+		if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
+			runStats.findingIDs = append(runStats.findingIDs, f.ID)
+		}
 		return isNew
 	}
 

@@ -35,7 +35,6 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
 
         const checkForAgents = async () => {
             try {
-                console.log('[CompleteStep] Checking for agents with token:', props.state.apiToken?.slice(0, 8) + '...');
 
                 const response = await fetch('/api/state', {
                     headers: {
@@ -43,18 +42,13 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
                     },
                 });
 
-                console.log('[CompleteStep] API response status:', response.status);
-
                 if (!response.ok) {
-                    console.log('[CompleteStep] API returned non-OK status, skipping');
                     return;
                 }
 
                 const state = await response.json();
                 const nodes = state.nodes || [];
                 const hosts = state.hosts || [];
-
-                console.log('[CompleteStep] Received:', { nodes: nodes.length, hosts: hosts.length, hostNames: hosts.map((h: any) => h.hostname || h.displayName) });
 
                 // Check if we have new connections
                 const totalAgents = nodes.length + hosts.length;

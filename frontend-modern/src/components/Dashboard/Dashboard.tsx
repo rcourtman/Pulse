@@ -308,7 +308,7 @@ export function Dashboard(props: DashboardProps) {
     // Listen for metadata changes from AI or other sources
     const handleMetadataChanged = (event: Event) => {
       const customEvent = event as CustomEvent;
-      console.log('[Dashboard] Metadata changed event received:', customEvent.detail);
+      logger.debug('[Dashboard] Metadata changed event received', customEvent.detail);
 
       // Handle optimistic update if payload is present - this fixes the "guest url not appearing straight away" issue
       if (customEvent.detail?.payload) {
@@ -339,7 +339,7 @@ export function Dashboard(props: DashboardProps) {
       refreshGuestMetadata();
     };
 
-    console.log('[Dashboard] Adding pulse:metadata-changed listener');
+    logger.debug('[Dashboard] Adding pulse:metadata-changed listener');
     window.addEventListener('pulse:metadata-changed', handleMetadataChanged);
 
     // Note: SolidJS onMount doesn't support cleanup return, so we rely on component unmount

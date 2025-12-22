@@ -3520,9 +3520,13 @@ function OverviewTab(props: {
                                           const activeFindings: Finding[] = [];
                                           const resolvedFindings: Finding[] = [];
 
+                                          // Only include warning+ severity findings (info/watch are filtered out)
+                                          const isDisplayableSeverity = (severity: string) =>
+                                            severity === 'warning' || severity === 'critical';
+
                                           (run.finding_ids || []).forEach(id => {
                                             const finding = findingsMap.get(id);
-                                            if (finding) {
+                                            if (finding && isDisplayableSeverity(finding.severity)) {
                                               if (finding.resolved_at) {
                                                 resolvedFindings.push(finding);
                                               } else {
