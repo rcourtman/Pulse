@@ -1258,7 +1258,7 @@ export const AISettings: Component = () => {
                         Pulse Pro required for alert-triggered analysis.{' '}
                         <a
                           class="underline decoration-dotted"
-                          href="https://pulsemonitor.app/pro"
+                          href="https://pulserelay.pro"
                           target="_blank"
                           rel="noreferrer"
                         >
@@ -1303,7 +1303,7 @@ export const AISettings: Component = () => {
                           Pulse Pro required for auto-fix.{' '}
                           <a
                             class="underline decoration-dotted"
-                            href="https://pulsemonitor.app/pro"
+                            href="https://pulserelay.pro"
                             target="_blank"
                             rel="noreferrer"
                           >

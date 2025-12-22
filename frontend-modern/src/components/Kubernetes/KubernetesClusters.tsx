@@ -213,7 +213,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
 
   const kubernetesAiEnabled = createMemo(() => licenseFeatures()?.features?.kubernetes_ai === true);
   const aiConfigured = createMemo(() => aiSettings()?.configured === true);
-  const upgradeUrl = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulsemonitor.app/pro');
+  const upgradeUrl = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulserelay.pro');
 
   const clustersForAnalysis = createMemo(() => props.clusters ?? []);
 
@@ -607,8 +607,8 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                     onClick={handleAnalyzeCluster}
                     disabled={analysisLoading() || !analysisClusterId() || !aiConfigured()}
                     class={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${analysisLoading() || !analysisClusterId() || !aiConfigured()
-                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
                       }`}
                   >
                     {analysisLoading() ? 'Analyzing...' : 'Analyze'}

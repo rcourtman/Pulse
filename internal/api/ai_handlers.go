@@ -2112,7 +2112,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		LicenseStatus:    licenseStatus,
 	}
 	if !hasPatrolFeature {
-		response.UpgradeURL = "https://pulsemonitor.app/pro"
+		response.UpgradeURL = "https://pulserelay.pro"
 	}
 	response.Summary.Critical = summary.Critical
 	response.Summary.Warning = summary.Warning

@@ -104,6 +104,7 @@ type commandResultPayload struct {
 
 // Run starts the command client and maintains the WebSocket connection
 func (c *CommandClient) Run(ctx context.Context) error {
+	consecutiveFailures := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -111,16 +112,38 @@ func (c *CommandClient) Run(ctx context.Context) error {
 		default:
 		}
 
-		if err := c.connectAndHandle(ctx); err != nil {
+		err := c.connectAndHandle(ctx)
+		if err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			c.logger.Warn().Err(err).Msg("WebSocket connection failed, reconnecting in 10s")
+
+			consecutiveFailures++
+
+			// Distinguish between transient issues and persistent failures
+			// Normal close errors (server restart, reconnection) are expected and logged at debug
+			errStr := err.Error()
+			isNormalClose := strings.Contains(errStr, "close 1000") ||
+				strings.Contains(errStr, "close 1001") ||
+				strings.Contains(errStr, "use of closed network connection") ||
+				strings.Contains(errStr, "connection reset by peer")
+
+			if isNormalClose {
+				c.logger.Debug().Err(err).Msg("WebSocket closed, reconnecting in 10s")
+			} else if consecutiveFailures >= 3 {
+				c.logger.Warn().Err(err).Int("failures", consecutiveFailures).Msg("WebSocket connection failed repeatedly, reconnecting in 10s")
+			} else {
+				c.logger.Debug().Err(err).Msg("WebSocket connection interrupted, reconnecting in 10s")
+			}
+
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-time.After(10 * time.Second):
 			}
+		} else {
+			// Connection closed cleanly (shouldn't happen in normal operation)
+			consecutiveFailures = 0
 		}
 	}
 }
@@ -132,7 +155,7 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 		return fmt.Errorf("build websocket url: %w", err)
 	}
 
-	c.logger.Info().Str("url", wsURL).Msg("Connecting to Pulse command server")
+	c.logger.Debug().Str("url", wsURL).Msg("Connecting to Pulse command server")
 
 	// Create dialer with TLS config
 	dialer := websocket.Dialer{

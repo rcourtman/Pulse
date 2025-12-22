@@ -91,7 +91,7 @@ func (h *LicenseHandlers) HandleLicenseFeatures(w http.ResponseWriter, r *http.R
 			license.FeatureAIAutoFix:    h.service.HasFeature(license.FeatureAIAutoFix),
 			license.FeatureKubernetesAI: h.service.HasFeature(license.FeatureKubernetesAI),
 		},
-		UpgradeURL: "https://pulsemonitor.app/pro",
+		UpgradeURL: "https://pulserelay.pro",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -217,7 +217,7 @@ func RequireLicenseFeature(service *license.Service, feature string, next http.H
 				"error":       "license_required",
 				"message":     err.Error(),
 				"feature":     feature,
-				"upgrade_url": "https://pulsemonitor.app/pro",
+				"upgrade_url": "https://pulserelay.pro",
 			})
 			return
 		}

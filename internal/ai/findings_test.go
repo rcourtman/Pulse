@@ -529,26 +529,34 @@ func TestFindingsStore_Add_SuppressedExisting(t *testing.T) {
 		t.Fatal("Finding should be suppressed")
 	}
 
-	// Try to add the same finding again
+	// Try to add the same finding again with SAME severity (should stay suppressed)
 	f1Updated := &Finding{
 		ID:         "f1",
 		ResourceID: "res-1",
-		Severity:   FindingSeverityCritical,
+		Severity:   FindingSeverityWarning, // Same severity - should stay suppressed
 		Title:      "Updated Title",
 		Category:   FindingCategoryPerformance,
 	}
 	isNew := store.Add(f1Updated)
 
-	// Should not update suppressed finding
+	// Should not be treated as new
 	if isNew {
-		t.Error("Suppressed finding should not be updated")
+		t.Error("Suppressed finding should not be treated as new")
 	}
 
-	// Verify the finding wasn't updated
+	// Verify the finding title wasn't updated (stayed suppressed)
 	stillSuppressed := store.Get("f1")
 	if stillSuppressed.Title != "Suppressed Finding" {
-		t.Error("Suppressed finding title should not change")
+		t.Error("Suppressed finding title should not change with same severity")
 	}
+
+	// But TimesRaised should still increment
+	if stillSuppressed.TimesRaised < 1 {
+		t.Error("TimesRaised should increment even for suppressed findings")
+	}
+
+	// NOTE: Severity ESCALATION (e.g., warning -> critical) would legitimately
+	// reactivate the finding for safety reasons - tested in TestFindingsStore_Add_SeverityEscalation
 }
 
 func TestFindingsStore_Add_DismissedSameSeverity(t *testing.T) {

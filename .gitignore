@@ -170,3 +170,6 @@ tmp_*.sh
 scripts/agent/
 docs/internal/
 .agent/
+
+# Pulse Pro landing page (private)
+landing-page/

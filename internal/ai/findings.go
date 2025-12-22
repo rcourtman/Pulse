@@ -225,14 +225,8 @@ func (s *FindingsStore) Add(f *Finding) bool {
 
 	existing, exists := s.findings[f.ID]
 	if exists {
-		// Check if it's permanently suppressed - don't update at all
-		if existing.Suppressed {
-			s.mu.Unlock()
-			return false
-		}
-
-		// Check if dismissed - only update if severity has escalated
-		if existing.DismissedReason != "" {
+		// Check if dismissed or suppressed - only update if severity has escalated
+		if existing.DismissedReason != "" || existing.Suppressed {
 			severityOrder := map[FindingSeverity]int{
 				FindingSeverityInfo:     0,
 				FindingSeverityWatch:    1,
@@ -247,8 +241,9 @@ func (s *FindingsStore) Add(f *Finding) bool {
 				s.scheduleSave()
 				return false
 			}
-			// Severity escalated - clear dismissal and reactivate
+			// Severity escalated - clear dismissal/suppression and reactivate
 			existing.DismissedReason = ""
+			existing.Suppressed = false
 			existing.UserNote = "" // Clear note since situation changed
 			existing.AcknowledgedAt = nil
 		}
@@ -370,6 +365,8 @@ func (s *FindingsStore) Unsnooze(id string) bool {
 
 // Dismiss marks a finding as dismissed with a reason and optional note
 // Reasons: "not_an_issue", "expected_behavior", "will_fix_later"
+// For "expected_behavior" and "not_an_issue", the finding is also suppressed
+// (creates a suppression rule) to prevent future alerts of the same type.
 func (s *FindingsStore) Dismiss(id, reason, note string) bool {
 	s.mu.Lock()
 
@@ -386,6 +383,12 @@ func (s *FindingsStore) Dismiss(id, reason, note string) bool {
 	// Also mark as acknowledged
 	now := time.Now()
 	f.AcknowledgedAt = &now
+
+	// For "expected_behavior" and "not_an_issue", also create a suppression rule
+	// This prevents the AI from re-raising similar findings for this resource+category
+	if reason == "expected_behavior" || reason == "not_an_issue" {
+		f.Suppressed = true
+	}
 
 	s.mu.Unlock()
 	s.scheduleSave()

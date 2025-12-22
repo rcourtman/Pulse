@@ -2185,6 +2185,8 @@ function OverviewTab(props: {
   const [patrolRunHistory, setPatrolRunHistory] = createSignal<PatrolRunRecord[]>([]);
   // Track findings user marked as "I Fixed It" - hidden until next patrol verifies
   const [pendingFixFindings, setPendingFixFindings] = createSignal<Set<string>>(new Set());
+  // Map of all findings by ID (including resolved) for displaying patrol run details
+  const [allFindingsMap, setAllFindingsMap] = createSignal<Map<string, Finding>>(new Map());
   const [lastKnownPatrolAt, setLastKnownPatrolAt] = createSignal<string | null>(null);
   const [showRunHistory, setShowRunHistory] = createSignal(false);
   const [forcePatrolLoading, setForcePatrolLoading] = createSignal(false);
@@ -2398,11 +2400,12 @@ function OverviewTab(props: {
   // Fetch AI data - extracted for reuse
   const fetchAiData = async () => {
     try {
-      const [status, findings, runHistory, rules] = await Promise.all([
+      const [status, findings, runHistory, rules, findingsHistoryData] = await Promise.all([
         getPatrolStatus(),
         getFindings(),
         getPatrolRunHistory(50), // Fetch more for filtering
-        getSuppressionRules().catch(() => []) // May not be available
+        getSuppressionRules().catch(() => []), // May not be available
+        getFindingsHistory().catch(() => []) // Includes resolved findings
       ]);
 
       // Check if a new patrol has completed - if so, clear pending fix findings
@@ -2419,6 +2422,16 @@ function OverviewTab(props: {
       setAiFindings(findings || []);
       setPatrolRunHistory(runHistory || []);
       setSuppressionRules(rules || []);
+
+      // Build a map of all findings by ID for looking up resolved findings
+      const findingsMap = new Map<string, Finding>();
+      (findings || []).forEach(f => findingsMap.set(f.id, f));
+      (findingsHistoryData || []).forEach(f => {
+        if (!findingsMap.has(f.id)) {
+          findingsMap.set(f.id, f);
+        }
+      });
+      setAllFindingsMap(findingsMap);
 
       // Auto-expand history if most recent run found issues
       if (runHistory && runHistory.length > 0 && runHistory[0].status !== 'healthy') {
@@ -2736,41 +2749,7 @@ function OverviewTab(props: {
             </div>
           </Show>
 
-          {/* Summary Stats Bar */}
-          <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 mb-4 flex flex-wrap items-center gap-4 text-xs">
-            <div class="flex items-center gap-1.5">
-              <span class="text-gray-500 dark:text-gray-400">Runs:</span>
-              <span class="font-medium text-gray-700 dark:text-gray-300">{patrolRunHistory().length}</span>
-            </div>
-            <div class="flex items-center gap-1.5">
-              <span class="text-gray-500 dark:text-gray-400">Healthy:</span>
-              <span class="font-medium text-green-600 dark:text-green-400">
-                {patrolRunHistory().filter(r => r.status === 'healthy').length}
-              </span>
-            </div>
-            <Show when={patrolRunHistory().filter(r => r.status !== 'healthy').length > 0}>
-              <div class="flex items-center gap-1.5">
-                <span class="text-gray-500 dark:text-gray-400">Issues:</span>
-                <span class="font-medium text-yellow-600 dark:text-yellow-400">
-                  {patrolRunHistory().filter(r => r.status !== 'healthy').length}
-                </span>
-              </div>
-            </Show>
-            <div class="flex items-center gap-1.5">
-              <span class="text-gray-500 dark:text-gray-400">Last:</span>
-              <span class="font-medium text-gray-700 dark:text-gray-300">
-                {patrolStatus()?.last_patrol_at ? formatTimestamp(patrolStatus()!.last_patrol_at!) : 'never'}
-              </span>
-            </div>
-            <Show when={patrolStatus()?.resources_checked}>
-              <div class="flex items-center gap-1.5">
-                <span class="text-gray-500 dark:text-gray-400">Resources:</span>
-                <span class="font-medium text-gray-700 dark:text-gray-300">{patrolStatus()?.resources_checked}</span>
-              </div>
-            </Show>
-          </div>
 
-          {/* AI Intelligence Summary removed - patrol findings below provide the same value without noise */}
 
 
           <Show when={patrolRequiresLicense()}>
@@ -3012,7 +2991,7 @@ function OverviewTab(props: {
                                     });
                                     try {
                                       await resolveFinding(finding.id);
-                                      showSuccess('Marked as fixed - the next patrol will verify');
+                                      showSuccess('✓ Fixed! Issue cleared from insights.');
                                       fetchAiData();
                                     } catch (_err) {
                                       // Still keep it hidden locally since user said they fixed it
@@ -3373,13 +3352,9 @@ function OverviewTab(props: {
                         <thead>
                           <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
                             <th class="p-1.5 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-4"></th>
-                            <th class="p-1.5 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Time</th>
-                            <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Type</th>
-                            <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Status</th>
+                            <th class="p-1.5 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">When</th>
+                            <th class="p-1.5 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Result</th>
                             <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Resources</th>
-                            <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">New</th>
-                            <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Resolved</th>
-                            <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Auto-Fix</th>
                             <th class="p-1.5 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Duration</th>
                           </tr>
                         </thead>
@@ -3409,7 +3384,7 @@ function OverviewTab(props: {
                                   Running
                                 </span>
                               </td>
-                              <td class="p-1.5 px-2 text-center" colspan="6">
+                              <td class="p-1.5 px-2 text-center" colspan="3">
                                 <span class="text-xs text-purple-600 dark:text-purple-400">
                                   {expandedLiveStream() ? 'Click to collapse' : 'Click to view live AI analysis'}
                                 </span>
@@ -3418,7 +3393,7 @@ function OverviewTab(props: {
                             {/* Expanded Live Stream Row */}
                             <Show when={expandedLiveStream()}>
                               <tr class="bg-purple-50 dark:bg-purple-900/10 border-b border-gray-200 dark:border-gray-600">
-                                <td colspan="9" class="p-3">
+                                <td colspan="5" class="p-3">
                                   <div class="flex items-center justify-between mb-3">
                                     <span class="text-[10px] text-purple-500 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
                                       <svg class="w-3 h-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3497,7 +3472,7 @@ function OverviewTab(props: {
                                 error: 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
                               };
                               const statusStyle = statusStyles[run.status] || statusStyles.healthy;
-                              const hasDetails = run.nodes_checked > 0 || run.guests_checked > 0 || run.docker_checked > 0 || run.storage_checked > 0 || run.ai_analysis;
+                              const hasDetails = run.finding_ids && run.finding_ids.length > 0;
 
                               return (
                                 <>
@@ -3515,36 +3490,13 @@ function OverviewTab(props: {
                                     <td class="p-1.5 px-2 text-gray-600 dark:text-gray-400 font-mono whitespace-nowrap">
                                       {formatTimestamp(run.completed_at)}
                                     </td>
-                                    <td class="p-1.5 px-2 text-center">
-                                      <span class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${run.type === 'deep'
-                                        ? 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300'
-                                        : 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300'
-                                        }`}>
-                                        {run.type === 'deep' ? 'Deep' : 'Patrol'}
-                                      </span>
-                                    </td>
-                                    <td class="p-1.5 px-2 text-center">
+                                    <td class="p-1.5 px-2">
                                       <span class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusStyle}`}>
                                         {run.findings_summary}
                                       </span>
                                     </td>
                                     <td class="p-1.5 px-2 text-center text-gray-700 dark:text-gray-300">
                                       {run.resources_checked}
-                                    </td>
-                                    <td class="p-1.5 px-2 text-center">
-                                      <Show when={run.new_findings > 0} fallback={<span class="text-gray-400">-</span>}>
-                                        <span class="text-yellow-600 dark:text-yellow-400 font-medium">{run.new_findings}</span>
-                                      </Show>
-                                    </td>
-                                    <td class="p-1.5 px-2 text-center">
-                                      <Show when={run.resolved_findings > 0} fallback={<span class="text-gray-400">-</span>}>
-                                        <span class="text-green-600 dark:text-green-400 font-medium">{run.resolved_findings}</span>
-                                      </Show>
-                                    </td>
-                                    <td class="p-1.5 px-2 text-center">
-                                      <Show when={(run.auto_fix_count || 0) > 0} fallback={<span class="text-gray-400">-</span>}>
-                                        <span class="text-blue-600 dark:text-blue-400 font-medium">{run.auto_fix_count}</span>
-                                      </Show>
                                     </td>
                                     <td class="p-1.5 px-2 text-center text-gray-500 dark:text-gray-400 font-mono">
                                       {(() => {
@@ -3561,113 +3513,79 @@ function OverviewTab(props: {
                                   {/* Expanded Details Row */}
                                   <Show when={expandedRunId() === run.id}>
                                     <tr class="bg-gray-50 dark:bg-gray-800/50">
-                                      <td colspan="9" class="p-3">
-                                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                                          <Show when={run.nodes_checked > 0}>
-                                            <div class="flex items-center gap-2">
-                                              <span class="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-[10px]">Nodes</span>
-                                              <span class="font-medium">{run.nodes_checked}</span>
-                                            </div>
-                                          </Show>
-                                          <Show when={run.guests_checked > 0}>
-                                            <div class="flex items-center gap-2">
-                                              <span class="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded text-[10px]">VMs/CTs</span>
-                                              <span class="font-medium">{run.guests_checked}</span>
-                                            </div>
-                                          </Show>
-                                          <Show when={run.docker_checked > 0}>
-                                            <div class="flex items-center gap-2">
-                                              <span class="px-1.5 py-0.5 bg-cyan-100 dark:bg-cyan-900/50 text-cyan-700 dark:text-cyan-300 rounded text-[10px]">Docker</span>
-                                              <span class="font-medium">{run.docker_checked}</span>
-                                            </div>
-                                          </Show>
-                                          <Show when={run.storage_checked > 0}>
-                                            <div class="flex items-center gap-2">
-                                              <span class="px-1.5 py-0.5 bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 rounded text-[10px]">Storage</span>
-                                              <span class="font-medium">{run.storage_checked}</span>
-                                            </div>
-                                          </Show>
-                                          <Show when={run.hosts_checked > 0}>
-                                            <div class="flex items-center gap-2">
-                                              <span class="px-1.5 py-0.5 bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 rounded text-[10px]">Hosts</span>
-                                              <span class="font-medium">{run.hosts_checked}</span>
-                                            </div>
-                                          </Show>
-                                          <Show when={run.pbs_checked > 0}>
-                                            <div class="flex items-center gap-2">
-                                              <span class="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded text-[10px]">PBS</span>
-                                              <span class="font-medium">{run.pbs_checked}</span>
-                                            </div>
-                                          </Show>
-                                          <Show when={(run.auto_fix_count || 0) > 0}>
-                                            <div class="flex items-center gap-2">
-                                              <span class="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-[10px]">Auto-Fix</span>
-                                              <span class="font-medium">{run.auto_fix_count}</span>
-                                            </div>
-                                          </Show>
-                                        </div>
-                                        {/* Only show findings section if we have active findings to display */}
+                                      <td colspan="5" class="p-3">
+                                        {/* Show findings from this run */}
                                         {(() => {
-                                          const activeFindings = (run.finding_ids || [])
-                                            .map(id => aiFindings().find(f => f.id === id))
-                                            .filter(f => f !== undefined);
-                                          const resolvedCount = (run.finding_ids?.length || 0) - activeFindings.length;
+                                          const findingsMap = allFindingsMap();
+                                          const activeFindings: Finding[] = [];
+                                          const resolvedFindings: Finding[] = [];
 
-                                          if (activeFindings.length === 0 && resolvedCount === 0) return null;
+                                          (run.finding_ids || []).forEach(id => {
+                                            const finding = findingsMap.get(id);
+                                            if (finding) {
+                                              if (finding.resolved_at) {
+                                                resolvedFindings.push(finding);
+                                              } else {
+                                                activeFindings.push(finding);
+                                              }
+                                            }
+                                          });
+
+                                          if (activeFindings.length === 0 && resolvedFindings.length === 0) return null;
 
                                           return (
-                                            <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                                              <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                Findings from this run:
-                                              </span>
-                                              <div class="flex flex-col gap-1 mt-1">
-                                                <For each={activeFindings}>
-                                                  {(finding) => (
-                                                    <div class="flex items-center gap-2 text-xs">
-                                                      <span class={`px-1.5 py-0.5 rounded text-[10px] ${finding!.severity === 'critical' ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' :
-                                                        finding!.severity === 'warning' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
-                                                          'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                                                        }`}>
-                                                        {finding!.severity}
-                                                      </span>
-                                                      <span class="font-medium text-gray-700 dark:text-gray-300">{finding!.title}</span>
-                                                      <span class="text-gray-500 dark:text-gray-400">on {finding!.resource_name}</span>
-                                                    </div>
-                                                  )}
-                                                </For>
-                                                <Show when={resolvedCount > 0}>
-                                                  <div class="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
-                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <div>
+                                              {/* Active findings */}
+                                              <Show when={activeFindings.length > 0}>
+                                                <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                  Active findings:
+                                                </span>
+                                                <div class="flex flex-col gap-1 mt-1">
+                                                  <For each={activeFindings}>
+                                                    {(finding) => (
+                                                      <div class="flex items-center gap-2 text-xs">
+                                                        <span class={`px-1.5 py-0.5 rounded text-[10px] ${finding.severity === 'critical' ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' :
+                                                          finding.severity === 'warning' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                                                            'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                                                          }`}>
+                                                          {finding.severity}
+                                                        </span>
+                                                        <span class="font-medium text-gray-700 dark:text-gray-300">{finding.title}</span>
+                                                        <span class="text-gray-500 dark:text-gray-400">on {finding.resource_name}</span>
+                                                      </div>
+                                                    )}
+                                                  </For>
+                                                </div>
+                                              </Show>
+
+                                              {/* Resolved findings - show value delivered */}
+                                              <Show when={resolvedFindings.length > 0}>
+                                                <div class={activeFindings.length > 0 ? "mt-3 pt-2 border-t border-gray-200 dark:border-gray-700" : ""}>
+                                                  <span class="text-[10px] text-green-600 dark:text-green-400 uppercase tracking-wider flex items-center gap-1">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                                                     </svg>
-                                                    {resolvedCount} finding{resolvedCount > 1 ? 's' : ''} since resolved
+                                                    Resolved ({resolvedFindings.length})
+                                                  </span>
+                                                  <div class="flex flex-col gap-1 mt-1">
+                                                    <For each={resolvedFindings}>
+                                                      {(finding) => (
+                                                        <div class="flex items-center gap-2 text-xs opacity-70">
+                                                          <span class="px-1.5 py-0.5 rounded text-[10px] bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
+                                                            ✓ resolved
+                                                          </span>
+                                                          <span class="text-gray-600 dark:text-gray-400">{finding.title}</span>
+                                                          <span class="text-gray-400 dark:text-gray-500">on {finding.resource_name}</span>
+                                                        </div>
+                                                      )}
+                                                    </For>
                                                   </div>
-                                                </Show>
-                                              </div>
+                                                </div>
+                                              </Show>
                                             </div>
                                           );
                                         })()}
-                                        {/* AI Analysis Section */}
-                                        <Show when={run.ai_analysis}>
-                                          <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                                            <div class="flex items-center justify-between mb-2">
-                                              <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                                                <svg class="w-3 h-3 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                                </svg>
-                                                AI Analysis
-                                              </span>
-                                              <Show when={run.input_tokens || run.output_tokens}>
-                                                <span class="text-[9px] text-gray-400 dark:text-gray-500">
-                                                  {run.input_tokens?.toLocaleString()} in / {run.output_tokens?.toLocaleString()} out tokens
-                                                </span>
-                                              </Show>
-                                            </div>
-                                            <div class="bg-gray-100 dark:bg-gray-900 rounded-lg p-3 max-h-64 overflow-y-auto">
-                                              <pre class="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">{run.ai_analysis}</pre>
-                                            </div>
-                                          </div>
-                                        </Show>
+
                                       </td>
                                     </tr>
                                   </Show>
