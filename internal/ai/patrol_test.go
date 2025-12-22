@@ -1452,3 +1452,164 @@ func TestPatrolService_AnalyzeDockerHost_PodmanRuntime(t *testing.T) {
 		t.Error("Expected finding for offline Podman host")
 	}
 }
+
+func TestPatrolService_ValidateAIFindings_FiltersNoisyCPU(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Create a state with a VM at low CPU
+	state := models.StateSnapshot{
+		VMs: []models.VM{
+			{
+				ID:   "vm-100",
+				Name: "test-vm",
+				CPU:  0.15, // 15% CPU - should filter out "high CPU" findings
+			},
+		},
+	}
+
+	// Create a noisy finding claiming high CPU when it's actually low
+	findings := []*Finding{
+		{
+			ID:           "test-1",
+			Key:          "high-cpu",
+			Severity:     FindingSeverityWarning,
+			Category:     FindingCategoryPerformance,
+			ResourceName: "test-vm",
+			Title:        "High CPU usage detected",
+			Description:  "CPU elevated from baseline",
+		},
+	}
+
+	validated := ps.validateAIFindings(findings, state)
+
+	if len(validated) != 0 {
+		t.Errorf("Expected 0 validated findings (noisy CPU finding should be filtered), got %d", len(validated))
+	}
+}
+
+func TestPatrolService_ValidateAIFindings_AllowsRealIssues(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Create a state with a VM at high CPU
+	state := models.StateSnapshot{
+		VMs: []models.VM{
+			{
+				ID:   "vm-100",
+				Name: "test-vm",
+				CPU:  0.85, // 85% CPU - this is actually high
+			},
+		},
+	}
+
+	// Real high CPU finding
+	findings := []*Finding{
+		{
+			ID:           "test-1",
+			Key:          "high-cpu",
+			Severity:     FindingSeverityWarning,
+			Category:     FindingCategoryPerformance,
+			ResourceName: "test-vm",
+			Title:        "High CPU usage",
+			Description:  "CPU at 85%",
+		},
+	}
+
+	validated := ps.validateAIFindings(findings, state)
+
+	if len(validated) != 1 {
+		t.Errorf("Expected 1 validated finding (real high CPU issue), got %d", len(validated))
+	}
+}
+
+func TestPatrolService_ValidateAIFindings_AllowsCritical(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	state := models.StateSnapshot{
+		VMs: []models.VM{
+			{
+				ID:   "vm-100",
+				Name: "test-vm",
+				CPU:  0.10, // Low CPU, but...
+			},
+		},
+	}
+
+	// Critical finding should always pass through regardless of metrics
+	findings := []*Finding{
+		{
+			ID:           "test-1",
+			Key:          "some-critical-issue",
+			Severity:     FindingSeverityCritical,
+			Category:     FindingCategoryReliability,
+			ResourceName: "test-vm",
+			Title:        "Critical issue",
+			Description:  "Something critical happened",
+		},
+	}
+
+	validated := ps.validateAIFindings(findings, state)
+
+	if len(validated) != 1 {
+		t.Errorf("Expected 1 validated finding (critical should always pass), got %d", len(validated))
+	}
+}
+
+func TestPatrolService_ValidateAIFindings_AllowsBackupIssues(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Empty state - no matching metrics
+	state := models.StateSnapshot{}
+
+	// Backup findings should always pass through
+	findings := []*Finding{
+		{
+			ID:           "test-1",
+			Key:          "backup-stale",
+			Severity:     FindingSeverityWarning,
+			Category:     FindingCategoryBackup,
+			ResourceName: "vm-100",
+			Title:        "Backup stale",
+			Description:  "No backup in 48 hours",
+		},
+	}
+
+	validated := ps.validateAIFindings(findings, state)
+
+	if len(validated) != 1 {
+		t.Errorf("Expected 1 validated finding (backup issues should always pass), got %d", len(validated))
+	}
+}
+
+func TestPatrolService_ValidateAIFindings_FiltersLowDisk(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	state := models.StateSnapshot{
+		Storage: []models.Storage{
+			{
+				ID:    "storage-1",
+				Name:  "local",
+				Used:  30 * 1024 * 1024 * 1024,  // 30 GB
+				Total: 100 * 1024 * 1024 * 1024, // 100 GB = 30% usage
+			},
+		},
+	}
+
+	// Noisy disk finding at only 30%
+	findings := []*Finding{
+		{
+			ID:           "test-1",
+			Key:          "high-disk",
+			Severity:     FindingSeverityWatch,
+			Category:     FindingCategoryCapacity,
+			ResourceName: "local",
+			Title:        "Disk usage elevated",
+			Description:  "Disk at 30% which is above baseline",
+		},
+	}
+
+	validated := ps.validateAIFindings(findings, state)
+
+	if len(validated) != 0 {
+		t.Errorf("Expected 0 validated findings (low disk finding should be filtered), got %d", len(validated))
+	}
+}

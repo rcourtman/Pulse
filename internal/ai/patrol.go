@@ -2287,6 +2287,9 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	// Parse findings from AI response
 	findings := p.parseAIFindings(finalContent)
 
+	// Validate findings to filter out noise before storing
+	findings = p.validateAIFindings(findings, state)
+
 	return &AIAnalysisResult{
 		Response:     finalContent,
 		Findings:     findings,
@@ -2303,7 +2306,7 @@ func (p *PatrolService) getPatrolSystemPrompt() string {
 		autoFix = cfg.PatrolAutoFix
 	}
 
-	basePrompt := `You are an infrastructure analyst for Pulse, a Proxmox monitoring system. Your job is to analyze infrastructure state and identify issues, potential problems, and optimization opportunities.
+	basePrompt := `You are an infrastructure analyst for Pulse, a Proxmox monitoring system. Your job is to identify ONLY issues that require human attention.
 
 IMPORTANT: You must respond in a specific structured format so findings can be parsed.
 
@@ -2324,27 +2327,32 @@ EVIDENCE: <specific data that supports this finding>
 Guidelines:
 - Use KEY as a stable identifier for the issue type (examples: high-cpu, high-memory, high-disk, backup-stale, backup-never, restart-loop, storage-high-usage, pbs-datastore-high-usage, pbs-job-failed, node-offline). Use "general" if nothing fits.
 
-SEVERITY GUIDELINES (be conservative - fewer findings are better than noisy alerts):
-- CRITICAL: Immediate action required (data loss risk, service down, disk >95%)
-- WARNING: Should be addressed soon (disk >85%, memory >90%, consistent failures)  
-- WATCH: Only use for SIGNIFICANT trends that project to hit critical in <7 days
-- INFO: Informational observations for context (stopped services, config notes)
+SEVERITY GUIDELINES (be VERY conservative):
+- CRITICAL: Service completely down, data loss imminent, disk >95%, node offline
+- WARNING: Disk >85%, memory >90% sustained, backup failed >48 hours
+- WATCH: Only use for trends that WILL become critical within 7 days at current rate
+- INFO: Almost never use - only for significant security or config issues
 
-IMPORTANT - DO NOT REPORT:
-- Small baseline deviations (CPU at 7% vs typical 4% is NORMAL variance)
-- Low absolute utilization (anything under 50% CPU or 60% memory is fine)
-- Stopped containers UNLESS they should be running (check autostart)
-- "Elevated" metrics that are still well under limits
+===== STRICT THRESHOLDS - DO NOT CREATE FINDINGS BELOW THESE =====
+- CPU: Only report if >70% sustained (brief spikes are normal)
+- Memory: Only report if >80% sustained (applications cache memory, this is fine)
+- Disk/Storage: Only report if >75% OR growing >5%/week toward full
+- Baseline deviations: IGNORE unless current value exceeds the absolute thresholds above
 
-Only flag something if an operator would actually need to take action.
+===== NOISE TO AVOID - DO NOT REPORT THESE =====
+- "CPU at 15% vs baseline 8%" - This is NORMAL variance, NOT an issue
+- "Memory at 45% which is elevated" - This is FINE, lots of headroom
+- "Disk at 30% is above baseline" - This is FINE, not actionable
+- Stopped containers/VMs (unless autostart is enabled AND they crashed)
+- Minor metric fluctuations compared to baseline
+- Resources that are simply "busier than usual" but not near limits
 
-Focus on:
-1. Capacity issues that will become critical soon (projected disk full, memory exhaustion)
-2. Actual failures or errors (service crashes, backup failures)
-3. Configuration problems (missing backups, insecure settings)
-4. Correlation between resources when it indicates a root cause
+BEFORE CREATING A FINDING, ASK YOURSELF:
+1. Would an operator need to DO something about this RIGHT NOW?
+2. Is this an actual problem, or just "different from yesterday"?
+3. If I woke someone up at 3am for this, would they thank me or curse me?
 
-If everything looks healthy, respond with NO findings. Users prefer silence to noise.`
+If everything looks healthy, respond with NO findings. An empty report is the BEST report.`
 
 
 	if autoFix {
@@ -2856,6 +2864,159 @@ Only report NEW issues or issues where the severity has clearly escalated.`)
 	}
 
 	return basePrompt
+}
+
+// validateAIFindings filters out noisy/invalid findings from AI analysis
+// This is a safety net to catch cases where the LLM generates low-quality findings
+// that would annoy users (e.g., "CPU at 7% vs typical 4% is elevated")
+func (p *PatrolService) validateAIFindings(findings []*Finding, state models.StateSnapshot) []*Finding {
+	if len(findings) == 0 {
+		return findings
+	}
+
+	// Build a lookup of current resource metrics for validation
+	resourceMetrics := make(map[string]map[string]float64)
+
+	// Index node metrics
+	for _, n := range state.Nodes {
+		metrics := make(map[string]float64)
+		metrics["cpu"] = n.CPU * 100
+		if n.Memory.Total > 0 {
+			metrics["memory"] = float64(n.Memory.Used) / float64(n.Memory.Total) * 100
+		}
+		resourceMetrics[n.ID] = metrics
+		resourceMetrics[n.Name] = metrics // Also index by name
+	}
+
+	// Index VM metrics
+	for _, vm := range state.VMs {
+		metrics := make(map[string]float64)
+		metrics["cpu"] = vm.CPU * 100
+		metrics["memory"] = vm.Memory.Usage
+		metrics["disk"] = vm.Disk.Usage
+		resourceMetrics[vm.ID] = metrics
+		resourceMetrics[vm.Name] = metrics
+	}
+
+	// Index container metrics
+	for _, ct := range state.Containers {
+		metrics := make(map[string]float64)
+		metrics["cpu"] = ct.CPU * 100
+		metrics["memory"] = ct.Memory.Usage
+		metrics["disk"] = ct.Disk.Usage
+		resourceMetrics[ct.ID] = metrics
+		resourceMetrics[ct.Name] = metrics
+	}
+
+	// Index storage metrics
+	for _, s := range state.Storage {
+		metrics := make(map[string]float64)
+		if s.Total > 0 {
+			metrics["usage"] = float64(s.Used) / float64(s.Total) * 100
+		}
+		resourceMetrics[s.ID] = metrics
+		resourceMetrics[s.Name] = metrics
+	}
+
+	var validated []*Finding
+	for _, f := range findings {
+		if f == nil {
+			continue
+		}
+
+		// Check if this finding is actionable based on actual metrics
+		if !p.isActionableFinding(f, resourceMetrics) {
+			log.Debug().
+				Str("finding_id", f.ID).
+				Str("title", f.Title).
+				Str("resource", f.ResourceName).
+				Msg("AI Patrol: Filtering out low-confidence finding")
+			continue
+		}
+
+		validated = append(validated, f)
+	}
+
+	if filtered := len(findings) - len(validated); filtered > 0 {
+		log.Info().
+			Int("original", len(findings)).
+			Int("validated", len(validated)).
+			Int("filtered", filtered).
+			Msg("AI Patrol: Filtered noisy findings from AI response")
+	}
+
+	return validated
+}
+
+// isActionableFinding determines if a finding is worth showing to users
+// Returns false for findings that would just be noise
+func (p *PatrolService) isActionableFinding(f *Finding, resourceMetrics map[string]map[string]float64) bool {
+	// Always allow critical findings through
+	if f.Severity == FindingSeverityCritical {
+		return true
+	}
+
+	// Always allow backup-related findings (these are actionable)
+	if f.Category == FindingCategoryBackup {
+		return true
+	}
+
+	// Always allow reliability findings (offline, errors)
+	if f.Category == FindingCategoryReliability {
+		return true
+	}
+
+	// For performance/capacity findings, validate against actual metrics
+	metrics, hasMetrics := resourceMetrics[f.ResourceID]
+	if !hasMetrics {
+		// Try by resource name
+		metrics, hasMetrics = resourceMetrics[f.ResourceName]
+	}
+
+	// If we can't find metrics, allow the finding (benefit of doubt)
+	if !hasMetrics {
+		return true
+	}
+
+	// Check specific finding types against actual thresholds
+	key := strings.ToLower(f.Key)
+
+	// High CPU findings
+	if strings.Contains(key, "cpu") || strings.Contains(strings.ToLower(f.Title), "cpu") {
+		if cpu, ok := metrics["cpu"]; ok {
+			// Reject CPU findings if actual CPU is below 50%
+			// Even if it's "elevated" compared to baseline, <50% isn't actionable
+			if cpu < 50.0 {
+				return false
+			}
+		}
+	}
+
+	// High memory findings
+	if strings.Contains(key, "memory") || strings.Contains(key, "mem") || strings.Contains(strings.ToLower(f.Title), "memory") {
+		if mem, ok := metrics["memory"]; ok {
+			// Reject memory findings if actual memory is below 60%
+			if mem < 60.0 {
+				return false
+			}
+		}
+	}
+
+	// High disk/storage findings
+	if strings.Contains(key, "disk") || strings.Contains(key, "storage") || strings.Contains(strings.ToLower(f.Title), "disk") {
+		disk, hasDisk := metrics["disk"]
+		usage, hasUsage := metrics["usage"]
+
+		if hasDisk && disk < 70.0 {
+			return false // Disk at <70% isn't urgent
+		}
+		if hasUsage && usage < 70.0 {
+			return false // Storage at <70% isn't urgent
+		}
+	}
+
+	// Default: allow the finding
+	return true
 }
 
 // parseAIFindings extracts structured findings from AI response
