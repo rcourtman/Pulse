@@ -499,7 +499,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           href={
                             isPVEItem
                               ? node!.guestURL || node!.host || `https://${node!.name}:8006`
-                              : pbs!.host || `https://${pbs!.name}:8007`
+                              : pbs!.guestURL || pbs!.host || `https://${pbs!.name}:8007`
                           }
                           target="_blank"
                           onClick={(e) => e.stopPropagation()}

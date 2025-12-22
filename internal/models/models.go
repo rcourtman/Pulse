@@ -760,6 +760,7 @@ type PBSInstance struct {
 	ID               string          `json:"id"`
 	Name             string          `json:"name"`
 	Host             string          `json:"host"`
+	GuestURL         string          `json:"guestURL,omitempty"` // Optional guest-accessible URL (for navigation)
 	Status           string          `json:"status"`
 	Version          string          `json:"version"`
 	CPU              float64         `json:"cpu"`         // CPU usage percentage
@@ -873,6 +874,7 @@ type PMGInstance struct {
 	ID               string               `json:"id"`
 	Name             string               `json:"name"`
 	Host             string               `json:"host"`
+	GuestURL         string               `json:"guestURL,omitempty"` // Optional guest-accessible URL (for navigation)
 	Status           string               `json:"status"`
 	Version          string               `json:"version"`
 	Nodes            []PMGNodeStatus      `json:"nodes,omitempty"`

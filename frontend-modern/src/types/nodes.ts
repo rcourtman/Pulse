@@ -50,6 +50,7 @@ export interface PBSNodeConfig {
   id: string;
   name: string;
   host: string;
+  guestURL?: string;
   user: string;
   hasPassword?: boolean;
   hasToken?: boolean;
@@ -70,6 +71,7 @@ export interface PMGNodeConfig {
   id: string;
   name: string;
   host: string;
+  guestURL?: string;
   user: string;
   hasPassword?: boolean;
   hasToken?: boolean;
