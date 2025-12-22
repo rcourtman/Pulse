@@ -365,8 +365,16 @@ func (s *FindingsStore) Unsnooze(id string) bool {
 
 // Dismiss marks a finding as dismissed with a reason and optional note
 // Reasons: "not_an_issue", "expected_behavior", "will_fix_later"
-// For "expected_behavior" and "not_an_issue", the finding is also suppressed
-// (creates a suppression rule) to prevent future alerts of the same type.
+//
+// Behavior by reason:
+// - "not_an_issue": Permanent suppression (true false positive in detection logic)
+// - "expected_behavior": Acknowledged only (finding stays visible but marked as accepted)
+// - "will_fix_later": Acknowledged only (user will address it later)
+//
+// Rationale: Only true false positives ("not_an_issue") should be permanently suppressed.
+// For "expected_behavior" and "will_fix_later", the finding stays visible (transparent)
+// but is marked as acknowledged so the user knows they've reviewed it.
+// Severity escalation will still clear the dismissal and reactivate the finding.
 func (s *FindingsStore) Dismiss(id, reason, note string) bool {
 	s.mu.Lock()
 
@@ -380,15 +388,19 @@ func (s *FindingsStore) Dismiss(id, reason, note string) bool {
 	if note != "" {
 		f.UserNote = note
 	}
-	// Also mark as acknowledged
+	// Mark as acknowledged for all dismiss reasons
 	now := time.Now()
 	f.AcknowledgedAt = &now
 
-	// For "expected_behavior" and "not_an_issue", also create a suppression rule
-	// This prevents the AI from re-raising similar findings for this resource+category
-	if reason == "expected_behavior" || reason == "not_an_issue" {
+	// Only "not_an_issue" creates permanent suppression
+	// This is for true false positives where the detection logic is wrong
+	if reason == "not_an_issue" {
 		f.Suppressed = true
 	}
+	// For "expected_behavior" and "will_fix_later":
+	// - Finding stays visible (not suppressed, not snoozed)
+	// - But is marked as dismissed/acknowledged so user knows they've reviewed it
+	// - Severity escalation will clear DismissedReason and reactivate
 
 	s.mu.Unlock()
 	s.scheduleSave()

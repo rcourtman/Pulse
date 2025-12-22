@@ -1433,7 +1433,9 @@ func (p *PatrolService) DismissFinding(findingID string, reason string, note str
 		return fmt.Errorf("finding not found: %s", findingID)
 	}
 
-	// Dismiss the finding (this automatically creates a suppression rule for expected_behavior/not_an_issue)
+	// Dismiss the finding:
+	// - "not_an_issue" creates permanent suppression (true false positive)
+	// - "expected_behavior" and "will_fix_later" just acknowledge (stays visible but marked)
 	if !p.findings.Dismiss(findingID, reason, note) {
 		return fmt.Errorf("failed to dismiss finding: %s", findingID)
 	}
@@ -1442,7 +1444,7 @@ func (p *PatrolService) DismissFinding(findingID string, reason string, note str
 		Str("finding_id", findingID).
 		Str("reason", reason).
 		Str("note", note).
-		Bool("suppressed", reason == "expected_behavior" || reason == "not_an_issue").
+		Bool("permanently_suppressed", reason == "not_an_issue").
 		Msg("AI dismissed finding")
 
 	return nil

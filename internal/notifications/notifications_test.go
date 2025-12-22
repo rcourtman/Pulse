@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -642,6 +643,7 @@ func TestRenderWebhookURL_SuccessCases(t *testing.T) {
 
 func TestSendTestNotificationApprise(t *testing.T) {
 	nm := NewNotificationManager("")
+	defer nm.Stop() // Clean up background queue to prevent lingering callbacks
 	nm.SetEmailConfig(EmailConfig{Enabled: false})
 
 	// Test 1: Apprise not enabled should return error
@@ -660,6 +662,7 @@ func TestSendTestNotificationApprise(t *testing.T) {
 
 	// Test 2: Apprise enabled with CLI mode should invoke executor
 	done := make(chan struct{})
+	var once sync.Once
 	var capturedArgs []string
 
 	nm.appriseExec = func(ctx context.Context, path string, args []string) ([]byte, error) {
@@ -667,7 +670,8 @@ func TestSendTestNotificationApprise(t *testing.T) {
 			t.Fatalf("expected CLI path 'apprise', got %q", path)
 		}
 		capturedArgs = append([]string(nil), args...)
-		close(done)
+		// Use sync.Once to safely close channel even if callback is invoked multiple times
+		once.Do(func() { close(done) })
 		return []byte("success"), nil
 	}
 
@@ -717,11 +721,13 @@ func TestSendTestAppriseWithConfig(t *testing.T) {
 	}
 
 	done := make(chan struct{})
+	var once sync.Once
 	var cliPath string
 
 	nm.appriseExec = func(ctx context.Context, path string, args []string) ([]byte, error) {
 		cliPath = path
-		close(done)
+		// Use sync.Once to safely close channel even if callback is invoked multiple times
+		once.Do(func() { close(done) })
 		return []byte("ok"), nil
 	}
 
