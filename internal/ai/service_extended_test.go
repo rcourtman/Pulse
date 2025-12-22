@@ -2591,3 +2591,234 @@ func TestService_GetDebugContext_Extended(t *testing.T) {
 		t.Error("Expected custom context preview to be truncated")
 	}
 }
+
+func TestService_EnrichRequestFromFinding(t *testing.T) {
+	svc := NewService(nil, nil)
+
+	// Setup patrol service with a mock finding
+	mockState := &mockStateProvider{
+		state: models.StateSnapshot{},
+	}
+	svc.stateProvider = mockState
+	svc.patrolService = NewPatrolService(svc, mockState)
+
+	// Add a finding to the store
+	finding := &Finding{
+		ID:           "test-finding-123",
+		Node:         "minipc",
+		ResourceID:   "delly:minipc:112",
+		ResourceName: "debian-go",
+		ResourceType: "container",
+		Title:        "Test Finding",
+		Description:  "Test description",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryCapacity,
+	}
+	svc.patrolService.GetFindings().Add(finding)
+
+	// Test 1: Enrich request with finding context
+	req := ExecuteRequest{
+		FindingID: "test-finding-123",
+		Prompt:    "Help me fix this",
+	}
+	svc.enrichRequestFromFinding(&req)
+
+	if req.Context["node"] != "minipc" {
+		t.Errorf("Expected node 'minipc', got %v", req.Context["node"])
+	}
+	if req.Context["guestName"] != "debian-go" {
+		t.Errorf("Expected guestName 'debian-go', got %v", req.Context["guestName"])
+	}
+	if req.TargetID != "delly:minipc:112" {
+		t.Errorf("Expected TargetID 'delly:minipc:112', got %s", req.TargetID)
+	}
+	if req.TargetType != "container" {
+		t.Errorf("Expected TargetType 'container', got %s", req.TargetType)
+	}
+	if req.Context["finding_node"] != "minipc" {
+		t.Errorf("Expected finding_node 'minipc', got %v", req.Context["finding_node"])
+	}
+
+	// Test 2: Don't overwrite existing context
+	req2 := ExecuteRequest{
+		FindingID:  "test-finding-123",
+		TargetID:   "existing-target",
+		TargetType: "existing-type",
+		Context: map[string]interface{}{
+			"node":      "existing-node",
+			"guestName": "existing-name",
+		},
+	}
+	svc.enrichRequestFromFinding(&req2)
+
+	if req2.Context["node"] != "existing-node" {
+		t.Errorf("Should not overwrite existing node, got %v", req2.Context["node"])
+	}
+	if req2.Context["guestName"] != "existing-name" {
+		t.Errorf("Should not overwrite existing guestName, got %v", req2.Context["guestName"])
+	}
+	if req2.TargetID != "existing-target" {
+		t.Errorf("Should not overwrite existing TargetID, got %s", req2.TargetID)
+	}
+	// But finding_* fields should still be added
+	if req2.Context["finding_node"] != "minipc" {
+		t.Errorf("Expected finding_node 'minipc', got %v", req2.Context["finding_node"])
+	}
+
+	// Test 3: No finding ID - should be a no-op
+	req3 := ExecuteRequest{
+		Prompt: "Just a question",
+	}
+	svc.enrichRequestFromFinding(&req3)
+	if req3.Context != nil && len(req3.Context) > 0 {
+		t.Error("Should not add context when no FindingID")
+	}
+
+	// Test 4: Non-existent finding ID - should be a no-op
+	req4 := ExecuteRequest{
+		FindingID: "non-existent",
+		Prompt:    "Help",
+	}
+	svc.enrichRequestFromFinding(&req4)
+	if req4.Context != nil && len(req4.Context) > 0 {
+		t.Error("Should not add context when finding not found")
+	}
+}
+
+// TestService_FindingContextInSystemPrompt verifies that when a FindingID is provided,
+// the system prompt includes proper routing instructions derived from the finding's node.
+// This is the integration test that would have caught the original bug.
+func TestService_FindingContextInSystemPrompt(t *testing.T) {
+	tmpDir := t.TempDir()
+	persistence := config.NewConfigPersistence(tmpDir)
+	svc := NewService(persistence, nil)
+	svc.cfg = &config.AIConfig{Enabled: true}
+
+	// Setup patrol service with a finding that has node info
+	mockState := &mockStateProvider{
+		state: models.StateSnapshot{
+			Containers: []models.Container{
+				{VMID: 112, Node: "minipc", Name: "debian-go", Instance: "delly"},
+			},
+		},
+	}
+	svc.stateProvider = mockState
+	svc.patrolService = NewPatrolService(svc, mockState)
+
+	// Add a finding with node context
+	finding := &Finding{
+		ID:           "disk-growth-finding",
+		Node:         "minipc",
+		ResourceID:   "delly:minipc:112",
+		ResourceName: "debian-go",
+		ResourceType: "container",
+		Title:        "Container disk usage growing",
+		Description:  "Disk growing at 4% per day",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryCapacity,
+	}
+	svc.patrolService.GetFindings().Add(finding)
+
+	// Create a request like "Get Help" would - only FindingID provided
+	req := ExecuteRequest{
+		FindingID: "disk-growth-finding",
+		Prompt:    "Help me fix this disk issue",
+	}
+
+	// Enrich the request (this is what Execute() does now)
+	svc.enrichRequestFromFinding(&req)
+
+	// Build the system prompt
+	prompt := svc.buildSystemPrompt(req)
+
+	// Verify the prompt includes routing context
+	if !strings.Contains(prompt, "minipc") {
+		t.Error("System prompt should include the node name 'minipc' for routing")
+	}
+	if !strings.Contains(prompt, "debian-go") {
+		t.Error("System prompt should include the resource name 'debian-go'")
+	}
+	if !strings.Contains(prompt, "target_host") || !strings.Contains(prompt, "minipc") {
+		t.Error("System prompt should include ROUTING instructions mentioning target_host=minipc")
+	}
+}
+
+// TestService_FindingContextCommandRouting verifies that commands route correctly
+// when ExecuteStream is called with a FindingID. This is an end-to-end test.
+func TestService_FindingContextCommandRouting(t *testing.T) {
+	// Track which agent the command was routed to
+	routedToAgent := ""
+	
+	mockAgentServer := &mockAgentServer{
+		agents: []agentexec.ConnectedAgent{
+			{AgentID: "agent-delly", Hostname: "delly"},
+			{AgentID: "agent-minipc", Hostname: "minipc"},
+		},
+		executeFunc: func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+			routedToAgent = agentID
+			return &agentexec.CommandResultPayload{
+				Success: true,
+				Stdout:  "Command output",
+			}, nil
+		},
+	}
+
+	tmpDir := t.TempDir()
+	persistence := config.NewConfigPersistence(tmpDir)
+	svc := NewService(persistence, mockAgentServer)
+	svc.cfg = &config.AIConfig{Enabled: true}
+	svc.limits = executionLimits{
+		chatSlots:   make(chan struct{}, 10),
+		patrolSlots: make(chan struct{}, 10),
+	}
+	svc.policy = &mockPolicy{decision: agentexec.PolicyAllow}
+
+	// Setup patrol service with finding
+	mockState := &mockStateProvider{
+		state: models.StateSnapshot{
+			Containers: []models.Container{
+				{VMID: 112, Node: "minipc", Name: "debian-go", Instance: "delly"},
+			},
+		},
+	}
+	svc.stateProvider = mockState
+	svc.patrolService = NewPatrolService(svc, mockState)
+
+	// Add finding on node "minipc"
+	finding := &Finding{
+		ID:           "test-routing-finding",
+		Node:         "minipc",
+		ResourceID:   "delly:minipc:112",
+		ResourceName: "debian-go",
+		ResourceType: "container",
+	}
+	svc.patrolService.GetFindings().Add(finding)
+
+	// Create request with finding ID (like "Get Help" does)
+	req := ExecuteRequest{
+		FindingID: "test-routing-finding",
+		Prompt:    "Check disk usage",
+	}
+
+	// Enrich the request
+	svc.enrichRequestFromFinding(&req)
+
+	// Now execute a command tool call - should route to minipc
+	tc := providers.ToolCall{
+		Name: "run_command",
+		Input: map[string]interface{}{
+			"command": "df -h",
+		},
+	}
+
+	result, exec := svc.executeTool(context.Background(), req, tc)
+	
+	if !exec.Success {
+		t.Errorf("Command execution failed: %s", result)
+	}
+
+	// Verify it routed to the correct agent (minipc, not delly)
+	if routedToAgent != "agent-minipc" {
+		t.Errorf("Expected command to route to agent-minipc, but went to: %s", routedToAgent)
+	}
+}

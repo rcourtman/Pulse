@@ -1030,3 +1030,101 @@ func TestFindingsStore_GetSuppressionRules_Empty(t *testing.T) {
 	}
 }
 
+// TestFindingsStore_Dismiss_DifferentReasons tests the dismissal behavior based on reason:
+// - "not_an_issue": permanent suppression (true false positive)
+// - "expected_behavior": 30-day snooze (user accepts risk, but re-check later)
+// - "will_fix_later": just marked dismissed, no snooze or suppression
+func TestFindingsStore_Dismiss_DifferentReasons(t *testing.T) {
+	t.Run("not_an_issue creates permanent suppression", func(t *testing.T) {
+		store := NewFindingsStore()
+		f := &Finding{
+			ID:         "f1",
+			ResourceID: "res-1",
+			Severity:   FindingSeverityWarning,
+			Title:      "False Positive",
+			Category:   FindingCategoryPerformance,
+		}
+		store.Add(f)
+
+		store.Dismiss("f1", "not_an_issue", "Detection bug")
+
+		finding := store.Get("f1")
+		if !finding.Suppressed {
+			t.Error("Expected finding to be suppressed for 'not_an_issue'")
+		}
+		if finding.SnoozedUntil != nil {
+			t.Error("Should not set snooze for 'not_an_issue'")
+		}
+		if finding.DismissedReason != "not_an_issue" {
+			t.Errorf("Expected DismissedReason 'not_an_issue', got %s", finding.DismissedReason)
+		}
+	})
+
+	t.Run("expected_behavior acknowledges but stays visible", func(t *testing.T) {
+		store := NewFindingsStore()
+		f := &Finding{
+			ID:         "f2",
+			ResourceID: "res-2",
+			Severity:   FindingSeverityWarning,
+			Title:      "Expected Behavior",
+			Category:   FindingCategoryCapacity,
+		}
+		store.Add(f)
+
+		store.Dismiss("f2", "expected_behavior", "Disk fills during backup")
+
+		finding := store.Get("f2")
+		if finding.Suppressed {
+			t.Error("Should NOT set Suppressed for 'expected_behavior'")
+		}
+		if finding.SnoozedUntil != nil {
+			t.Error("Should NOT set snooze for 'expected_behavior' (just acknowledges)")
+		}
+		if finding.AcknowledgedAt == nil {
+			t.Error("Expected AcknowledgedAt to be set for 'expected_behavior'")
+		}
+		if finding.DismissedReason != "expected_behavior" {
+			t.Errorf("Expected DismissedReason 'expected_behavior', got %s", finding.DismissedReason)
+		}
+		if finding.UserNote != "Disk fills during backup" {
+			t.Errorf("Expected note to be saved, got %s", finding.UserNote)
+		}
+
+		// Finding is marked dismissed, so IsDismissed() returns true
+		if !finding.IsDismissed() {
+			t.Error("Finding should be marked as dismissed")
+		}
+	})
+
+	t.Run("will_fix_later acknowledges but stays visible", func(t *testing.T) {
+		store := NewFindingsStore()
+		f := &Finding{
+			ID:         "f3",
+			ResourceID: "res-3",
+			Severity:   FindingSeverityWarning,
+			Title:      "Will Fix Later",
+			Category:   FindingCategoryReliability,
+		}
+		store.Add(f)
+
+		store.Dismiss("f3", "will_fix_later", "Low priority")
+
+		finding := store.Get("f3")
+		if finding.Suppressed {
+			t.Error("Should NOT suppress for 'will_fix_later'")
+		}
+		if finding.SnoozedUntil != nil {
+			t.Error("Should NOT snooze for 'will_fix_later'")
+		}
+		if finding.AcknowledgedAt == nil {
+			t.Error("Expected AcknowledgedAt to be set")
+		}
+		if finding.DismissedReason != "will_fix_later" {
+			t.Errorf("Expected DismissedReason 'will_fix_later', got %s", finding.DismissedReason)
+		}
+		// Finding is marked dismissed
+		if !finding.IsDismissed() {
+			t.Error("Finding should be marked as dismissed")
+		}
+	})
+}

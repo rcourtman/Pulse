@@ -489,6 +489,11 @@ func (s *Service) StartPatrol(ctx context.Context) {
 			Bool("enabled", enabled).
 			Msg("Alert-triggered AI analysis configured")
 	}
+
+	// In demo/mock mode, inject realistic AI findings for showcasing
+	if IsDemoMode() {
+		patrol.InjectDemoFindings()
+	}
 }
 
 // StopPatrol stops the background patrol service
@@ -542,6 +547,72 @@ func (s *Service) ReconfigurePatrol() {
 		}
 		alertAnalyzer.SetEnabled(enabled)
 	}
+}
+
+// enrichRequestFromFinding looks up a patrol finding by ID and enriches the request
+// with the finding's context (node, resource ID, resource type, etc.)
+// This ensures proper command routing when the AI helps fix a patrol finding.
+// The function modifies the request in place.
+func (s *Service) enrichRequestFromFinding(req *ExecuteRequest) {
+	if req.FindingID == "" {
+		return
+	}
+
+	s.mu.RLock()
+	patrol := s.patrolService
+	s.mu.RUnlock()
+
+	if patrol == nil {
+		log.Debug().Str("finding_id", req.FindingID).Msg("Cannot enrich request - patrol service not available")
+		return
+	}
+
+	findings := patrol.GetFindings()
+	if findings == nil {
+		log.Debug().Str("finding_id", req.FindingID).Msg("Cannot enrich request - findings store not available")
+		return
+	}
+
+	finding := findings.Get(req.FindingID)
+	if finding == nil {
+		log.Debug().Str("finding_id", req.FindingID).Msg("Cannot enrich request - finding not found")
+		return
+	}
+
+	// Ensure context map exists
+	if req.Context == nil {
+		req.Context = make(map[string]interface{})
+	}
+
+	// Inject finding context (only if not already set)
+	if _, ok := req.Context["node"]; !ok && finding.Node != "" {
+		req.Context["node"] = finding.Node
+	}
+	if _, ok := req.Context["guestName"]; !ok && finding.ResourceName != "" {
+		req.Context["guestName"] = finding.ResourceName
+	}
+	if req.TargetID == "" && finding.ResourceID != "" {
+		req.TargetID = finding.ResourceID
+	}
+	if req.TargetType == "" && finding.ResourceType != "" {
+		req.TargetType = finding.ResourceType
+	}
+
+	// Also store the finding details for reference in context
+	req.Context["finding_resource_id"] = finding.ResourceID
+	req.Context["finding_resource_name"] = finding.ResourceName
+	req.Context["finding_resource_type"] = finding.ResourceType
+	if finding.Node != "" {
+		req.Context["finding_node"] = finding.Node
+	}
+
+	log.Debug().
+		Str("finding_id", req.FindingID).
+		Str("node", finding.Node).
+		Str("resource_id", finding.ResourceID).
+		Str("resource_name", finding.ResourceName).
+		Str("resource_type", finding.ResourceType).
+		Msg("Enriched request with finding context")
 }
 
 // GuestInfo contains information about a guest (VM or container) found by VMID lookup
@@ -1078,6 +1149,9 @@ func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteResp
 		return nil, err
 	}
 
+	// Enrich request with finding context if this is a "help me fix" request
+	s.enrichRequestFromFinding(&req)
+
 	s.mu.RLock()
 	defaultProvider := s.provider
 	agentServer := s.agentServer
@@ -1270,6 +1344,9 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	if err := s.enforceBudget(req.UseCase); err != nil {
 		return nil, err
 	}
+
+	// Enrich request with finding context if this is a "help me fix" request
+	s.enrichRequestFromFinding(&req)
 
 	s.mu.RLock()
 	defaultProvider := s.provider
