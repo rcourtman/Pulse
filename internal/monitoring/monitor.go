@@ -7182,6 +7182,37 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		Int("datastores", len(pbsInst.Datastores)).
 		Msg("PBS instance updated in state")
 
+	// Convert PBS datastores to Storage entries for unified storage view
+	if len(pbsInst.Datastores) > 0 && instanceCfg.MonitorDatastores {
+		var pbsStorages []models.Storage
+		for _, ds := range pbsInst.Datastores {
+			// Create a storage entry for this PBS datastore
+			storageID := fmt.Sprintf("pbs-%s-%s", instanceName, ds.Name)
+			pbsStorage := models.Storage{
+				ID:       storageID,
+				Name:     ds.Name,
+				Node:     instanceName, // Use PBS instance name as "node"
+				Instance: "pbs-" + instanceName,
+				Type:     "pbs",
+				Status:   ds.Status,
+				Total:    ds.Total,
+				Used:     ds.Used,
+				Free:     ds.Free,
+				Usage:    ds.Usage,
+				Content:  "backup", // PBS datastores are for backups
+				Shared:   true,     // PBS datastores are typically shared/network storage
+				Enabled:  true,
+				Active:   pbsInst.Status == "online",
+			}
+			pbsStorages = append(pbsStorages, pbsStorage)
+		}
+		m.state.UpdateStorageForInstance("pbs-"+instanceName, pbsStorages)
+		log.Debug().
+			Str("instance", instanceName).
+			Int("storageEntries", len(pbsStorages)).
+			Msg("Added PBS datastores to unified storage view")
+	}
+
 	if m.alertManager != nil {
 		m.alertManager.CheckPBS(pbsInst)
 	}
