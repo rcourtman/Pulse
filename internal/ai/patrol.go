@@ -126,6 +126,8 @@ type PatrolConfig struct {
 	AnalyzePBS bool `json:"analyze_pbs"`
 	// AnalyzeHosts controls whether to analyze agent hosts (RAID, sensors)
 	AnalyzeHosts bool `json:"analyze_hosts"`
+	// AnalyzeKubernetes controls whether to analyze Kubernetes clusters
+	AnalyzeKubernetes bool `json:"analyze_kubernetes"`
 }
 
 // GetInterval returns the effective patrol interval, handling migration from old config
@@ -144,14 +146,15 @@ func (c PatrolConfig) GetInterval() time.Duration {
 // DefaultPatrolConfig returns sensible defaults
 func DefaultPatrolConfig() PatrolConfig {
 	return PatrolConfig{
-		Enabled:        true,
-		Interval:       15 * time.Minute,
-		AnalyzeNodes:   true,
-		AnalyzeGuests:  true,
-		AnalyzeDocker:  true,
-		AnalyzeStorage: true,
-		AnalyzePBS:     true,
-		AnalyzeHosts:   true,
+		Enabled:           true,
+		Interval:          15 * time.Minute,
+		AnalyzeNodes:      true,
+		AnalyzeGuests:     true,
+		AnalyzeDocker:     true,
+		AnalyzeStorage:    true,
+		AnalyzePBS:        true,
+		AnalyzeHosts:      true,
+		AnalyzeKubernetes: true,
 	}
 }
 
@@ -178,12 +181,13 @@ type PatrolRunRecord struct {
 	Type             string        `json:"type"` // Always "patrol" now (kept for backwards compat)
 	ResourcesChecked int           `json:"resources_checked"`
 	// Breakdown by resource type
-	NodesChecked   int `json:"nodes_checked"`
-	GuestsChecked  int `json:"guests_checked"`
-	DockerChecked  int `json:"docker_checked"`
-	StorageChecked int `json:"storage_checked"`
-	HostsChecked   int `json:"hosts_checked"`
-	PBSChecked     int `json:"pbs_checked"`
+	NodesChecked      int `json:"nodes_checked"`
+	GuestsChecked     int `json:"guests_checked"`
+	DockerChecked     int `json:"docker_checked"`
+	StorageChecked    int `json:"storage_checked"`
+	HostsChecked      int `json:"hosts_checked"`
+	PBSChecked        int `json:"pbs_checked"`
+	KubernetesChecked int `json:"kubernetes_checked"`
 	// Findings from this run
 	NewFindings      int      `json:"new_findings"`
 	ExistingFindings int      `json:"existing_findings"`
@@ -728,18 +732,19 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 
 	// Track run statistics
 	var runStats struct {
-		resourceCount    int
-		nodesChecked     int
-		guestsChecked    int
-		dockerChecked    int
-		storageChecked   int
-		hostsChecked     int
-		pbsChecked       int
-		newFindings      int
-		existingFindings int
-		findingIDs       []string
-		errors           int
-		aiAnalysis       *AIAnalysisResult // Stores the AI's analysis for the run record
+		resourceCount     int
+		nodesChecked      int
+		guestsChecked     int
+		dockerChecked     int
+		storageChecked    int
+		hostsChecked      int
+		pbsChecked        int
+		kubernetesChecked int
+		newFindings       int
+		existingFindings  int
+		findingIDs        []string
+		errors            int
+		aiAnalysis        *AIAnalysisResult // Stores the AI's analysis for the run record
 	}
 	var newFindings []*Finding
 
@@ -784,8 +789,10 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 	runStats.storageChecked = len(state.Storage)
 	runStats.pbsChecked = len(state.PBSInstances)
 	runStats.hostsChecked = len(state.Hosts)
+	runStats.kubernetesChecked = len(state.KubernetesClusters)
 	runStats.resourceCount = runStats.nodesChecked + runStats.guestsChecked +
-		runStats.dockerChecked + runStats.storageChecked + runStats.pbsChecked + runStats.hostsChecked
+		runStats.dockerChecked + runStats.storageChecked + runStats.pbsChecked + runStats.hostsChecked +
+		runStats.kubernetesChecked
 
 	hasPatrolFeature := p.aiService == nil || p.aiService.HasLicenseFeature(FeatureAIPatrol)
 	// Check license before running LLM analysis (Pro feature)
@@ -909,27 +916,29 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 
 	// Create run record
 	runRecord := PatrolRunRecord{
-		ID:               fmt.Sprintf("%d", start.UnixNano()),
-		StartedAt:        start,
-		CompletedAt:      completedAt,
-		Duration:         duration,
-		Type:             patrolType,
-		ResourcesChecked: runStats.resourceCount,
-		NodesChecked:     runStats.nodesChecked,
-		GuestsChecked:    runStats.guestsChecked,
-		DockerChecked:    runStats.dockerChecked,
-		StorageChecked:   runStats.storageChecked,
-		HostsChecked:     runStats.hostsChecked,
-		PBSChecked:       runStats.pbsChecked,
-		NewFindings:      runStats.newFindings,
-		ExistingFindings: runStats.existingFindings,
-		ResolvedFindings: resolvedCount,
-		AutoFixCount:     runbookResolved,
-		FindingsSummary:  findingsSummaryStr,
-		FindingIDs:       runStats.findingIDs,
-		ErrorCount:       runStats.errors,
-		Status:           status,
+		ID:                fmt.Sprintf("%d", start.UnixNano()),
+		StartedAt:         start,
+		CompletedAt:       completedAt,
+		Duration:          duration,
+		Type:              patrolType,
+		ResourcesChecked:  runStats.resourceCount,
+		NodesChecked:      runStats.nodesChecked,
+		GuestsChecked:     runStats.guestsChecked,
+		DockerChecked:     runStats.dockerChecked,
+		StorageChecked:    runStats.storageChecked,
+		HostsChecked:      runStats.hostsChecked,
+		PBSChecked:        runStats.pbsChecked,
+		KubernetesChecked: runStats.kubernetesChecked,
+		NewFindings:       runStats.newFindings,
+		ExistingFindings:  runStats.existingFindings,
+		ResolvedFindings:  resolvedCount,
+		AutoFixCount:      runbookResolved,
+		FindingsSummary:   findingsSummaryStr,
+		FindingIDs:        runStats.findingIDs,
+		ErrorCount:        runStats.errors,
+		Status:            status,
 	}
+
 
 	// Add AI analysis details if available
 	if runStats.aiAnalysis != nil {
@@ -1048,6 +1057,12 @@ func (p *PatrolService) runHeuristicAnalysis(state models.StateSnapshot) []*Find
 	if cfg.AnalyzeHosts {
 		for _, host := range state.Hosts {
 			findings = append(findings, p.analyzeHost(host)...)
+		}
+	}
+
+	if cfg.AnalyzeKubernetes {
+		for _, cluster := range state.KubernetesClusters {
+			findings = append(findings, p.analyzeKubernetesCluster(cluster)...)
 		}
 	}
 
@@ -1238,17 +1253,25 @@ func (p *PatrolService) analyzeGuest(id, name, guestType, node, status string,
 	return findings
 }
 
-// analyzeDockerHost checks a Docker host for issues
+// analyzeDockerHost checks a Docker/Podman host for issues
 func (p *PatrolService) analyzeDockerHost(host models.DockerHost) []*Finding {
 	var findings []*Finding
 
 	hostName := host.Hostname
-	if host.DisplayName != "" {
+	if host.CustomDisplayName != "" {
+		hostName = host.CustomDisplayName
+	} else if host.DisplayName != "" {
 		hostName = host.DisplayName
 	}
 
+	// Determine runtime type for better messages
+	runtime := "Docker"
+	if host.Runtime == "podman" || strings.Contains(strings.ToLower(host.RuntimeVersion), "podman") {
+		runtime = "Podman"
+	}
+
 	// Host offline
-	if host.Status != "online" && host.Status != "connected" {
+	if host.Status != "online" && host.Status != "connected" && host.Status != "" {
 		findings = append(findings, &Finding{
 			ID:             generateFindingID(host.ID, "reliability", "offline"),
 			Key:            "docker-host-offline",
@@ -1257,46 +1280,132 @@ func (p *PatrolService) analyzeDockerHost(host models.DockerHost) []*Finding {
 			ResourceID:     host.ID,
 			ResourceName:   hostName,
 			ResourceType:   "docker_host",
-			Title:          "Docker host offline",
-			Description:    fmt.Sprintf("Docker host '%s' is not responding", hostName),
-			Recommendation: "Check network connectivity and docker-agent service",
+			Title:          runtime + " host offline",
+			Description:    fmt.Sprintf("%s host '%s' is not responding (status: %s)", runtime, hostName, host.Status),
+			Recommendation: "Check network connectivity and pulse-agent service on the host",
+			Evidence:       fmt.Sprintf("Status: %s", host.Status),
+		})
+	}
+
+	// Host not seen recently (stale data)
+	if !host.LastSeen.IsZero() && time.Since(host.LastSeen) > 10*time.Minute {
+		findings = append(findings, &Finding{
+			ID:             generateFindingID(host.ID, "reliability", "stale"),
+			Key:            "docker-host-stale",
+			Severity:       FindingSeverityWarning,
+			Category:       FindingCategoryReliability,
+			ResourceID:     host.ID,
+			ResourceName:   hostName,
+			ResourceType:   "docker_host",
+			Title:          runtime + " host not reporting",
+			Description:    fmt.Sprintf("%s host '%s' has not reported in %s", runtime, hostName, formatDurationPatrol(time.Since(host.LastSeen))),
+			Recommendation: "Check pulse-agent service status and network connectivity",
+			Evidence:       fmt.Sprintf("Last seen: %s", host.LastSeen.Format(time.RFC3339)),
 		})
 	}
 
 	// Check individual containers
 	for _, c := range host.Containers {
-		// Restarting containers
-		if c.State == "restarting" || c.RestartCount > 3 {
+		containerName := c.Name
+
+		// Restarting containers or containers in restart loop
+		if c.State == "restarting" || c.RestartCount > 5 {
+			severity := FindingSeverityWarning
+			if c.RestartCount > 10 {
+				severity = FindingSeverityCritical
+			}
 			findings = append(findings, &Finding{
 				ID:             generateFindingID(c.ID, "reliability", "restart-loop"),
-				Key:            "restart-loop",
-				Severity:       FindingSeverityWarning,
+				Key:            "docker-restart-loop",
+				Severity:       severity,
 				Category:       FindingCategoryReliability,
 				ResourceID:     c.ID,
-				ResourceName:   c.Name,
+				ResourceName:   containerName,
 				ResourceType:   "docker_container",
 				Node:           hostName,
 				Title:          "Container restart loop",
-				Description:    fmt.Sprintf("Container '%s' has restarted %d times", c.Name, c.RestartCount),
-				Recommendation: "Check container logs: docker logs " + c.Name,
+				Description:    fmt.Sprintf("Container '%s' on '%s' has restarted %d times", containerName, hostName, c.RestartCount),
+				Recommendation: fmt.Sprintf("Check container logs: docker logs %s", containerName),
 				Evidence:       fmt.Sprintf("State: %s, Restarts: %d", c.State, c.RestartCount),
 			})
 		}
 
-		// High memory containers
-		if c.MemoryPercent > 90 {
+		// Unhealthy containers (health check failing)
+		if strings.ToLower(c.Health) == "unhealthy" {
 			findings = append(findings, &Finding{
-				ID:             generateFindingID(c.ID, "performance", "high-memory"),
-				Key:            "high-memory",
-				Severity:       FindingSeverityWatch,
+				ID:             generateFindingID(c.ID, "reliability", "unhealthy"),
+				Key:            "docker-unhealthy",
+				Severity:       FindingSeverityWarning,
+				Category:       FindingCategoryReliability,
+				ResourceID:     c.ID,
+				ResourceName:   containerName,
+				ResourceType:   "docker_container",
+				Node:           hostName,
+				Title:          "Container health check failing",
+				Description:    fmt.Sprintf("Container '%s' on '%s' is reporting unhealthy", containerName, hostName),
+				Recommendation: fmt.Sprintf("Check health check logs: docker inspect %s | jq '.[0].State.Health'", containerName),
+				Evidence:       fmt.Sprintf("Health: %s, State: %s", c.Health, c.State),
+			})
+		}
+
+		// Exited or dead containers with non-zero exit code
+		if (c.State == "exited" || c.State == "dead") && c.ExitCode != 0 {
+			findings = append(findings, &Finding{
+				ID:             generateFindingID(c.ID, "reliability", "exited-error"),
+				Key:            "docker-exited-error",
+				Severity:       FindingSeverityWarning,
+				Category:       FindingCategoryReliability,
+				ResourceID:     c.ID,
+				ResourceName:   containerName,
+				ResourceType:   "docker_container",
+				Node:           hostName,
+				Title:          "Container exited with error",
+				Description:    fmt.Sprintf("Container '%s' on '%s' exited with code %d", containerName, hostName, c.ExitCode),
+				Recommendation: fmt.Sprintf("Check container logs: docker logs --tail 100 %s", containerName),
+				Evidence:       fmt.Sprintf("State: %s, Exit code: %d", c.State, c.ExitCode),
+			})
+		}
+
+		// High CPU usage
+		if c.CPUPercent > 90 {
+			severity := FindingSeverityWatch
+			if c.CPUPercent > 95 {
+				severity = FindingSeverityWarning
+			}
+			findings = append(findings, &Finding{
+				ID:             generateFindingID(c.ID, "performance", "high-cpu"),
+				Key:            "docker-high-cpu",
+				Severity:       severity,
 				Category:       FindingCategoryPerformance,
 				ResourceID:     c.ID,
-				ResourceName:   c.Name,
+				ResourceName:   containerName,
+				ResourceType:   "docker_container",
+				Node:           hostName,
+				Title:          "High CPU usage",
+				Description:    fmt.Sprintf("Container '%s' on '%s' using %.0f%% CPU", containerName, hostName, c.CPUPercent),
+				Recommendation: "Check for runaway processes or resource-intensive operations",
+				Evidence:       fmt.Sprintf("CPU: %.1f%%", c.CPUPercent),
+			})
+		}
+
+		// High memory usage
+		if c.MemoryPercent > 90 {
+			severity := FindingSeverityWatch
+			if c.MemoryPercent > 95 {
+				severity = FindingSeverityWarning
+			}
+			findings = append(findings, &Finding{
+				ID:             generateFindingID(c.ID, "performance", "high-memory"),
+				Key:            "docker-high-memory",
+				Severity:       severity,
+				Category:       FindingCategoryPerformance,
+				ResourceID:     c.ID,
+				ResourceName:   containerName,
 				ResourceType:   "docker_container",
 				Node:           hostName,
 				Title:          "High memory usage",
-				Description:    fmt.Sprintf("Container '%s' using %.0f%% of allocated memory", c.Name, c.MemoryPercent),
-				Recommendation: "Consider increasing container memory limit",
+				Description:    fmt.Sprintf("Container '%s' on '%s' using %.0f%% of allocated memory", containerName, hostName, c.MemoryPercent),
+				Recommendation: "Consider increasing container memory limit or optimizing memory usage",
 				Evidence:       fmt.Sprintf("Memory: %.1f%%", c.MemoryPercent),
 			})
 		}
@@ -1304,6 +1413,7 @@ func (p *PatrolService) analyzeDockerHost(host models.DockerHost) []*Finding {
 
 	return findings
 }
+
 
 // analyzeStorage checks storage for issues
 func (p *PatrolService) analyzeStorage(storage models.Storage) []*Finding {
@@ -1811,6 +1921,175 @@ func (p *PatrolService) analyzeHost(host models.Host) []*Finding {
 	return findings
 }
 
+// analyzeKubernetesCluster checks a Kubernetes cluster for issues
+func (p *PatrolService) analyzeKubernetesCluster(cluster models.KubernetesCluster) []*Finding {
+	var findings []*Finding
+
+	clusterName := cluster.CustomDisplayName
+	if clusterName == "" {
+		clusterName = cluster.DisplayName
+	}
+	if clusterName == "" {
+		clusterName = cluster.Name
+	}
+	if clusterName == "" {
+		clusterName = cluster.ID
+	}
+
+	// Check cluster connectivity (if last seen is too old)
+	if !cluster.LastSeen.IsZero() && time.Since(cluster.LastSeen) > 10*time.Minute {
+		findings = append(findings, &Finding{
+			ID:             generateFindingID(cluster.ID, "reliability", "cluster-offline"),
+			Key:            "kubernetes-cluster-offline",
+			Severity:       FindingSeverityCritical,
+			Category:       FindingCategoryReliability,
+			ResourceID:     cluster.ID,
+			ResourceName:   clusterName,
+			ResourceType:   "kubernetes_cluster",
+			Title:          "Kubernetes cluster offline",
+			Description:    fmt.Sprintf("Kubernetes cluster '%s' has not reported in %s", clusterName, formatDurationPatrol(time.Since(cluster.LastSeen))),
+			Recommendation: "Check the Pulse Kubernetes agent deployment and cluster connectivity",
+			Evidence:       fmt.Sprintf("Last seen: %s", cluster.LastSeen.Format(time.RFC3339)),
+		})
+	}
+
+	// Check for pending uninstall
+	if cluster.PendingUninstall {
+		findings = append(findings, &Finding{
+			ID:             generateFindingID(cluster.ID, "configuration", "pending-uninstall"),
+			Key:            "kubernetes-pending-uninstall",
+			Severity:       FindingSeverityInfo,
+			Category:       FindingCategoryGeneral,
+			ResourceID:     cluster.ID,
+			ResourceName:   clusterName,
+			ResourceType:   "kubernetes_cluster",
+			Title:          "Kubernetes cluster pending uninstall",
+			Description:    fmt.Sprintf("Kubernetes cluster '%s' is marked for uninstall", clusterName),
+			Recommendation: "Complete the uninstall process or cancel if unintended",
+		})
+	}
+
+	// Check for unhealthy nodes
+	unhealthyNodes := 0
+	unschedulableNodes := 0
+	for _, node := range cluster.Nodes {
+		if !node.Ready {
+			unhealthyNodes++
+		}
+		if node.Unschedulable {
+			unschedulableNodes++
+		}
+	}
+
+	if unhealthyNodes > 0 {
+		severity := FindingSeverityWarning
+		if unhealthyNodes == len(cluster.Nodes) {
+			severity = FindingSeverityCritical // All nodes are unhealthy
+		}
+		findings = append(findings, &Finding{
+			ID:             generateFindingID(cluster.ID, "reliability", "nodes-not-ready"),
+			Key:            "kubernetes-nodes-not-ready",
+			Severity:       severity,
+			Category:       FindingCategoryReliability,
+			ResourceID:     cluster.ID,
+			ResourceName:   clusterName,
+			ResourceType:   "kubernetes_cluster",
+			Title:          "Kubernetes nodes not ready",
+			Description:    fmt.Sprintf("%d of %d nodes in cluster '%s' are not ready", unhealthyNodes, len(cluster.Nodes), clusterName),
+			Recommendation: "Check node conditions with 'kubectl get nodes' and 'kubectl describe node <name>'",
+			Evidence:       fmt.Sprintf("Not ready: %d, Unschedulable: %d, Total: %d", unhealthyNodes, unschedulableNodes, len(cluster.Nodes)),
+		})
+	}
+
+	// Check for pods in problematic states
+	crashLoopPods := 0
+	pendingPods := 0
+	failedPods := 0
+	highRestartPods := 0
+
+	for _, pod := range cluster.Pods {
+		phase := strings.ToLower(strings.TrimSpace(pod.Phase))
+
+		if phase == "failed" {
+			failedPods++
+		} else if phase == "pending" {
+			pendingPods++
+		}
+
+		// Check for CrashLoopBackOff or high restarts
+		if pod.Restarts > 10 {
+			highRestartPods++
+		}
+		for _, container := range pod.Containers {
+			if strings.Contains(strings.ToLower(container.Reason), "crashloop") {
+				crashLoopPods++
+				break
+			}
+		}
+	}
+
+	if crashLoopPods > 0 {
+		findings = append(findings, &Finding{
+			ID:             generateFindingID(cluster.ID, "reliability", "crashloop-pods"),
+			Key:            "kubernetes-crashloop-pods",
+			Severity:       FindingSeverityWarning,
+			Category:       FindingCategoryReliability,
+			ResourceID:     cluster.ID,
+			ResourceName:   clusterName,
+			ResourceType:   "kubernetes_cluster",
+			Title:          "Pods in CrashLoopBackOff",
+			Description:    fmt.Sprintf("%d pod(s) in cluster '%s' are in CrashLoopBackOff", crashLoopPods, clusterName),
+			Recommendation: "Check pod logs with 'kubectl logs <pod>' and events with 'kubectl describe pod <pod>'",
+			Evidence:       fmt.Sprintf("CrashLoopBackOff: %d", crashLoopPods),
+		})
+	}
+
+	if failedPods > 0 {
+		findings = append(findings, &Finding{
+			ID:             generateFindingID(cluster.ID, "reliability", "failed-pods"),
+			Key:            "kubernetes-failed-pods",
+			Severity:       FindingSeverityWarning,
+			Category:       FindingCategoryReliability,
+			ResourceID:     cluster.ID,
+			ResourceName:   clusterName,
+			ResourceType:   "kubernetes_cluster",
+			Title:          "Failed pods",
+			Description:    fmt.Sprintf("%d pod(s) in cluster '%s' are in Failed state", failedPods, clusterName),
+			Recommendation: "Check pod logs and events. Failed pods may need manual cleanup or intervention.",
+			Evidence:       fmt.Sprintf("Failed: %d", failedPods),
+		})
+	}
+
+	// Check for deployments not at desired replica count
+	unhealthyDeployments := 0
+	for _, deployment := range cluster.Deployments {
+		if deployment.DesiredReplicas > 0 {
+			if deployment.AvailableReplicas < deployment.DesiredReplicas ||
+				deployment.ReadyReplicas < deployment.DesiredReplicas {
+				unhealthyDeployments++
+			}
+		}
+	}
+
+	if unhealthyDeployments > 0 {
+		findings = append(findings, &Finding{
+			ID:             generateFindingID(cluster.ID, "reliability", "deployments-unavailable"),
+			Key:            "kubernetes-deployments-unavailable",
+			Severity:       FindingSeverityWarning,
+			Category:       FindingCategoryReliability,
+			ResourceID:     cluster.ID,
+			ResourceName:   clusterName,
+			ResourceType:   "kubernetes_cluster",
+			Title:          "Deployments not fully available",
+			Description:    fmt.Sprintf("%d deployment(s) in cluster '%s' are not at desired replica count", unhealthyDeployments, clusterName),
+			Recommendation: "Check deployment status with 'kubectl rollout status' and pod events",
+			Evidence:       fmt.Sprintf("Unhealthy deployments: %d of %d", unhealthyDeployments, len(cluster.Deployments)),
+		})
+	}
+
+	return findings
+}
+
 // AIAnalysisResult contains the results of an AI analysis
 type AIAnalysisResult struct {
 	Response     string     // The AI's raw response text
@@ -1818,6 +2097,7 @@ type AIAnalysisResult struct {
 	InputTokens  int
 	OutputTokens int
 }
+
 
 // runAIAnalysis uses the LLM to analyze infrastructure and identify issues
 func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSnapshot) (*AIAnalysisResult, error) {
@@ -1925,7 +2205,7 @@ KEY: <stable issue key>
 SEVERITY: critical|warning|watch|info
 CATEGORY: performance|reliability|security|capacity|configuration
 RESOURCE: <resource name or ID>
-RESOURCE_TYPE: node|vm|container|docker_container|storage|host
+RESOURCE_TYPE: node|vm|container|docker_container|storage|host|kubernetes_cluster
 TITLE: <brief issue title>
 DESCRIPTION: <detailed description of the issue>
 RECOMMENDATION: <specific actionable recommendation>
@@ -2075,8 +2355,66 @@ func (p *PatrolService) buildInfrastructureSummary(state models.StateSnapshot) s
 		sb.WriteString("\n")
 	}
 
+	// Kubernetes clusters
+	if len(state.KubernetesClusters) > 0 {
+		sb.WriteString("## Kubernetes Clusters\n")
+		for _, cluster := range state.KubernetesClusters {
+			clusterName := cluster.CustomDisplayName
+			if clusterName == "" {
+				clusterName = cluster.DisplayName
+			}
+			if clusterName == "" {
+				clusterName = cluster.Name
+			}
+			if clusterName == "" {
+				clusterName = cluster.ID
+			}
+
+			// Count node health
+			readyNodes := 0
+			for _, node := range cluster.Nodes {
+				if node.Ready {
+					readyNodes++
+				}
+			}
+
+			// Count pod health
+			runningPods := 0
+			problemPods := 0
+			for _, pod := range cluster.Pods {
+				phase := strings.ToLower(strings.TrimSpace(pod.Phase))
+				if phase == "running" {
+					runningPods++
+				} else if phase == "failed" || phase == "pending" {
+					problemPods++
+				}
+			}
+
+			// Count deployment health
+			healthyDeployments := 0
+			for _, d := range cluster.Deployments {
+				if d.DesiredReplicas <= 0 || (d.AvailableReplicas >= d.DesiredReplicas && d.ReadyReplicas >= d.DesiredReplicas) {
+					healthyDeployments++
+				}
+			}
+
+			lastSeen := "unknown"
+			if !cluster.LastSeen.IsZero() {
+				lastSeen = fmt.Sprintf("%s ago", formatDurationPatrol(time.Since(cluster.LastSeen)))
+			}
+
+			sb.WriteString(fmt.Sprintf("- **%s** (ID:%s): Version=%s, LastSeen=%s\n",
+				clusterName, cluster.ID, cluster.Version, lastSeen))
+			sb.WriteString(fmt.Sprintf("  - Nodes: %d/%d ready\n", readyNodes, len(cluster.Nodes)))
+			sb.WriteString(fmt.Sprintf("  - Pods: %d running, %d problem, %d total\n", runningPods, problemPods, len(cluster.Pods)))
+			sb.WriteString(fmt.Sprintf("  - Deployments: %d/%d healthy\n", healthyDeployments, len(cluster.Deployments)))
+		}
+		sb.WriteString("\n")
+	}
+
 	return sb.String()
 }
+
 
 // buildEnrichedContext creates context with historical trends and predictions
 // Falls back to basic summary if metrics history is not available

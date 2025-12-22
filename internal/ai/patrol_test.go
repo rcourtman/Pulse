@@ -1,9 +1,14 @@
 package ai
 
 import (
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
+
+
 
 
 func TestDefaultPatrolThresholds(t *testing.T) {
@@ -141,6 +146,9 @@ func TestDefaultPatrolConfig(t *testing.T) {
 	}
 	if !cfg.AnalyzeHosts {
 		t.Error("Expected AnalyzeHosts to be true by default")
+	}
+	if !cfg.AnalyzeKubernetes {
+		t.Error("Expected AnalyzeKubernetes to be true by default")
 	}
 }
 
@@ -1054,5 +1062,393 @@ func TestNormalizeFindingKey(t *testing.T) {
 				t.Errorf("normalizeFindingKey(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestPatrolService_AnalyzeKubernetesCluster_HealthyCluster(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	cluster := models.KubernetesCluster{
+		ID:       "k8s-test",
+		Name:     "test-cluster",
+		LastSeen: time.Now(),
+		Nodes: []models.KubernetesNode{
+			{Name: "node-1", Ready: true},
+			{Name: "node-2", Ready: true},
+		},
+		Pods: []models.KubernetesPod{
+			{Name: "pod-1", Namespace: "default", Phase: "Running"},
+			{Name: "pod-2", Namespace: "default", Phase: "Running"},
+		},
+		Deployments: []models.KubernetesDeployment{
+			{Name: "deploy-1", Namespace: "default", DesiredReplicas: 2, AvailableReplicas: 2, ReadyReplicas: 2},
+		},
+	}
+
+	findings := ps.analyzeKubernetesCluster(cluster)
+
+	if len(findings) != 0 {
+		t.Errorf("Expected no findings for healthy cluster, got %d", len(findings))
+		for _, f := range findings {
+			t.Logf("Finding: %s - %s", f.Key, f.Title)
+		}
+	}
+}
+
+func TestPatrolService_AnalyzeKubernetesCluster_OfflineCluster(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	cluster := models.KubernetesCluster{
+		ID:       "k8s-test",
+		Name:     "offline-cluster",
+		LastSeen: time.Now().Add(-20 * time.Minute), // 20 minutes ago
+	}
+
+	findings := ps.analyzeKubernetesCluster(cluster)
+
+	if len(findings) != 1 {
+		t.Errorf("Expected 1 finding for offline cluster, got %d", len(findings))
+		return
+	}
+
+	if findings[0].Key != "kubernetes-cluster-offline" {
+		t.Errorf("Expected key 'kubernetes-cluster-offline', got '%s'", findings[0].Key)
+	}
+	if findings[0].Severity != FindingSeverityCritical {
+		t.Errorf("Expected critical severity, got %s", findings[0].Severity)
+	}
+}
+
+func TestPatrolService_AnalyzeKubernetesCluster_UnhealthyNodes(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	cluster := models.KubernetesCluster{
+		ID:       "k8s-test",
+		Name:     "test-cluster",
+		LastSeen: time.Now(),
+		Nodes: []models.KubernetesNode{
+			{Name: "node-1", Ready: true},
+			{Name: "node-2", Ready: false}, // Unhealthy
+		},
+	}
+
+	findings := ps.analyzeKubernetesCluster(cluster)
+
+	found := false
+	for _, f := range findings {
+		if f.Key == "kubernetes-nodes-not-ready" {
+			found = true
+			if f.Severity != FindingSeverityWarning {
+				t.Errorf("Expected warning severity for partial node failure, got %s", f.Severity)
+			}
+		}
+	}
+
+	if !found {
+		t.Error("Expected finding for unhealthy nodes")
+	}
+}
+
+func TestPatrolService_AnalyzeKubernetesCluster_AllNodesUnhealthy(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	cluster := models.KubernetesCluster{
+		ID:       "k8s-test",
+		Name:     "test-cluster",
+		LastSeen: time.Now(),
+		Nodes: []models.KubernetesNode{
+			{Name: "node-1", Ready: false},
+			{Name: "node-2", Ready: false},
+		},
+	}
+
+	findings := ps.analyzeKubernetesCluster(cluster)
+
+	found := false
+	for _, f := range findings {
+		if f.Key == "kubernetes-nodes-not-ready" {
+			found = true
+			if f.Severity != FindingSeverityCritical {
+				t.Errorf("Expected critical severity when all nodes are unhealthy, got %s", f.Severity)
+			}
+		}
+	}
+
+	if !found {
+		t.Error("Expected finding for all nodes unhealthy")
+	}
+}
+
+func TestPatrolService_AnalyzeKubernetesCluster_CrashLoopPods(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	cluster := models.KubernetesCluster{
+		ID:       "k8s-test",
+		Name:     "test-cluster",
+		LastSeen: time.Now(),
+		Pods: []models.KubernetesPod{
+			{
+				Name:      "crashloop-pod",
+				Namespace: "default",
+				Phase:     "Running",
+				Containers: []models.KubernetesPodContainer{
+					{Name: "main", Ready: false, Reason: "CrashLoopBackOff"},
+				},
+			},
+		},
+	}
+
+	findings := ps.analyzeKubernetesCluster(cluster)
+
+	found := false
+	for _, f := range findings {
+		if f.Key == "kubernetes-crashloop-pods" {
+			found = true
+			if f.Severity != FindingSeverityWarning {
+				t.Errorf("Expected warning severity, got %s", f.Severity)
+			}
+		}
+	}
+
+	if !found {
+		t.Error("Expected finding for CrashLoopBackOff pods")
+	}
+}
+
+func TestPatrolService_AnalyzeKubernetesCluster_UnavailableDeployments(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	cluster := models.KubernetesCluster{
+		ID:       "k8s-test",
+		Name:     "test-cluster",
+		LastSeen: time.Now(),
+		Deployments: []models.KubernetesDeployment{
+			{
+				Name:              "broken-deploy",
+				Namespace:         "default",
+				DesiredReplicas:   3,
+				AvailableReplicas: 1, // Only 1 of 3 available
+				ReadyReplicas:     1,
+			},
+		},
+	}
+
+	findings := ps.analyzeKubernetesCluster(cluster)
+
+	found := false
+	for _, f := range findings {
+		if f.Key == "kubernetes-deployments-unavailable" {
+			found = true
+			if f.Severity != FindingSeverityWarning {
+				t.Errorf("Expected warning severity, got %s", f.Severity)
+			}
+		}
+	}
+
+	if !found {
+		t.Error("Expected finding for unavailable deployments")
+	}
+}
+
+// Docker/Podman analysis tests
+
+func TestPatrolService_AnalyzeDockerHost_HealthyHost(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	host := models.DockerHost{
+		ID:       "docker-test",
+		Hostname: "docker-host",
+		Status:   "online",
+		LastSeen: time.Now(),
+		Containers: []models.DockerContainer{
+			{ID: "c1", Name: "healthy-container", State: "running", Health: "healthy"},
+		},
+	}
+
+	findings := ps.analyzeDockerHost(host)
+
+	if len(findings) != 0 {
+		t.Errorf("Expected no findings for healthy host, got %d", len(findings))
+		for _, f := range findings {
+			t.Logf("Finding: %s - %s", f.Key, f.Title)
+		}
+	}
+}
+
+func TestPatrolService_AnalyzeDockerHost_OfflineHost(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	host := models.DockerHost{
+		ID:       "docker-test",
+		Hostname: "docker-host",
+		Status:   "offline",
+		LastSeen: time.Now(),
+	}
+
+	findings := ps.analyzeDockerHost(host)
+
+	found := false
+	for _, f := range findings {
+		if f.Key == "docker-host-offline" {
+			found = true
+			if f.Severity != FindingSeverityCritical {
+				t.Errorf("Expected critical severity, got %s", f.Severity)
+			}
+		}
+	}
+
+	if !found {
+		t.Error("Expected finding for offline host")
+	}
+}
+
+func TestPatrolService_AnalyzeDockerHost_UnhealthyContainer(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	host := models.DockerHost{
+		ID:       "docker-test",
+		Hostname: "docker-host",
+		Status:   "online",
+		LastSeen: time.Now(),
+		Containers: []models.DockerContainer{
+			{ID: "c1", Name: "unhealthy-container", State: "running", Health: "unhealthy"},
+		},
+	}
+
+	findings := ps.analyzeDockerHost(host)
+
+	found := false
+	for _, f := range findings {
+		if f.Key == "docker-unhealthy" {
+			found = true
+			if f.Severity != FindingSeverityWarning {
+				t.Errorf("Expected warning severity, got %s", f.Severity)
+			}
+		}
+	}
+
+	if !found {
+		t.Error("Expected finding for unhealthy container")
+	}
+}
+
+func TestPatrolService_AnalyzeDockerHost_ExitedWithError(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	host := models.DockerHost{
+		ID:       "docker-test",
+		Hostname: "docker-host",
+		Status:   "online",
+		LastSeen: time.Now(),
+		Containers: []models.DockerContainer{
+			{ID: "c1", Name: "crashed-container", State: "exited", ExitCode: 1},
+		},
+	}
+
+	findings := ps.analyzeDockerHost(host)
+
+	found := false
+	for _, f := range findings {
+		if f.Key == "docker-exited-error" {
+			found = true
+			if f.Severity != FindingSeverityWarning {
+				t.Errorf("Expected warning severity, got %s", f.Severity)
+			}
+		}
+	}
+
+	if !found {
+		t.Error("Expected finding for container exited with error")
+	}
+}
+
+func TestPatrolService_AnalyzeDockerHost_RestartLoop(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	host := models.DockerHost{
+		ID:       "docker-test",
+		Hostname: "docker-host",
+		Status:   "online",
+		LastSeen: time.Now(),
+		Containers: []models.DockerContainer{
+			{ID: "c1", Name: "restarting-container", State: "running", RestartCount: 15},
+		},
+	}
+
+	findings := ps.analyzeDockerHost(host)
+
+	found := false
+	for _, f := range findings {
+		if f.Key == "docker-restart-loop" {
+			found = true
+			// RestartCount > 10 should be critical
+			if f.Severity != FindingSeverityCritical {
+				t.Errorf("Expected critical severity for 15 restarts, got %s", f.Severity)
+			}
+		}
+	}
+
+	if !found {
+		t.Error("Expected finding for container restart loop")
+	}
+}
+
+func TestPatrolService_AnalyzeDockerHost_HighCPU(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	host := models.DockerHost{
+		ID:       "docker-test",
+		Hostname: "docker-host",
+		Status:   "online",
+		LastSeen: time.Now(),
+		Containers: []models.DockerContainer{
+			{ID: "c1", Name: "cpu-hog", State: "running", CPUPercent: 96},
+		},
+	}
+
+	findings := ps.analyzeDockerHost(host)
+
+	found := false
+	for _, f := range findings {
+		if f.Key == "docker-high-cpu" {
+			found = true
+			// CPUPercent > 95 should be warning
+			if f.Severity != FindingSeverityWarning {
+				t.Errorf("Expected warning severity for 96%% CPU, got %s", f.Severity)
+			}
+		}
+	}
+
+	if !found {
+		t.Error("Expected finding for high CPU usage")
+	}
+}
+
+func TestPatrolService_AnalyzeDockerHost_PodmanRuntime(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	host := models.DockerHost{
+		ID:       "podman-test",
+		Hostname: "podman-host",
+		Runtime:  "podman",
+		Status:   "offline",
+		LastSeen: time.Now(),
+	}
+
+	findings := ps.analyzeDockerHost(host)
+
+	found := false
+	for _, f := range findings {
+		if f.Key == "docker-host-offline" {
+			found = true
+			// Title should mention Podman, not Docker
+			if !strings.Contains(f.Title, "Podman") {
+				t.Errorf("Expected 'Podman' in title for Podman runtime, got '%s'", f.Title)
+			}
+		}
+	}
+
+	if !found {
+		t.Error("Expected finding for offline Podman host")
 	}
 }
