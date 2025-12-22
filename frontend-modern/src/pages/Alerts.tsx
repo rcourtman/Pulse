@@ -1033,6 +1033,9 @@ export function Alerts() {
         setDockerPoweredOffSeverity(FACTORY_DOCKER_STATE_SEVERITY);
       }
       setDockerIgnoredPrefixes(config.dockerIgnoredContainerPrefixes ?? []);
+      setIgnoredGuestPrefixes(config.ignoredGuestPrefixes ?? []);
+      setGuestTagWhitelist(config.guestTagWhitelist ?? []);
+      setGuestTagBlacklist(config.guestTagBlacklist ?? []);
 
       if (config.storageDefault) {
         setStorageDefault(getTriggerValue(config.storageDefault) ?? 85);
@@ -1434,6 +1437,9 @@ export function Alerts() {
     FACTORY_DOCKER_STATE_SEVERITY,
   );
   const [dockerIgnoredPrefixes, setDockerIgnoredPrefixes] = createSignal<string[]>([]);
+  const [ignoredGuestPrefixes, setIgnoredGuestPrefixes] = createSignal<string[]>([]);
+  const [guestTagWhitelist, setGuestTagWhitelist] = createSignal<string[]>([]);
+  const [guestTagBlacklist, setGuestTagBlacklist] = createSignal<string[]>([]);
 
   const [storageDefault, setStorageDefault] = createSignal(FACTORY_STORAGE_DEFAULT);
   const [backupDefaults, setBackupDefaults] = createSignal<BackupAlertConfig>({
@@ -1748,6 +1754,15 @@ export function Alerts() {
                       dockerIgnoredContainerPrefixes: dockerIgnoredPrefixes()
                         .map((prefix) => prefix.trim())
                         .filter((prefix) => prefix.length > 0),
+                      ignoredGuestPrefixes: ignoredGuestPrefixes()
+                        .map((prefix) => prefix.trim())
+                        .filter((prefix) => prefix.length > 0),
+                      guestTagWhitelist: guestTagWhitelist()
+                        .map((tag) => tag.trim())
+                        .filter((tag) => tag.length > 0),
+                      guestTagBlacklist: guestTagBlacklist()
+                        .map((tag) => tag.trim())
+                        .filter((tag) => tag.length > 0),
                       storageDefault: createHysteresisThreshold(storageDefault()),
                       minimumDelta: 2.0,
                       suppressionWindow: 5,
@@ -2034,6 +2049,12 @@ export function Alerts() {
                   setDockerDefaults={setDockerDefaults}
                   dockerIgnoredPrefixes={dockerIgnoredPrefixes}
                   setDockerIgnoredPrefixes={setDockerIgnoredPrefixes}
+                  ignoredGuestPrefixes={ignoredGuestPrefixes}
+                  setIgnoredGuestPrefixes={setIgnoredGuestPrefixes}
+                  guestTagWhitelist={guestTagWhitelist}
+                  setGuestTagWhitelist={setGuestTagWhitelist}
+                  guestTagBlacklist={guestTagBlacklist}
+                  setGuestTagBlacklist={setGuestTagBlacklist}
                   storageDefault={storageDefault}
                   setStorageDefault={setStorageDefault}
                   resetGuestDefaults={resetGuestDefaults}
@@ -2192,7 +2213,7 @@ function OverviewTab(props: {
     if (!status) return false;
     return !status.features?.['ai_alerts'];
   });
-  const aiAlertsUpgradeURL = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulsemonitor.app/pro');
+  const aiAlertsUpgradeURL = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulserelay.pro');
   // Live streaming state for running patrol
   const [expandedLiveStream, setExpandedLiveStream] = createSignal(false);
   // Track streaming blocks for sequential display (like AI chat)
@@ -2205,7 +2226,7 @@ function OverviewTab(props: {
   const [currentThinking, setCurrentThinking] = createSignal('');
   let liveStreamUnsubscribe: (() => void) | null = null;
   const patrolRequiresLicense = createMemo(() => patrolStatus()?.license_required === true);
-  const patrolUpgradeURL = createMemo(() => patrolStatus()?.upgrade_url || 'https://pulsemonitor.app/pro');
+  const patrolUpgradeURL = createMemo(() => patrolStatus()?.upgrade_url || 'https://pulserelay.pro');
   const patrolLicenseNote = createMemo(() => {
     if (!patrolRequiresLicense()) return '';
     const status = patrolStatus()?.license_status;
@@ -4078,6 +4099,9 @@ interface ThresholdsTabProps {
   dockerDisableConnectivity: () => boolean;
   dockerPoweredOffSeverity: () => 'warning' | 'critical';
   dockerIgnoredPrefixes: () => string[];
+  ignoredGuestPrefixes: () => string[];
+  guestTagWhitelist: () => string[];
+  guestTagBlacklist: () => string[];
   storageDefault: () => number;
   timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
   metricTimeThresholds: () => Record<string, Record<string, number>>;
@@ -4146,6 +4170,9 @@ interface ThresholdsTabProps {
   setDockerDisableConnectivity: (value: boolean) => void;
   setDockerPoweredOffSeverity: (value: 'warning' | 'critical') => void;
   setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
+  setIgnoredGuestPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
+  setGuestTagWhitelist: (value: string[] | ((prev: string[]) => string[])) => void;
+  setGuestTagBlacklist: (value: string[] | ((prev: string[]) => string[])) => void;
   setStorageDefault: (value: number) => void;
   setMetricTimeThresholds: (
     value:
@@ -4258,6 +4285,12 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setDockerPoweredOffSeverity={props.setDockerPoweredOffSeverity}
       dockerIgnoredPrefixes={props.dockerIgnoredPrefixes}
       setDockerIgnoredPrefixes={props.setDockerIgnoredPrefixes}
+      ignoredGuestPrefixes={props.ignoredGuestPrefixes}
+      setIgnoredGuestPrefixes={props.setIgnoredGuestPrefixes}
+      guestTagWhitelist={props.guestTagWhitelist}
+      setGuestTagWhitelist={props.setGuestTagWhitelist}
+      guestTagBlacklist={props.guestTagBlacklist}
+      setGuestTagBlacklist={props.setGuestTagBlacklist}
       storageDefault={props.storageDefault}
       setStorageDefault={props.setStorageDefault}
       timeThresholds={props.timeThresholds}

@@ -377,6 +377,9 @@ type AlertConfig struct {
 	StorageDefault                 HysteresisThreshold        `json:"storageDefault"`
 	DockerDefaults                 DockerThresholdConfig      `json:"dockerDefaults"`
 	DockerIgnoredContainerPrefixes []string                   `json:"dockerIgnoredContainerPrefixes,omitempty"`
+	IgnoredGuestPrefixes           []string                   `json:"ignoredGuestPrefixes,omitempty"`
+	GuestTagWhitelist              []string                   `json:"guestTagWhitelist,omitempty"`
+	GuestTagBlacklist              []string                   `json:"guestTagBlacklist,omitempty"`
 	PMGDefaults                    PMGThresholdConfig         `json:"pmgDefaults"`
 	SnapshotDefaults               SnapshotAlertConfig        `json:"snapshotDefaults"`
 	BackupDefaults                 BackupAlertConfig          `json:"backupDefaults"`
@@ -2097,6 +2100,9 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	enabled := m.config.Enabled
 	disableAllGuests := m.config.DisableAllGuests
 	disableAllGuestsOffline := m.config.DisableAllGuestsOffline
+	ignoredGuestPrefixes := m.config.IgnoredGuestPrefixes
+	guestTagWhitelist := m.config.GuestTagWhitelist
+	guestTagBlacklist := m.config.GuestTagBlacklist
 	m.mu.RUnlock()
 
 	if !enabled {
@@ -2166,6 +2172,18 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		return
 	}
 
+
+
+	// Check ignored prefixes
+	for _, prefix := range ignoredGuestPrefixes {
+		if prefix != "" && strings.HasPrefix(name, prefix) {
+			if cleared := m.suppressGuestAlerts(guestID); cleared {
+				m.saveActiveAlertsAsync("ignored-prefix")
+			}
+			return
+		}
+	}
+
 	settings := parsePulseTags(tags)
 	if settings.Suppress {
 		if cleared := m.suppressGuestAlerts(guestID); cleared {
@@ -2175,6 +2193,44 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 			Str("guestID", guestID).
 			Msg("Pulse no-alerts tag active; suppressing guest alerts")
 		return
+	}
+
+	// Custom Tag Filtering
+	if len(guestTagBlacklist) > 0 || len(guestTagWhitelist) > 0 {
+		// Normalize tags once for checking
+		normalizedTags := make(map[string]bool)
+		for _, tag := range tags {
+			normalizedTags[strings.ToLower(strings.TrimSpace(tag))] = true
+		}
+
+		// Check Blacklist
+		for _, block := range guestTagBlacklist {
+			if normalizedTags[strings.ToLower(strings.TrimSpace(block))] {
+				if cleared := m.suppressGuestAlerts(guestID); cleared {
+					m.saveActiveAlertsAsync("tag-blacklist")
+				}
+				log.Debug().Str("guestID", guestID).Msg("Guest suppressed by tag blacklist")
+				return
+			}
+		}
+
+		// Check Whitelist
+		if len(guestTagWhitelist) > 0 {
+			found := false
+			for _, allow := range guestTagWhitelist {
+				if normalizedTags[strings.ToLower(strings.TrimSpace(allow))] {
+					found = true
+					break
+				}
+			}
+			if !found {
+				if cleared := m.suppressGuestAlerts(guestID); cleared {
+					m.saveActiveAlertsAsync("tag-whitelist")
+				}
+				log.Debug().Str("guestID", guestID).Msg("Guest suppressed by tag whitelist (required tag not found)")
+				return
+			}
+		}
 	}
 
 	monitorOnly := settings.MonitorOnly

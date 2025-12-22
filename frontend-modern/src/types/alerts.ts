@@ -121,6 +121,9 @@ export interface AlertConfig {
   storageDefault: HysteresisThreshold;
   dockerDefaults?: DockerThresholdConfig;
   dockerIgnoredContainerPrefixes?: string[];
+  ignoredGuestPrefixes?: string[];
+  guestTagWhitelist?: string[];
+  guestTagBlacklist?: string[];
   pmgDefaults?: PMGThresholdDefaults;
   snapshotDefaults?: SnapshotAlertConfig;
   backupDefaults?: BackupAlertConfig;
