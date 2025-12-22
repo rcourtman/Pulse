@@ -1480,6 +1480,7 @@ type AIFindingRecord struct {
 	Description    string     `json:"description"`
 	Recommendation string     `json:"recommendation,omitempty"`
 	Evidence       string     `json:"evidence,omitempty"`
+	Source         string     `json:"source,omitempty"`
 	DetectedAt     time.Time  `json:"detected_at"`
 	LastSeenAt     time.Time  `json:"last_seen_at"`
 	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
@@ -1487,6 +1488,11 @@ type AIFindingRecord struct {
 	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty"`
 	SnoozedUntil   *time.Time `json:"snoozed_until,omitempty"`
 	AlertID        string     `json:"alert_id,omitempty"`
+	// User feedback fields - enables persistence of dismissal state
+	DismissedReason string `json:"dismissed_reason,omitempty"`
+	UserNote        string `json:"user_note,omitempty"`
+	TimesRaised     int    `json:"times_raised"`
+	Suppressed      bool   `json:"suppressed"`
 }
 
 // SaveAIFindings persists AI findings to disk

@@ -144,25 +144,30 @@ func TestFindingsPersistenceAdapter_PreservesAllFields(t *testing.T) {
 	snoozed := now.Add(24 * time.Hour)
 
 	originalFinding := &Finding{
-		ID:             "test-finding",
-		Key:            "test-key",
-		Severity:       FindingSeverityCritical,
-		Category:       FindingCategorySecurity,
-		ResourceID:     "resource-123",
-		ResourceName:   "Test Resource",
-		ResourceType:   "vm",
-		Node:           "node1",
-		Title:          "Test Title",
-		Description:    "Test Description",
-		Recommendation: "Test Recommendation",
-		Evidence:       "Test Evidence",
-		DetectedAt:     now,
-		LastSeenAt:     now,
-		ResolvedAt:     &resolved,
-		AutoResolved:   true,
-		AcknowledgedAt: &acked,
-		SnoozedUntil:   &snoozed,
-		AlertID:        "alert-456",
+		ID:              "test-finding",
+		Key:             "test-key",
+		Severity:        FindingSeverityCritical,
+		Category:        FindingCategorySecurity,
+		ResourceID:      "resource-123",
+		ResourceName:    "Test Resource",
+		ResourceType:    "vm",
+		Node:            "node1",
+		Title:           "Test Title",
+		Description:     "Test Description",
+		Recommendation:  "Test Recommendation",
+		Evidence:        "Test Evidence",
+		Source:          "ai-analysis",
+		DetectedAt:      now,
+		LastSeenAt:      now,
+		ResolvedAt:      &resolved,
+		AutoResolved:    true,
+		AcknowledgedAt:  &acked,
+		SnoozedUntil:    &snoozed,
+		AlertID:         "alert-456",
+		DismissedReason: "expected_behavior",
+		UserNote:        "This is intentional for Frigate recordings",
+		TimesRaised:     5,
+		Suppressed:      false,
 	}
 
 	findings := map[string]*Finding{"test-finding": originalFinding}
@@ -213,4 +218,132 @@ func TestFindingsPersistenceAdapter_PreservesAllFields(t *testing.T) {
 	if f.SnoozedUntil == nil {
 		t.Error("SnoozedUntil should not be nil")
 	}
+
+	// Verify user feedback fields are preserved (these were missing before the fix)
+	if f.Source != originalFinding.Source {
+		t.Errorf("Source mismatch: got %q, want %q", f.Source, originalFinding.Source)
+	}
+	if f.DismissedReason != originalFinding.DismissedReason {
+		t.Errorf("DismissedReason mismatch: got %q, want %q", f.DismissedReason, originalFinding.DismissedReason)
+	}
+	if f.UserNote != originalFinding.UserNote {
+		t.Errorf("UserNote mismatch: got %q, want %q", f.UserNote, originalFinding.UserNote)
+	}
+	if f.TimesRaised != originalFinding.TimesRaised {
+		t.Errorf("TimesRaised mismatch: got %d, want %d", f.TimesRaised, originalFinding.TimesRaised)
+	}
+	if f.Suppressed != originalFinding.Suppressed {
+		t.Errorf("Suppressed mismatch: got %v, want %v", f.Suppressed, originalFinding.Suppressed)
+	}
 }
+
+// TestFindingsPersistenceAdapter_PreservesDismissals specifically tests that dismissed findings
+// are properly persisted across restarts. This was a bug where DismissedReason, UserNote,
+// TimesRaised, and Suppressed fields were not being saved to disk.
+func TestFindingsPersistenceAdapter_PreservesDismissals(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	adapter := NewFindingsPersistenceAdapter(persistence)
+
+	now := time.Now()
+	acked := now.Add(-1 * time.Hour)
+
+	// Simulate a finding that was dismissed as "expected_behavior"
+	dismissedFinding := &Finding{
+		ID:              "frigate-storage-123",
+		Key:             "storage-growth-high",
+		Severity:        FindingSeverityWarning,
+		Category:        FindingCategoryCapacity,
+		ResourceID:      "delly-frigate-storage",
+		ResourceName:    "frigate-storage",
+		ResourceType:    "storage",
+		Node:            "delly",
+		Title:           "Frigate storage growing at 56GB/day",
+		Description:     "Storage will be full in 13 days",
+		Recommendation:  "Reduce retention policy",
+		Evidence:        "6.0% per day growth rate",
+		Source:          "ai-analysis",
+		DetectedAt:      now.Add(-5 * time.Hour),
+		LastSeenAt:      now,
+		DismissedReason: "expected_behavior",
+		UserNote:        "24/7 recording is intentional, storage is sized for this",
+		TimesRaised:     3,
+		Suppressed:      false,
+		AcknowledgedAt:  &acked,
+	}
+
+	// Also test a suppressed finding
+	suppressedFinding := &Finding{
+		ID:              "dev-vm-hot",
+		Key:             "cpu-high",
+		Severity:        FindingSeverityInfo,
+		Category:        FindingCategoryPerformance,
+		ResourceID:      "node1-105",
+		ResourceName:    "dev-vm",
+		ResourceType:    "vm",
+		Node:            "node1",
+		Title:           "Dev VM running hot",
+		Description:     "CPU at 80%",
+		Source:          "ai-analysis",
+		DetectedAt:      now.Add(-24 * time.Hour),
+		LastSeenAt:      now,
+		DismissedReason: "suppressed",
+		UserNote:        "Development workload, expected",
+		TimesRaised:     10,
+		Suppressed:      true,
+		AcknowledgedAt:  &acked,
+	}
+
+	findings := map[string]*Finding{
+		dismissedFinding.ID:  dismissedFinding,
+		suppressedFinding.ID: suppressedFinding,
+	}
+
+	// Save
+	if err := adapter.SaveFindings(findings); err != nil {
+		t.Fatalf("failed to save findings: %v", err)
+	}
+
+	// Load (simulating restart)
+	loaded, err := adapter.LoadFindings()
+	if err != nil {
+		t.Fatalf("failed to load findings: %v", err)
+	}
+
+	// Verify dismissed finding
+	df := loaded[dismissedFinding.ID]
+	if df == nil {
+		t.Fatal("dismissed finding not found after load")
+	}
+	if df.DismissedReason != "expected_behavior" {
+		t.Errorf("DismissedReason not preserved: got %q, want 'expected_behavior'", df.DismissedReason)
+	}
+	if df.UserNote != dismissedFinding.UserNote {
+		t.Errorf("UserNote not preserved: got %q", df.UserNote)
+	}
+	if df.TimesRaised != 3 {
+		t.Errorf("TimesRaised not preserved: got %d, want 3", df.TimesRaised)
+	}
+	if df.IsActive() {
+		t.Error("dismissed finding should not be active")
+	}
+
+	// Verify suppressed finding
+	sf := loaded[suppressedFinding.ID]
+	if sf == nil {
+		t.Fatal("suppressed finding not found after load")
+	}
+	if !sf.Suppressed {
+		t.Error("Suppressed not preserved: should be true")
+	}
+	if sf.DismissedReason != "suppressed" {
+		t.Errorf("DismissedReason not preserved for suppressed: got %q", sf.DismissedReason)
+	}
+	if sf.TimesRaised != 10 {
+		t.Errorf("TimesRaised not preserved: got %d, want 10", sf.TimesRaised)
+	}
+	if sf.IsActive() {
+		t.Error("suppressed finding should not be active")
+	}
+}
+
