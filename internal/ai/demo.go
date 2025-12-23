@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -195,68 +196,90 @@ func (p *PatrolService) injectDemoRunHistory() {
 
 	now := time.Now()
 
-	// Create a few historical patrol runs
-	demoRuns := []PatrolRunRecord{
-		{
-			ID:               "demo-run-1",
-			StartedAt:        now.Add(-15 * time.Minute),
-			CompletedAt:      now.Add(-14*time.Minute - 30*time.Second),
-			Duration:         90 * time.Second,
+	// Clear existing history first to avoid duplicates on restart
+	// (Assuming we can't easily clear, we'll just generate new IDs based on time to be idempotent-ish)
+
+	// Create a realistic schedule: every 6 hours for the last 3 days
+	var demoRuns []PatrolRunRecord
+
+	// 1. Most recent run (just happened)
+	demoRuns = append(demoRuns, PatrolRunRecord{
+		ID:               fmt.Sprintf("demo-run-%d", now.Unix()),
+		StartedAt:        now.Add(-15 * time.Minute),
+		CompletedAt:      now.Add(-14*time.Minute + 15*time.Second),
+		Duration:         75 * time.Second,
+		Type:             "patrol",
+		ResourcesChecked: 47,
+		NodesChecked:     5,
+		GuestsChecked:    32,
+		DockerChecked:    8,
+		StorageChecked:   6,
+		NewFindings:      0,
+		ExistingFindings: 5,
+		ResolvedFindings: 0,
+		FindingsSummary:  "2 critical, 3 warnings",
+		FindingIDs:       []string{"demo-storage-critical", "9e1eb083b7109506", "demo-memory-warning", "demo-backup-warning", "demo-cpu-warning"},
+		Status:           "issues_found",
+		InputTokens:      4250,
+		OutputTokens:     890,
+	})
+
+	// 2. Scheduled runs (every 6 hours)
+	for i := 1; i <= 12; i++ {
+		offset := time.Duration(i*6) * time.Hour
+		startTime := now.Add(-offset)
+		
+		// Vary the duration slightly
+		duration := time.Duration(40 + (i % 30)) * time.Second
+		
+		// Outcomes vary over time
+		var summary string
+		var status string
+		var newFindings, existingFindings, resolvedFindings int
+		var findingIDs []string
+
+		if i <= 4 { // Last 24h - steady state of issues
+			summary = "2 critical, 3 warnings"
+			status = "issues_found"
+			existingFindings = 5
+			findingIDs = []string{"demo-storage-critical", "9e1eb083b7109506", "demo-memory-warning", "demo-backup-warning", "demo-cpu-warning"}
+		} else if i == 5 { // 30h ago - one issue appeared
+			summary = "1 new critical, 3 warnings"
+			status = "issues_found"
+			newFindings = 1
+			existingFindings = 3
+			findingIDs = []string{"demo-storage-critical", "demo-memory-warning", "demo-backup-warning", "demo-cpu-warning"}
+		} else if i <= 10 { // 2-3 days ago - fewer issues
+			summary = "3 warnings"
+			status = "issues_found"
+			existingFindings = 3
+			findingIDs = []string{"demo-memory-warning", "demo-backup-warning", "demo-cpu-warning"}
+		} else { // > 3 days ago - clean state
+			summary = "No issues found"
+			status = "healthy"
+			resolvedFindings = 1
+		}
+
+		demoRuns = append(demoRuns, PatrolRunRecord{
+			ID:               fmt.Sprintf("demo-run-%d", startTime.Unix()),
+			StartedAt:        startTime,
+			CompletedAt:      startTime.Add(duration),
+			Duration:         duration,
 			Type:             "patrol",
 			ResourcesChecked: 47,
 			NodesChecked:     5,
 			GuestsChecked:    32,
 			DockerChecked:    8,
 			StorageChecked:   6,
-			NewFindings:      1,
-			ExistingFindings: 4,
-			ResolvedFindings: 0,
-			FindingsSummary:  "1 critical, 3 warnings",
-			FindingIDs:       []string{"demo-storage-critical", "demo-memory-warning", "demo-backup-warning", "demo-cpu-warning"},
-			Status:           "issues_found",
-			InputTokens:      4250,
-			OutputTokens:     890,
-		},
-		{
-			ID:               "demo-run-2",
-			StartedAt:        now.Add(-30 * time.Minute),
-			CompletedAt:      now.Add(-29*time.Minute - 15*time.Second),
-			Duration:         75 * time.Second,
-			Type:             "patrol",
-			ResourcesChecked: 47,
-			NodesChecked:     5,
-			GuestsChecked:    32,
-			DockerChecked:    8,
-			StorageChecked:   6,
-			NewFindings:      2,
-			ExistingFindings: 2,
-			ResolvedFindings: 1,
-			FindingsSummary:  "1 critical, 2 warnings",
-			FindingIDs:       []string{"demo-storage-critical", "demo-memory-warning", "demo-backup-warning"},
-			Status:           "issues_found",
-			InputTokens:      4180,
-			OutputTokens:     720,
-		},
-		{
-			ID:               "demo-run-3",
-			StartedAt:        now.Add(-45 * time.Minute),
-			CompletedAt:      now.Add(-44*time.Minute - 45*time.Second),
-			Duration:         45 * time.Second,
-			Type:             "patrol",
-			ResourcesChecked: 47,
-			NodesChecked:     5,
-			GuestsChecked:    32,
-			DockerChecked:    8,
-			StorageChecked:   6,
-			NewFindings:      0,
-			ExistingFindings: 2,
-			ResolvedFindings: 0,
-			FindingsSummary:  "2 warnings",
-			FindingIDs:       []string{"demo-memory-warning", "demo-cpu-warning"},
-			Status:           "issues_found",
-			InputTokens:      4100,
-			OutputTokens:     450,
-		},
+			NewFindings:      newFindings,
+			ExistingFindings: existingFindings,
+			ResolvedFindings: resolvedFindings,
+			FindingsSummary:  summary,
+			FindingIDs:       findingIDs,
+			Status:           status,
+			InputTokens:      4000 + (i * 10),
+			OutputTokens:     500 + (i * 5),
+		})
 	}
 
 	for _, run := range demoRuns {
