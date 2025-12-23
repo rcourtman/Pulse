@@ -14,6 +14,7 @@ import HardDrive from 'lucide-solid/icons/hard-drive';
 import Mail from 'lucide-solid/icons/mail';
 import Loader from 'lucide-solid/icons/loader-2';
 import type { NodeConfig } from '@/types/nodes';
+import type { Node, PBSInstance, PMGInstance, Host } from '@/types/api';
 
 type AgentType = 'pve' | 'pbs' | 'pmg';
 
@@ -47,10 +48,10 @@ interface ProxmoxAgentNodesPanelProps {
   discoveredNodes: Accessor<DiscoveredServer[]>;
 
   // State data for tables
-  stateNodes?: any[];
-  stateHosts?: any[];
-  statePbs?: any[];
-  statePmg?: any[];
+  stateNodes?: Node[];
+  stateHosts?: Host[];
+  statePbs?: PBSInstance[];
+  statePmg?: PMGInstance[];
 
   // Temperature monitoring
   temperatureMonitoringEnabled: Accessor<boolean>;
@@ -203,7 +204,8 @@ export const ProxmoxAgentNodesPanel: Component<ProxmoxAgentNodesPanelProps> = (p
     if (props.agentType === 'pve') {
       return (
         <PveNodesTable
-          nodes={props.nodes() as any}
+          <PveNodesTable
+          nodes={props.nodes()}
           stateNodes={props.stateNodes ?? []}
           stateHosts={props.stateHosts ?? []}
           globalTemperatureMonitoringEnabled={props.temperatureMonitoringEnabled()}
@@ -221,7 +223,8 @@ export const ProxmoxAgentNodesPanel: Component<ProxmoxAgentNodesPanelProps> = (p
     } else if (props.agentType === 'pbs') {
       return (
         <PbsNodesTable
-          nodes={props.nodes() as any}
+          <PbsNodesTable
+          nodes={props.nodes()}
           statePbs={props.statePbs ?? []}
           globalTemperatureMonitoringEnabled={props.temperatureMonitoringEnabled()}
           onTestConnection={props.testNodeConnection}
@@ -236,7 +239,8 @@ export const ProxmoxAgentNodesPanel: Component<ProxmoxAgentNodesPanelProps> = (p
     } else {
       return (
         <PmgNodesTable
-          nodes={props.nodes() as any}
+          <PmgNodesTable
+          nodes={props.nodes()}
           statePmg={props.statePmg ?? []}
           globalTemperatureMonitoringEnabled={props.temperatureMonitoringEnabled()}
           onTestConnection={props.testNodeConnection}
