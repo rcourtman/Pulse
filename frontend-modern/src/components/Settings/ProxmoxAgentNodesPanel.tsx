@@ -32,13 +32,7 @@ interface DiscoveryScanStatus {
   errors?: string[];
 }
 
-type NodeConfigWithStatus = NodeConfig & {
-  hasPassword?: boolean;
-  hasToken?: boolean;
-  connectionStatus?: 'connected' | 'error' | 'pending' | 'unknown';
-  connectionError?: string;
-  status?: 'connected' | 'error' | 'pending' | 'unknown';
-};
+
 
 interface ProxmoxAgentNodesPanelProps {
   agentType: AgentType;
