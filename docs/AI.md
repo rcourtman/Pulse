@@ -2,20 +2,55 @@
 
 Pulse AI adds an optional assistant for troubleshooting and proactive monitoring. It is **off by default** and can be enabled per instance.
 
-## Immediate Value
+## What Makes AI Patrol Different
 
-Pulse AI Patrol monitors your infrastructure 24/7 and alerts you to issues that matter:
+Unlike chatting with a generic AI where you manually describe your infrastructure, Patrol runs automatically and sees **your entire infrastructure at once** - every node, VM, container, storage pool, backup job, and Kubernetes cluster. It's not just a static checklist; it's an LLM analyzing real-time data enriched with historical context.
 
-### What Patrol Catches
+### Context Patrol Receives (That Generic LLMs Can't See)
+
+Every patrol run passes the LLM comprehensive context about your environment:
+
+| Data Category | What's Included |
+|---------------|-----------------|
+| **Proxmox Nodes** | Status, CPU%, memory%, uptime, 24h/7d trend analysis |
+| **VMs & Containers** | Full metrics, backup status, OCI images, historical trends, anomaly flags |
+| **Storage Pools** | Usage %, capacity predictions, type (ZFS/LVM/Ceph), growth rates |
+| **Docker/Podman** | Container counts, health states, unhealthy container lists |
+| **Kubernetes** | Nodes, pods, deployments, services, DaemonSets, StatefulSets, namespaces |
+| **PBS/PMG** | Datastore status, backup jobs, job failures, verification status |
+| **Ceph** | Cluster health, OSD states, PG status |
+| **Agent Hosts** | Load averages, memory, disk, RAID status, temperatures |
+
+### Enriched Context (The Real Differentiator)
+
+Beyond raw metrics, Patrol enriches the context with intelligence that transforms raw data into actionable insights:
+
+- **Trend analysis** - 24h and 7d patterns showing `growing`, `stable`, `declining`, or `volatile` behavior
+- **Learned baselines** - Z-score anomaly detection based on what's *normal for your environment*
+- **Capacity predictions** - "Storage pool will be full in 12 days at current growth rate"
+- **Infrastructure changes** - Detected config changes, VM migrations, new deployments  
+- **Resource correlations** - Pattern detection across related resources (e.g., containers on same host)
+- **User notes** - Your annotations explaining expected behavior ("runs hot for transcoding")
+- **Dismissed findings** - Respects your feedback and suppressed alerts
+- **Incident memory** - Learns from past investigations and successful remediations
+
+### Examples of What Patrol Catches
+
+Because it's an LLM with full context, Patrol catches issues that static threshold-based alerting misses:
 
 | Issue | Severity | Example |
 |-------|----------|---------|
 | **Node offline** | Critical | Proxmox node not responding |
-| **Disk filling up** | Warning/Critical | Storage at 85%+ capacity |
+| **Disk approaching capacity** | Warning/Critical | Storage at 85%+, or growing toward full |
 | **Backup failures** | Warning | PBS job failed, no backup in 48+ hours |
 | **Service down** | Critical | Docker container crashed, agent offline |
 | **High resource usage** | Warning | Sustained memory >90%, CPU >85% |
-| **Storage issues** | Critical | PBS datastore errors, ZFS problems |
+| **Storage issues** | Critical | PBS datastore errors, ZFS pool degraded |
+| **Ceph problems** | Warning/Critical | Degraded OSDs, unhealthy PGs |
+| **Kubernetes issues** | Warning | Pods stuck in Pending/CrashLoopBackOff |
+| **Restart loops** | Warning | VMs that keep restarting without errors |
+| **Clock drift** | Warning | Node time drift affecting Ceph/HA |
+| **Unusual patterns** | Varies | Any anomaly the LLM identifies as unusual for your setup |
 
 ### What Patrol Ignores (by design)
 
@@ -67,16 +102,11 @@ You can set separate models for:
 - Test provider connectivity: `POST /api/ai/test` and `POST /api/ai/test/{provider}`
 - List available models: `GET /api/ai/models`
 
-## Patrol Service
+## Patrol Service (Pro Feature)
 
-Patrol runs automated health checks on a configurable schedule (default: 15 minutes). It analyzes:
+Patrol runs automated health checks on a configurable schedule (default: every 15 minutes). It passes comprehensive infrastructure context to the LLM (see "Context Patrol Receives" above) and generates findings when issues are detected.
 
-- Proxmox nodes, VMs, and containers
-- PBS backup status and datastore health
-- Host agent metrics (RAID, sensors, services)
-- Docker/Podman containers
-- Kubernetes clusters
-- Resource utilization trends
+Patrol requires a [Pulse Pro](https://pulserelay.pro) license. Free users get full access to the AI Chat assistant (BYOK) and all other monitoring features.
 
 ### Finding Severity
 
