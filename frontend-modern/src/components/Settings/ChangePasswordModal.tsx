@@ -1,6 +1,6 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { showSuccess, showError } from '@/utils/toast';
+import { notificationStore } from '@/stores/notifications';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 
@@ -75,7 +75,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
         throw new Error(text || 'Failed to change password');
       }
 
-      showSuccess('Password changed successfully. Please log in with your new password.');
+      notificationStore.success('Password changed successfully. Please log in with your new password.');
 
       // Clear form
       setCurrentPassword('');
@@ -92,7 +92,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to change password';
       setError(errorMessage);
-      showError(errorMessage);
+      notificationStore.error(errorMessage);
     } finally {
       setLoading(false);
     }
