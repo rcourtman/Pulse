@@ -4,6 +4,7 @@ import type { NodeConfig } from '@/types/nodes';
 import type { SecurityStatus } from '@/types/config';
 import { copyToClipboard } from '@/utils/clipboard';
 import { showSuccess, showError } from '@/utils/toast';
+import { notificationStore } from '@/stores/notifications';
 import { getPulseBaseUrl } from '@/utils/url';
 import { NodesAPI } from '@/api/nodes';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -796,19 +797,15 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             enableProxmox: true,
                                           });
 
-                                          if (response.ok) {
-                                            const data = await response.json();
-                                            if (data.command) {
-                                              setAgentInstallCommand(data.command);
-                                              const copied = await copyToClipboard(data.command);
-                                              if (copied) {
-                                                showSuccess('Command copied! Run it on your Proxmox node.');
-                                              } else {
-                                                showError('Failed to copy to clipboard');
-                                              }
+
+                                          if (data.command) {
+                                            setAgentInstallCommand(data.command);
+                                            const copied = await copyToClipboard(data.command);
+                                            if (copied) {
+                                              notificationStore.success('Command copied! Run it on your Proxmox node.');
+                                            } else {
+                                              notificationStore.error('Failed to copy to clipboard');
                                             }
-                                          } else {
-                                            showError('Failed to generate install command');
                                           }
                                         } catch (error) {
                                           logger.error('[Agent Install] Error:', error);
