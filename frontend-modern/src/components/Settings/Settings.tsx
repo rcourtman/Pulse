@@ -2129,41 +2129,10 @@ const Settings: Component<SettingsProps> = (props) => {
         headers['X-API-Token'] = apiToken;
       }
 
-      const response = await fetch('/api/config/export', {
+      const data = await apiFetchJSON<any>('/api/config/export', {
         method: 'POST',
-        headers,
-        credentials: 'include', // Include cookies for session auth
         body: JSON.stringify({ passphrase: exportPassphrase() }),
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        // Handle authentication errors
-        if (response.status === 401 || response.status === 403) {
-          // Check if we're using API token auth (not password auth)
-          const hasPasswordAuth = securityStatus()?.hasAuthentication;
-          if (!hasPasswordAuth) {
-            // Clear invalid token if we had one
-            const hadToken = getApiClientToken();
-            if (hadToken) {
-              clearApiClientToken();
-              notificationStore.error('Invalid or expired API token. Please re-enter.');
-              setApiTokenModalSource('export');
-              setShowApiTokenModal(true);
-              return;
-            }
-            if (errorText.includes('API_TOKEN') || errorText.includes('API_TOKENS')) {
-              setApiTokenModalSource('export');
-              setShowApiTokenModal(true);
-              return;
-            }
-          }
-          throw new Error('Export requires authentication');
-        }
-        throw new Error(errorText || 'Export failed');
-      }
-
-      const data = await response.json();
 
       // Create and download file
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -2235,33 +2204,8 @@ const Settings: Component<SettingsProps> = (props) => {
         encryptedData = fileContent.trim();
       }
 
-      // Get CSRF token from cookie
-      const csrfCookie = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('pulse_csrf='));
-      const csrfToken = csrfCookie
-        ? decodeURIComponent(csrfCookie.split('=').slice(1).join('='))
-        : undefined;
-
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
-
-      // Add CSRF token if available
-      if (csrfToken) {
-        headers['X-CSRF-Token'] = csrfToken;
-      }
-
-      // Add API token if configured
-      const apiToken = getApiClientToken();
-      if (apiToken) {
-        headers['X-API-Token'] = apiToken;
-      }
-
-      const response = await fetch('/api/config/import', {
+      await apiFetchJSON('/api/config/import', {
         method: 'POST',
-        headers,
-        credentials: 'include', // Include cookies for session auth
         body: JSON.stringify({
           passphrase: importPassphrase(),
           data: encryptedData,
