@@ -5,7 +5,9 @@ import { isPulseHttps } from '@/utils/url';
 import { logger } from '@/utils/logger';
 import { apiFetchJSON } from '@/utils/apiClient';
 
-interface SecurityStatus {
+import type { SecurityStatus } from '@/types/config';
+
+interface SecurityState {
   hasAuthentication: boolean;
   hasHTTPS: boolean;
   hasAPIToken: boolean;
@@ -21,7 +23,7 @@ interface SecurityStatus {
 
 export const SecurityWarning: Component = () => {
   const [dismissed, setDismissed] = createSignal(false);
-  const [status, setStatus] = createSignal<SecurityStatus | null>(null);
+  const [status, setStatus] = createSignal<SecurityState | null>(null);
   const [showDetails, setShowDetails] = createSignal(false);
 
   onMount(async () => {
@@ -37,7 +39,7 @@ export const SecurityWarning: Component = () => {
 
     // Fetch security status
     try {
-      const data = await apiFetchJSON<any>('/api/security/status');
+      const data = await apiFetchJSON<SecurityStatus>('/api/security/status');
 
       // Calculate security score
       let score = 0;
