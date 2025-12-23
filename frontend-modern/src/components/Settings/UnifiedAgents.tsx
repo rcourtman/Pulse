@@ -741,8 +741,10 @@ export const UnifiedAgents: Component = () => {
                                     type="button"
                                     onClick={async () => {
                                         const success = await copyToClipboard(getUninstallCommand());
-                                        if (typeof window !== 'undefined' && window.showToast) {
-                                            window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed');
+                                        if (success) {
+                                            notificationStore.success('Copied to clipboard');
+                                        } else {
+                                            notificationStore.error('Failed to copy');
                                         }
                                     }}
                                     class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700/50 hover:bg-gray-700 rounded-md transition-colors"
@@ -791,8 +793,10 @@ export const UnifiedAgents: Component = () => {
                                         type="button"
                                         onClick={async () => {
                                             const success = await copyToClipboard(getUpgradeCommand(''));
-                                            if (typeof window !== 'undefined' && window.showToast) {
-                                                window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
+                                            if (success) {
+                                                notificationStore.success('Copied to clipboard');
+                                            } else {
+                                                notificationStore.error('Failed to copy');
                                             }
                                         }}
                                         class="absolute top-2 right-2 p-1.5 text-amber-700/60 hover:text-amber-900 bg-amber-200/50 hover:bg-amber-300/50 rounded-md transition-colors dark:text-amber-400 dark:hover:text-amber-200 dark:bg-amber-800/50 dark:hover:bg-amber-700/50"
