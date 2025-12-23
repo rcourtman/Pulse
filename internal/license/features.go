@@ -93,11 +93,11 @@ func GetTierDisplayName(tier Tier) string {
 	case TierFree:
 		return "Free"
 	case TierPro:
-		return "Pro (Monthly)"
+		return "Pro Intelligence (Monthly)"
 	case TierProAnnual:
-		return "Pro (Annual)"
+		return "Pro Intelligence (Annual)"
 	case TierLifetime:
-		return "Pro (Lifetime)"
+		return "Pro Intelligence (Lifetime)"
 	case TierMSP:
 		return "MSP"
 	case TierEnterprise:
