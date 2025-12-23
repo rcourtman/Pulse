@@ -1,5 +1,6 @@
 import { Component, createEffect, createSignal, For, Show } from 'solid-js';
 import { AIAPI } from '@/api/ai';
+import { logger } from '@/utils/logger';
 import type { RemediationRecord, RemediationStats } from '@/types/aiIntelligence';
 
 const DEFAULT_UPGRADE_URL = 'https://pulserelay.pro';
@@ -24,7 +25,7 @@ export const AIImpactTimelinePanel: Component<{ hours?: number; showWhenEmpty?: 
             setStats(response.stats || null);
             setRemediations(response.remediations || []);
         } catch (e) {
-            console.error('Failed to load AI impact timeline:', e);
+            logger.error('Failed to load AI impact timeline:', e);
             setError('Failed to load AI impact timeline.');
         } finally {
             setLoading(false);

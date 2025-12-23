@@ -272,7 +272,7 @@ export class AIAPI {
     try {
       for (; ;) {
         if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
-          console.warn('[AI] Alert investigation stream timeout');
+          logger.warn('[AI] Alert investigation stream timeout');
           break;
         }
 
@@ -310,7 +310,7 @@ export class AIAPI {
               const data = JSON.parse(jsonStr);
               onEvent(data as AIStreamEvent);
             } catch (e) {
-              console.error('[AI] Failed to parse investigation event:', e);
+              logger.error('[AI] Failed to parse investigation event:', e);
             }
           }
         }

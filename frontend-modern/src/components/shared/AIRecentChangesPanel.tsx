@@ -1,5 +1,6 @@
 import { Component, createEffect, createSignal, For, Show } from 'solid-js';
 import { AIAPI } from '@/api/ai';
+import { logger } from '@/utils/logger';
 import type { InfrastructureChange } from '@/types/aiIntelligence';
 
 const DEFAULT_UPGRADE_URL = 'https://pulserelay.pro';
@@ -30,7 +31,7 @@ export const AIRecentChangesPanel: Component<{ hours?: number; showWhenEmpty?: b
                 setChanges(response.changes || []);
             }
         } catch (e) {
-            console.error('Failed to load AI change history:', e);
+            logger.error('Failed to load AI change history:', e);
             setError('Failed to load recent changes.');
         } finally {
             setLoading(false);

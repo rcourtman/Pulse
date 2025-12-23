@@ -736,10 +736,7 @@ export const UnifiedAgents: Component = () => {
                             <p class="text-xs text-gray-600 dark:text-gray-400">
                                 Run this command on any host to remove the Pulse agent:
                             </p>
-                            <div class="flex items-center gap-2">
-                                <code class="flex-1 break-all rounded bg-gray-900 px-3 py-2 font-mono text-xs text-red-400 dark:bg-gray-950">
-                                    {getUninstallCommand()}
-                                </code>
+                            <div class="relative">
                                 <button
                                     type="button"
                                     onClick={async () => {
@@ -748,10 +745,17 @@ export const UnifiedAgents: Component = () => {
                                             window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed');
                                         }
                                     }}
-                                    class="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
+                                    class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700/50 hover:bg-gray-700 rounded-md transition-colors"
+                                    title="Copy command"
                                 >
-                                    Copy
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                    </svg>
                                 </button>
+                                <pre class="overflow-x-auto rounded-md bg-gray-950 p-3 pr-12 font-mono text-xs text-red-400">
+                                    <code>{getUninstallCommand()}</code>
+                                </pre>
                             </div>
                         </div>
                     </div>
@@ -782,10 +786,7 @@ export const UnifiedAgents: Component = () => {
                                 <p class="text-xs text-amber-600 dark:text-amber-400">
                                     Run this command on each legacy host to upgrade:
                                 </p>
-                                <div class="flex items-center gap-2">
-                                    <code class="flex-1 break-all rounded bg-amber-100 px-3 py-2 font-mono text-xs text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
-                                        {getUpgradeCommand('')}
-                                    </code>
+                                <div class="relative">
                                     <button
                                         type="button"
                                         onClick={async () => {
@@ -794,10 +795,17 @@ export const UnifiedAgents: Component = () => {
                                                 window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
                                             }
                                         }}
-                                        class="rounded-lg bg-amber-200 px-3 py-1.5 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-300 dark:bg-amber-800 dark:text-amber-100 dark:hover:bg-amber-700"
+                                        class="absolute top-2 right-2 p-1.5 text-amber-700/60 hover:text-amber-900 bg-amber-200/50 hover:bg-amber-300/50 rounded-md transition-colors dark:text-amber-400 dark:hover:text-amber-200 dark:bg-amber-800/50 dark:hover:bg-amber-700/50"
+                                        title="Copy command"
                                     >
-                                        Copy
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                        </svg>
                                     </button>
+                                    <pre class="overflow-x-auto rounded-md bg-amber-100 px-3 py-3 pr-12 font-mono text-xs text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
+                                        <code>{getUpgradeCommand('')}</code>
+                                    </pre>
                                 </div>
                             </div>
                         </div>

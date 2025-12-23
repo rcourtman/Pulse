@@ -1,6 +1,7 @@
 import { Component, createSignal, createEffect, For, Show, createMemo } from 'solid-js';
 import { notificationStore } from '@/stores/notifications';
 import { apiFetch } from '@/utils/apiClient';
+import { logger } from '@/utils/logger';
 
 interface Note {
     id: string;
@@ -146,7 +147,7 @@ export const GuestNotes: Component<GuestNotesProps> = (props) => {
                 }
             }
         } catch (error) {
-            console.error('Failed to load guest knowledge:', error);
+            logger.error('Failed to load guest knowledge:', error);
         } finally {
             setIsLoading(false);
         }
@@ -169,7 +170,7 @@ export const GuestNotes: Component<GuestNotesProps> = (props) => {
                 notificationStore.error('Failed to save guest URL');
             }
         } catch (error) {
-            console.error('Failed to save guest URL:', error);
+            logger.error('Failed to save guest URL:', error);
             notificationStore.error('Failed to save guest URL');
         } finally {
             setIsSavingUrl(false);
@@ -207,7 +208,7 @@ export const GuestNotes: Component<GuestNotesProps> = (props) => {
                 notificationStore.error('Failed to save note');
             }
         } catch (error) {
-            console.error('Failed to save note:', error);
+            logger.error('Failed to save note:', error);
             notificationStore.error('Failed to save note');
         }
     };
@@ -231,7 +232,7 @@ export const GuestNotes: Component<GuestNotesProps> = (props) => {
                 notificationStore.error('Failed to delete note');
             }
         } catch (error) {
-            console.error('Failed to delete note:', error);
+            logger.error('Failed to delete note:', error);
             notificationStore.error('Failed to delete note');
         }
     };
@@ -256,7 +257,7 @@ export const GuestNotes: Component<GuestNotesProps> = (props) => {
                 notificationStore.error('Failed to export notes');
             }
         } catch (error) {
-            console.error('Failed to export notes:', error);
+            logger.error('Failed to export notes:', error);
             notificationStore.error('Failed to export notes');
         }
     };
@@ -296,7 +297,7 @@ export const GuestNotes: Component<GuestNotesProps> = (props) => {
                 notificationStore.error('Import failed: ' + errorText);
             }
         } catch (error) {
-            console.error('Failed to import notes:', error);
+            logger.error('Failed to import notes:', error);
             notificationStore.error('Failed to parse import file');
         } finally {
             setIsImporting(false);
@@ -328,7 +329,7 @@ export const GuestNotes: Component<GuestNotesProps> = (props) => {
                 notificationStore.error('Failed to clear notes');
             }
         } catch (error) {
-            console.error('Failed to clear notes:', error);
+            logger.error('Failed to clear notes:', error);
             notificationStore.error('Failed to clear notes');
         }
     };
