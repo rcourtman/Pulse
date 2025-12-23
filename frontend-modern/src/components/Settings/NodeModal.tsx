@@ -3,7 +3,7 @@ import { Portal } from 'solid-js/web';
 import type { NodeConfig } from '@/types/nodes';
 import type { SecurityStatus } from '@/types/config';
 import { copyToClipboard } from '@/utils/clipboard';
-import { copyToClipboard } from '@/utils/clipboard';
+
 import { notificationStore } from '@/stores/notifications';
 import { getPulseBaseUrl } from '@/utils/url';
 import { NodesAPI } from '@/api/nodes';
