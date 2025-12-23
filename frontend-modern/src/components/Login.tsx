@@ -366,9 +366,35 @@ const LoginForm: Component<{
     showLocalLogin,
   } = props;
 
+  // Check if we're on the demo server
+  const isDemoServer = () => {
+    const hostname = window.location.hostname;
+    return hostname === 'demo.pulserelay.pro' || hostname.includes('demo.');
+  };
+
   return (
     <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900 py-12 px-4 sm:px-6 lg:px-8">
       <div class="max-w-md w-full space-y-8">
+        {/* Demo Credentials Banner */}
+        <Show when={isDemoServer()}>
+          <div class="bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl p-4 shadow-lg animate-fade-in">
+            <div class="flex items-center gap-3">
+              <div class="flex-shrink-0">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div class="flex-1">
+                <div class="font-bold text-sm">Demo Credentials</div>
+                <div class="text-emerald-100 text-sm mt-0.5">
+                  Username: <code class="bg-white/20 px-1.5 py-0.5 rounded font-mono">demo</code>{' '}
+                  Password: <code class="bg-white/20 px-1.5 py-0.5 rounded font-mono">demo</code>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Show>
+
         <div class="animate-fade-in">
           <div class="flex justify-center mb-8">
             <div class="relative group">
