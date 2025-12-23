@@ -791,14 +791,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         logger.debug('[Agent Install] Copy button clicked');
                                         try {
                                           setLoadingAgentCommand(true);
-                                          const { apiFetch } = await import('@/utils/apiClient');
-                                          const response = await apiFetch('/api/agent-install-command', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({
-                                              type: 'pve',
-                                              enableProxmox: true,
-                                            }),
+                                          const data = await NodesAPI.getAgentInstallCommand({
+                                            type: 'pve',
+                                            enableProxmox: true,
                                           });
 
                                           if (response.ok) {
