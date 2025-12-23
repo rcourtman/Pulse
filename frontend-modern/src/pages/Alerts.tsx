@@ -4479,10 +4479,10 @@ function DestinationsTab(props: DestinationsTabProps) {
         type: 'email',
         config: { ...config } as Record<string, unknown>, // Send current form data, not saved config
       });
-      notificationStore.success('Test email sent successfully!', 'Check your inbox.');
+      notificationStore.success('Test email sent successfully! Check your inbox.');
     } catch (err) {
       logger.error('Failed to send test email:', err);
-      notificationStore.error('Failed to send test email', err instanceof Error ? err.message : 'Unknown error');
+      notificationStore.error('Failed to send test email: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setTestingEmail(false);
     }
@@ -4513,8 +4513,8 @@ function DestinationsTab(props: DestinationsTabProps) {
     } catch (err) {
       logger.error('Failed to send test Apprise notification:', err);
       notificationStore.error(
-        'Failed to send test Apprise notification',
-        err instanceof Error ? err.message : 'Unknown error',
+        'Failed to send test Apprise notification: ' +
+        (err instanceof Error ? err.message : 'Unknown error'),
       );
     } finally {
       setTestingApprise(false);
@@ -4534,8 +4534,7 @@ function DestinationsTab(props: DestinationsTabProps) {
       notificationStore.success('Test webhook sent successfully!');
     } catch (err) {
       notificationStore.error(
-        'Failed to send test webhook',
-        err instanceof Error ? err.message : 'Unknown error',
+        'Failed to send test webhook: ' + (err instanceof Error ? err.message : 'Unknown error'),
       );
     } finally {
       setTestingWebhook(null);
@@ -7364,8 +7363,7 @@ function HistoryTab() {
                     } catch (err) {
                       logger.error('Error clearing alert history:', err);
                       notificationStore.error(
-                        'Error clearing alert history',
-                        'Please check your connection and try again.',
+                        'Error clearing alert history: Please check your connection and try again.',
                       );
                     }
                   }
