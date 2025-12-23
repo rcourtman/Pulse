@@ -1,13 +1,7 @@
 import { Component, For, Show, createMemo } from 'solid-js';
-import type { NodeConfig } from '@/types/nodes';
+import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import type { Node, PBSInstance, PMGInstance, Host } from '@/types/api';
 import { Card } from '@/components/shared/Card';
-
-type NodeConfigWithStatus = NodeConfig & {
-  hasPassword?: boolean;
-  hasToken?: boolean;
-  status: 'connected' | 'disconnected' | 'offline' | 'error' | 'pending';
-};
 
 export interface TemperatureTransportInfo {
   httpMap: Record<string, { reachable: boolean; error?: string; url?: string }>;
@@ -21,11 +15,7 @@ type TemperatureSocketCooldownInfo = {
   lastError?: string;
 };
 
-// Host agent info passed from state
-interface HostAgentInfo {
-  hostname: string;
-  status: string;
-}
+
 
 interface PveNodesTableProps {
   nodes: NodeConfigWithStatus[];
