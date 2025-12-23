@@ -84,8 +84,6 @@ export const ConnectStep: Component<ConnectStepProps> = (props) => {
                 body: JSON.stringify({ subnet: 'auto' }),
             });
 
-            if (!response.ok) throw new Error('Discovery failed');
-
             // Poll for results
             for (let i = 0; i < 10; i++) {
                 await new Promise(r => setTimeout(r, 2000));
