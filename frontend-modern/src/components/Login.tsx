@@ -13,18 +13,7 @@ interface LoginProps {
   securityStatus?: SecurityStatus; // Full security status from App.tsx to avoid redundant API call
 }
 
-interface SecurityStatus {
-  hasAuthentication: boolean;
-  oidcEnabled?: boolean;
-  oidcIssuer?: string;
-  oidcClientId?: string;
-  oidcEnvOverrides?: Record<string, boolean>;
-  disabled?: boolean;
-  deprecatedDisableAuth?: boolean;
-  message?: string;
-  apiTokenConfigured?: boolean;
-  hideLocalLogin?: boolean;
-}
+import type { SecurityStatus } from '@/types/config';
 
 export const Login: Component<LoginProps> = (props) => {
   const [username, setUsername] = createSignal('');
@@ -119,7 +108,7 @@ export const Login: Component<LoginProps> = (props) => {
 
     logger.debug('[Login] Starting auth check...');
     try {
-      const data = await apiFetchJSON<any>('/api/security/status');
+      const data = await apiFetchJSON<SecurityStatus>('/api/security/status');
       logger.debug('[Login] Auth status data', data);
       setAuthStatus(data);
     } catch (err: any) {
