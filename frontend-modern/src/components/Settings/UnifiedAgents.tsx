@@ -145,11 +145,8 @@ export const UnifiedAgents: Component = () => {
 
         const fetchSecurityStatus = async () => {
             try {
-                const response = await fetch('/api/security/status', { credentials: 'include' });
-                if (response.ok) {
-                    const data = (await response.json()) as SecurityStatus;
-                    setSecurityStatus(data);
-                }
+                const data = await SecurityAPI.getStatus();
+                setSecurityStatus(data);
             } catch (err) {
                 if (!hasLoggedSecurityStatusError) {
                     hasLoggedSecurityStatusError = true;
