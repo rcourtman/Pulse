@@ -13,7 +13,7 @@ import Server from 'lucide-solid/icons/server';
 import HardDrive from 'lucide-solid/icons/hard-drive';
 import Mail from 'lucide-solid/icons/mail';
 import Loader from 'lucide-solid/icons/loader-2';
-import type { NodeConfig } from '@/types/nodes';
+import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import type { Node, PBSInstance, PMGInstance, Host } from '@/types/api';
 
 type AgentType = 'pve' | 'pbs' | 'pmg';
