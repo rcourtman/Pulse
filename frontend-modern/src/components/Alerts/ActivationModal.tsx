@@ -4,7 +4,7 @@ import { useNavigate } from '@solidjs/router';
 import type { JSX } from 'solid-js';
 import type { Alert } from '@/types/api';
 import type { AlertConfig, AlertThresholds, HysteresisThreshold } from '@/types/alerts';
-import { showError, showSuccess } from '@/utils/toast';
+import { notificationStore } from '@/stores/notifications';
 import { formatAlertValue, formatAlertThreshold } from '@/utils/alertFormatters';
 
 interface ActivationModalProps {
@@ -164,13 +164,13 @@ export function ActivationModal(props: ActivationModalProps): JSX.Element {
 
     if (success) {
       await props.refreshActiveAlerts();
-      showSuccess('Notifications activated! You\'ll now receive alerts when issues are detected.');
+      notificationStore.success('Notifications activated! You\'ll now receive alerts when issues are detected.');
       if (props.onActivated) {
         await props.onActivated();
       }
       props.onClose();
     } else {
-      showError('Unable to activate notifications. Please try again.');
+      notificationStore.error('Unable to activate notifications. Please try again.');
     }
 
     setIsSubmitting(false);
