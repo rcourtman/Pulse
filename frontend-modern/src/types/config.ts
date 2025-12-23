@@ -124,6 +124,16 @@ export interface SecurityStatus {
   message?: string;
   hideLocalLogin?: boolean; // Hide local login form
   agentUrl?: string; // URL for agent install commands (from PULSE_PUBLIC_URL or auto-detected)
+  // First run setup fields
+  bootstrapTokenPath?: string;
+  isDocker?: boolean;
+  inContainer?: boolean;
+  lxcCtid?: string;
+  dockerContainerName?: string;
+  // OIDC fields
+  oidcIssuer?: string;
+  oidcClientId?: string;
+  oidcEnvOverrides?: Record<string, boolean>;
 }
 
 /**
