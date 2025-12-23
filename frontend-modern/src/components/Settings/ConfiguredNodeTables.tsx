@@ -1,5 +1,6 @@
 import { Component, For, Show, createMemo } from 'solid-js';
 import type { NodeConfig } from '@/types/nodes';
+import type { Node, PBSInstance, PMGInstance, Host } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 
 type NodeConfigWithStatus = NodeConfig & {
@@ -28,8 +29,8 @@ interface HostAgentInfo {
 
 interface PveNodesTableProps {
   nodes: NodeConfigWithStatus[];
-  stateNodes: { instance: string; status?: string; connectionHealth?: string }[];
-  stateHosts?: HostAgentInfo[];
+  stateNodes: Node[];
+  stateHosts?: Host[];
   globalTemperatureMonitoringEnabled?: boolean;
   temperatureTransports?: TemperatureTransportInfo | null;
   onTestConnection: (nodeId: string) => void;
@@ -111,7 +112,7 @@ const resolveTemperatureTransport = (
   node: NodeConfigWithStatus,
   info: TemperatureTransportInfo | null | undefined,
   globalEnabled: boolean,
-  hostAgent?: HostAgentInfo,
+  hostAgent?: Host,
 ): TemperatureTransportBadge => {
   const monitoringEnabled = isTemperatureMonitoringEnabled(node, globalEnabled);
   const normalizedTransport = (node.temperatureTransport || '').toLowerCase();
@@ -291,8 +292,8 @@ const resolvePveStatusMeta = (
 // Helper to find matching host agent for a node by hostname matching
 const findMatchingHostAgent = (
   nodeName: string,
-  hosts: HostAgentInfo[] | undefined,
-): HostAgentInfo | undefined => {
+  hosts: Host[] | undefined,
+): Host | undefined => {
   if (!hosts || hosts.length === 0) return undefined;
   const nodeNameLower = nodeName.toLowerCase().trim();
   return hosts.find((h) => h.hostname.toLowerCase().trim() === nodeNameLower);
@@ -559,7 +560,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
 
 interface PbsNodesTableProps {
   nodes: NodeConfigWithStatus[];
-  statePbs: { name: string; status?: string; connectionHealth?: string }[];
+  statePbs: PBSInstance[];
   globalTemperatureMonitoringEnabled?: boolean;
   onTestConnection: (nodeId: string) => void;
   onEdit: (node: NodeConfigWithStatus) => void;
@@ -755,7 +756,7 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
 
 interface PmgNodesTableProps {
   nodes: NodeConfigWithStatus[];
-  statePmg: { name: string; status?: string; connectionHealth?: string }[];
+  statePmg: PMGInstance[];
   globalTemperatureMonitoringEnabled?: boolean;
   onTestConnection: (nodeId: string) => void;
   onEdit: (node: NodeConfigWithStatus) => void;
