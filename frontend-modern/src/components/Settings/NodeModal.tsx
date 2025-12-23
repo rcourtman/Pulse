@@ -841,7 +841,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       when={agentInstallCommand().length > 0}
                                       fallback={
                                         <code class="text-blue-400">
-                                          Click the button above to copy the install command
+                                          Click the copy button to generate the install command
                                         </code>
                                       }
                                     >
@@ -963,7 +963,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       fallback={
                                         <code class="text-blue-400">
                                           {formData().host
-                                            ? 'Click the button above to copy the setup command'
+                                            ? 'Click the copy button to generate the setup command'
                                             : 'Please enter the Host URL above first'}
                                         </code>
                                       }
@@ -1517,7 +1517,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       fallback={
                                         <code class="text-blue-400">
                                           {formData().host
-                                            ? 'Click the button above to copy the setup command'
+                                            ? 'Click the copy button to generate the setup command'
                                             : '⚠️ Please enter the Host URL above first'}
                                         </code>
                                       }
