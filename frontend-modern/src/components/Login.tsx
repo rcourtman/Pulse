@@ -228,13 +228,13 @@ export const Login: Component<LoginProps> = (props) => {
     } catch (_err) {
       // Try the old method as fallback
       try {
-        const response = await fetch('/api/state', {
+        const response = await apiClient.fetch('/api/state', {
           headers: {
             Authorization: `Basic ${btoa(`${username()}:${password()}`)}`,
             'X-Requested-With': 'XMLHttpRequest',
             Accept: 'application/json',
           },
-          credentials: 'include',
+          skipAuth: true,
         });
 
         if (response.ok) {

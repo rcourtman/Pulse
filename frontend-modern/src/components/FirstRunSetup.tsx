@@ -163,10 +163,9 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
         headers['X-Setup-Token'] = bootstrapToken().trim();
       }
 
-      const response = await fetch('/api/security/quick-setup', {
+      const result = await apiFetchJSON<{ skipped?: boolean }>('/api/security/quick-setup', {
         method: 'POST',
         headers,
-        credentials: 'include', // Include cookies for CSRF
         body: JSON.stringify({
           username: username(),
           password: finalPassword,
@@ -175,13 +174,6 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
           setupToken: bootstrapToken().trim(), // Also include in body as fallback
         }),
       });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'Failed to setup security');
-      }
-
-      const result = await response.json();
 
       if (result.skipped) {
         // Shouldn't happen in first-run, but handle it
