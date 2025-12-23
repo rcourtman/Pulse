@@ -84,6 +84,28 @@ Community-maintained integrations and addons:
 
 - **[Home Assistant Addons](https://github.com/Kosztyk/homeassistant-addons)** - Run Pulse Agent and Pulse Server as Home Assistant addons.
 
+## 🚀 Pulse Pro
+
+**[Pulse Pro](https://pulserelay.pro)** unlocks **AI Patrol** — automated background monitoring that catches issues before they become outages.
+
+| Feature | Free | Pro |
+|---------|------|-----|
+| Real-time dashboard | ✅ | ✅ |
+| Threshold alerts | ✅ | ✅ |
+| AI Chat (BYOK) | ✅ | ✅ |
+| **AI Patrol** (automated scans) | — | ✅ |
+| Root cause analysis | — | ✅ |
+| Priority support | — | ✅ |
+
+AI Patrol runs on your schedule (every 5 minutes to every 24 hours) and finds:
+- ZFS pools approaching capacity
+- Backup jobs that silently failed
+- VMs stuck in restart loops
+- Clock drift across cluster nodes
+- Container health check failures
+
+**[Try the live demo →](https://demo.pulserelay.pro)** or **[learn more at pulserelay.pro](https://pulserelay.pro)**
+
 ## ❤️ Support Pulse Development
 
 Pulse is maintained by one person. Sponsorships help cover the costs of the demo server, development tools, and domains. If Pulse saves you time, please consider supporting the project!
