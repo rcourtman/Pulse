@@ -150,12 +150,16 @@ function formatRelativeTime(timestamp?: string | number): string {
     return `${Math.floor(diffSec / 86400)}d ago`;
 }
 
+import type { JSX } from 'solid-js';
+
+// ...
+
 // DiagnosticCard - a mini card component for individual diagnostic items
 const DiagnosticCard: Component<{
     title: string;
     icon: Component<{ class?: string }>;
     status?: 'success' | 'warning' | 'error' | 'info';
-    children: any;
+    children: JSX.Element;
 }> = (props) => {
     const statusColors = {
         success: 'border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-900/20',
