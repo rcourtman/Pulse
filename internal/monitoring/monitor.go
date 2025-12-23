@@ -1057,7 +1057,7 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 	// Revoke the API token associated with this Docker host
 	if host.TokenID != "" {
 		tokenRemoved := m.config.RemoveAPIToken(host.TokenID)
-		if tokenRemoved {
+		if tokenRemoved != nil {
 			m.config.SortAPITokens()
 			m.config.APITokenEnabled = m.config.HasAPITokens()
 
@@ -1151,10 +1151,10 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 		}
 	}
 
-	tokenRevoked := false
+	var tokenRemoved *config.APITokenRecord
 	if tokenID != "" && !tokenStillUsed {
-		tokenRevoked = m.config.RemoveAPIToken(tokenID)
-		if tokenRevoked {
+		tokenRemoved = m.config.RemoveAPIToken(tokenID)
+		if tokenRemoved != nil {
 			m.config.SortAPITokens()
 			m.config.APITokenEnabled = m.config.HasAPITokens()
 
@@ -1190,7 +1190,7 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 			}
 		}
 
-		if tokenRevoked {
+		if tokenRemoved != nil {
 			prefix := tokenID + ":"
 			for key := range m.hostTokenBindings {
 				if strings.HasPrefix(key, prefix) {
@@ -1203,7 +1203,7 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 		log.Debug().
 			Str("tokenID", tokenID).
 			Str("hostID", hostID).
-			Bool("revoked", tokenRevoked).
+			Bool("revoked", tokenRemoved != nil).
 			Msg("Unbound host agent token bindings after host removal")
 	}
 

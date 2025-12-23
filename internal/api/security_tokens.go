@@ -187,9 +187,19 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 	defer config.Mu.Unlock()
 
 	removed := r.config.RemoveAPIToken(id)
-	if !removed {
+	if removed == nil {
 		http.Error(w, "Token not found", http.StatusNotFound)
 		return
+	}
+
+	// If this was a migrated env token, suppress re-migration on restart
+	if strings.HasPrefix(removed.Name, "Migrated from .env") {
+		r.config.SuppressEnvMigration(removed.Hash)
+		if r.persistence != nil {
+			if err := r.persistence.SaveEnvTokenSuppressions(r.config.SuppressedEnvMigrations); err != nil {
+				log.Warn().Err(err).Msg("Failed to persist env token suppression list")
+			}
+		}
 	}
 
 	r.config.SortAPITokens()

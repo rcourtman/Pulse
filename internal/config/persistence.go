@@ -30,8 +30,9 @@ type ConfigPersistence struct {
 	nodesFile          string
 	systemFile         string
 	oidcFile           string
-	apiTokensFile      string
-	aiFile             string
+	apiTokensFile            string
+	envTokenSuppressionsFile string
+	aiFile                   string
 	aiFindingsFile     string
 	aiPatrolRunsFile   string
 	aiUsageHistoryFile string
@@ -76,8 +77,9 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		nodesFile:          filepath.Join(configDir, "nodes.enc"),
 		systemFile:         filepath.Join(configDir, "system.json"),
 		oidcFile:           filepath.Join(configDir, "oidc.enc"),
-		apiTokensFile:      filepath.Join(configDir, "api_tokens.json"),
-		aiFile:             filepath.Join(configDir, "ai.enc"),
+		apiTokensFile:             filepath.Join(configDir, "api_tokens.json"),
+		envTokenSuppressionsFile:  filepath.Join(configDir, "env_token_suppressions.json"),
+		aiFile:                    filepath.Join(configDir, "ai.enc"),
 		aiFindingsFile:     filepath.Join(configDir, "ai_findings.json"),
 		aiPatrolRunsFile:   filepath.Join(configDir, "ai_patrol_runs.json"),
 		aiUsageHistoryFile: filepath.Join(configDir, "ai_usage_history.json"),
@@ -167,6 +169,48 @@ func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 	}
 
 	return tokens, nil
+}
+
+// LoadEnvTokenSuppressions loads the list of suppressed env token hashes.
+func (c *ConfigPersistence) LoadEnvTokenSuppressions() ([]string, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := os.ReadFile(c.envTokenSuppressionsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	if len(data) == 0 {
+		return []string{}, nil
+	}
+
+	var hashes []string
+	if err := json.Unmarshal(data, &hashes); err != nil {
+		return nil, err
+	}
+
+	return hashes, nil
+}
+
+// SaveEnvTokenSuppressions persists the suppressed env token hashes to disk.
+func (c *ConfigPersistence) SaveEnvTokenSuppressions(hashes []string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(hashes)
+	if err != nil {
+		return err
+	}
+
+	return c.writeConfigFileLocked(c.envTokenSuppressionsFile, data, 0600)
 }
 
 // SaveAPITokens persists API token metadata to disk.

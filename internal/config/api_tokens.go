@@ -171,6 +171,25 @@ func (c *Config) HasAPITokenHash(hash string) bool {
 	return false
 }
 
+// IsEnvMigrationSuppressed returns true if the given hash was a migrated env token
+// that the user explicitly deleted (and should not be re-migrated on restart).
+func (c *Config) IsEnvMigrationSuppressed(hash string) bool {
+	for _, h := range c.SuppressedEnvMigrations {
+		if h == hash {
+			return true
+		}
+	}
+	return false
+}
+
+// SuppressEnvMigration adds a hash to the suppression list to prevent re-migration.
+func (c *Config) SuppressEnvMigration(hash string) {
+	if c.IsEnvMigrationSuppressed(hash) {
+		return
+	}
+	c.SuppressedEnvMigrations = append(c.SuppressedEnvMigrations, hash)
+}
+
 // PrimaryAPITokenHash returns the newest token hash, if any.
 func (c *Config) PrimaryAPITokenHash() string {
 	if len(c.APITokens) == 0 {
@@ -225,15 +244,16 @@ func (c *Config) UpsertAPIToken(record APITokenRecord) {
 	c.SortAPITokens()
 }
 
-// RemoveAPIToken removes a token by ID.
-func (c *Config) RemoveAPIToken(id string) bool {
+// RemoveAPIToken removes a token by ID and returns the removed record (if any).
+func (c *Config) RemoveAPIToken(id string) *APITokenRecord {
 	for idx, record := range c.APITokens {
 		if record.ID == id {
+			removed := record
 			c.APITokens = append(c.APITokens[:idx], c.APITokens[idx+1:]...)
-			return true
+			return &removed
 		}
 	}
-	return false
+	return nil
 }
 
 // SortAPITokens keeps tokens ordered newest-first and syncs the legacy APIToken field.
