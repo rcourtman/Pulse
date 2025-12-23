@@ -1171,6 +1171,10 @@ func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteResp
 	}
 
 	if provider == nil {
+		// In demo mode, return mock response if no provider is configured
+		if IsDemoMode() {
+			return GenerateDemoAIResponse(req.Prompt), nil
+		}
 		return nil, fmt.Errorf("AI is not enabled or configured")
 	}
 
