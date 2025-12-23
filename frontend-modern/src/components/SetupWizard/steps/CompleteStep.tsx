@@ -2,6 +2,7 @@ import { Component, createSignal, createEffect, onCleanup, Show, For } from 'sol
 // Note: For is still used for connectedAgents list
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
+import { apiFetchJSON } from '@/utils/apiClient';
 import { getPulseBaseUrl } from '@/utils/url';
 import { SecurityAPI } from '@/api/security';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
@@ -37,17 +38,11 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
         const checkForAgents = async () => {
             try {
 
-                const response = await fetch('/api/state', {
+                const state = await apiFetchJSON<{ nodes: any[], hosts: any[] }>('/api/state', {
                     headers: {
                         'X-API-Token': props.state.apiToken,
                     },
                 });
-
-                if (!response.ok) {
-                    return;
-                }
-
-                const state = await response.json();
                 const nodes = state.nodes || [];
                 const hosts = state.hosts || [];
 
