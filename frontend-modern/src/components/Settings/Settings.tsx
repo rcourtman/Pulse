@@ -16,7 +16,6 @@ import { logger } from '@/utils/logger';
 import {
   apiFetch,
   apiFetchJSON,
-  clearApiToken as clearApiClientToken,
   getApiToken as getApiClientToken,
   setApiToken as setApiClientToken,
 } from '@/utils/apiClient';

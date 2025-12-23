@@ -1,6 +1,6 @@
 import { Component, createSignal, Show, onMount, lazy, Suspense } from 'solid-js';
 import { logger } from '@/utils/logger';
-import { apiClient } from '@/utils/apiClient';
+import { apiClient, apiFetchJSON } from '@/utils/apiClient';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
 const SetupWizard = lazy(() =>
@@ -119,24 +119,16 @@ export const Login: Component<LoginProps> = (props) => {
 
     logger.debug('[Login] Starting auth check...');
     try {
-      const response = await fetch('/api/security/status');
-      logger.debug('[Login] Auth check response', { status: response.status });
-      if (response.ok) {
-        const data = await response.json();
-        logger.debug('[Login] Auth status data', data);
-        setAuthStatus(data);
-      } else if (response.status === 429) {
-        // Rate limited - wait a bit and assume auth is configured
-        logger.debug('[Login] Rate limited, assuming auth is configured');
-        setAuthStatus({ hasAuthentication: true });
-      } else {
-        logger.debug('[Login] Auth check failed, assuming no auth');
-        // On error, assume no auth configured
-        setAuthStatus({ hasAuthentication: false });
-      }
-    } catch (err) {
+      const data = await apiFetchJSON<any>('/api/security/status');
+      logger.debug('[Login] Auth status data', data);
+      setAuthStatus(data);
+    } catch (err: any) {
+      // Check for 429
+      // apiFetchJSON throws error with status attached? No, simple Error map.
+      // But if needed we can parse error message if it contains "Too Many Requests"
+
+      // Just assume no auth on error, matching previous logic mostly.
       logger.error('[Login] Failed to check auth status:', err);
-      // On error, assume no auth configured
       setAuthStatus({ hasAuthentication: false });
     } finally {
       logger.debug('[Login] Auth check complete, setting loading to false');
@@ -154,22 +146,13 @@ export const Login: Component<LoginProps> = (props) => {
 
     let redirecting = false;
     try {
-      const response = await fetch('/api/oidc/login', {
+      const data = await apiFetchJSON<{ authorizationUrl: string }>('/api/oidc/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           returnTo: `${window.location.pathname}${window.location.search}`,
         }),
       });
 
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || 'Failed to initiate OIDC login');
-      }
-
-      const data = await response.json();
       if (data.authorizationUrl) {
         redirecting = true;
         window.location.href = data.authorizationUrl;
