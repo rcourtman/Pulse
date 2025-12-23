@@ -26,6 +26,7 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 import { UpdatesAPI } from './api/updates';
 import type { VersionInfo } from './api/updates';
 import { apiFetch } from './utils/apiClient';
+import type { SecurityStatus } from '@/types/config';
 import { SettingsAPI } from './api/settings';
 import { eventBus } from './stores/events';
 import { updateStore } from './stores/updates';
@@ -320,15 +321,8 @@ function App() {
   const [needsAuth, setNeedsAuth] = createSignal(false);
   const [hasAuth, setHasAuth] = createSignal(false);
   // Store full security status for Login component (hideLocalLogin, oidcEnabled, etc.)
-  const [securityStatus, setSecurityStatus] = createSignal<{
-    hasAuthentication: boolean;
-    oidcEnabled?: boolean;
-    oidcIssuer?: string;
-    oidcClientId?: string;
-    oidcEnvOverrides?: Record<string, boolean>;
-    hideLocalLogin?: boolean;
-    deprecatedDisableAuth?: boolean;
-  } | null>(null);
+  // Store full security status for Login component (hideLocalLogin, oidcEnabled, etc.)
+  const [securityStatus, setSecurityStatus] = createSignal<SecurityStatus | null>(null);
   const [proxyAuthInfo, setProxyAuthInfo] = createSignal<{
     username?: string;
     logoutURL?: string;
