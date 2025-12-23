@@ -1578,7 +1578,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             const scriptUrl = `/api/setup-script?type=pbs&host=${encodedHost}&pulse_url=${pulseUrl}`;
 
                                             // Fetch the script using the current session
-                                            const response = await fetch(scriptUrl);
+                                            const response = await apiFetch(scriptUrl);
                                             if (!response.ok) {
                                               throw new Error('Failed to fetch setup script');
                                             }

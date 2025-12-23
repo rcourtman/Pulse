@@ -1,4 +1,5 @@
 import { createSignal, onMount, Show } from 'solid-js';
+import { apiFetch } from '@/utils/apiClient';
 
 export function DemoBanner() {
   const [isDemoMode, setIsDemoMode] = createSignal(false);
@@ -7,7 +8,7 @@ export function DemoBanner() {
   onMount(async () => {
     // Check if we're in demo mode by trying a test request
     try {
-      const response = await fetch('/api/health');
+      const response = await apiFetch('/api/health');
       const demoHeader = response.headers.get('X-Demo-Mode');
       if (demoHeader === 'true') {
         setIsDemoMode(true);
