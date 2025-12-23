@@ -714,3 +714,74 @@ type mockStateProvider struct {
 func (m *mockStateProvider) GetState() models.StateSnapshot {
 	return m.state
 }
+
+func TestAlertTriggeredAnalyzer_AnalyzeGuestFromAlert_PreservesBackup(t *testing.T) {
+	// Set up a recent backup time (yesterday)
+	lastBackup := time.Now().Add(-24 * time.Hour)
+
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			VMs: []models.VM{
+				{
+					ID:     "qemu/100",
+					Name:   "backup-test-vm",
+					Status: "running",
+					CPU:    0.1, // Low CPU, not the issue
+					Memory: models.Memory{
+						Usage: 20.0,
+					},
+					Disk: models.Disk{
+						Usage: 20.0,
+					},
+					LastBackup: lastBackup, // <--- VM has a backup!
+				},
+			},
+		},
+	}
+
+	patrolService := &PatrolService{
+		thresholds: DefaultPatrolThresholds(),
+	}
+
+	analyzer := NewAlertTriggeredAnalyzer(patrolService, stateProvider)
+
+	// Trigger a CPU alert (unrelated to backup)
+	// This forces the analyzer to run analyzeGuestFromAlert
+	alertVM := &alerts.Alert{
+		ID:           "vm-cpu-alert",
+		Type:         "cpu",
+		ResourceID:   "qemu/100",
+		ResourceName: "backup-test-vm",
+		Value:        90.0,
+	}
+
+	findings := analyzer.analyzeGuestFromAlert(context.Background(), alertVM)
+
+	// We might get CPU findings if we set CPU high enough, or none if we don't.
+	// But critically, we should NOT get "Never backed up".
+
+	for _, f := range findings {
+		if f.Key == "backup-never" {
+			t.Error("Found 'backup-never' finding despite VM having a valid LastBackup timestamp. Regression detected!")
+		}
+	}
+
+	// Double check: if we intentionally make the backup VERY old, we SHOULD get a stale backup finding
+	// This proves the timestamp is actually being passed through.
+	staleBackup := time.Now().Add(-400 * 24 * time.Hour) // 400 days ago
+	stateProvider.state.VMs[0].LastBackup = staleBackup
+
+	findingsStale := analyzer.analyzeGuestFromAlert(context.Background(), alertVM)
+
+	foundStale := false
+	for _, f := range findingsStale {
+		if f.Key == "backup-stale" {
+			foundStale = true
+			break
+		}
+	}
+
+	if !foundStale {
+		t.Error("Expected 'backup-stale' finding for very old backup, but didn't find it. LastBackup might not be getting passed correctly.")
+	}
+}
