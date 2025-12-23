@@ -3,7 +3,7 @@ import { Portal } from 'solid-js/web';
 import type { NodeConfig } from '@/types/nodes';
 import type { SecurityStatus } from '@/types/config';
 import { copyToClipboard } from '@/utils/clipboard';
-import { showSuccess, showError } from '@/utils/toast';
+import { copyToClipboard } from '@/utils/clipboard';
 import { notificationStore } from '@/stores/notifications';
 import { getPulseBaseUrl } from '@/utils/url';
 import { NodesAPI } from '@/api/nodes';
@@ -809,7 +809,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           }
                                         } catch (error) {
                                           logger.error('[Agent Install] Error:', error);
-                                          showError('Failed to generate install command');
+                                          notificationStore.error('Failed to generate install command');
                                         } finally {
                                           setLoadingAgentCommand(false);
                                         }
@@ -1444,7 +1444,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           try {
                                             // Check if host is populated
                                             if (!formData().host || formData().host.trim() === '') {
-                                              showError('Please enter the Host URL first');
+                                              notificationStore.error('Please enter the Host URL first');
                                               return;
                                             }
 
