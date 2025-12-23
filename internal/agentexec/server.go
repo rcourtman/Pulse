@@ -134,7 +134,24 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		done: make(chan struct{}),
 	}
 
-	// Register agent
+	// Clear deadline for normal operation - both on the WebSocket and underlying connection
+	// This MUST happen BEFORE registering the agent in the map to avoid race conditions
+	// where other goroutines could call ExecuteCommand while we're still configuring the connection.
+	conn.SetReadDeadline(time.Time{})
+	conn.SetWriteDeadline(time.Time{})
+	if netConn := conn.NetConn(); netConn != nil {
+		netConn.SetReadDeadline(time.Time{})
+		netConn.SetWriteDeadline(time.Time{})
+	}
+
+	// Set up ping/pong handlers to keep connection alive
+	conn.SetPongHandler(func(appData string) error {
+		// Reset read deadline on pong received
+		conn.SetReadDeadline(time.Time{})
+		return nil
+	})
+
+	// Register agent - after this point, other goroutines can access the connection
 	s.mu.Lock()
 	// Close existing connection if any
 	if existing, ok := s.agents[reg.AgentID]; ok {
@@ -151,29 +168,15 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		Str("platform", reg.Platform).
 		Msg("Agent connected")
 
-	// Send registration success
+	// Send registration success (with write lock since agent is now in the map
+	// and other goroutines could try to send commands via ExecuteCommand)
+	ac.writeMu.Lock()
 	s.sendMessage(conn, Message{
 		Type:      MsgTypeRegistered,
 		Timestamp: time.Now(),
 		Payload:   RegisteredPayload{Success: true, Message: "Registered"},
 	})
-
-	// Clear deadline for normal operation - both on the WebSocket and underlying connection
-	// This is critical because Go's http.Server.ReadTimeout may have set a deadline
-	// on the underlying connection before the WebSocket upgrade occurred.
-	conn.SetReadDeadline(time.Time{})
-	conn.SetWriteDeadline(time.Time{})
-	if netConn := conn.NetConn(); netConn != nil {
-		netConn.SetReadDeadline(time.Time{})
-		netConn.SetWriteDeadline(time.Time{})
-	}
-
-	// Set up ping/pong handlers to keep connection alive
-	conn.SetPongHandler(func(appData string) error {
-		// Reset read deadline on pong received
-		conn.SetReadDeadline(time.Time{})
-		return nil
-	})
+	ac.writeMu.Unlock()
 
 	// Start server-side ping loop to keep connection alive
 	pingDone := make(chan struct{})
@@ -222,10 +225,12 @@ func (s *Server) readLoop(ac *agentConn) {
 
 		switch msg.Type {
 		case MsgTypeAgentPing:
+			ac.writeMu.Lock()
 			s.sendMessage(ac.conn, Message{
 				Type:      MsgTypePong,
 				Timestamp: time.Now(),
 			})
+			ac.writeMu.Unlock()
 
 		case MsgTypeCommandResult:
 			payloadBytes, _ := json.Marshal(msg.Payload)
