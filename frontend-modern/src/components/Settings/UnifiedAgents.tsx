@@ -434,8 +434,11 @@ export const UnifiedAgents: Component = () => {
                     <Show when={requiresToken()}>
                         <div class="space-y-3">
                             <div class="space-y-1">
-                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Generate API token</p>
-                                <p class="text-sm text-gray-600 dark:text-gray-400">
+                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                    <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-blue-600 text-white text-xs font-bold">1</span>
+                                    Generate API token
+                                </p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400 ml-6">
                                     Create a fresh token scoped for Host, Docker, and Kubernetes monitoring.
                                 </p>
                             </div>
@@ -496,13 +499,39 @@ export const UnifiedAgents: Component = () => {
                         </div>
                     </Show>
 
+                    {/* Show locked step 2 preview when token required but not yet generated */}
+                    <Show when={requiresToken() && !commandsUnlocked()}>
+                        <div class="space-y-3 opacity-60 pointer-events-none select-none">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                        <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-gray-400 text-white text-xs font-bold">2</span>
+                                        Installation commands
+                                    </h4>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 ml-6">Generate a token above to unlock installation commands.</p>
+                                </div>
+                            </div>
+                            <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-6 dark:border-gray-700 dark:bg-gray-800/50 text-center">
+                                <svg class="w-8 h-8 mx-auto text-gray-400 dark:text-gray-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                                </svg>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Click "Generate token" above to see installation commands</p>
+                            </div>
+                        </div>
+                    </Show>
+
                     <Show when={commandsUnlocked()}>
                         <div class="space-y-3">
                             <div class="space-y-3">
                                 <div class="flex items-center justify-between">
                                     <div>
-                                        <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Installation commands</h4>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">The installer auto-detects Docker, Kubernetes, and Proxmox on the target machine.</p>
+                                        <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                            <Show when={requiresToken()}>
+                                                <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-green-600 text-white text-xs font-bold">2</span>
+                                            </Show>
+                                            Installation commands
+                                        </h4>
+                                        <p class={`text-xs text-gray-500 dark:text-gray-400 mt-0.5 ${requiresToken() ? 'ml-6' : ''}`}>The installer auto-detects Docker, Kubernetes, and Proxmox on the target machine.</p>
                                     </div>
                                 </div>
 
