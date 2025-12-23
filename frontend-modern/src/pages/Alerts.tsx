@@ -2357,7 +2357,7 @@ function OverviewTab(props: {
         },
         () => {
           // Error - just log it
-          console.error('Patrol stream error');
+          logger.error('Patrol stream error');
         }
       );
     } else if ((!isExpanded || !isRunning) && liveStreamUnsubscribe) {
@@ -2444,7 +2444,7 @@ function OverviewTab(props: {
       const response = await AIAPI.getRemediations({ findingId, limit: 3 });
       setRemediationsByFinding((prev) => ({ ...prev, [findingId]: response.remediations || [] }));
     } catch (err) {
-      console.error('Failed to load remediation history', err);
+      logger.error('Failed to load remediation history', err);
     } finally {
       setRemediationLoadingByFinding((prev) => ({ ...prev, [findingId]: false }));
     }
@@ -2467,7 +2467,7 @@ function OverviewTab(props: {
         setForcePatrolLoading(false);
       }, 2000);
     } catch (e) {
-      console.error('Force patrol error:', e);
+      logger.error('Force patrol error:', e);
       showError('Failed to start patrol: ' + (e instanceof Error ? e.message : 'Unknown error'));
       setForcePatrolLoading(false);
     }

@@ -1,6 +1,7 @@
 import { Component, createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
 // Note: For is still used for connectedAgents list
 import { copyToClipboard } from '@/utils/clipboard';
+import { logger } from '@/utils/logger';
 import { getPulseBaseUrl } from '@/utils/url';
 import { SecurityAPI } from '@/api/security';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
@@ -108,7 +109,7 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
                     previousCount = totalAgents;
                 }
             } catch (error) {
-                console.error('Failed to check for agents:', error);
+                logger.error('Failed to check for agents:', error);
             }
         };
 
@@ -138,7 +139,7 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
                 setCurrentInstallToken(result.token);
             }
         } catch (error) {
-            console.error('Failed to generate new token:', error);
+            logger.error('Failed to generate new token:', error);
         } finally {
             setGeneratingToken(false);
         }

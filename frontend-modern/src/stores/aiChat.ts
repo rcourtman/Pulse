@@ -1,4 +1,5 @@
 import { createSignal } from 'solid-js';
+import { logger } from '@/utils/logger';
 
 interface AIChatContext {
   targetType?: string;
@@ -49,7 +50,7 @@ const loadMessagesFromStorage = (): Message[] => {
       timestamp: new Date(m.timestamp)
     }));
   } catch (e) {
-    console.error('Failed to load chat history:', e);
+    logger.error('Failed to load chat history:', e);
     return [];
   }
 };
@@ -106,7 +107,7 @@ export const aiChatStore = {
     try {
       localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(msgs));
     } catch (e) {
-      console.error('Failed to save chat history:', e);
+      logger.error('Failed to save chat history:', e);
     }
   },
 

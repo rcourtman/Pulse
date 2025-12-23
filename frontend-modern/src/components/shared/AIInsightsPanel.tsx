@@ -1,5 +1,6 @@
 import { Component, createSignal, createEffect, Show, For } from 'solid-js';
 import { AIAPI } from '@/api/ai';
+import { logger } from '@/utils/logger';
 import type { FailurePrediction, ResourceCorrelation } from '@/types/aiIntelligence';
 
 /**
@@ -40,7 +41,7 @@ export const AIInsightsPanel: Component<{ resourceId?: string; showWhenEmpty?: b
                 setCorrelations(corrResp.correlations || []);
             }
         } catch (e) {
-            console.error('Failed to load AI insights:', e);
+            logger.error('Failed to load AI insights:', e);
             setError('Failed to load AI insights.');
         } finally {
             setLoading(false);

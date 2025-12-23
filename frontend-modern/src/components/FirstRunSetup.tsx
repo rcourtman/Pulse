@@ -1,5 +1,6 @@
 import { Component, createSignal, Show, onMount } from 'solid-js';
 import { showSuccess, showError } from '@/utils/toast';
+import { logger } from '@/utils/logger';
 import { copyToClipboard } from '@/utils/clipboard';
 import { clearAuth as clearApiClientAuth, setApiToken as setApiClientToken } from '@/utils/apiClient';
 import { getPulseBaseUrl } from '@/utils/url';
@@ -83,7 +84,7 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
         }
       }
     } catch (error) {
-      console.error('Failed to fetch bootstrap token path:', error);
+      logger.error('Failed to fetch bootstrap token path:', error);
     }
   });
 

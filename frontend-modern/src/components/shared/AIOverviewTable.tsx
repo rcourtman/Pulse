@@ -1,5 +1,6 @@
 import { Component, createEffect, createSignal, For, Show } from 'solid-js';
 import { AIAPI } from '@/api/ai';
+import { logger } from '@/utils/logger';
 import type { FailurePrediction, InfrastructureChange, RemediationRecord, RemediationStats, AnomalyReport } from '@/types/aiIntelligence';
 
 const DEFAULT_UPGRADE_URL = 'https://pulserelay.pro';
@@ -110,7 +111,7 @@ export const AIOverviewTable: Component<{ showWhenEmpty?: boolean }> = (props) =
                 predResp.upgrade_url || corrResp.upgrade_url || remResp.upgrade_url || changesResp.upgrade_url || DEFAULT_UPGRADE_URL
             );
         } catch (e) {
-            console.error('Failed to load AI overview data:', e);
+            logger.error('Failed to load AI overview data:', e);
             setError('Failed to load AI overview data.');
         } finally {
             setLoading(false);

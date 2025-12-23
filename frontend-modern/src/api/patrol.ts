@@ -4,6 +4,7 @@
  */
 
 import { apiFetchJSON } from '@/utils/apiClient';
+import { logger } from '@/utils/logger';
 
 export type FindingSeverity = 'info' | 'watch' | 'warning' | 'critical';
 export type FindingCategory = 'performance' | 'capacity' | 'reliability' | 'backup' | 'security' | 'general';
@@ -339,7 +340,7 @@ export function subscribeToPatrolStream(
             const data = JSON.parse(event.data) as PatrolStreamEvent;
             onEvent(data);
         } catch (e) {
-            console.error('Failed to parse patrol stream event:', e);
+            logger.error('Failed to parse patrol stream event:', e);
         }
     };
 

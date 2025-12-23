@@ -7,6 +7,7 @@
  */
 
 import { createSignal } from 'solid-js';
+import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { seedFromBackend, resetSeedingState } from './metricsHistory';
 import type { TimeRange } from '@/api/charts';
@@ -87,7 +88,7 @@ export function setMetricsViewModePreference(mode: MetricsViewMode): void {
       localStorage.setItem(STORAGE_KEYS.METRICS_VIEW_MODE, mode);
     } catch (err) {
       // Ignore localStorage errors
-      console.warn('Failed to save metrics view mode preference', err);
+      logger.warn('Failed to save metrics view mode preference', err);
     }
   }
 
@@ -112,7 +113,7 @@ export function setMetricsTimeRangePreference(range: TimeRange): void {
       localStorage.setItem(STORAGE_KEYS.METRICS_TIME_RANGE, range);
     } catch (err) {
       // Ignore localStorage errors
-      console.warn('Failed to save metrics time range preference', err);
+      logger.warn('Failed to save metrics time range preference', err);
     }
   }
 
