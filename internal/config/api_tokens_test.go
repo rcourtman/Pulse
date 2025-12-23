@@ -905,7 +905,7 @@ func TestUpsertAPIToken(t *testing.T) {
 }
 
 func TestRemoveAPIToken(t *testing.T) {
-	t.Run("remove existing returns true", func(t *testing.T) {
+	t.Run("remove existing returns record", func(t *testing.T) {
 		cfg := &Config{
 			APITokens: []APITokenRecord{
 				{ID: "keep", Hash: "hash1"},
@@ -915,8 +915,11 @@ func TestRemoveAPIToken(t *testing.T) {
 		}
 
 		removed := cfg.RemoveAPIToken("remove")
-		if !removed {
-			t.Error("expected true when removing existing token")
+		if removed == nil {
+			t.Error("expected record when removing existing token")
+		}
+		if removed.ID != "remove" || removed.Hash != "hash2" {
+			t.Errorf("unexpected removed record: %+v", removed)
 		}
 		if len(cfg.APITokens) != 2 {
 			t.Fatalf("expected 2 tokens remaining, got %d", len(cfg.APITokens))
@@ -929,7 +932,7 @@ func TestRemoveAPIToken(t *testing.T) {
 		}
 	})
 
-	t.Run("remove non-existing returns false", func(t *testing.T) {
+	t.Run("remove non-existing returns nil", func(t *testing.T) {
 		cfg := &Config{
 			APITokens: []APITokenRecord{
 				{ID: "existing", Hash: "hash1"},
@@ -937,19 +940,69 @@ func TestRemoveAPIToken(t *testing.T) {
 		}
 
 		removed := cfg.RemoveAPIToken("nonexistent")
-		if removed {
-			t.Error("expected false when removing nonexistent token")
+		if removed != nil {
+			t.Error("expected nil when removing nonexistent token")
 		}
 		if len(cfg.APITokens) != 1 {
 			t.Errorf("token count should be unchanged, got %d", len(cfg.APITokens))
 		}
 	})
 
-	t.Run("remove from empty returns false", func(t *testing.T) {
+	t.Run("remove from empty returns nil", func(t *testing.T) {
 		cfg := &Config{}
 		removed := cfg.RemoveAPIToken("any")
-		if removed {
-			t.Error("expected false when removing from empty config")
+		if removed != nil {
+			t.Error("expected nil when removing from empty config")
+		}
+	})
+}
+
+func TestEnvMigrationSuppression(t *testing.T) {
+	t.Run("IsEnvMigrationSuppressed returns false for empty list", func(t *testing.T) {
+		cfg := &Config{}
+		if cfg.IsEnvMigrationSuppressed("any-hash") {
+			t.Error("expected false for empty suppression list")
+		}
+	})
+
+	t.Run("IsEnvMigrationSuppressed returns true for suppressed hash", func(t *testing.T) {
+		cfg := &Config{
+			SuppressedEnvMigrations: []string{"hash1", "hash2"},
+		}
+		if !cfg.IsEnvMigrationSuppressed("hash1") {
+			t.Error("expected true for suppressed hash")
+		}
+		if !cfg.IsEnvMigrationSuppressed("hash2") {
+			t.Error("expected true for suppressed hash")
+		}
+	})
+
+	t.Run("IsEnvMigrationSuppressed returns false for non-suppressed hash", func(t *testing.T) {
+		cfg := &Config{
+			SuppressedEnvMigrations: []string{"hash1", "hash2"},
+		}
+		if cfg.IsEnvMigrationSuppressed("hash3") {
+			t.Error("expected false for non-suppressed hash")
+		}
+	})
+
+	t.Run("SuppressEnvMigration adds new hash", func(t *testing.T) {
+		cfg := &Config{}
+		cfg.SuppressEnvMigration("hash1")
+		if len(cfg.SuppressedEnvMigrations) != 1 {
+			t.Errorf("expected 1 suppressed hash, got %d", len(cfg.SuppressedEnvMigrations))
+		}
+		if !cfg.IsEnvMigrationSuppressed("hash1") {
+			t.Error("hash1 should be suppressed")
+		}
+	})
+
+	t.Run("SuppressEnvMigration is idempotent", func(t *testing.T) {
+		cfg := &Config{}
+		cfg.SuppressEnvMigration("hash1")
+		cfg.SuppressEnvMigration("hash1")
+		if len(cfg.SuppressedEnvMigrations) != 1 {
+			t.Errorf("expected 1 suppressed hash after duplicate add, got %d", len(cfg.SuppressedEnvMigrations))
 		}
 	})
 }

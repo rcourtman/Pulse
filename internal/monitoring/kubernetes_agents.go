@@ -239,7 +239,7 @@ func (m *Monitor) RemoveKubernetesCluster(clusterID string) (models.KubernetesCl
 	// Revoke the API token associated with this Kubernetes cluster
 	if cluster.TokenID != "" {
 		tokenRemoved := m.config.RemoveAPIToken(cluster.TokenID)
-		if tokenRemoved {
+		if tokenRemoved != nil {
 			m.config.SortAPITokens()
 			m.config.APITokenEnabled = m.config.HasAPITokens()
 

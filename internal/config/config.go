@@ -129,9 +129,10 @@ type Config struct {
 	LogCompress bool   `envconfig:"LOG_COMPRESS" default:"true"`
 
 	// Security settings
-	APIToken               string           `envconfig:"API_TOKEN"`
-	APITokenEnabled        bool             `envconfig:"API_TOKEN_ENABLED" default:"false"`
-	APITokens              []APITokenRecord `json:"-"`
+	APIToken                 string           `envconfig:"API_TOKEN"`
+	APITokenEnabled          bool             `envconfig:"API_TOKEN_ENABLED" default:"false"`
+	APITokens                []APITokenRecord `json:"-"`
+	SuppressedEnvMigrations  []string         `json:"-"` // Hashes of env tokens deleted by user (prevent re-migration)
 	AuthUser               string           `envconfig:"PULSE_AUTH_USER"`
 	AuthPass               string           `envconfig:"PULSE_AUTH_PASS"`
 	DisableAuthEnvDetected bool             `json:"-"`
@@ -735,6 +736,16 @@ func Load() (*Config, error) {
 		log.Warn().Err(err).Msg("Failed to load API tokens from persistence")
 	}
 
+	// Load suppressed env token migrations (tokens user deleted that came from .env)
+	if suppressions, err := persistence.LoadEnvTokenSuppressions(); err == nil {
+		cfg.SuppressedEnvMigrations = suppressions
+		if len(suppressions) > 0 {
+			log.Debug().Int("count", len(suppressions)).Msg("Loaded env token suppression list")
+		}
+	} else {
+		log.Warn().Err(err).Msg("Failed to load env token suppressions")
+	}
+
 	// Ensure polling intervals have sane defaults if not set
 	if cfg.PVEPollingInterval <= 0 {
 		cfg.PVEPollingInterval = 10 * time.Second
@@ -1038,6 +1049,11 @@ func Load() (*Config, error) {
 
 			// Check if this token already exists in api_tokens.json
 			if cfg.HasAPITokenHash(hashed) {
+				continue
+			}
+
+			// Check if user previously deleted this migrated token (prevent re-migration)
+			if cfg.IsEnvMigrationSuppressed(hashed) {
 				continue
 			}
 
