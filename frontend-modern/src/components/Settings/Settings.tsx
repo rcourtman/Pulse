@@ -70,7 +70,7 @@ import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
-import { notificationStore } from '@/stores/notifications';
+
 import { updateStore } from '@/stores/updates';
 
 // Type definitions
