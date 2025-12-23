@@ -931,6 +931,10 @@ func (s *Service) LoadConfig() error {
 
 // IsEnabled returns true if AI is enabled and configured
 func (s *Service) IsEnabled() bool {
+	// In demo mode, AI is always considered enabled (using mock backend)
+	if IsDemoMode() {
+		return true
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cfg != nil && s.cfg.Enabled && s.provider != nil

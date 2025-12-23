@@ -244,8 +244,11 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		authMethod = string(config.AuthMethodAPIKey)
 	}
 
+	// Determine if running in demo mode
+	isDemo := strings.EqualFold(os.Getenv("PULSE_MOCK_MODE"), "true")
+
 	response := AISettingsResponse{
-		Enabled:        settings.Enabled,
+		Enabled:        settings.Enabled || isDemo,
 		Provider:       settings.Provider,
 		APIKeySet:      settings.APIKey != "",
 		Model:          settings.GetModel(),
@@ -253,7 +256,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		PatrolModel:    settings.PatrolModel,
 		AutoFixModel:   settings.AutoFixModel,
 		BaseURL:        settings.BaseURL,
-		Configured:     settings.IsConfigured(),
+		Configured:     settings.IsConfigured() || isDemo,
 		AutonomousMode: settings.AutonomousMode,
 		CustomContext:  settings.CustomContext,
 		AuthMethod:     authMethod,
