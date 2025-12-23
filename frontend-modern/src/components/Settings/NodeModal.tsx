@@ -1126,7 +1126,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           const cmd =
                                             'pveum user add pulse-monitor@pam --comment "Pulse monitoring service"';
                                           if (await copyToClipboard(cmd)) {
-                                            showSuccess('Command copied!');
+                                            notificationStore.success('Command copied!');
                                           }
                                         }}
                                         class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
@@ -1170,7 +1170,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           const cmd =
                                             'pveum user token add pulse-monitor@pam pulse-token --privsep 0';
                                           if (await copyToClipboard(cmd)) {
-                                            showSuccess('Command copied!');
+                                            notificationStore.success('Command copied!');
                                           }
                                         }}
                                         class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
@@ -1217,7 +1217,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           const cmd =
                                             'pveum aclmod / -user pulse-monitor@pam -role PVEAuditor && if pveum role list 2>/dev/null | grep -q "VM.Monitor" || pveum role add TestMonitor -privs VM.Monitor 2>/dev/null; then pveum role delete TestMonitor 2>/dev/null; pveum role delete PulseMonitor 2>/dev/null; pveum role add PulseMonitor -privs VM.Monitor; pveum aclmod / -user pulse-monitor@pam -role PulseMonitor; fi';
                                           if (await copyToClipboard(cmd)) {
-                                            showSuccess('Command copied!');
+                                            notificationStore.success('Command copied!');
                                           }
                                         }}
                                         class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
@@ -1255,7 +1255,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           const cmd =
                                             'pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin';
                                           if (await copyToClipboard(cmd)) {
-                                            showSuccess('Command copied!');
+                                            notificationStore.success('Command copied!');
                                           }
                                         }}
                                         class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
@@ -1680,7 +1680,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           const cmd =
                                             'proxmox-backup-manager user create pulse-monitor@pbs';
                                           if (await copyToClipboard(cmd)) {
-                                            showSuccess('Command copied!');
+                                            notificationStore.success('Command copied!');
                                           }
                                         }}
                                         class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
@@ -1723,7 +1723,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           const cmd =
                                             'proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token';
                                           if (await copyToClipboard(cmd)) {
-                                            showSuccess('Command copied!');
+                                            notificationStore.success('Command copied!');
                                           }
                                         }}
                                         class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
@@ -1770,7 +1770,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           const cmd =
                                             'proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs';
                                           if (await copyToClipboard(cmd)) {
-                                            showSuccess('Command copied!');
+                                            notificationStore.success('Command copied!');
                                           }
                                         }}
                                         class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
@@ -1807,7 +1807,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           const cmd =
                                             "proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!pulse-token'";
                                           if (await copyToClipboard(cmd)) {
-                                            showSuccess('Command copied!');
+                                            notificationStore.success('Command copied!');
                                           }
                                         }}
                                         class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
