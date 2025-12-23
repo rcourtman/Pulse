@@ -2212,33 +2212,6 @@ const Settings: Component<SettingsProps> = (props) => {
         }),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        // Handle authentication errors
-        if (response.status === 401 || response.status === 403) {
-          // Check if we're using API token auth (not password auth)
-          const hasPasswordAuth = securityStatus()?.hasAuthentication;
-          if (!hasPasswordAuth) {
-            // Clear invalid token if we had one
-            const hadToken = getApiClientToken();
-            if (hadToken) {
-              clearApiClientToken();
-              notificationStore.error('Invalid or expired API token. Please re-enter.');
-              setApiTokenModalSource('import');
-              setShowApiTokenModal(true);
-              return;
-            }
-            if (errorText.includes('API_TOKEN') || errorText.includes('API_TOKENS')) {
-              setApiTokenModalSource('import');
-              setShowApiTokenModal(true);
-              return;
-            }
-          }
-          throw new Error('Import requires authentication');
-        }
-        throw new Error(errorText || 'Import failed');
-      }
-
       notificationStore.success('Configuration imported successfully. Reloading...');
       setShowImportDialog(false);
       setImportPassphrase('');
@@ -2247,7 +2220,19 @@ const Settings: Component<SettingsProps> = (props) => {
       // Reload page to apply new configuration
       setTimeout(() => window.location.reload(), 2000);
     } catch (error) {
-      notificationStore.error('Failed to import configuration');
+      const errorText = error instanceof Error ? error.message : String(error);
+
+      // Handle specific error cases if possible, though apiFetch usually handles 401/403
+      // But for Import, we might want to trigger the token modal if it was a token issue
+      // Note: apiFetch throws Error with message.
+
+      if (errorText.includes('API_TOKEN') || errorText.includes('API_TOKENS')) {
+        setApiTokenModalSource('import');
+        setShowApiTokenModal(true);
+        return;
+      }
+
+      notificationStore.error(errorText || 'Failed to import configuration');
       logger.error('Import error', error);
     }
   };
