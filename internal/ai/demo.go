@@ -263,3 +263,107 @@ func (p *PatrolService) injectDemoRunHistory() {
 		p.runHistoryStore.Add(run)
 	}
 }
+
+// GenerateDemoAIResponse returns a realistic mock AI response for demo mode
+// This allows the demo server to showcase the AI Assistant without a real API key
+func GenerateDemoAIResponse(prompt string) *ExecuteResponse {
+	promptLower := strings.ToLower(prompt)
+
+	// Determine response based on prompt content
+	var response string
+
+	switch {
+	case strings.Contains(promptLower, "disk") || strings.Contains(promptLower, "storage") || strings.Contains(promptLower, "full"):
+		response = "## Disk Usage Analysis\n\n" +
+			"Based on the current metrics, I can see elevated disk usage. Here are my recommendations:\n\n" +
+			"### Immediate Actions\n" +
+			"1. **Check large files**: Run `du -sh /* | sort -rh | head -20` to find the largest directories\n" +
+			"2. **Review logs**: Old logs often consume significant space. Check `/var/log` and consider log rotation\n" +
+			"3. **Docker cleanup**: If using Docker, run `docker system prune -a` to remove unused images\n\n" +
+			"### Long-term Solutions\n" +
+			"- Set up automated log rotation with logrotate\n" +
+			"- Configure alerts at 80% to catch issues before they become critical\n" +
+			"- Consider expanding storage if usage is consistently high\n\n" +
+			"Would you like me to help investigate any specific directory?"
+
+	case strings.Contains(promptLower, "memory") || strings.Contains(promptLower, "ram") || strings.Contains(promptLower, "oom"):
+		response = "## Memory Analysis\n\n" +
+			"I can help analyze memory usage patterns. Here's what I recommend:\n\n" +
+			"### Quick Diagnostics\n" +
+			"1. **Current usage**: Check top consumers with `ps aux --sort=-%mem | head -15`\n" +
+			"2. **Memory pressure**: Review `/proc/meminfo` for swap usage\n" +
+			"3. **OOM events**: Check `dmesg | grep -i oom` for recent kills\n\n" +
+			"### Optimization Tips\n" +
+			"- Consider increasing VM memory allocation if the host has capacity\n" +
+			"- Review application memory limits (especially for Java apps with -Xmx)\n" +
+			"- Enable memory ballooning for better cluster-wide memory utilization\n\n" +
+			"This is a **demo instance** - in production, I can run these commands directly on your nodes."
+
+	case strings.Contains(promptLower, "backup") || strings.Contains(promptLower, "pbs"):
+		response = "## Backup Status Review\n\n" +
+			"Backups are critical for data protection. Here's my analysis:\n\n" +
+			"### Recommended Checks\n" +
+			"1. **PBS connectivity**: Verify the Proxmox Backup Server is reachable\n" +
+			"2. **Job schedules**: Review backup job configurations in Datacenter → Backup\n" +
+			"3. **Storage capacity**: Ensure PBS datastore has sufficient space for new backups\n\n" +
+			"### Best Practices\n" +
+			"- Schedule daily backups during low-usage periods\n" +
+			"- Keep at least 7 daily + 4 weekly retention\n" +
+			"- Test restores periodically to verify backup integrity\n\n" +
+			"Would you like me to help configure backup schedules for specific VMs?"
+
+	case strings.Contains(promptLower, "cpu") || strings.Contains(promptLower, "load") || strings.Contains(promptLower, "slow"):
+		response = "## CPU/Performance Analysis\n\n" +
+			"High CPU can indicate various issues. Let me help diagnose:\n\n" +
+			"### Diagnostic Steps\n" +
+			"1. **Top processes**: `top -bn1 | head -20` shows current CPU consumers\n" +
+			"2. **Load average**: Check if load > number of CPU cores\n" +
+			"3. **Per-VM usage**: Review individual guest CPU allocation\n\n" +
+			"### Common Causes\n" +
+			"- Overprovisioned guests (total vCPUs > physical cores)\n" +
+			"- Runaway processes within VMs\n" +
+			"- Background tasks like backups or replication\n\n" +
+			"### Quick Wins\n" +
+			"- Consider live-migrating busy VMs to less loaded nodes\n" +
+			"- Set CPU limits on non-critical guests\n" +
+			"- Schedule heavy tasks during off-peak hours"
+
+	case strings.Contains(promptLower, "hello") || strings.Contains(promptLower, "hi") || strings.Contains(promptLower, "help"):
+		response = "## Hello! 👋\n\n" +
+			"I'm the **Pulse AI Assistant**, here to help you manage your Proxmox infrastructure.\n\n" +
+			"### What I Can Help With\n" +
+			"- **Troubleshooting**: Diagnose disk, memory, CPU, and network issues\n" +
+			"- **Backups**: Review backup status and configure schedules\n" +
+			"- **Optimization**: Identify resource bottlenecks and optimization opportunities\n" +
+			"- **Commands**: Execute maintenance commands on your nodes (with your approval)\n\n" +
+			"### Try Asking\n" +
+			"- \"Why is my disk filling up?\"\n" +
+			"- \"Help me fix the backup failure on vm-102\"\n" +
+			"- \"Check memory usage on pve1\"\n\n" +
+			"*Note: This is a demo instance - command execution is disabled, but you can see how the AI analysis works!*"
+
+	default:
+		response = "## Analysis\n\n" +
+			"I can help you with that! In a production environment with AI configured, I would:\n\n" +
+			"1. **Analyze** the current state of your infrastructure\n" +
+			"2. **Identify** potential issues or optimization opportunities\n" +
+			"3. **Recommend** specific actions with commands you can run\n" +
+			"4. **Execute** approved commands directly on your nodes\n\n" +
+			"### This Demo Shows\n" +
+			"- How AI-powered analysis works in Pulse\n" +
+			"- The types of insights and recommendations you'll receive\n" +
+			"- Command suggestions with approval workflow\n\n" +
+			"To enable full AI capabilities in your own Pulse installation:\n" +
+			"1. Go to **Settings → AI Settings**\n" +
+			"2. Add your API key (Anthropic, OpenAI, DeepSeek, or Ollama)\n" +
+			"3. Enable AI features\n\n" +
+			"*Visit [pulserelay.pro](https://pulserelay.pro) to get Pulse Pro!*"
+	}
+
+	return &ExecuteResponse{
+		Content:      response,
+		Model:        "demo-model",
+		InputTokens:  150,
+		OutputTokens: 400,
+	}
+}
