@@ -1,7 +1,7 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
-import { clearAuth as clearApiClientAuth } from '@/utils/apiClient';
+import { clearAuth as clearApiClientAuth, apiFetchJSON } from '@/utils/apiClient';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 
@@ -82,37 +82,14 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
         apiToken: generateToken(),
       };
 
-      // Get CSRF token from cookie for authenticated requests (rotation mode)
-      const csrfToken = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('pulse_csrf='))
-        ?.split('=')[1];
-
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (csrfToken) {
-        headers['X-CSRF-Token'] = csrfToken;
-      }
-
       // Call API to enable security
-      const response = await fetch('/api/security/quick-setup', {
+      const result = await apiFetchJSON<{ skipped?: boolean; message?: string }>('/api/security/quick-setup', {
         method: 'POST',
-        headers,
         body: JSON.stringify({
           ...newCredentials,
           force: isRotation,
         }),
-        credentials: 'include', // Include cookies for CSRF
       });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'Failed to setup security');
-      }
-
-      // Parse response to check if setup was skipped
-      const result = await response.json();
 
       if (result.skipped) {
         // Security was already configured, don't show credentials

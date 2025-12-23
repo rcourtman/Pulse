@@ -1,5 +1,6 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { apiFetch } from '@/utils/apiClient';
 import { notificationStore } from '@/stores/notifications';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
@@ -39,32 +40,15 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
     setLoading(true);
 
     try {
-      // Get CSRF token from cookie
-      const csrfToken = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('pulse_csrf='))
-        ?.split('=')[1];
-
-      // Get the actual username from sessionStorage or use 'admin' as fallback
-      const authUser = sessionStorage.getItem('pulse_auth_user') || 'admin';
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        Authorization: `Basic ${btoa(`${authUser}:${currentPassword()}`)}`,
-      };
-
-      // Add CSRF token if available
-      if (csrfToken) {
-        headers['X-CSRF-Token'] = csrfToken;
-      }
-
-      const response = await fetch('/api/security/change-password', {
+      const response = await apiFetch('/api/security/change-password', {
         method: 'POST',
-        headers,
+        headers: {
+          Authorization: `Basic ${btoa(`${authUser}:${currentPassword()}`)}`,
+        },
         body: JSON.stringify({
           currentPassword: currentPassword(),
           newPassword: newPassword(),
         }),
-        credentials: 'include',
       });
 
       if (!response.ok) {
