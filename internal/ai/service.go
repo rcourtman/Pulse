@@ -1375,6 +1375,10 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	}
 
 	if provider == nil {
+		// In demo mode, simulate streaming response if no provider is configured
+		if IsDemoMode() {
+			return GenerateDemoAIStream(req.Prompt, callback)
+		}
 		return nil, fmt.Errorf("AI is not enabled or configured")
 	}
 
