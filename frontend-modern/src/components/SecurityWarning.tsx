@@ -2,7 +2,6 @@ import { Component, createSignal, Show, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { isPulseHttps } from '@/utils/url';
-import { isPulseHttps } from '@/utils/url';
 import { logger } from '@/utils/logger';
 import { apiFetchJSON } from '@/utils/apiClient';
 
