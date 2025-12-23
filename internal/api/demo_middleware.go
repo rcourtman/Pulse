@@ -38,6 +38,8 @@ func DemoModeMiddleware(cfg *config.Config, next http.Handler) http.Handler {
 			"/api/oidc/login",
 			"/api/oidc/callback",
 			"/api/logout",
+			// Allow AI chat interaction (mocked in backend if key missing)
+			"/api/ai/execute",
 		}
 		for _, path := range authPaths {
 			if r.URL.Path == path {
