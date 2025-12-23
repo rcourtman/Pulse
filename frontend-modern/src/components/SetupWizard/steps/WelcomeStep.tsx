@@ -1,5 +1,6 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { showError, showSuccess } from '@/utils/toast';
+import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 
 interface WelcomeStepProps {
@@ -20,7 +21,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
     // Fetch bootstrap info on mount
     const fetchBootstrapInfo = async () => {
         try {
-            const response = await fetch('/api/security/status');
+            const response = await apiFetch('/api/security/status');
             if (response.ok) {
                 const data = await response.json();
                 if (data.bootstrapTokenPath) {
@@ -46,20 +47,18 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
 
         setIsValidating(true);
         try {
-            const response = await fetch('/api/security/validate-bootstrap-token', {
+            await apiFetch('/api/security/validate-bootstrap-token', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token: props.bootstrapToken.trim() }),
             });
-
-            if (!response.ok) {
-                throw new Error('Invalid bootstrap token');
-            }
 
             props.setIsUnlocked(true);
             showSuccess('Token verified!');
             props.onNext();
         } catch (_error) {
+            if (_error instanceof Error && _error.message !== 'Invalid bootstrap token') {
+                // In case apiFetch throws other errors
+            }
             showError('Invalid bootstrap token. Please check and try again.');
         } finally {
             setIsValidating(false);
