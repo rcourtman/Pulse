@@ -122,13 +122,7 @@ export interface PatrolRunRecord {
  * Get the current AI patrol status
  */
 export async function getPatrolStatus(): Promise<PatrolStatus> {
-    const resp = await fetch('/api/ai/patrol/status', {
-        credentials: 'include',
-    });
-    if (!resp.ok) {
-        throw new Error(`Failed to get patrol status: ${resp.status}`);
-    }
-    return resp.json();
+    return apiFetchJSON<PatrolStatus>('/api/ai/patrol/status');
 }
 
 /**
@@ -140,13 +134,7 @@ export async function getFindings(resourceId?: string): Promise<Finding[]> {
         ? `/api/ai/patrol/findings?resource_id=${encodeURIComponent(resourceId)}`
         : '/api/ai/patrol/findings';
 
-    const resp = await fetch(url, {
-        credentials: 'include',
-    });
-    if (!resp.ok) {
-        throw new Error(`Failed to get findings: ${resp.status}`);
-    }
-    return resp.json();
+    return apiFetchJSON<Finding[]>(url);
 }
 
 /**
@@ -165,14 +153,7 @@ export async function getFindingsHistory(startTime?: string): Promise<Finding[]>
     const url = startTime
         ? `/api/ai/patrol/history?start_time=${encodeURIComponent(startTime)}`
         : '/api/ai/patrol/history';
-    const resp = await fetch(url, {
-        method: 'GET',
-        credentials: 'include',
-    });
-    if (!resp.ok) {
-        throw new Error(`Failed to get findings history: ${resp.status}`);
-    }
-    return resp.json();
+    return apiFetchJSON<Finding[]>(url);
 }
 
 /**
@@ -183,14 +164,7 @@ export async function getPatrolRunHistory(limit?: number): Promise<PatrolRunReco
     const url = limit
         ? `/api/ai/patrol/runs?limit=${limit}`
         : '/api/ai/patrol/runs';
-    const resp = await fetch(url, {
-        method: 'GET',
-        credentials: 'include',
-    });
-    if (!resp.ok) {
-        throw new Error(`Failed to get patrol run history: ${resp.status}`);
-    }
-    return resp.json();
+    return apiFetchJSON<PatrolRunRecord[]>(url);
 }
 
 /**
@@ -229,13 +203,7 @@ export async function resolveFinding(findingId: string): Promise<{ success: bool
 
 export async function getRunbooksForFinding(findingId: string): Promise<RunbookInfo[]> {
     const url = `/api/ai/runbooks?finding_id=${encodeURIComponent(findingId)}`;
-    const resp = await fetch(url, {
-        credentials: 'include',
-    });
-    if (!resp.ok) {
-        throw new Error(`Failed to get runbooks: ${resp.status}`);
-    }
-    return resp.json();
+    return apiFetchJSON<RunbookInfo[]>(url);
 }
 
 export async function executeRunbook(findingId: string, runbookId: string): Promise<RunbookExecutionResult> {
@@ -374,13 +342,7 @@ export interface SuppressionRule {
  * Get all suppression rules (both manual and from dismissed findings)
  */
 export async function getSuppressionRules(): Promise<SuppressionRule[]> {
-    const resp = await fetch('/api/ai/patrol/suppressions', {
-        credentials: 'include',
-    });
-    if (!resp.ok) {
-        throw new Error(`Failed to get suppression rules: ${resp.status}`);
-    }
-    return resp.json();
+    return apiFetchJSON<SuppressionRule[]>('/api/ai/patrol/suppressions');
 }
 
 /**
@@ -421,11 +383,5 @@ export async function deleteSuppressionRule(ruleId: string): Promise<{ success: 
  * Get all dismissed/suppressed findings
  */
 export async function getDismissedFindings(): Promise<Finding[]> {
-    const resp = await fetch('/api/ai/patrol/dismissed', {
-        credentials: 'include',
-    });
-    if (!resp.ok) {
-        throw new Error(`Failed to get dismissed findings: ${resp.status}`);
-    }
-    return resp.json();
+    return apiFetchJSON<Finding[]>('/api/ai/patrol/dismissed');
 }
