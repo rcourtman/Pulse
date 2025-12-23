@@ -23,9 +23,7 @@ on:
       - 'tests/integration/**'
   workflow_dispatch: # Allow manual triggering
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+
 
 jobs:
   integration-tests:
