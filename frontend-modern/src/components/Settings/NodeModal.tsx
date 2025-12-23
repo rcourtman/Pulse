@@ -285,7 +285,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
     const normalizedName = data.name.trim() || deriveNameFromHost(data.host);
     if (!normalizedName) {
-      showError('Node name is required');
+      notificationStore.error('Node name is required');
       return;
     }
 
@@ -1043,12 +1043,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             document.body.removeChild(a);
                                             URL.revokeObjectURL(url);
 
-                                            showSuccess(
+                                            notificationStore.success(
                                               'Script downloaded! Upload it to your server and run: bash pulse-setup.sh',
                                             );
                                           } catch (error) {
                                             logger.error('Failed to download script:', error);
-                                            showSuccess(
+                                            notificationStore.error(
                                               'Failed to download script. Please check your connection.',
                                             );
                                           }
@@ -1389,13 +1389,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             setAgentInstallCommand(data.command);
                                             const copied = await copyToClipboard(data.command);
                                             if (copied) {
-                                              showSuccess('Command copied to clipboard');
+                                              notificationStore.success('Command copied to clipboard');
                                             }
                                           }
                                         } catch (error) {
                                           logger.error('[Agent Install] Error:', error);
                                           setAgentCommandError(error instanceof Error ? error.message : 'Failed to generate command');
-                                          showError('Failed to generate install command');
+                                          notificationStore.error('Failed to generate install command');
                                         } finally {
                                           setLoadingAgentCommand(false);
                                         }
@@ -1468,17 +1468,17 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                               if (data.command) {
                                                 setQuickSetupCommand(data.command);
                                                 if (await copyToClipboard(data.command)) {
-                                                  showSuccess('Command copied to clipboard!');
+                                                  notificationStore.success('Command copied to clipboard!');
                                                 } else {
-                                                  showError('Failed to copy to clipboard');
+                                                  notificationStore.error('Failed to copy to clipboard');
                                                 }
                                               }
                                             } else {
-                                              showError('Failed to generate setup URL');
+                                              notificationStore.error('Failed to generate setup URL');
                                             }
                                           } catch (error) {
                                             logger.error('Failed to copy command:', error);
-                                            showError('Failed to copy command');
+                                            notificationStore.error('Failed to copy command');
                                           }
                                         }}
                                         class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700 rounded-md transition-colors"
@@ -1597,12 +1597,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             document.body.removeChild(a);
                                             URL.revokeObjectURL(url);
 
-                                            showSuccess(
+                                            notificationStore.success(
                                               'Script downloaded! Upload it to your PBS and run: bash pulse-pbs-setup.sh',
                                             );
                                           } catch (error) {
                                             logger.error('Failed to download script:', error);
-                                            showSuccess(
+                                            notificationStore.error(
                                               'Failed to download script. Please check your connection.',
                                             );
                                           }
