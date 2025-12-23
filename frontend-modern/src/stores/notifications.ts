@@ -18,4 +18,8 @@ export const notificationStore = {
   info: (message: string, duration: number = DEFAULT_DURATIONS.info) => {
     return showToast('info', message, undefined, duration);
   },
+
+  warning: (message: string, duration: number = DEFAULT_DURATIONS.info) => {
+    return showToast('warning', message, undefined, duration);
+  },
 };
