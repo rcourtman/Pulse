@@ -109,6 +109,7 @@ export const UnifiedAgents: Component = () => {
     const [lookupError, setLookupError] = createSignal<string | null>(null);
     const [lookupLoading, setLookupLoading] = createSignal(false);
     const [insecureMode, setInsecureMode] = createSignal(false); // For self-signed certificates (issue #806)
+    const [customAgentUrl, setCustomAgentUrl] = createSignal('');
 
     createEffect(() => {
         if (requiresToken()) {
@@ -123,7 +124,8 @@ export const UnifiedAgents: Component = () => {
     const agentUrl = () => securityStatus()?.agentUrl || getPulseBaseUrl();
 
     const commandSections = createMemo(() => {
-        const commands = buildCommandsByPlatform(agentUrl());
+        const url = customAgentUrl() || agentUrl();
+        const commands = buildCommandsByPlatform(url);
         return Object.entries(commands).map(([platform, meta]) => ({
             platform: platform as AgentPlatform,
             ...meta,
@@ -243,7 +245,8 @@ export const UnifiedAgents: Component = () => {
     const getCurlInsecureFlag = () => insecureMode() ? '-k' : '';
 
     const getUninstallCommand = () => {
-        return `curl ${getCurlInsecureFlag()}-fsSL ${agentUrl()}/install.sh | sudo bash -s -- --uninstall`;
+        const url = customAgentUrl() || agentUrl();
+        return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | sudo bash -s -- --uninstall`;
     };
 
     // Track previously seen host types to prevent flapping when one source temporarily has no data
@@ -375,7 +378,8 @@ export const UnifiedAgents: Component = () => {
 
     const getUpgradeCommand = (_hostname: string) => {
         const token = resolvedToken();
-        return `curl ${getCurlInsecureFlag()}-fsSL ${agentUrl()}/install.sh | sudo bash -s -- --url ${agentUrl()} --token ${token}${getInsecureFlag()}`;
+        const url = customAgentUrl() || agentUrl();
+        return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | sudo bash -s -- --url ${url} --token ${token}${getInsecureFlag()}`;
     };
 
     const handleRemoveAgent = async (id: string, type: 'host' | 'docker' | 'kubernetes') => {
@@ -500,6 +504,27 @@ export const UnifiedAgents: Component = () => {
                                         <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Installation commands</h4>
                                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">The installer auto-detects Docker, Kubernetes, and Proxmox on the target machine.</p>
                                     </div>
+                                </div>
+
+                                <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                        Connection URL (Agent → Pulse)
+                                    </label>
+                                    <div class="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={customAgentUrl()}
+                                            onInput={(e) => setCustomAgentUrl(e.currentTarget.value)}
+                                            placeholder={agentUrl()}
+                                            class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                        />
+                                    </div>
+                                    <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                        Override the address agents use to connect to this server (e.g., use IP address <code>http://192.168.1.50:7655</code> if DNS fails).
+                                        <Show when={!customAgentUrl()}>
+                                            <span class="ml-1 opacity-75">Currently using auto-detected: {agentUrl()}</span>
+                                        </Show>
+                                    </p>
                                 </div>
                                 <Show when={insecureMode()}>
                                     <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
