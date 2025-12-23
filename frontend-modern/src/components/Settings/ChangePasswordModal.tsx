@@ -40,6 +40,9 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
     setLoading(true);
 
     try {
+      // Get the actual username from sessionStorage or use 'admin' as fallback
+      const authUser = sessionStorage.getItem('pulse_auth_user') || 'admin';
+
       const response = await apiFetch('/api/security/change-password', {
         method: 'POST',
         headers: {
