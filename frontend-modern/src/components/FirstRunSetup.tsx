@@ -7,7 +7,9 @@ import { getPulseBaseUrl } from '@/utils/url';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { showTokenReveal } from '@/stores/tokenReveal';
 import type { APITokenRecord } from '@/api/security';
+import type { APITokenRecord } from '@/api/security';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import type { SecurityStatus } from '@/types/config';
 
 export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: boolean }> = (
   props,
@@ -72,7 +74,7 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
 
     // Fetch bootstrap token path from API
     try {
-      const data = await apiFetchJSON<any>('/api/security/status');
+      const data = await apiFetchJSON<SecurityStatus>('/api/security/status');
       if (data.bootstrapTokenPath) {
         setBootstrapTokenPath(data.bootstrapTokenPath);
         setIsDocker(data.isDocker || false);
