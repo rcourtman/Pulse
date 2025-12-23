@@ -57,7 +57,7 @@ describe('Login', () => {
         };
 
         render(() => (
-            <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus} />
+            <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus as any} />
         ));
 
         // Username and password fields should be visible
@@ -75,7 +75,7 @@ describe('Login', () => {
         };
 
         render(() => (
-            <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus} />
+            <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus as any} />
         ));
 
         // Wait for the component to render
@@ -108,7 +108,7 @@ describe('Login', () => {
         };
 
         render(() => (
-            <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus} />
+            <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus as any} />
         ));
 
         // Local login form should still be visible due to show_local=true
@@ -127,7 +127,7 @@ describe('Login', () => {
         };
 
         render(() => (
-            <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus} />
+            <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus as any} />
         ));
 
         // Wait for component to render
