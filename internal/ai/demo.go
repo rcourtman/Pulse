@@ -296,6 +296,56 @@ func GenerateDemoAIResponse(prompt string) *ExecuteResponse {
 	var response string
 
 	switch {
+	// Detect Patrol Analysis Request
+	case strings.Contains(promptLower, "analyze") && strings.Contains(promptLower, "infrastructure"):
+		response = `Based on the infrastructure data provided, I have identified the following issues:
+
+[FINDING]
+SEVERITY: critical
+CATEGORY: capacity
+KEY: storage:local-zfs:capacity
+RESOURCE_ID: storage/pve1/local-zfs
+RESOURCE_NAME: local-zfs
+RESOURCE_TYPE: storage
+NODE: pve1
+TITLE: ZFS pool 'local-zfs' is 94% full
+DESCRIPTION: Storage pool local-zfs on pve1 has critical capacity usage. This endangers VM stability and snapshot creation.
+RECOMMENDATION: **Immediate actions:**
+1. Identify large files: ` + "`zfs list -o name,used,refer -t all | sort -k2 -h`" + `
+2. Check for orphaned VM disks
+3. Remove old snapshots
+EVIDENCE: Used: 94% (703GB/750GB)
+[/FINDING]
+
+[FINDING]
+SEVERITY: warning
+CATEGORY: performance
+KEY: vm:vm-102:memory
+RESOURCE_ID: qemu/102
+RESOURCE_NAME: vm-database
+RESOURCE_TYPE: vm
+NODE: pve1
+TITLE: High memory pressure on Database VM
+DESCRIPTION: VM 'vm-database' is consistently using >90% RAM with significant swap activity.
+RECOMMENDATION: Increase memory allocation to 16GB or enable ballooning.
+EVIDENCE: Memory: 92% (7.4GB/8GB), Swap: 30%
+[/FINDING]
+
+[FINDING]
+SEVERITY: warning
+CATEGORY: security
+KEY: host:pve2:ssh
+RESOURCE_ID: node/pve2
+RESOURCE_NAME: pve2
+RESOURCE_TYPE: node
+NODE: pve2
+TITLE: Root SSH login enabled
+DESCRIPTION: Root SSH login is enabled on node pve2, which is a security risk.
+RECOMMENDATION: Disable root login in /etc/ssh/sshd_config and use key-based authentication.
+EVIDENCE: PermitRootLogin yes found in config
+[/FINDING]
+`
+
 	case strings.Contains(promptLower, "disk") || strings.Contains(promptLower, "storage") || strings.Contains(promptLower, "full"):
 		response = "## Disk Usage Analysis\n\n" +
 			"Based on the current metrics, I can see elevated disk usage. Here are my recommendations:\n\n" +
@@ -389,4 +439,34 @@ func GenerateDemoAIResponse(prompt string) *ExecuteResponse {
 		InputTokens:  150,
 		OutputTokens: 400,
 	}
+}
+
+// GenerateDemoAIStream acts like GenerateDemoAIResponse but streams content via callback
+func GenerateDemoAIStream(prompt string, callback StreamCallback) (*ExecuteResponse, error) {
+	resp := GenerateDemoAIResponse(prompt)
+	
+	// Simulate streaming by sending chunks
+	chunkSize := 10
+	content := resp.Content
+	
+	for i := 0; i < len(content); i += chunkSize {
+		end := i + chunkSize
+		if end > len(content) {
+			end = len(content)
+		}
+		
+		callback(StreamEvent{
+			Type: "content",
+			Data: content[i:end],
+		})
+		
+		// Tiny sleep to simulate generation speed
+		time.Sleep(10 * time.Millisecond)
+	}
+	
+	callback(StreamEvent{
+		Type: "done",
+	})
+	
+	return resp, nil
 }
