@@ -263,10 +263,14 @@ func (a *AlertTriggeredAnalyzer) analyzeGuestFromAlert(_ context.Context, alert 
 	// Check VMs
 	for _, vm := range state.VMs {
 		if vm.ID == alert.ResourceID || vm.Name == alert.ResourceName {
+			var lastBackup *time.Time
+			if !vm.LastBackup.IsZero() {
+				lastBackup = &vm.LastBackup
+			}
 			return a.patrolService.analyzeGuest(
 				vm.ID, vm.Name, "vm", vm.Node, vm.Status,
 				vm.CPU, vm.Memory.Usage, vm.Disk.Usage,
-				nil, vm.Template,
+				lastBackup, vm.Template,
 			)
 		}
 	}
@@ -274,10 +278,14 @@ func (a *AlertTriggeredAnalyzer) analyzeGuestFromAlert(_ context.Context, alert 
 	// Check containers
 	for _, ct := range state.Containers {
 		if ct.ID == alert.ResourceID || ct.Name == alert.ResourceName {
+			var lastBackup *time.Time
+			if !ct.LastBackup.IsZero() {
+				lastBackup = &ct.LastBackup
+			}
 			return a.patrolService.analyzeGuest(
 				ct.ID, ct.Name, "container", ct.Node, ct.Status,
 				ct.CPU, ct.Memory.Usage, ct.Disk.Usage,
-				nil, ct.Template,
+				lastBackup, ct.Template,
 			)
 		}
 	}
