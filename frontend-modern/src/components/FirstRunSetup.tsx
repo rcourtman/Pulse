@@ -2,7 +2,7 @@ import { Component, createSignal, Show, onMount } from 'solid-js';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { copyToClipboard } from '@/utils/clipboard';
-import { clearAuth as clearApiClientAuth, setApiToken as setApiClientToken } from '@/utils/apiClient';
+import { clearAuth as clearApiClientAuth, setApiToken as setApiClientToken, apiFetchJSON } from '@/utils/apiClient';
 import { getPulseBaseUrl } from '@/utils/url';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { showTokenReveal } from '@/stores/tokenReveal';
@@ -72,16 +72,13 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
 
     // Fetch bootstrap token path from API
     try {
-      const response = await fetch('/api/security/status');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.bootstrapTokenPath) {
-          setBootstrapTokenPath(data.bootstrapTokenPath);
-          setIsDocker(data.isDocker || false);
-          setInContainer(data.inContainer || false);
-          setLxcCtid(data.lxcCtid || '');
-          setDockerContainerName(data.dockerContainerName || '');
-        }
+      const data = await apiFetchJSON<any>('/api/security/status');
+      if (data.bootstrapTokenPath) {
+        setBootstrapTokenPath(data.bootstrapTokenPath);
+        setIsDocker(data.isDocker || false);
+        setInContainer(data.inContainer || false);
+        setLxcCtid(data.lxcCtid || '');
+        setDockerContainerName(data.dockerContainerName || '');
       }
     } catch (error) {
       logger.error('Failed to fetch bootstrap token path:', error);
@@ -113,18 +110,10 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
     setIsValidatingToken(true);
 
     try {
-      const response = await fetch('/api/security/validate-bootstrap-token', {
+      await apiFetchJSON('/api/security/validate-bootstrap-token', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ token: bootstrapToken().trim() }),
       });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'Invalid bootstrap setup token');
-      }
 
       setIsUnlocked(true);
       notificationStore.success('Bootstrap token verified. Continue with setup.');
