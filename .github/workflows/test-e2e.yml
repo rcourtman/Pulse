@@ -22,9 +22,7 @@ on:
       - '.github/workflows/test-e2e.yml'
   workflow_dispatch:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+
 
 jobs:
   e2e:
