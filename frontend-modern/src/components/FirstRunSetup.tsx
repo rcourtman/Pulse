@@ -7,7 +7,6 @@ import { getPulseBaseUrl } from '@/utils/url';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { showTokenReveal } from '@/stores/tokenReveal';
 import type { APITokenRecord } from '@/api/security';
-import type { APITokenRecord } from '@/api/security';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import type { SecurityStatus } from '@/types/config';
 
