@@ -1,6 +1,6 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { showError, showSuccess } from '@/utils/toast';
-import { setApiToken as setApiClientToken } from '@/utils/apiClient';
+import { setApiToken as setApiClientToken, apiFetchJSON } from '@/utils/apiClient';
 import type { WizardState } from '../SetupWizard';
 
 interface SecurityStepProps {
@@ -52,13 +52,11 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
         try {
             setApiClientToken(token);
 
-            const response = await fetch('/api/security/quick-setup', {
+            await apiFetchJSON('/api/security/quick-setup', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'X-Setup-Token': props.bootstrapToken,
                 },
-                credentials: 'include',
                 body: JSON.stringify({
                     username: username(),
                     password: finalPassword,
@@ -67,10 +65,6 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                     setupToken: props.bootstrapToken,
                 }),
             });
-
-            if (!response.ok) {
-                throw new Error(await response.text());
-            }
 
             props.updateState({
                 username: username(),
