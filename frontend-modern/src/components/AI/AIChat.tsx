@@ -1,5 +1,6 @@
 import { Component, Show, createSignal, For, createEffect, createMemo, onMount, Switch, Match } from 'solid-js';
 import { AIAPI } from '@/api/ai';
+import { getPatrolStatus, type PatrolStatus } from '@/api/patrol';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { aiChatStore } from '@/stores/aiChat';
@@ -219,16 +220,28 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [autonomousMode, setAutonomousMode] = createSignal(false);
   const [isTogglingAutonomous, setIsTogglingAutonomous] = createSignal(false);
 
+  // AI Patrol upgrade prompt state
+  const [patrolStatus, setPatrolStatus] = createSignal<PatrolStatus | null>(null);
+  const [upgradePromptDismissed, setUpgradePromptDismissed] = createSignal(false);
+
+  // Show upgrade prompt when: user has sent a message, patrol requires license, and user hasn't dismissed
+  const showUpgradePrompt = createMemo(() => {
+    const status = patrolStatus();
+    const hasMessages = messages().some(m => m.role === 'user');
+    return hasMessages && status?.license_required === true && !upgradePromptDismissed();
+  });
+
   let messagesEndRef: HTMLDivElement | undefined;
   let inputRef: HTMLTextAreaElement | undefined;
   let abortControllerRef: AbortController | null = null;
 
-  // Fetch available models and settings on mount
+  // Fetch available models, settings, and patrol status on mount
   onMount(async () => {
     try {
-      const [modelsResult, settingsResult] = await Promise.all([
+      const [modelsResult, settingsResult, patrolStatusResult] = await Promise.all([
         AIAPI.getModels(),
         AIAPI.getSettings(),
+        getPatrolStatus().catch(() => null), // Patrol may not be available
       ]);
       if (modelsResult.models && modelsResult.models.length > 0) {
         setAvailableModels(modelsResult.models.map(m => ({
@@ -239,6 +252,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
       }
       if (settingsResult) {
         setAutonomousMode(settingsResult.autonomous_mode || false);
+      }
+      if (patrolStatusResult) {
+        setPatrolStatus(patrolStatusResult);
       }
     } catch (_e) {
       // Silently fail - models will just not be selectable
@@ -1015,6 +1031,46 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
         {/* Messages Area */}
         <div class="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* AI Patrol upgrade prompt - shows after first message for free users */}
+          <Show when={showUpgradePrompt()}>
+            <div class="relative flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800">
+              <div class="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-800 flex items-center justify-center">
+                <svg class="w-4 h-4 text-purple-600 dark:text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  Want AI to patrol automatically?
+                </p>
+                <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                  AI Patrol monitors your infrastructure 24/7 and surfaces issues before they become outages.
+                </p>
+                <a
+                  href={patrolStatus()?.upgrade_url || 'https://pulserelay.pro'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300"
+                >
+                  Learn about Pulse Pro
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUpgradePromptDismissed(true)}
+                class="flex-shrink-0 p-1 rounded hover:bg-purple-200 dark:hover:bg-purple-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                title="Dismiss"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </Show>
+
           <Show when={messages().length === 0}>
             <div class="text-center py-12 text-gray-500 dark:text-gray-400">
               <svg
