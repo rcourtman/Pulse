@@ -4,6 +4,7 @@ import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { getPulseBaseUrl } from '@/utils/url';
+import type { State } from '@/types/api';
 import { SecurityAPI } from '@/api/security';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import type { WizardState } from '../SetupWizard';
@@ -38,7 +39,7 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
         const checkForAgents = async () => {
             try {
 
-                const state = await apiFetchJSON<{ nodes: any[], hosts: any[] }>('/api/state', {
+                const state = await apiFetchJSON<State>('/api/state', {
                     headers: {
                         'X-API-Token': props.state.apiToken,
                     },
