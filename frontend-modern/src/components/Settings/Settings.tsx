@@ -11,7 +11,7 @@ import {
 } from 'solid-js';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
-import { showSuccess, showError, showWarning } from '@/utils/toast';
+import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import {
   apiFetch,
@@ -875,7 +875,7 @@ const Settings: Component<SettingsProps> = (props) => {
       );
       if (failing.length > 0) {
         const nodes = failing.map((proxy) => proxy.node || 'Unknown').join(', ');
-        showWarning(`Pulse cannot reach HTTPS temperature proxy on: ${nodes}`);
+        notificationStore.warning(`Pulse cannot reach HTTPS temperature proxy on: ${nodes}`);
       }
     }
     if (diag.temperatureProxy.controlPlaneStates) {
@@ -884,7 +884,7 @@ const Settings: Component<SettingsProps> = (props) => {
       );
       if (stale.length > 0) {
         const names = stale.map((state) => state.instance || 'Proxy').join(', ');
-        showWarning(`Temperature proxy control plane is behind on: ${names}`);
+        notificationStore.warning(`Temperature proxy control plane is behind on: ${names}`);
       }
     }
     if (diag.temperatureProxy.socketHostCooldowns) {
@@ -893,7 +893,7 @@ const Settings: Component<SettingsProps> = (props) => {
       );
       if (cooling.length > 0) {
         const hosts = cooling.map((entry) => entry.node || entry.host || 'proxy').join(', ');
-        showWarning(`Temperature proxy is cooling down the following hosts: ${hosts}`);
+        notificationStore.warning(`Temperature proxy is cooling down the following hosts: ${hosts}`);
       }
     }
   };
@@ -953,7 +953,7 @@ const Settings: Component<SettingsProps> = (props) => {
       // hostProxyStatus removed - pulse-sensor-proxy is deprecated in v5
     } catch (err) {
       logger.error('Failed to fetch diagnostics', err);
-      showError('Failed to run diagnostics');
+      notificationStore.error('Failed to run diagnostics');
     } finally {
       setRunningDiagnostics(false);
     }
@@ -1906,7 +1906,7 @@ const Settings: Component<SettingsProps> = (props) => {
         });
       }
 
-      showSuccess('Settings saved successfully. Service restart may be required for port changes.');
+      notificationStore.success('Settings saved successfully. Service restart may be required for port changes.');
       setHasUnsavedChanges(false);
 
       // Reload the page after a short delay to ensure the new settings are applied
@@ -1914,7 +1914,7 @@ const Settings: Component<SettingsProps> = (props) => {
         window.location.reload();
       }, 3000);
     } catch (error) {
-      showError(error instanceof Error ? error.message : 'Failed to save settings');
+      notificationStore.error(error instanceof Error ? error.message : 'Failed to save settings');
     }
   };
 
@@ -1958,9 +1958,9 @@ const Settings: Component<SettingsProps> = (props) => {
       await NodesAPI.deleteNode(pending.id);
       setNodes(nodes().filter((n) => n.id !== pending.id));
       const label = pending.displayName || pending.name || pending.host || pending.id;
-      showSuccess(`${label} removed successfully`);
+      notificationStore.success(`${label} removed successfully`);
     } catch (error) {
-      showError(error instanceof Error ? error.message : 'Failed to delete node');
+      notificationStore.error(error instanceof Error ? error.message : 'Failed to delete node');
     } finally {
       setDeleteNodeLoading(false);
       setShowDeleteNodeModal(false);
@@ -1981,15 +1981,15 @@ const Settings: Component<SettingsProps> = (props) => {
         // Check for warnings in the response
         if (result.warnings && Array.isArray(result.warnings) && result.warnings.length > 0) {
           const warningMessage = result.message + '\n\nWarnings:\n' + result.warnings.map((w: string) => '• ' + w).join('\n');
-          showWarning(warningMessage);
+          notificationStore.warning(warningMessage);
         } else {
-          showSuccess(result.message || 'Connection successful');
+          notificationStore.success(result.message || 'Connection successful');
         }
       } else {
         throw new Error(result.message || 'Connection failed');
       }
     } catch (error) {
-      showError(error instanceof Error ? error.message : 'Connection test failed');
+      notificationStore.error(error instanceof Error ? error.message : 'Connection test failed');
     }
   };
 
@@ -1999,9 +1999,9 @@ const Settings: Component<SettingsProps> = (props) => {
       const result = await NodesAPI.refreshClusterNodes(nodeId);
       if (result.status === 'success') {
         if (result.nodesAdded && result.nodesAdded > 0) {
-          showSuccess(`Found ${result.nodesAdded} new node(s) in cluster "${result.clusterName}"`);
+          notificationStore.success(`Found ${result.nodesAdded} new node(s) in cluster "${result.clusterName}"`);
         } else {
-          showSuccess(`Cluster "${result.clusterName}" membership verified (${result.newNodeCount} nodes)`);
+          notificationStore.success(`Cluster "${result.clusterName}" membership verified (${result.newNodeCount} nodes)`);
         }
         // Refresh nodes list to show updated cluster info
         await loadNodes();
@@ -2009,7 +2009,7 @@ const Settings: Component<SettingsProps> = (props) => {
         throw new Error('Failed to refresh cluster');
       }
     } catch (error) {
-      showError(error instanceof Error ? error.message : 'Failed to refresh cluster membership');
+      notificationStore.error(error instanceof Error ? error.message : 'Failed to refresh cluster membership');
     }
   };
 
@@ -2040,10 +2040,10 @@ const Settings: Component<SettingsProps> = (props) => {
       }
 
       if (!info?.available) {
-        showSuccess('You are running the latest version');
+        notificationStore.success('You are running the latest version');
       }
     } catch (error) {
-      showError('Failed to check for updates');
+      notificationStore.error('Failed to check for updates');
       logger.error('Update check error', error);
     } finally {
       setCheckingForUpdates(false);
@@ -2066,7 +2066,7 @@ const Settings: Component<SettingsProps> = (props) => {
       setShowUpdateConfirmation(false);
     } catch (error) {
       logger.error('Failed to start update', error);
-      showError('Failed to start update. Please try again.');
+      notificationStore.error('Failed to start update. Please try again.');
     } finally {
       setIsInstallingUpdate(false);
     }
@@ -2075,7 +2075,7 @@ const Settings: Component<SettingsProps> = (props) => {
   const handleExport = async () => {
     if (!exportPassphrase()) {
       const hasAuth = securityStatus()?.hasAuthentication;
-      showError(
+      notificationStore.error(
         hasAuth
           ? useCustomPassphrase()
             ? 'Please enter a passphrase'
@@ -2088,7 +2088,7 @@ const Settings: Component<SettingsProps> = (props) => {
     // Backend requires at least 12 characters for encryption security
     if (exportPassphrase().length < 12) {
       const hasAuth = securityStatus()?.hasAuthentication;
-      showError(
+      notificationStore.error(
         hasAuth && !useCustomPassphrase()
           ? 'Your password must be at least 12 characters. Please use a custom passphrase instead.'
           : 'Passphrase must be at least 12 characters long',
@@ -2147,7 +2147,7 @@ const Settings: Component<SettingsProps> = (props) => {
             const hadToken = getApiClientToken();
             if (hadToken) {
               clearApiClientToken();
-              showError('Invalid or expired API token. Please re-enter.');
+              notificationStore.error('Invalid or expired API token. Please re-enter.');
               setApiTokenModalSource('export');
               setShowApiTokenModal(true);
               return;
@@ -2176,25 +2176,25 @@ const Settings: Component<SettingsProps> = (props) => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      showSuccess('Configuration exported successfully');
+      notificationStore.success('Configuration exported successfully');
       setShowExportDialog(false);
       setExportPassphrase('');
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to export configuration';
-      showError(errorMessage);
+      notificationStore.error(errorMessage);
       logger.error('Export error', error);
     }
   };
 
   const handleImport = async () => {
     if (!importPassphrase()) {
-      showError('Please enter the password');
+      notificationStore.error('Please enter the password');
       return;
     }
 
     if (!importFile()) {
-      showError('Please select a file to import');
+      notificationStore.error('Please select a file to import');
       return;
     }
 
@@ -2227,7 +2227,7 @@ const Settings: Component<SettingsProps> = (props) => {
           // Standard format with data field
           encryptedData = exportData.data;
         } else {
-          showError('Invalid backup file format. Expected encrypted data in "data" field.');
+          notificationStore.error('Invalid backup file format. Expected encrypted data in "data" field.');
           return;
         }
       } catch (_parseError) {
@@ -2279,7 +2279,7 @@ const Settings: Component<SettingsProps> = (props) => {
             const hadToken = getApiClientToken();
             if (hadToken) {
               clearApiClientToken();
-              showError('Invalid or expired API token. Please re-enter.');
+              notificationStore.error('Invalid or expired API token. Please re-enter.');
               setApiTokenModalSource('import');
               setShowApiTokenModal(true);
               return;
@@ -2295,7 +2295,7 @@ const Settings: Component<SettingsProps> = (props) => {
         throw new Error(errorText || 'Import failed');
       }
 
-      showSuccess('Configuration imported successfully. Reloading...');
+      notificationStore.success('Configuration imported successfully. Reloading...');
       setShowImportDialog(false);
       setImportPassphrase('');
       setImportFile(null);
@@ -2303,7 +2303,7 @@ const Settings: Component<SettingsProps> = (props) => {
       // Reload page to apply new configuration
       setTimeout(() => window.location.reload(), 2000);
     } catch (error) {
-      showError('Failed to import configuration');
+      notificationStore.error('Failed to import configuration');
       logger.error('Import error', error);
     }
   };
@@ -3702,7 +3702,7 @@ const Settings: Component<SettingsProps> = (props) => {
                       : n,
                   ),
                 );
-                showSuccess('Node updated successfully');
+                notificationStore.success('Node updated successfully');
               } else {
                 // Add new node
                 await NodesAPI.addNode(nodeData as NodeConfig);
@@ -3717,13 +3717,13 @@ const Settings: Component<SettingsProps> = (props) => {
                   status: node.status || ('pending' as const),
                 }));
                 setNodes(nodesWithStatus);
-                showSuccess('Node added successfully');
+                notificationStore.success('Node added successfully');
               }
 
               setShowNodeModal(false);
               setEditingNode(null);
             } catch (error) {
-              showError(error instanceof Error ? error.message : 'Operation failed');
+              notificationStore.error(error instanceof Error ? error.message : 'Operation failed');
             }
           }}
         />
@@ -3773,7 +3773,7 @@ const Settings: Component<SettingsProps> = (props) => {
                       : n,
                   ),
                 );
-                showSuccess('Node updated successfully');
+                notificationStore.success('Node updated successfully');
               } else {
                 // Add new node
                 await NodesAPI.addNode(nodeData as NodeConfig);
@@ -3788,13 +3788,13 @@ const Settings: Component<SettingsProps> = (props) => {
                   status: node.status || ('pending' as const),
                 }));
                 setNodes(nodesWithStatus);
-                showSuccess('Node added successfully');
+                notificationStore.success('Node added successfully');
               }
 
               setShowNodeModal(false);
               setEditingNode(null);
             } catch (error) {
-              showError(error instanceof Error ? error.message : 'Operation failed');
+              notificationStore.error(error instanceof Error ? error.message : 'Operation failed');
             }
           }}
         />
@@ -3840,7 +3840,7 @@ const Settings: Component<SettingsProps> = (props) => {
                       : n,
                   ),
                 );
-                showSuccess('Node updated successfully');
+                notificationStore.success('Node updated successfully');
               } else {
                 await NodesAPI.addNode(nodeData as NodeConfig);
                 const nodesList = await NodesAPI.getNodes();
@@ -3851,13 +3851,13 @@ const Settings: Component<SettingsProps> = (props) => {
                   status: node.status || ('pending' as const),
                 }));
                 setNodes(nodesWithStatus);
-                showSuccess('Node added successfully');
+                notificationStore.success('Node added successfully');
               }
 
               setShowNodeModal(false);
               setEditingNode(null);
             } catch (error) {
-              showError(error instanceof Error ? error.message : 'Operation failed');
+              notificationStore.error(error instanceof Error ? error.message : 'Operation failed');
             }
           }}
         />
@@ -4075,7 +4075,7 @@ const Settings: Component<SettingsProps> = (props) => {
                       handleImport();
                     }
                   } else {
-                    showError('Please enter the API token');
+                    notificationStore.error('Please enter the API token');
                   }
                 }}
                 disabled={!apiTokenInput()}
