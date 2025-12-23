@@ -1136,7 +1136,7 @@ function AppLayout(props: {
   const utilityTabs = createMemo(() => {
     const allAlerts = props.state().activeAlerts || [];
     const breakdown = allAlerts.reduce(
-      (acc, alert: any) => {
+      (acc, alert: Alert) => {
         if (alert?.acknowledged) return acc;
         const level = String(alert?.level || '').toLowerCase();
         if (level === 'critical') {
