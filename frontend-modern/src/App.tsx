@@ -33,7 +33,7 @@ import { updateStore } from './stores/updates';
 import { UpdateBanner } from './components/UpdateBanner';
 import { DemoBanner } from './components/DemoBanner';
 import { createTooltipSystem } from './components/shared/Tooltip';
-import type { State } from '@/types/api';
+import type { State, Alert } from '@/types/api';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { startMetricsSampler } from './stores/metricsSampler';
 import { seedFromBackend } from './stores/metricsHistory';
