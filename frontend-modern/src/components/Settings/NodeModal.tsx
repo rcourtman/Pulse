@@ -871,7 +871,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           // Check if host is populated
                                           if (!formData().host || formData().host.trim() === '') {
                                             logger.debug('[Quick Setup] No host entered');
-                                            showError('Please enter the Host URL first');
+                                            notificationStore.error('Please enter the Host URL first');
                                             return;
                                           }
 
@@ -909,9 +909,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                               const copied = await copyToClipboard(data.command);
                                               logger.debug('[Quick Setup] Copy result', copied);
                                               if (copied) {
-                                                showSuccess('Command copied to clipboard! Paste the setup token shown below when prompted.');
+                                                notificationStore.success('Command copied to clipboard! Paste the setup token shown below when prompted.');
                                               } else {
-                                                showError('Failed to copy to clipboard');
+                                                notificationStore.error('Failed to copy to clipboard');
                                               }
                                             } else {
                                               logger.debug('[Quick Setup] No command in response');
@@ -919,13 +919,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           } else {
                                             setQuickSetupToken('');
                                             setQuickSetupExpiry(null);
-                                            showError('Failed to generate setup URL');
+                                            notificationStore.error('Failed to generate setup URL');
                                           }
                                         } catch (error) {
                                           logger.error('[Quick Setup] Error:', error);
                                           setQuickSetupToken('');
                                           setQuickSetupExpiry(null);
-                                          showError('Failed to copy command');
+                                          notificationStore.error('Failed to copy command');
                                         }
                                       }}
                                       class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700 rounded-md transition-colors"
