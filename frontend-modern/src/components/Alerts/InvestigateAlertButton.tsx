@@ -2,7 +2,7 @@ import { Show, createSignal } from 'solid-js';
 import { aiChatStore } from '@/stores/aiChat';
 import type { Alert } from '@/types/api';
 import { formatAlertValue } from '@/utils/alertFormatters';
-import { showWarning } from '@/utils/toast';
+import { notificationStore } from '@/stores/notifications';
 
 interface InvestigateAlertButtonProps {
     alert: Alert;
@@ -26,7 +26,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
         e.stopPropagation();
         e.preventDefault();
         if (isLocked()) {
-            showWarning('Pulse Pro required to investigate alerts with AI.');
+            notificationStore.warning('Pulse Pro required to investigate alerts with AI.');
             return;
         }
 

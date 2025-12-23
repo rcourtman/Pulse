@@ -1,6 +1,6 @@
 import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
-import { showError, showSuccess } from '@/utils/toast';
+import { notificationStore } from '@/stores/notifications';
 import { formatRelativeTime } from '@/utils/format';
 import { useWebSocket } from '@/App';
 import type { DockerHost, Host } from '@/types/api';

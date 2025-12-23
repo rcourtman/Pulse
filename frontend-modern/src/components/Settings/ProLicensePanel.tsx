@@ -1,7 +1,7 @@
 import { Component, Show, createMemo, createSignal, onMount, For } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { formField, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
-import { showError, showSuccess } from '@/utils/toast';
+import { notificationStore } from '@/stores/notifications';
 import { LicenseAPI, type LicenseStatus } from '@/api/license';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 
