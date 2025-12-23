@@ -226,6 +226,11 @@ func (s *Service) IsValid() bool {
 
 // HasFeature checks if the current license grants a feature.
 func (s *Service) HasFeature(feature string) bool {
+	// In demo mode, grant all Pro features for showcase purposes
+	if isDemoMode() {
+		return true
+	}
+
 	s.mu.Lock() // Need write lock since we may update grace period
 	defer s.mu.Unlock()
 
@@ -245,6 +250,11 @@ func (s *Service) HasFeature(feature string) bool {
 		return false
 	}
 	return s.license.HasFeature(feature)
+}
+
+// isDemoMode returns true if the demo/mock mode is enabled
+func isDemoMode() bool {
+	return strings.EqualFold(os.Getenv("PULSE_MOCK_MODE"), "true")
 }
 
 // LicenseState represents the current state of the license
