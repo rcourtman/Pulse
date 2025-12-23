@@ -189,7 +189,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       setTokensLoaded(true);
     } catch (err) {
       logger.error('Failed to load API tokens', err);
-      showError('Failed to load API tokens');
+      notificationStore.error('Failed to load API tokens');
     } finally {
       setLoading(false);
     }
@@ -259,11 +259,11 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         source: 'security',
         note: 'Copy this token now. You can reopen this dialog from Security → API tokens while this page stays open.',
       });
-      showSuccess('New API token generated. Copy it below while it is still visible.');
+      notificationStore.success('New API token generated. Copy it below while it is still visible.');
       props.onTokensChanged?.();
     } catch (err) {
       logger.error('Failed to generate API token', err);
-      showError('Failed to generate API token');
+      notificationStore.error('Failed to generate API token');
     } finally {
       setIsGenerating(false);
     }
@@ -327,7 +327,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     try {
       await SecurityAPI.deleteToken(record.id);
       setTokens((prev) => prev.filter((token) => token.id !== record.id));
-      showSuccess('Token revoked', revokeMessage);
+      notificationStore.success('Token revoked', revokeMessage);
       props.onTokensChanged?.();
       if (affectedDockerHostIds.length > 0) {
         markDockerHostsTokenRevoked(record.id, affectedDockerHostIds);
@@ -343,7 +343,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       }
     } catch (err) {
       logger.error('Failed to revoke API token', err);
-      showError('Failed to revoke API token');
+      notificationStore.error('Failed to revoke API token');
     }
   };
 

@@ -50,7 +50,7 @@ export const ProLicensePanel: Component = () => {
       const nextStatus = await LicenseAPI.getStatus();
       setStatus(nextStatus);
     } catch (err) {
-      showError(err instanceof Error ? err.message : 'Failed to load license status');
+      notificationStore.error(err instanceof Error ? err.message : 'Failed to load license status');
     } finally {
       setLoading(false);
     }
@@ -108,17 +108,17 @@ export const ProLicensePanel: Component = () => {
   const handleActivate = async () => {
     const trimmedKey = licenseKey().trim();
     if (!trimmedKey) {
-      showError('License key is required');
+      notificationStore.error('License key is required');
       return;
     }
     setActivating(true);
     try {
       const result = await LicenseAPI.activateLicense(trimmedKey);
       if (!result.success) {
-        showError(result.message || 'Failed to activate license');
+        notificationStore.error(result.message || 'Failed to activate license');
         return;
       }
-      showSuccess(result.message || 'License activated');
+      notificationStore.success(result.message || 'License activated');
       setLicenseKey('');
       if (result.status) {
         setStatus(result.status);
@@ -126,7 +126,7 @@ export const ProLicensePanel: Component = () => {
         await loadStatus();
       }
     } catch (err) {
-      showError(err instanceof Error ? err.message : 'Failed to activate license');
+      notificationStore.error(err instanceof Error ? err.message : 'Failed to activate license');
     } finally {
       setActivating(false);
     }
@@ -139,10 +139,10 @@ export const ProLicensePanel: Component = () => {
     setClearing(true);
     try {
       const result = await LicenseAPI.clearLicense();
-      showSuccess(result.message || 'License cleared');
+      notificationStore.success(result.message || 'License cleared');
       await loadStatus();
     } catch (err) {
-      showError(err instanceof Error ? err.message : 'Failed to clear license');
+      notificationStore.error(err instanceof Error ? err.message : 'Failed to clear license');
     } finally {
       setClearing(false);
     }
