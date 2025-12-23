@@ -36,6 +36,7 @@ vi.mock('@/api/monitoring', () => ({
 vi.mock('@/api/security', () => ({
   SecurityAPI: {
     createToken: (...args: unknown[]) => createTokenMock(...args),
+    getStatus: () => Promise.resolve({ requiresAuth: true, apiTokenConfigured: false }),
   },
 }));
 
