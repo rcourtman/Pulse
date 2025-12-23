@@ -377,18 +377,17 @@ const LoginForm: Component<{
       <div class="max-w-md w-full space-y-8">
         {/* Demo Credentials Banner */}
         <Show when={isDemoServer()}>
-          <div class="bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl p-4 shadow-lg animate-fade-in">
+          <div class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg p-4 shadow-xl border border-blue-200 dark:border-blue-800 animate-fade-in">
             <div class="flex items-center gap-3">
-              <div class="flex-shrink-0">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <div class="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-cyan-600 flex items-center justify-center">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                 </svg>
               </div>
               <div class="flex-1">
-                <div class="font-bold text-sm">Demo Credentials</div>
-                <div class="text-emerald-100 text-sm mt-0.5">
-                  Username: <code class="bg-white/20 px-1.5 py-0.5 rounded font-mono">demo</code>{' '}
-                  Password: <code class="bg-white/20 px-1.5 py-0.5 rounded font-mono">demo</code>
+                <div class="font-semibold text-sm text-gray-900 dark:text-white">Demo Mode</div>
+                <div class="text-sm text-gray-600 dark:text-gray-300">
+                  Login with <code class="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">demo</code> / <code class="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">demo</code>
                 </div>
               </div>
             </div>
