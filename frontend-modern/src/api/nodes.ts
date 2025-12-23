@@ -76,4 +76,14 @@ export class NodesAPI {
       method: 'POST',
     });
   }
+
+  static async getAgentInstallCommand(params: {
+    type: 'pve';
+    enableProxmox: boolean;
+  }): Promise<{ command: string }> {
+    return apiFetchJSON('/api/agent-install-command', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
 }
