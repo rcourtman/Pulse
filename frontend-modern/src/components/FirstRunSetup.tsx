@@ -1,5 +1,5 @@
 import { Component, createSignal, Show, onMount } from 'solid-js';
-import { showSuccess, showError } from '@/utils/toast';
+import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { copyToClipboard } from '@/utils/clipboard';
 import { clearAuth as clearApiClientAuth, setApiToken as setApiClientToken } from '@/utils/apiClient';
@@ -106,7 +106,7 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
 
   const handleUnlock = async () => {
     if (!bootstrapToken().trim()) {
-      showError('Please enter the bootstrap token');
+      notificationStore.error('Please enter the bootstrap token');
       return;
     }
 
@@ -127,12 +127,12 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
       }
 
       setIsUnlocked(true);
-      showSuccess('Bootstrap token verified. Continue with setup.');
+      notificationStore.success('Bootstrap token verified. Continue with setup.');
     } catch (error) {
       if (error instanceof Error) {
-        showError(error.message || 'Failed to validate bootstrap token');
+        notificationStore.error(error.message || 'Failed to validate bootstrap token');
       } else {
-        showError('Failed to validate bootstrap token');
+        notificationStore.error('Failed to validate bootstrap token');
       }
     } finally {
       setIsValidatingToken(false);
@@ -143,15 +143,15 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
     // Validate custom password if used
     if (useCustomPassword()) {
       if (!password()) {
-        showError('Please enter a password');
+        notificationStore.error('Please enter a password');
         return;
       }
       if (password() !== confirmPassword()) {
-        showError('Passwords do not match');
+        notificationStore.error('Passwords do not match');
         return;
       }
       if (password().length < 1) {
-        showError('Password cannot be empty');
+        notificationStore.error('Password cannot be empty');
         return;
       }
     }
@@ -223,9 +223,9 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
 
       // Show credentials
       setShowCredentials(true);
-      showSuccess('Security configured successfully!');
+      notificationStore.success('Security configured successfully!');
     } catch (error) {
-      showError(`Failed to setup security: ${error}`);
+      notificationStore.error(`Failed to setup security: ${error}`);
     } finally {
       setIsSettingUp(false);
     }
