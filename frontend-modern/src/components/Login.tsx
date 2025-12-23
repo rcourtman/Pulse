@@ -118,7 +118,7 @@ export const Login: Component<LoginProps> = (props) => {
 
       // Just assume no auth on error, matching previous logic mostly.
       logger.error('[Login] Failed to check auth status:', err);
-      setAuthStatus({ hasAuthentication: false });
+      setAuthStatus({ hasAuthentication: false } as SecurityStatus);
     } finally {
       logger.debug('[Login] Auth check complete, setting loading to false');
       setLoadingAuth(false);
