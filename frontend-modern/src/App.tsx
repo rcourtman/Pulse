@@ -522,15 +522,7 @@ function App() {
         // Parse security data to get hideLocalLogin, oidcEnabled, etc.
         if (securityRes.ok) {
           const securityData = await securityRes.json();
-          setSecurityStatus({
-            hasAuthentication: securityData.hasAuthentication || false,
-            oidcEnabled: securityData.oidcEnabled,
-            oidcIssuer: securityData.oidcIssuer,
-            oidcClientId: securityData.oidcClientId,
-            oidcEnvOverrides: securityData.oidcEnvOverrides,
-            hideLocalLogin: securityData.hideLocalLogin,
-            deprecatedDisableAuth: securityData.deprecatedDisableAuth,
-          });
+          setSecurityStatus(securityData as SecurityStatus);
         }
         setHasAuth(true); // Force showing login instead of setup
         setNeedsAuth(true);
@@ -546,15 +538,7 @@ function App() {
       logger.debug('[App] Security status fetched', securityData);
 
       // Store full security status for Login component
-      setSecurityStatus({
-        hasAuthentication: securityData.hasAuthentication || false,
-        oidcEnabled: securityData.oidcEnabled,
-        oidcIssuer: securityData.oidcIssuer,
-        oidcClientId: securityData.oidcClientId,
-        oidcEnvOverrides: securityData.oidcEnvOverrides,
-        hideLocalLogin: securityData.hideLocalLogin,
-        deprecatedDisableAuth: securityData.deprecatedDisableAuth,
-      });
+      setSecurityStatus(securityData as SecurityStatus);
 
       // Detect legacy DISABLE_AUTH flag (now ignored) so we can surface a warning
       if (securityData.deprecatedDisableAuth === true) {
