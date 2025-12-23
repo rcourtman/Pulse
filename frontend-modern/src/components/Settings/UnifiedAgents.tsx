@@ -606,8 +606,10 @@ export const UnifiedAgents: Component = () => {
                                                                         type="button"
                                                                         onClick={async () => {
                                                                             const success = await copyToClipboard(copyCommand());
-                                                                            if (typeof window !== 'undefined' && window.showToast) {
-                                                                                window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
+                                                                            if (success) {
+                                                                                notificationStore.success('Copied to clipboard');
+                                                                            } else {
+                                                                                notificationStore.error('Failed to copy');
                                                                             }
                                                                         }}
                                                                         class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700 rounded-md transition-colors"
