@@ -96,6 +96,12 @@ export type NodeConfig = (PVENodeConfig | PBSNodeConfig | PMGNodeConfig) & {
   source?: 'agent' | 'script' | ''; // How this node was registered
 };
 
+export type NodeConfigWithStatus = NodeConfig & {
+  hasPassword?: boolean;
+  hasToken?: boolean;
+  status: 'connected' | 'disconnected' | 'offline' | 'error' | 'pending';
+};
+
 export interface NodesResponse {
   pve_instances: PVENodeConfig[];
   pbs_instances: PBSNodeConfig[];
