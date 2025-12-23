@@ -14,7 +14,7 @@ import { Toggle } from '@/components/shared/Toggle';
 import { formField, formControl, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { useWebSocket } from '@/App';
-import { showSuccess, showError } from '@/utils/toast';
+import { notificationStore } from '@/stores/notifications';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
@@ -486,14 +486,14 @@ export function Alerts() {
     try {
       const success = await alertsActivation.activate();
       if (success) {
-        showSuccess('Alerts activated! You\'ll now receive alerts when issues are detected.');
+        notificationStore.success('Alerts activated! You\'ll now receive alerts when issues are detected.');
         try {
           await alertsActivation.refreshActiveAlerts();
         } catch (error) {
           logger.error('Failed to refresh alerts after activation', error);
         }
       } else {
-        showError('Unable to activate alerts. Please try again.');
+        notificationStore.error('Unable to activate alerts. Please try again.');
       }
     } finally {
       setIsSwitchingActivation(false);
@@ -508,18 +508,18 @@ export function Alerts() {
     try {
       const success = await alertsActivation.deactivate();
       if (success) {
-        showSuccess('Alerts deactivated. Nothing will be sent until you activate them again.');
+        notificationStore.success('Alerts deactivated. Nothing will be sent until you activate them again.');
         try {
           await alertsActivation.refreshActiveAlerts();
         } catch (error) {
           logger.error('Failed to refresh alerts after deactivation', error);
         }
       } else {
-        showError('Unable to deactivate alerts. Please try again.');
+        notificationStore.error('Unable to deactivate alerts. Please try again.');
       }
     } catch (error) {
       logger.error('Deactivate alerts failed', error);
-      showError('Unable to deactivate alerts. Please try again.');
+      notificationStore.error('Unable to deactivate alerts. Please try again.');
     } finally {
       setIsSwitchingActivation(false);
     }
@@ -1284,12 +1284,12 @@ export function Alerts() {
       }
 
       if (options.notify) {
-        showSuccess('Changes discarded');
+        notificationStore.success('Changes discarded');
       }
     } catch (err) {
       logger.error('Failed to load alert configuration:', err);
       if (options.notify) {
-        showError('Failed to reload configuration');
+        notificationStore.error('Failed to reload configuration');
       }
     } finally {
       setIsReloadingConfig(false);
@@ -1672,7 +1672,7 @@ export function Alerts() {
                       dockerDefaultsValue.serviceCriticalGapPercent > 0 &&
                       dockerDefaultsValue.serviceWarnGapPercent > dockerDefaultsValue.serviceCriticalGapPercent
                     ) {
-                      showError(
+                      notificationStore.error(
                         'Swarm service critical gap must be greater than or equal to the warning gap when enabled.',
                       );
                       return;
@@ -1850,10 +1850,10 @@ export function Alerts() {
                     }
 
                     setHasUnsavedChanges(false);
-                    showSuccess('Configuration saved successfully!');
+                    notificationStore.success('Configuration saved successfully!');
                   } catch (err) {
                     logger.error('Failed to save configuration:', err);
-                    showError(err instanceof Error ? err.message : 'Failed to save configuration');
+                    notificationStore.error(err instanceof Error ? err.message : 'Failed to save configuration');
                   }
                 }}
               >
@@ -2254,7 +2254,7 @@ function OverviewTab(props: {
       setIncidentTimelines((prev) => ({ ...prev, [alertId]: timeline }));
     } catch (error) {
       logger.error('Failed to load incident timeline', error);
-      showError('Failed to load incident timeline');
+      notificationStore.error('Failed to load incident timeline');
     } finally {
       setIncidentLoading((prev) => ({ ...prev, [alertId]: false }));
     }
@@ -2286,10 +2286,10 @@ function OverviewTab(props: {
       await AlertsAPI.addIncidentNote({ alertId, incidentId, note });
       setIncidentNoteDrafts((prev) => ({ ...prev, [alertId]: '' }));
       await loadIncidentTimeline(alertId, startedAt);
-      showSuccess('Incident note saved');
+      notificationStore.success('Incident note saved');
     } catch (error) {
       logger.error('Failed to save incident note', error);
-      showError('Failed to save incident note');
+      notificationStore.error('Failed to save incident note');
     } finally {
       setIncidentNoteSaving((prev) => {
         const next = new Set(prev);
@@ -2456,11 +2456,11 @@ function OverviewTab(props: {
     try {
       const result = await forcePatrol(deep);
       if (!result.success) {
-        showError(result.message || 'Failed to start patrol');
+        notificationStore.error(result.message || 'Failed to start patrol');
         setForcePatrolLoading(false);
         return;
       }
-      showSuccess('Patrol started - results will appear shortly');
+      notificationStore.success('Patrol started - results will appear shortly');
       // Wait a bit for the patrol to start and potentially complete
       setTimeout(() => {
         fetchAiData();
@@ -2468,7 +2468,7 @@ function OverviewTab(props: {
       }, 2000);
     } catch (e) {
       logger.error('Force patrol error:', e);
-      showError('Failed to start patrol: ' + (e instanceof Error ? e.message : 'Unknown error'));
+      notificationStore.error('Failed to start patrol: ' + (e instanceof Error ? e.message : 'Unknown error'));
       setForcePatrolLoading(false);
     }
   };
@@ -2987,11 +2987,11 @@ function OverviewTab(props: {
                                     });
                                     try {
                                       await resolveFinding(finding.id);
-                                      showSuccess('✓ Fixed! Issue cleared from insights.');
+                                      notificationStore.success('✓ Fixed! Issue cleared from insights.');
                                       fetchAiData();
                                     } catch (_err) {
                                       // Still keep it hidden locally since user said they fixed it
-                                      showError('Failed to mark as fixed on server');
+                                      notificationStore.error('Failed to mark as fixed on server');
                                     }
                                   }}
                                   title="Mark as fixed - the next patrol will verify"
@@ -3025,10 +3025,10 @@ function OverviewTab(props: {
                                           e.stopPropagation();
                                           try {
                                             await dismissFinding(finding.id, 'not_an_issue');
-                                            showSuccess('Dismissed - AI will not raise this again');
+                                            notificationStore.success('Dismissed - AI will not raise this again');
                                             fetchAiData();
                                           } catch (_err) {
-                                            showError('Failed to dismiss finding');
+                                            notificationStore.error('Failed to dismiss finding');
                                           }
                                         }}
                                       >
@@ -3042,10 +3042,10 @@ function OverviewTab(props: {
                                           const note = prompt('Why is this expected? (optional - helps AI understand your environment)');
                                           try {
                                             await dismissFinding(finding.id, 'expected_behavior', note || undefined);
-                                            showSuccess('Dismissed - AI will not raise this again');
+                                            notificationStore.success('Dismissed - AI will not raise this again');
                                             fetchAiData();
                                           } catch (_err) {
-                                            showError('Failed to dismiss finding');
+                                            notificationStore.error('Failed to dismiss finding');
                                           }
                                         }}
                                       >
@@ -3058,10 +3058,10 @@ function OverviewTab(props: {
                                           e.stopPropagation();
                                           try {
                                             await dismissFinding(finding.id, 'will_fix_later');
-                                            showSuccess('Acknowledged - AI will check again later');
+                                            notificationStore.success('Acknowledged - AI will check again later');
                                             fetchAiData();
                                           } catch (_err) {
-                                            showError('Failed to dismiss finding');
+                                            notificationStore.error('Failed to dismiss finding');
                                           }
                                         }}
                                       >
@@ -3076,10 +3076,10 @@ function OverviewTab(props: {
                                             if (confirm('Permanently suppress this type of finding for this resource?\n\nThe AI will never raise this issue again.')) {
                                               try {
                                                 await suppressFinding(finding.id);
-                                                showSuccess('Suppressed - AI will never raise this again');
+                                                notificationStore.success('Suppressed - AI will never raise this again');
                                                 fetchAiData();
                                               } catch (_err) {
-                                                showError('Failed to suppress finding');
+                                                notificationStore.error('Failed to suppress finding');
                                               }
                                             }
                                           }}
@@ -3183,14 +3183,14 @@ function OverviewTab(props: {
                             (newRuleCategory() as 'performance' | 'capacity' | 'reliability' | 'backup' | 'security' | 'general' | ''),
                             newRuleDescription()
                           );
-                          showSuccess('Suppression rule created');
+                          notificationStore.success('Suppression rule created');
                           setShowAddRuleForm(false);
                           setNewRuleResource('');
                           setNewRuleCategory('');
                           setNewRuleDescription('');
                           fetchAiData();
                         } catch (_err) {
-                          showError('Failed to create rule');
+                          notificationStore.error('Failed to create rule');
                         }
                       }}
                     >
@@ -3245,10 +3245,10 @@ function OverviewTab(props: {
                           onClick={async () => {
                             try {
                               await deleteSuppressionRule(rule.id);
-                              showSuccess('Rule deleted');
+                              notificationStore.success('Rule deleted');
                               fetchAiData();
                             } catch (_err) {
-                              showError('Failed to delete rule');
+                              notificationStore.error('Failed to delete rule');
                             }
                           }}
                           title="Delete this rule"
@@ -3822,19 +3822,19 @@ function OverviewTab(props: {
                         });
 
                         if (successes.length > 0) {
-                          showSuccess(
+                          notificationStore.success(
                             `Acknowledged ${successes.length} ${successes.length === 1 ? 'alert' : 'alerts'}.`,
                           );
                         }
 
                         if (failures.length > 0) {
-                          showError(
+                          notificationStore.error(
                             `Failed to acknowledge ${failures.length} ${failures.length === 1 ? 'alert' : 'alerts'}.`,
                           );
                         }
                       } catch (error) {
                         logger.error('Bulk acknowledge failed', error);
-                        showError('Failed to acknowledge alerts');
+                        notificationStore.error('Failed to acknowledge alerts');
                       } finally {
                         setBulkAckProcessing(false);
                       }
@@ -3968,7 +3968,7 @@ function OverviewTab(props: {
                                   ackTime: undefined,
                                   ackUser: undefined,
                                 });
-                                showSuccess('Alert restored');
+                                notificationStore.success('Alert restored');
                               } else {
                                 // Call API first, only update local state if successful
                                 await AlertsAPI.acknowledge(alert.id);
@@ -3977,14 +3977,14 @@ function OverviewTab(props: {
                                   acknowledged: true,
                                   ackTime: new Date().toISOString(),
                                 });
-                                showSuccess('Alert acknowledged');
+                                notificationStore.success('Alert acknowledged');
                               }
                             } catch (err) {
                               logger.error(
                                 `Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`,
                                 err,
                               );
-                              showError(
+                              notificationStore.error(
                                 `Failed to ${wasAcknowledged ? 'restore' : 'acknowledge'} alert`,
                               );
                               // Don't update local state on error - let WebSocket keep the correct state
@@ -4479,10 +4479,10 @@ function DestinationsTab(props: DestinationsTabProps) {
         type: 'email',
         config: { ...config } as Record<string, unknown>, // Send current form data, not saved config
       });
-      showSuccess('Test email sent successfully!', 'Check your inbox.');
+      notificationStore.success('Test email sent successfully!', 'Check your inbox.');
     } catch (err) {
       logger.error('Failed to send test email:', err);
-      showError('Failed to send test email', err instanceof Error ? err.message : 'Unknown error');
+      notificationStore.error('Failed to send test email', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setTestingEmail(false);
     }
@@ -4509,10 +4509,10 @@ function DestinationsTab(props: DestinationsTabProps) {
         type: 'apprise',
         config,
       });
-      showSuccess('Test Apprise notification sent successfully!');
+      notificationStore.success('Test Apprise notification sent successfully!');
     } catch (err) {
       logger.error('Failed to send test Apprise notification:', err);
-      showError(
+      notificationStore.error(
         'Failed to send test Apprise notification',
         err instanceof Error ? err.message : 'Unknown error',
       );
@@ -4531,9 +4531,9 @@ function DestinationsTab(props: DestinationsTabProps) {
         // Test existing webhook by ID
         await NotificationsAPI.testNotification({ type: 'webhook', webhookId });
       }
-      showSuccess('Test webhook sent successfully!');
+      notificationStore.success('Test webhook sent successfully!');
     } catch (err) {
-      showError(
+      notificationStore.error(
         'Failed to send test webhook',
         err instanceof Error ? err.message : 'Unknown error',
       );
@@ -4777,30 +4777,30 @@ mailto://alerts@example.com`}
             try {
               const created = await NotificationsAPI.createWebhook(webhook);
               setWebhooks([...webhooks(), created]);
-              showSuccess('Webhook added successfully');
+              notificationStore.success('Webhook added successfully');
             } catch (err) {
               logger.error('Failed to add webhook:', err);
-              showError(err instanceof Error ? err.message : 'Failed to add webhook');
+              notificationStore.error(err instanceof Error ? err.message : 'Failed to add webhook');
             }
           }}
           onUpdate={async (webhook) => {
             try {
               const updated = await NotificationsAPI.updateWebhook(webhook.id!, webhook);
               setWebhooks(webhooks().map((w) => (w.id === webhook.id ? updated : w)));
-              showSuccess('Webhook updated successfully');
+              notificationStore.success('Webhook updated successfully');
             } catch (err) {
               logger.error('Failed to update webhook:', err);
-              showError(err instanceof Error ? err.message : 'Failed to update webhook');
+              notificationStore.error(err instanceof Error ? err.message : 'Failed to update webhook');
             }
           }}
           onDelete={async (id) => {
             try {
               await NotificationsAPI.deleteWebhook(id);
               setWebhooks(webhooks().filter((w) => w.id !== id));
-              showSuccess('Webhook deleted successfully');
+              notificationStore.success('Webhook deleted successfully');
             } catch (err) {
               logger.error('Failed to delete webhook:', err);
-              showError(err instanceof Error ? err.message : 'Failed to delete webhook');
+              notificationStore.error(err instanceof Error ? err.message : 'Failed to delete webhook');
             }
           }}
           onTest={testWebhook}
@@ -5872,7 +5872,7 @@ function HistoryTab() {
       setResourceIncidents((prev) => ({ ...prev, [resourceId]: incidents }));
     } catch (error) {
       logger.error('Failed to load resource incidents', error);
-      showError('Failed to load resource incidents');
+      notificationStore.error('Failed to load resource incidents');
     } finally {
       setResourceIncidentLoading((prev) => ({ ...prev, [resourceId]: false }));
     }
@@ -6385,7 +6385,7 @@ function HistoryTab() {
       setIncidentTimelines((prev) => ({ ...prev, [rowKey]: timeline }));
     } catch (error) {
       logger.error('Failed to load incident timeline', error);
-      showError('Failed to load incident timeline');
+      notificationStore.error('Failed to load incident timeline');
     } finally {
       setIncidentLoading((prev) => ({ ...prev, [rowKey]: false }));
     }
@@ -6417,10 +6417,10 @@ function HistoryTab() {
       await AlertsAPI.addIncidentNote({ alertId, incidentId, note });
       setIncidentNoteDrafts((prev) => ({ ...prev, [rowKey]: '' }));
       await loadIncidentTimeline(rowKey, alertId, startedAt);
-      showSuccess('Incident note saved');
+      notificationStore.success('Incident note saved');
     } catch (error) {
       logger.error('Failed to save incident note', error);
-      showError('Failed to save incident note');
+      notificationStore.error('Failed to save incident note');
     } finally {
       setIncidentNoteSaving((prev) => {
         const next = new Set(prev);
@@ -7363,7 +7363,7 @@ function HistoryTab() {
                       // Alert history cleared successfully
                     } catch (err) {
                       logger.error('Error clearing alert history:', err);
-                      showError(
+                      notificationStore.error(
                         'Error clearing alert history',
                         'Please check your connection and try again.',
                       );
