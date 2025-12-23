@@ -598,10 +598,10 @@ export const UnifiedAgents: Component = () => {
 
                                                         return (
                                                             <div class="space-y-2">
-                                                                <div class="flex items-center justify-between gap-3">
-                                                                    <h6 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                                                        {snippet.label}
-                                                                    </h6>
+                                                                <h6 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                                                    {snippet.label}
+                                                                </h6>
+                                                                <div class="relative">
                                                                     <button
                                                                         type="button"
                                                                         onClick={async () => {
@@ -610,14 +610,18 @@ export const UnifiedAgents: Component = () => {
                                                                                 window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
                                                                             }
                                                                         }}
-                                                                        class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
+                                                                        class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700 rounded-md transition-colors"
+                                                                        title="Copy command"
                                                                     >
-                                                                        Copy command
+                                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                                                        </svg>
                                                                     </button>
+                                                                    <pre class="overflow-x-auto rounded-md bg-gray-900/90 p-3 pr-12 text-xs text-gray-100">
+                                                                        <code>{copyCommand()}</code>
+                                                                    </pre>
                                                                 </div>
-                                                                <pre class="overflow-x-auto rounded-md bg-gray-900/90 p-3 text-xs text-gray-100">
-                                                                    <code>{copyCommand()}</code>
-                                                                </pre>
                                                                 <Show when={snippet.note}>
                                                                     <p class="text-xs text-gray-500 dark:text-gray-400">{snippet.note}</p>
                                                                 </Show>
