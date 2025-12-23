@@ -21,15 +21,12 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
     // Fetch bootstrap info on mount
     const fetchBootstrapInfo = async () => {
         try {
-            const response = await apiFetch('/api/security/status');
-            if (response.ok) {
-                const data = await response.json();
-                if (data.bootstrapTokenPath) {
-                    setTokenPath(data.bootstrapTokenPath);
-                    setIsDocker(data.isDocker || false);
-                    setInContainer(data.inContainer || false);
-                    setLxcCtid(data.lxcCtid || '');
-                }
+            const data = await apiFetchJSON<{ bootstrapTokenPath?: string; isDocker?: boolean; inContainer?: boolean; lxcCtid?: string }>('/api/security/status');
+            if (data?.bootstrapTokenPath) {
+                setTokenPath(data.bootstrapTokenPath);
+                setIsDocker(data.isDocker || false);
+                setInContainer(data.inContainer || false);
+                setLxcCtid(data.lxcCtid || '');
             }
         } catch (error) {
             logger.error('Failed to fetch bootstrap info:', error);

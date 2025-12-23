@@ -1,5 +1,6 @@
 import { Component, createSignal, For, Show } from 'solid-js';
 import { showError, showSuccess } from '@/utils/toast';
+import { apiFetchJSON } from '@/utils/apiClient';
 import type { WizardState } from '../SetupWizard';
 
 interface ConnectStepProps {
@@ -77,10 +78,9 @@ export const ConnectStep: Component<ConnectStepProps> = (props) => {
         }
 
         try {
-            const response = await fetch('/api/discover', {
+            await apiFetchJSON('/api/discover', {
                 method: 'POST',
                 headers,
-                credentials: 'include',
                 body: JSON.stringify({ subnet: 'auto' }),
             });
 
@@ -89,18 +89,14 @@ export const ConnectStep: Component<ConnectStepProps> = (props) => {
             // Poll for results
             for (let i = 0; i < 10; i++) {
                 await new Promise(r => setTimeout(r, 2000));
-                const results = await fetch('/api/discover/results', {
+                const data = await apiFetchJSON<{ nodes: DiscoveredNode[] }>('/api/discover/results', {
                     headers: props.state.apiToken ? { 'X-API-Token': props.state.apiToken } : {},
-                    credentials: 'include',
                 });
-                if (results.ok) {
-                    const data = await results.json();
-                    if (data.nodes && data.nodes.length > 0) {
-                        setDiscoveredNodes(data.nodes.filter((n: DiscoveredNode) =>
-                            selectedPlatform() === 'proxmox' ? ['pve', 'pbs', 'pmg'].includes(n.type) : true
-                        ));
-                        break;
-                    }
+                if (data.nodes && data.nodes.length > 0) {
+                    setDiscoveredNodes(data.nodes.filter((n: DiscoveredNode) =>
+                        selectedPlatform() === 'proxmox' ? ['pve', 'pbs', 'pmg'].includes(n.type) : true
+                    ));
+                    break;
                 }
             }
 
@@ -137,14 +133,11 @@ export const ConnectStep: Component<ConnectStepProps> = (props) => {
                 tokenValue: tokenSecret(),
             };
 
-            const response = await fetch('/api/nodes', {
+            await apiFetchJSON('/api/nodes', {
                 method: 'POST',
                 headers,
-                credentials: 'include',
                 body: JSON.stringify(nodeData),
             });
-
-            if (!response.ok) throw new Error(await response.text());
 
             props.updateState({ nodeAdded: true, nodeName: nodeData.name });
             showSuccess(`Connected to ${nodeData.name}!`);
