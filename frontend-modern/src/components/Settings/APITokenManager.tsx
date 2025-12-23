@@ -327,7 +327,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     try {
       await SecurityAPI.deleteToken(record.id);
       setTokens((prev) => prev.filter((token) => token.id !== record.id));
-      notificationStore.success('Token revoked', revokeMessage);
+      notificationStore.success(revokeMessage ? `Token revoked: ${revokeMessage}` : 'Token revoked');
       props.onTokensChanged?.();
       if (affectedDockerHostIds.length > 0) {
         markDockerHostsTokenRevoked(record.id, affectedDockerHostIds);
