@@ -204,7 +204,6 @@ export const ProxmoxAgentNodesPanel: Component<ProxmoxAgentNodesPanelProps> = (p
     if (props.agentType === 'pve') {
       return (
         <PveNodesTable
-          <PveNodesTable
           nodes={props.nodes()}
           stateNodes={props.stateNodes ?? []}
           stateHosts={props.stateHosts ?? []}
@@ -223,7 +222,6 @@ export const ProxmoxAgentNodesPanel: Component<ProxmoxAgentNodesPanelProps> = (p
     } else if (props.agentType === 'pbs') {
       return (
         <PbsNodesTable
-          <PbsNodesTable
           nodes={props.nodes()}
           statePbs={props.statePbs ?? []}
           globalTemperatureMonitoringEnabled={props.temperatureMonitoringEnabled()}
@@ -239,7 +237,6 @@ export const ProxmoxAgentNodesPanel: Component<ProxmoxAgentNodesPanelProps> = (p
     } else {
       return (
         <PmgNodesTable
-          <PmgNodesTable
           nodes={props.nodes()}
           statePmg={props.statePmg ?? []}
           globalTemperatureMonitoringEnabled={props.temperatureMonitoringEnabled()}
