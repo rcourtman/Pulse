@@ -6,6 +6,7 @@ import { copyToClipboard } from '@/utils/clipboard';
 
 import { notificationStore } from '@/stores/notifications';
 import { getPulseBaseUrl } from '@/utils/url';
+import { apiFetch } from '@/utils/apiClient';
 import { NodesAPI } from '@/api/nodes';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import {
