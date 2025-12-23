@@ -2,7 +2,9 @@ import { Component, createSignal, Show, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { isPulseHttps } from '@/utils/url';
+import { isPulseHttps } from '@/utils/url';
 import { logger } from '@/utils/logger';
+import { apiFetchJSON } from '@/utils/apiClient';
 
 interface SecurityStatus {
   hasAuthentication: boolean;
@@ -36,39 +38,37 @@ export const SecurityWarning: Component = () => {
 
     // Fetch security status
     try {
-      const response = await fetch('/api/security/status');
-      if (response.ok) {
-        const data = await response.json();
+      const data = await apiFetchJSON<any>('/api/security/status');
 
-        // Calculate security score
-        let score = 0;
-        const maxScore = 5;
+      // Calculate security score
+      let score = 0;
+      const maxScore = 5;
 
-        const runningOverHttps = isPulseHttps();
+      const runningOverHttps = isPulseHttps();
 
-        if (data.credentialsEncrypted !== false) score++; // Always true currently
-        if (data.exportProtected) score++;
-        if (data.apiTokenConfigured) score++;
-        if (data.hasHTTPS || runningOverHttps) score++;
-        if (data.hasAuthentication) score++;
+      if (data.credentialsEncrypted !== false) score++; // Always true currently
+      if (data.exportProtected) score++;
+      if (data.apiTokenConfigured) score++;
+      if (data.hasHTTPS || runningOverHttps) score++;
+      if (data.hasAuthentication) score++;
 
-        setStatus({
-          hasAuthentication: data.hasAuthentication || false,
-          hasHTTPS: runningOverHttps,
-          hasAPIToken: data.apiTokenConfigured || false,
-          hasAuditLogging: data.hasAuditLogging || false,
-          credentialsEncrypted: true, // Always true in current implementation
-          exportProtected: data.exportProtected || false,
-          score,
-          maxScore,
-          publicAccess: data.publicAccess || false,
-          isPrivateNetwork: data.isPrivateNetwork,
-          clientIP: data.clientIP,
-        });
-      } catch (error) {
-        logger.error('Failed to fetch security status:', error);
-      }
-    });
+      setStatus({
+        hasAuthentication: data.hasAuthentication || false,
+        hasHTTPS: runningOverHttps,
+        hasAPIToken: data.apiTokenConfigured || false,
+        hasAuditLogging: data.hasAuditLogging || false,
+        credentialsEncrypted: true, // Always true in current implementation
+        exportProtected: data.exportProtected || false,
+        score,
+        maxScore,
+        publicAccess: data.publicAccess || false,
+        isPrivateNetwork: data.isPrivateNetwork,
+        clientIP: data.clientIP,
+      });
+    } catch (error) {
+      logger.error('Failed to fetch security status:', error);
+    }
+  });
 
   const handleDismiss = (duration: 'day' | 'week' | 'forever') => {
     const now = new Date();
