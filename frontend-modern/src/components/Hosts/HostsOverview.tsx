@@ -990,6 +990,7 @@ const HostRow: Component<HostRowProps> = (props) => {
   };
 
   const hostStatus = createMemo(() => getHostStatusIndicator(host));
+  const isOnline = () => host.status === 'online';
   const cpuPercent = host.cpuUsage ?? 0;
   const memPercent = host.memory?.usage ?? 0;
   const diskStats = props.getDiskStats(host);
@@ -999,7 +1000,8 @@ const HostRow: Component<HostRowProps> = (props) => {
     const hover = 'hover:bg-gray-50 dark:hover:bg-gray-800/50';
     const clickable = aiChatStore.enabled ? 'cursor-pointer' : '';
     const aiContext = isInAIContext() ? 'ai-context-row' : '';
-    return `${base} ${hover} ${clickable} ${aiContext}`;
+    const offline = !isOnline() ? 'opacity-60' : '';
+    return `${base} ${hover} ${clickable} ${aiContext} ${offline}`;
   };
 
   return (
@@ -1095,60 +1097,66 @@ const HostRow: Component<HostRowProps> = (props) => {
         {/* CPU */}
         <Show when={props.isColVisible('cpu')}>
           <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-            <Show when={props.isMobile()}>
-              <div class="md:hidden flex justify-center">
-                <MetricText value={cpuPercent} type="cpu" />
+            <Show when={isOnline()} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
+              <Show when={props.isMobile()}>
+                <div class="md:hidden flex justify-center">
+                  <MetricText value={cpuPercent} type="cpu" />
+                </div>
+              </Show>
+              <div class="hidden md:block">
+                <EnhancedCPUBar
+                  usage={cpuPercent}
+                  loadAverage={host.loadAverage?.[0]}
+                  cores={host.cpuCount}
+                />
               </div>
             </Show>
-            <div class="hidden md:block">
-              <EnhancedCPUBar
-                usage={cpuPercent}
-                loadAverage={host.loadAverage?.[0]}
-                cores={host.cpuCount}
-              />
-            </div>
           </td>
         </Show>
 
         {/* Memory */}
         <Show when={props.isColVisible('memory')}>
           <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-            <Show when={props.isMobile()}>
-              <div class="md:hidden flex justify-center">
-                <MetricText value={memPercent} type="memory" />
+            <Show when={isOnline()} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
+              <Show when={props.isMobile()}>
+                <div class="md:hidden flex justify-center">
+                  <MetricText value={memPercent} type="memory" />
+                </div>
+              </Show>
+              <div class="hidden md:block">
+                <StackedMemoryBar
+                  used={host.memory?.used || 0}
+                  total={host.memory?.total || 0}
+                  balloon={host.memory?.balloon || 0}
+                  swapUsed={host.memory?.swapUsed || 0}
+                  swapTotal={host.memory?.swapTotal || 0}
+                />
               </div>
             </Show>
-            <div class="hidden md:block">
-              <StackedMemoryBar
-                used={host.memory?.used || 0}
-                total={host.memory?.total || 0}
-                balloon={host.memory?.balloon || 0}
-                swapUsed={host.memory?.swapUsed || 0}
-                swapTotal={host.memory?.swapTotal || 0}
-              />
-            </div>
           </td>
         </Show>
 
         {/* Disk */}
         <Show when={props.isColVisible('disk')}>
           <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-            <Show when={props.isMobile()}>
-              <div class="md:hidden flex justify-center">
-                <MetricText value={diskStats.percent} type="disk" />
+            <Show when={isOnline()} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
+              <Show when={props.isMobile()}>
+                <div class="md:hidden flex justify-center">
+                  <MetricText value={diskStats.percent} type="disk" />
+                </div>
+              </Show>
+              <div class="hidden md:block">
+                <StackedDiskBar
+                  disks={host.disks}
+                  aggregateDisk={{
+                    total: diskStats.total,
+                    used: diskStats.used,
+                    free: diskStats.total - diskStats.used,
+                    usage: diskStats.percent / 100
+                  }}
+                />
               </div>
             </Show>
-            <div class="hidden md:block">
-              <StackedDiskBar
-                disks={host.disks}
-                aggregateDisk={{
-                  total: diskStats.total,
-                  used: diskStats.used,
-                  free: diskStats.total - diskStats.used,
-                  usage: diskStats.percent / 100
-                }}
-              />
-            </div>
           </td>
         </Show>
 
@@ -1165,7 +1173,7 @@ const HostRow: Component<HostRowProps> = (props) => {
         <Show when={props.isColVisible('uptime')}>
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <Show when={host.uptimeSeconds} fallback={<span class="text-xs text-gray-400">—</span>}>
+              <Show when={isOnline() && host.uptimeSeconds} fallback={<span class="text-xs text-gray-400">—</span>}>
                 <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
                   {formatUptime(host.uptimeSeconds!)}
                 </span>

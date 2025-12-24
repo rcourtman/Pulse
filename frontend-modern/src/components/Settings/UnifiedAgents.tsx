@@ -381,16 +381,17 @@ export const UnifiedAgents: Component = () => {
         return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | sudo bash -s -- --url ${url} --token ${token}${getInsecureFlag()}`;
     };
 
-    const handleRemoveAgent = async (id: string, type: 'host' | 'docker' | 'kubernetes') => {
+    const handleRemoveAgent = async (id: string, types: ('host' | 'docker')[]) => {
         if (!confirm('Are you sure you want to remove this agent? This will stop monitoring but will not uninstall the agent from the remote machine.')) return;
 
         try {
-            if (type === 'host') {
-                await MonitoringAPI.deleteHostAgent(id);
-            } else if (type === 'docker') {
-                await MonitoringAPI.deleteDockerHost(id);
-            } else {
-                await MonitoringAPI.deleteKubernetesCluster(id);
+            // Delete all types associated with this agent
+            for (const type of types) {
+                if (type === 'host') {
+                    await MonitoringAPI.deleteHostAgent(id);
+                } else if (type === 'docker') {
+                    await MonitoringAPI.deleteDockerHost(id);
+                }
             }
             notificationStore.success('Agent removed from Pulse');
         } catch (err) {
@@ -880,7 +881,7 @@ export const UnifiedAgents: Component = () => {
                                         </td>
                                         <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
                                             <button
-                                                onClick={() => handleRemoveAgent(agent.id, agent.types[0])}
+                                                onClick={() => handleRemoveAgent(agent.id, agent.types)}
                                                 class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                                             >
                                                 Remove
