@@ -6,37 +6,96 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
 	// LicenseFileName is the name of the encrypted license file.
 	LicenseFileName = "license.enc"
+	// PersistentKeyFileName is the name of the persistent encryption key file.
+	// This file is stored in the config directory (e.g., /data/) and survives
+	// Docker container recreation, unlike /etc/machine-id.
+	PersistentKeyFileName = ".license-key"
 )
 
 // Persistence handles encrypted storage of license keys.
 type Persistence struct {
-	configDir string
-	machineID string // Used as encryption key material
+	configDir     string
+	encryptionKey string // Primary key for encryption (persistent or machine-id)
+	machineID     string // Fallback for backwards compatibility
 }
 
 // NewPersistence creates a new license persistence handler.
+// It tries to use a persistent key stored in configDir first, then falls back
+// to machine-id for backwards compatibility with existing installations.
 func NewPersistence(configDir string) (*Persistence, error) {
+	// Try to load persistent key from config directory first
+	persistentKey, _ := loadPersistentKey(configDir)
+
+	// Get machine-id as fallback for backwards compatibility
 	machineID, err := getMachineID()
 	if err != nil {
-		// Fall back to a fixed key for development
 		machineID = "pulse-dev-fallback-machine-id"
 	}
 
+	// Use persistent key if available, otherwise machine-id
+	encryptionKey := persistentKey
+	if encryptionKey == "" {
+		encryptionKey = machineID
+	}
+
 	return &Persistence{
-		configDir: configDir,
-		machineID: machineID,
+		configDir:     configDir,
+		encryptionKey: encryptionKey,
+		machineID:     machineID,
 	}, nil
+}
+
+// loadPersistentKey attempts to load the persistent encryption key from disk.
+func loadPersistentKey(configDir string) (string, error) {
+	keyPath := filepath.Join(configDir, PersistentKeyFileName)
+	data, err := os.ReadFile(keyPath)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+// ensurePersistentKey creates a persistent encryption key if one doesn't exist.
+// Returns the key (existing or newly created).
+func (p *Persistence) ensurePersistentKey() (string, error) {
+	keyPath := filepath.Join(p.configDir, PersistentKeyFileName)
+
+	// Check if key already exists
+	if data, err := os.ReadFile(keyPath); err == nil {
+		return strings.TrimSpace(string(data)), nil
+	}
+
+	// Generate a new random key (32 bytes = 64 hex chars)
+	keyBytes := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, keyBytes); err != nil {
+		return "", fmt.Errorf("failed to generate encryption key: %w", err)
+	}
+	key := hex.EncodeToString(keyBytes)
+
+	// Ensure config directory exists
+	if err := os.MkdirAll(p.configDir, 0700); err != nil {
+		return "", fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	// Save the key
+	if err := os.WriteFile(keyPath, []byte(key), 0600); err != nil {
+		return "", fmt.Errorf("failed to write encryption key: %w", err)
+	}
+
+	return key, nil
 }
 
 // PersistedLicense contains the license key and metadata for storage.
@@ -54,6 +113,14 @@ func (p *Persistence) Save(licenseKey string) error {
 func (p *Persistence) SaveWithGracePeriod(licenseKey string, gracePeriodEnd *int64) error {
 	if licenseKey == "" {
 		return errors.New("license key cannot be empty")
+	}
+
+	// Ensure we have a persistent encryption key for future-proofing.
+	// This creates .license-key in the config directory if it doesn't exist,
+	// ensuring Docker users don't lose their license on container recreation.
+	newKey, err := p.ensurePersistentKey()
+	if err == nil && newKey != "" {
+		p.encryptionKey = newKey
 	}
 
 	// Store as JSON with metadata
@@ -96,6 +163,8 @@ func (p *Persistence) Load() (string, error) {
 }
 
 // LoadWithMetadata reads and decrypts a license with metadata from disk.
+// It tries to decrypt with the current encryption key first, then falls back
+// to machine-id for backwards compatibility with existing installations.
 func (p *Persistence) LoadWithMetadata() (PersistedLicense, error) {
 	licensePath := filepath.Join(p.configDir, LicenseFileName)
 
@@ -112,7 +181,16 @@ func (p *Persistence) LoadWithMetadata() (PersistedLicense, error) {
 		return PersistedLicense{}, fmt.Errorf("failed to decode license file: %w", err)
 	}
 
+	// Try to decrypt with current encryption key
 	decrypted, err := p.decrypt(encrypted)
+
+	// If decryption failed and we have a different machine-id, try that as fallback
+	// This handles the case where an existing license was encrypted with machine-id
+	// before the persistent key feature was added
+	if err != nil && p.machineID != p.encryptionKey {
+		decrypted, err = p.decryptWithKey(encrypted, p.deriveKeyFrom(p.machineID))
+	}
+
 	if err != nil {
 		return PersistedLicense{}, fmt.Errorf("failed to decrypt license: %w", err)
 	}
@@ -167,10 +245,13 @@ func (p *Persistence) encrypt(plaintext []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-// decrypt uses AES-GCM to decrypt data.
+// decrypt uses AES-GCM to decrypt data with the current encryption key.
 func (p *Persistence) decrypt(ciphertext []byte) ([]byte, error) {
-	key := p.deriveKey()
+	return p.decryptWithKey(ciphertext, p.deriveKey())
+}
 
+// decryptWithKey uses AES-GCM to decrypt data with a specific key.
+func (p *Persistence) decryptWithKey(ciphertext []byte, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -186,9 +267,9 @@ func (p *Persistence) decrypt(ciphertext []byte) ([]byte, error) {
 	}
 
 	nonce := ciphertext[:gcm.NonceSize()]
-	ciphertext = ciphertext[gcm.NonceSize():]
+	data := ciphertext[gcm.NonceSize():]
 
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	plaintext, err := gcm.Open(nil, nonce, data, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -196,9 +277,14 @@ func (p *Persistence) decrypt(ciphertext []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-// deriveKey derives a 32-byte key from the machine ID.
+// deriveKey derives a 32-byte key from the current encryption key.
 func (p *Persistence) deriveKey() []byte {
-	hash := sha256.Sum256([]byte("pulse-license-" + p.machineID))
+	return p.deriveKeyFrom(p.encryptionKey)
+}
+
+// deriveKeyFrom derives a 32-byte key from a given key material.
+func (p *Persistence) deriveKeyFrom(keyMaterial string) []byte {
+	hash := sha256.Sum256([]byte("pulse-license-" + keyMaterial))
 	return hash[:]
 }
 
