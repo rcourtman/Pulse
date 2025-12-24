@@ -5890,9 +5890,10 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Check if a node with this host already exists
-	// IMPORTANT: Only match by Host URL, NOT by name!
-	// Different physical hosts can have the same hostname (e.g., "px1" on different networks).
-	// Matching by name caused duplicate hostnames to be collapsed into one entry.
+	// IMPORTANT: Match by Host URL primarily.
+	// Also match by name+tokenID for DHCP scenarios where IP changed but it's the same host.
+	// Different physical hosts can have the same hostname (e.g., "px1" on different networks)
+	// but they'll have different tokens, so we only merge if BOTH name AND token match.
 	// See: Issue #891, #104, and multiple fix attempts in Dec 2025.
 	existingIndex := -1
 	if req.Type == "pve" {
@@ -5901,11 +5902,33 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				existingIndex = i
 				break
 			}
+			// DHCP case: same hostname AND same token = same physical host with new IP
+			// This allows IP changes to update existing nodes without creating duplicates
+			if req.ServerName != "" && strings.EqualFold(node.Name, req.ServerName) && node.TokenName == req.TokenID {
+				existingIndex = i
+				// Update the host to the new IP
+				log.Info().
+					Str("oldHost", node.Host).
+					Str("newHost", host).
+					Str("node", req.ServerName).
+					Msg("Detected IP change for existing node - updating host")
+				break
+			}
 		}
 	} else {
 		for i, node := range h.config.PBSInstances {
 			if node.Host == host {
 				existingIndex = i
+				break
+			}
+			// DHCP case: same hostname AND same token = same physical host with new IP
+			if req.ServerName != "" && strings.EqualFold(node.Name, req.ServerName) && node.TokenName == req.TokenID {
+				existingIndex = i
+				log.Info().
+					Str("oldHost", node.Host).
+					Str("newHost", host).
+					Str("node", req.ServerName).
+					Msg("Detected IP change for existing node - updating host")
 				break
 			}
 		}
@@ -5916,6 +5939,8 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		// Update existing node
 		if req.Type == "pve" {
 			instance := &h.config.PVEInstances[existingIndex]
+			// Update host in case IP changed (DHCP scenario)
+			instance.Host = host
 			// Clear password auth when switching to token auth
 			instance.User = ""
 			instance.Password = ""
@@ -5949,6 +5974,8 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			// Keep other settings as they were
 		} else {
 			instance := &h.config.PBSInstances[existingIndex]
+			// Update host in case IP changed (DHCP scenario)
+			instance.Host = host
 			// Clear password auth when switching to token auth
 			instance.User = ""
 			instance.Password = ""
