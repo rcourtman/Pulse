@@ -449,6 +449,7 @@ type ClusterEndpoint struct {
 	Host           string     // Full URL (e.g., https://node1.lan:8006)
 	GuestURL       string     // Optional guest-accessible URL (for navigation)
 	IP             string     // IP address
+	Fingerprint    string     // TLS certificate fingerprint (SHA256, auto-captured via TOFU)
 	Online         bool       // Current online status from Proxmox
 	LastSeen       time.Time  // Last successful connection
 	PulseReachable *bool      // Pulse's view: can Pulse reach this endpoint? nil = not yet checked

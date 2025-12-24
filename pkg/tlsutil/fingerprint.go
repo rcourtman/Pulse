@@ -1,15 +1,68 @@
 package tlsutil
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
+
+// FetchFingerprint connects to a host and returns the SHA256 fingerprint of its TLS certificate.
+// This is used for TOFU (Trust On First Use) when discovering cluster peers.
+// The host should be in the format "hostname:port" or "https://hostname:port".
+func FetchFingerprint(host string) (string, error) {
+	// Normalize the host to just host:port format
+	targetHost := host
+	if strings.HasPrefix(host, "https://") || strings.HasPrefix(host, "http://") {
+		parsed, err := url.Parse(host)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse host URL: %w", err)
+		}
+		targetHost = parsed.Host
+	}
+
+	// Ensure port is present (default to 8006 for Proxmox)
+	if _, _, err := net.SplitHostPort(targetHost); err != nil {
+		targetHost = targetHost + ":8006"
+	}
+
+	// Create a TLS connection with InsecureSkipVerify to fetch the cert
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	conn, err := tls.DialWithDialer(dialer, "tcp", targetHost, &tls.Config{
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to %s: %w", targetHost, err)
+	}
+	defer conn.Close()
+
+	// Check context wasn't cancelled
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	default:
+	}
+
+	// Get the peer certificates
+	certs := conn.ConnectionState().PeerCertificates
+	if len(certs) == 0 {
+		return "", fmt.Errorf("no certificates presented by %s", targetHost)
+	}
+
+	// Calculate SHA256 fingerprint of the leaf certificate
+	fingerprint := sha256.Sum256(certs[0].Raw)
+	return hex.EncodeToString(fingerprint[:]), nil
+}
 
 // FingerprintVerifier creates a custom TLS config that verifies server certificate fingerprint
 func FingerprintVerifier(fingerprint string) *tls.Config {

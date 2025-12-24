@@ -15,15 +15,16 @@ import (
 
 // ClusterClient wraps multiple Proxmox clients for cluster-aware operations
 type ClusterClient struct {
-	mu              sync.RWMutex
-	name            string
-	clients         map[string]*Client   // Key is node name
-	endpoints       []string             // All available endpoints
-	nodeHealth      map[string]bool      // Track node health
-	lastHealthCheck map[string]time.Time // Track last health check time
-	lastError       map[string]string    // Track last error per endpoint
-	config          ClientConfig         // Base config (auth info)
-	rateLimitUntil  map[string]time.Time // Cooldown window for rate-limited endpoints
+	mu                   sync.RWMutex
+	name                 string
+	clients              map[string]*Client   // Key is node name
+	endpoints            []string             // All available endpoints
+	endpointFingerprints map[string]string    // Per-endpoint TLS fingerprints (TOFU)
+	nodeHealth           map[string]bool      // Track node health
+	lastHealthCheck      map[string]time.Time // Track last health check time
+	lastError            map[string]string    // Track last error per endpoint
+	config               ClientConfig         // Base config (auth info)
+	rateLimitUntil       map[string]time.Time // Cooldown window for rate-limited endpoints
 }
 
 const (
@@ -125,17 +126,23 @@ func sanitizeEndpointError(errMsg string) string {
 	return errMsg
 }
 
-// NewClusterClient creates a new cluster-aware client
-func NewClusterClient(name string, config ClientConfig, endpoints []string) *ClusterClient {
+// NewClusterClient creates a new cluster-aware client.
+// endpointFingerprints is an optional map of endpoint URL -> TLS fingerprint for per-node certificate verification.
+// This enables TOFU (Trust On First Use) for clusters with unique self-signed certs per node.
+func NewClusterClient(name string, config ClientConfig, endpoints []string, endpointFingerprints map[string]string) *ClusterClient {
+	if endpointFingerprints == nil {
+		endpointFingerprints = make(map[string]string)
+	}
 	cc := &ClusterClient{
-		name:            name,
-		clients:         make(map[string]*Client),
-		endpoints:       endpoints,
-		nodeHealth:      make(map[string]bool),
-		lastHealthCheck: make(map[string]time.Time),
-		lastError:       make(map[string]string),
-		config:          config,
-		rateLimitUntil:  make(map[string]time.Time),
+		name:                 name,
+		clients:              make(map[string]*Client),
+		endpoints:            endpoints,
+		endpointFingerprints: endpointFingerprints,
+		nodeHealth:           make(map[string]bool),
+		lastHealthCheck:      make(map[string]time.Time),
+		lastError:            make(map[string]string),
+		config:               config,
+		rateLimitUntil:       make(map[string]time.Time),
 	}
 
 	// Initialize all endpoints as unknown (will be tested on first use)
@@ -150,6 +157,15 @@ func NewClusterClient(name string, config ClientConfig, endpoints []string) *Clu
 	cc.initialHealthCheck()
 
 	return cc
+}
+
+// getEndpointFingerprint returns the TLS fingerprint to use for a specific endpoint.
+// It prefers the per-endpoint fingerprint (TOFU) over the base config fingerprint.
+func (cc *ClusterClient) getEndpointFingerprint(endpoint string) string {
+	if fp, ok := cc.endpointFingerprints[endpoint]; ok && fp != "" {
+		return fp
+	}
+	return cc.config.Fingerprint
 }
 
 // initialHealthCheck performs a quick parallel health check on all endpoints
@@ -176,6 +192,7 @@ func (cc *ClusterClient) initialHealthCheck() {
 			// Try a quick connection test with slightly longer timeout for initial check
 			cfg := cc.config
 			cfg.Host = ep
+			cfg.Fingerprint = cc.getEndpointFingerprint(ep)
 			cfg.Timeout = 5 * time.Second
 
 			testClient, err := NewClient(cfg)
@@ -207,6 +224,7 @@ func (cc *ClusterClient) initialHealthCheck() {
 				// Node is healthy - create a proper client with full timeout for actual use
 				fullCfg := cc.config
 				fullCfg.Host = ep
+				fullCfg.Fingerprint = cc.getEndpointFingerprint(ep)
 				fullClient, clientErr := NewClient(fullCfg)
 				if clientErr != nil {
 					cc.nodeHealth[ep] = false
@@ -381,6 +399,7 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		// Create new client with shorter timeout for initial test
 		cfg := cc.config
 		cfg.Host = selectedEndpoint
+		cfg.Fingerprint = cc.getEndpointFingerprint(selectedEndpoint)
 
 		// First try with a short timeout to quickly detect offline nodes
 		testCfg := cfg
@@ -549,6 +568,7 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 			// typically takes ~3 seconds on local networks
 			cfg := cc.config
 			cfg.Host = ep
+			cfg.Fingerprint = cc.getEndpointFingerprint(ep)
 			cfg.Timeout = 5 * time.Second
 
 			testClient, err := NewClient(cfg)
