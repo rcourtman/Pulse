@@ -134,6 +134,7 @@ func main() {
 			Logger:             &logger,
 			EnableProxmox:      cfg.EnableProxmox,
 			ProxmoxType:        cfg.ProxmoxType,
+			DisableCommands:    cfg.DisableCommands,
 		}
 
 		agent, err := hostagent.New(hostCfg)
@@ -347,6 +348,9 @@ type Config struct {
 	// Auto-update
 	DisableAutoUpdate bool
 
+	// Security
+	DisableCommands bool // Disable command execution for AI auto-fix
+
 	// Health/metrics server
 	HealthAddr string
 
@@ -376,6 +380,7 @@ func loadConfig() Config {
 	envEnableProxmox := utils.GetenvTrim("PULSE_ENABLE_PROXMOX")
 	envProxmoxType := utils.GetenvTrim("PULSE_PROXMOX_TYPE")
 	envDisableAutoUpdate := utils.GetenvTrim("PULSE_DISABLE_AUTO_UPDATE")
+	envDisableCommands := utils.GetenvTrim("PULSE_DISABLE_COMMANDS")
 	envHealthAddr := utils.GetenvTrim("PULSE_HEALTH_ADDR")
 	envKubeconfig := utils.GetenvTrim("PULSE_KUBECONFIG")
 	envKubeContext := utils.GetenvTrim("PULSE_KUBE_CONTEXT")
@@ -433,6 +438,7 @@ func loadConfig() Config {
 	enableProxmoxFlag := flag.Bool("enable-proxmox", defaultEnableProxmox, "Enable Proxmox mode (creates API token, registers node)")
 	proxmoxTypeFlag := flag.String("proxmox-type", envProxmoxType, "Proxmox type: pve or pbs (auto-detected if not specified)")
 	disableAutoUpdateFlag := flag.Bool("disable-auto-update", utils.ParseBool(envDisableAutoUpdate), "Disable automatic updates")
+	disableCommandsFlag := flag.Bool("disable-commands", utils.ParseBool(envDisableCommands), "Disable command execution for AI auto-fix")
 	healthAddrFlag := flag.String("health-addr", defaultHealthAddr, "Health/metrics server address (empty to disable)")
 	kubeconfigFlag := flag.String("kubeconfig", envKubeconfig, "Path to kubeconfig (optional; uses in-cluster config if available)")
 	kubeContextFlag := flag.String("kube-context", envKubeContext, "Kubeconfig context (optional)")
@@ -502,6 +508,7 @@ func loadConfig() Config {
 		EnableProxmox:         *enableProxmoxFlag,
 		ProxmoxType:           strings.TrimSpace(*proxmoxTypeFlag),
 		DisableAutoUpdate:     *disableAutoUpdateFlag,
+		DisableCommands:       *disableCommandsFlag,
 		HealthAddr:            strings.TrimSpace(*healthAddrFlag),
 		KubeconfigPath:        strings.TrimSpace(*kubeconfigFlag),
 		KubeContext:           strings.TrimSpace(*kubeContextFlag),

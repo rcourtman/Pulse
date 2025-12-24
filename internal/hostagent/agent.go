@@ -44,6 +44,9 @@ type Config struct {
 	// Proxmox integration
 	EnableProxmox bool   // If true, creates Proxmox API token and registers node on startup
 	ProxmoxType   string // "pve", "pbs", or "" for auto-detect
+
+	// Security options
+	DisableCommands bool // If true, disables the command execution feature (AI auto-fix)
 }
 
 // Agent is responsible for collecting host metrics and shipping them to Pulse.
@@ -224,8 +227,12 @@ func New(cfg Config) (*Agent, error) {
 		reportBuffer:    buffer.New[agentshost.Report](bufferCapacity),
 	}
 
-	// Create command client for AI command execution
-	agent.commandClient = NewCommandClient(cfg, agentID, hostname, platform, agentVersion)
+	// Create command client for AI command execution (unless disabled)
+	if !cfg.DisableCommands {
+		agent.commandClient = NewCommandClient(cfg, agentID, hostname, platform, agentVersion)
+	} else {
+		cfg.Logger.Info().Msg("Command execution disabled via --disable-commands flag")
+	}
 
 	return agent, nil
 }
