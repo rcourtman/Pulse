@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Pulse Unified Agent Installer
-# Supports: Linux (systemd, OpenRC), macOS (launchd), Synology DSM (6.x/7+), Unraid
+# Supports: Linux (systemd, OpenRC, SysV init), macOS (launchd), Synology DSM (6.x/7+), Unraid
 #
 # Usage:
 #   curl -fsSL http://pulse/install.sh | bash -s -- --url http://pulse --token <token> [options]
@@ -387,6 +387,25 @@ if [[ "$UNINSTALL" == "true" ]]; then
         rc-service "${AGENT_NAME}" stop 2>/dev/null || true
         rc-update del "${AGENT_NAME}" default 2>/dev/null || true
         rm -f "/etc/init.d/${AGENT_NAME}"
+    fi
+
+    # SysV init (legacy systems like Asustor, older Debian/RHEL, etc.)
+    if [[ -f "/etc/init.d/${AGENT_NAME}" ]]; then
+        "/etc/init.d/${AGENT_NAME}" stop 2>/dev/null || true
+        # Remove using available tools
+        if command -v update-rc.d >/dev/null 2>&1; then
+            update-rc.d -f "${AGENT_NAME}" remove >/dev/null 2>&1 || true
+        elif command -v chkconfig >/dev/null 2>&1; then
+            chkconfig "${AGENT_NAME}" off >/dev/null 2>&1 || true
+            chkconfig --del "${AGENT_NAME}" >/dev/null 2>&1 || true
+        fi
+        # Remove rc.d symlinks manually (in case tools weren't available)
+        for RL in 0 1 2 3 4 5 6; do
+            rm -f "/etc/rc${RL}.d/S99${AGENT_NAME}" 2>/dev/null || true
+            rm -f "/etc/rc${RL}.d/K01${AGENT_NAME}" 2>/dev/null || true
+        done
+        rm -f "/etc/init.d/${AGENT_NAME}"
+        rm -f "/var/run/${AGENT_NAME}.pid"
     fi
 
     rm -f "${INSTALL_DIR}/${BINARY_NAME}"
@@ -1143,7 +1162,179 @@ EOF
     exit 0
 fi
 
-fail "Could not detect a supported service manager (systemd, OpenRC, launchd, or Unraid)."
+# 6. SysV Init (legacy systems like Asustor, older Debian/RHEL, etc.)
+# This is a fallback for systems that have /etc/init.d but no systemd/OpenRC
+if [[ -d /etc/init.d ]] && [[ -w /etc/init.d ]]; then
+    INITSCRIPT="/etc/init.d/${AGENT_NAME}"
+    log_info "Configuring SysV init script at $INITSCRIPT..."
+
+    # Build command line args
+    build_exec_args
+
+    # Create SysV init script following LSB conventions
+    cat > "$INITSCRIPT" <<'INITEOF'
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          pulse-agent
+# Required-Start:    $network $remote_fs
+# Required-Stop:     $network $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Pulse Unified Agent
+# Description:       Pulse monitoring agent for host metrics, Docker, and Kubernetes
+### END INIT INFO
+
+# Pulse Unified Agent SysV init script
+
+NAME="pulse-agent"
+DAEMON="INSTALL_DIR_PLACEHOLDER/BINARY_NAME_PLACEHOLDER"
+DAEMON_ARGS="EXEC_ARGS_PLACEHOLDER"
+PIDFILE="/var/run/${NAME}.pid"
+LOGFILE="/var/log/${NAME}.log"
+
+# Exit if the binary is not installed
+[ -x "$DAEMON" ] || exit 0
+
+do_start() {
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "$NAME is already running."
+        return 1
+    fi
+    echo "Starting $NAME..."
+    # Start daemon in background, redirect output to log file
+    nohup $DAEMON $DAEMON_ARGS >> "$LOGFILE" 2>&1 &
+    echo $! > "$PIDFILE"
+    sleep 1
+    if kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "$NAME started."
+        return 0
+    else
+        echo "Failed to start $NAME."
+        rm -f "$PIDFILE"
+        return 1
+    fi
+}
+
+do_stop() {
+    if [ ! -f "$PIDFILE" ]; then
+        echo "$NAME is not running (no PID file)."
+        return 0
+    fi
+    PID=$(cat "$PIDFILE")
+    if ! kill -0 "$PID" 2>/dev/null; then
+        echo "$NAME is not running (stale PID file)."
+        rm -f "$PIDFILE"
+        return 0
+    fi
+    echo "Stopping $NAME..."
+    kill "$PID"
+    # Wait for process to stop
+    for i in 1 2 3 4 5; do
+        if ! kill -0 "$PID" 2>/dev/null; then
+            break
+        fi
+        sleep 1
+    done
+    # Force kill if still running
+    if kill -0 "$PID" 2>/dev/null; then
+        echo "Force killing $NAME..."
+        kill -9 "$PID" 2>/dev/null || true
+    fi
+    rm -f "$PIDFILE"
+    echo "$NAME stopped."
+    return 0
+}
+
+do_status() {
+    if [ -f "$PIDFILE" ]; then
+        PID=$(cat "$PIDFILE")
+        if kill -0 "$PID" 2>/dev/null; then
+            echo "$NAME is running (PID $PID)."
+            return 0
+        else
+            echo "$NAME is not running (stale PID file)."
+            return 1
+        fi
+    else
+        echo "$NAME is not running."
+        return 3
+    fi
+}
+
+case "$1" in
+    start)
+        do_start
+        ;;
+    stop)
+        do_stop
+        ;;
+    restart|reload|force-reload)
+        do_stop
+        sleep 1
+        do_start
+        ;;
+    status)
+        do_status
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}" >&2
+        exit 3
+        ;;
+esac
+
+exit $?
+INITEOF
+
+    # Replace placeholders with actual values
+    sed -i "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$INITSCRIPT"
+    sed -i "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$INITSCRIPT"
+    sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$INITSCRIPT"
+
+    chmod +x "$INITSCRIPT"
+
+    # Try to enable on boot using available tools
+    if command -v update-rc.d >/dev/null 2>&1; then
+        # Debian-based systems
+        update-rc.d "${AGENT_NAME}" defaults >/dev/null 2>&1 || true
+        log_info "Enabled service with update-rc.d."
+    elif command -v chkconfig >/dev/null 2>&1; then
+        # RHEL-based systems
+        chkconfig --add "${AGENT_NAME}" >/dev/null 2>&1 || true
+        chkconfig "${AGENT_NAME}" on >/dev/null 2>&1 || true
+        log_info "Enabled service with chkconfig."
+    else
+        # Manual symlink creation for systems without tools
+        # Try to create rc.d symlinks manually
+        for RL in 2 3 4 5; do
+            if [[ -d "/etc/rc${RL}.d" ]]; then
+                ln -sf "$INITSCRIPT" "/etc/rc${RL}.d/S99${AGENT_NAME}" 2>/dev/null || true
+            fi
+        done
+        for RL in 0 1 6; do
+            if [[ -d "/etc/rc${RL}.d" ]]; then
+                ln -sf "$INITSCRIPT" "/etc/rc${RL}.d/K01${AGENT_NAME}" 2>/dev/null || true
+            fi
+        done
+        log_info "Created rc.d symlinks manually."
+    fi
+
+    # Stop existing agent if running
+    "$INITSCRIPT" stop 2>/dev/null || true
+    sleep 1
+
+    # Start the agent
+    "$INITSCRIPT" start
+    if [[ "$UPGRADE_MODE" == "true" ]]; then
+        log_info "Upgrade complete! Agent restarted with new configuration."
+    else
+        log_info "Installation complete! Agent service started."
+    fi
+    log_info "To check status: $INITSCRIPT status"
+    log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
+    exit 0
+fi
+
+fail "Could not detect a supported service manager (systemd, OpenRC, SysV init, launchd, or Unraid)."
 
 }
 
