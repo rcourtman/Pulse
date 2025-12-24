@@ -19,7 +19,8 @@ type OllamaClient struct {
 }
 
 // NewOllamaClient creates a new Ollama API client
-func NewOllamaClient(model, baseURL string) *OllamaClient {
+// timeout is optional - pass 0 to use the default 5 minute timeout
+func NewOllamaClient(model, baseURL string, timeout time.Duration) *OllamaClient {
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
 	}
@@ -28,11 +29,14 @@ func NewOllamaClient(model, baseURL string) *OllamaClient {
 	baseURL = strings.TrimSuffix(baseURL, "/")
 	baseURL = strings.TrimSuffix(baseURL, "/api")
 	baseURL = strings.TrimSuffix(baseURL, "/") // In case it was /api/
+	if timeout <= 0 {
+		timeout = 300 * time.Second // Default 5 minutes
+	}
 	return &OllamaClient{
 		model:   model,
 		baseURL: baseURL,
 		client: &http.Client{
-			Timeout: 300 * time.Second, // Local models can be slow
+			Timeout: timeout,
 		},
 	}
 }

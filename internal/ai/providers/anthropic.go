@@ -29,23 +29,27 @@ type AnthropicClient struct {
 }
 
 // NewAnthropicClient creates a new Anthropic API client
-func NewAnthropicClient(apiKey, model string) *AnthropicClient {
-	return NewAnthropicClientWithBaseURL(apiKey, model, anthropicAPIURL)
+// timeout is optional - pass 0 to use the default 5 minute timeout
+func NewAnthropicClient(apiKey, model string, timeout time.Duration) *AnthropicClient {
+	return NewAnthropicClientWithBaseURL(apiKey, model, anthropicAPIURL, timeout)
 }
 
 // NewAnthropicClientWithBaseURL creates a new Anthropic client using a custom messages endpoint.
 // This is useful for testing and for deployments that route requests through a proxy.
-func NewAnthropicClientWithBaseURL(apiKey, model, baseURL string) *AnthropicClient {
+// timeout is optional - pass 0 to use the default 5 minute timeout
+func NewAnthropicClientWithBaseURL(apiKey, model, baseURL string, timeout time.Duration) *AnthropicClient {
 	if baseURL == "" {
 		baseURL = anthropicAPIURL
+	}
+	if timeout <= 0 {
+		timeout = 300 * time.Second // Default 5 minutes
 	}
 	return &AnthropicClient{
 		apiKey:  apiKey,
 		model:   model,
 		baseURL: baseURL,
 		client: &http.Client{
-			// 5 minutes - Opus and other large models can take a very long time
-			Timeout: 300 * time.Second,
+			Timeout: timeout,
 		},
 	}
 }

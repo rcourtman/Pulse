@@ -13,7 +13,7 @@ import (
 func TestNewGeminiClient(t *testing.T) {
 	t.Parallel()
 
-	client := NewGeminiClient("test-api-key", "gemini-pro", "")
+	client := NewGeminiClient("test-api-key", "gemini-pro", "", 0)
 	if client == nil {
 		t.Fatal("expected non-nil client")
 	}
@@ -31,7 +31,7 @@ func TestNewGeminiClient(t *testing.T) {
 func TestNewGeminiClient_StripPrefix(t *testing.T) {
 	t.Parallel()
 
-	client := NewGeminiClient("api-key", "gemini:gemini-1.5-pro", "")
+	client := NewGeminiClient("api-key", "gemini:gemini-1.5-pro", "", 0)
 	if client.model != "gemini-1.5-pro" {
 		t.Errorf("expected model with prefix stripped, got %q", client.model)
 	}
@@ -40,7 +40,7 @@ func TestNewGeminiClient_StripPrefix(t *testing.T) {
 func TestNewGeminiClient_CustomBaseURL(t *testing.T) {
 	t.Parallel()
 
-	client := NewGeminiClient("api-key", "gemini-pro", "https://custom.api.example.com")
+	client := NewGeminiClient("api-key", "gemini-pro", "https://custom.api.example.com", 0)
 	if client.baseURL != "https://custom.api.example.com" {
 		t.Errorf("expected custom baseURL, got %q", client.baseURL)
 	}
@@ -49,7 +49,7 @@ func TestNewGeminiClient_CustomBaseURL(t *testing.T) {
 func TestGeminiClient_Name(t *testing.T) {
 	t.Parallel()
 
-	client := NewGeminiClient("key", "model", "")
+	client := NewGeminiClient("key", "model", "", 0)
 	if client.Name() != "gemini" {
 		t.Errorf("expected Name() to return 'gemini', got %q", client.Name())
 	}
@@ -87,7 +87,7 @@ func TestGeminiClient_Chat_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewGeminiClient("test-key", "gemini-pro", server.URL)
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
 
 	ctx := context.Background()
 	resp, err := client.Chat(ctx, ChatRequest{
@@ -135,7 +135,7 @@ func TestGeminiClient_Chat_WithSystemPrompt(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewGeminiClient("test-key", "gemini-pro", server.URL)
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{
@@ -178,7 +178,7 @@ func TestGeminiClient_Chat_WithMaxTokens(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewGeminiClient("test-key", "gemini-pro", server.URL)
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{
@@ -221,7 +221,7 @@ func TestGeminiClient_Chat_ToolCalls(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewGeminiClient("test-key", "gemini-pro", server.URL)
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
 
 	ctx := context.Background()
 	resp, err := client.Chat(ctx, ChatRequest{
@@ -269,7 +269,7 @@ func TestGeminiClient_Chat_APIError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewGeminiClient("invalid-key", "gemini-pro", server.URL)
+	client := NewGeminiClient("invalid-key", "gemini-pro", server.URL, 0)
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{
@@ -293,7 +293,7 @@ func TestGeminiClient_Chat_NoCandidates(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewGeminiClient("test-key", "gemini-pro", server.URL)
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{
@@ -325,7 +325,7 @@ func TestGeminiClient_Chat_SafetyBlocked(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewGeminiClient("test-key", "gemini-pro", server.URL)
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{
@@ -351,7 +351,7 @@ func TestGeminiClient_Chat_PromptBlocked(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewGeminiClient("test-key", "gemini-pro", server.URL)
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{
@@ -413,7 +413,7 @@ func TestGeminiClient_ListModels_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewGeminiClient("test-key", "gemini-pro", server.URL)
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
 
 	ctx := context.Background()
 	models, err := client.ListModels(ctx)
@@ -435,7 +435,7 @@ func TestGeminiClient_ListModels_Error(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewGeminiClient("test-key", "gemini-pro", server.URL)
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
 
 	ctx := context.Background()
 	_, err := client.ListModels(ctx)
@@ -454,7 +454,7 @@ func TestGeminiClient_TestConnection(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewGeminiClient("test-key", "gemini-pro", server.URL)
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
 
 	ctx := context.Background()
 	err := client.TestConnection(ctx)
@@ -465,7 +465,7 @@ func TestGeminiClient_TestConnection(t *testing.T) {
 }
 
 func TestGeminiClient_Chat_NetworkError(t *testing.T) {
-	client := NewGeminiClient("test-key", "gemini-pro", "http://localhost:99999")
+	client := NewGeminiClient("test-key", "gemini-pro", "http://localhost:99999", 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -497,7 +497,7 @@ func TestGeminiClient_Chat_RoleConversion(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewGeminiClient("test-key", "gemini-pro", server.URL)
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{

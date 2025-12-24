@@ -12,14 +12,14 @@ import (
 // Anthropic tests focus on request/response correctness and endpoint behavior.
 
 func TestAnthropicClient_Name(t *testing.T) {
-	client := NewAnthropicClient("test-key", "claude-3-5-sonnet")
+	client := NewAnthropicClient("test-key", "claude-3-5-sonnet", 0)
 	if client.Name() != "anthropic" {
 		t.Errorf("Expected 'anthropic', got '%s'", client.Name())
 	}
 }
 
 func TestAnthropicClient_Chat_ContextCanceled(t *testing.T) {
-	client := NewAnthropicClient("test-key", "claude-3-5-sonnet")
+	client := NewAnthropicClient("test-key", "claude-3-5-sonnet", 0)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
@@ -34,7 +34,7 @@ func TestAnthropicClient_Chat_ContextCanceled(t *testing.T) {
 }
 
 func TestAnthropicClient_Chat_Timeout(t *testing.T) {
-	client := NewAnthropicClient("test-key", "claude-3-5-sonnet")
+	client := NewAnthropicClient("test-key", "claude-3-5-sonnet", 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
@@ -108,7 +108,7 @@ func TestAnthropicClient_Chat_Success_TextAndToolCalls(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL+"/v1/messages")
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL+"/v1/messages", 0)
 	out, err := client.Chat(context.Background(), ChatRequest{
 		System:    "You are helpful",
 		Messages:  []Message{{Role: "user", Content: "Hello"}},
@@ -162,7 +162,7 @@ func TestAnthropicClient_Chat_ToolResultInRequest(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL+"/v1/messages")
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL+"/v1/messages", 0)
 	_, err := client.Chat(context.Background(), ChatRequest{
 		Messages: []Message{
 			{
@@ -227,7 +227,7 @@ func TestAnthropicClient_ListModels_UsesConfiguredHost(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL+"/v1/messages")
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL+"/v1/messages", 0)
 	models, err := client.ListModels(context.Background())
 	if err != nil {
 		t.Fatalf("ListModels: %v", err)
@@ -248,7 +248,7 @@ func TestAnthropicClient_TestConnection_CallsListModels(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL+"/v1/messages")
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL+"/v1/messages", 0)
 	if err := client.TestConnection(context.Background()); err != nil {
 		t.Fatalf("TestConnection: %v", err)
 	}
