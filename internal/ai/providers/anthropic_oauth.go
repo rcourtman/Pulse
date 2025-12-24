@@ -320,15 +320,20 @@ type AnthropicOAuthClient struct {
 }
 
 // NewAnthropicOAuthClient creates a new Anthropic client using OAuth tokens
-func NewAnthropicOAuthClient(accessToken, refreshToken string, expiresAt time.Time, model string) *AnthropicOAuthClient {
-	return NewAnthropicOAuthClientWithBaseURL(accessToken, refreshToken, expiresAt, model, "https://api.anthropic.com/v1/messages?beta=true")
+// timeout is optional - pass 0 to use the default 5 minute timeout
+func NewAnthropicOAuthClient(accessToken, refreshToken string, expiresAt time.Time, model string, timeout time.Duration) *AnthropicOAuthClient {
+	return NewAnthropicOAuthClientWithBaseURL(accessToken, refreshToken, expiresAt, model, "https://api.anthropic.com/v1/messages?beta=true", timeout)
 }
 
 // NewAnthropicOAuthClientWithBaseURL creates a new Anthropic OAuth client using a custom messages endpoint.
 // This is useful for testing and for deployments that route requests through a proxy.
-func NewAnthropicOAuthClientWithBaseURL(accessToken, refreshToken string, expiresAt time.Time, model, baseURL string) *AnthropicOAuthClient {
+// timeout is optional - pass 0 to use the default 5 minute timeout
+func NewAnthropicOAuthClientWithBaseURL(accessToken, refreshToken string, expiresAt time.Time, model, baseURL string, timeout time.Duration) *AnthropicOAuthClient {
 	if baseURL == "" {
 		baseURL = "https://api.anthropic.com/v1/messages?beta=true"
+	}
+	if timeout <= 0 {
+		timeout = 300 * time.Second // Default 5 minutes
 	}
 	return &AnthropicOAuthClient{
 		accessToken:  accessToken,
@@ -337,7 +342,7 @@ func NewAnthropicOAuthClientWithBaseURL(accessToken, refreshToken string, expire
 		model:        model,
 		baseURL:      baseURL,
 		client: &http.Client{
-			Timeout: 300 * time.Second,
+			Timeout: timeout,
 		},
 	}
 }

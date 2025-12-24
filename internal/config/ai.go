@@ -53,6 +53,10 @@ type AIConfig struct {
 	// Alert-triggered AI analysis - analyze specific resources when alerts fire
 	AlertTriggeredAnalysis bool `json:"alert_triggered_analysis"` // Enable AI analysis when alerts fire (token-efficient)
 
+	// Request timeout - how long to wait for AI responses (default: 300s / 5 min)
+	// Increase this for slow hardware running local models (e.g., Ollama on low-power devices)
+	RequestTimeoutSeconds int `json:"request_timeout_seconds,omitempty"`
+
 	// AI cost controls
 	// Budget is expressed as an estimated USD amount over a 30-day window (pro-rated in UI for other ranges).
 	CostBudgetUSD30d float64 `json:"cost_budget_usd_30d,omitempty"`
@@ -453,4 +457,13 @@ func (c *AIConfig) IsPatrolEnabled() bool {
 // IsAlertTriggeredAnalysisEnabled returns true if AI should analyze resources when alerts fire
 func (c *AIConfig) IsAlertTriggeredAnalysisEnabled() bool {
 	return c.AlertTriggeredAnalysis
+}
+
+// GetRequestTimeout returns the timeout duration for AI requests
+// Default is 5 minutes (300 seconds) if not configured
+func (c *AIConfig) GetRequestTimeout() time.Duration {
+	if c.RequestTimeoutSeconds > 0 {
+		return time.Duration(c.RequestTimeoutSeconds) * time.Second
+	}
+	return 300 * time.Second // 5 minutes default
 }

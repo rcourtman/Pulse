@@ -115,7 +115,7 @@ func TestOpenAIClient_Chat_Success(t *testing.T) {
 	defer server.Close()
 
 	// Create client with mock server URL
-	client := NewOpenAIClient("test-api-key", "gpt-4o", server.URL+"/v1/chat/completions")
+	client := NewOpenAIClient("test-api-key", "gpt-4o", server.URL+"/v1/chat/completions", 0)
 
 	// Execute chat request
 	ctx := context.Background()
@@ -158,7 +158,7 @@ func TestOpenAIClient_Chat_APIError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("invalid-key", "gpt-4o", server.URL+"/v1/chat/completions")
+	client := NewOpenAIClient("invalid-key", "gpt-4o", server.URL+"/v1/chat/completions", 0)
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{
@@ -172,7 +172,7 @@ func TestOpenAIClient_Chat_APIError(t *testing.T) {
 
 func TestOpenAIClient_Chat_NetworkError(t *testing.T) {
 	// Create client pointing to non-existent server
-	client := NewOpenAIClient("test-key", "gpt-4o", "http://localhost:99999")
+	client := NewOpenAIClient("test-key", "gpt-4o", "http://localhost:99999", 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -193,7 +193,7 @@ func TestOpenAIClient_Chat_ContextCanceled(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-key", "gpt-4o", server.URL+"/v1/chat/completions")
+	client := NewOpenAIClient("test-key", "gpt-4o", server.URL+"/v1/chat/completions", 0)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
@@ -236,7 +236,7 @@ func TestOpenAIClient_Chat_WithSystemPrompt(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-key", "gpt-4o", server.URL+"/v1/chat/completions")
+	client := NewOpenAIClient("test-key", "gpt-4o", server.URL+"/v1/chat/completions", 0)
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{
@@ -284,7 +284,7 @@ func TestOpenAIClient_ListModels_UsesConfiguredHostAndFilters(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-api-key", "gpt-4o", server.URL+"/v1/chat/completions")
+	client := NewOpenAIClient("test-api-key", "gpt-4o", server.URL+"/v1/chat/completions", 0)
 	models, err := client.ListModels(context.Background())
 	if err != nil {
 		t.Fatalf("ListModels: %v", err)
@@ -312,7 +312,7 @@ func TestOpenAIClient_TestConnection_CallsListModels(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-api-key", "gpt-4o", server.URL+"/v1/chat/completions")
+	client := NewOpenAIClient("test-api-key", "gpt-4o", server.URL+"/v1/chat/completions", 0)
 	if err := client.TestConnection(context.Background()); err != nil {
 		t.Fatalf("TestConnection: %v", err)
 	}
@@ -345,7 +345,7 @@ func TestOpenAIClient_Chat_UsesMaxCompletionTokensForOpenAI(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-api-key", "gpt-4o", server.URL+"/v1/chat/completions")
+	client := NewOpenAIClient("test-api-key", "gpt-4o", server.URL+"/v1/chat/completions", 0)
 	_, err := client.Chat(context.Background(), ChatRequest{
 		Messages:  []Message{{Role: "user", Content: "Hello"}},
 		MaxTokens: 123,
@@ -383,7 +383,7 @@ func TestOpenAIClient_Chat_GPT52NonChat_UsesCompletionsEndpointAndPrompt(t *test
 		t.Fatalf("parse server url: %v", err)
 	}
 
-	client := NewOpenAIClient("test-api-key", "gpt-5.2-pro", "https://api.openai.com/v1/chat/completions")
+	client := NewOpenAIClient("test-api-key", "gpt-5.2-pro", "https://api.openai.com/v1/chat/completions", 0)
 	client.client.Transport = rewriteToServerTransport{serverBase: serverURL, rt: http.DefaultTransport}
 
 	_, err = client.Chat(context.Background(), ChatRequest{
@@ -426,7 +426,7 @@ func TestOpenAIClient_ListModels_DeepSeekUsesModelsEndpoint(t *testing.T) {
 		t.Fatalf("parse server url: %v", err)
 	}
 
-	client := NewOpenAIClient("test-api-key", "deepseek-chat", "https://api.deepseek.com/v1/chat/completions")
+	client := NewOpenAIClient("test-api-key", "deepseek-chat", "https://api.deepseek.com/v1/chat/completions", 0)
 	client.client.Transport = rewriteToServerTransport{serverBase: serverURL, rt: http.DefaultTransport}
 
 	_, err = client.ListModels(context.Background())
@@ -462,7 +462,7 @@ func TestOpenAIClient_Chat_O1OmitsTemperature(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-api-key", "o1-mini", server.URL+"/v1/chat/completions")
+	client := NewOpenAIClient("test-api-key", "o1-mini", server.URL+"/v1/chat/completions", 0)
 	_, err := client.Chat(context.Background(), ChatRequest{
 		Messages:    []Message{{Role: "user", Content: "Hello"}},
 		Model:       "o1-mini",

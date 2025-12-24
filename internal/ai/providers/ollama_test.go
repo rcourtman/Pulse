@@ -47,7 +47,7 @@ func TestOllamaClient_Chat_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama2", server.URL)
+	client := NewOllamaClient("llama2", server.URL, 0)
 
 	ctx := context.Background()
 	resp, err := client.Chat(ctx, ChatRequest{
@@ -92,7 +92,7 @@ func TestOllamaClient_Chat_WithSystemPrompt(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama2", server.URL)
+	client := NewOllamaClient("llama2", server.URL, 0)
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{
@@ -133,7 +133,7 @@ func TestOllamaClient_Chat_WithOptions(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama2", server.URL)
+	client := NewOllamaClient("llama2", server.URL, 0)
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{
@@ -166,7 +166,7 @@ func TestOllamaClient_Chat_APIError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("nonexistent", server.URL)
+	client := NewOllamaClient("nonexistent", server.URL, 0)
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{
@@ -179,7 +179,7 @@ func TestOllamaClient_Chat_APIError(t *testing.T) {
 }
 
 func TestOllamaClient_Chat_NetworkError(t *testing.T) {
-	client := NewOllamaClient("llama2", "http://localhost:99999")
+	client := NewOllamaClient("llama2", "http://localhost:99999", 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -211,7 +211,7 @@ func TestOllamaClient_Chat_ModelFallback(t *testing.T) {
 	defer server.Close()
 
 	// Client with no default model
-	client := NewOllamaClient("", server.URL)
+	client := NewOllamaClient("", server.URL, 0)
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{
@@ -246,7 +246,7 @@ func TestOllamaClient_Chat_StripModelPrefix(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("default", server.URL)
+	client := NewOllamaClient("default", server.URL, 0)
 
 	ctx := context.Background()
 	_, err := client.Chat(ctx, ChatRequest{
@@ -274,7 +274,7 @@ func TestOllamaClient_TestConnection_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama2", server.URL)
+	client := NewOllamaClient("llama2", server.URL, 0)
 
 	ctx := context.Background()
 	err := client.TestConnection(ctx)
@@ -290,7 +290,7 @@ func TestOllamaClient_TestConnection_Failure(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama2", server.URL)
+	client := NewOllamaClient("llama2", server.URL, 0)
 
 	ctx := context.Background()
 	err := client.TestConnection(ctx)
@@ -327,7 +327,7 @@ func TestOllamaClient_ListModels_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama2", server.URL)
+	client := NewOllamaClient("llama2", server.URL, 0)
 
 	ctx := context.Background()
 	models, err := client.ListModels(ctx)
@@ -352,7 +352,7 @@ func TestOllamaClient_ListModels_Failure(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama2", server.URL)
+	client := NewOllamaClient("llama2", server.URL, 0)
 
 	ctx := context.Background()
 	_, err := client.ListModels(ctx)
@@ -376,7 +376,7 @@ func TestNewOllamaClient_NormalizesBaseURL(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.in, func(t *testing.T) {
-			client := NewOllamaClient("llama3", tc.in)
+			client := NewOllamaClient("llama3", tc.in, 0)
 			if client.baseURL != tc.expected {
 				t.Fatalf("baseURL = %q, want %q", client.baseURL, tc.expected)
 			}
@@ -408,7 +408,7 @@ func TestOllamaClient_Chat_ToolCallsResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama3", server.URL)
+	client := NewOllamaClient("llama3", server.URL, 0)
 	out, err := client.Chat(context.Background(), ChatRequest{
 		Messages: []Message{{Role: "user", Content: "What time is it?"}},
 	})
@@ -442,7 +442,7 @@ func TestOllamaClient_Chat_ToolCallsAndToolResultsInRequest(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama3", server.URL)
+	client := NewOllamaClient("llama3", server.URL, 0)
 	_, err := client.Chat(context.Background(), ChatRequest{
 		System: "system prompt",
 		Messages: []Message{

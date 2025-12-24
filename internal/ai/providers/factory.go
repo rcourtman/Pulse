@@ -23,12 +23,15 @@ func NewFromConfig(cfg *config.AIConfig) (Provider, error) {
 		return providerClient, nil
 	}
 
+	// Get the configured timeout
+	timeout := cfg.GetRequestTimeout()
+
 	// Fall back to legacy single-provider format
 	switch cfg.Provider {
 	case config.AIProviderAnthropic:
 		// If we have an API key (from direct entry or OAuth-created), use regular client
 		if cfg.APIKey != "" {
-			return NewAnthropicClient(cfg.APIKey, cfg.GetModel()), nil
+			return NewAnthropicClient(cfg.APIKey, cfg.GetModel(), timeout), nil
 		}
 		// Pro/Max users without org:create_api_key will use OAuth tokens directly
 		if cfg.IsUsingOAuth() && cfg.OAuthAccessToken != "" {
@@ -37,6 +40,7 @@ func NewFromConfig(cfg *config.AIConfig) (Provider, error) {
 				cfg.OAuthRefreshToken,
 				cfg.OAuthExpiresAt,
 				cfg.GetModel(),
+				timeout,
 			)
 			return client, nil
 		}
@@ -46,23 +50,23 @@ func NewFromConfig(cfg *config.AIConfig) (Provider, error) {
 		if cfg.APIKey == "" {
 			return nil, fmt.Errorf("OpenAI API key is required")
 		}
-		return NewOpenAIClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL()), nil
+		return NewOpenAIClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL(), timeout), nil
 
 	case config.AIProviderOllama:
-		return NewOllamaClient(cfg.GetModel(), cfg.GetBaseURL()), nil
+		return NewOllamaClient(cfg.GetModel(), cfg.GetBaseURL(), timeout), nil
 
 	case config.AIProviderDeepSeek:
 		if cfg.APIKey == "" {
 			return nil, fmt.Errorf("DeepSeek API key is required")
 		}
 		// DeepSeek uses OpenAI-compatible API
-		return NewOpenAIClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL()), nil
+		return NewOpenAIClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL(), timeout), nil
 
 	case config.AIProviderGemini:
 		if cfg.APIKey == "" {
 			return nil, fmt.Errorf("Gemini API key is required")
 		}
-		return NewGeminiClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL()), nil
+		return NewGeminiClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL(), timeout), nil
 
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", cfg.Provider)
@@ -75,6 +79,9 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 		return nil, fmt.Errorf("AI config is nil")
 	}
 
+	// Get the configured timeout
+	timeout := cfg.GetRequestTimeout()
+
 	switch provider {
 	case config.AIProviderAnthropic:
 		// Check for OAuth first
@@ -84,6 +91,7 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 				cfg.OAuthRefreshToken,
 				cfg.OAuthExpiresAt,
 				model,
+				timeout,
 			), nil
 		}
 		// Then check for per-provider API key
@@ -91,7 +99,7 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 		if apiKey == "" {
 			return nil, fmt.Errorf("Anthropic API key not configured")
 		}
-		return NewAnthropicClient(apiKey, model), nil
+		return NewAnthropicClient(apiKey, model, timeout), nil
 
 	case config.AIProviderOpenAI:
 		apiKey := cfg.GetAPIKeyForProvider(config.AIProviderOpenAI)
@@ -99,7 +107,7 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 			return nil, fmt.Errorf("OpenAI API key not configured")
 		}
 		baseURL := cfg.GetBaseURLForProvider(config.AIProviderOpenAI)
-		return NewOpenAIClient(apiKey, model, baseURL), nil
+		return NewOpenAIClient(apiKey, model, baseURL, timeout), nil
 
 	case config.AIProviderDeepSeek:
 		apiKey := cfg.GetAPIKeyForProvider(config.AIProviderDeepSeek)
@@ -107,11 +115,11 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 			return nil, fmt.Errorf("DeepSeek API key not configured")
 		}
 		baseURL := cfg.GetBaseURLForProvider(config.AIProviderDeepSeek)
-		return NewOpenAIClient(apiKey, model, baseURL), nil
+		return NewOpenAIClient(apiKey, model, baseURL, timeout), nil
 
 	case config.AIProviderOllama:
 		baseURL := cfg.GetBaseURLForProvider(config.AIProviderOllama)
-		return NewOllamaClient(model, baseURL), nil
+		return NewOllamaClient(model, baseURL, timeout), nil
 
 	case config.AIProviderGemini:
 		apiKey := cfg.GetAPIKeyForProvider(config.AIProviderGemini)
@@ -119,7 +127,7 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 			return nil, fmt.Errorf("Gemini API key not configured")
 		}
 		baseURL := cfg.GetBaseURLForProvider(config.AIProviderGemini)
-		return NewGeminiClient(apiKey, model, baseURL), nil
+		return NewGeminiClient(apiKey, model, baseURL, timeout), nil
 
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", provider)

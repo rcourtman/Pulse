@@ -265,7 +265,7 @@ func TestAnthropicOAuthClient_forceRefreshToken_UpdatesAndCallsCallback(t *testi
 	oauthTokenURL = server.URL
 	oauthHTTPClient = server.Client()
 
-	client := NewAnthropicOAuthClient("access_old", "refresh_old", time.Now().Add(-time.Minute), "claude-3")
+	client := NewAnthropicOAuthClient("access_old", "refresh_old", time.Now().Add(-time.Minute), "claude-3", 0)
 
 	var cbTokens *OAuthTokens
 	client.SetTokenRefreshCallback(func(tokens *OAuthTokens) { cbTokens = tokens })
@@ -361,6 +361,7 @@ func TestAnthropicOAuthClient_Chat_RefreshesOn401AndRetriesImmediately(t *testin
 		time.Now().Add(10*time.Minute), // valid token, so refresh is driven by 401
 		"claude-3",
 		server.URL+"/v1/messages?beta=true",
+		0,
 	)
 	client.client = server.Client()
 
@@ -401,6 +402,7 @@ func TestAnthropicOAuthClient_ListModels_UsesConfiguredHost(t *testing.T) {
 		time.Now().Add(10*time.Minute),
 		"claude-3",
 		server.URL+"/v1/messages?beta=true",
+		0,
 	)
 	client.client = server.Client()
 

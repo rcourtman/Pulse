@@ -30,7 +30,8 @@ type OpenAIClient struct {
 }
 
 // NewOpenAIClient creates a new OpenAI API client
-func NewOpenAIClient(apiKey, model, baseURL string) *OpenAIClient {
+// timeout is optional - pass 0 to use the default 5 minute timeout
+func NewOpenAIClient(apiKey, model, baseURL string, timeout time.Duration) *OpenAIClient {
 	if baseURL == "" {
 		baseURL = openaiAPIURL
 	}
@@ -40,13 +41,15 @@ func NewOpenAIClient(apiKey, model, baseURL string) *OpenAIClient {
 	} else if strings.HasPrefix(model, "deepseek:") {
 		model = strings.TrimPrefix(model, "deepseek:")
 	}
+	if timeout <= 0 {
+		timeout = 300 * time.Second // Default 5 minutes
+	}
 	return &OpenAIClient{
 		apiKey:  apiKey,
 		model:   model,
 		baseURL: baseURL,
 		client: &http.Client{
-			// 5 minutes timeout - DeepSeek reasoning models can take a long time
-			Timeout: 300 * time.Second,
+			Timeout: timeout,
 		},
 	}
 }

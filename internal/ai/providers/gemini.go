@@ -28,7 +28,8 @@ type GeminiClient struct {
 }
 
 // NewGeminiClient creates a new Gemini API client
-func NewGeminiClient(apiKey, model, baseURL string) *GeminiClient {
+// timeout is optional - pass 0 to use the default 5 minute timeout
+func NewGeminiClient(apiKey, model, baseURL string, timeout time.Duration) *GeminiClient {
 	if baseURL == "" {
 		baseURL = geminiAPIURL
 	}
@@ -36,13 +37,15 @@ func NewGeminiClient(apiKey, model, baseURL string) *GeminiClient {
 	if strings.HasPrefix(model, "gemini:") {
 		model = strings.TrimPrefix(model, "gemini:")
 	}
+	if timeout <= 0 {
+		timeout = 300 * time.Second // Default 5 minutes
+	}
 	return &GeminiClient{
 		apiKey:  apiKey,
 		model:   model,
 		baseURL: baseURL,
 		client: &http.Client{
-			// 5 minutes timeout - large models can take a long time
-			Timeout: 300 * time.Second,
+			Timeout: timeout,
 		},
 	}
 }
