@@ -606,18 +606,23 @@ func TestAIConfig_IsPatrolEnabled(t *testing.T) {
 		expected bool
 	}{
 		{
-			name:     "patrol disabled by preset",
-			config:   AIConfig{PatrolEnabled: true, PatrolSchedulePreset: "disabled"},
+			name:     "patrol disabled when AI disabled",
+			config:   AIConfig{Enabled: false, PatrolEnabled: true},
 			expected: false,
 		},
 		{
-			name:     "patrol enabled",
-			config:   AIConfig{PatrolEnabled: true},
+			name:     "patrol disabled by preset",
+			config:   AIConfig{Enabled: true, PatrolEnabled: true, PatrolSchedulePreset: "disabled"},
+			expected: false,
+		},
+		{
+			name:     "patrol enabled when AI enabled",
+			config:   AIConfig{Enabled: true, PatrolEnabled: true},
 			expected: true,
 		},
 		{
 			name:     "patrol disabled by flag",
-			config:   AIConfig{PatrolEnabled: false},
+			config:   AIConfig{Enabled: true, PatrolEnabled: false},
 			expected: false,
 		},
 	}
@@ -633,15 +638,22 @@ func TestAIConfig_IsPatrolEnabled(t *testing.T) {
 }
 
 func TestAIConfig_IsAlertTriggeredAnalysisEnabled(t *testing.T) {
-	t.Run("enabled", func(t *testing.T) {
-		config := AIConfig{AlertTriggeredAnalysis: true}
+	t.Run("enabled when AI enabled", func(t *testing.T) {
+		config := AIConfig{Enabled: true, AlertTriggeredAnalysis: true}
 		if !config.IsAlertTriggeredAnalysisEnabled() {
 			t.Error("expected true")
 		}
 	})
 
-	t.Run("disabled", func(t *testing.T) {
-		config := AIConfig{AlertTriggeredAnalysis: false}
+	t.Run("disabled when AI disabled", func(t *testing.T) {
+		config := AIConfig{Enabled: false, AlertTriggeredAnalysis: true}
+		if config.IsAlertTriggeredAnalysisEnabled() {
+			t.Error("expected false when AI is disabled")
+		}
+	})
+
+	t.Run("disabled by flag", func(t *testing.T) {
+		config := AIConfig{Enabled: true, AlertTriggeredAnalysis: false}
 		if config.IsAlertTriggeredAnalysisEnabled() {
 			t.Error("expected false")
 		}

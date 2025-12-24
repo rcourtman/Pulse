@@ -445,8 +445,13 @@ func PresetToMinutes(preset string) int {
 }
 
 // IsPatrolEnabled returns true if patrol should run
-// Note: Patrol uses local heuristics and doesn't require an AI API key
+// Note: Patrol uses local heuristics and doesn't require an AI API key,
+// but still requires AI to be enabled as a master switch
 func (c *AIConfig) IsPatrolEnabled() bool {
+	// If AI is disabled globally, patrol is disabled
+	if !c.Enabled {
+		return false
+	}
 	// If preset is "disabled", patrol is disabled
 	if c.PatrolSchedulePreset == "disabled" {
 		return false
@@ -456,6 +461,10 @@ func (c *AIConfig) IsPatrolEnabled() bool {
 
 // IsAlertTriggeredAnalysisEnabled returns true if AI should analyze resources when alerts fire
 func (c *AIConfig) IsAlertTriggeredAnalysisEnabled() bool {
+	// Requires AI to be enabled as a master switch
+	if !c.Enabled {
+		return false
+	}
 	return c.AlertTriggeredAnalysis
 }
 
