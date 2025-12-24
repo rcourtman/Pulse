@@ -274,7 +274,8 @@ export const UnifiedAgents: Component = () => {
                 return;
             }
 
-            const key = h.hostname || h.id;
+            // Use id as key (not hostname) to avoid overwriting when different machines share the same hostname
+            const key = h.id;
             unified.set(key, {
                 id: h.id,
                 hostname: h.hostname || 'Unknown',
@@ -287,9 +288,10 @@ export const UnifiedAgents: Component = () => {
             });
         });
 
-        // Process Docker Agents (merge if same hostname)
+        // Process Docker Agents (merge if same id - indicates same physical machine)
         dockerHosts.forEach(d => {
-            const key = d.hostname || d.id;
+            // Use id as key (not hostname) to avoid overwriting 
+            const key = d.id;
             const existing = unified.get(key);
             if (existing) {
                 if (!existing.types.includes('docker')) {
