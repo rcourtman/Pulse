@@ -1301,14 +1301,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       )
       : guests;
 
-    // Group by node
+    // Group by instance (not node - node is just the hostname which may be duplicated)
+    // Instance is the disambiguated name like "px1" or "px1 (10.0.2.224)"
     const grouped: Record<string, Resource[]> = {};
     filteredGuests.forEach((guest) => {
-      const node = guest.node || 'Unknown';
-      if (!grouped[node]) {
-        grouped[node] = [];
+      const groupKey = guest.instance || guest.node || 'Unknown';
+      if (!grouped[groupKey]) {
+        grouped[groupKey] = [];
       }
-      grouped[node].push(guest);
+      grouped[groupKey].push(guest);
     });
 
     // Sort guests within each group by vmid
