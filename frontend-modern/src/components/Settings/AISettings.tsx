@@ -144,6 +144,8 @@ export const AISettings: Component = () => {
     openaiBaseUrl: '',
     // Cost controls
     costBudgetUSD30d: '',
+    // Request timeout (seconds) - for slow Ollama hardware
+    requestTimeoutSeconds: 300,
   });
 
   const resetForm = (data: AISettingsType | null) => {
@@ -171,6 +173,7 @@ export const AISettings: Component = () => {
         ollamaBaseUrl: 'http://localhost:11434',
         openaiBaseUrl: '',
         costBudgetUSD30d: '',
+        requestTimeoutSeconds: 300,
       });
       return;
     }
@@ -201,6 +204,7 @@ export const AISettings: Component = () => {
         typeof data.cost_budget_usd_30d === 'number' && data.cost_budget_usd_30d > 0
           ? String(data.cost_budget_usd_30d)
           : '',
+      requestTimeoutSeconds: data.request_timeout_seconds ?? 300,
     });
 
     // Auto-expand providers that are configured
@@ -411,6 +415,11 @@ export const AISettings: Component = () => {
         if (Math.abs(parsed - current) > 0.0001) {
           payload.cost_budget_usd_30d = parsed;
         }
+      }
+
+      // Request timeout (for slow Ollama hardware)
+      if (form.requestTimeoutSeconds !== (settings()?.request_timeout_seconds ?? 300)) {
+        payload.request_timeout_seconds = form.requestTimeoutSeconds;
       }
 
       const updated = await AIAPI.updateSettings(payload);
@@ -1394,6 +1403,37 @@ export const AISettings: Component = () => {
                   <span class="text-[10px] text-amber-600 dark:text-amber-400">💡 Set budget for alerts</span>
                 </Show>
               </div>
+
+              {/* Request Timeout - For slow Ollama hardware */}
+              <div class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40">
+                <svg class="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Request Timeout</label>
+                <input
+                  type="number"
+                  class="w-20 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+                  value={form.requestTimeoutSeconds}
+                  onInput={(e) => {
+                    const value = parseInt(e.currentTarget.value, 10);
+                    if (!isNaN(value) && value > 0) setForm('requestTimeoutSeconds', value);
+                  }}
+                  min={30}
+                  max={3600}
+                  step={30}
+                  disabled={saving()}
+                />
+                <span class="text-xs text-gray-500">seconds</span>
+                <Show when={form.requestTimeoutSeconds !== 300}>
+                  <span class="text-[10px] text-blue-600 dark:text-blue-400">Custom</span>
+                </Show>
+                <Show when={form.requestTimeoutSeconds === 300}>
+                  <span class="text-[10px] text-gray-400 dark:text-gray-500">default</span>
+                </Show>
+              </div>
+              <p class="text-[10px] text-gray-500 dark:text-gray-400 -mt-4 ml-1">
+                💡 Increase for slow Ollama hardware (default: 300s / 5 min)
+              </p>
 
 
             </div>
