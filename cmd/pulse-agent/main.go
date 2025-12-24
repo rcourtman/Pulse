@@ -134,7 +134,7 @@ func main() {
 			Logger:             &logger,
 			EnableProxmox:      cfg.EnableProxmox,
 			ProxmoxType:        cfg.ProxmoxType,
-			DisableCommands:    cfg.DisableCommands,
+			EnableCommands:     cfg.EnableCommands,
 		}
 
 		agent, err := hostagent.New(hostCfg)
@@ -349,7 +349,7 @@ type Config struct {
 	DisableAutoUpdate bool
 
 	// Security
-	DisableCommands bool // Disable command execution for AI auto-fix
+	EnableCommands  bool // Enable command execution for AI auto-fix (disabled by default)
 
 	// Health/metrics server
 	HealthAddr string
@@ -380,7 +380,8 @@ func loadConfig() Config {
 	envEnableProxmox := utils.GetenvTrim("PULSE_ENABLE_PROXMOX")
 	envProxmoxType := utils.GetenvTrim("PULSE_PROXMOX_TYPE")
 	envDisableAutoUpdate := utils.GetenvTrim("PULSE_DISABLE_AUTO_UPDATE")
-	envDisableCommands := utils.GetenvTrim("PULSE_DISABLE_COMMANDS")
+	envEnableCommands := utils.GetenvTrim("PULSE_ENABLE_COMMANDS")
+	envDisableCommands := utils.GetenvTrim("PULSE_DISABLE_COMMANDS") // deprecated
 	envHealthAddr := utils.GetenvTrim("PULSE_HEALTH_ADDR")
 	envKubeconfig := utils.GetenvTrim("PULSE_KUBECONFIG")
 	envKubeContext := utils.GetenvTrim("PULSE_KUBE_CONTEXT")
@@ -438,7 +439,8 @@ func loadConfig() Config {
 	enableProxmoxFlag := flag.Bool("enable-proxmox", defaultEnableProxmox, "Enable Proxmox mode (creates API token, registers node)")
 	proxmoxTypeFlag := flag.String("proxmox-type", envProxmoxType, "Proxmox type: pve or pbs (auto-detected if not specified)")
 	disableAutoUpdateFlag := flag.Bool("disable-auto-update", utils.ParseBool(envDisableAutoUpdate), "Disable automatic updates")
-	disableCommandsFlag := flag.Bool("disable-commands", utils.ParseBool(envDisableCommands), "Disable command execution for AI auto-fix")
+	enableCommandsFlag := flag.Bool("enable-commands", utils.ParseBool(envEnableCommands), "Enable command execution for AI auto-fix (disabled by default)")
+	disableCommandsFlag := flag.Bool("disable-commands", false, "[DEPRECATED] Commands are now disabled by default; use --enable-commands to enable")
 	healthAddrFlag := flag.String("health-addr", defaultHealthAddr, "Health/metrics server address (empty to disable)")
 	kubeconfigFlag := flag.String("kubeconfig", envKubeconfig, "Path to kubeconfig (optional; uses in-cluster config if available)")
 	kubeContextFlag := flag.String("kube-context", envKubeContext, "Kubeconfig context (optional)")
@@ -508,7 +510,7 @@ func loadConfig() Config {
 		EnableProxmox:         *enableProxmoxFlag,
 		ProxmoxType:           strings.TrimSpace(*proxmoxTypeFlag),
 		DisableAutoUpdate:     *disableAutoUpdateFlag,
-		DisableCommands:       *disableCommandsFlag,
+		EnableCommands:        resolveEnableCommands(*enableCommandsFlag, *disableCommandsFlag, envEnableCommands, envDisableCommands),
 		HealthAddr:            strings.TrimSpace(*healthAddrFlag),
 		KubeconfigPath:        strings.TrimSpace(*kubeconfigFlag),
 		KubeContext:           strings.TrimSpace(*kubeContextFlag),
@@ -583,6 +585,39 @@ func defaultLogLevel(envValue string) string {
 		return "info"
 	}
 	return envValue
+}
+
+// resolveEnableCommands determines whether command execution should be enabled.
+// Priority: --enable-commands > --disable-commands (deprecated) > PULSE_ENABLE_COMMANDS > PULSE_DISABLE_COMMANDS (deprecated)
+// Default: disabled (false) for security
+func resolveEnableCommands(enableFlag, disableFlag bool, envEnable, envDisable string) bool {
+	// If --enable-commands is explicitly set, use it
+	if enableFlag {
+		return true
+	}
+
+	// Backwards compat: if --disable-commands was used, log deprecation but respect it
+	// (disableFlag being true means commands should be disabled, which is already the default)
+	if disableFlag {
+		fmt.Fprintln(os.Stderr, "warning: --disable-commands is deprecated and no longer needed (commands are disabled by default). Use --enable-commands to enable.")
+		return false
+	}
+
+	// Check environment variables
+	if envEnable != "" {
+		return utils.ParseBool(envEnable)
+	}
+
+	// Backwards compat: PULSE_DISABLE_COMMANDS=true means commands disabled (already default)
+	// PULSE_DISABLE_COMMANDS=false means commands enabled (backwards compat)
+	if envDisable != "" {
+		fmt.Fprintln(os.Stderr, "warning: PULSE_DISABLE_COMMANDS is deprecated. Use PULSE_ENABLE_COMMANDS=true to enable commands.")
+		// Invert: DISABLE=false means enable
+		return !utils.ParseBool(envDisable)
+	}
+
+	// Default: commands disabled
+	return false
 }
 
 // initDockerWithRetry attempts to initialize the Docker agent with exponential backoff.

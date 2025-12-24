@@ -11,9 +11,10 @@ func TestNew_DefaultPulseURLUsedForCommandClient(t *testing.T) {
 	logger := zerolog.New(io.Discard)
 
 	agent, err := New(Config{
-		APIToken: "test-token",
-		LogLevel: zerolog.InfoLevel,
-		Logger:   &logger,
+		APIToken:       "test-token",
+		LogLevel:       zerolog.InfoLevel,
+		Logger:         &logger,
+		EnableCommands: true, // Commands are disabled by default; enable for this test
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -38,10 +39,11 @@ func TestNew_TrimsPulseURLForCommandClient(t *testing.T) {
 	logger := zerolog.New(io.Discard)
 
 	agent, err := New(Config{
-		PulseURL: "https://example.invalid/",
-		APIToken: "test-token",
-		LogLevel: zerolog.InfoLevel,
-		Logger:   &logger,
+		PulseURL:       "https://example.invalid/",
+		APIToken:       "test-token",
+		LogLevel:       zerolog.InfoLevel,
+		Logger:         &logger,
+		EnableCommands: true, // Commands are disabled by default; enable for this test
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)

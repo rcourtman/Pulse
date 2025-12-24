@@ -46,7 +46,7 @@ type Config struct {
 	ProxmoxType   string // "pve", "pbs", or "" for auto-detect
 
 	// Security options
-	DisableCommands bool // If true, disables the command execution feature (AI auto-fix)
+	EnableCommands bool // If true, enables the command execution feature (AI auto-fix)
 }
 
 // Agent is responsible for collecting host metrics and shipping them to Pulse.
@@ -227,11 +227,12 @@ func New(cfg Config) (*Agent, error) {
 		reportBuffer:    buffer.New[agentshost.Report](bufferCapacity),
 	}
 
-	// Create command client for AI command execution (unless disabled)
-	if !cfg.DisableCommands {
+	// Create command client for AI command execution (only if enabled)
+	if cfg.EnableCommands {
 		agent.commandClient = NewCommandClient(cfg, agentID, hostname, platform, agentVersion)
+		cfg.Logger.Info().Msg("Command execution enabled via --enable-commands flag")
 	} else {
-		cfg.Logger.Info().Msg("Command execution disabled via --disable-commands flag")
+		cfg.Logger.Info().Msg("Command execution disabled (use --enable-commands to enable)")
 	}
 
 	return agent, nil
