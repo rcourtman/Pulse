@@ -43,6 +43,9 @@ export interface AISettings {
 
   // Cost controls (30-day budget, pro-rated in UI)
   cost_budget_usd_30d?: number;
+
+  // Request timeout (in seconds) - for slow Ollama hardware
+  request_timeout_seconds?: number;
 }
 
 export interface AISettingsUpdateRequest {
@@ -79,6 +82,9 @@ export interface AISettingsUpdateRequest {
 
   // Cost controls
   cost_budget_usd_30d?: number;
+
+  // Request timeout (in seconds) - for slow Ollama hardware
+  request_timeout_seconds?: number;
 }
 
 
