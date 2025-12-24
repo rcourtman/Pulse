@@ -1,4 +1,5 @@
 name: Publish Docker Images
+run-name: Publish Docker Images ${{ inputs.tag }}
 
 # Triggered by create-release.yml after staging images pass tests.
 # Builds multi-arch images (amd64+arm64) from source and publishes to Docker Hub and GHCR.

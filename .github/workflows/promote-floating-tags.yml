@@ -1,4 +1,5 @@
 name: Promote Floating Tags
+run-name: Promote Floating Tags ${{ inputs.tag }}
 
 # Triggered automatically when publish-docker.yml completes, or manually
 on:
