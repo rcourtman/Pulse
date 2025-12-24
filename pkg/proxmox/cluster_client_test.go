@@ -41,7 +41,7 @@ func TestClusterClientHandlesRateLimitWithoutMarkingUnhealthy(t *testing.T) {
 		Timeout:    2 * time.Second,
 	}
 
-	cc := NewClusterClient("test-cluster", cfg, []string{server.URL})
+	cc := NewClusterClient("test-cluster", cfg, []string{server.URL}, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -89,7 +89,7 @@ func TestClusterClientIgnoresGuestAgentTimeoutForHealth(t *testing.T) {
 		Timeout:    2 * time.Second,
 	}
 
-	cc := NewClusterClient("test-cluster", cfg, []string{server.URL})
+	cc := NewClusterClient("test-cluster", cfg, []string{server.URL}, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -385,7 +385,7 @@ func TestClusterClient_GetNodes_PermanentFailure(t *testing.T) {
 		Timeout:    2 * time.Second,
 	}
 
-	cc := NewClusterClient("test-cluster", cfg, []string{server.URL})
+	cc := NewClusterClient("test-cluster", cfg, []string{server.URL}, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

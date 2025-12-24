@@ -35,6 +35,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -541,8 +542,9 @@ func ensureHostHasPort(host, port string) string {
 }
 
 // validateNodeAPI tests if a cluster node has a working Proxmox API
-// This helps filter out qdevice VMs and other non-Proxmox participants
-func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.ClientConfig) bool {
+// This helps filter out qdevice VMs and other non-Proxmox participants.
+// Returns (isValid, fingerprint) - fingerprint is captured for TOFU (Trust On First Use).
+func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.ClientConfig) (bool, string) {
 	// Determine the host to test - prefer IP if available, otherwise use node name
 	testHost := clusterNode.IP
 	if testHost == "" {
@@ -551,7 +553,7 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 
 	// Skip empty hostnames (shouldn't happen but be safe)
 	if testHost == "" {
-		return false
+		return false, ""
 	}
 
 	scheme, defaultPort := deriveSchemeAndPort(baseConfig.Host)
@@ -571,6 +573,24 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 		Str("node", clusterNode.Name).
 		Str("test_host", testConfig.Host).
 		Msg("Validating Proxmox API for cluster node")
+
+	// Capture the fingerprint for TOFU (Trust On First Use)
+	var capturedFingerprint string
+	if testHost != "" {
+		fp, err := tlsutil.FetchFingerprint(testConfig.Host)
+		if err != nil {
+			log.Debug().
+				Str("node", clusterNode.Name).
+				Err(err).
+				Msg("Could not fetch TLS fingerprint for cluster node")
+		} else {
+			capturedFingerprint = fp
+			log.Debug().
+				Str("node", clusterNode.Name).
+				Str("fingerprint", fp[:16]+"...").
+				Msg("Captured TLS fingerprint for cluster node")
+		}
+	}
 
 	// Try to create a client and make a simple API call
 	testClient, err := proxmox.NewClient(testConfig)
@@ -595,7 +615,7 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 				Str("node", clusterNode.Name).
 				Err(err).
 				Msg("Failed to create test client for cluster node")
-			return false
+			return false, ""
 		}
 	}
 
@@ -615,21 +635,21 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 				Str("node", clusterNode.Name).
 				Err(err).
 				Msg("Cluster node API responded but denied access; accepting for discovery")
-			return true
+			return true, capturedFingerprint
 		}
 
 		log.Debug().
 			Str("node", clusterNode.Name).
 			Err(err).
 			Msg("Node failed Proxmox API validation - likely not a Proxmox node")
-		return false
+		return false, ""
 	}
 
 	log.Debug().
 		Str("node", clusterNode.Name).
 		Msg("Node passed Proxmox API validation")
 
-	return true
+	return true, capturedFingerprint
 }
 
 // findExistingGuestURL looks up the GuestURL for a node from existing endpoints
@@ -718,7 +738,9 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string, existi
 		for _, clusterNode := range clusterNodes {
 			// Validate that this node actually has a working Proxmox API
 			// This filters out qdevice VMs and other non-Proxmox participants
-			if !validateNodeAPI(clusterNode, clientConfig) {
+			// Also captures the node's TLS fingerprint for TOFU
+			isValid, nodeFingerprint := validateNodeAPI(clusterNode, clientConfig)
+			if !isValid {
 				log.Debug().
 					Str("node", clusterNode.Name).
 					Str("ip", clusterNode.IP).
@@ -730,11 +752,12 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string, existi
 			// Build the host URL with proper port
 			// Store hostname in Host field (for TLS validation), IP separately
 			endpoint := config.ClusterEndpoint{
-				NodeID:   clusterNode.ID,
-				NodeName: clusterNode.Name,
-				GuestURL: findExistingGuestURL(clusterNode.Name, existingEndpoints),
-				Online:   clusterNode.Online == 1,
-				LastSeen: time.Now(),
+				NodeID:      clusterNode.ID,
+				NodeName:    clusterNode.Name,
+				GuestURL:    findExistingGuestURL(clusterNode.Name, existingEndpoints),
+				Fingerprint: nodeFingerprint, // Store captured fingerprint for per-node TLS verification
+				Online:      clusterNode.Online == 1,
+				LastSeen:    time.Now(),
 			}
 
 			// Populate Host field with hostname (if available) for TLS certificate validation

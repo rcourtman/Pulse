@@ -3211,6 +3211,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 				// If not, use the main host for all connections (Proxmox will route cluster API calls)
 				hasValidEndpoints := false
 				endpoints := make([]string, 0, len(pve.ClusterEndpoints))
+				endpointFingerprints := make(map[string]string)
 
 				for _, ep := range pve.ClusterEndpoints {
 					hasFingerprint := pve.Fingerprint != ""
@@ -3235,6 +3236,10 @@ func New(cfg *config.Config) (*Monitor, error) {
 					}
 
 					endpoints = append(endpoints, effectiveURL)
+					// Store per-endpoint fingerprint for TOFU (Trust On First Use)
+					if ep.Fingerprint != "" {
+						endpointFingerprints[effectiveURL] = ep.Fingerprint
+					}
 				}
 
 				// If endpoints are just node names (not FQDNs or IPs), use main host only
@@ -3254,6 +3259,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 				log.Info().
 					Str("cluster", pve.ClusterName).
 					Strs("endpoints", endpoints).
+					Int("fingerprints", len(endpointFingerprints)).
 					Msg("Creating cluster-aware client")
 
 				clientConfig := config.CreateProxmoxConfig(&pve)
@@ -3262,6 +3268,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 					pve.Name,
 					clientConfig,
 					endpoints,
+					endpointFingerprints,
 				)
 				m.pveClients[pve.Name] = clusterClient
 				log.Info().
@@ -3971,6 +3978,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 				// Create cluster client
 				hasValidEndpoints := false
 				endpoints := make([]string, 0, len(pve.ClusterEndpoints))
+				endpointFingerprints := make(map[string]string)
 
 				for _, ep := range pve.ClusterEndpoints {
 					host := ep.IP
@@ -3987,6 +3995,10 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 						host = fmt.Sprintf("https://%s:8006", host)
 					}
 					endpoints = append(endpoints, host)
+					// Store per-endpoint fingerprint for TOFU
+					if ep.Fingerprint != "" {
+						endpointFingerprints[host] = ep.Fingerprint
+					}
 				}
 
 				if !hasValidEndpoints || len(endpoints) == 0 {
@@ -3998,7 +4010,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 
 				clientConfig := config.CreateProxmoxConfig(&pve)
 				clientConfig.Timeout = m.config.ConnectionTimeout
-				clusterClient := proxmox.NewClusterClient(pve.Name, clientConfig, endpoints)
+				clusterClient := proxmox.NewClusterClient(pve.Name, clientConfig, endpoints, endpointFingerprints)
 
 				m.mu.Lock()
 				m.pveClients[pve.Name] = clusterClient
