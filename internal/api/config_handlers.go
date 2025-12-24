@@ -1175,6 +1175,47 @@ func normalizeNodeHost(rawHost, nodeType string) (string, error) {
 	return parsed.String(), nil
 }
 
+// disambiguateNodeName ensures a node name is unique by appending the host IP if needed.
+// This handles cases where multiple Proxmox hosts have the same hostname (e.g., "px1" on different networks).
+// Returns the original name if unique, or "name (ip)" if duplicates exist.
+func (h *ConfigHandlers) disambiguateNodeName(name, host, nodeType string) string {
+	if name == "" {
+		return name
+	}
+
+	// Check if any existing node has the same name
+	hasDuplicate := false
+	if nodeType == "pve" {
+		for _, node := range h.config.PVEInstances {
+			if strings.EqualFold(node.Name, name) && node.Host != host {
+				hasDuplicate = true
+				break
+			}
+		}
+	} else if nodeType == "pbs" {
+		for _, node := range h.config.PBSInstances {
+			if strings.EqualFold(node.Name, name) && node.Host != host {
+				hasDuplicate = true
+				break
+			}
+		}
+	}
+
+	if !hasDuplicate {
+		return name
+	}
+
+	// Extract IP/hostname from host URL for disambiguation
+	parsed, err := url.Parse(host)
+	if err != nil || parsed.Host == "" {
+		// Fallback: use a short hash of the host
+		return fmt.Sprintf("%s (%s)", name, host[:min(15, len(host))])
+	}
+
+	hostname := parsed.Hostname()
+	return fmt.Sprintf("%s (%s)", name, hostname)
+}
+
 // HandleAddNode adds a new node
 func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 	// Prevent node modifications in mock mode
@@ -5848,8 +5889,11 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		MonitorGarbageJobs: &boolFalse,
 	}
 
-	// Check if a node with this host or name already exists
-	// Match by host URL or by node name (to handle hostname vs IP differences)
+	// Check if a node with this host already exists
+	// IMPORTANT: Only match by Host URL, NOT by name!
+	// Different physical hosts can have the same hostname (e.g., "px1" on different networks).
+	// Matching by name caused duplicate hostnames to be collapsed into one entry.
+	// See: Issue #891, #104, and multiple fix attempts in Dec 2025.
 	existingIndex := -1
 	if req.Type == "pve" {
 		for i, node := range h.config.PVEInstances {
@@ -5857,20 +5901,10 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				existingIndex = i
 				break
 			}
-			// Also match by name if ServerName matches existing node name
-			if req.ServerName != "" && strings.EqualFold(node.Name, req.ServerName) {
-				existingIndex = i
-				break
-			}
 		}
 	} else {
 		for i, node := range h.config.PBSInstances {
 			if node.Host == host {
-				existingIndex = i
-				break
-			}
-			// Also match by name if ServerName matches existing node name
-			if req.ServerName != "" && strings.EqualFold(node.Name, req.ServerName) {
 				existingIndex = i
 				break
 			}
@@ -6021,8 +6055,11 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				monitorBackups = *nodeConfig.MonitorBackups
 			}
 
+			// Disambiguate node name if duplicate hostnames exist
+			displayName := h.disambiguateNodeName(nodeConfig.Name, nodeConfig.Host, "pve")
+
 			newInstance := config.PVEInstance{
-				Name:              nodeConfig.Name,
+				Name:              displayName,
 				Host:              nodeConfig.Host,
 				TokenName:         nodeConfig.TokenName,
 				TokenValue:        nodeConfig.TokenValue,
@@ -6070,8 +6107,11 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				monitorGarbageJobs = *nodeConfig.MonitorGarbageJobs
 			}
 
+			// Disambiguate node name if duplicate hostnames exist
+			pbsDisplayName := h.disambiguateNodeName(nodeConfig.Name, nodeConfig.Host, "pbs")
+
 			newInstance := config.PBSInstance{
-				Name:               nodeConfig.Name,
+				Name:               pbsDisplayName,
 				Host:               nodeConfig.Host,
 				TokenName:          nodeConfig.TokenName,
 				TokenValue:         nodeConfig.TokenValue,
