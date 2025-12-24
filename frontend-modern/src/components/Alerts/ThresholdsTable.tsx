@@ -1926,6 +1926,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       ...allDockerContainers,
       ...storageWithOverrides(),
       ...pbsServersWithOverrides(),
+      ...hostAgentsWithOverrides(),
     ];
     const resource = allResources.find((r) => r.id === resourceId);
     if (
@@ -1933,7 +1934,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       (resource.type !== 'guest' &&
         resource.type !== 'storage' &&
         resource.type !== 'pbs' &&
-        resource.type !== 'dockerContainer')
+        resource.type !== 'dockerContainer' &&
+        resource.type !== 'hostAgent')
     )
       return;
 
