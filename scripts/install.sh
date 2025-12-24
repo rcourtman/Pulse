@@ -17,7 +17,7 @@
 #   --interval <dur>    Reporting interval (default: 30s)
 #   --agent-id <id>     Custom agent identifier (default: auto-generated)
 #   --insecure          Skip TLS certificate verification
-#   --disable-commands  Disable AI command execution on agent
+#   --enable-commands   Enable AI command execution on agent (disabled by default)
 #   --uninstall         Remove the agent
 #
 # Auto-Detection:
@@ -73,7 +73,7 @@ PROXMOX_TYPE=""
 UNINSTALL="false"
 INSECURE="false"
 AGENT_ID=""
-DISABLE_COMMANDS="false"
+ENABLE_COMMANDS="false"
 
 # Track if flags were explicitly set (to override auto-detection)
 DOCKER_EXPLICIT="false"
@@ -170,7 +170,7 @@ build_exec_args() {
     if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-proxmox"; fi
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS="$EXEC_ARGS --proxmox-type ${PROXMOX_TYPE}"; fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
-    if [[ "$DISABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --disable-commands"; fi
+    if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
 }
 
@@ -189,7 +189,7 @@ build_exec_args_array() {
     if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-proxmox); fi
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS_ARRAY+=(--proxmox-type "$PROXMOX_TYPE"); fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
-    if [[ "$DISABLE_COMMANDS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--disable-commands); fi
+    if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-commands); fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS_ARRAY+=(--agent-id "$AGENT_ID"); fi
 }
 
@@ -209,7 +209,7 @@ while [[ $# -gt 0 ]]; do
         --disable-proxmox) ENABLE_PROXMOX="false"; PROXMOX_EXPLICIT="true"; shift ;;
         --proxmox-type) PROXMOX_TYPE="$2"; shift 2 ;;
         --insecure) INSECURE="true"; shift ;;
-        --disable-commands) DISABLE_COMMANDS="true"; shift ;;
+        --enable-commands) ENABLE_COMMANDS="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
         --agent-id) AGENT_ID="$2"; shift 2 ;;
         *) fail "Unknown argument: $1" ;;
@@ -647,9 +647,9 @@ if [[ "$OS" == "darwin" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
         <string>--insecure</string>"
     fi
-    if [[ "$DISABLE_COMMANDS" == "true" ]]; then
+    if [[ "$ENABLE_COMMANDS" == "true" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
-        <string>--disable-commands</string>"
+        <string>--enable-commands</string>"
     fi
     if [[ -n "$AGENT_ID" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
