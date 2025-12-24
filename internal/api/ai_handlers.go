@@ -183,6 +183,8 @@ type AISettingsResponse struct {
 	ConfiguredProviders []string `json:"configured_providers"`      // List of provider names with credentials
 	// Cost controls
 	CostBudgetUSD30d float64 `json:"cost_budget_usd_30d,omitempty"`
+	// Request timeout (seconds) - for slow hardware running local models
+	RequestTimeoutSeconds int `json:"request_timeout_seconds,omitempty"`
 }
 
 // AISettingsUpdateRequest is the request body for PUT /api/settings/ai
@@ -218,6 +220,8 @@ type AISettingsUpdateRequest struct {
 	ClearOllamaURL    *bool `json:"clear_ollama_url,omitempty"`    // Clear Ollama URL
 	// Cost controls
 	CostBudgetUSD30d *float64 `json:"cost_budget_usd_30d,omitempty"`
+	// Request timeout (seconds) - for slow hardware running local models
+	RequestTimeoutSeconds *int `json:"request_timeout_seconds,omitempty"`
 }
 
 // HandleGetAISettings returns the current AI settings (GET /api/settings/ai)
@@ -273,10 +277,11 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		DeepSeekConfigured:  settings.HasProvider(config.AIProviderDeepSeek),
 		GeminiConfigured:    settings.HasProvider(config.AIProviderGemini),
 		OllamaConfigured:    settings.HasProvider(config.AIProviderOllama),
-		OllamaBaseURL:       settings.GetBaseURLForProvider(config.AIProviderOllama),
-		OpenAIBaseURL:       settings.OpenAIBaseURL,
-		ConfiguredProviders: settings.GetConfiguredProviders(),
-		CostBudgetUSD30d:    settings.CostBudgetUSD30d,
+		OllamaBaseURL:         settings.GetBaseURLForProvider(config.AIProviderOllama),
+		OpenAIBaseURL:         settings.OpenAIBaseURL,
+		ConfiguredProviders:   settings.GetConfiguredProviders(),
+		CostBudgetUSD30d:      settings.CostBudgetUSD30d,
+		RequestTimeoutSeconds: settings.RequestTimeoutSeconds,
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -468,6 +473,19 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.AlertTriggeredAnalysis = *req.AlertTriggeredAnalysis
 	}
 
+	// Handle request timeout (for slow hardware)
+	if req.RequestTimeoutSeconds != nil {
+		if *req.RequestTimeoutSeconds < 0 {
+			http.Error(w, "request_timeout_seconds cannot be negative", http.StatusBadRequest)
+			return
+		}
+		if *req.RequestTimeoutSeconds > 3600 {
+			http.Error(w, "request_timeout_seconds cannot exceed 3600 (1 hour)", http.StatusBadRequest)
+			return
+		}
+		settings.RequestTimeoutSeconds = *req.RequestTimeoutSeconds
+	}
+
 	// Save settings
 	if err := h.persistence.SaveAIConfig(*settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save AI settings")
@@ -530,9 +548,10 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		DeepSeekConfigured:  settings.HasProvider(config.AIProviderDeepSeek),
 		GeminiConfigured:    settings.HasProvider(config.AIProviderGemini),
 		OllamaConfigured:    settings.HasProvider(config.AIProviderOllama),
-		OllamaBaseURL:       settings.GetBaseURLForProvider(config.AIProviderOllama),
-		OpenAIBaseURL:       settings.OpenAIBaseURL,
-		ConfiguredProviders: settings.GetConfiguredProviders(),
+		OllamaBaseURL:         settings.GetBaseURLForProvider(config.AIProviderOllama),
+		OpenAIBaseURL:         settings.OpenAIBaseURL,
+		ConfiguredProviders:   settings.GetConfiguredProviders(),
+		RequestTimeoutSeconds: settings.RequestTimeoutSeconds,
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
