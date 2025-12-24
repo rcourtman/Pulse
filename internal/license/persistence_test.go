@@ -1,6 +1,8 @@
 package license
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -126,10 +128,11 @@ func TestPersistence(t *testing.T) {
 			t.Fatalf("Failed to save license: %v", err)
 		}
 		
-		// Create a new persistence with different machine ID
+		// Create a new persistence with different encryption key
 		pWrong := &Persistence{
-			configDir: tmpDir,
-			machineID: "different-machine-id",
+			configDir:     tmpDir,
+			encryptionKey: "different-encryption-key",
+			machineID:     "different-machine-id",
 		}
 		
 		_, err = pWrong.Load()
@@ -137,4 +140,64 @@ func TestPersistence(t *testing.T) {
 			t.Error("Expected error when decrypting with wrong key material")
 		}
 	})
+
+	t.Run("Backwards compatibility with machine-id", func(t *testing.T) {
+		// This tests the scenario where a license was saved with machine-id
+		// (old behavior before persistent key feature) and we're now loading it
+		// with a different primary key but same machine-id as fallback
+
+		tmpDirCompat, _ := os.MkdirTemp("", "pulse-license-compat-*")
+		defer os.RemoveAll(tmpDirCompat)
+
+		testKey := "compat-test-key"
+		machineID := "test-machine-id-12345"
+
+		// Simulate old behavior: directly encrypt with machine-id (without calling Save
+		// which would create a persistent key). This is what old installations have.
+		pOld := &Persistence{
+			configDir:     tmpDirCompat,
+			encryptionKey: machineID, // Old behavior used machine-id as encryption key
+			machineID:     machineID,
+		}
+
+		// Manually encrypt and save without creating persistent key
+		persisted := PersistedLicense{LicenseKey: testKey}
+		jsonData, _ := json.Marshal(persisted)
+		encrypted, err := pOld.encrypt(jsonData)
+		if err != nil {
+			t.Fatalf("Failed to encrypt license: %v", err)
+		}
+
+		// Write directly to simulate old installation
+		os.MkdirAll(tmpDirCompat, 0700)
+		licensePath := filepath.Join(tmpDirCompat, LicenseFileName)
+		encoded := base64.StdEncoding.EncodeToString(encrypted)
+		os.WriteFile(licensePath, []byte(encoded), 0600)
+
+		// Verify no persistent key file exists (simulating old installation)
+		keyPath := filepath.Join(tmpDirCompat, PersistentKeyFileName)
+		if _, err := os.Stat(keyPath); err == nil {
+			t.Fatal("Persistent key should not exist for this test")
+		}
+
+		// Now try to load with a new primary key but same machine-id as fallback
+		// This simulates what happens when a Docker user upgrades and gets a
+		// persistent key file, but their old license was encrypted with machine-id
+		pNew := &Persistence{
+			configDir:     tmpDirCompat,
+			encryptionKey: "new-persistent-key", // Different primary key (simulating new container)
+			machineID:     machineID,            // Same machine-id for fallback
+		}
+
+		loaded, err := pNew.LoadWithMetadata()
+		if err != nil {
+			t.Fatalf("Failed to load license with machine-id fallback: %v\n"+
+				"This means backwards compatibility is broken for existing Docker users", err)
+		}
+
+		if loaded.LicenseKey != testKey {
+			t.Errorf("Expected license key %s, got %s", testKey, loaded.LicenseKey)
+		}
+	})
 }
+
