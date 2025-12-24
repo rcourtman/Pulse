@@ -1313,26 +1313,28 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check for duplicate nodes by name
+	// Check for duplicate nodes by HOST URL (not name!)
+	// Different physical hosts can share the same hostname (Issue #891).
+	// We disambiguate names later, but Host URLs must be unique.
 	switch req.Type {
 	case "pve":
 		for _, node := range h.config.PVEInstances {
-			if node.Name == req.Name {
-				http.Error(w, "A node with this name already exists", http.StatusConflict)
+			if node.Host == normalizedHost {
+				http.Error(w, "A node with this host URL already exists", http.StatusConflict)
 				return
 			}
 		}
 	case "pbs":
 		for _, node := range h.config.PBSInstances {
-			if node.Name == req.Name {
-				http.Error(w, "A node with this name already exists", http.StatusConflict)
+			if node.Host == normalizedHost {
+				http.Error(w, "A node with this host URL already exists", http.StatusConflict)
 				return
 			}
 		}
 	case "pmg":
 		for _, node := range h.config.PMGInstances {
-			if node.Name == req.Name {
-				http.Error(w, "A node with this name already exists", http.StatusConflict)
+			if node.Host == normalizedHost {
+				http.Error(w, "A node with this host URL already exists", http.StatusConflict)
 				return
 			}
 		}
@@ -1465,8 +1467,11 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			monitorBackups = *req.MonitorBackups
 		}
 
+		// Disambiguate name if duplicate hostnames exist (Issue #891)
+		displayName := h.disambiguateNodeName(req.Name, host, "pve")
+
 		pve := config.PVEInstance{
-			Name:                         req.Name,
+			Name:                         displayName,
 			Host:                         host, // Use normalized host
 			GuestURL:                     req.GuestURL,
 			User:                         req.User,
@@ -1549,8 +1554,11 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			monitorGarbageJobs = *req.MonitorGarbageJobs
 		}
 
+		// Disambiguate name if duplicate hostnames exist (Issue #891)
+		pbsDisplayName := h.disambiguateNodeName(req.Name, host, "pbs")
+
 		pbs := config.PBSInstance{
-			Name:                         req.Name,
+			Name:                         pbsDisplayName,
 			Host:                         host,
 			GuestURL:                     req.GuestURL,
 			User:                         pbsUser,
@@ -1620,8 +1628,21 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			monitorDomainStats = *req.MonitorDomainStats
 		}
 
+		// Disambiguate name if duplicate hostnames exist (Issue #891)
+		// Note: PMG uses similar logic to PBS - we check against PMG instances
+		pmgDisplayName := req.Name
+		for _, node := range h.config.PMGInstances {
+			if strings.EqualFold(node.Name, req.Name) && node.Host != host {
+				parsed, err := url.Parse(host)
+				if err == nil && parsed.Host != "" {
+					pmgDisplayName = fmt.Sprintf("%s (%s)", req.Name, parsed.Hostname())
+				}
+				break
+			}
+		}
+
 		pmgInstance := config.PMGInstance{
-			Name:                         req.Name,
+			Name:                         pmgDisplayName,
 			Host:                         host,
 			GuestURL:                     req.GuestURL,
 			User:                         pmgUser,
