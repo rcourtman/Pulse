@@ -1765,6 +1765,40 @@ const DockerContainerRow: Component<{
                   </div>
                 </Show>
 
+                <Show when={container.env && container.env.length > 0}>
+                  <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                      Environment
+                    </div>
+                    <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
+                      {container.env!.map((envVar) => {
+                        const eqIndex = envVar.indexOf('=');
+                        if (eqIndex === -1) return null;
+                        const name = envVar.substring(0, eqIndex);
+                        const value = envVar.substring(eqIndex + 1);
+                        const isMasked = value === '***';
+                        return (
+                          <span
+                            class={`max-w-full truncate rounded px-1.5 py-0.5 ${isMasked
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200'
+                                : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200'
+                              }`}
+                            title={isMasked ? `${name} (masked for security)` : `${name}=${value}`}
+                          >
+                            {name}
+                            <Show when={!isMasked && value}>
+                              <span class="text-green-600 dark:text-green-300">={value}</span>
+                            </Show>
+                            <Show when={isMasked}>
+                              <span class="text-amber-500 dark:text-amber-400 ml-0.5">🔒</span>
+                            </Show>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </Show>
+
                 {/* Annotations & Ask AI row */}
                 <Show when={aiEnabled()}>
                   <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 w-full space-y-2">

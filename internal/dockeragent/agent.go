@@ -944,6 +944,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		FinishedAt:          finishedPtr,
 		Ports:               ports,
 		Labels:              labels,
+		Env:                 maskSensitiveEnvVars(inspect.Config.Env),
 		Networks:            networks,
 		WritableLayerBytes:  writableLayerBytes,
 		RootFilesystemBytes: rootFsBytes,
@@ -1027,6 +1028,52 @@ func extractPodmanMetadata(labels map[string]string) *agentsdocker.PodmanContain
 	}
 
 	return meta
+}
+
+// sensitiveEnvPatterns are substrings that, when found in an env var name (case-insensitive),
+// indicate the value should be masked for security.
+var sensitiveEnvPatterns = []string{
+	"password", "passwd", "secret", "key", "token", "credential", "auth",
+	"api_key", "apikey", "private", "access_token", "refresh_token",
+	"database_url", "connection_string", "encryption",
+}
+
+// maskSensitiveEnvVars returns a copy of the environment variables with sensitive values masked.
+// Environment variables whose names contain sensitive keywords will have their values replaced with "***".
+func maskSensitiveEnvVars(envVars []string) []string {
+	if len(envVars) == 0 {
+		return nil
+	}
+
+	result := make([]string, 0, len(envVars))
+	for _, env := range envVars {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) != 2 {
+			result = append(result, env)
+			continue
+		}
+
+		name := parts[0]
+		value := parts[1]
+
+		// Check if the environment variable name contains a sensitive pattern
+		lowerName := strings.ToLower(name)
+		isSensitive := false
+		for _, pattern := range sensitiveEnvPatterns {
+			if strings.Contains(lowerName, pattern) {
+				isSensitive = true
+				break
+			}
+		}
+
+		if isSensitive && value != "" {
+			result = append(result, name+"=***")
+		} else {
+			result = append(result, env)
+		}
+	}
+
+	return result
 }
 
 func (a *Agent) sendReport(ctx context.Context, report agentsdocker.Report) error {

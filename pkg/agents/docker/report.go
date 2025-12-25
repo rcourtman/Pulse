@@ -70,6 +70,7 @@ type Container struct {
 	FinishedAt          *time.Time         `json:"finishedAt,omitempty"`
 	Ports               []ContainerPort    `json:"ports,omitempty"`
 	Labels              map[string]string  `json:"labels,omitempty"`
+	Env                 []string           `json:"env,omitempty"`
 	Networks            []ContainerNetwork `json:"networks,omitempty"`
 	WritableLayerBytes  int64              `json:"writableLayerBytes,omitempty"`
 	RootFilesystemBytes int64              `json:"rootFilesystemBytes,omitempty"`
