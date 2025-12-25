@@ -48,6 +48,9 @@ type Config struct {
 
 	// Security options
 	EnableCommands bool // If true, enables the command execution feature (AI auto-fix)
+
+	// Disk filtering
+	DiskExclude []string // Mount points or path prefixes to exclude from disk monitoring
 }
 
 // Agent is responsible for collecting host metrics and shipping them to Pulse.
@@ -340,7 +343,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	defer cancel()
 
 	uptime, _ := hostUptimeWithContext(collectCtx)
-	snapshot, err := hostmetricsCollect(collectCtx)
+	snapshot, err := hostmetricsCollect(collectCtx, a.cfg.DiskExclude)
 	if err != nil {
 		return agentshost.Report{}, fmt.Errorf("collect metrics: %w", err)
 	}
