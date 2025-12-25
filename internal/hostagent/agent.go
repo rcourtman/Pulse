@@ -88,6 +88,7 @@ var (
 	hostmetricsCollect     = hostmetrics.Collect
 	sensorsCollectLocal    = sensors.CollectLocal
 	sensorsParse           = sensors.Parse
+	sensorsCollectPower    = sensors.CollectPower
 	mdadmCollectArrays     = mdadm.CollectArrays
 	cephCollect            = ceph.Collect
 	smartctlCollectLocal   = smartctl.CollectLocal
@@ -561,9 +562,28 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 		}
 	}
 
+	// Collect power consumption data (Intel RAPL, etc.)
+	if powerData, err := sensorsCollectPower(ctx); err == nil && powerData.Available {
+		result.PowerWatts = make(map[string]float64)
+		if powerData.PackageWatts > 0 {
+			result.PowerWatts["cpu_package"] = powerData.PackageWatts
+		}
+		if powerData.CoreWatts > 0 {
+			result.PowerWatts["cpu_core"] = powerData.CoreWatts
+		}
+		if powerData.DRAMWatts > 0 {
+			result.PowerWatts["dram"] = powerData.DRAMWatts
+		}
+		a.logger.Debug().
+			Float64("packageWatts", powerData.PackageWatts).
+			Str("source", powerData.Source).
+			Msg("Collected power data")
+	}
+
 	a.logger.Debug().
 		Int("temperatureCount", len(result.TemperatureCelsius)).
 		Int("fanCount", len(result.FanRPM)).
+		Int("powerCount", len(result.PowerWatts)).
 		Int("additionalCount", len(result.Additional)).
 		Msg("Collected sensor data")
 

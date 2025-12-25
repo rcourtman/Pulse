@@ -101,6 +101,7 @@ type NetworkInterface struct {
 type Sensors struct {
 	TemperatureCelsius map[string]float64 `json:"temperatureCelsius,omitempty"`
 	FanRPM             map[string]float64 `json:"fanRpm,omitempty"`
+	PowerWatts         map[string]float64 `json:"powerWatts,omitempty"` // Power consumption (e.g., cpu_package, dram)
 	Additional         map[string]float64 `json:"additional,omitempty"`
 	SMART              []DiskSMART        `json:"smart,omitempty"` // S.M.A.R.T. disk data
 }
