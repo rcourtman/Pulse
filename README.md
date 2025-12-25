@@ -19,7 +19,7 @@ Pulse is a modern, unified dashboard for monitoring your **infrastructure** acro
 
 Designed for homelabs, sysadmins, and MSPs who need a "single pane of glass" without the complexity of enterprise monitoring stacks.
 
-![Pulse Dashboard](docs/images/01-dashboard.png)
+![Pulse Dashboard](docs/images/01-dashboard.jpg)
 
 ## ✨ Features
 
