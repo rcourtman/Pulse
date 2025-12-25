@@ -183,3 +183,46 @@ func ShouldSkipFilesystem(fsType, mountpoint string, totalBytes, usedBytes uint6
 
 	return len(reasons) > 0, reasons
 }
+
+// MatchesUserExclude checks if a mountpoint matches any user-defined exclusion patterns.
+// Patterns can be:
+//   - Exact paths: "/mnt/backup" matches only "/mnt/backup"
+//   - Prefix patterns (ending with *): "/mnt/ext*" matches "/mnt/external", "/mnt/ext-drive"
+//   - Contains patterns (surrounded by *): "*pbs*" matches any path containing "pbs"
+func MatchesUserExclude(mountpoint string, excludePatterns []string) bool {
+	if len(excludePatterns) == 0 {
+		return false
+	}
+
+	for _, pattern := range excludePatterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+
+		// Contains pattern: *substring*
+		if strings.HasPrefix(pattern, "*") && strings.HasSuffix(pattern, "*") && len(pattern) > 2 {
+			substring := pattern[1 : len(pattern)-1]
+			if strings.Contains(mountpoint, substring) {
+				return true
+			}
+			continue
+		}
+
+		// Prefix pattern: /path/prefix*
+		if strings.HasSuffix(pattern, "*") {
+			prefix := pattern[:len(pattern)-1]
+			if strings.HasPrefix(mountpoint, prefix) {
+				return true
+			}
+			continue
+		}
+
+		// Exact match
+		if mountpoint == pattern {
+			return true
+		}
+	}
+
+	return false
+}

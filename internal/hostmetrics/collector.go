@@ -41,7 +41,8 @@ type Snapshot struct {
 }
 
 // Collect gathers a point-in-time snapshot of host resource utilisation.
-func Collect(ctx context.Context) (Snapshot, error) {
+// diskExclude contains user-defined patterns for mount points to exclude.
+func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 	collectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -78,7 +79,7 @@ func Collect(ctx context.Context) (Snapshot, error) {
 		SwapUsed:   swapUsed,
 	}
 
-	snapshot.Disks = collectDisks(collectCtx)
+	snapshot.Disks = collectDisks(collectCtx, diskExclude)
 	snapshot.DiskIO = collectDiskIO(collectCtx)
 	snapshot.Network = collectNetwork(collectCtx)
 
@@ -104,7 +105,7 @@ func collectCPUUsage(ctx context.Context) (float64, error) {
 	return usage, nil
 }
 
-func collectDisks(ctx context.Context) []agentshost.Disk {
+func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
 	partitions, err := diskPartitions(ctx, true)
 	if err != nil {
 		return nil
@@ -122,6 +123,11 @@ func collectDisks(ctx context.Context) []agentshost.Disk {
 			continue
 		}
 		seen[part.Mountpoint] = struct{}{}
+
+		// Check user-defined exclusions first (issue #896)
+		if fsfilters.MatchesUserExclude(part.Mountpoint, diskExclude) {
+			continue
+		}
 
 		usage, err := diskUsage(ctx, part.Mountpoint)
 		if err != nil {

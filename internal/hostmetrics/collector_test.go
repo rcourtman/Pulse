@@ -9,7 +9,7 @@ import (
 func TestCollectDiskIO(t *testing.T) {
     ctx := context.Background()
     
-    snapshot, err := Collect(ctx)
+    snapshot, err := Collect(ctx, nil)
     if err != nil {
         t.Fatalf("Collect failed: %v", err)
     }

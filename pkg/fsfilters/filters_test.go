@@ -216,3 +216,52 @@ func TestShouldSkipFilesystem(t *testing.T) {
 		})
 	}
 }
+
+func TestMatchesUserExclude(t *testing.T) {
+	tests := []struct {
+		name       string
+		mountpoint string
+		patterns   []string
+		expected   bool
+	}{
+		// Exact match
+		{"exact match", "/mnt/backup", []string{"/mnt/backup"}, true},
+		{"exact no match", "/mnt/backup", []string{"/mnt/data"}, false},
+		{"exact case sensitive", "/mnt/Backup", []string{"/mnt/backup"}, false},
+
+		// Prefix patterns (ending with *)
+		{"prefix match", "/mnt/external", []string{"/mnt/ext*"}, true},
+		{"prefix match long", "/mnt/external-drive-2", []string{"/mnt/ext*"}, true},
+		{"prefix no match", "/home/user", []string{"/mnt/ext*"}, false},
+
+		// Contains patterns (*substring*)
+		{"contains match", "/mnt/pbs-data", []string{"*pbs*"}, true},
+		{"contains match middle", "/data/pbs/backup", []string{"*pbs*"}, true},
+		{"contains no match", "/mnt/data", []string{"*pbs*"}, false},
+
+		// Multiple patterns
+		{"multiple patterns first match", "/mnt/backup", []string{"/mnt/backup", "/data/*"}, true},
+		{"multiple patterns second match", "/data/files", []string{"/mnt/backup", "/data/*"}, true},
+		{"multiple patterns no match", "/home/user", []string{"/mnt/backup", "/data/*"}, false},
+
+		// Edge cases
+		{"empty patterns", "/mnt/backup", []string{}, false},
+		{"nil patterns", "/mnt/backup", nil, false},
+		{"empty pattern in list", "/mnt/backup", []string{"", "/mnt/backup"}, true},
+		{"whitespace pattern", "/mnt/backup", []string{"  /mnt/backup  "}, true},
+
+		// Real-world use cases (Issue #896)
+		{"exclude pbs mount", "/mnt/pbs-datastore", []string{"*pbs*"}, true},
+		{"exclude specific mount", "/media/external-hdd", []string{"/media/external-hdd"}, true},
+		{"exclude all media mounts", "/media/usb-drive", []string{"/media/*"}, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := MatchesUserExclude(tc.mountpoint, tc.patterns)
+			if result != tc.expected {
+				t.Errorf("MatchesUserExclude(%q, %v) = %t, want %t", tc.mountpoint, tc.patterns, result, tc.expected)
+			}
+		})
+	}
+}
