@@ -2160,7 +2160,9 @@ func (m *Monitor) pollPVENode(
 	if effectiveStatus == "online" && tempMonitoringEnabled {
 		// First, check if there's a matching host agent with temperature data.
 		// Host agent temperatures are preferred because they don't require SSH access.
-		hostAgentTemp := m.getHostAgentTemperature(node.Node)
+		// Use getHostAgentTemperatureByID with the unique node ID to correctly handle
+		// duplicate hostname scenarios (e.g., two "px1" nodes on different IPs).
+		hostAgentTemp := m.getHostAgentTemperatureByID(modelNode.ID, node.Node)
 		if hostAgentTemp != nil {
 			log.Debug().
 				Str("node", node.Node).
