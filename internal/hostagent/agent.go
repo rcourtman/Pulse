@@ -462,7 +462,10 @@ func (a *Agent) applyRemoteConfig(commandsEnabled bool) {
 	} else if !commandsEnabled && currentlyEnabled {
 		// Server disabled commands, but we have a command client running
 		a.logger.Info().Msg("Server disabled command execution - stopping command client")
-		// Signal stop (the command client will exit on next iteration)
+		// Properly close the WebSocket connection to stop the client
+		if err := a.commandClient.Close(); err != nil {
+			a.logger.Debug().Err(err).Msg("Error closing command client connection")
+		}
 		a.commandClient = nil
 	}
 }
