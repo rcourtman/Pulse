@@ -1322,7 +1322,7 @@ const DockerContainerRow: Component<{
               type="cpu"
               resourceId={metricsKey}
               isRunning={isRunning() && (container.cpuPercent ?? 0) > 0}
-              showMobile={props.isMobile()}
+              showMobile={false}
               class="w-full"
             />
           </div>
@@ -1334,20 +1334,7 @@ const DockerContainerRow: Component<{
 
         return (
           <div class="px-2 py-0.5 flex items-center overflow-hidden">
-            <Show when={props.isMobile()}>
-              <div class="md:hidden w-full">
-                <ResponsiveMetricCell
-                  value={memPercent()}
-                  type="memory"
-                  sublabel={memUsageLabel()}
-                  resourceId={metricsKey}
-                  isRunning={isRunning() && (container.memoryUsageBytes ?? 0) > 0}
-                  showMobile={true}
-                  class="w-full"
-                />
-              </div>
-            </Show>
-            <div class="hidden md:block w-full">
+            <div class="w-full">
               <StackedMemoryBar
                 used={container.memoryUsageBytes || 0}
                 total={memoryTotal()}
@@ -1370,7 +1357,7 @@ const DockerContainerRow: Component<{
                   resourceId={metricsKey}
                   sublabel={diskSublabel() ?? diskUsageLabel()}
                   isRunning={true}
-                  showMobile={props.isMobile()}
+                  showMobile={false}
                   class="w-full"
                 />
               </Show>
@@ -1415,7 +1402,9 @@ const DockerContainerRow: Component<{
             <td
               class={`py-0.5 align-middle whitespace-nowrap ${column.id === 'resource' ? 'max-w-[300px]' : ''}`}
               style={{
-                "min-width": column.id === 'cpu' || column.id === 'memory' ? '140px' : undefined,
+                "min-width": (column.id === 'cpu' || column.id === 'memory') ? (props.isMobile() ? '60px' : '140px') : undefined,
+                "width": (column.id === 'cpu' || column.id === 'memory') && !props.isMobile() ? '140px' : undefined,
+                "max-width": (column.id === 'cpu' || column.id === 'memory') && !props.isMobile() ? '140px' : undefined
               }}
             >
               {renderCell(column)}
@@ -2245,7 +2234,9 @@ const DockerServiceRow: Component<{
             <td
               class={`py-0.5 align-middle whitespace-nowrap ${column.id === 'resource' ? 'max-w-[300px]' : ''}`}
               style={{
-                "min-width": column.id === 'cpu' || column.id === 'memory' ? '140px' : undefined,
+                "min-width": (column.id === 'cpu' || column.id === 'memory') ? (props.isMobile() ? '60px' : '140px') : undefined,
+                "width": (column.id === 'cpu' || column.id === 'memory') && !props.isMobile() ? '140px' : undefined,
+                "max-width": (column.id === 'cpu' || column.id === 'memory') && !props.isMobile() ? '140px' : undefined
               }}
             >
               {renderCell(column)}
@@ -2790,7 +2781,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
       >
         <Card padding="none" tone="glass" class="overflow-hidden">
           <div class="overflow-x-auto">
-            <table class="w-full border-collapse whitespace-nowrap">
+            <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": isMobile() ? "100%" : "800px" }}>
               <thead>
                 <tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20">
                   <For each={DOCKER_COLUMNS}>
@@ -2801,7 +2792,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                       return (
                         <th
                           class={`${isResource ? 'pl-4 sm:pl-5 lg:pl-6 pr-2' : 'px-2'} py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 text-left font-medium whitespace-nowrap`}
-                          style={{ "min-width": col.id === 'cpu' || col.id === 'memory' ? '140px' : undefined }}
+                          style={{ "min-width": (col.id === 'cpu' || col.id === 'memory' || col.id === 'disk') ? (isMobile() ? '60px' : '140px') : undefined, "width": (col.id === 'cpu' || col.id === 'memory' || col.id === 'disk') && !isMobile() ? '140px' : undefined, "max-width": (col.id === 'cpu' || col.id === 'memory' || col.id === 'disk') && !isMobile() ? '140px' : undefined }}
                           onClick={() => colSortKey && handleSort(colSortKey)}
                           onKeyDown={(e) => e.key === 'Enter' && colSortKey && handleSort(colSortKey)}
                           tabIndex={0}

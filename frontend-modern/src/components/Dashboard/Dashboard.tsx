@@ -20,6 +20,7 @@ import { getNodeDisplayName } from '@/utils/nodes';
 import { logger } from '@/utils/logger';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { getBackupInfo } from '@/utils/format';
 import { aiChatStore } from '@/stores/aiChat';
@@ -207,6 +208,7 @@ export function Dashboard(props: DashboardProps) {
   const navigate = useNavigate();
   const ws = useWebSocket();
   const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = ws;
+  const { isMobile } = useBreakpoint();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const [search, setSearch] = createSignal('');
@@ -1117,7 +1119,7 @@ export function Dashboard(props: DashboardProps) {
         <ComponentErrorBoundary name="Guest Table">
           <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
             <div class="overflow-x-auto">
-              <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "900px" }}>
+              <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": isMobile() ? "100%" : "900px" }}>
                 <thead>
                   <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                     <For each={visibleColumns()}>
@@ -1130,10 +1132,14 @@ export function Dashboard(props: DashboardProps) {
                         return (
                           <th
                             class={`py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
-                              ${isFirst() ? 'pl-4 pr-2 text-left' : 'px-2 text-center'}
-                              ${isSortable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
+                                  ${isFirst() ? 'pl-4 pr-2 text-left' : 'px-2 text-center'}
+                                  ${isSortable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
                             style={{
-                              ...(col.width ? { "min-width": col.width } : {}),
+                              ...((['cpu', 'memory', 'disk'].includes(col.id))
+                                ? (isMobile()
+                                  ? { "min-width": "60px" }
+                                  : { "width": "140px", "min-width": "140px", "max-width": "140px" })
+                                : (col.width && (!isMobile() || col.id !== 'name') ? { "min-width": col.width } : {})),
                               "vertical-align": 'middle'
                             }}
                             onClick={() => isSortable && handleSort(sortKeyForCol!)}

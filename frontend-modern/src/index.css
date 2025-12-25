@@ -134,7 +134,7 @@
 
   @media (max-width: 640px) {
     .pulse-shell {
-      padding-inline: clamp(0.75rem, 6vw, 1.25rem);
+      padding-inline: 0.5rem;
     }
   }
 

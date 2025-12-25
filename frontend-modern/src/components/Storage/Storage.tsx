@@ -788,30 +788,30 @@ const Storage: Component = () => {
                 <style>{`
                 .overflow-x-auto::-webkit-scrollbar { display: none; }
               `}</style>
-                <table class="w-full">
+                <table class="w-full" style={{ "min-width": "900px" }}>
                   <thead>
                     <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                       <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-auto">
                         Storage
                       </th>
-                      <th class="hidden md:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                         Type
                       </th>
-                      <th class="hidden lg:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%]">
+                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%]">
                         Content
                       </th>
-                      <th class="hidden sm:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                         Status
                       </th>
                       <Show when={viewMode() === 'node'}>
-                        <th class="hidden lg:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
+                        <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
                           Shared
                         </th>
                       </Show>
                       <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[25%] min-w-[150px]">
                         Usage
                       </th>
-                      <th class="hidden sm:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                         Free
                       </th>
                       <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
@@ -1154,12 +1154,12 @@ const Storage: Component = () => {
                                           </Show>
                                         </div>
                                       </td>
-                                      <td class="hidden md:table-cell p-0.5 px-1.5">
+                                      <td class="p-0.5 px-1.5">
                                         <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
                                           {storage.type}
                                         </span>
                                       </td>
-                                      <td class="hidden lg:table-cell p-0.5 px-1.5">
+                                      <td class="p-0.5 px-1.5">
                                         <span
                                           class="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap truncate max-w-[220px]"
                                           title={storage.content || '-'}
@@ -1167,7 +1167,7 @@ const Storage: Component = () => {
                                           {storage.content || '-'}
                                         </span>
                                       </td>
-                                      <td class="hidden sm:table-cell p-0.5 px-1.5 text-xs whitespace-nowrap">
+                                      <td class="p-0.5 px-1.5 text-xs whitespace-nowrap">
                                         <span
                                           class={`${storage.status === 'available'
                                             ? 'text-green-600 dark:text-green-400'
@@ -1178,7 +1178,7 @@ const Storage: Component = () => {
                                         </span>
                                       </td>
                                       <Show when={viewMode() === 'node'}>
-                                        <td class="hidden lg:table-cell p-0.5 px-1.5">
+                                        <td class="p-0.5 px-1.5">
                                           <span class="text-xs text-gray-600 dark:text-gray-400">
                                             {storage.shared ? '✓' : '-'}
                                           </span>
@@ -1193,7 +1193,7 @@ const Storage: Component = () => {
                                           zfsPool={storage.zfsPool}
                                         />
                                       </td>
-                                      <td class="hidden sm:table-cell p-0.5 px-1.5 text-xs whitespace-nowrap">
+                                      <td class="p-0.5 px-1.5 text-xs whitespace-nowrap">
                                         {formatBytes(storage.free || 0, 0)}
                                       </td>
                                       <td class="p-0.5 px-1.5 text-xs whitespace-nowrap">

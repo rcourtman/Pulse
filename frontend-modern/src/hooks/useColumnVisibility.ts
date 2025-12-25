@@ -106,7 +106,7 @@ export function useColumnVisibility(
   const visibleColumns: Accessor<ColumnDef[]> = createMemo(() => {
     return columns.filter(col => {
       // Always show essential columns regardless of breakpoint
-      if (col.priority === 'essential') return true;
+      // However, check for toggle status later (removed early return)
 
       // Check if screen has space for this priority level
       if (!hasSpaceForColumn(col)) return false;

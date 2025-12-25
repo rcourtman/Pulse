@@ -433,6 +433,8 @@ export interface GuestColumnDef {
 export const GUEST_COLUMNS: GuestColumnDef[] = [
   // Essential - always visible (fixed widths ensure no overlap)
   { id: 'name', label: 'Name', priority: 'essential', width: '120px', sortKey: 'name' },
+
+  // Secondary - visible on md+ (Now essential for mobile scroll)
   { id: 'type', label: 'Type', priority: 'essential', width: '40px', sortKey: 'type' },
   { id: 'vmid', label: 'ID', priority: 'essential', width: '45px', sortKey: 'vmid' },
 
@@ -441,21 +443,21 @@ export const GUEST_COLUMNS: GuestColumnDef[] = [
   { id: 'memory', label: 'Mem', priority: 'essential', width: '140px', sortKey: 'memory' },
   { id: 'disk', label: 'Disk', priority: 'essential', width: '140px', sortKey: 'disk' },
 
-  // Secondary - visible on md+ (768px), user toggleable - use icons
-  { id: 'ip', label: 'IP', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>, priority: 'secondary', width: '45px', toggleable: true },
-  { id: 'uptime', label: 'Uptime', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>, priority: 'secondary', width: '60px', toggleable: true, sortKey: 'uptime' },
-  { id: 'node', label: 'Node', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>, priority: 'secondary', width: '55px', toggleable: true, sortKey: 'node' },
+  // Secondary - visible on md+ (Now essential), user toggleable - use icons
+  { id: 'ip', label: 'IP', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>, priority: 'essential', width: '45px', toggleable: true },
+  { id: 'uptime', label: 'Uptime', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>, priority: 'essential', width: '60px', toggleable: true, sortKey: 'uptime' },
+  { id: 'node', label: 'Node', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>, priority: 'essential', width: '55px', toggleable: true, sortKey: 'node' },
 
-  // Supplementary - visible on lg+ (1024px), user toggleable
-  { id: 'backup', label: 'Backup', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>, priority: 'supplementary', width: '50px', toggleable: true },
-  { id: 'tags', label: 'Tags', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>, priority: 'supplementary', width: '60px', toggleable: true },
+  // Supplementary - visible on lg+ (Now essential), user toggleable
+  { id: 'backup', label: 'Backup', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>, priority: 'essential', width: '50px', toggleable: true },
+  { id: 'tags', label: 'Tags', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>, priority: 'essential', width: '60px', toggleable: true },
 
-  // Detailed - visible on xl+ (1280px), user toggleable
-  { id: 'os', label: 'OS', priority: 'detailed', width: '45px', toggleable: true },
-  { id: 'diskRead', label: 'D Read', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>, priority: 'detailed', width: '55px', toggleable: true, sortKey: 'diskRead' },
-  { id: 'diskWrite', label: 'D Write', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>, priority: 'detailed', width: '55px', toggleable: true, sortKey: 'diskWrite' },
-  { id: 'netIn', label: 'Net In', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" /></svg>, priority: 'detailed', width: '55px', toggleable: true, sortKey: 'networkIn' },
-  { id: 'netOut', label: 'Net Out', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>, priority: 'detailed', width: '55px', toggleable: true, sortKey: 'networkOut' },
+  // Detailed - visible on xl+ (Now essential), user toggleable
+  { id: 'os', label: 'OS', priority: 'essential', width: '45px', toggleable: true },
+  { id: 'diskRead', label: 'D Read', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>, priority: 'essential', width: '55px', toggleable: true, sortKey: 'diskRead' },
+  { id: 'diskWrite', label: 'D Write', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>, priority: 'essential', width: '55px', toggleable: true, sortKey: 'diskWrite' },
+  { id: 'netIn', label: 'Net In', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" /></svg>, priority: 'essential', width: '55px', toggleable: true, sortKey: 'networkIn' },
+  { id: 'netOut', label: 'Net Out', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>, priority: 'essential', width: '55px', toggleable: true, sortKey: 'networkOut' },
 ];
 
 interface GuestRowProps {
@@ -790,6 +792,8 @@ export function GuestRow(props: GuestRowProps) {
     props.onRowClick?.(props.guest);
   };
 
+
+
   return (
     <>
       <tr
@@ -914,16 +918,11 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* CPU */}
         <Show when={isColVisible('cpu')}>
-          <td class="px-2 py-1 align-middle" style={{ width: "140px", "min-width": "140px", "max-width": "140px" }}>
-            <Show when={isMobile()}>
-              <div class="md:hidden h-4 flex items-center justify-center">
-                <MetricText value={cpuPercent()} type="cpu" />
-              </div>
-            </Show>
-            <div class="hidden md:block h-4">
+          <td class="px-2 py-1 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
+            <div class="h-4">
               <EnhancedCPUBar
                 usage={cpuPercent()}
-                cores={props.guest.cpus}
+                cores={isMobile() ? undefined : props.guest.cpus}
                 resourceId={metricsKey()}
                 anomaly={cpuAnomaly()}
               />
@@ -933,52 +932,38 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Memory */}
         <Show when={isColVisible('memory')}>
-          <td class="px-2 py-1 align-middle" style={{ width: "140px", "min-width": "140px", "max-width": "140px" }}>
+          <td class="px-2 py-1 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
             <div title={memoryTooltip() ?? undefined}>
-              <Show when={isMobile()}>
-                <div class="md:hidden flex justify-center">
-                  <ResponsiveMetricCell
-                    value={memPercent()}
-                    type="memory"
+              <Show
+                when={viewMode() === 'sparklines'}
+                fallback={
+                  <StackedMemoryBar
+                    used={props.guest.memory?.used || 0}
+                    total={props.guest.memory?.total || 0}
+                    balloon={props.guest.memory?.balloon || 0}
+                    swapUsed={props.guest.memory?.swapUsed || 0}
+                    swapTotal={props.guest.memory?.swapTotal || 0}
                     resourceId={metricsKey()}
-                    sublabel={memoryUsageLabel()}
-                    isRunning={isRunning()}
-                    showMobile={true}
+                    anomaly={memoryAnomaly()}
                   />
-                </div>
+                }
+              >
+                <ResponsiveMetricCell
+                  value={memPercent()}
+                  type="memory"
+                  resourceId={metricsKey()}
+                  sublabel={memoryUsageLabel()}
+                  isRunning={isRunning()}
+                  showMobile={false}
+                />
               </Show>
-              <div class="hidden md:block">
-                <Show
-                  when={viewMode() === 'sparklines'}
-                  fallback={
-                    <StackedMemoryBar
-                      used={props.guest.memory?.used || 0}
-                      total={props.guest.memory?.total || 0}
-                      balloon={props.guest.memory?.balloon || 0}
-                      swapUsed={props.guest.memory?.swapUsed || 0}
-                      swapTotal={props.guest.memory?.swapTotal || 0}
-                      resourceId={metricsKey()}
-                      anomaly={memoryAnomaly()}
-                    />
-                  }
-                >
-                  <ResponsiveMetricCell
-                    value={memPercent()}
-                    type="memory"
-                    resourceId={metricsKey()}
-                    sublabel={memoryUsageLabel()}
-                    isRunning={isRunning()}
-                    showMobile={false}
-                  />
-                </Show>
-              </div>
             </div>
           </td>
         </Show>
 
         {/* Disk */}
         <Show when={isColVisible('disk')}>
-          <td class="px-2 py-1 align-middle" style={{ width: "140px", "min-width": "140px", "max-width": "140px" }}>
+          <td class="px-2 py-1 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
             <Show
               when={hasDiskUsage()}
               fallback={
@@ -989,31 +974,24 @@ export function GuestRow(props: GuestRowProps) {
                 </div>
               }
             >
-              <Show when={isMobile()}>
-                <div class="md:hidden flex justify-center text-xs text-gray-600 dark:text-gray-400">
-                  {formatPercent(diskPercent())}
-                </div>
-              </Show>
-              <div class={isMobile() ? 'hidden md:block' : ''}>
-                <Show
-                  when={viewMode() === 'sparklines'}
-                  fallback={
-                    <StackedDiskBar
-                      disks={props.guest.disks}
-                      aggregateDisk={props.guest.disk}
-                      anomaly={diskAnomaly()}
-                    />
-                  }
-                >
-                  <ResponsiveMetricCell
-                    value={diskPercent()}
-                    type="disk"
-                    resourceId={metricsKey()}
-                    isRunning={isRunning()}
-                    showMobile={false}
+              <Show
+                when={viewMode() === 'sparklines'}
+                fallback={
+                  <StackedDiskBar
+                    disks={props.guest.disks}
+                    aggregateDisk={props.guest.disk}
+                    anomaly={diskAnomaly()}
                   />
-                </Show>
-              </div>
+                }
+              >
+                <ResponsiveMetricCell
+                  value={diskPercent()}
+                  type="disk"
+                  resourceId={metricsKey()}
+                  isRunning={isRunning()}
+                  showMobile={false}
+                />
+              </Show>
             </Show>
           </td>
         </Show>
