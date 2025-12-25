@@ -325,18 +325,31 @@ class ApiClient {
       // Try to extract just the error message without HTTP status codes
       let errorMessage = text;
 
-      // If it looks like an HTML error page, try to extract the message
-      if (text.includes('<pre>') && text.includes('</pre>')) {
-        const match = text.match(/<pre>(.*?)<\/pre>/s);
-        if (match) errorMessage = match[1];
-      }
+      // First try to parse as JSON (our API returns structured errors like {error, message, feature, upgrade_url})
+      try {
+        const jsonError = JSON.parse(text);
+        if (jsonError.message) {
+          errorMessage = jsonError.message;
+        } else if (jsonError.error && typeof jsonError.error === 'string') {
+          // Some APIs return {error: "message"} format
+          errorMessage = jsonError.error;
+        }
+      } catch {
+        // Not JSON, try other formats
 
-      // If the backend sent a plain text error, use it directly
-      if (!text.includes('<') && text.length < 200) {
-        errorMessage = text;
-      } else if (text.length > 200) {
-        // For long responses, just use a generic message
-        errorMessage = `Request failed with status ${response.status}`;
+        // If it looks like an HTML error page, try to extract the message
+        if (text.includes('<pre>') && text.includes('</pre>')) {
+          const match = text.match(/<pre>(.*?)<\/pre>/s);
+          if (match) errorMessage = match[1];
+        }
+
+        // If the backend sent a plain text error, use it directly
+        if (!text.includes('<') && text.length < 200) {
+          errorMessage = text;
+        } else if (text.length > 200) {
+          // For long responses, just use a generic message
+          errorMessage = `Request failed with status ${response.status}`;
+        }
       }
 
       throw new Error(errorMessage || `Request failed with status ${response.status}`);
