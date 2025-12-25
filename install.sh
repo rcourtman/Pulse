@@ -1266,7 +1266,8 @@ create_lxc_container() {
             echo "Or download a new template:"
             echo "  d) Download Debian 12 (recommended)"
             echo "  u) Download Ubuntu 22.04 LTS"
-            echo "  a) Download Alpine Linux (minimal)"
+            echo
+            echo "Note: Pulse requires a Debian-based template (apt/systemd)."
             echo
             safe_read_with_default "Select template number or option [Enter for Debian 12]: " template_choice ""
             if [[ -n "$template_choice" ]]; then
@@ -1288,19 +1289,22 @@ create_lxc_container() {
                         pveam download "$BEST_TEMPLATE_STORAGE" ubuntu-22.04-standard_22.04-1_amd64.tar.zst
                         TEMPLATE="${BEST_TEMPLATE_STORAGE}:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst"
                         ;;
-                    a|A)
-                        # Find best storage for templates (prefer one with most free space)
-                        local BEST_TEMPLATE_STORAGE=$(pvesm status -content vztmpl 2>/dev/null | tail -n +2 | sort -k6 -rn | head -1 | awk '{print $1}')
-                        BEST_TEMPLATE_STORAGE=${BEST_TEMPLATE_STORAGE:-$storage}
-                        print_info "Downloading Alpine Linux to storage '$BEST_TEMPLATE_STORAGE'..."
-                        pveam download "$BEST_TEMPLATE_STORAGE" alpine-3.18-default_20230607_amd64.tar.xz
-                        TEMPLATE="${BEST_TEMPLATE_STORAGE}:vztmpl/alpine-3.18-default_20230607_amd64.tar.xz"
-                        ;;
                     [0-9]*)
                         # Extract the full template path from numbered list
                         TEMPLATE=$(echo -e "$ALL_TEMPLATES" | sed -n "${template_choice}p")
                         if [[ -n "$TEMPLATE" ]]; then
-                            print_info "Using template: $TEMPLATE"
+                            # Check if selected template is Alpine or other non-Debian based
+                            if [[ "$TEMPLATE" =~ alpine|gentoo|arch|void ]]; then
+                                print_warn "Selected template ($TEMPLATE) is not Debian-based."
+                                print_warn "Pulse LXC installation requires apt and systemd."
+                                print_info "Falling back to Debian 12..."
+                                local BEST_TEMPLATE_STORAGE=$(pvesm status -content vztmpl 2>/dev/null | tail -n +2 | sort -k6 -rn | head -1 | awk '{print $1}')
+                                BEST_TEMPLATE_STORAGE=${BEST_TEMPLATE_STORAGE:-$storage}
+                                ensure_debian_template
+                                TEMPLATE="${BEST_TEMPLATE_STORAGE}:vztmpl/${DEBIAN_TEMPLATE}"
+                            else
+                                print_info "Using template: $TEMPLATE"
+                            fi
                         else
                             # Find best storage for templates (prefer one with most free space)
                             local BEST_TEMPLATE_STORAGE=$(pvesm status -content vztmpl 2>/dev/null | tail -n +2 | sort -k6 -rn | head -1 | awk '{print $1}')

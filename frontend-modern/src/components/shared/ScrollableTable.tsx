@@ -1,10 +1,13 @@
-import { Component, JSX, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
+import { Component, JSX, createSignal, createEffect, onMount, onCleanup, createMemo } from 'solid-js';
 import { Show } from 'solid-js';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 interface ScrollableTableProps {
   children: JSX.Element;
   class?: string;
   minWidth?: string;
+  /** Minimum width on mobile screens (< 768px). Defaults to '100%' for natural fit. */
+  mobileMinWidth?: string;
   persistKey?: string;
 }
 
@@ -14,6 +17,16 @@ export const ScrollableTable: Component<ScrollableTableProps> = (props) => {
   const [showLeftFade, setShowLeftFade] = createSignal(false);
   const [showRightFade, setShowRightFade] = createSignal(false);
   let scrollContainer: HTMLDivElement | undefined;
+
+  const { isMobile } = useBreakpoint();
+
+  // Dynamic minWidth based on screen size
+  const effectiveMinWidth = createMemo(() => {
+    if (isMobile()) {
+      return props.mobileMinWidth ?? '100%';
+    }
+    return props.minWidth || 'auto';
+  });
 
   const checkScroll = (scrollLeftValue?: number) => {
     if (!scrollContainer) return;
@@ -69,7 +82,7 @@ export const ScrollableTable: Component<ScrollableTableProps> = (props) => {
         <style>{`
           .overflow-x-auto::-webkit-scrollbar { display: none; }
         `}</style>
-        <div style={{ 'min-width': props.minWidth || 'auto' }}>
+        <div style={{ 'min-width': effectiveMinWidth() }}>
           {props.children}
         </div>
       </div>
