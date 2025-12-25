@@ -854,12 +854,13 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		}
 	}
 
-	// Auto-fix with runbooks when enabled (Pro only)
+	// Auto-fix with runbooks when enabled (Pro only - requires license)
 	var runbookResolved int
 	autoFixEnabled := false
 	if p.aiService != nil {
 		if aiCfg := p.aiService.GetAIConfig(); aiCfg != nil {
-			autoFixEnabled = aiCfg.PatrolAutoFix
+			// Auto-fix requires both config flag AND Pro license with ai_autofix feature
+			autoFixEnabled = aiCfg.PatrolAutoFix && p.aiService.HasLicenseFeature(FeatureAIAutoFix)
 		}
 	}
 	_ = autoFixEnabled // Auto-fix via runbooks removed - dynamic AI remediation handles this
