@@ -208,8 +208,29 @@ func convertHostSensorsToTemperature(sensors models.HostSensorSummary, lastSeen 
 		}
 	}
 
+	// Convert S.M.A.R.T. data from host agent
+	if len(sensors.SMART) > 0 {
+		temp.SMART = make([]models.DiskTemp, 0, len(sensors.SMART))
+		for _, disk := range sensors.SMART {
+			// Skip disks in standby (no temperature data)
+			if disk.Standby {
+				continue
+			}
+			temp.SMART = append(temp.SMART, models.DiskTemp{
+				Device:      "/dev/" + disk.Device,
+				Serial:      disk.Serial,
+				WWN:         disk.WWN,
+				Model:       disk.Model,
+				Type:        disk.Type,
+				Temperature: disk.Temperature,
+				LastUpdated: lastSeen,
+			})
+		}
+		temp.HasSMART = len(temp.SMART) > 0
+	}
+
 	// Validate we have at least some data
-	if !temp.HasCPU && !temp.HasGPU && !temp.HasNVMe {
+	if !temp.HasCPU && !temp.HasGPU && !temp.HasNVMe && !temp.HasSMART {
 		return nil
 	}
 
@@ -220,6 +241,7 @@ func convertHostSensorsToTemperature(sensors models.HostSensorSummary, lastSeen 
 		Int("coreCount", len(temp.Cores)).
 		Int("nvmeCount", len(temp.NVMe)).
 		Int("gpuCount", len(temp.GPU)).
+		Int("smartCount", len(temp.SMART)).
 		Msg("Converted host agent sensors to temperature data")
 
 	return temp
@@ -258,7 +280,7 @@ func mergeTemperatureData(hostAgentTemp, proxyTemp *models.Temperature) *models.
 		HasCPU:      hostAgentTemp.HasCPU,
 		HasGPU:      hostAgentTemp.HasGPU,
 		HasNVMe:     hostAgentTemp.HasNVMe,
-		HasSMART:    proxyTemp.HasSMART, // SMART data only comes from proxy
+		HasSMART:    hostAgentTemp.HasSMART || proxyTemp.HasSMART,
 		LastUpdate:  hostAgentTemp.LastUpdate,
 	}
 
@@ -270,8 +292,10 @@ func mergeTemperatureData(hostAgentTemp, proxyTemp *models.Temperature) *models.
 		result.HasCPU = true
 	}
 
-	// Keep proxy SMART data (host agent doesn't have smartctl access currently)
-	if proxyTemp.HasSMART {
+	// Merge SMART data - prefer host agent if available, fall back to proxy
+	if hostAgentTemp.HasSMART {
+		result.SMART = hostAgentTemp.SMART
+	} else if proxyTemp.HasSMART {
 		result.SMART = proxyTemp.SMART
 	}
 
