@@ -360,6 +360,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			IntervalSeconds: int(a.interval / time.Second),
 			Hostname:        a.hostname,
 			UpdatedFrom:     a.updatedFrom,
+			CommandsEnabled: a.cfg.EnableCommands,
 		},
 		Host: agentshost.HostInfo{
 			ID:            a.machineID,

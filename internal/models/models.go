@@ -181,6 +181,7 @@ type Host struct {
 	IntervalSeconds   int                    `json:"intervalSeconds,omitempty"`
 	LastSeen          time.Time              `json:"lastSeen"`
 	AgentVersion      string                 `json:"agentVersion,omitempty"`
+	CommandsEnabled   bool                   `json:"commandsEnabled,omitempty"` // Whether AI command execution is enabled
 	TokenID           string                 `json:"tokenId,omitempty"`
 	TokenName         string                 `json:"tokenName,omitempty"`
 	TokenHint         string                 `json:"tokenHint,omitempty"`
