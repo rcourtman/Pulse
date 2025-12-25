@@ -659,9 +659,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const buildNodeHeaderMeta = (node: Node) => {
     const originalDisplayName = node.displayName?.trim() || node.name;
     const friendlyName = getFriendlyNodeName(originalDisplayName, node.clusterName);
+    // Prioritize guestURL over host (same as NodeGroupHeader)
+    const guestUrlValue = node.guestURL?.trim();
     const hostValue = node.host?.trim();
     let host: string | undefined;
-    if (hostValue && hostValue !== '') {
+    if (guestUrlValue && guestUrlValue !== '') {
+      host = guestUrlValue.startsWith('http')
+        ? guestUrlValue
+        : `https://${guestUrlValue}`;
+    } else if (hostValue && hostValue !== '') {
       host = hostValue.startsWith('http')
         ? hostValue
         : `https://${hostValue.includes(':') ? hostValue : `${hostValue}:8006`}`;
@@ -720,11 +726,18 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       const rawName = node.name;
       const sanitizedName = friendlyName || originalDisplayName || rawName.split('.')[0] || rawName;
       // Build a best-effort management URL for the node
+      // Prioritize guestURL over host (same as NodeGroupHeader)
+      const guestUrlValue = node.guestURL?.trim();
       const hostValue = node.host?.trim() || rawName;
-      const normalizedHost =
-        hostValue.startsWith('http://') || hostValue.startsWith('https://')
-          ? hostValue
-          : `https://${hostValue.includes(':') ? hostValue : `${hostValue}:8006`}`;
+      let normalizedHost: string;
+      if (guestUrlValue && guestUrlValue !== '') {
+        normalizedHost = guestUrlValue.startsWith('http') ? guestUrlValue : `https://${guestUrlValue}`;
+      } else {
+        normalizedHost =
+          hostValue.startsWith('http://') || hostValue.startsWith('https://')
+            ? hostValue
+            : `https://${hostValue.includes(':') ? hostValue : `${hostValue}:8006`}`;
+      }
 
       return {
         id: node.id,
