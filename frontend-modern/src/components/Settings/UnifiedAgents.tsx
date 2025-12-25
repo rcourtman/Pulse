@@ -111,6 +111,8 @@ export const UnifiedAgents: Component = () => {
     const [insecureMode, setInsecureMode] = createSignal(false); // For self-signed certificates (issue #806)
     const [enableCommands, setEnableCommands] = createSignal(false); // Enable AI command execution (issue #903)
     const [customAgentUrl, setCustomAgentUrl] = createSignal('');
+    // Track pending command config changes: hostId -> desired commandsEnabled value
+    const [pendingCommandConfig, setPendingCommandConfig] = createSignal<Record<string, boolean>>({});
 
     createEffect(() => {
         if (requiresToken()) {
@@ -425,14 +427,46 @@ export const UnifiedAgents: Component = () => {
     };
 
     const handleToggleCommands = async (hostId: string, enabled: boolean) => {
+        // Set optimistic/pending state immediately
+        setPendingCommandConfig(prev => ({ ...prev, [hostId]: enabled }));
+
         try {
             await MonitoringAPI.updateHostAgentConfig(hostId, { commandsEnabled: enabled });
-            notificationStore.success(`AI command execution ${enabled ? 'enabled' : 'disabled'}. Agent will apply change on next report.`);
+            notificationStore.success(`AI command execution ${enabled ? 'enabled' : 'disabled'}. Syncing with agent...`);
         } catch (err) {
+            // On error, clear the pending state so toggle reverts
+            setPendingCommandConfig(prev => {
+                const next = { ...prev };
+                delete next[hostId];
+                return next;
+            });
             logger.error('Failed to toggle AI commands', err);
             notificationStore.error('Failed to update agent configuration');
         }
     };
+
+    // Clear pending state when agent reports matching the expected value
+    createEffect(() => {
+        const pending = pendingCommandConfig();
+        const hosts = state.hosts || [];
+
+        // Check if any pending config now matches the reported state
+        let updated = false;
+        const newPending = { ...pending };
+
+        for (const hostId of Object.keys(pending)) {
+            const host = hosts.find(h => h.id === hostId);
+            if (host && host.commandsEnabled === pending[hostId]) {
+                // Agent confirmed the change
+                delete newPending[hostId];
+                updated = true;
+            }
+        }
+
+        if (updated) {
+            setPendingCommandConfig(newPending);
+        }
+    });
 
     return (
         <div class="space-y-6">
@@ -915,19 +949,43 @@ export const UnifiedAgents: Component = () => {
                                                     <span class="text-gray-400 dark:text-gray-500">—</span>
                                                 }
                                             >
-                                                <button
-                                                    onClick={() => handleToggleCommands(agent.id, !agent.commandsEnabled)}
-                                                    class={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${agent.commandsEnabled
-                                                        ? 'bg-blue-600'
-                                                        : 'bg-gray-200 dark:bg-gray-700'
-                                                        }`}
-                                                    title={agent.commandsEnabled ? 'AI command execution enabled' : 'AI command execution disabled'}
-                                                >
-                                                    <span
-                                                        class={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${agent.commandsEnabled ? 'translate-x-4' : 'translate-x-0'
-                                                            }`}
-                                                    />
-                                                </button>
+                                                {(() => {
+                                                    // Use pending state if set, otherwise use agent-reported state
+                                                    const pending = pendingCommandConfig();
+                                                    const isPending = agent.id in pending;
+                                                    const effectiveEnabled = isPending ? pending[agent.id] : agent.commandsEnabled;
+
+                                                    return (
+                                                        <div class="flex items-center gap-2">
+                                                            <button
+                                                                onClick={() => handleToggleCommands(agent.id, !effectiveEnabled)}
+                                                                disabled={isPending}
+                                                                class={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${isPending ? 'opacity-60 cursor-wait' : ''
+                                                                    } ${effectiveEnabled
+                                                                        ? 'bg-blue-600'
+                                                                        : 'bg-gray-200 dark:bg-gray-700'
+                                                                    }`}
+                                                                title={isPending
+                                                                    ? 'Syncing with agent...'
+                                                                    : effectiveEnabled
+                                                                        ? 'AI command execution enabled'
+                                                                        : 'AI command execution disabled'
+                                                                }
+                                                            >
+                                                                <span
+                                                                    class={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${effectiveEnabled ? 'translate-x-4' : 'translate-x-0'
+                                                                        }`}
+                                                                />
+                                                            </button>
+                                                            <Show when={isPending}>
+                                                                <svg class="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                                </svg>
+                                                            </Show>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </Show>
                                         </td>
                                         <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
