@@ -362,6 +362,7 @@ export interface DockerContainer {
   finishedAt?: number | null;
   ports?: DockerContainerPort[];
   labels?: Record<string, string>;
+  env?: string[];
   networks?: DockerContainerNetwork[];
   writableLayerBytes?: number;
   rootFilesystemBytes?: number;
