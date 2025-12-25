@@ -151,37 +151,37 @@ export const DiskList: Component<DiskListProps> = (props) => {
       <Show when={filteredDisks().length > 0}>
         <Card padding="none" tone="glass" class="overflow-hidden">
           <div class="overflow-x-auto">
-            <table class="w-full">
+            <table class="w-full" style={{ "min-width": "750px" }}>
               <thead>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Node
                   </th>
-                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Device
                   </th>
-                  <th class="hidden md:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[20%]">
+                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[20%]">
                     Model
                   </th>
-                  <th class="hidden sm:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
+                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
                     Type
                   </th>
-                  <th class="hidden lg:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
+                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
                     FS
                   </th>
-                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Health
                   </th>
-                  <th class="hidden md:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%]">
+                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%]">
                     SSD Life
                   </th>
-                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell w-[8%]">
+                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
                     Temp
                   </th>
-                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Size
                   </th>
-                  <th class="px-2 py-1.5 w-8"></th>
+                  <th class="px-1 py-1.5 w-8"></th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -192,29 +192,29 @@ export const DiskList: Component<DiskListProps> = (props) => {
                     return (
                       <>
                         <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                          <td class="px-2 py-1.5 text-xs">
+                          <td class="px-1 py-1.5 text-xs">
                             <span class="font-medium text-gray-900 dark:text-gray-100">
                               {disk.node}
                             </span>
                           </td>
-                          <td class="px-2 py-1.5 text-xs">
+                          <td class="px-1 py-1.5 text-xs">
                             <span class="font-mono text-gray-600 dark:text-gray-400">
                               {disk.devPath}
                             </span>
                           </td>
-                          <td class="hidden md:table-cell px-2 py-1.5 text-xs">
+                          <td class="px-1 py-1.5 text-xs">
                             <span class="text-gray-700 dark:text-gray-300">
                               {disk.model || 'Unknown'}
                             </span>
                           </td>
-                          <td class="hidden sm:table-cell px-2 py-1.5 text-xs">
+                          <td class="px-1 py-1.5 text-xs">
                             <span
                               class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${getDiskTypeBadge(disk.type)}`}
                             >
                               {disk.type.toUpperCase()}
                             </span>
                           </td>
-                          <td class="hidden lg:table-cell px-2 py-1.5 text-xs">
+                          <td class="px-1 py-1.5 text-xs">
                             <Show
                               when={disk.used && disk.used !== 'unknown'}
                               fallback={<span class="text-gray-400">-</span>}
@@ -224,14 +224,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               </span>
                             </Show>
                           </td>
-                          <td class="px-2 py-1.5 text-xs">
+                          <td class="px-1 py-1.5 text-xs">
                             <span
                               class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${health.bgColor} ${health.color}`}
                             >
                               {health.text}
                             </span>
                           </td>
-                          <td class="hidden md:table-cell px-2 py-1.5 text-xs">
+                          <td class="px-1 py-1.5 text-xs">
                             <Show
                               when={disk.wearout > 0}
                               fallback={<span class="text-gray-400">-</span>}
@@ -254,7 +254,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               </div>
                             </Show>
                           </td>
-                          <td class="px-2 py-1.5 text-xs hidden sm:table-cell">
+                          <td class="px-1 py-1.5 text-xs">
                             <Show
                               when={typeof disk.temperature === 'number' && disk.temperature !== 0}
                               fallback={<span class="font-medium text-gray-400">-</span>}
@@ -271,12 +271,12 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               </span>
                             </Show>
                           </td>
-                          <td class="px-2 py-1.5 text-xs">
+                          <td class="px-1 py-1.5 text-xs">
                             <span class="text-gray-700 dark:text-gray-300">
                               {formatBytes(disk.size)}
                             </span>
                           </td>
-                          <td class="px-2 py-1.5"></td>
+                          <td class="px-1 py-1.5"></td>
                         </tr>
                       </>
                     );

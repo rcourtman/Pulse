@@ -748,7 +748,7 @@ export const HostsOverview: Component = () => {
 
 
 
-  const thClass = "px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap";
+  const thClass = "px-1.5 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap";
 
   return (
     <div class="space-y-4">
@@ -859,8 +859,9 @@ export const HostsOverview: Component = () => {
                 }
               >
                 <Card padding="none" tone="glass" class="overflow-hidden">
-                  <div class="overflow-x-auto">
-                    <table class="w-full border-collapse whitespace-nowrap">
+                  <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
+                    <style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>
+                    <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "900px" }}>
                       <thead>
                         <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                           {/* Essential columns */}

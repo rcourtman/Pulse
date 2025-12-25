@@ -3370,8 +3370,8 @@ function OverviewTab(props: {
                       <p class="text-sm text-gray-500 dark:text-gray-400 italic py-4">No patrol runs in selected time range.</p>
                     }
                   >
-                    <div class="border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
-                      <table class="w-full text-xs sm:text-sm">
+                    <div class="border border-gray-200 dark:border-gray-700 rounded overflow-x-auto">
+                      <table class="w-full min-w-[600px] text-xs sm:text-sm">
                         <thead>
                           <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
                             <th class="p-1.5 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-4"></th>
