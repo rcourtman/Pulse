@@ -437,6 +437,7 @@ export interface Host {
   lastSeen: number;
   intervalSeconds?: number;
   agentVersion?: string;
+  commandsEnabled?: boolean; // Whether AI command execution is enabled on this agent
   tokenId?: string;
   tokenName?: string;
   tokenHint?: string;

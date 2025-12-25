@@ -26,6 +26,7 @@ type AgentInfo struct {
 	IntervalSeconds int    `json:"intervalSeconds,omitempty"`
 	Hostname        string `json:"hostname,omitempty"`
 	UpdatedFrom     string `json:"updatedFrom,omitempty"` // Previous version if recently auto-updated
+	CommandsEnabled bool   `json:"commandsEnabled,omitempty"` // Whether AI command execution is enabled
 }
 
 // HostInfo contains platform and identification details about the monitored host.

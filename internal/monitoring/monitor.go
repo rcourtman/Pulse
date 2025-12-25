@@ -2178,6 +2178,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		IntervalSeconds: report.Agent.IntervalSeconds,
 		LastSeen:        timestamp,
 		AgentVersion:    strings.TrimSpace(report.Agent.Version),
+		CommandsEnabled: report.Agent.CommandsEnabled,
 		Tags:            append([]string(nil), report.Tags...),
 		IsLegacy:        isLegacyHostAgent(report.Agent.Type),
 	}
