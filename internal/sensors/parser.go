@@ -17,6 +17,8 @@ type TemperatureData struct {
 	Cores      map[string]float64 // Per-core temperatures (e.g., "Core 0": 45.0)
 	NVMe       map[string]float64 // NVMe drive temperatures (e.g., "nvme0": 42.0)
 	GPU        map[string]float64 // GPU temperatures (e.g., "amdgpu-pci-0400": 55.0)
+	Fans       map[string]float64 // Fan speeds in RPM (e.g., "cpu_fan": 1200)
+	Other      map[string]float64 // Other temperatures (DDR5, mobo, etc.)
 	Available  bool               // Whether any temperature data was found
 }
 
@@ -35,6 +37,8 @@ func Parse(jsonStr string) (*TemperatureData, error) {
 		Cores: make(map[string]float64),
 		NVMe:  make(map[string]float64),
 		GPU:   make(map[string]float64),
+		Fans:  make(map[string]float64),
+		Other: make(map[string]float64),
 	}
 
 	foundCPUChip := false
@@ -66,6 +70,9 @@ func Parse(jsonStr string) (*TemperatureData, error) {
 		if strings.Contains(chipLower, "amdgpu") || strings.Contains(chipLower, "nouveau") {
 			parseGPUTemps(chipName, chipMap, data)
 		}
+
+		// Parse all fans and other temperatures from every chip
+		parseFansAndOther(chipName, chipMap, data)
 	}
 
 	// If we got CPU temps, calculate max from cores if package not available
@@ -96,7 +103,7 @@ func Parse(jsonStr string) (*TemperatureData, error) {
 		}
 	}
 
-	data.Available = foundCPUChip || len(data.NVMe) > 0 || len(data.GPU) > 0
+	data.Available = foundCPUChip || len(data.NVMe) > 0 || len(data.GPU) > 0 || len(data.Fans) > 0 || len(data.Other) > 0
 
 	log.Debug().
 		Bool("available", data.Available).
@@ -105,6 +112,8 @@ func Parse(jsonStr string) (*TemperatureData, error) {
 		Int("coreCount", len(data.Cores)).
 		Int("nvmeCount", len(data.NVMe)).
 		Int("gpuCount", len(data.GPU)).
+		Int("fanCount", len(data.Fans)).
+		Int("otherCount", len(data.Other)).
 		Msg("Parsed temperature data")
 
 	return data, nil
@@ -280,4 +289,109 @@ func extractTempInput(sensorMap map[string]interface{}) float64 {
 		}
 	}
 	return math.NaN()
+}
+
+// parseFansAndOther extracts fan speeds and other temperature readings from a sensor chip.
+// This captures DDR5/RAM temps, motherboard temps, additional NVMe sensors, fan speeds, etc.
+func parseFansAndOther(chipName string, chipMap map[string]interface{}, data *TemperatureData) {
+	chipLower := strings.ToLower(chipName)
+
+	for sensorName, sensorData := range chipMap {
+		sensorMap, ok := sensorData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		sensorNameLower := strings.ToLower(sensorName)
+
+		// Extract fan speeds (fan*_input fields report RPM)
+		for key, value := range sensorMap {
+			keyLower := strings.ToLower(key)
+
+			// Fan speed readings end in _input and are under fan* sensors
+			if strings.HasPrefix(keyLower, "fan") && strings.HasSuffix(keyLower, "_input") {
+				rpm := extractNumericValue(value)
+				if rpm > 0 {
+					// Create a readable key: chipName_sensorName (e.g., "nct6687_cpu_fan")
+					fanKey := normalizeSensorKey(chipName, sensorName)
+					data.Fans[fanKey] = rpm
+					log.Debug().
+						Str("chip", chipName).
+						Str("sensor", sensorName).
+						Float64("rpm", rpm).
+						Msg("Found fan speed")
+				}
+			}
+		}
+
+		// Skip sensors we've already handled in specific parsers
+		if isCPUChip(chipLower) {
+			// Skip CPU temps - already handled
+			if strings.Contains(sensorName, "Package") ||
+				strings.Contains(sensorName, "Core ") ||
+				strings.Contains(sensorNameLower, "tdie") ||
+				strings.Contains(sensorNameLower, "tctl") ||
+				strings.HasPrefix(sensorName, "Tccd") ||
+				strings.Contains(sensorNameLower, "cputin") {
+				continue
+			}
+		}
+
+		if strings.Contains(chipLower, "nvme") && strings.Contains(sensorName, "Composite") {
+			continue // Already handled
+		}
+
+		if (strings.Contains(chipLower, "amdgpu") || strings.Contains(chipLower, "nouveau")) &&
+			(strings.Contains(sensorNameLower, "edge") ||
+				strings.Contains(sensorNameLower, "junction") ||
+				strings.Contains(sensorNameLower, "mem")) {
+			continue // Already handled as GPU temps
+		}
+
+		// Extract other temperature readings (DDR5, motherboard, etc.)
+		tempVal := extractTempInput(sensorMap)
+		if !math.IsNaN(tempVal) && tempVal > 0 && tempVal < 150 { // Sanity check: 0-150°C range
+			tempKey := normalizeSensorKey(chipName, sensorName)
+			// Avoid duplicating temps already in other maps
+			if _, exists := data.Other[tempKey]; !exists {
+				data.Other[tempKey] = tempVal
+				log.Debug().
+					Str("chip", chipName).
+					Str("sensor", sensorName).
+					Float64("temp", tempVal).
+					Msg("Found other temperature")
+			}
+		}
+	}
+}
+
+// normalizeSensorKey creates a readable, normalized key from chip and sensor names.
+// e.g., "nct6687-isa-0a20" + "CPU Fan" -> "nct6687_cpu_fan"
+func normalizeSensorKey(chipName, sensorName string) string {
+	// Strip the address suffix from chip names (e.g., "-isa-0a20", "-pci-0400")
+	chipClean := chipName
+	if idx := strings.Index(chipName, "-"); idx > 0 {
+		// Keep just the chip type (e.g., "nct6687", "amdgpu")
+		chipClean = chipName[:idx]
+	}
+
+	// Normalize sensor name: lowercase, replace spaces with underscores
+	sensorClean := strings.ToLower(sensorName)
+	sensorClean = strings.ReplaceAll(sensorClean, " ", "_")
+	sensorClean = strings.ReplaceAll(sensorClean, "-", "_")
+
+	return fmt.Sprintf("%s_%s", strings.ToLower(chipClean), sensorClean)
+}
+
+// extractNumericValue extracts a numeric value from an interface{}
+func extractNumericValue(value interface{}) float64 {
+	switch v := value.(type) {
+	case float64:
+		return v
+	case int:
+		return float64(v)
+	case int64:
+		return float64(v)
+	}
+	return 0
 }

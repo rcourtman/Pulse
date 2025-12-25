@@ -157,27 +157,40 @@ function HostNetworkInfoCell(props: { networkInterfaces: NetworkInterface[] }) {
 }
 
 // Temperature cell with rich tooltip showing all sensor readings
-function HostTemperatureCell(props: { sensors: Record<string, number> | null | undefined }) {
+interface HostSensorSummaryForCell {
+  temperatureCelsius?: Record<string, number>;
+  fanRpm?: Record<string, number>;
+  additional?: Record<string, number>;
+}
+
+function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null | undefined }) {
   const [showTooltip, setShowTooltip] = createSignal(false);
   const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
 
   // Get the primary (highest) temperature for display
   const primaryTemp = createMemo(() => {
-    if (!props.sensors) return null;
-    const temps = Object.values(props.sensors);
+    if (!props.sensors?.temperatureCelsius) return null;
+    const temps = Object.values(props.sensors.temperatureCelsius);
     if (temps.length === 0) return null;
     // Find package/composite temp first, otherwise show max
-    const keys = Object.keys(props.sensors);
+    const keys = Object.keys(props.sensors.temperatureCelsius);
     const packageKey = keys.find(k =>
       k.toLowerCase().includes('package') ||
       k.toLowerCase().includes('composite') ||
       k.toLowerCase().includes('tctl')
     );
-    if (packageKey) return props.sensors[packageKey];
+    if (packageKey) return props.sensors.temperatureCelsius[packageKey];
     return Math.max(...temps);
   });
 
-  const hasSensors = () => props.sensors && Object.keys(props.sensors).length > 0;
+  const hasSensors = () => {
+    const temps = props.sensors?.temperatureCelsius;
+    const fans = props.sensors?.fanRpm;
+    const additional = props.sensors?.additional;
+    return (temps && Object.keys(temps).length > 0) ||
+      (fans && Object.keys(fans).length > 0) ||
+      (additional && Object.keys(additional).length > 0);
+  };
 
   // Color based on temperature
   const textColorClass = createMemo(() => {
@@ -199,9 +212,9 @@ function HostTemperatureCell(props: { sensors: Record<string, number> | null | u
   };
 
   // Sort sensors: package/composite first, then cores, then others
-  const sortedSensors = createMemo(() => {
-    if (!props.sensors) return [];
-    return Object.entries(props.sensors).sort(([a], [b]) => {
+  const sortedTemps = createMemo(() => {
+    if (!props.sensors?.temperatureCelsius) return [];
+    return Object.entries(props.sensors.temperatureCelsius).sort(([a], [b]) => {
       const aLower = a.toLowerCase();
       const bLower = b.toLowerCase();
       // Package/composite/tctl first
@@ -218,6 +231,26 @@ function HostTemperatureCell(props: { sensors: Record<string, number> | null | u
       return a.localeCompare(b);
     });
   });
+
+  const sortedFans = createMemo(() => {
+    if (!props.sensors?.fanRpm) return [];
+    return Object.entries(props.sensors.fanRpm).sort(([a], [b]) => a.localeCompare(b));
+  });
+
+  const sortedAdditional = createMemo(() => {
+    if (!props.sensors?.additional) return [];
+    return Object.entries(props.sensors.additional).sort(([a], [b]) => a.localeCompare(b));
+  });
+
+  // Format sensor name for display (e.g., "nct6687_cpu_fan" -> "CPU Fan")
+  const formatSensorName = (name: string) => {
+    // Remove chip prefix (e.g., "nct6687_" or "coretemp_")
+    let clean = name.replace(/^[a-z]+\d*_/i, '');
+    // Replace underscores with spaces
+    clean = clean.replace(/_/g, ' ');
+    // Capitalize words
+    return clean.replace(/\b\w/g, c => c.toUpperCase());
+  };
 
   return (
     <>
@@ -241,24 +274,63 @@ function HostTemperatureCell(props: { sensors: Record<string, number> | null | u
               transform: 'translate(-50%, -100%)',
             }}
           >
-            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[160px] max-w-[240px] border border-gray-700">
-              <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
-                Temperature Sensors
-              </div>
+            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[160px] max-w-[280px] border border-gray-700">
+              {/* Temperature section */}
+              <Show when={sortedTemps().length > 0}>
+                <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                  Temperatures
+                </div>
+                <div class="space-y-0.5 mb-2">
+                  <For each={sortedTemps()}>
+                    {([name, temp]) => {
+                      const colorClass = temp >= 80 ? 'text-red-400' : temp >= 70 ? 'text-yellow-400' : 'text-gray-200';
+                      return (
+                        <div class="flex justify-between gap-3 py-0.5">
+                          <span class="text-gray-400 truncate max-w-[140px]">{formatSensorName(name)}</span>
+                          <span class={`font-medium font-mono ${colorClass}`}>{Math.round(temp)}°C</span>
+                        </div>
+                      );
+                    }}
+                  </For>
+                </div>
+              </Show>
 
-              <div class="space-y-0.5">
-                <For each={sortedSensors()}>
-                  {([name, temp]) => {
-                    const colorClass = temp >= 80 ? 'text-red-400' : temp >= 70 ? 'text-yellow-400' : 'text-gray-200';
-                    return (
+              {/* Fan speeds section */}
+              <Show when={sortedFans().length > 0}>
+                <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                  Fan Speeds
+                </div>
+                <div class="space-y-0.5 mb-2">
+                  <For each={sortedFans()}>
+                    {([name, rpm]) => (
                       <div class="flex justify-between gap-3 py-0.5">
-                        <span class="text-gray-400 truncate max-w-[120px]">{name}</span>
-                        <span class={`font-medium font-mono ${colorClass}`}>{Math.round(temp)}°C</span>
+                        <span class="text-gray-400 truncate max-w-[140px]">{formatSensorName(name)}</span>
+                        <span class="font-medium font-mono text-blue-300">{Math.round(rpm)} RPM</span>
                       </div>
-                    );
-                  }}
-                </For>
-              </div>
+                    )}
+                  </For>
+                </div>
+              </Show>
+
+              {/* Additional sensors section */}
+              <Show when={sortedAdditional().length > 0}>
+                <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                  Other Sensors
+                </div>
+                <div class="space-y-0.5">
+                  <For each={sortedAdditional()}>
+                    {([name, temp]) => {
+                      const colorClass = temp >= 80 ? 'text-red-400' : temp >= 70 ? 'text-yellow-400' : 'text-gray-200';
+                      return (
+                        <div class="flex justify-between gap-3 py-0.5">
+                          <span class="text-gray-400 truncate max-w-[140px]">{formatSensorName(name)}</span>
+                          <span class={`font-medium font-mono ${colorClass}`}>{Math.round(temp)}°C</span>
+                        </div>
+                      );
+                    }}
+                  </For>
+                </div>
+              </Show>
             </div>
           </div>
         </Portal>
@@ -1164,7 +1236,7 @@ const HostRow: Component<HostRowProps> = (props) => {
         <Show when={props.isColVisible('temp')}>
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <HostTemperatureCell sensors={host.sensors?.temperatureCelsius} />
+              <HostTemperatureCell sensors={host.sensors} />
             </div>
           </td>
         </Show>

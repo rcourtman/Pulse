@@ -268,7 +268,7 @@ func TestParse_EmptyObject(t *testing.T) {
 }
 
 func TestParse_NoRecognizedSensors(t *testing.T) {
-	// JSON with unknown sensor types
+	// JSON with unknown sensor types - should still be captured in Other map
 	unknownJSON := `{
 		"unknown-chip-0000": {
 			"Adapter": "Unknown adapter",
@@ -281,8 +281,19 @@ func TestParse_NoRecognizedSensors(t *testing.T) {
 		t.Fatalf("Parse() error: %v", err)
 	}
 
-	if data.Available {
-		t.Error("Expected Available to be false for unknown sensors")
+	// Unknown sensors should now be captured in Other, making data available
+	if !data.Available {
+		t.Error("Expected Available to be true for sensors in Other map")
+	}
+
+	if len(data.Other) != 1 {
+		t.Errorf("len(Other) = %d, want 1", len(data.Other))
+	}
+
+	// Check that the sensor was captured with normalized key
+	expectedKey := "unknown_some_sensor"
+	if data.Other[expectedKey] != 50.0 {
+		t.Errorf("Other[%s] = %v, want 50.0", expectedKey, data.Other[expectedKey])
 	}
 }
 
