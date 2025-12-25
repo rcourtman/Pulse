@@ -145,12 +145,37 @@ export function createUrlEditState() {
         const button = event.currentTarget as HTMLElement;
         const rect = button.getBoundingClientRect();
 
-        // Position below the button, slightly to the left for better visibility
-        setPosition({
-            top: rect.bottom + 4,
-            left: Math.max(8, rect.left - 100)
-        });
+        // Popover dimensions (approximate)
+        const popoverHeight = 80; // Approximate height of the popover
+        const popoverWidth = 300; // min-w-[300px]
 
+        // Get visual viewport dimensions (handles iOS Safari/Firefox address bar)
+        const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+        const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+        const viewportOffsetTop = window.visualViewport?.offsetTop ?? 0;
+
+        // Check if there's enough space below the button
+        const spaceBelow = viewportHeight - (rect.bottom - viewportOffsetTop);
+        const spaceAbove = rect.top - viewportOffsetTop;
+
+        let top: number;
+        if (spaceBelow >= popoverHeight + 8) {
+            // Position below the button
+            top = rect.bottom + 4;
+        } else if (spaceAbove >= popoverHeight + 8) {
+            // Flip above the button
+            top = rect.top - popoverHeight - 4;
+        } else {
+            // Not enough space either way, position at top of viewport with small margin
+            top = Math.max(8, viewportOffsetTop + 8);
+        }
+
+        // Ensure left position keeps popover within viewport
+        let left = rect.left - 100;
+        left = Math.max(8, left); // Don't go off left edge
+        left = Math.min(left, viewportWidth - popoverWidth - 8); // Don't go off right edge
+
+        setPosition({ top, left });
         setEditingValue(currentValue);
         setEditingId(id);
         setIsEditing(true);
