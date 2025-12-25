@@ -111,8 +111,8 @@ export const UnifiedAgents: Component = () => {
     const [insecureMode, setInsecureMode] = createSignal(false); // For self-signed certificates (issue #806)
     const [enableCommands, setEnableCommands] = createSignal(false); // Enable AI command execution (issue #903)
     const [customAgentUrl, setCustomAgentUrl] = createSignal('');
-    // Track pending command config changes: hostId -> desired commandsEnabled value
-    const [pendingCommandConfig, setPendingCommandConfig] = createSignal<Record<string, boolean>>({});
+    // Track pending command config changes: hostId -> { desired value, timestamp }
+    const [pendingCommandConfig, setPendingCommandConfig] = createSignal<Record<string, { enabled: boolean; timestamp: number }>>({});
 
     createEffect(() => {
         if (requiresToken()) {
@@ -427,8 +427,11 @@ export const UnifiedAgents: Component = () => {
     };
 
     const handleToggleCommands = async (hostId: string, enabled: boolean) => {
-        // Set optimistic/pending state immediately
-        setPendingCommandConfig(prev => ({ ...prev, [hostId]: enabled }));
+        // Set optimistic/pending state immediately with timestamp
+        setPendingCommandConfig(prev => ({
+            ...prev,
+            [hostId]: { enabled, timestamp: Date.now() }
+        }));
 
         try {
             await MonitoringAPI.updateHostAgentConfig(hostId, { commandsEnabled: enabled });
@@ -445,26 +448,39 @@ export const UnifiedAgents: Component = () => {
         }
     };
 
-    // Clear pending state when agent reports matching the expected value
+    // Clear pending state when agent reports matching the expected value, or after timeout
     createEffect(() => {
         const pending = pendingCommandConfig();
         const hosts = state.hosts || [];
+        const now = Date.now();
+        const TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 
-        // Check if any pending config now matches the reported state
+        // Check if any pending config now matches the reported state or has timed out
         let updated = false;
         const newPending = { ...pending };
+        const timedOut: string[] = [];
 
         for (const hostId of Object.keys(pending)) {
+            const entry = pending[hostId];
             const host = hosts.find(h => h.id === hostId);
-            if (host && host.commandsEnabled === pending[hostId]) {
+
+            if (host && host.commandsEnabled === entry.enabled) {
                 // Agent confirmed the change
                 delete newPending[hostId];
+                updated = true;
+            } else if (now - entry.timestamp > TIMEOUT_MS) {
+                // Timed out waiting for agent
+                delete newPending[hostId];
+                timedOut.push(host?.hostname || hostId);
                 updated = true;
             }
         }
 
         if (updated) {
             setPendingCommandConfig(newPending);
+            if (timedOut.length > 0) {
+                notificationStore.warning(`Config sync timed out for ${timedOut.join(', ')}. Agent may be offline.`);
+            }
         }
     });
 
@@ -953,7 +969,7 @@ export const UnifiedAgents: Component = () => {
                                                     // Use pending state if set, otherwise use agent-reported state
                                                     const pending = pendingCommandConfig();
                                                     const isPending = agent.id in pending;
-                                                    const effectiveEnabled = isPending ? pending[agent.id] : agent.commandsEnabled;
+                                                    const effectiveEnabled = isPending ? pending[agent.id].enabled : agent.commandsEnabled;
 
                                                     return (
                                                         <div class="flex items-center gap-2">
