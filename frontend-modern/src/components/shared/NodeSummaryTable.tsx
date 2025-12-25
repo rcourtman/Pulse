@@ -653,14 +653,27 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             showMobile={false}
                           />
                         }>
-                          <StackedDiskBar
-                            aggregateDisk={{
-                              total: node!.disk?.total || 0,
-                              used: node!.disk?.used || 0,
-                              free: (node!.disk?.total || 0) - (node!.disk?.used || 0),
-                              usage: node!.disk?.total ? (node!.disk.used / node!.disk.total) : 0
-                            }}
-                          />
+                          <Show
+                            when={viewMode() === 'sparklines'}
+                            fallback={
+                              <StackedDiskBar
+                                aggregateDisk={{
+                                  total: node!.disk?.total || 0,
+                                  used: node!.disk?.used || 0,
+                                  free: (node!.disk?.total || 0) - (node!.disk?.used || 0),
+                                  usage: node!.disk?.total ? (node!.disk.used / node!.disk.total) : 0
+                                }}
+                              />
+                            }
+                          >
+                            <ResponsiveMetricCell
+                              value={diskPercentValue}
+                              type="disk"
+                              resourceId={metricsKey}
+                              isRunning={online}
+                              showMobile={false}
+                            />
+                          </Show>
                         </Show>
                       </div>
                     </td>
