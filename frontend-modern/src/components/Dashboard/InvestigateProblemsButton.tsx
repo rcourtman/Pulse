@@ -118,9 +118,9 @@ Start with the most critical problems first.`;
         });
     };
 
-    // Only show if problems mode is active AND there are results
+    // Only show if problems mode is active AND there are results AND AI is enabled
     const shouldShow = createMemo(() =>
-        props.isProblemsMode && props.problemGuests.length > 0
+        props.isProblemsMode && props.problemGuests.length > 0 && aiChatStore.enabled === true
     );
 
     return (
