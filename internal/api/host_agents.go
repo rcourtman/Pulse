@@ -67,6 +67,9 @@ func (h *HostAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Request)
 
 	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
 
+	// Include any server-side config overrides in the response
+	serverConfig := h.monitor.GetHostAgentConfig(host.ID)
+
 	resp := map[string]any{
 		"success":   true,
 		"hostId":    host.ID,
@@ -74,6 +77,13 @@ func (h *HostAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Request)
 		"platform":  host.Platform,
 		"osName":    host.OSName,
 		"osVersion": host.OSVersion,
+	}
+
+	// Only include config if there are actual overrides
+	if serverConfig.CommandsEnabled != nil {
+		resp["config"] = map[string]any{
+			"commandsEnabled": serverConfig.CommandsEnabled,
+		}
 	}
 
 	if err := utils.WriteJSONResponse(w, resp); err != nil {
@@ -210,3 +220,81 @@ func (h *HostAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Requ
 		log.Error().Err(err).Msg("Failed to serialize host removal response")
 	}
 }
+
+// HandleConfig handles GET (fetch config) and PATCH (update config) for host agents.
+// GET /api/agents/host/{hostId}/config - Agent fetches its server-side config
+// PATCH /api/agents/host/{hostId}/config - UI updates host config (e.g., commandsEnabled)
+func (h *HostAgentHandlers) HandleConfig(w http.ResponseWriter, r *http.Request) {
+	// Extract host ID from URL path
+	// Expected format: /api/agents/host/{hostId}/config
+	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/host/")
+	trimmedPath = strings.TrimSuffix(trimmedPath, "/config")
+	hostID := strings.TrimSpace(trimmedPath)
+	if hostID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Host ID is required", nil)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		h.handleGetConfig(w, r, hostID)
+	case http.MethodPatch:
+		h.handlePatchConfig(w, r, hostID)
+	default:
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET and PATCH are allowed", nil)
+	}
+}
+
+// handleGetConfig returns the server-side config for an agent to apply.
+func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Request, hostID string) {
+	config := h.monitor.GetHostAgentConfig(hostID)
+
+	resp := map[string]any{
+		"success": true,
+		"hostId":  hostID,
+		"config":  config,
+	}
+
+	if err := utils.WriteJSONResponse(w, resp); err != nil {
+		log.Error().Err(err).Msg("Failed to serialize host config response")
+	}
+}
+
+// handlePatchConfig updates the server-side config for a host agent.
+func (h *HostAgentHandlers) handlePatchConfig(w http.ResponseWriter, r *http.Request, hostID string) {
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	defer r.Body.Close()
+
+	var req struct {
+		CommandsEnabled *bool `json:"commandsEnabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", map[string]string{"error": err.Error()})
+		return
+	}
+
+	if err := h.monitor.UpdateHostAgentConfig(hostID, req.CommandsEnabled); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "update_failed", err.Error(), nil)
+		return
+	}
+
+	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+
+	log.Info().
+		Str("hostId", hostID).
+		Interface("commandsEnabled", req.CommandsEnabled).
+		Msg("Host agent config updated")
+
+	resp := map[string]any{
+		"success": true,
+		"hostId":  hostID,
+		"config": map[string]any{
+			"commandsEnabled": req.CommandsEnabled,
+		},
+	}
+
+	if err := utils.WriteJSONResponse(w, resp); err != nil {
+		log.Error().Err(err).Msg("Failed to serialize host config update response")
+	}
+}
+

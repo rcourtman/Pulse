@@ -205,7 +205,34 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/agents/kubernetes/report", RequireAuth(r.config, RequireScope(config.ScopeKubernetesReport, r.kubernetesAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/host/report", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/host/lookup", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleLookup)))
-	r.mux.HandleFunc("/api/agents/host/", RequireAdmin(r.config, RequireScope(config.ScopeHostManage, r.hostAgentHandlers.HandleDeleteHost)))
+	// Host agent management routes - config endpoint is accessible by agents (GET) and admins (PATCH)
+	r.mux.HandleFunc("/api/agents/host/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		// Route /api/agents/host/{id}/config to HandleConfig
+		if strings.HasSuffix(req.URL.Path, "/config") {
+			// GET is for agents to fetch config (host_report scope)
+			// PATCH is for UI to update config (host_manage scope, admin only)
+			if req.Method == http.MethodGet {
+				if !ensureScope(w, req, config.ScopeHostReport) {
+					return
+				}
+			} else if req.Method == http.MethodPatch {
+				if !ensureScope(w, req, config.ScopeHostManage) {
+					return
+				}
+			}
+			r.hostAgentHandlers.HandleConfig(w, req)
+			return
+		}
+		// Route DELETE /api/agents/host/{id} to HandleDeleteHost (host_manage scope)
+		if req.Method == http.MethodDelete {
+			if !ensureScope(w, req, config.ScopeHostManage) {
+				return
+			}
+			r.hostAgentHandlers.HandleDeleteHost(w, req)
+			return
+		}
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}))
 	r.mux.HandleFunc("/api/temperature-proxy/register", r.requireSensorProxyEnabled(r.temperatureProxyHandlers.HandleRegister))
 	r.mux.HandleFunc("/api/temperature-proxy/authorized-nodes", r.requireSensorProxyEnabled(r.temperatureProxyHandlers.HandleAuthorizedNodes))
 	r.mux.HandleFunc("/api/temperature-proxy/unregister", r.requireSensorProxyEnabled(RequireAdmin(r.config, r.temperatureProxyHandlers.HandleUnregister)))

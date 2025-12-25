@@ -109,6 +109,7 @@ export const UnifiedAgents: Component = () => {
     const [lookupError, setLookupError] = createSignal<string | null>(null);
     const [lookupLoading, setLookupLoading] = createSignal(false);
     const [insecureMode, setInsecureMode] = createSignal(false); // For self-signed certificates (issue #806)
+    const [enableCommands, setEnableCommands] = createSignal(false); // Enable AI command execution (issue #903)
     const [customAgentUrl, setCustomAgentUrl] = createSignal('');
 
     createEffect(() => {
@@ -239,6 +240,7 @@ export const UnifiedAgents: Component = () => {
     };
 
     const getInsecureFlag = () => insecureMode() ? ' --insecure' : '';
+    const getEnableCommandsFlag = () => enableCommands() ? ' --enable-commands' : '';
     const getCurlInsecureFlag = () => insecureMode() ? '-k' : '';
 
     const getUninstallCommand = () => {
@@ -265,6 +267,7 @@ export const UnifiedAgents: Component = () => {
             lastSeen?: number;
             isLegacy?: boolean;
             linkedNodeId?: string;
+            commandsEnabled?: boolean;
         }>();
 
         // Process Host Agents (skip those linked to PVE nodes - they're shown merged with the node)
@@ -284,7 +287,8 @@ export const UnifiedAgents: Component = () => {
                 status: h.status || 'unknown',
                 version: h.agentVersion,
                 lastSeen: h.lastSeen,
-                isLegacy: h.isLegacy
+                isLegacy: h.isLegacy,
+                commandsEnabled: h.commandsEnabled
             });
         });
 
@@ -417,6 +421,16 @@ export const UnifiedAgents: Component = () => {
         } catch (err) {
             logger.error('Failed to allow kubernetes re-enrollment', err);
             notificationStore.error('Failed to allow kubernetes re-enrollment');
+        }
+    };
+
+    const handleToggleCommands = async (hostId: string, enabled: boolean) => {
+        try {
+            await MonitoringAPI.updateHostAgentConfig(hostId, { commandsEnabled: enabled });
+            notificationStore.success(`AI command execution ${enabled ? 'enabled' : 'disabled'}. Agent will apply change on next report.`);
+        } catch (err) {
+            logger.error('Failed to toggle AI commands', err);
+            notificationStore.error('Failed to update agent configuration');
         }
     };
 
@@ -569,6 +583,20 @@ export const UnifiedAgents: Component = () => {
                                     />
                                     Skip TLS certificate verification (self-signed certs)
                                 </label>
+                                <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Allow AI Patrol to execute diagnostic and fix commands on this agent (requires Pulse Pro)">
+                                    <input
+                                        type="checkbox"
+                                        checked={enableCommands()}
+                                        onChange={(e) => setEnableCommands(e.currentTarget.checked)}
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                    />
+                                    Enable AI command execution (for AI auto-fix)
+                                </label>
+                                <Show when={enableCommands()}>
+                                    <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">
+                                        <span class="font-medium">AI commands enabled</span> — The agent will accept diagnostic and fix commands from Pulse AI features.
+                                    </div>
+                                </Show>
                             </div>
 
                             <div class="space-y-4">
@@ -592,6 +620,10 @@ export const UnifiedAgents: Component = () => {
                                                             const isBashScript = !cmd.includes('$env:') && !cmd.includes('irm');
                                                             if (insecureMode() && isBashScript) {
                                                                 cmd += getInsecureFlag();
+                                                            }
+                                                            // Add --enable-commands flag if enabled (issue #903)
+                                                            if (enableCommands() && isBashScript) {
+                                                                cmd += getEnableCommandsFlag();
                                                             }
                                                             return cmd;
                                                         };
@@ -826,6 +858,7 @@ export const UnifiedAgents: Component = () => {
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Type</th>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Status</th>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Version</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">AI Commands</th>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Last Seen</th>
                                 <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>
                             </tr>
@@ -833,7 +866,7 @@ export const UnifiedAgents: Component = () => {
                         <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
                             <For each={allHosts()} fallback={
                                 <tr>
-                                    <td colspan="6" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                    <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                                         No agents installed yet.
                                     </td>
                                 </tr>
@@ -874,6 +907,27 @@ export const UnifiedAgents: Component = () => {
                                                 <span class="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200" title="This agent is using an old version. Please update to the unified agent.">
                                                     Legacy
                                                 </span>
+                                            </Show>
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-3 text-sm">
+                                            <Show when={agent.types.includes('host')}
+                                                fallback={
+                                                    <span class="text-gray-400 dark:text-gray-500">—</span>
+                                                }
+                                            >
+                                                <button
+                                                    onClick={() => handleToggleCommands(agent.id, !agent.commandsEnabled)}
+                                                    class={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${agent.commandsEnabled
+                                                        ? 'bg-blue-600'
+                                                        : 'bg-gray-200 dark:bg-gray-700'
+                                                        }`}
+                                                    title={agent.commandsEnabled ? 'AI command execution enabled' : 'AI command execution disabled'}
+                                                >
+                                                    <span
+                                                        class={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${agent.commandsEnabled ? 'translate-x-4' : 'translate-x-0'
+                                                            }`}
+                                                    />
+                                                </button>
                                             </Show>
                                         </td>
                                         <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">

@@ -441,6 +441,45 @@ export class MonitoringAPI {
     }
   }
 
+  static async updateHostAgentConfig(hostId: string, config: { commandsEnabled?: boolean }): Promise<void> {
+    if (!hostId) {
+      throw new Error('Host ID is required to update agent config.');
+    }
+
+    const url = `${this.baseUrl}/agents/host/${encodeURIComponent(hostId)}/config`;
+    const response = await apiFetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(config),
+    });
+
+    if (!response.ok) {
+      let message = `Failed with status ${response.status}`;
+      try {
+        const text = await response.text();
+        if (text?.trim()) {
+          message = text.trim();
+          try {
+            const parsed = JSON.parse(text);
+            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+              message = parsed.error.trim();
+            } else if (typeof parsed?.message === 'string' && parsed.message.trim()) {
+              message = parsed.message.trim();
+            }
+          } catch (_err) {
+            // Ignore JSON parse errors.
+          }
+        }
+      } catch (_err) {
+        // Ignore body read errors.
+      }
+
+      throw new Error(message);
+    }
+  }
+
   static async lookupHost(params: { id?: string; hostname?: string }): Promise<HostLookupResponse | null> {
     const search = new URLSearchParams();
     if (params.id) search.set('id', params.id);
