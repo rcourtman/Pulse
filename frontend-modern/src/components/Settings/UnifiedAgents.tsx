@@ -41,10 +41,10 @@ const buildCommandsByPlatform = (url: string): Record<
         snippets: [
             {
                 label: 'Install',
-                command: `curl -fsSL ${url}/install.sh | sudo bash -s -- --url ${url} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
+                command: `curl -fsSL ${url}/install.sh | bash -s -- --url ${url} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
                 note: (
                     <span>
-                        Automatically detects your init system (systemd, OpenRC, Unraid, Synology) and configures the appropriate service. Works on Debian, Ubuntu, Fedora, Alpine, Gentoo, Unraid, Synology, and more.
+                        Run as root (use <code>sudo</code> or <code>su -</code> if not already root). Auto-detects your init system and works on Debian, Ubuntu, Proxmox, Fedora, Alpine, Unraid, Synology, and more.
                     </span>
                 ),
             },
@@ -57,10 +57,10 @@ const buildCommandsByPlatform = (url: string): Record<
         snippets: [
             {
                 label: 'Install with launchd',
-                command: `curl -fsSL ${url}/install.sh | sudo bash -s -- --url ${url} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
+                command: `curl -fsSL ${url}/install.sh | bash -s -- --url ${url} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
                 note: (
                     <span>
-                        Creates <code>/Library/LaunchDaemons/com.pulse.agent.plist</code> and starts the agent automatically.
+                        Run as root (use <code>sudo</code> if not already root). Creates <code>/Library/LaunchDaemons/com.pulse.agent.plist</code> and starts the agent automatically.
                     </span>
                 ),
             },
@@ -247,7 +247,7 @@ export const UnifiedAgents: Component = () => {
 
     const getUninstallCommand = () => {
         const url = customAgentUrl() || agentUrl();
-        return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | sudo bash -s -- --uninstall`;
+        return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | bash -s -- --uninstall`;
     };
 
     // Track previously seen host types to prevent flapping when one source temporarily has no data
@@ -384,7 +384,7 @@ export const UnifiedAgents: Component = () => {
     const getUpgradeCommand = (_hostname: string) => {
         const token = resolvedToken();
         const url = customAgentUrl() || agentUrl();
-        return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | sudo bash -s -- --url ${url} --token ${token}${getInsecureFlag()}`;
+        return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | bash -s -- --url ${url} --token ${token}${getInsecureFlag()}`;
     };
 
     const handleRemoveAgent = async (id: string, types: ('host' | 'docker')[]) => {

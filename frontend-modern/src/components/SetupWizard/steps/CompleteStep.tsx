@@ -198,7 +198,8 @@ Keep these credentials secure!
     const getInstallCommand = () => {
         const baseUrl = getPulseBaseUrl();
         // Simple command - the install script auto-detects Docker, Kubernetes, and Proxmox
-        return `curl -sSL ${baseUrl}/install.sh | sudo bash -s -- --url "${baseUrl}" --token "${currentInstallToken()}"`;
+        // Note: sudo removed - users should run as root (via su or sudo) since some systems (like Proxmox) don't have sudo installed
+        return `curl -sSL ${baseUrl}/install.sh | bash -s -- --url "${baseUrl}" --token "${currentInstallToken()}"`;
     };
 
     return (
