@@ -369,6 +369,18 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 
 	if req.PatrolAutoFix != nil {
+		// Auto-fix requires Pro license with ai_autofix feature
+		if *req.PatrolAutoFix && !h.aiService.HasLicenseFeature(ai.FeatureAIAutoFix) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPaymentRequired)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":       "license_required",
+				"message":     "AI Auto-Fix requires Pulse Pro",
+				"feature":     ai.FeatureAIAutoFix,
+				"upgrade_url": "https://pulserelay.pro",
+			})
+			return
+		}
 		settings.PatrolAutoFix = *req.PatrolAutoFix
 	}
 
@@ -377,6 +389,18 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 
 	if req.AutonomousMode != nil {
+		// Autonomous mode requires Pro license with ai_autofix feature
+		if *req.AutonomousMode && !h.aiService.HasLicenseFeature(ai.FeatureAIAutoFix) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPaymentRequired)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":       "license_required",
+				"message":     "Autonomous Mode requires Pulse Pro",
+				"feature":     ai.FeatureAIAutoFix,
+				"upgrade_url": "https://pulserelay.pro",
+			})
+			return
+		}
 		settings.AutonomousMode = *req.AutonomousMode
 	}
 

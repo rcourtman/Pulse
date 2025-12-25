@@ -1036,11 +1036,19 @@ func (s *Service) GetDebugContext(req ExecuteRequest) map[string]interface{} {
 	return result
 }
 
-// IsAutonomous returns true if autonomous mode is enabled
+// IsAutonomous returns true if autonomous mode is enabled AND licensed.
+// Autonomous mode requires the ai_autofix license feature (Pro tier).
 func (s *Service) IsAutonomous() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.cfg != nil && s.cfg.AutonomousMode
+	if s.cfg == nil || !s.cfg.AutonomousMode {
+		return false
+	}
+	// Autonomous mode requires Pro license with ai_autofix feature
+	if s.licenseChecker != nil && !s.licenseChecker.HasFeature(FeatureAIAutoFix) {
+		return false
+	}
+	return true
 }
 
 // ConversationMessage represents a message in conversation history
