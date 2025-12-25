@@ -488,8 +488,9 @@ const Ceph: Component = () => {
                                     Cluster Overview
                                 </h3>
                             </div>
-                            <div class="overflow-x-auto">
-                                <table class="w-full border-collapse whitespace-nowrap">
+                            <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
+                                <style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>
+                                <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "700px" }}>
                                     <thead>
                                         <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                                             <th class={`${thClass} pl-4`}>Cluster</th>
@@ -612,8 +613,9 @@ const Ceph: Component = () => {
                                     </div>
                                 }
                             >
-                                <div class="overflow-x-auto">
-                                    <table class="w-full border-collapse whitespace-nowrap">
+                                <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
+                                    <style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>
+                                    <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "650px" }}>
                                         <thead>
                                             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                                                 <th class={`${thClass} pl-4`}>Pool</th>

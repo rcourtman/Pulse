@@ -788,36 +788,36 @@ const Storage: Component = () => {
                 <style>{`
                 .overflow-x-auto::-webkit-scrollbar { display: none; }
               `}</style>
-                <table class="w-full" style={{ "min-width": "900px" }}>
+                <table class="w-full" style={{ "min-width": "750px" }}>
                   <thead>
                     <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-auto">
+                      <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-auto">
                         Storage
                       </th>
-                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                      <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                         Type
                       </th>
-                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%]">
+                      <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%]">
                         Content
                       </th>
-                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                      <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                         Status
                       </th>
                       <Show when={viewMode() === 'node'}>
-                        <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
+                        <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[6%]">
                           Shared
                         </th>
                       </Show>
-                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[25%] min-w-[150px]">
+                      <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[25%] min-w-[120px]">
                         Usage
                       </th>
-                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                      <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                         Free
                       </th>
-                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                      <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                         Total
                       </th>
-                      <th class="px-2 py-1.5 w-8"></th>
+                      <th class="px-1.5 py-1.5 w-8"></th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -1064,12 +1064,12 @@ const Storage: Component = () => {
                                 const firstCellClass = createMemo(() => {
                                   if (viewMode() === 'node') {
                                     return firstCellHasIndicator()
-                                      ? 'p-0.5 pl-7 pr-1.5'
-                                      : 'p-0.5 pl-8 pr-1.5';
+                                      ? 'p-0.5 pl-6 pr-1.5'
+                                      : 'p-0.5 pl-7 pr-1.5';
                                   }
                                   return firstCellHasIndicator()
-                                    ? 'p-0.5 pl-3 pr-1.5'
-                                    : 'p-0.5 pl-3 pr-1.5';
+                                    ? 'p-0.5 pl-2 pr-1.5'
+                                    : 'p-0.5 pl-2 pr-1.5';
                                 });
 
                                 const toggleDrawer = () => {
@@ -1088,9 +1088,9 @@ const Storage: Component = () => {
                                       aria-expanded={canExpand() && isExpanded() ? 'true' : 'false'}
                                     >
                                       <td class={`${firstCellClass()} align-middle`}>
-                                        <div class="flex items-center gap-2 min-w-0">
+                                        <div class="flex items-center gap-1.5 min-w-0">
                                           <span
-                                            class={`text-sm font-medium text-gray-900 dark:text-gray-100 truncate ${canExpand() ? 'max-w-[180px]' : 'max-w-[200px]'
+                                            class={`text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100 truncate ${canExpand() ? 'max-w-[140px] sm:max-w-[180px]' : 'max-w-[160px] sm:max-w-[200px]'
                                               }`}
                                             title={storage.name}
                                           >
@@ -1098,7 +1098,7 @@ const Storage: Component = () => {
                                           </span>
                                           {/* ZFS Health Map */}
                                           <Show when={zfsPool && zfsPool.devices && zfsPool.devices.length > 0}>
-                                            <div class="mx-1.5">
+                                            <div class="mx-1">
                                               <ZFSHealthMap pool={zfsPool!} />
                                             </div>
                                           </Show>
