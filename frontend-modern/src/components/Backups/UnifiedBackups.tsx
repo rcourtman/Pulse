@@ -1991,105 +1991,10 @@ const UnifiedBackups: Component = () => {
                   </Card>
                 }
               >
-                {/* Mobile Card View - Compact */}
-                <div class="block lg:hidden space-y-3">
-                  <For each={paginatedData()}>
-                    {(group) => (
-                      <div class="space-y-1">
-                        <div class="text-xs font-medium text-gray-600 dark:text-gray-400 px-2 py-1 sticky top-0 bg-gray-50 dark:bg-gray-900 z-10">
-                          {group.label} ({group.items.length})
-                        </div>
-                        <For each={group.items}>
-                          {(item) => (
-                            <Card padding="sm" class="hover:shadow-sm transition-shadow">
-                              {/* Compact header row */}
-                              <div class="flex items-center justify-between gap-2 mb-1">
-                                <div class="flex items-center gap-2 min-w-0 flex-1">
-                                  <span
-                                    class={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${item.type === 'VM'
-                                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                                      : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                      }`}
-                                  >
-                                    {item.type}
-                                  </span>
-                                  <span class="text-xs text-gray-500 shrink-0">{item.vmid}</span>
-                                  <span class="font-medium text-xs truncate">
-                                    {item.name || 'Unnamed'}
-                                  </span>
-                                </div>
-                                <div class="flex items-center gap-2 shrink-0">
-                                  <span
-                                    class={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${item.backupType === 'snapshot'
-                                      ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-                                      : item.backupType === 'local'
-                                        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                                        : 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200'
-                                      }`}
-                                  >
-                                    {item.backupType === 'snapshot'
-                                      ? 'SNAP'
-                                      : item.backupType === 'local'
-                                        ? 'PVE'
-                                        : 'PBS'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Compact info row */}
-                              <div class="flex items-center justify-between gap-2 text-[11px]">
-                                <div class="flex items-center gap-3 text-gray-600 dark:text-gray-400">
-                                  <span>{item.node}</span>
-                                  <span class={getAgeColorClass(item.backupTime)}>
-                                    {formatTime(item.backupTime * 1000)}
-                                  </span>
-                                  <Show when={item.size}>
-                                    <span class={getSizeColor(item.size)}>
-                                      {formatBytes(item.size!)}
-                                    </span>
-                                  </Show>
-                                  <Show when={item.backupType === 'remote' && item.verified}>
-                                    <svg
-                                      class="w-4 h-4 text-green-600 dark:text-green-400 inline"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                    >
-                                      <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M5 13l4 4L19 7"
-                                      />
-                                    </svg>
-                                  </Show>
-                                </div>
-                                <Show
-                                  when={
-                                    (item.storage || item.datastore) &&
-                                    item.backupType !== 'snapshot'
-                                  }
-                                >
-                                  <span class="text-gray-500 dark:text-gray-400 text-[10px] truncate max-w-[100px]">
-                                    {item.storage ||
-                                      (item.datastore &&
-                                        (item.namespace && item.namespace !== 'root'
-                                          ? `${item.datastore}/${item.namespace}`
-                                          : item.datastore)) ||
-                                      '-'}
-                                  </span>
-                                </Show>
-                              </div>
-                            </Card>
-                          )}
-                        </For>
-                      </div>
-                    )}
-                  </For>
-                </div>
+                {/* Mobile Card View removed in favor of scrollable table */}
 
                 {/* Desktop Table View */}
-                <table class="backup-table hidden md:table">
+                <table class="backup-table" style={{ "min-width": "1200px" }}>
                   <thead>
                     <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                       <th
@@ -2112,14 +2017,14 @@ const UnifiedBackups: Component = () => {
                         Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
                       <th
-                        class="hidden xl:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                         onClick={() => handleSort('node')}
                       >
                         Node {sortKey() === 'node' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
                       <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
                         <th
-                          class="hidden 2xl:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                          class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('owner')}
                         >
                           Owner {sortKey() === 'owner' && (sortDirection() === 'asc' ? '▲' : '▼')}
@@ -2133,14 +2038,14 @@ const UnifiedBackups: Component = () => {
                       </th>
                       <Show when={backupTypeFilter() !== 'snapshot'}>
                         <th
-                          class="hidden lg:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                          class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('size')}
                         >
                           Size {sortKey() === 'size' && (sortDirection() === 'asc' ? '▲' : '▼')}
                         </th>
                       </Show>
                       <th
-                        class="hidden lg:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                         onClick={() => handleSort('backupType')}
                       >
                         Backup{' '}
@@ -2148,7 +2053,7 @@ const UnifiedBackups: Component = () => {
                       </th>
                       <Show when={backupTypeFilter() !== 'snapshot'}>
                         <th
-                          class="hidden xl:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                          class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('storage')}
                         >
                           Location{' '}
@@ -2157,7 +2062,7 @@ const UnifiedBackups: Component = () => {
                       </Show>
                       <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
                         <th
-                          class="hidden lg:table-cell px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                          class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('verified')}
                         >
                           <span title="Verified">✓</span>
@@ -2165,7 +2070,7 @@ const UnifiedBackups: Component = () => {
                         </th>
                       </Show>
                       <th
-                        class="hidden md:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider"
+                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider"
                       >
                         Details
                       </th>
@@ -2209,13 +2114,13 @@ const UnifiedBackups: Component = () => {
                                 <td class="p-0.5 px-1.5 text-sm align-middle">
                                   {item.name || '-'}
                                 </td>
-                                <td class="hidden xl:table-cell p-0.5 px-1.5 text-sm align-middle">{item.node}</td>
+                                <td class="p-0.5 px-1.5 text-sm align-middle">{item.node}</td>
                                 <Show
                                   when={
                                     backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'
                                   }
                                 >
-                                  <td class="hidden 2xl:table-cell p-0.5 px-1.5 text-xs align-middle text-gray-500 dark:text-gray-400">
+                                  <td class="p-0.5 px-1.5 text-xs align-middle text-gray-500 dark:text-gray-400">
                                     {item.owner ? item.owner.split('@')[0] : '-'}
                                   </td>
                                 </Show>
@@ -2226,12 +2131,12 @@ const UnifiedBackups: Component = () => {
                                 </td>
                                 <Show when={backupTypeFilter() !== 'snapshot'}>
                                   <td
-                                    class={`hidden lg:table-cell p-0.5 px-1.5 align-middle ${getSizeColor(item.size)}`}
+                                    class={`p-0.5 px-1.5 align-middle ${getSizeColor(item.size)}`}
                                   >
                                     {item.size ? formatBytes(item.size) : '-'}
                                   </td>
                                 </Show>
-                                <td class="hidden lg:table-cell p-0.5 px-1.5 align-middle">
+                                <td class="p-0.5 px-1.5 align-middle">
                                   <div class="flex items-center gap-1">
                                     <span
                                       class={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${item.backupType === 'snapshot'
@@ -2288,7 +2193,7 @@ const UnifiedBackups: Component = () => {
                                   </div>
                                 </td>
                                 <Show when={backupTypeFilter() !== 'snapshot'}>
-                                  <td class="hidden xl:table-cell p-0.5 px-1.5 text-sm align-middle">
+                                  <td class="p-0.5 px-1.5 text-sm align-middle">
                                     {item.storage ||
                                       (item.datastore &&
                                         (item.namespace && item.namespace !== 'root'
@@ -2302,7 +2207,7 @@ const UnifiedBackups: Component = () => {
                                     backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'
                                   }
                                 >
-                                  <td class="hidden lg:table-cell p-0.5 px-1.5 text-center align-middle">
+                                  <td class="p-0.5 px-1.5 text-center align-middle">
                                     {item.backupType === 'remote' ? (
                                       item.verified ? (
                                         <span title="PBS backup verified">
@@ -2348,7 +2253,7 @@ const UnifiedBackups: Component = () => {
                                   </td>
                                 </Show>
                                 <td
-                                  class="hidden md:table-cell p-0.5 px-1.5 align-middle"
+                                  class="p-0.5 px-1.5 align-middle"
                                   onMouseEnter={(e) => {
                                     const details = [];
 

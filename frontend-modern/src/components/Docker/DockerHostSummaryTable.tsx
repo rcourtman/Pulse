@@ -206,7 +206,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
   return (
     <>
       <Card padding="none" tone="glass" class={`mb-4 ${urlEdit.isEditing() ? 'overflow-visible' : 'overflow-hidden'}`}>
-        <ScrollableTable persistKey="docker-host-summary">
+        <ScrollableTable persistKey="docker-host-summary" minWidth={isMobile() ? '100%' : '800px'}>
           <table class="w-full border-collapse whitespace-nowrap">
             <thead>
               <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
@@ -225,18 +225,21 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                 </th>
                 <th
                   class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                  style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}
                   onClick={() => handleSort('cpu')}
                 >
                   CPU {renderSortIndicator('cpu')}
                 </th>
                 <th
                   class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                  style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}
                   onClick={() => handleSort('memory')}
                 >
                   Memory {renderSortIndicator('memory')}
                 </th>
                 <th
                   class="px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                  style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}
                   onClick={() => handleSort('disk')}
                 >
                   Disk {renderSortIndicator('disk')}
@@ -383,40 +386,39 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                           {renderDockerStatusBadge(summary.host.status)}
                         </div>
                       </td>
-                      <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-                        <Show when={isMobile()}>
-                          <div class="md:hidden flex justify-center">
-                            <MetricText value={summary.cpuPercent} type="cpu" />
-                          </div>
-                        </Show>
-                        <div class="hidden md:block w-full">
+                      <td class="px-2 py-1 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
+                        <div class="h-4 w-full">
                           <EnhancedCPUBar
                             usage={summary.cpuPercent}
                             loadAverage={summary.host.loadAverage?.[0]}
-                            cores={summary.host.cpus}
+                            cores={isMobile() ? undefined : summary.host.cpus}
                             resourceId={metricsKey}
                           />
                         </div>
                       </td>
-                      <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-                        <ResponsiveMetricCell
-                          value={summary.memoryPercent}
-                          type="memory"
-                          sublabel={summary.memoryLabel}
-                          resourceId={metricsKey}
-                          isRunning={online}
-                          showMobile={isMobile()}
-                        />
+                      <td class="px-2 py-1 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
+                        <div class="h-4">
+                          <ResponsiveMetricCell
+                            value={summary.memoryPercent}
+                            type="memory"
+                            sublabel={summary.memoryLabel}
+                            resourceId={metricsKey}
+                            isRunning={online}
+                            showMobile={false}
+                          />
+                        </div>
                       </td>
-                      <td class="px-2 py-1 align-middle" style={{ "min-width": "140px" }}>
-                        <ResponsiveMetricCell
-                          value={summary.diskPercent}
-                          type="disk"
-                          sublabel={summary.diskLabel}
-                          resourceId={metricsKey}
-                          isRunning={!!summary.diskLabel}
-                          showMobile={isMobile()}
-                        />
+                      <td class="px-2 py-1 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
+                        <div class="h-4">
+                          <ResponsiveMetricCell
+                            value={summary.diskPercent}
+                            type="disk"
+                            sublabel={summary.diskLabel}
+                            resourceId={metricsKey}
+                            isRunning={!!summary.diskLabel}
+                            showMobile={false}
+                          />
+                        </div>
                       </td>
                       <td class="px-2 py-1 align-middle">
                         <div class="flex justify-center items-center h-full whitespace-nowrap w-full">

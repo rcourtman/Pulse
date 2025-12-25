@@ -348,7 +348,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   return (
     <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
       <div class="overflow-x-auto">
-        <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "800px" }}>
+        <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": isMobile() ? "100%" : "800px" }}>
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
               <th
@@ -360,13 +360,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               <th class={thClass} style={{ "min-width": '80px' }} onClick={() => handleSort('uptime')}>
                 Uptime {renderSortIndicator('uptime')}
               </th>
-              <th class={thClass} style={{ width: "200px", "min-width": "200px", "max-width": "200px" }} onClick={() => handleSort('cpu')}>
+              <th class={thClass} style={isMobile() ? { "min-width": "60px" } : { width: "200px", "min-width": "200px", "max-width": "200px" }} onClick={() => handleSort('cpu')}>
                 CPU {renderSortIndicator('cpu')}
               </th>
-              <th class={thClass} style={{ width: "200px", "min-width": "200px", "max-width": "200px" }} onClick={() => handleSort('memory')}>
+              <th class={thClass} style={isMobile() ? { "min-width": "60px" } : { width: "200px", "min-width": "200px", "max-width": "200px" }} onClick={() => handleSort('memory')}>
                 Memory {renderSortIndicator('memory')}
               </th>
-              <th class={thClass} style={{ width: "200px", "min-width": "200px", "max-width": "200px" }} onClick={() => handleSort('disk')}>
+              <th class={thClass} style={isMobile() ? { "min-width": "60px" } : { width: "200px", "min-width": "200px", "max-width": "200px" }} onClick={() => handleSort('disk')}>
                 Disk {renderSortIndicator('disk')}
               </th>
               <Show when={hasAnyTemperatureData()}>
@@ -575,17 +575,12 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* CPU */}
-                    <td class={tdClass} style={metricColumnStyle}>
-                      <Show when={isMobile()}>
-                        <div class="md:hidden h-4 flex items-center justify-center">
-                          <MetricText value={cpuPercentValue} type="cpu" />
-                        </div>
-                      </Show>
-                      <div class="hidden md:block h-4">
+                    <td class={tdClass} style={isMobile() ? { "min-width": "60px" } : metricColumnStyle}>
+                      <div class="h-4">
                         <EnhancedCPUBar
                           usage={cpuPercentValue}
                           loadAverage={isPVEItem ? node!.loadAverage?.[0] : undefined}
-                          cores={isPVEItem ? node!.cpuInfo?.cores : undefined}
+                          cores={isMobile() ? undefined : (isPVEItem ? node!.cpuInfo?.cores : undefined)}
                           model={isPVEItem ? node!.cpuInfo?.model : undefined}
                           resourceId={metricsKey}
                         />
@@ -593,13 +588,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* Memory */}
-                    <td class={tdClass} style={metricColumnStyle}>
-                      <Show when={isMobile()}>
-                        <div class="md:hidden h-4 flex items-center justify-center">
-                          <MetricText value={memoryPercentValue} type="memory" />
-                        </div>
-                      </Show>
-                      <div class="hidden md:block h-4">
+                    <td class={tdClass} style={isMobile() ? { "min-width": "60px" } : metricColumnStyle}>
+                      <div class="h-4">
                         <Show when={isPVEItem} fallback={
                           <ResponsiveMetricCell
                             value={memoryPercentValue}
@@ -636,13 +626,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* Disk */}
-                    <td class={tdClass} style={metricColumnStyle}>
-                      <Show when={isMobile()}>
-                        <div class="md:hidden h-4 flex items-center justify-center">
-                          <MetricText value={diskPercentValue} type="disk" />
-                        </div>
-                      </Show>
-                      <div class="hidden md:block h-4">
+                    <td class={tdClass} style={isMobile() ? { "min-width": "60px" } : metricColumnStyle}>
+                      <div class="h-4">
                         <Show when={isPVEItem} fallback={
                           <ResponsiveMetricCell
                             value={diskPercentValue}
