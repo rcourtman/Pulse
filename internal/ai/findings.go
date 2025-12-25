@@ -584,6 +584,20 @@ func (s *FindingsStore) GetAll(startTime *time.Time) []*Finding {
 	return result
 }
 
+// ClearAll removes all findings from the store
+// Returns the number of findings removed
+func (s *FindingsStore) ClearAll() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	count := len(s.findings)
+	s.findings = make(map[string]*Finding)
+	s.byResource = make(map[string][]string)
+	s.activeCounts = make(map[FindingSeverity]int)
+	s.scheduleSave()
+	return count
+}
+
 // Cleanup removes old resolved findings
 func (s *FindingsStore) Cleanup(maxAge time.Duration) int {
 	s.mu.Lock()
