@@ -2718,6 +2718,48 @@ func (h *AISettingsHandler) HandleSuppressFinding(w http.ResponseWriter, r *http
 	}
 }
 
+// HandleClearAllFindings clears all AI findings (DELETE /api/ai/patrol/findings)
+// This allows users to clear accumulated findings, especially useful for users who
+// accumulated findings before the patrol-without-AI bug was fixed.
+func (h *AISettingsHandler) HandleClearAllFindings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require authentication (already wrapped by RequireAuth in router)
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	// Check for confirm parameter
+	if r.URL.Query().Get("confirm") != "true" {
+		http.Error(w, "confirm=true query parameter required", http.StatusBadRequest)
+		return
+	}
+
+	patrol := h.aiService.GetPatrolService()
+	if patrol == nil {
+		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	findings := patrol.GetFindings()
+	count := findings.ClearAll()
+
+	log.Info().Int("count", count).Msg("Cleared all AI findings")
+
+	response := map[string]interface{}{
+		"success": true,
+		"cleared": count,
+		"message": fmt.Sprintf("Cleared %d findings", count),
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write clear findings response")
+	}
+}
+
 // HandleGetFindingsHistory returns all findings including resolved for history (GET /api/ai/patrol/history)
 func (h *AISettingsHandler) HandleGetFindingsHistory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

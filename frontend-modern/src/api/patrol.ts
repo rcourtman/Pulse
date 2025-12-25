@@ -244,6 +244,18 @@ export async function suppressFinding(findingId: string): Promise<{ success: boo
 }
 
 /**
+ * Clear all AI findings
+ * Removes all accumulated findings from the store.
+ * Useful for users who want to start fresh or who accumulated findings
+ * before AI was properly configured.
+ */
+export async function clearAllFindings(): Promise<{ success: boolean; cleared: number; message: string }> {
+    return apiFetchJSON('/api/ai/patrol/findings?confirm=true', {
+        method: 'DELETE',
+    });
+}
+
+/**
  * Severity color mapping for UI
  */
 export const severityColors: Record<FindingSeverity, { bg: string; text: string; border: string }> = {

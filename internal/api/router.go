@@ -1161,14 +1161,26 @@ func (r *Router) setupRoutes() {
 	// Mutation endpoints (run, acknowledge, dismiss, etc.) return 402 to prevent unauthorized actions
 	r.mux.HandleFunc("/api/ai/patrol/status", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolStatus))
 	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandlePatrolStream)))
-	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolFindings))
+	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			r.aiSettingsHandler.HandleGetPatrolFindings(w, req)
+		case http.MethodDelete:
+			// Clear all findings - doesn't require Pro license so users can clean up accumulated findings
+			r.aiSettingsHandler.HandleClearAllFindings(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
 	r.mux.HandleFunc("/api/ai/patrol/history", RequireAuth(r.config, r.aiSettingsHandler.HandleGetFindingsHistory))
 	r.mux.HandleFunc("/api/ai/patrol/run", RequireAdmin(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleForcePatrol)))
 	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleAcknowledgeFinding)))
-	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleDismissFinding)))
+	// Dismiss and resolve don't require Pro license - users should be able to clear findings they can see
+	// This is especially important for users who accumulated findings before fixing the patrol-without-AI bug
+	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, r.aiSettingsHandler.HandleDismissFinding))
 	r.mux.HandleFunc("/api/ai/patrol/suppress", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleSuppressFinding)))
 	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleSnoozeFinding)))
-	r.mux.HandleFunc("/api/ai/patrol/resolve", RequireAuth(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAIPatrol, r.aiSettingsHandler.HandleResolveFinding)))
+	r.mux.HandleFunc("/api/ai/patrol/resolve", RequireAuth(r.config, r.aiSettingsHandler.HandleResolveFinding))
 	r.mux.HandleFunc("/api/ai/patrol/runs", RequireAuth(r.config, r.aiSettingsHandler.HandleGetPatrolRunHistory))
 	// Suppression rules management (also Pro-only since they control LLM behavior)
 	// GET returns empty array for unlicensed, POST returns 402
