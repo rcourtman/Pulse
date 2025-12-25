@@ -12,10 +12,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// getHostAgentTemperature looks for a matching host agent by hostname and converts
+// getHostAgentTemperature looks for a matching host agent and converts
 // its sensor data to the Temperature model used by Proxmox nodes.
+// It first tries to match by nodeID using the LinkedNodeID field (preferred for
+// duplicate hostname scenarios), then falls back to hostname matching.
 // Returns nil if no matching host agent is found or if no temperature data is available.
 func (m *Monitor) getHostAgentTemperature(nodeName string) *models.Temperature {
+	return m.getHostAgentTemperatureByID("", nodeName)
+}
+
+// getHostAgentTemperatureByID looks for a matching host agent by node ID first,
+// then falls back to hostname matching. This correctly handles clusters where
+// multiple nodes may have the same hostname (e.g., "px1" on different IPs).
+func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.Temperature {
 	if m.state == nil {
 		return nil
 	}
@@ -25,15 +34,35 @@ func (m *Monitor) getHostAgentTemperature(nodeName string) *models.Temperature {
 		return nil
 	}
 
-	// Find a host agent whose hostname matches the Proxmox node name
-	// The agent on a Proxmox node will have the same hostname as the node
-	nodeLower := strings.ToLower(strings.TrimSpace(nodeName))
 	var matchedHost *models.Host
-	for i := range hosts {
-		hostnameLower := strings.ToLower(strings.TrimSpace(hosts[i].Hostname))
-		if hostnameLower == nodeLower {
-			matchedHost = &hosts[i]
-			break
+
+	// First, try to find a host agent that is explicitly linked to this node
+	// via LinkedNodeID. This is the most reliable method and handles duplicate
+	// hostnames correctly.
+	if nodeID != "" {
+		for i := range hosts {
+			if hosts[i].LinkedNodeID == nodeID {
+				matchedHost = &hosts[i]
+				log.Debug().
+					Str("nodeID", nodeID).
+					Str("hostAgentID", hosts[i].ID).
+					Str("hostname", hosts[i].Hostname).
+					Msg("Matched host agent to node via LinkedNodeID")
+				break
+			}
+		}
+	}
+
+	// Fallback: match by hostname if no linked host was found
+	// This maintains backwards compatibility for setups where linking hasn't occurred yet
+	if matchedHost == nil {
+		nodeLower := strings.ToLower(strings.TrimSpace(nodeName))
+		for i := range hosts {
+			hostnameLower := strings.ToLower(strings.TrimSpace(hosts[i].Hostname))
+			if hostnameLower == nodeLower {
+				matchedHost = &hosts[i]
+				break
+			}
 		}
 	}
 
