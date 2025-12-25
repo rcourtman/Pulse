@@ -1177,17 +1177,33 @@ export const AISettings: Component = () => {
                           ENABLED
                         </span>
                       </Show>
+                      <Show when={autoFixLocked()}>
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded">Pro</span>
+                      </Show>
                     </label>
                     <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
                       {form.autonomousMode
                         ? 'AI will execute all commands without asking for approval. Only enable if you trust your configured model.'
                         : 'AI will ask for approval before running commands that modify your system. Read-only commands (like df, ps, docker stats) run automatically.'}
                     </p>
+                    <Show when={autoFixLocked()}>
+                      <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+                        Pulse Pro required for autonomous mode.{' '}
+                        <a
+                          class="underline decoration-dotted"
+                          href="https://pulserelay.pro"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Upgrade
+                        </a>
+                      </p>
+                    </Show>
                   </div>
                   <Toggle
                     checked={form.autonomousMode}
                     onChange={(event) => setForm('autonomousMode', event.currentTarget.checked)}
-                    disabled={saving()}
+                    disabled={saving() || autoFixLocked()}
                   />
                 </div>
               </div>
