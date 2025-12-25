@@ -1,12 +1,12 @@
 <div align="center">
   <img src="docs/images/pulse-logo.svg" alt="Pulse Logo" width="120" />
   <h1>Pulse</h1>
-  <p><strong>Real-time monitoring for Proxmox VE, Proxmox Mail Gateway, PBS, and Docker infrastructure.</strong></p>
+  <p><strong>Real-time monitoring for Proxmox, Docker, and Kubernetes infrastructure.</strong></p>
 
+  [![GitHub Stars](https://img.shields.io/github/stars/rcourtman/Pulse?style=flat&logo=github)](https://github.com/rcourtman/Pulse)
   [![GitHub release](https://img.shields.io/github/v/release/rcourtman/Pulse)](https://github.com/rcourtman/Pulse/releases/latest)
   [![Docker Pulls](https://img.shields.io/docker/pulls/rcourtman/pulse)](https://hub.docker.com/r/rcourtman/pulse)
   [![License](https://img.shields.io/github/license/rcourtman/Pulse)](LICENSE)
-  [![GitHub Sponsors](https://img.shields.io/github/sponsors/rcourtman?label=Sponsor)](https://github.com/sponsors/rcourtman)
 
   [Live Demo](https://demo.pulserelay.pro) • [Pulse Pro](https://pulserelay.pro) • [Documentation](docs/README.md) • [Report Bug](https://github.com/rcourtman/Pulse/issues)
 </div>
@@ -30,7 +30,7 @@ Designed for homelabs, sysadmins, and MSPs who need a "single pane of glass" wit
 - **Metrics History**: Persistent storage with configurable retention
 - **Backup Explorer**: Visualize backup jobs and storage usage
 
-### Pulse AI *(New in 5.0)*
+### AI-Powered
 - **Chat Assistant**: Ask questions about your infrastructure in natural language
 - **Patrol**: Background health checks that generate findings on a schedule
 - **Alert Analysis**: Optional AI analysis when alerts fire
