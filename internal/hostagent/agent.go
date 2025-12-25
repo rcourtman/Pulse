@@ -545,9 +545,27 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 		result.TemperatureCelsius[gpuName] = temp
 	}
 
+	// Add fan speeds (RPM)
+	if len(tempData.Fans) > 0 {
+		result.FanRPM = make(map[string]float64)
+		for fanName, rpm := range tempData.Fans {
+			result.FanRPM[fanName] = rpm
+		}
+	}
+
+	// Add other temperatures (DDR5, motherboard, etc.)
+	if len(tempData.Other) > 0 {
+		result.Additional = make(map[string]float64)
+		for sensorName, temp := range tempData.Other {
+			result.Additional[sensorName] = temp
+		}
+	}
+
 	a.logger.Debug().
 		Int("temperatureCount", len(result.TemperatureCelsius)).
-		Msg("Collected temperature data")
+		Int("fanCount", len(result.FanRPM)).
+		Int("additionalCount", len(result.Additional)).
+		Msg("Collected sensor data")
 
 	return result
 }
