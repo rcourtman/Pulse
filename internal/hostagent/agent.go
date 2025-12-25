@@ -421,7 +421,50 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 		return fmt.Errorf("pulse responded with status %s", resp.Status)
 	}
 
+	// Parse response to check for server-side config overrides
+	var reportResp struct {
+		Success bool `json:"success"`
+		HostID  string `json:"hostId"`
+		Config  *struct {
+			CommandsEnabled *bool `json:"commandsEnabled"`
+		} `json:"config,omitempty"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&reportResp); err != nil {
+		// Non-fatal: just log and continue
+		a.logger.Debug().Err(err).Msg("Failed to parse report response, ignoring config")
+		return nil
+	}
+
+	// Apply server config overrides
+	if reportResp.Config != nil && reportResp.Config.CommandsEnabled != nil {
+		a.applyRemoteConfig(*reportResp.Config.CommandsEnabled)
+	}
+
 	return nil
+}
+
+// applyRemoteConfig applies server-side configuration overrides.
+// Currently handles enabling/disabling the command execution feature dynamically.
+func (a *Agent) applyRemoteConfig(commandsEnabled bool) {
+	// Check if state would change
+	currentlyEnabled := a.commandClient != nil
+
+	if commandsEnabled && !currentlyEnabled {
+		// Server enabled commands, but we don't have a command client
+		// Start the command client
+		a.logger.Info().Msg("Server enabled command execution - starting command client")
+		a.commandClient = NewCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
+		go func() {
+			if err := a.commandClient.Run(context.Background()); err != nil && !errors.Is(err, context.Canceled) {
+				a.logger.Error().Err(err).Msg("Command client stopped with error")
+			}
+		}()
+	} else if !commandsEnabled && currentlyEnabled {
+		// Server disabled commands, but we have a command client running
+		a.logger.Info().Msg("Server disabled command execution - stopping command client")
+		// Signal stop (the command client will exit on next iteration)
+		a.commandClient = nil
+	}
 }
 
 func normalisePlatform(platform string) string {

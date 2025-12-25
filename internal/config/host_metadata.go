@@ -12,11 +12,12 @@ import (
 
 // HostMetadata holds additional metadata for a host
 type HostMetadata struct {
-	ID          string   `json:"id"`          // Host ID
-	CustomURL   string   `json:"customUrl"`   // Custom URL for the host
-	Description string   `json:"description"` // Optional description
-	Tags        []string `json:"tags"`        // Optional tags for categorization
-	Notes       []string `json:"notes"`       // User annotations for AI context
+	ID              string   `json:"id"`              // Host ID
+	CustomURL       string   `json:"customUrl"`       // Custom URL for the host
+	Description     string   `json:"description"`     // Optional description
+	Tags            []string `json:"tags"`            // Optional tags for categorization
+	Notes           []string `json:"notes"`           // User annotations for AI context
+	CommandsEnabled *bool    `json:"commandsEnabled"` // Remote override for AI command execution (nil = use agent default)
 }
 
 // HostMetadataStore manages host metadata
