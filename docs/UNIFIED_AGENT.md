@@ -49,6 +49,8 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 | `--disable-kubernetes` | - | Disable Kubernetes even if detected | - |
 | `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Force enable Proxmox integration | **auto-detect** |
 | `--disable-proxmox` | - | Disable Proxmox even if detected | - |
+| `--enable-commands` | `PULSE_ENABLE_COMMANDS` | Enable AI command execution (disabled by default) | `false` |
+| `--disk-exclude` | `PULSE_DISK_EXCLUDE` | Mount point patterns to exclude from disk monitoring (repeatable or CSV) | *(none)* |
 | `--kubeconfig` | `PULSE_KUBECONFIG` | Kubeconfig path (optional) | *(auto)* |
 | `--kube-context` | `PULSE_KUBE_CONTEXT` | Kubeconfig context (optional) | *(auto)* |
 | `--kube-include-namespace` | `PULSE_KUBE_INCLUDE_NAMESPACES` | Limit namespaces (repeatable or CSV, wildcards supported) | *(all)* |
@@ -103,6 +105,50 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
   bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-host --enable-docker
 ```
+
+### Exclude Specific Disks from Monitoring
+```bash
+# Exclude specific mount points
+pulse-agent --disk-exclude /mnt/backup --disk-exclude /media/external
+
+# Exclude using patterns (prefix match)
+pulse-agent --disk-exclude '/mnt/pbs*'  # Matches /mnt/pbs-data, /mnt/pbs-backup, etc.
+
+# Exclude using patterns (contains match)
+pulse-agent --disk-exclude '*pbs*'  # Matches any path containing 'pbs'
+
+# Via environment variable (comma-separated)
+PULSE_DISK_EXCLUDE=/mnt/backup,*pbs*,/media/external
+```
+
+**Pattern types:**
+- Exact: `/mnt/backup` - matches only that exact path
+- Prefix: `/mnt/ext*` - matches paths starting with `/mnt/ext`
+- Contains: `*pbs*` - matches paths containing `pbs`
+
+## S.M.A.R.T. Disk Temperatures
+
+The agent can report S.M.A.R.T. disk temperatures when running in Agent mode. This requires:
+
+1. **smartmontools** installed on the host:
+   ```bash
+   # Debian/Ubuntu
+   apt install smartmontools
+
+   # RHEL/CentOS
+   yum install smartmontools
+
+   # Alpine
+   apk add smartmontools
+   ```
+
+2. The agent must have permission to run `smartctl` (typically requires root)
+
+**Notes:**
+- Disks in standby mode are reported as such (no temperature) to avoid waking them
+- S.M.A.R.T. data is collected alongside other host metrics
+- If `smartctl` is not available, S.M.A.R.T. monitoring is silently skipped
+
 
 ## Auto-Update
 
