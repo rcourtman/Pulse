@@ -17,10 +17,16 @@ interface InvestigateAlertButtonProps {
 /**
  * "Ask AI" button for one-click alert investigation.
  * When clicked, opens the AI chat panel with the alert context pre-populated.
+ * Hidden entirely when AI is not configured.
  */
 export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
     const [isHovered, setIsHovered] = createSignal(false);
     const isLocked = () => props.licenseLocked === true;
+
+    // Don't render if AI is not enabled
+    if (aiChatStore.enabled !== true) {
+        return null;
+    }
 
     const handleClick = (e: MouseEvent) => {
         e.stopPropagation();
