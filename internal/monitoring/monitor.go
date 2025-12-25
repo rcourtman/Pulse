@@ -7852,6 +7852,24 @@ func (m *Monitor) handleAlertUnacknowledged(alert *alerts.Alert, user string) {
 	m.incidentStore.RecordAlertUnacknowledged(alert, user)
 }
 
+// broadcastStateUpdate sends an immediate state update to all WebSocket clients.
+// Call this after updating state with new data that should be visible immediately.
+func (m *Monitor) broadcastStateUpdate() {
+	m.mu.RLock()
+	hub := m.wsHub
+	m.mu.RUnlock()
+
+	if hub == nil {
+		return
+	}
+
+	state := m.GetState()
+	frontendState := state.ToFrontend()
+	m.updateResourceStore(state)
+	frontendState.Resources = m.getResourcesForBroadcast()
+	hub.BroadcastState(frontendState)
+}
+
 // SetResourceStore sets the resource store for polling optimization.
 // When set, the monitor will check if it should reduce polling frequency
 // for nodes that have host agents providing data.
@@ -8276,6 +8294,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		Str("instance", instanceName).
 		Int("count", len(allBackups)).
 		Msg("Storage backups polled")
+
+	// Immediately broadcast the updated state so frontend sees new backups
+	m.broadcastStateUpdate()
 }
 
 func shouldPreserveBackups(nodeCount int, hadSuccessfulNode bool, storagesWithBackup, contentSuccess int) bool {
@@ -8755,6 +8776,9 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 		Str("instance", instanceName).
 		Int("count", len(allSnapshots)).
 		Msg("Guest snapshots polled")
+
+	// Immediately broadcast the updated state so frontend sees new snapshots
+	m.broadcastStateUpdate()
 }
 
 func (m *Monitor) collectSnapshotSizes(ctx context.Context, instanceName string, client PVEClientInterface, snapshots []models.GuestSnapshot) map[string]int64 {
@@ -9220,6 +9244,9 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		}
 		m.alertManager.CheckBackups(pveStorage, pbsBackups, pmgBackups, guestsByKey, guestsByVMID)
 	}
+
+	// Immediately broadcast the updated state so frontend sees new backups
+	m.broadcastStateUpdate()
 }
 
 func (m *Monitor) buildPBSBackupCache(instanceName string) map[pbsBackupGroupKey]cachedPBSGroup {
