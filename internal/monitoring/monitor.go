@@ -2226,6 +2226,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			TemperatureCelsius: cloneStringFloatMap(report.Sensors.TemperatureCelsius),
 			FanRPM:             cloneStringFloatMap(report.Sensors.FanRPM),
 			Additional:         cloneStringFloatMap(report.Sensors.Additional),
+			SMART:              convertAgentSMARTToModels(report.Sensors.SMART),
 		},
 		RAID:            raid,
 		Ceph:            cephData,
@@ -9603,6 +9604,27 @@ func isLegacyDockerAgent(agentType string) bool {
 	// Unified agent reports type="unified"
 	// Legacy standalone agents have empty type
 	return agentType != "unified"
+}
+
+// convertAgentSMARTToModels converts agent report S.M.A.R.T. data to the models.HostDiskSMART format.
+func convertAgentSMARTToModels(smart []agentshost.DiskSMART) []models.HostDiskSMART {
+	if len(smart) == 0 {
+		return nil
+	}
+	result := make([]models.HostDiskSMART, 0, len(smart))
+	for _, disk := range smart {
+		result = append(result, models.HostDiskSMART{
+			Device:      disk.Device,
+			Model:       disk.Model,
+			Serial:      disk.Serial,
+			WWN:         disk.WWN,
+			Type:        disk.Type,
+			Temperature: disk.Temperature,
+			Health:      disk.Health,
+			Standby:     disk.Standby,
+		})
+	}
+	return result
 }
 
 // convertAgentCephToModels converts agent report Ceph data to the models.HostCephCluster format.

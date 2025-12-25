@@ -210,6 +210,19 @@ type HostSensorSummary struct {
 	TemperatureCelsius map[string]float64 `json:"temperatureCelsius,omitempty"`
 	FanRPM             map[string]float64 `json:"fanRpm,omitempty"`
 	Additional         map[string]float64 `json:"additional,omitempty"`
+	SMART              []HostDiskSMART    `json:"smart,omitempty"` // S.M.A.R.T. disk data
+}
+
+// HostDiskSMART represents S.M.A.R.T. data for a disk from a host agent.
+type HostDiskSMART struct {
+	Device      string `json:"device"`            // Device name (e.g., sda)
+	Model       string `json:"model,omitempty"`   // Disk model
+	Serial      string `json:"serial,omitempty"`  // Serial number
+	WWN         string `json:"wwn,omitempty"`     // World Wide Name
+	Type        string `json:"type,omitempty"`    // Transport type: sata, sas, nvme
+	Temperature int    `json:"temperature"`       // Temperature in Celsius
+	Health      string `json:"health,omitempty"`  // PASSED, FAILED, UNKNOWN
+	Standby     bool   `json:"standby,omitempty"` // True if disk was in standby
 }
 
 // HostRAIDArray represents an mdadm RAID array on a host.

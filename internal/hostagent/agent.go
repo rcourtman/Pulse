@@ -21,6 +21,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mdadm"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
+	"github.com/rcourtman/pulse-go-rewrite/internal/smartctl"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 	gohost "github.com/shirou/gopsutil/v4/host"
@@ -79,14 +80,15 @@ var readFile = os.ReadFile
 var netInterfaces = net.Interfaces
 
 var (
-	hostInfoWithContext   = gohost.InfoWithContext
-	hostUptimeWithContext = gohost.UptimeWithContext
-	hostmetricsCollect    = hostmetrics.Collect
-	sensorsCollectLocal   = sensors.CollectLocal
-	sensorsParse          = sensors.Parse
-	mdadmCollectArrays    = mdadm.CollectArrays
-	cephCollect           = ceph.Collect
-	nowUTC                = func() time.Time { return time.Now().UTC() }
+	hostInfoWithContext    = gohost.InfoWithContext
+	hostUptimeWithContext  = gohost.UptimeWithContext
+	hostmetricsCollect     = hostmetrics.Collect
+	sensorsCollectLocal    = sensors.CollectLocal
+	sensorsParse           = sensors.Parse
+	mdadmCollectArrays     = mdadm.CollectArrays
+	cephCollect            = ceph.Collect
+	smartctlCollectLocal   = smartctl.CollectLocal
+	nowUTC                 = func() time.Time { return time.Now().UTC() }
 )
 
 // New constructs a fully initialised host Agent.
@@ -345,6 +347,12 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 
 	// Collect temperature data (best effort - don't fail if unavailable)
 	sensorData := a.collectTemperatures(collectCtx)
+
+	// Collect S.M.A.R.T. disk data (best effort - don't fail if unavailable)
+	smartData := a.collectSMARTData(collectCtx)
+	if len(smartData) > 0 {
+		sensorData.SMART = smartData
+	}
 
 	// Collect RAID array data (best effort - don't fail if unavailable)
 	raidData := a.collectRAIDArrays(collectCtx)
@@ -678,6 +686,46 @@ func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
 		Int("osds", result.OSDMap.NumOSDs).
 		Int("pools", len(result.Pools)).
 		Msg("Collected Ceph cluster status")
+
+	return result
+}
+
+// collectSMARTData collects S.M.A.R.T. data from local disks.
+// Returns nil if smartctl is not available or no disks are found.
+func (a *Agent) collectSMARTData(ctx context.Context) []agentshost.DiskSMART {
+	// Only collect on Linux (smartctl works on other platforms but disk paths differ)
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+
+	smartData, err := smartctlCollectLocal(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to collect S.M.A.R.T. data (smartctl may not be installed)")
+		return nil
+	}
+
+	if len(smartData) == 0 {
+		return nil
+	}
+
+	// Convert internal smartctl types to agent report types
+	result := make([]agentshost.DiskSMART, 0, len(smartData))
+	for _, disk := range smartData {
+		result = append(result, agentshost.DiskSMART{
+			Device:      disk.Device,
+			Model:       disk.Model,
+			Serial:      disk.Serial,
+			WWN:         disk.WWN,
+			Type:        disk.Type,
+			Temperature: disk.Temperature,
+			Health:      disk.Health,
+			Standby:     disk.Standby,
+		})
+	}
+
+	a.logger.Debug().
+		Int("diskCount", len(result)).
+		Msg("Collected S.M.A.R.T. disk data")
 
 	return result
 }
