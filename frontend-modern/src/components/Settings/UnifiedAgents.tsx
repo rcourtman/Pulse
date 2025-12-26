@@ -247,7 +247,9 @@ export const UnifiedAgents: Component = () => {
 
     const getUninstallCommand = () => {
         const url = customAgentUrl() || agentUrl();
-        return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | bash -s -- --uninstall`;
+        const token = currentToken() || latestRecord()?.id || TOKEN_PLACEHOLDER;
+        const insecure = insecureMode() ? ' --insecure' : '';
+        return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | bash -s -- --uninstall --url ${url} --token ${token}${insecure}`;
     };
 
     // Track previously seen host types to prevent flapping when one source temporarily has no data
@@ -1023,8 +1025,7 @@ export const UnifiedAgents: Component = () => {
                                             <div class="flex items-center justify-end gap-3">
                                                 <button
                                                     onClick={async () => {
-                                                        const url = agentUrl();
-                                                        const cmd = `curl ${insecureMode() ? '-k' : ''}-fsSL ${url}/install.sh | bash -s -- --uninstall`;
+                                                        const cmd = getUninstallCommand();
                                                         const success = await copyToClipboard(cmd);
                                                         if (success) {
                                                             notificationStore.success('Uninstall command copied');
