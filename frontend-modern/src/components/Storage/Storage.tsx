@@ -65,18 +65,18 @@ const Storage: Component = () => {
 
   // Column definitions for storage table
   const STORAGE_COLUMNS: ColumnDef[] = [
-    { id: 'type', label: 'Type', priority: 3 },
-    { id: 'content', label: 'Content', priority: 4 },
-    { id: 'status', label: 'Status', priority: 2 },
-    { id: 'shared', label: 'Shared', priority: 5, hiddenByDefault: true },
-    { id: 'free', label: 'Free', priority: 4 },
-    { id: 'total', label: 'Total', priority: 3 },
+    { id: 'type', label: 'Type', priority: 3, toggleable: true },
+    { id: 'content', label: 'Content', priority: 4, toggleable: true },
+    { id: 'status', label: 'Status', priority: 2, toggleable: true },
+    { id: 'shared', label: 'Shared', priority: 5, toggleable: true },
+    { id: 'free', label: 'Free', priority: 4, toggleable: true },
+    { id: 'total', label: 'Total', priority: 3, toggleable: true },
   ];
 
   // Column visibility management
   const columnVisibility = useColumnVisibility(
-    STORAGE_COLUMNS,
-    STORAGE_KEYS.STORAGE_HIDDEN_COLUMNS
+    STORAGE_KEYS.STORAGE_HIDDEN_COLUMNS,
+    STORAGE_COLUMNS
   );
 
   const isColumnVisible = (id: string) => !columnVisibility.isHiddenByUser(id);
