@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent, cleanup } from '@solidjs/testing-library';
+import { cleanup } from '@solidjs/testing-library';
 import { createStore } from 'solid-js/store';
 
 // We need to test the PBS enhancement banner logic
@@ -197,8 +197,8 @@ describe('PBS Backup Data Source Indicator', () => {
         });
 
         it('should NOT show "via PVE" for non-PBS backups', () => {
-            const backup = {
-                backupType: 'local' as const,
+            const backup: { backupType: 'local' | 'remote'; storage: string; datastore: null } = {
+                backupType: 'local',
                 storage: 'local-lvm',
                 datastore: null,
             };
