@@ -343,3 +343,44 @@ func (h *HostAgentHandlers) HandleUninstall(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// HandleUnlink removes the link between a host agent and its PVE node.
+// The agent continues to report but appears in the Managed Agents table.
+func (h *HostAgentHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	defer r.Body.Close()
+
+	var req struct {
+		HostID string `json:"hostId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", map[string]string{"error": err.Error()})
+		return
+	}
+
+	hostID := strings.TrimSpace(req.HostID)
+	if hostID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Host ID is required", nil)
+		return
+	}
+
+	if err := h.monitor.UnlinkHostAgent(hostID); err != nil {
+		writeErrorResponse(w, http.StatusNotFound, "unlink_failed", err.Error(), nil)
+		return
+	}
+
+	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+
+	if err := utils.WriteJSONResponse(w, map[string]any{
+		"success": true,
+		"hostId":  hostID,
+		"message": "Host agent unlinked from PVE node",
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to serialize host unlink response")
+	}
+}
+

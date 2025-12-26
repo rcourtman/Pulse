@@ -1232,6 +1232,26 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 	return host, nil
 }
 
+// UnlinkHostAgent removes the link between a host agent and its PVE node.
+// The agent will continue to report but will appear in the Managed Agents table
+// instead of being merged with the PVE node in the Dashboard.
+func (m *Monitor) UnlinkHostAgent(hostID string) error {
+	hostID = strings.TrimSpace(hostID)
+	if hostID == "" {
+		return fmt.Errorf("host id is required")
+	}
+
+	if !m.state.UnlinkHostAgent(hostID) {
+		return fmt.Errorf("host not found or not linked to a node")
+	}
+
+	log.Info().
+		Str("hostID", hostID).
+		Msg("Unlinked host agent from PVE node")
+
+	return nil
+}
+
 // HostAgentConfig represents server-side configuration for a host agent.
 type HostAgentConfig struct {
 	CommandsEnabled *bool `json:"commandsEnabled,omitempty"` // nil = use agent default

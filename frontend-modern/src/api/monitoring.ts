@@ -480,6 +480,45 @@ export class MonitoringAPI {
     }
   }
 
+  static async unlinkHostAgent(hostId: string): Promise<void> {
+    if (!hostId) {
+      throw new Error('Host ID is required to unlink an agent.');
+    }
+
+    const url = `${this.baseUrl}/agents/host/unlink`;
+    const response = await apiFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ hostId }),
+    });
+
+    if (!response.ok) {
+      let message = `Failed with status ${response.status}`;
+      try {
+        const text = await response.text();
+        if (text?.trim()) {
+          message = text.trim();
+          try {
+            const parsed = JSON.parse(text);
+            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+              message = parsed.error.trim();
+            } else if (typeof parsed?.message === 'string' && parsed.message.trim()) {
+              message = parsed.message.trim();
+            }
+          } catch (_err) {
+            // Ignore JSON parse errors.
+          }
+        }
+      } catch (_err) {
+        // Ignore body read errors.
+      }
+
+      throw new Error(message);
+    }
+  }
+
   static async lookupHost(params: { id?: string; hostname?: string }): Promise<HostLookupResponse | null> {
     const search = new URLSearchParams();
     if (params.id) search.set('id', params.id);
