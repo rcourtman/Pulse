@@ -1098,7 +1098,7 @@ export function Dashboard(props: DashboardProps) {
         <ComponentErrorBoundary name="Guest Table">
           <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
             <div class="overflow-x-auto">
-              <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": isMobile() ? "100%" : "900px" }}>
+              <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": isMobile() ? "800px" : "900px" }}>
                 <thead>
                   <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                     <For each={visibleColumns()}>

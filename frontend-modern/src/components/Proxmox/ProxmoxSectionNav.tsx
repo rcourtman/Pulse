@@ -60,17 +60,19 @@ export const ProxmoxSectionNav: Component<ProxmoxSectionNavProps> = (props) => {
     const hasCeph = state.cephClusters && state.cephClusters.length > 0;
     const hasReplication = state.replicationJobs && state.replicationJobs.length > 0;
     return allSections.filter((section) =>
-      (section.id !== 'mail' || hasPMG) &&
-      (section.id !== 'ceph' || hasCeph) &&
-      (section.id !== 'replication' || hasReplication)
+      section.id === props.current || (
+        (section.id !== 'mail' || hasPMG) &&
+        (section.id !== 'ceph' || hasCeph) &&
+        (section.id !== 'replication' || hasReplication)
+      )
     );
   });
 
   const baseClasses =
-    'inline-flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-600 dark:text-gray-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900';
+    'inline-flex items-center px-1.5 sm:px-3 py-1 text-[11px] sm:text-sm font-medium border-b-2 border-transparent text-gray-600 dark:text-gray-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900';
 
   return (
-    <div class={`flex flex-wrap items-center gap-3 sm:gap-4 ${props.class ?? ''}`} aria-label="Proxmox sections">
+    <div class={`flex flex-wrap items-center gap-1.5 sm:gap-4 ${props.class ?? ''}`} aria-label="Proxmox sections">
       <For each={sections()}>{(section) => {
         const isActive = section.id === props.current;
         const classes = isActive

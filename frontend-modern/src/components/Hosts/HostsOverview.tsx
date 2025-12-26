@@ -856,7 +856,7 @@ export const HostsOverview: Component = () => {
                 <Card padding="none" tone="glass" class="overflow-hidden">
                   <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
                     <style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>
-                    <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": isMobile() ? "100%" : "900px" }}>
+                    <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "800px" }}>
                       <thead>
                         <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                           {/* Essential columns */}
@@ -1168,7 +1168,7 @@ const HostRow: Component<HostRowProps> = (props) => {
               <EnhancedCPUBar
                 usage={cpuPercent}
                 loadAverage={host.loadAverage?.[0]}
-                cores={host.cpuCount}
+                cores={props.isMobile() ? undefined : host.cpuCount}
               />
             </Show>
           </td>

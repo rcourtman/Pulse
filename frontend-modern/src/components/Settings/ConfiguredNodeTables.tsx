@@ -292,7 +292,7 @@ const findMatchingHostAgent = (
 export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
   return (
     <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
-      <table class="min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+      <table class="min-w-[900px] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
         <thead class="bg-gray-50 dark:bg-gray-800/70">
           <tr>
             <th scope="col" class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -594,7 +594,7 @@ const resolvePbsStatusMeta = (
 export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
   return (
     <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
-      <table class="min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+      <table class="min-w-[900px] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
         <thead class="bg-gray-50 dark:bg-gray-800/70">
           <tr>
             <th scope="col" class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -790,7 +790,7 @@ const resolvePmgStatusMeta = (
 export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
   return (
     <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
-      <table class="min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+      <table class="min-w-[900px] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
         <thead class="bg-gray-50 dark:bg-gray-800/70">
           <tr>
             <th scope="col" class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
