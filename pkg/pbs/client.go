@@ -320,6 +320,147 @@ func (c *Client) get(ctx context.Context, path string) (*http.Response, error) {
 	return c.request(ctx, "GET", path, nil)
 }
 
+// post performs a POST request
+func (c *Client) post(ctx context.Context, path string, data url.Values) (*http.Response, error) {
+	return c.request(ctx, "POST", path, data)
+}
+
+// TokenResponse represents the response from token creation
+type TokenResponse struct {
+	TokenID string `json:"tokenid"`
+	Value   string `json:"value"`
+}
+
+// CreateUser creates a new user on the PBS server
+// This requires admin privileges (typically root@pam)
+func (c *Client) CreateUser(ctx context.Context, userID, comment string) error {
+	log.Debug().Str("userID", userID).Msg("PBS CreateUser: creating user")
+
+	data := url.Values{}
+	data.Set("userid", userID)
+	if comment != "" {
+		data.Set("comment", comment)
+	}
+
+	resp, err := c.post(ctx, "/api2/json/access/users", data)
+	if err != nil {
+		// User might already exist, which is okay
+		if strings.Contains(err.Error(), "already exists") {
+			log.Debug().Str("userID", userID).Msg("PBS CreateUser: user already exists")
+			return nil
+		}
+		return fmt.Errorf("create user: %w", err)
+	}
+	defer resp.Body.Close()
+
+	log.Info().Str("userID", userID).Msg("PBS CreateUser: user created successfully")
+	return nil
+}
+
+// SetUserACL sets ACL permissions for a user
+func (c *Client) SetUserACL(ctx context.Context, authID, path, role string) error {
+	log.Debug().Str("authID", authID).Str("path", path).Str("role", role).Msg("PBS SetUserACL: setting ACL")
+
+	data := url.Values{}
+	data.Set("auth-id", authID)
+	data.Set("path", path)
+	data.Set("role", role)
+
+	resp, err := c.post(ctx, "/api2/json/access/acl", data)
+	if err != nil {
+		return fmt.Errorf("set ACL: %w", err)
+	}
+	defer resp.Body.Close()
+
+	log.Info().Str("authID", authID).Str("role", role).Msg("PBS SetUserACL: ACL set successfully")
+	return nil
+}
+
+// CreateUserToken creates an API token for a user
+// Returns the full token ID and the secret value
+func (c *Client) CreateUserToken(ctx context.Context, userID, tokenName string) (*TokenResponse, error) {
+	log.Debug().Str("userID", userID).Str("tokenName", tokenName).Msg("PBS CreateUserToken: creating token")
+
+	// PBS API: POST /api2/json/access/users/{userid}/token/{tokenname}
+	path := fmt.Sprintf("/api2/json/access/users/%s/token/%s", url.PathEscape(userID), url.PathEscape(tokenName))
+
+	// Token with no expiry
+	data := url.Values{}
+	data.Set("expire", "0")
+
+	resp, err := c.post(ctx, path, data)
+	if err != nil {
+		return nil, fmt.Errorf("create token: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	// Parse response - PBS returns {"data": {"tokenid": "...", "value": "..."}}
+	var result struct {
+		Data TokenResponse `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("parse response: %w (body: %s)", err, string(body))
+	}
+
+	if result.Data.Value == "" {
+		return nil, fmt.Errorf("empty token value in response: %s", string(body))
+	}
+
+	log.Info().
+		Str("userID", userID).
+		Str("tokenName", tokenName).
+		Str("tokenID", result.Data.TokenID).
+		Msg("PBS CreateUserToken: token created successfully")
+
+	return &result.Data, nil
+}
+
+// SetupMonitoringAccess creates a monitoring user with Audit role and returns API token
+// This is the turnkey method for setting up PBS monitoring access
+func (c *Client) SetupMonitoringAccess(ctx context.Context, tokenName string) (tokenID, tokenValue string, err error) {
+	const (
+		monitorUser    = "pulse-monitor@pbs"
+		monitorComment = "Pulse monitoring service"
+		auditRole      = "Audit"
+	)
+
+	log.Info().Str("tokenName", tokenName).Msg("PBS SetupMonitoringAccess: starting turnkey setup")
+
+	// Step 1: Create monitoring user (ignore if exists)
+	if err := c.CreateUser(ctx, monitorUser, monitorComment); err != nil {
+		log.Warn().Err(err).Msg("PBS SetupMonitoringAccess: failed to create user (may already exist)")
+		// Continue - user might already exist
+	}
+
+	// Step 2: Grant Audit role on / (root path)
+	if err := c.SetUserACL(ctx, monitorUser, "/", auditRole); err != nil {
+		return "", "", fmt.Errorf("set user ACL: %w", err)
+	}
+
+	// Step 3: Create API token
+	token, err := c.CreateUserToken(ctx, monitorUser, tokenName)
+	if err != nil {
+		return "", "", fmt.Errorf("create token: %w", err)
+	}
+
+	// Step 4: Grant Audit role to the token as well
+	if err := c.SetUserACL(ctx, token.TokenID, "/", auditRole); err != nil {
+		log.Warn().Err(err).Msg("PBS SetupMonitoringAccess: failed to set ACL on token (may not be required)")
+		// Continue - might not be strictly necessary
+	}
+
+	log.Info().
+		Str("tokenID", token.TokenID).
+		Msg("PBS SetupMonitoringAccess: turnkey setup complete")
+
+	return token.TokenID, token.Value, nil
+}
+
 // Version represents PBS version information
 type Version struct {
 	Version string `json:"version"`
