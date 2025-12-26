@@ -1,6 +1,8 @@
 import { Component, Show, For, createSignal, onMount, createEffect, onCleanup } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { SearchTipsPopover } from '@/components/shared/SearchTipsPopover';
+import { ColumnPicker } from '@/components/shared/ColumnPicker';
+import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { createSearchHistoryManager } from '@/utils/searchHistory';
 
@@ -17,6 +19,13 @@ interface StorageFilterProps {
   searchInputRef?: (el: HTMLInputElement) => void;
   statusFilter?: () => 'all' | 'available' | 'offline';
   setStatusFilter?: (value: 'all' | 'available' | 'offline') => void;
+  // Column visibility (optional)
+  columnVisibility?: {
+    availableToggles: () => ColumnDef[];
+    isHiddenByUser: (id: string) => boolean;
+    toggle: (id: string) => void;
+    resetToDefaults: () => void;
+  };
 }
 
 export const StorageFilter: Component<StorageFilterProps> = (props) => {
@@ -386,6 +395,17 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               </svg>
             </button>
           </div>
+
+          {/* Column Picker */}
+          <Show when={props.columnVisibility}>
+            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+            <ColumnPicker
+              columns={props.columnVisibility!.availableToggles()}
+              isHidden={props.columnVisibility!.isHiddenByUser}
+              onToggle={props.columnVisibility!.toggle}
+              onReset={props.columnVisibility!.resetToDefaults}
+            />
+          </Show>
 
           {/* Reset Button - Only show when filters are active */}
           <Show when={hasActiveFilters()}>

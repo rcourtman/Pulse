@@ -2661,7 +2661,8 @@ function OverviewTab(props: {
       </div>
 
       {/* Sub-tabs for AI Insights vs Active Alerts */}
-      <Show when={patrolStatus()?.enabled}>
+      {/* Show tabs when patrol is enabled OR when there are legacy findings to clear */}
+      <Show when={patrolStatus()?.enabled || aiFindings().length > 0}>
         <div class="flex items-center gap-1 border-b border-gray-200 dark:border-gray-700/50 pb-1">
           <button
             class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${overviewSubTab() === 'active-alerts'
@@ -2694,8 +2695,8 @@ function OverviewTab(props: {
         </div>
       </Show>
 
-      {/* AI Insights Section - show when AI tab selected and there are findings */}
-      <Show when={overviewSubTab() === 'ai-insights' && patrolStatus()?.enabled}>
+      {/* AI Insights Section - show when AI tab selected and patrol enabled OR has findings to clear */}
+      <Show when={overviewSubTab() === 'ai-insights' && (patrolStatus()?.enabled || aiFindings().length > 0)}>
         <div>
           <div class="flex items-center justify-between mb-3">
             <SectionHeader
@@ -3778,8 +3779,8 @@ function OverviewTab(props: {
         </div>
       </Show >
 
-      {/* Active Alerts - show when alerts tab selected OR when patrol is disabled (no sub-tabs) */}
-      < Show when={overviewSubTab() === 'active-alerts' || !patrolStatus()?.enabled
+      {/* Active Alerts - show when alerts tab selected OR when patrol is disabled AND no legacy findings (no sub-tabs) */}
+      < Show when={overviewSubTab() === 'active-alerts' || (!patrolStatus()?.enabled && aiFindings().length === 0)
       }>
         <div>
           <SectionHeader title="Active Alerts" size="md" class="mb-3" />
