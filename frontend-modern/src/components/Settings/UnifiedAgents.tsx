@@ -383,6 +383,21 @@ export const UnifiedAgents: Component = () => {
     });
     const hasRemovedKubernetesClusters = createMemo(() => removedKubernetesClusters().length > 0);
 
+    // Host agents linked to PVE nodes (shown separately with unlink option)
+    const linkedHostAgents = createMemo(() => {
+        const hosts = state.hosts || [];
+        return hosts.filter(h => h.linkedNodeId).map(h => ({
+            id: h.id,
+            hostname: h.hostname || 'Unknown',
+            displayName: h.displayName,
+            linkedNodeId: h.linkedNodeId,
+            status: h.status,
+            version: h.agentVersion,
+            lastSeen: h.lastSeen ? new Date(h.lastSeen).getTime() : undefined,
+        }));
+    });
+    const hasLinkedAgents = createMemo(() => linkedHostAgents().length > 0);
+
     const getUpgradeCommand = (_hostname: string) => {
         const token = resolvedToken();
         const url = customAgentUrl() || agentUrl();
@@ -461,6 +476,7 @@ export const UnifiedAgents: Component = () => {
             notificationStore.error('Failed to update agent configuration');
         }
     };
+
 
     // Clear pending state when agent reports matching the expected value, or after timeout
     createEffect(() => {
@@ -869,6 +885,19 @@ export const UnifiedAgents: Component = () => {
                         Overview of all agents currently reporting to Pulse.
                     </p>
                 </div>
+
+                {/* Note about linked agents */}
+                <Show when={hasLinkedAgents()}>
+                    <div class="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-900/20">
+                        <svg class="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p class="text-xs text-blue-700 dark:text-blue-300">
+                            <span class="font-medium">{linkedHostAgents().length}</span> host agent{linkedHostAgents().length > 1 ? 's are' : ' is'} linked to Proxmox node{linkedHostAgents().length > 1 ? 's' : ''} and shown in the Dashboard with a <span class="font-medium text-purple-600 dark:text-purple-400">+Agent</span> badge.
+                            <a href="#linked-agents" class="ml-1 underline hover:text-blue-900 dark:hover:text-blue-100">Manage linked agents →</a>
+                        </p>
+                    </div>
+                </Show>
 
                 <Show when={hasLegacyAgents()}>
                     <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-700 dark:bg-amber-900/20">

@@ -2054,6 +2054,44 @@ func (s *State) UnlinkNodesFromHostAgent(hostAgentID string) int {
 	return count
 }
 
+// UnlinkHostAgent removes the bidirectional link between a host agent and its PVE node.
+// Clears LinkedNodeID on the host and LinkedHostAgentID on the node.
+// Returns true if the host was found and unlinked.
+func (s *State) UnlinkHostAgent(hostID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Find the host
+	var hostIdx int = -1
+	var linkedNodeID string
+	for i, host := range s.Hosts {
+		if host.ID == hostID {
+			hostIdx = i
+			linkedNodeID = host.LinkedNodeID
+			break
+		}
+	}
+
+	if hostIdx < 0 || linkedNodeID == "" {
+		return false
+	}
+
+	// Clear the link on the host
+	s.Hosts[hostIdx].LinkedNodeID = ""
+	s.Hosts[hostIdx].LinkedVMID = ""
+	s.Hosts[hostIdx].LinkedContainerID = ""
+
+	// Clear the link on the node
+	for i, node := range s.Nodes {
+		if node.ID == linkedNodeID || node.LinkedHostAgentID == hostID {
+			s.Nodes[i].LinkedHostAgentID = ""
+		}
+	}
+
+	s.LastUpdate = time.Now()
+	return true
+}
+
 // UpsertCephCluster inserts or updates a Ceph cluster in the state.
 // Uses ID (typically the FSID) for matching.
 func (s *State) UpsertCephCluster(cluster CephCluster) {
