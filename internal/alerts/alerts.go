@@ -5732,8 +5732,13 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			}
 
 			// Check if we should re-notify based on cooldown period
+			// Never re-notify acknowledged alerts (user has already seen it)
 			shouldRenotify := false
-			if m.shouldNotifyAfterCooldown(existingAlert) {
+			if existingAlert.Acknowledged {
+				log.Debug().
+					Str("alertID", alertID).
+					Msg("Alert is acknowledged, skipping re-notification")
+			} else if m.shouldNotifyAfterCooldown(existingAlert) {
 				shouldRenotify = true
 				log.Debug().
 					Str("alertID", alertID).
