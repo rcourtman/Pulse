@@ -163,13 +163,23 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 		return
 	}
 
-	// Provide helpful error message
+	// Fallback: redirect to GitHub releases for the binary
+	// This handles LXC/barebone installations that don't have agent binaries locally
 	if normalized != "" {
-		log.Warn().Str("arch", normalized).Msg("Unified agent binary not found for requested architecture")
-		http.Error(w, "Agent binary not found for architecture: "+normalized, http.StatusNotFound)
-	} else {
-		http.Error(w, "Agent binary not found", http.StatusNotFound)
+		// Map architecture to GitHub release asset name
+		binaryName := "pulse-agent-" + normalized
+		if strings.HasPrefix(normalized, "windows-") {
+			binaryName += ".exe"
+		}
+		githubURL := "https://github.com/rcourtman/Pulse/releases/latest/download/" + binaryName
+		log.Info().Str("arch", normalized).Str("redirect", githubURL).Msg("Local agent binary not found, redirecting to GitHub releases")
+		w.Header().Set("X-Served-From", "github-redirect")
+		http.Redirect(w, req, githubURL, http.StatusTemporaryRedirect)
+		return
 	}
+
+	// No architecture specified and no local binary - can't redirect without knowing arch
+	http.Error(w, "Agent binary not found. Specify ?arch=linux-amd64 (or your architecture)", http.StatusNotFound)
 }
 
 // proxyInstallScriptFromGitHub fetches an install script from GitHub releases
