@@ -115,6 +115,7 @@ export const STORAGE_KEYS = {
   HOSTS_HIDDEN_COLUMNS: 'hostsHiddenColumns',
   DOCKER_HIDDEN_COLUMNS: 'dockerHiddenColumns',
   BACKUPS_HIDDEN_COLUMNS: 'backupsHiddenColumns',
+  STORAGE_HIDDEN_COLUMNS: 'storageHiddenColumns',
 
   // Resources search
   RESOURCES_SEARCH_HISTORY: 'resourcesSearchHistory',
