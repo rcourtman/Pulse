@@ -810,6 +810,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           hasCustomThresholds ||
           Boolean(override?.disabled) ||
           Boolean(override?.disableConnectivity),
+        disabled: override?.disabled || false,
         disableConnectivity: override?.disableConnectivity || false,
         thresholds: override?.thresholds || {},
         defaults: props.hostDefaults,
@@ -831,6 +832,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           instance: '',
           status: 'unknown',
           hasOverride: true,
+          disabled: override.disabled || false,
           disableConnectivity: override.disableConnectivity || false,
           thresholds: override.thresholds || {},
           defaults: props.hostDefaults,
