@@ -65,12 +65,12 @@ const Storage: Component = () => {
 
   // Column definitions for storage table
   const STORAGE_COLUMNS: ColumnDef[] = [
-    { id: 'type', label: 'Type', priority: 3, toggleable: true },
-    { id: 'content', label: 'Content', priority: 4, toggleable: true },
-    { id: 'status', label: 'Status', priority: 2, toggleable: true },
-    { id: 'shared', label: 'Shared', priority: 5, toggleable: true },
-    { id: 'free', label: 'Free', priority: 4, toggleable: true },
-    { id: 'total', label: 'Total', priority: 3, toggleable: true },
+    { id: 'type', label: 'Type', priority: 'secondary', toggleable: true },
+    { id: 'content', label: 'Content', priority: 'supplementary', toggleable: true },
+    { id: 'status', label: 'Status', priority: 'primary', toggleable: true },
+    { id: 'shared', label: 'Shared', priority: 'detailed', toggleable: true },
+    { id: 'free', label: 'Free', priority: 'supplementary', toggleable: true },
+    { id: 'total', label: 'Total', priority: 'secondary', toggleable: true },
   ];
 
   // Column visibility management

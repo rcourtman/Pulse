@@ -1,0 +1,29 @@
+{
+  "name": "pulse",
+  "version": "1.0.0",
+  "description": "<div align=\"center\">   <img src=\"docs/images/pulse-logo.svg\" alt=\"Pulse Logo\" width=\"120\" />   <h1>Pulse</h1>   <p><strong>Real-time monitoring for Proxmox, Docker, and Kubernetes infrastructure.</strong></p>",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "husky"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rcourtman/Pulse.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/rcourtman/Pulse/issues"
+  },
+  "homepage": "https://github.com/rcourtman/Pulse#readme",
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}
