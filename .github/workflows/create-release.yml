@@ -406,10 +406,11 @@ jobs:
           IS_PRERELEASE="${{ needs.extract_version.outputs.is_prerelease }}"
 
           # Check if a release already exists for this tag
+          # Note: gh api returns JSON error on 404, so check for valid release ID
           EXISTING_RELEASE=$(gh api "repos/${{ github.repository }}/releases/tags/${TAG}" 2>/dev/null || echo "")
+          RELEASE_ID=$(echo "$EXISTING_RELEASE" | jq -r '.id // empty')
 
-          if [ -n "$EXISTING_RELEASE" ]; then
-            RELEASE_ID=$(echo "$EXISTING_RELEASE" | jq -r '.id')
+          if [ -n "$RELEASE_ID" ]; then
             RELEASE_URL=$(echo "$EXISTING_RELEASE" | jq -r '.html_url')
             IS_DRAFT=$(echo "$EXISTING_RELEASE" | jq -r '.draft')
 
