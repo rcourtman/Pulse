@@ -1210,6 +1210,15 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 
 	m.state.RemoveConnectionHealth(hostConnectionPrefix + hostID)
 
+	// Clear LinkedHostAgentID from any nodes that were linked to this host agent
+	unlinkedCount := m.state.UnlinkNodesFromHostAgent(hostID)
+	if unlinkedCount > 0 {
+		log.Info().
+			Str("hostID", hostID).
+			Int("unlinkedNodes", unlinkedCount).
+			Msg("Cleared host agent links from PVE nodes")
+	}
+
 	log.Info().
 		Str("host", host.Hostname).
 		Str("hostID", hostID).
