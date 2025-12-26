@@ -1,0 +1,2 @@
+# TypeScript type-check before push to prevent CI failures
+cd frontend-modern && npm run type-check
