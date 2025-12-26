@@ -1,10 +1,12 @@
 package api
 
 import (
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -26,8 +28,11 @@ func (r *Router) handleDownloadUnifiedInstallScript(w http.ResponseWriter, req *
 		// Fallback to project root (dev environment)
 		scriptPath = filepath.Join(r.projectRoot, "scripts", "install.sh")
 		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-			log.Error().Str("path", scriptPath).Msg("Unified install script not found")
-			http.Error(w, "Install script not found", http.StatusNotFound)
+			// Final fallback: proxy from GitHub releases
+			// This handles LXC/barebone installations updated via web UI where
+			// only the binary is updated, not the scripts directory
+			log.Info().Msg("Local install.sh not found, proxying from GitHub releases")
+			r.proxyInstallScriptFromGitHub(w, req, "install.sh")
 			return
 		}
 	}
@@ -54,8 +59,9 @@ func (r *Router) handleDownloadUnifiedInstallScriptPS(w http.ResponseWriter, req
 		// Fallback to project root (dev environment)
 		scriptPath = filepath.Join(r.projectRoot, "scripts", "install.ps1")
 		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-			log.Error().Str("path", scriptPath).Msg("Unified PowerShell install script not found")
-			http.Error(w, "Install script not found", http.StatusNotFound)
+			// Final fallback: proxy from GitHub releases
+			log.Info().Msg("Local install.ps1 not found, proxying from GitHub releases")
+			r.proxyInstallScriptFromGitHub(w, req, "install.ps1")
 			return
 		}
 	}
@@ -164,4 +170,48 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 	} else {
 		http.Error(w, "Agent binary not found", http.StatusNotFound)
 	}
+}
+
+// proxyInstallScriptFromGitHub fetches an install script from GitHub releases
+// This is used as a fallback when scripts aren't available locally (e.g., LXC updates)
+func (r *Router) proxyInstallScriptFromGitHub(w http.ResponseWriter, req *http.Request, scriptName string) {
+	// Use raw.githubusercontent.com to fetch from main branch
+	githubURL := "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/" + scriptName
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	resp, err := client.Get(githubURL)
+	if err != nil {
+		log.Error().Err(err).Str("url", githubURL).Msg("Failed to fetch install script from GitHub")
+		http.Error(w, "Failed to fetch install script", http.StatusServiceUnavailable)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Error().Int("status", resp.StatusCode).Str("url", githubURL).Msg("GitHub returned non-200 status for install script")
+		http.Error(w, "Install script not found", http.StatusNotFound)
+		return
+	}
+
+	// Read the script content
+	content, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to read install script from GitHub")
+		http.Error(w, "Failed to read install script", http.StatusInternalServerError)
+		return
+	}
+
+	// Determine content type based on script extension
+	contentType := "text/x-shellscript"
+	if strings.HasSuffix(scriptName, ".ps1") {
+		contentType = "text/plain"
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", "inline; filename=\""+scriptName+"\"")
+	w.Header().Set("X-Served-From", "github-fallback")
+	w.Write(content)
 }
