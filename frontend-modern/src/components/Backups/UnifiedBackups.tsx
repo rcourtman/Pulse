@@ -158,7 +158,7 @@ const UnifiedBackups: Component = () => {
     }
   });
 
-  const [useRelativeTime, setUseRelativeTime] = createLocalStorageBooleanSignal(
+  const [useRelativeTime] = createLocalStorageBooleanSignal(
     STORAGE_KEYS.BACKUPS_USE_RELATIVE_TIME,
     false, // Default to absolute time
   );
