@@ -11,7 +11,6 @@ import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
-import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import type { BackupType, GuestType, UnifiedBackup } from '@/types/backups';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -2016,30 +2015,14 @@ const UnifiedBackups: Component = () => {
           groupBy={groupByMode}
           setGroupBy={setGroupByMode}
           searchInputRef={(el) => (searchInputRef = el)}
-          typeFilter={typeFilter}
-          setTypeFilter={setTypeFilter}
-          statusFilter={statusFilter}
-          setStatusFilter={setStatusFilter}
-          hasHostBackups={hasHostBackups}
           sortOptions={sortKeyOptions}
           sortKey={sortKey}
           setSortKey={(value) => setSortKey(value as BackupSortKey)}
           sortDirection={sortDirection}
           setSortDirection={setSortDirection}
           onReset={resetFilters}
-          useRelativeTime={useRelativeTime}
-          setUseRelativeTime={setUseRelativeTime}
+          columnVisibility={columnVisibility}
         />
-
-        {/* Column Visibility Toggle */}
-        <div class="flex justify-end mb-2 -mt-2">
-          <ColumnPicker
-            columns={columnVisibility.availableToggles()}
-            isHidden={columnVisibility.isHiddenByUser}
-            onToggle={columnVisibility.toggle}
-            onReset={columnVisibility.resetToDefaults}
-          />
-        </div>
 
         {/* Table */}
         <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
