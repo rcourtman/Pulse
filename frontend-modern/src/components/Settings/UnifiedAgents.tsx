@@ -1020,12 +1020,33 @@ export const UnifiedAgents: Component = () => {
                                             {agent.lastSeen ? formatRelativeTime(agent.lastSeen) : '—'}
                                         </td>
                                         <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
-                                            <button
-                                                onClick={() => handleRemoveAgent(agent.id, agent.types)}
-                                                class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                                            >
-                                                Remove
-                                            </button>
+                                            <div class="flex items-center justify-end gap-3">
+                                                <button
+                                                    onClick={async () => {
+                                                        const url = agentUrl();
+                                                        const cmd = `curl ${insecureMode() ? '-k' : ''}-fsSL ${url}/install.sh | bash -s -- --uninstall`;
+                                                        const success = await copyToClipboard(cmd);
+                                                        if (success) {
+                                                            notificationStore.success('Uninstall command copied');
+                                                        } else {
+                                                            notificationStore.error('Failed to copy');
+                                                        }
+                                                    }}
+                                                    class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+                                                    title="Copy uninstall command"
+                                                >
+                                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                                    </svg>
+                                                </button>
+                                                <button
+                                                    onClick={() => handleRemoveAgent(agent.id, agent.types)}
+                                                    class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                                >
+                                                    Remove
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 )}
