@@ -1090,14 +1090,14 @@ func (c *Client) GetContainerInterfaces(ctx context.Context, node string, vmid i
 
 // GetStorageContent returns the content of a specific storage
 func (c *Client) GetStorageContent(ctx context.Context, node, storage string) ([]StorageContent, error) {
-	// Storage content queries can take longer on large storages
-	// Create a new context with shorter timeout for storage API calls
-	// Storage endpoints can hang when NFS/network storage is unavailable
-	// Using 30s timeout as a balance between responsiveness and reliability
+	// Storage content queries can take longer on large storages, especially PBS
+	// with encrypted backups which can take 10-20+ seconds to enumerate.
+	// Using 60s timeout to accommodate slow PBS storage backends while still
+	// preventing indefinite hangs on unavailable NFS/network storage.
 	storageCtx := ctx
-	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 30*time.Second {
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 60*time.Second {
 		var cancel context.CancelFunc
-		storageCtx, cancel = context.WithTimeout(ctx, 30*time.Second)
+		storageCtx, cancel = context.WithTimeout(ctx, 60*time.Second)
 		defer cancel()
 	}
 
