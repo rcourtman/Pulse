@@ -16,6 +16,7 @@
 #   --disable-proxmox   Disable Proxmox integration even if detected
 #   --interval <dur>    Reporting interval (default: 30s)
 #   --agent-id <id>     Custom agent identifier (default: auto-generated)
+#   --disk-exclude <pattern>  Exclude mount points matching pattern (repeatable)
 #   --insecure          Skip TLS certificate verification
 #   --enable-commands   Enable AI command execution on agent (disabled by default)
 #   --uninstall         Remove the agent
@@ -74,6 +75,7 @@ UNINSTALL="false"
 INSECURE="false"
 AGENT_ID=""
 ENABLE_COMMANDS="false"
+DISK_EXCLUDES=()  # Array for multiple --disk-exclude values
 
 # Track if flags were explicitly set (to override auto-detection)
 DOCKER_EXPLICIT="false"
@@ -172,6 +174,10 @@ build_exec_args() {
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
+    # Add disk exclude patterns
+    for pattern in "${DISK_EXCLUDES[@]}"; do
+        EXEC_ARGS="$EXEC_ARGS --disk-exclude '${pattern}'"
+    done
 }
 
 # Build exec args as array for direct execution (proper quoting)
@@ -191,6 +197,10 @@ build_exec_args_array() {
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-commands); fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS_ARRAY+=(--agent-id "$AGENT_ID"); fi
+    # Add disk exclude patterns
+    for pattern in "${DISK_EXCLUDES[@]}"; do
+        EXEC_ARGS_ARRAY+=(--disk-exclude "$pattern")
+    done
 }
 
 # --- Parse Arguments ---
@@ -212,6 +222,7 @@ while [[ $# -gt 0 ]]; do
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
         --agent-id) AGENT_ID="$2"; shift 2 ;;
+        --disk-exclude) DISK_EXCLUDES+=("$2"); shift 2 ;;
         *) fail "Unknown argument: $1" ;;
     esac
 done
@@ -675,6 +686,12 @@ if [[ "$OS" == "darwin" ]]; then
         <string>--agent-id</string>
         <string>${AGENT_ID}</string>"
     fi
+    # Add disk exclude patterns
+    for pattern in "${DISK_EXCLUDES[@]}"; do
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--disk-exclude</string>
+        <string>${pattern}</string>"
+    done
 
     cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
