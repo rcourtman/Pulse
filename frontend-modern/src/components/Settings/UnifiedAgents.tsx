@@ -416,6 +416,18 @@ export const UnifiedAgents: Component = () => {
         }
     };
 
+    const handleRemoveKubernetesCluster = async (clusterId: string) => {
+        if (!confirm('Are you sure you want to remove this Kubernetes cluster? This will stop monitoring but will not uninstall the agent from the cluster.')) return;
+
+        try {
+            await MonitoringAPI.deleteKubernetesCluster(clusterId);
+            notificationStore.success('Kubernetes cluster removed from Pulse');
+        } catch (err) {
+            logger.error('Failed to remove Kubernetes cluster', err);
+            notificationStore.error('Failed to remove Kubernetes cluster');
+        }
+    };
+
     const handleAllowKubernetesReenroll = async (clusterId: string, name?: string) => {
         try {
             await MonitoringAPI.allowKubernetesClusterReenroll(clusterId);
@@ -1071,7 +1083,7 @@ export const UnifiedAgents: Component = () => {
                                         </td>
                                         <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
                                             <button
-                                                onClick={() => handleRemoveAgent(cluster.id, 'kubernetes')}
+                                                onClick={() => handleRemoveKubernetesCluster(cluster.id)}
                                                 class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                                             >
                                                 Remove

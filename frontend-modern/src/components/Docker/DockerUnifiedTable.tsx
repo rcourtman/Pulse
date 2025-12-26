@@ -1161,16 +1161,7 @@ const DockerContainerRow: Component<{
   };
 
   const cpuPercent = () => Math.max(0, Math.min(100, container.cpuPercent ?? 0));
-  const memPercent = () => Math.max(0, Math.min(100, container.memoryPercent ?? 0));
   const metricsKey = buildMetricKey('dockerContainer', container.id);
-  const memUsageLabel = () => {
-    if (!container.memoryUsageBytes) return undefined;
-    const used = formatBytes(container.memoryUsageBytes, 0);
-    const limit = container.memoryLimitBytes
-      ? formatBytes(container.memoryLimitBytes, 0)
-      : undefined;
-    return limit ? `${used} / ${limit}` : used;
-  };
 
   const uptime = () => (container.uptimeSeconds ? formatUptime(container.uptimeSeconds) : '—');
   const restarts = () => container.restartCount ?? 0;
@@ -1780,8 +1771,8 @@ const DockerContainerRow: Component<{
                         return (
                           <span
                             class={`max-w-full truncate rounded px-1.5 py-0.5 ${isMasked
-                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200'
-                                : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200'
+                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200'
+                              : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200'
                               }`}
                             title={isMasked ? `${name} (masked for security)` : `${name}=${value}`}
                           >
