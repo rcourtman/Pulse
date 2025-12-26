@@ -1296,9 +1296,12 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	}
 
 	// Build hostname-to-hostAgentID map for linking new nodes to existing host agents
+	// Also build a set of valid host agent IDs to validate existing links
 	hostAgentByHostname := make(map[string]string) // lowercase hostname -> hostAgentID
+	validHostAgentIDs := make(map[string]bool)     // set of existing host agent IDs
 	for _, host := range s.Hosts {
 		if host.ID != "" {
+			validHostAgentIDs[host.ID] = true
 			hostAgentByHostname[strings.ToLower(host.Hostname)] = host.ID
 			// Also index by short hostname
 			if idx := strings.Index(host.Hostname, "."); idx > 0 {
@@ -1309,9 +1312,12 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 
 	// Add or update nodes from this instance
 	for _, node := range nodes {
-		// Preserve existing link if we had one
+		// Preserve existing link if we had one, but only if the host agent still exists
 		if existingLink, ok := existingNodeLinks[node.ID]; ok {
-			node.LinkedHostAgentID = existingLink
+			if validHostAgentIDs[existingLink] {
+				node.LinkedHostAgentID = existingLink
+			}
+			// If host agent no longer exists, leave LinkedHostAgentID empty (stale reference cleared)
 		}
 		// If no existing link, try to match by hostname
 		if node.LinkedHostAgentID == "" {
