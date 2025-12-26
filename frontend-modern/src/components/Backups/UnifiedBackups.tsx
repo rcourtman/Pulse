@@ -56,6 +56,28 @@ const UnifiedBackups: Component = () => {
   const pbsBackupsState = createMemo(() => state.backups?.pbs ?? state.pbsBackups);
   const pmgBackupsState = createMemo(() => state.backups?.pmg ?? state.pmgBackups);
   const [searchTerm, setSearchTerm] = createSignal('');
+
+  // PBS enhancement banner: Check if user has PBS storage via PVE passthrough but no direct PBS connection
+  const [pbsBannerDismissed, setPbsBannerDismissed] = createLocalStorageBooleanSignal(
+    'pulse.pbsEnhancementBannerDismissed',
+    false
+  );
+
+  // Detect PBS storage accessed via PVE passthrough (storage.type === 'pbs')
+  const hasPBSViaPassthrough = createMemo(() => {
+    const storageList = state.storage || [];
+    return storageList.some((s) => s.type === 'pbs');
+  });
+
+  // Check if user has direct PBS instances configured
+  const hasDirectPBS = createMemo(() => {
+    return (state.pbs || []).length > 0;
+  });
+
+  // Show banner if: PBS via passthrough exists, no direct PBS, and not dismissed
+  const showPBSEnhancementBanner = createMemo(() => {
+    return hasPBSViaPassthrough() && !hasDirectPBS() && !pbsBannerDismissed();
+  });
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [typeFilter, setTypeFilter] = createSignal<'all' | FilterableGuestType>('all');
   const [backupTypeFilter, setBackupTypeFilter] = createSignal<'all' | BackupType>('all');
@@ -1143,6 +1165,69 @@ const UnifiedBackups: Component = () => {
         searchTerm={searchTerm()}
       />
 
+      {/* PBS Enhancement Banner - shown when PBS storage exists via PVE but no direct PBS connection */}
+      <Show when={showPBSEnhancementBanner()}>
+        <div class="relative bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-4">
+          <button
+            type="button"
+            onClick={() => setPbsBannerDismissed(true)}
+            class="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            title="Dismiss"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+          <div class="flex items-start gap-3 pr-8">
+            <div class="flex-shrink-0 mt-0.5">
+              <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 16v-4M12 8h.01" />
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <h4 class="text-sm font-medium text-blue-900 dark:text-blue-100">
+                Get more from your PBS backups
+              </h4>
+              <p class="mt-1 text-xs text-blue-700 dark:text-blue-300">
+                You're viewing PBS backups through your PVE connection. Add your PBS server directly to unlock:
+              </p>
+              <ul class="mt-2 text-xs text-blue-600 dark:text-blue-400 space-y-1">
+                <li class="flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>Deduplication factor and storage efficiency stats</span>
+                </li>
+                <li class="flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>PBS server health monitoring (CPU, memory, uptime)</span>
+                </li>
+                <li class="flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>Sync, verify, prune, and GC job status</span>
+                </li>
+              </ul>
+              <button
+                type="button"
+                onClick={() => navigate('/settings')}
+                class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+              >
+                Add PBS Server
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
       {/* Removed old PBS table */}
       <Show when={false && sortedPBSInstances().length > 0}>
         <Card padding="none" class="overflow-hidden">
@@ -2152,6 +2237,15 @@ const UnifiedBackups: Component = () => {
                                           ? 'PVE'
                                           : 'PBS'}
                                     </span>
+                                    {/* Data source indicator for PBS via passthrough */}
+                                    <Show when={item.backupType === 'remote' && item.storage && !item.datastore}>
+                                      <span
+                                        class="text-[9px] text-gray-400 dark:text-gray-500 font-medium"
+                                        title="PBS backup accessed via PVE storage - add PBS directly for more detail"
+                                      >
+                                        via PVE
+                                      </span>
+                                    </Show>
                                     <Show when={item.encrypted}>
                                       <span
                                         title="Encrypted backup"
