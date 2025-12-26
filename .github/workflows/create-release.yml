@@ -370,11 +370,31 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ needs.extract_version.outputs.tag }}"
-          echo "Creating tag ${TAG}..."
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "${TAG}" -m "Release ${TAG}"
-          git push origin "${TAG}"
+          HEAD_SHA=$(git rev-parse HEAD)
+
+          # Check if tag already exists on remote
+          REMOTE_TAG_SHA=$(git ls-remote --tags origin "refs/tags/${TAG}" | awk '{print $1}')
+
+          if [ -n "$REMOTE_TAG_SHA" ]; then
+            # Tag exists - check if it points to current HEAD
+            # For annotated tags, we need to dereference to get the commit
+            REMOTE_COMMIT_SHA=$(git ls-remote --tags origin "refs/tags/${TAG}^{}" | awk '{print $1}')
+            # If no dereferenced tag, it's a lightweight tag pointing directly to the commit
+            [ -z "$REMOTE_COMMIT_SHA" ] && REMOTE_COMMIT_SHA="$REMOTE_TAG_SHA"
+
+            if [ "$REMOTE_COMMIT_SHA" = "$HEAD_SHA" ]; then
+              echo "Tag ${TAG} already exists and points to HEAD - continuing"
+            else
+              echo "::error::Tag ${TAG} already exists but points to ${REMOTE_COMMIT_SHA}, not HEAD (${HEAD_SHA}). Delete the tag first: git push origin --delete ${TAG}"
+              exit 1
+            fi
+          else
+            echo "Creating tag ${TAG}..."
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "${TAG}" -m "Release ${TAG}"
+            git push origin "${TAG}"
+          fi
 
       - name: Create draft release
         id: create_release
@@ -383,26 +403,44 @@ jobs:
         run: |
           TAG="${{ needs.extract_version.outputs.tag }}"
           NOTES_FILE="${{ steps.generate_notes.outputs.notes_file }}"
-
-          echo "Creating draft release for ${TAG}..."
-
-          # Tag must exist first - draft releases can't create tags (GitHub API limitation)
-          # See: https://github.com/cli/cli/issues/11589
-          # Create as draft first so we can upload assets before publishing
           IS_PRERELEASE="${{ needs.extract_version.outputs.is_prerelease }}"
-          
-          RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases" \
-            -X POST \
-            -F tag_name="${TAG}" \
-            -F name="Pulse ${TAG}" \
-            -F body="$(cat $NOTES_FILE)" \
-            -F draft=true \
-            -F prerelease=${IS_PRERELEASE})
+
+          # Check if a release already exists for this tag
+          EXISTING_RELEASE=$(gh api "repos/${{ github.repository }}/releases/tags/${TAG}" 2>/dev/null || echo "")
+
+          if [ -n "$EXISTING_RELEASE" ]; then
+            RELEASE_ID=$(echo "$EXISTING_RELEASE" | jq -r '.id')
+            RELEASE_URL=$(echo "$EXISTING_RELEASE" | jq -r '.html_url')
+            IS_DRAFT=$(echo "$EXISTING_RELEASE" | jq -r '.draft')
+
+            if [ "$IS_DRAFT" = "true" ]; then
+              echo "Draft release already exists for ${TAG} - updating it"
+              # Update the existing draft with new notes
+              gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
+                -X PATCH \
+                -F body="$(cat $NOTES_FILE)" \
+                -F prerelease=${IS_PRERELEASE} > /dev/null
+            else
+              echo "::error::Published release already exists for ${TAG}. Cannot re-release the same version."
+              exit 1
+            fi
+          else
+            echo "Creating draft release for ${TAG}..."
+            # Tag must exist first - draft releases can't create tags (GitHub API limitation)
+            # See: https://github.com/cli/cli/issues/11589
+            RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases" \
+              -X POST \
+              -F tag_name="${TAG}" \
+              -F name="Pulse ${TAG}" \
+              -F body="$(cat $NOTES_FILE)" \
+              -F draft=true \
+              -F prerelease=${IS_PRERELEASE})
+
+            RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r '.id')
+            RELEASE_URL=$(echo "$RELEASE_JSON" | jq -r '.html_url')
+          fi
 
           rm -f "$NOTES_FILE"
-
-          RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r '.id')
-          RELEASE_URL=$(echo "$RELEASE_JSON" | jq -r '.html_url')
 
           if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
             echo "::error::Failed to extract release ID from API response"
@@ -420,11 +458,11 @@ jobs:
           TAG="${{ needs.extract_version.outputs.tag }}"
 
           echo "Uploading checksums.txt..."
-          gh release upload "${TAG}" release/checksums.txt
+          gh release upload "${TAG}" release/checksums.txt --clobber
 
           # Upload individual .sha256 files for backward compatibility
           echo "Uploading .sha256 checksum files..."
-          gh release upload "${TAG}" release/*.sha256
+          gh release upload "${TAG}" release/*.sha256 --clobber
 
       - name: Upload release assets
         env:
@@ -435,24 +473,24 @@ jobs:
           echo "Uploading release assets..."
 
           # Upload tarballs
-          gh release upload "${TAG}" release/*.tar.gz
+          gh release upload "${TAG}" release/*.tar.gz --clobber
 
           # Upload Windows zip files
-          gh release upload "${TAG}" release/*.zip
+          gh release upload "${TAG}" release/*.zip --clobber
 
           # Upload Helm chart if it exists
           if ls release/*.tgz 1> /dev/null 2>&1; then
             echo "Uploading Helm chart..."
-            gh release upload "${TAG}" release/*.tgz
+            gh release upload "${TAG}" release/*.tgz --clobber
           fi
 
           # Upload install scripts as standalone assets
           # Users can now use: curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
           # This ensures scripts are version-locked to the release, not pulled from main branch
-          gh release upload "${TAG}" release/install.sh
-          gh release upload "${TAG}" release/install-sensor-proxy.sh
-          gh release upload "${TAG}" release/install-docker.sh
-          gh release upload "${TAG}" release/pulse-auto-update.sh
+          gh release upload "${TAG}" release/install.sh --clobber
+          gh release upload "${TAG}" release/install-sensor-proxy.sh --clobber
+          gh release upload "${TAG}" release/install-docker.sh --clobber
+          gh release upload "${TAG}" release/pulse-auto-update.sh --clobber
 
       - name: Publish release
         if: ${{ github.event.inputs.draft_only != 'true' }}
