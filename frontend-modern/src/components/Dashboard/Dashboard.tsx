@@ -210,6 +210,15 @@ export function Dashboard(props: DashboardProps) {
   const { isMobile } = useBreakpoint();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+
+  // Kiosk mode - hide filter panel for clean dashboard display
+  // Usage: Add ?kiosk=1 to URL
+  const kioskMode = createMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('kiosk') === '1' || params.get('kiosk') === 'true';
+  });
+
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
@@ -940,7 +949,10 @@ export function Dashboard(props: DashboardProps) {
 
   return (
     <div class="space-y-3">
-      <ProxmoxSectionNav current="overview" />
+      {/* Section nav - hidden in kiosk mode */}
+      <Show when={!kioskMode()}>
+        <ProxmoxSectionNav current="overview" />
+      </Show>
 
       {/* Unified Node Selector */}
       <UnifiedNodeSelector
@@ -953,28 +965,30 @@ export function Dashboard(props: DashboardProps) {
         searchTerm={search()}
       />
 
-      {/* Dashboard Filter */}
-      <DashboardFilter
-        search={search}
-        setSearch={setSearch}
-        isSearchLocked={isSearchLocked}
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-        statusMode={statusMode}
-        setStatusMode={setStatusMode}
-        problemsMode={problemsMode}
-        setProblemsMode={setProblemsMode}
-        filteredProblemGuests={problemGuests}
-        groupingMode={groupingMode}
-        setGroupingMode={setGroupingMode}
-        setSortKey={setSortKey}
-        setSortDirection={setSortDirection}
-        searchInputRef={(el) => (searchInputRef = el)}
-        availableColumns={columnVisibility.availableToggles()}
-        isColumnHidden={columnVisibility.isHiddenByUser}
-        onColumnToggle={columnVisibility.toggle}
-        onColumnReset={columnVisibility.resetToDefaults}
-      />
+      {/* Dashboard Filter - hidden in kiosk mode */}
+      <Show when={!kioskMode()}>
+        <DashboardFilter
+          search={search}
+          setSearch={setSearch}
+          isSearchLocked={isSearchLocked}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          statusMode={statusMode}
+          setStatusMode={setStatusMode}
+          problemsMode={problemsMode}
+          setProblemsMode={setProblemsMode}
+          filteredProblemGuests={problemGuests}
+          groupingMode={groupingMode}
+          setGroupingMode={setGroupingMode}
+          setSortKey={setSortKey}
+          setSortDirection={setSortDirection}
+          searchInputRef={(el) => (searchInputRef = el)}
+          availableColumns={columnVisibility.availableToggles()}
+          isColumnHidden={columnVisibility.isHiddenByUser}
+          onColumnToggle={columnVisibility.toggle}
+          onColumnReset={columnVisibility.resetToDefaults}
+        />
+      </Show>
 
       {/* Loading State */}
       <Show when={connected() && !initialDataReceived()}>
