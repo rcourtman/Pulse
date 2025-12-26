@@ -1504,7 +1504,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		// Parse PBS authentication details
 		var pbsUser string
 		var pbsPassword string
-		var pbsTokenName string
+	var pbsTokenName string
 		var pbsTokenValue string
 
 		// Determine authentication method
@@ -1515,12 +1515,55 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			// Token name might contain the full format (user@realm!tokenname)
 			// The backend PBS client will parse this
 		} else if req.Password != "" {
-			// Using password authentication - don't store token fields
+			// Using password authentication - try to create a token via API
+			// This enables turnkey setup for Docker/containerized PBS
 			pbsUser = req.User
-			pbsPassword = req.Password
-			// Ensure user has realm for PBS
 			if pbsUser != "" && !strings.Contains(pbsUser, "@") {
 				pbsUser = pbsUser + "@pbs" // Default to @pbs realm if not specified
+			}
+
+			log.Info().
+				Str("host", host).
+				Str("user", pbsUser).
+				Msg("PBS: Attempting turnkey token creation via API")
+
+			// Try to create a token using the provided credentials
+			pbsClient, err := pbs.NewClient(pbs.ClientConfig{
+				Host:      host,
+				User:      pbsUser,
+				Password:  req.Password,
+				VerifySSL: false, // Self-signed certs common
+			})
+
+			if err != nil {
+				log.Warn().Err(err).Str("host", host).Msg("PBS: Failed to connect for token creation, falling back to password auth")
+				// Fallback to password auth
+				pbsPassword = req.Password
+			} else {
+				// Generate a unique token name
+				hostname, _ := os.Hostname()
+				if hostname == "" {
+					hostname = "pulse"
+				}
+				timestamp := time.Now().Unix()
+				tokenName := fmt.Sprintf("pulse-%s-%d", hostname, timestamp)
+
+				tokenID, tokenSecret, err := pbsClient.SetupMonitoringAccess(context.Background(), tokenName)
+				if err != nil {
+					log.Warn().Err(err).Str("host", host).Msg("PBS: Failed to create token via API, falling back to password auth")
+					// Fallback to password auth
+					pbsPassword = req.Password
+				} else {
+					// Successfully created token - use it instead of password
+					pbsTokenName = tokenID
+					pbsTokenValue = tokenSecret
+					pbsUser = ""      // Clear password auth fields
+					pbsPassword = ""
+					log.Info().
+						Str("host", host).
+						Str("tokenID", tokenID).
+						Msg("PBS: Successfully created monitoring token via API")
+				}
 			}
 		}
 
