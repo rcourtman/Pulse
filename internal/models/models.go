@@ -2029,6 +2029,25 @@ func (s *State) LinkNodeToHostAgent(nodeID, hostAgentID string) bool {
 	return false
 }
 
+// UnlinkNodesFromHostAgent clears LinkedHostAgentID from all nodes linked to the given host agent.
+// This is called when a host agent is removed to clean up stale references.
+func (s *State) UnlinkNodesFromHostAgent(hostAgentID string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	count := 0
+	for i, node := range s.Nodes {
+		if node.LinkedHostAgentID == hostAgentID {
+			s.Nodes[i].LinkedHostAgentID = ""
+			count++
+		}
+	}
+	if count > 0 {
+		s.LastUpdate = time.Now()
+	}
+	return count
+}
+
 // UpsertCephCluster inserts or updates a Ceph cluster in the state.
 // Uses ID (typically the FSID) for matching.
 func (s *State) UpsertCephCluster(cluster CephCluster) {
