@@ -6323,11 +6323,40 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, _ *http
 		fullTokenID = fmt.Sprintf("pulse-monitor@pam!%s", tokenName)
 		// Note: This would require implementing token creation in the proxmox package
 		// For now, we'll return the token for the script to create
+		// TODO: Implement PVE token creation via API
 	} else if req.Type == "pbs" {
-		// For PBS, create token via API
-		fullTokenID = fmt.Sprintf("pulse-monitor@pbs!%s", tokenName)
-		// Note: This would require implementing token creation in the pbs package
-		// For now, we'll return the token for the script to create
+		// For PBS, create token via API using the new client methods
+		log.Info().
+			Str("host", host).
+			Str("username", req.Username).
+			Msg("Creating PBS token via API")
+
+		pbsClient, err := pbs.NewClient(pbs.ClientConfig{
+			Host:      host,
+			User:      req.Username,
+			Password:  req.Password,
+			VerifySSL: false, // Self-signed certs common
+		})
+		if err != nil {
+			log.Error().Err(err).Str("host", host).Msg("Failed to create PBS client")
+			http.Error(w, fmt.Sprintf("Failed to connect to PBS: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		// Use the turnkey method to create user + token
+		tokenID, tokenSecret, err := pbsClient.SetupMonitoringAccess(context.Background(), tokenName)
+		if err != nil {
+			log.Error().Err(err).Str("host", host).Msg("Failed to create PBS monitoring access")
+			http.Error(w, fmt.Sprintf("Failed to create token: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		fullTokenID = tokenID
+		tokenValue = tokenSecret
+		log.Info().
+			Str("host", host).
+			Str("tokenID", fullTokenID).
+			Msg("Successfully created PBS token via API")
 	}
 
 	if createErr != nil {
