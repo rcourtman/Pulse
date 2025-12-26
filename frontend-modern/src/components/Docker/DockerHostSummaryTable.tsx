@@ -10,7 +10,7 @@ import { buildMetricKey } from '@/utils/metricsKeys';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getDockerHostStatusIndicator } from '@/utils/status';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { ResponsiveMetricCell, MetricText } from '@/components/shared/responsive';
+import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { isAgentOutdated, getAgentVersionTooltip } from '@/utils/agentVersion';
 import { DockerHostMetadataAPI, type DockerHostMetadata } from '@/api/dockerHostMetadata';

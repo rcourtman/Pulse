@@ -11,7 +11,7 @@ import { HostsFilter } from './HostsFilter';
 import { useWebSocket } from '@/App';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getHostStatusIndicator } from '@/utils/status';
-import { MetricText } from '@/components/shared/responsive';
+
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { useBreakpoint, type ColumnPriority } from '@/hooks/useBreakpoint';
@@ -1060,7 +1060,6 @@ const HostRow: Component<HostRowProps> = (props) => {
   const hostStatus = createMemo(() => getHostStatusIndicator(host));
   const isOnline = () => host.status === 'online';
   const cpuPercent = host.cpuUsage ?? 0;
-  const memPercent = host.memory?.usage ?? 0;
   const diskStats = props.getDiskStats(host);
 
   const rowClass = () => {

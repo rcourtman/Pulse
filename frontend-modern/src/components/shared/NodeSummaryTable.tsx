@@ -10,7 +10,7 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getNodeStatusIndicator, getPBSStatusIndicator } from '@/utils/status';
-import { ResponsiveMetricCell, MetricText } from '@/components/shared/responsive';
+import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';

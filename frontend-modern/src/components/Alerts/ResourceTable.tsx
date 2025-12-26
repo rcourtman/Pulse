@@ -542,10 +542,10 @@ export function ResourceTable(props: ResourceTableProps) {
         each={
           props.groupedResources
             ? Object.entries(props.groupedResources).sort(([a], [b]) => a.localeCompare(b))
-            : [['default', props.resources || []]]
+            : [['default', props.resources || []] as [string, Resource[]]]
         }
       >
-        {([groupName, resources]) => (
+        {([groupName, resources]: [string, Resource[]]) => (
           <div class="space-y-2">
             <Show when={props.groupedResources}>
               <div class="px-1 font-medium text-xs text-gray-500 uppercase mt-4 mb-1">{renderGroupHeader(groupName, props.groupHeaderMeta?.[groupName])}</div>
