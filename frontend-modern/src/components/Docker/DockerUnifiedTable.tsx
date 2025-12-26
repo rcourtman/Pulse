@@ -2806,7 +2806,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
       >
         <Card padding="none" tone="glass" class="overflow-hidden">
           <div class="overflow-x-auto">
-            <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": isMobile() ? "100%" : "800px" }}>
+            <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "800px" }}>
               <thead>
                 <tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20">
                   <For each={DOCKER_COLUMNS}>

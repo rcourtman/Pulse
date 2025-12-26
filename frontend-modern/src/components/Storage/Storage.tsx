@@ -4,6 +4,7 @@ import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { formatBytes, formatPercent } from '@/utils/format';
 import type { Storage as StorageType, CephCluster } from '@/types/api';
+import { StatusDot } from '@/components/shared/StatusDot';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
 import { StorageFilter } from './StorageFilter';
@@ -809,7 +810,7 @@ const Storage: Component = () => {
                 <style>{`
                 .overflow-x-auto::-webkit-scrollbar { display: none; }
               `}</style>
-                <table class="w-full" style={{ "min-width": "750px" }}>
+                <table class="w-full" style={{ "min-width": "800px" }}>
                   <thead>
                     <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                       <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-auto">
@@ -826,16 +827,16 @@ const Storage: Component = () => {
                         </th>
                       </Show>
                       <Show when={isColumnVisible('status')}>
-                        <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                        <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%] min-w-[70px]">
                           Status
                         </th>
                       </Show>
                       <Show when={viewMode() === 'node' && isColumnVisible('shared')}>
-                        <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[6%]">
+                        <th class="hidden sm:table-cell px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[6%]">
                           Shared
                         </th>
                       </Show>
-                      <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[25%] min-w-[120px]">
+                      <th class="px-1.5 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[25%] min-w-[130px]">
                         Usage
                       </th>
                       <Show when={isColumnVisible('free')}>
@@ -1187,9 +1188,16 @@ const Storage: Component = () => {
                                       </td>
                                       <Show when={isColumnVisible('type')}>
                                         <td class="p-0.5 px-1.5">
-                                          <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                                            {storage.type}
-                                          </span>
+                                          <div class="flex items-center gap-1.5">
+                                            <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                                              {storage.type}
+                                            </span>
+                                            <Show when={storage.shared}>
+                                              <svg class="h-3 w-3 text-blue-500 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 8l2.55 3.4A1 1 0 0116 13H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z" clip-rule="evenodd" />
+                                              </svg>
+                                            </Show>
+                                          </div>
                                         </td>
                                       </Show>
                                       <Show when={isColumnVisible('content')}>
@@ -1204,18 +1212,24 @@ const Storage: Component = () => {
                                       </Show>
                                       <Show when={isColumnVisible('status')}>
                                         <td class="p-0.5 px-1.5 text-xs whitespace-nowrap">
-                                          <span
-                                            class={`${storage.status === 'available'
-                                              ? 'text-green-600 dark:text-green-400'
-                                              : 'text-red-600 dark:text-red-400'
-                                              }`}
-                                          >
-                                            {storage.status || 'unknown'}
-                                          </span>
+                                          <div class="flex items-center gap-1.5">
+                                            <StatusDot
+                                              variant={storage.status === 'available' ? 'success' : 'danger'}
+                                              size="xs"
+                                            />
+                                            <span
+                                              class={`${storage.status === 'available'
+                                                ? 'text-green-600 dark:text-green-400'
+                                                : 'text-red-600 dark:text-red-400'
+                                                }`}
+                                            >
+                                              {storage.status || 'unknown'}
+                                            </span>
+                                          </div>
                                         </td>
                                       </Show>
                                       <Show when={viewMode() === 'node' && isColumnVisible('shared')}>
-                                        <td class="p-0.5 px-1.5">
+                                        <td class="hidden sm:table-cell p-0.5 px-1.5">
                                           <span class="text-xs text-gray-600 dark:text-gray-400">
                                             {storage.shared ? '✓' : '-'}
                                           </span>

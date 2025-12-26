@@ -860,7 +860,7 @@ function App() {
                     <button
                       type="button"
                       onClick={() => aiChatStore.toggle()}
-                      class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1.5 pl-2 pr-1.5 py-3 rounded-l-xl bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 group"
+                      class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1.5 pl-2 pr-1.5 py-3 rounded-l-xl bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 group sm:top-1/2 sm:translate-y-[-50%] top-auto bottom-20 translate-y-0"
                       title={aiChatStore.context.context?.name ? `AI Assistant - ${aiChatStore.context.context.name}` : 'AI Assistant (⌘K)'}
                       aria-label="Expand AI Assistant"
                     >
@@ -1285,7 +1285,7 @@ function AppLayout(props: {
               const isActive = () => getActiveTab() === platform.id;
               const disabled = () => !platform.enabled;
               const baseClasses =
-                'tab relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
+                'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
 
               const className = () => {
                 if (isActive()) {
@@ -1311,19 +1311,20 @@ function AppLayout(props: {
                   title={title()}
                 >
                   {platform.icon}
-                  <span>{platform.label}</span>
+                  <span class="hidden xs:inline">{platform.label}</span>
+                  <span class="xs:hidden">{platform.label.charAt(0)}</span>
                 </div>
               );
             }}
           </For>
         </div>
-        <div class="flex items-end gap-2 ml-auto" role="group" aria-label="System">
-          <div class="flex items-end gap-1 pl-3 sm:pl-4">
+        <div class="flex items-end gap-1 ml-auto" role="group" aria-label="System">
+          <div class="flex items-end gap-1 pl-1 sm:pl-4">
             <For each={utilityTabs()}>
               {(tab) => {
                 const isActive = () => getActiveTab() === tab.id;
                 const baseClasses =
-                  'tab relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
+                  'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
 
                 const className = () => {
                   if (isActive()) {
@@ -1341,8 +1342,9 @@ function AppLayout(props: {
                     title={tab.tooltip}
                   >
                     {tab.icon}
-                    <span class="flex items-center gap-1.5">
-                      <span>{tab.label}</span>
+                    <span class="flex items-center gap-1">
+                      <span class="hidden xs:inline">{tab.label}</span>
+                      <span class="xs:hidden">{tab.label.charAt(0)}</span>
                       {tab.id === 'alerts' && (() => {
                         const total = tab.count ?? 0;
                         if (total <= 0) {

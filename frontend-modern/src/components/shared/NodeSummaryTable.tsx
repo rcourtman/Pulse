@@ -348,7 +348,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   return (
     <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
       <div class="overflow-x-auto">
-        <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": isMobile() ? "100%" : "800px" }}>
+        <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "800px" }}>
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
               <th
@@ -360,13 +360,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               <th class={thClass} style={{ "min-width": '80px' }} onClick={() => handleSort('uptime')}>
                 Uptime {renderSortIndicator('uptime')}
               </th>
-              <th class={thClass} style={isMobile() ? { "min-width": "60px" } : { width: "200px", "min-width": "200px", "max-width": "200px" }} onClick={() => handleSort('cpu')}>
+              <th class={thClass} style={isMobile() ? { "min-width": "80px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }} onClick={() => handleSort('cpu')}>
                 CPU {renderSortIndicator('cpu')}
               </th>
-              <th class={thClass} style={isMobile() ? { "min-width": "60px" } : { width: "200px", "min-width": "200px", "max-width": "200px" }} onClick={() => handleSort('memory')}>
+              <th class={thClass} style={isMobile() ? { "min-width": "80px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }} onClick={() => handleSort('memory')}>
                 Memory {renderSortIndicator('memory')}
               </th>
-              <th class={thClass} style={isMobile() ? { "min-width": "60px" } : { width: "200px", "min-width": "200px", "max-width": "200px" }} onClick={() => handleSort('disk')}>
+              <th class={thClass} style={isMobile() ? { "min-width": "80px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }} onClick={() => handleSort('disk')}>
                 Disk {renderSortIndicator('disk')}
               </th>
               <Show when={hasAnyTemperatureData()}>
@@ -483,7 +483,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 return (
                   <tr
                     class={rowClass()}
-                    style={{ ...rowStyle(), height: '29px', 'max-height': '29px' }}
+                    style={{ ...rowStyle(), 'min-height': '36px' }}
                     onClick={() => props.onNodeClick(nodeId, isPVEItem ? 'pve' : 'pbs')}
                   >
                     {/* Name */}
@@ -575,8 +575,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* CPU */}
-                    <td class={tdClass} style={isMobile() ? { "min-width": "60px" } : metricColumnStyle}>
-                      <div class="h-4">
+                    <td class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
+                      <div class="h-5">
                         <EnhancedCPUBar
                           usage={cpuPercentValue}
                           loadAverage={isPVEItem ? node!.loadAverage?.[0] : undefined}
@@ -588,8 +588,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* Memory */}
-                    <td class={tdClass} style={isMobile() ? { "min-width": "60px" } : metricColumnStyle}>
-                      <div class="h-4">
+                    <td class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
+                      <div class="h-5">
                         <Show when={isPVEItem} fallback={
                           <ResponsiveMetricCell
                             value={memoryPercentValue}
@@ -626,8 +626,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
 
                     {/* Disk */}
-                    <td class={tdClass} style={isMobile() ? { "min-width": "60px" } : metricColumnStyle}>
-                      <div class="h-4">
+                    <td class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
+                      <div class="h-5">
                         <Show when={isPVEItem} fallback={
                           <ResponsiveMetricCell
                             value={diskPercentValue}

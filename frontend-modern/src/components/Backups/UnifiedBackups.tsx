@@ -171,9 +171,9 @@ const UnifiedBackups: Component = () => {
     { id: 'node', label: 'Node', priority: 'essential' },
     { id: 'owner', label: 'Owner', priority: 'secondary', toggleable: true },
     { id: 'backupTime', label: 'Time', priority: 'essential' },
-    { id: 'size', label: 'Size', priority: 'secondary', toggleable: true },
+    { id: 'size', label: 'Size', priority: 'primary', toggleable: true },
     { id: 'backupType', label: 'Backup Type', priority: 'essential' },
-    { id: 'storage', label: 'Location', priority: 'secondary', toggleable: true },
+    { id: 'storage', label: 'Location', priority: 'primary', toggleable: true },
     { id: 'verified', label: 'Verified', priority: 'secondary', toggleable: true },
     { id: 'comment', label: 'Comment', priority: 'supplementary', toggleable: true },
     { id: 'details', label: 'Details', priority: 'essential' },
@@ -2100,58 +2100,58 @@ const UnifiedBackups: Component = () => {
                 {/* Mobile Card View removed in favor of scrollable table */}
 
                 {/* Desktop Table View */}
-                <table class="backup-table" style={{ "min-width": "1200px" }}>
+                <table class="backup-table" style={{ "min-width": "900px" }}>
                   <thead>
                     <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                       <th
-                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                        class="px-1.5 sm:px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                         onClick={() => handleSort('vmid')}
                       >
                         {hasHostBackups() ? 'ID' : 'VMID'}{' '}
                         {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
                       <th
-                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                        class="px-1.5 sm:px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                         onClick={() => handleSort('type')}
                       >
                         Type {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
                       <th
-                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                        class="px-1.5 sm:px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                         onClick={() => handleSort('name')}
                       >
                         Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
                       <th
-                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                        class="px-1.5 sm:px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                         onClick={() => handleSort('node')}
                       >
                         Node {sortKey() === 'node' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
                       <Show when={isColumnVisible('owner') && (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote')}>
                         <th
-                          class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                          class="px-1.5 sm:px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('owner')}
                         >
                           Owner {sortKey() === 'owner' && (sortDirection() === 'asc' ? '▲' : '▼')}
                         </th>
                       </Show>
                       <th
-                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                        class="px-1.5 sm:px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                         onClick={() => handleSort('backupTime')}
                       >
                         Time {sortKey() === 'backupTime' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
                       <Show when={isColumnVisible('size') && backupTypeFilter() !== 'snapshot'}>
                         <th
-                          class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                          class="px-1.5 sm:px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('size')}
                         >
                           Size {sortKey() === 'size' && (sortDirection() === 'asc' ? '▲' : '▼')}
                         </th>
                       </Show>
                       <th
-                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                        class="px-1.5 sm:px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                         onClick={() => handleSort('backupType')}
                       >
                         Backup{' '}
@@ -2159,7 +2159,7 @@ const UnifiedBackups: Component = () => {
                       </th>
                       <Show when={isColumnVisible('storage') && backupTypeFilter() !== 'snapshot'}>
                         <th
-                          class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                          class="px-1.5 sm:px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('storage')}
                         >
                           Location{' '}
@@ -2209,8 +2209,8 @@ const UnifiedBackups: Component = () => {
                           <For each={group.items}>
                             {(item) => (
                               <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                                <td class="p-0.5 pl-5 pr-1.5 text-sm align-middle">{item.vmid}</td>
-                                <td class="p-0.5 px-1.5 align-middle">
+                                <td class="p-0.5 pl-3 sm:pl-5 pr-1 sm:pr-1.5 text-xs sm:text-sm align-middle">{item.vmid}</td>
+                                <td class="p-0.5 px-1 sm:px-1.5 align-middle">
                                   <span
                                     class={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${item.type === 'VM'
                                       ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
@@ -2247,7 +2247,7 @@ const UnifiedBackups: Component = () => {
                                     {item.size ? formatBytes(item.size) : '-'}
                                   </td>
                                 </Show>
-                                <td class="p-0.5 px-1.5 align-middle">
+                                <td class="p-0.5 px-1 sm:px-1.5 align-middle">
                                   <div class="flex items-center gap-1">
                                     <span
                                       class={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${item.backupType === 'snapshot'

@@ -138,7 +138,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                   commitSearchToHistory(e.currentTarget.value);
                 }
               }}
-              class={`w-full pl-9 pr-16 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg
+              class={`w-full pl-8 sm:pl-9 pr-14 sm:pr-16 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg
                      bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
                      focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all`}
             />
@@ -158,7 +158,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             <Show when={props.search()}>
               <button
                 type="button"
-                class="absolute right-[4.5rem] top-1/2 -translate-y-1/2 transform p-1 rounded-full 
+                class="absolute right-[3.5rem] sm:right-[4.5rem] top-1/2 -translate-y-1/2 transform p-1 rounded-full 
                        bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-300 
                        hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/50 dark:hover:text-red-400 
                        transition-all duration-150 active:scale-90"
@@ -301,7 +301,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
         </div>
 
         {/* Row 2: Filters - grouped for logical wrapping */}
-        <div class="flex flex-wrap items-center gap-x-2 gap-y-2">
+        <div class="flex flex-wrap items-center gap-x-1.5 sm:gap-x-2 gap-y-2">
           {/* Problems Toggle - Prominent "Show me issues" button */}
           <button
             type="button"
@@ -427,7 +427,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
         {/* End Primary Filters Group */}
 
         {/* Secondary Controls Group: Grouping, View, Columns, Reset */}
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="flex flex-wrap items-center gap-x-1.5 sm:gap-x-2 gap-y-2">
 
           {/* Grouping Mode Toggle */}
           <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">

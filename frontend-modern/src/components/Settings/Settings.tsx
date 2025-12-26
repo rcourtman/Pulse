@@ -2406,7 +2406,7 @@ const Settings: Component<SettingsProps> = (props) => {
             <Show when={flatTabs.length > 0}>
               <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
                 <div
-                  class="flex gap-1 px-2 py-1 w-full overflow-x-auto scrollbar-hide"
+                  class="flex gap-1 px-2 py-1 w-full overflow-x-auto"
                   style="-webkit-overflow-scrolling: touch;"
                 >
                   <For each={flatTabs}>
@@ -2489,9 +2489,9 @@ const Settings: Component<SettingsProps> = (props) => {
                       </div>
                     </Show>
                     <Show when={initialLoadComplete()}>
-                      <Card padding="lg">
-                        <div class="space-y-4">
-                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <Card padding="none" tone="glass">
+                        <div class="px-3 py-4 sm:px-6 sm:py-6 space-y-4">
+                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                             <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">
                               Proxmox VE nodes
                             </h4>
@@ -2779,9 +2779,9 @@ const Settings: Component<SettingsProps> = (props) => {
                       </div>
                     </Show>
                     <Show when={initialLoadComplete()}>
-                      <Card padding="lg">
-                        <div class="space-y-4">
-                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <Card padding="none" tone="glass">
+                        <div class="px-3 py-4 sm:px-6 sm:py-6 space-y-4">
+                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                             <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">
                               Proxmox Backup Server nodes
                             </h4>
@@ -2909,7 +2909,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 No PBS nodes configured
                               </p>
                               <p class="text-sm text-gray-500 dark:text-gray-400">
-                                Add a Proxmox Backup Server to monitor your backup infrastructure
+                                Add a Proxmox Backup Server to monitor your backups
                               </p>
                             </div>
                           </Show>
@@ -3066,9 +3066,9 @@ const Settings: Component<SettingsProps> = (props) => {
                     </Show>
 
                     <Show when={initialLoadComplete()}>
-                      <Card padding="lg">
-                        <div class="space-y-4">
-                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <Card padding="none" tone="glass">
+                        <div class="px-3 py-4 sm:px-6 sm:py-6 space-y-4">
+                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                             <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">
                               Proxmox Mail Gateway nodes
                             </h4>
@@ -3174,7 +3174,7 @@ const Settings: Component<SettingsProps> = (props) => {
                               globalTemperatureMonitoringEnabled={temperatureMonitoringEnabled()}
                               onTestConnection={testNodeConnection}
                               onEdit={(node) => {
-                                setEditingNode(nodes().find((n) => n.id === node.id) ?? null);
+                                setEditingNode(node);
                                 setCurrentNodeType('pmg');
                                 setModalResetKey((prev) => prev + 1);
                                 setShowNodeModal(true);
@@ -3192,8 +3192,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 No PMG nodes configured
                               </p>
                               <p class="text-sm text-gray-500 dark:text-gray-400">
-                                Add a Proxmox Mail Gateway to monitor mail queue and quarantine
-                                metrics
+                                Add a Proxmox Mail Gateway node to start monitoring
                               </p>
                             </div>
                           </Show>
@@ -3515,7 +3514,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 <DiagnosticsPanel />
               </Show>
             </div>
-          </div>
+          </div >
         </Card >
       </div >
 
@@ -3793,7 +3792,7 @@ const Settings: Component<SettingsProps> = (props) => {
       </Show >
 
       {/* Update Confirmation Modal */}
-      <UpdateConfirmationModal
+      < UpdateConfirmationModal
         isOpen={showUpdateConfirmation()}
         onClose={() => setShowUpdateConfirmation(false)}
         onConfirm={handleConfirmUpdate}

@@ -5,7 +5,7 @@ import { createSignal, onMount, onCleanup, createMemo, Accessor } from 'solid-js
  * These match Tailwind's default breakpoints
  */
 export const BREAKPOINTS = {
-  xs: 0,
+  xs: 400,
   sm: 640,
   md: 768,
   lg: 1024,
