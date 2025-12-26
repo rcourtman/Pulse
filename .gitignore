@@ -103,8 +103,7 @@ testing-tools/*
 manual-test*.md
 verify-*.md
 test-*.md
-package.json
-package-lock.json
+
 *.test.js
 *.test.md
 screenshots/
