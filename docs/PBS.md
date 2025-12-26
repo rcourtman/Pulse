@@ -35,7 +35,7 @@ If your PVE cluster has PBS storage configured, Pulse automatically fetches back
 
 ## Setting Up Direct PBS Connection
 
-### Method 1: Agent Install (Recommended)
+### Method 1: Agent Install (Recommended for Bare Metal)
 
 Install the Pulse agent directly on your PBS server for automatic setup:
 
@@ -50,7 +50,25 @@ The agent will:
 3. Generate an API token
 4. Register the PBS node with Pulse automatically
 
-### Method 2: One-Click Setup Script
+### Method 2: Password Setup (Best for Docker PBS) ⭐
+
+**Perfect for PBS running in Docker containers** where you can't run the agent.
+
+1. Go to **Settings → Nodes → Add PBS Node**
+2. Enter your PBS server's URL (e.g., `https://192.168.1.50:8007`)
+3. Select **Username & Password** authentication
+4. Enter admin credentials (e.g., `root@pam` with password)
+5. Click **Save**
+
+Pulse will automatically:
+- Connect to your PBS server
+- Create a `pulse-monitor@pbs` monitoring user
+- Generate an API token with Audit permissions
+- Store the token (not your password) for ongoing monitoring
+
+> **Note:** This requires admin credentials initially, but Pulse converts them to a limited-permission token immediately.
+
+### Method 3: One-Click Setup Script
 
 From Pulse's Settings page:
 1. Go to **Settings → Nodes**
@@ -60,7 +78,7 @@ From Pulse's Settings page:
 5. Click copy to get the setup command
 6. Run the command on your PBS server
 
-### Method 3: Manual Token Creation
+### Method 4: Manual Token Creation
 
 If you prefer manual setup:
 
