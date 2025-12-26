@@ -507,44 +507,47 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
           </Show>
 
-          {/* Reset Button */}
-          <button
-            onClick={() => {
-              props.setSearch('');
-              props.setSortKey('vmid');
-              props.setSortDirection('asc');
-              props.setViewMode('all');
-              props.setStatusMode('all');
-              props.setBackupMode('all');
-              props.setProblemsMode('all');
-              props.setGroupingMode('grouped');
-            }}
-            title="Reset all filters"
-            class={`flex items-center justify-center px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 active:scale-95 ${props.search() ||
-              props.viewMode() !== 'all' ||
-              props.statusMode() !== 'all' ||
-              props.backupMode() !== 'all' ||
-              props.problemsMode() !== 'all' ||
-              props.groupingMode() !== 'grouped'
-              ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70 ring-1 ring-blue-200 dark:ring-blue-800'
-              : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
+          {/* Reset Button - Only show when filters are active */}
+          <Show when={
+            props.search().trim() !== '' ||
+            props.viewMode() !== 'all' ||
+            props.statusMode() !== 'all' ||
+            props.backupMode() !== 'all' ||
+            props.problemsMode() !== 'all' ||
+            props.groupingMode() !== 'grouped'
+          }>
+            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+            <button
+              onClick={() => {
+                props.setSearch('');
+                props.setSortKey('vmid');
+                props.setSortDirection('asc');
+                props.setViewMode('all');
+                props.setStatusMode('all');
+                props.setBackupMode('all');
+                props.setProblemsMode('all');
+                props.setGroupingMode('grouped');
+              }}
+              title="Reset all filters"
+              class="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 active:scale-95
+                     text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70"
             >
-              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-              <path d="M21 3v5h-5" />
-              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-              <path d="M8 16H3v5" />
-            </svg>
-            <span class="ml-1 hidden sm:inline">Reset</span>
-          </button>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                <path d="M8 16H3v5" />
+              </svg>
+              Reset
+            </button>
+          </Show>
         </div>
       </div>
     </Card>
