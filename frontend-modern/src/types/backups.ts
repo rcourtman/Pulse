@@ -20,4 +20,5 @@ export interface UnifiedBackup {
   protected: boolean;
   encrypted?: boolean;
   owner?: string;
+  comment?: string; // PBS backup comment (only available from direct PBS)
 }

@@ -11,9 +11,11 @@ import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
+import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import type { BackupType, GuestType, UnifiedBackup } from '@/types/backups';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useColumnVisibility, type ColumnDef } from '@/hooks/useColumnVisibility';
 import { logger } from '@/utils/logger';
 
 type BackupSortKey = keyof Pick<
@@ -161,6 +163,31 @@ const UnifiedBackups: Component = () => {
     STORAGE_KEYS.BACKUPS_USE_RELATIVE_TIME,
     false, // Default to absolute time
   );
+
+  // Column visibility definitions for the backup table
+  const BACKUP_COLUMNS: ColumnDef[] = [
+    { id: 'vmid', label: 'VMID/ID', priority: 'essential' },
+    { id: 'type', label: 'Type', priority: 'essential' },
+    { id: 'name', label: 'Name', priority: 'essential' },
+    { id: 'node', label: 'Node', priority: 'essential' },
+    { id: 'owner', label: 'Owner', priority: 'secondary', toggleable: true },
+    { id: 'backupTime', label: 'Time', priority: 'essential' },
+    { id: 'size', label: 'Size', priority: 'secondary', toggleable: true },
+    { id: 'backupType', label: 'Backup Type', priority: 'essential' },
+    { id: 'storage', label: 'Location', priority: 'secondary', toggleable: true },
+    { id: 'verified', label: 'Verified', priority: 'secondary', toggleable: true },
+    { id: 'comment', label: 'Comment', priority: 'supplementary', toggleable: true },
+    { id: 'details', label: 'Details', priority: 'essential' },
+  ];
+
+  // Column visibility with persistence - hide less useful columns by default
+  const columnVisibility = useColumnVisibility(
+    STORAGE_KEYS.BACKUPS_HIDDEN_COLUMNS,
+    BACKUP_COLUMNS,
+    ['comment'] // Comment hidden by default (often empty)
+  );
+  const visibleColumns = columnVisibility.visibleColumns;
+  const isColumnVisible = (id: string) => visibleColumns().some(col => col.id === id);
 
   // Helper functions
   const getDaySuffix = (day: number) => {
@@ -456,6 +483,7 @@ const UnifiedBackups: Component = () => {
         protected: backup.protected || false,
         encrypted: isEncrypted,
         owner: backup.owner,
+        comment: backup.comment,
       });
     });
 
@@ -2003,6 +2031,16 @@ const UnifiedBackups: Component = () => {
           setUseRelativeTime={setUseRelativeTime}
         />
 
+        {/* Column Visibility Toggle */}
+        <div class="flex justify-end mb-2 -mt-2">
+          <ColumnPicker
+            columns={columnVisibility.availableToggles()}
+            isHidden={columnVisibility.isHiddenByUser}
+            onToggle={columnVisibility.toggle}
+            onReset={columnVisibility.resetToDefaults}
+          />
+        </div>
+
         {/* Table */}
         <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
           <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
@@ -2107,7 +2145,7 @@ const UnifiedBackups: Component = () => {
                       >
                         Node {sortKey() === 'node' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
-                      <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
+                      <Show when={isColumnVisible('owner') && (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote')}>
                         <th
                           class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('owner')}
@@ -2121,7 +2159,7 @@ const UnifiedBackups: Component = () => {
                       >
                         Time {sortKey() === 'backupTime' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
-                      <Show when={backupTypeFilter() !== 'snapshot'}>
+                      <Show when={isColumnVisible('size') && backupTypeFilter() !== 'snapshot'}>
                         <th
                           class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('size')}
@@ -2136,7 +2174,7 @@ const UnifiedBackups: Component = () => {
                         Backup{' '}
                         {sortKey() === 'backupType' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
-                      <Show when={backupTypeFilter() !== 'snapshot'}>
+                      <Show when={isColumnVisible('storage') && backupTypeFilter() !== 'snapshot'}>
                         <th
                           class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('storage')}
@@ -2145,13 +2183,18 @@ const UnifiedBackups: Component = () => {
                           {sortKey() === 'storage' && (sortDirection() === 'asc' ? '▲' : '▼')}
                         </th>
                       </Show>
-                      <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
+                      <Show when={isColumnVisible('verified') && (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote')}>
                         <th
                           class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('verified')}
                         >
                           <span title="Verified">✓</span>
                           {sortKey() === 'verified' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+                        </th>
+                      </Show>
+                      <Show when={isColumnVisible('comment') && (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote')}>
+                        <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                          Comment
                         </th>
                       </Show>
                       <th
@@ -2202,7 +2245,7 @@ const UnifiedBackups: Component = () => {
                                 <td class="p-0.5 px-1.5 text-sm align-middle">{item.node}</td>
                                 <Show
                                   when={
-                                    backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'
+                                    isColumnVisible('owner') && (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote')
                                   }
                                 >
                                   <td class="p-0.5 px-1.5 text-xs align-middle text-gray-500 dark:text-gray-400">
@@ -2214,7 +2257,7 @@ const UnifiedBackups: Component = () => {
                                 >
                                   {formatTime(item.backupTime * 1000)}
                                 </td>
-                                <Show when={backupTypeFilter() !== 'snapshot'}>
+                                <Show when={isColumnVisible('size') && backupTypeFilter() !== 'snapshot'}>
                                   <td
                                     class={`p-0.5 px-1.5 align-middle ${getSizeColor(item.size)}`}
                                   >
@@ -2286,7 +2329,7 @@ const UnifiedBackups: Component = () => {
                                     </Show>
                                   </div>
                                 </td>
-                                <Show when={backupTypeFilter() !== 'snapshot'}>
+                                <Show when={isColumnVisible('storage') && backupTypeFilter() !== 'snapshot'}>
                                   <td class="p-0.5 px-1.5 text-sm align-middle">
                                     {item.storage ||
                                       (item.datastore &&
@@ -2298,7 +2341,7 @@ const UnifiedBackups: Component = () => {
                                 </Show>
                                 <Show
                                   when={
-                                    backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'
+                                    isColumnVisible('verified') && (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote')
                                   }
                                 >
                                   <td class="p-0.5 px-1.5 text-center align-middle">
@@ -2344,6 +2387,15 @@ const UnifiedBackups: Component = () => {
                                         -
                                       </span>
                                     )}
+                                  </td>
+                                </Show>
+                                <Show
+                                  when={
+                                    isColumnVisible('comment') && (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote')
+                                  }
+                                >
+                                  <td class="p-0.5 px-1.5 text-xs align-middle text-gray-500 dark:text-gray-400 max-w-[150px] truncate" title={item.comment || ''}>
+                                    {item.comment || '-'}
                                   </td>
                                 </Show>
                                 <td
