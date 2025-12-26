@@ -298,3 +298,48 @@ func (h *HostAgentHandlers) handlePatchConfig(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// HandleUninstall allows an agent to unregister itself during uninstallation.
+// Requires ScopeHostReport and a valid hostId in the request body.
+func (h *HostAgentHandlers) HandleUninstall(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	defer r.Body.Close()
+
+	var req struct {
+		HostID string `json:"hostId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", map[string]string{"error": err.Error()})
+		return
+	}
+
+	hostID := strings.TrimSpace(req.HostID)
+	if hostID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Host ID is required", nil)
+		return
+	}
+
+	log.Info().Str("hostId", hostID).Msg("Received unregistration request from agent uninstaller")
+
+	// Remove the host from state
+	_, err := h.monitor.RemoveHostAgent(hostID)
+	if err != nil {
+		// If host not found, we still return success because the goal is reached
+		log.Warn().Err(err).Str("hostId", hostID).Msg("Host not found during unregistration request")
+	}
+
+	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+
+	if err := utils.WriteJSONResponse(w, map[string]any{
+		"success": true,
+		"hostId":  hostID,
+		"message": "Host unregistered successfully",
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to serialize host unregistration response")
+	}
+}
+

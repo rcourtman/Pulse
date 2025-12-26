@@ -272,6 +272,28 @@ log_info "  Proxmox: $ENABLE_PROXMOX"
 if [[ "$UNINSTALL" == "true" ]]; then
     log_info "Uninstalling ${AGENT_NAME} and cleaning up legacy agents..."
 
+    # Try to notify the Pulse server about uninstallation if we have connection details
+    # This ensures the host record is removed and any linked PVE nodes are updated immediately.
+    if [[ -n "$PULSE_URL" && -n "$PULSE_TOKEN" ]]; then
+        # Try to recover agent ID if not provided
+        if [[ -z "$AGENT_ID" ]]; then
+            if [[ -f /var/lib/pulse-agent/agent-id ]]; then
+                AGENT_ID=$(cat /var/lib/pulse-agent/agent-id)
+            elif [[ -f "$TRUENAS_STATE_DIR/agent-id" ]]; then
+                AGENT_ID=$(cat "$TRUENAS_STATE_DIR/agent-id")
+            fi
+        fi
+
+        if [[ -n "$AGENT_ID" ]]; then
+            log_info "Notifying Pulse server to unregister agent ID: ${AGENT_ID}..."
+            CURL_ARGS=(-fsSL --connect-timeout 5 -X POST -H "Content-Type: application/json" -H "X-API-Token: ${PULSE_TOKEN}")
+            if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
+            
+            # Send unregistration request (ignore errors as we are uninstalling anyway)
+            curl "${CURL_ARGS[@]}" -d "{\"hostId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/host/uninstall" >/dev/null 2>&1 || true
+        fi
+    fi
+
     # Kill any running agent processes first
     pkill -f "pulse-agent" 2>/dev/null || true
     pkill -f "pulse-host-agent" 2>/dev/null || true

@@ -156,6 +156,35 @@ function Get-FileChecksum {
 if ($Uninstall) {
     Write-Host "Uninstalling $AgentName..." -ForegroundColor Cyan
 
+    # Try to notify the Pulse server about uninstallation if we have connection details
+    if (-not [string]::IsNullOrWhiteSpace($Url) -and -not [string]::IsNullOrWhiteSpace($Token)) {
+        # Try to recover agent ID if not provided
+        $detectedAgentId = $AgentId
+        $stateFile = "$env:ProgramData\Pulse\agent-id"
+        if ([string]::IsNullOrWhiteSpace($detectedAgentId) -and (Test-Path $stateFile)) {
+            $detectedAgentId = Get-Content $stateFile -Raw
+            if ($detectedAgentId) { $detectedAgentId = $detectedAgentId.Trim() }
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($detectedAgentId)) {
+            Write-Host "Notifying Pulse server to unregister agent ID: $detectedAgentId..." -ForegroundColor Gray
+            try {
+                $body = @{ hostId = $detectedAgentId } | ConvertTo-Json
+                $headers = @{ "X-API-Token" = $Token }
+
+                Invoke-RestMethod -Uri "$Url/api/agents/host/uninstall" `
+                                 -Method Post `
+                                 -Body $body `
+                                 -ContentType "application/json" `
+                                 -Headers $headers `
+                                 -TimeoutSec 5 `
+                                 -ErrorAction SilentlyContinue | Out-Null
+            } catch {
+                # Ignore errors during uninstall
+            }
+        }
+    }
+
     if (Get-Service $AgentName -ErrorAction SilentlyContinue) {
         Stop-Service $AgentName -Force -ErrorAction SilentlyContinue
         $scOutput = sc.exe delete $AgentName 2>&1
