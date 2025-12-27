@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"regexp"
@@ -349,14 +351,21 @@ func (p *ProxmoxSetup) parsePBSTokenValue(output string) string {
 }
 
 // getHostURL constructs the host URL for this Proxmox node.
-// Uses intelligent IP selection to prefer LAN addresses over internal cluster networks.
+// Uses the local IP that can reach Pulse, falling back to intelligent IP selection.
 func (p *ProxmoxSetup) getHostURL(ptype string) string {
 	port := "8006"
 	if ptype == "pbs" {
 		port = "8007"
 	}
 
-	// Get all IPs and select the best one for external access
+	// First, try to determine which local IP is used to connect to Pulse
+	// This ensures we pick an IP that can actually communicate with the Pulse server
+	if reachableIP := p.getIPThatReachesPulse(); reachableIP != "" {
+		p.logger.Debug().Str("ip", reachableIP).Msg("Using IP that can reach Pulse server")
+		return fmt.Sprintf("https://%s:%s", reachableIP, port)
+	}
+
+	// Fallback: Get all IPs and select the best one based on heuristics
 	if out, err := exec.Command("hostname", "-I").Output(); err == nil {
 		ips := strings.Fields(string(out))
 		if len(ips) > 0 {
@@ -367,12 +376,75 @@ func (p *ProxmoxSetup) getHostURL(ptype string) string {
 		}
 	}
 
-	// Fallback to hostname if IP detection failed
+	// Final fallback to hostname if IP detection failed
 	hostname := p.hostname
 	if hostname == "" {
 		hostname = "localhost"
 	}
 	return fmt.Sprintf("https://%s:%s", hostname, port)
+}
+
+// getIPThatReachesPulse determines which local IP is used to connect to the Pulse server.
+// This handles cases where multiple network interfaces exist (e.g., management, Ceph, cluster ring)
+// and ensures we pick the one that can actually reach Pulse. Related to #929.
+func (p *ProxmoxSetup) getIPThatReachesPulse() string {
+	if p.pulseURL == "" {
+		return ""
+	}
+
+	// Parse the Pulse URL to get host:port
+	u, err := url.Parse(p.pulseURL)
+	if err != nil {
+		return ""
+	}
+
+	host := u.Host
+	if !strings.Contains(host, ":") {
+		// Add default port if not specified
+		if u.Scheme == "https" {
+			host += ":443"
+		} else {
+			host += ":80"
+		}
+	}
+
+	// Create a UDP "connection" to determine local address (doesn't actually send data)
+	conn, err := net.DialTimeout("udp", host, 2*time.Second)
+	if err != nil {
+		p.logger.Debug().Err(err).Msg("Could not determine local IP for Pulse connection")
+		return ""
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	ip := localAddr.IP.String()
+
+	// Only return private IPs (we don't want to register with a public IP)
+	if isPrivateIP(ip) {
+		return ip
+	}
+	return ""
+}
+
+// isPrivateIP checks if an IP address is in a private range (RFC 1918).
+func isPrivateIP(ip string) bool {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	// Check common private ranges
+	private := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+	}
+	for _, cidr := range private {
+		_, network, _ := net.ParseCIDR(cidr)
+		if network.Contains(parsed) {
+			return true
+		}
+	}
+	return false
 }
 
 // selectBestIP picks the most likely externally-reachable IP from a list.
