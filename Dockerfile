@@ -3,7 +3,8 @@ ARG BUILD_AGENT=1
 ARG PULSE_LICENSE_PUBLIC_KEY
 
 # Build stage for frontend (must be built first for embedding)
-FROM node:20-alpine AS frontend-builder
+# Force amd64 platform to avoid slow QEMU emulation during multi-arch builds
+FROM --platform=linux/amd64 node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend-modern
 
@@ -20,7 +21,9 @@ RUN --mount=type=cache,id=pulse-npm-cache,target=/root/.npm \
     npm run build
 
 # Build stage for Go backend
-FROM golang:1.24-alpine AS backend-builder
+# Force amd64 platform - Go cross-compiles for all targets anyway,
+# and this avoids slow QEMU emulation during multi-arch builds
+FROM --platform=linux/amd64 golang:1.24-alpine AS backend-builder
 
 ARG BUILD_AGENT
 ARG PULSE_LICENSE_PUBLIC_KEY
