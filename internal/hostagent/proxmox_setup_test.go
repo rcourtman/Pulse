@@ -132,3 +132,25 @@ func TestScoreIPv4(t *testing.T) {
 		})
 	}
 }
+
+func TestStateFileForType(t *testing.T) {
+	setup := &ProxmoxSetup{}
+
+	tests := []struct {
+		ptype    string
+		expected string
+	}{
+		{"pve", stateFilePVE},
+		{"pbs", stateFilePBS},
+		{"unknown", stateFilePath}, // fallback to legacy
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.ptype, func(t *testing.T) {
+			result := setup.stateFileForType(tt.ptype)
+			if result != tt.expected {
+				t.Errorf("stateFileForType(%q) = %q, want %q", tt.ptype, result, tt.expected)
+			}
+		})
+	}
+}

@@ -40,8 +40,11 @@ const (
 	proxmoxUserPVE = "pulse-monitor@pam"
 	proxmoxUserPBS = "pulse-monitor@pbs"
 	proxmoxComment = "Pulse monitoring service"
-	stateFilePath  = "/var/lib/pulse-agent/proxmox-registered"
+	stateFilePath  = "/var/lib/pulse-agent/proxmox-registered" // Legacy, kept for backward compat
 	stateFileDir   = "/var/lib/pulse-agent"
+	// Per-type state files for multi-product support (PVE+PBS on same host)
+	stateFilePVE = "/var/lib/pulse-agent/proxmox-pve-registered"
+	stateFilePBS = "/var/lib/pulse-agent/proxmox-pbs-registered"
 )
 
 // NewProxmoxSetup creates a new ProxmoxSetup instance.
@@ -97,6 +100,7 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 	} else {
 		registered = true
 		p.markAsRegistered()
+		p.markTypeAsRegistered(ptype)
 		p.logger.Info().Str("host", hostURL).Msg("Successfully registered Proxmox node with Pulse")
 	}
 
@@ -109,17 +113,116 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 	}, nil
 }
 
-// detectProxmoxType checks for pvesh (PVE) or proxmox-backup-manager (PBS).
-func (p *ProxmoxSetup) detectProxmoxType() string {
-	// Check for PVE first
-	if _, err := exec.LookPath("pvesh"); err == nil {
-		return "pve"
+// RunAll detects and registers ALL Proxmox products on this system.
+// This supports hosts with both PVE and PBS installed (a common and officially
+// supported configuration). Each type gets its own registration and state tracking.
+// Returns results for all types that were processed (skipping already-registered ones).
+func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error) {
+	var results []*ProxmoxSetupResult
+
+	// If a specific type is forced, only run that
+	if p.proxmoxType != "" {
+		result, err := p.runForType(ctx, p.proxmoxType)
+		if err != nil {
+			return nil, err
+		}
+		if result != nil {
+			results = append(results, result)
+		}
+		return results, nil
 	}
-	// Check for PBS
-	if _, err := exec.LookPath("proxmox-backup-manager"); err == nil {
-		return "pbs"
+
+	// Detect all Proxmox products
+	types := p.detectProxmoxTypes()
+	if len(types) == 0 {
+		return nil, fmt.Errorf("this system does not appear to be a Proxmox VE or PBS node")
+	}
+
+	p.logger.Info().Strs("types", types).Msg("Auto-detected Proxmox products")
+
+	// Register each type
+	for _, ptype := range types {
+		result, err := p.runForType(ctx, ptype)
+		if err != nil {
+			p.logger.Error().Err(err).Str("type", ptype).Msg("Failed to setup Proxmox type")
+			continue // Don't fail completely, try other types
+		}
+		if result != nil {
+			results = append(results, result)
+		}
+	}
+
+	return results, nil
+}
+
+// runForType executes setup for a specific Proxmox type.
+func (p *ProxmoxSetup) runForType(ctx context.Context, ptype string) (*ProxmoxSetupResult, error) {
+	// Check if this type is already registered
+	if p.isTypeRegistered(ptype) {
+		p.logger.Info().Str("type", ptype).Msg("Proxmox type already registered, skipping")
+		return nil, nil
+	}
+
+	p.logger.Info().Str("type", ptype).Msg("Setting up Proxmox type")
+
+	// Create monitoring user and token
+	tokenID, tokenValue, err := p.setupToken(ctx, ptype)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create %s API token: %w", ptype, err)
+	}
+
+	p.logger.Info().Str("type", ptype).Str("token_id", tokenID).Msg("Created Proxmox API token")
+
+	// Get the host URL for registration
+	hostURL := p.getHostURL(ptype)
+
+	// Register with Pulse
+	registered := false
+	if err := p.registerWithPulse(ctx, ptype, hostURL, tokenID, tokenValue); err != nil {
+		p.logger.Warn().Err(err).Str("type", ptype).Msg("Failed to register with Pulse (node may already exist)")
+	} else {
+		registered = true
+		p.markTypeAsRegistered(ptype)
+		p.logger.Info().Str("type", ptype).Str("host", hostURL).Msg("Successfully registered Proxmox node with Pulse")
+	}
+
+	return &ProxmoxSetupResult{
+		ProxmoxType: ptype,
+		TokenID:     tokenID,
+		TokenValue:  tokenValue,
+		NodeHost:    hostURL,
+		Registered:  registered,
+	}, nil
+}
+
+// detectProxmoxType checks for pvesh (PVE) or proxmox-backup-manager (PBS).
+// For backward compatibility, returns the first detected type.
+// Use detectProxmoxTypes() to get all detected types.
+func (p *ProxmoxSetup) detectProxmoxType() string {
+	types := p.detectProxmoxTypes()
+	if len(types) > 0 {
+		return types[0]
 	}
 	return ""
+}
+
+// detectProxmoxTypes checks for ALL Proxmox products on this system.
+// Returns a slice of detected types (e.g., ["pve", "pbs"] if both are installed).
+// This is common when PBS is installed directly on a PVE host.
+func (p *ProxmoxSetup) detectProxmoxTypes() []string {
+	var types []string
+
+	// Check for PVE
+	if _, err := exec.LookPath("pvesh"); err == nil {
+		types = append(types, "pve")
+	}
+
+	// Check for PBS
+	if _, err := exec.LookPath("proxmox-backup-manager"); err == nil {
+		types = append(types, "pbs")
+	}
+
+	return types
 }
 
 // setupToken creates the monitoring user and API token.
@@ -399,9 +502,44 @@ func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype, hostURL, to
 }
 
 // isAlreadyRegistered checks if we've already done Proxmox setup.
+// This uses the legacy single state file for backward compatibility.
 func (p *ProxmoxSetup) isAlreadyRegistered() bool {
 	_, err := os.Stat(stateFilePath)
 	return err == nil
+}
+
+// isTypeRegistered checks if a specific Proxmox type has been registered.
+func (p *ProxmoxSetup) isTypeRegistered(ptype string) bool {
+	// Check per-type state file
+	stateFile := p.stateFileForType(ptype)
+	if _, err := os.Stat(stateFile); err == nil {
+		return true
+	}
+
+	// Also check legacy state file for backward compat
+	// If the legacy file exists and matches this type, consider it registered
+	if _, err := os.Stat(stateFilePath); err == nil {
+		// Legacy file exists - only the first detected type was registered
+		// For backward compat, treat PVE as registered if legacy file exists
+		// (since PVE was always detected first in the old logic)
+		if ptype == "pve" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// stateFileForType returns the state file path for a specific Proxmox type.
+func (p *ProxmoxSetup) stateFileForType(ptype string) string {
+	switch ptype {
+	case "pve":
+		return stateFilePVE
+	case "pbs":
+		return stateFilePBS
+	default:
+		return stateFilePath
+	}
 }
 
 // markAsRegistered creates a state file to indicate setup is complete.
@@ -413,6 +551,19 @@ func (p *ProxmoxSetup) markAsRegistered() {
 
 	if err := os.WriteFile(stateFilePath, []byte(time.Now().Format(time.RFC3339)), 0644); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to write state file")
+	}
+}
+
+// markTypeAsRegistered creates a state file for a specific Proxmox type.
+func (p *ProxmoxSetup) markTypeAsRegistered(ptype string) {
+	if err := os.MkdirAll(stateFileDir, 0755); err != nil {
+		p.logger.Warn().Err(err).Msg("Failed to create state directory")
+		return
+	}
+
+	stateFile := p.stateFileForType(ptype)
+	if err := os.WriteFile(stateFile, []byte(time.Now().Format(time.RFC3339)), 0644); err != nil {
+		p.logger.Warn().Err(err).Str("type", ptype).Msg("Failed to write type state file")
 	}
 }
 
