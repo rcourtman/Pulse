@@ -510,20 +510,50 @@ func (p *ProxmoxSetup) isAlreadyRegistered() bool {
 
 // isTypeRegistered checks if a specific Proxmox type has been registered.
 func (p *ProxmoxSetup) isTypeRegistered(ptype string) bool {
-	// Check per-type state file
+	// Check per-type state file first (new behavior)
 	stateFile := p.stateFileForType(ptype)
 	if _, err := os.Stat(stateFile); err == nil {
 		return true
 	}
 
-	// Also check legacy state file for backward compat
-	// If the legacy file exists and matches this type, consider it registered
+	// Check legacy state file for backward compat
 	if _, err := os.Stat(stateFilePath); err == nil {
-		// Legacy file exists - only the first detected type was registered
-		// For backward compat, treat PVE as registered if legacy file exists
-		// (since PVE was always detected first in the old logic)
+		// Legacy file exists. The old detection logic was:
+		// 1. If pvesh exists → registered "pve"
+		// 2. Else if proxmox-backup-manager exists → registered "pbs"
+		//
+		// So we need to figure out what was likely registered.
+		// If PVE is currently installed, treat PVE as registered.
+		// If only PBS is installed (no PVE), treat PBS as registered.
+		types := p.detectProxmoxTypes()
+		if len(types) == 0 {
+			return false
+		}
+
+		// The old code registered the "first" type it found
+		// If PVE is installed, it was always detected first
 		if ptype == "pve" {
-			return true
+			for _, t := range types {
+				if t == "pve" {
+					return true
+				}
+			}
+		}
+		// If PBS-only host (no PVE), PBS was what was registered
+		if ptype == "pbs" {
+			hasPVE := false
+			hasPBS := false
+			for _, t := range types {
+				if t == "pve" {
+					hasPVE = true
+				}
+				if t == "pbs" {
+					hasPBS = true
+				}
+			}
+			if hasPBS && !hasPVE {
+				return true
+			}
 		}
 	}
 
