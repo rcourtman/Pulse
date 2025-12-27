@@ -772,6 +772,7 @@ func (a *Agent) collectSMARTData(ctx context.Context) []agentshost.DiskSMART {
 }
 
 // runProxmoxSetup performs one-time Proxmox API token setup and node registration.
+// Supports hosts with multiple Proxmox products (e.g., PVE + PBS on same host).
 func (a *Agent) runProxmoxSetup(ctx context.Context) {
 	a.logger.Info().Msg("Proxmox mode enabled, checking setup...")
 
@@ -785,28 +786,33 @@ func (a *Agent) runProxmoxSetup(ctx context.Context) {
 		a.cfg.InsecureSkipVerify,
 	)
 
-	result, err := setup.Run(ctx)
+	// Use RunAll to detect and register all Proxmox products on this host
+	results, err := setup.RunAll(ctx)
 	if err != nil {
 		a.logger.Error().Err(err).Msg("Proxmox setup failed")
 		return
 	}
 
-	if result == nil {
-		// Already registered
+	if len(results) == 0 {
+		// All types already registered
+		a.logger.Info().Msg("All detected Proxmox products already registered")
 		return
 	}
 
-	if result.Registered {
-		a.logger.Info().
-			Str("type", result.ProxmoxType).
-			Str("host", result.NodeHost).
-			Str("token_id", result.TokenID).
-			Msg("Proxmox node registered successfully")
-	} else {
-		a.logger.Warn().
-			Str("type", result.ProxmoxType).
-			Str("host", result.NodeHost).
-			Msg("Proxmox token created but registration failed (node may need manual configuration)")
+	// Log results for each registered type
+	for _, result := range results {
+		if result.Registered {
+			a.logger.Info().
+				Str("type", result.ProxmoxType).
+				Str("host", result.NodeHost).
+				Str("token_id", result.TokenID).
+				Msg("Proxmox node registered successfully")
+		} else {
+			a.logger.Warn().
+				Str("type", result.ProxmoxType).
+				Str("host", result.NodeHost).
+				Msg("Proxmox token created but registration failed (node may need manual configuration)")
+		}
 	}
 }
 
