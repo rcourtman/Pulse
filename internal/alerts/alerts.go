@@ -4491,6 +4491,14 @@ func (m *Manager) cleanupDockerContainerAlerts(host models.DockerHost, seen map[
 			}
 		}
 	}
+	// Cleanup update tracking for removed containers
+	for resourceID := range m.dockerUpdateFirstSeen {
+		if strings.HasPrefix(resourceID, prefix) {
+			if _, exists := seen[resourceID]; !exists {
+				delete(m.dockerUpdateFirstSeen, resourceID)
+			}
+		}
+	}
 	m.mu.Unlock()
 
 	for _, alertID := range toClear {
@@ -4521,6 +4529,11 @@ func (m *Manager) clearDockerHostContainerAlerts(hostID string) {
 	for resourceID := range m.dockerLastExitCode {
 		if strings.HasPrefix(resourceID, prefix) {
 			delete(m.dockerLastExitCode, resourceID)
+		}
+	}
+	for resourceID := range m.dockerUpdateFirstSeen {
+		if strings.HasPrefix(resourceID, prefix) {
+			delete(m.dockerUpdateFirstSeen, resourceID)
 		}
 	}
 	m.mu.Unlock()
