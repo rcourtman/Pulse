@@ -183,13 +183,40 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                 </div>
               </div>
 
-              {/* Docker installation notice */}
+              {/* Docker installation notice - enhanced with copy-able commands */}
               <Show when={props.versionInfo()?.isDocker && !props.updateInfo()?.available}>
-                <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                  <p class="text-xs text-blue-800 dark:text-blue-200">
-                    <strong>Docker Installation:</strong> Updates are managed through Docker. Pull
-                    the latest image to update.
+                <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-3">
+                  <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.186.186 0 00-.185.186v1.887c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.186.186 0 00-.185.185v1.888c0 .102.082.186.185.186m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.186.186 0 00-.185.185v1.888c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.186.186 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.888c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.186.186 0 00-.185.186v1.887c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.186v1.887c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.185-.186h-2.119a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-.001 2.716h2.118a.185.185 0 00.185-.185v-1.888a.185.185 0 00-.185-.185H2.136a.185.185 0 00-.186.185v1.888c0 .102.084.185.186.185m23.063-3.167a.509.509 0 00-.376-.25.431.431 0 00-.116-.01.431.431 0 00-.114.01 3.6 3.6 0 00-1.618.877c-.186.166-.356.36-.509.577a6.6 6.6 0 00-1.117-1.474 6.6 6.6 0 00-9.336 0 6.6 6.6 0 00-1.938 4.684 6.6 6.6 0 001.938 4.684 6.6 6.6 0 004.668 1.938 6.6 6.6 0 004.668-1.938 6.6 6.6 0 001.938-4.684 6.6 6.6 0 00-.185-1.41 3.6 3.6 0 001.587-.904.509.509 0 00.134-.459" />
+                    </svg>
+                    <p class="text-sm font-medium text-blue-800 dark:text-blue-200">
+                      Docker Installation
+                    </p>
+                  </div>
+                  <p class="text-xs text-blue-700 dark:text-blue-300">
+                    Updates are managed through Docker. Use these commands to check for and apply updates:
                   </p>
+                  <div class="space-y-2">
+                    <div class="relative group">
+                      <code class="block p-2.5 bg-gray-900 dark:bg-gray-950 rounded-lg text-xs font-mono text-blue-400 border border-gray-700">
+                        docker pull rcourtman/pulse:latest && docker restart pulse
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => navigator.clipboard.writeText('docker pull rcourtman/pulse:latest && docker restart pulse')}
+                        class="absolute top-1.5 right-1.5 p-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Copy to clipboard"
+                      >
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                    </div>
+                    <p class="text-[10px] text-blue-600 dark:text-blue-400">
+                      Or with Docker Compose: <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-800/50 rounded text-[10px]">docker-compose pull && docker-compose up -d</code>
+                    </p>
+                  </div>
                 </div>
               </Show>
 
@@ -241,8 +268,8 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                           onClick={props.onInstallUpdate}
                           disabled={props.isInstalling()}
                           class={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${props.isInstalling()
-                              ? 'bg-green-400 dark:bg-green-600 text-white cursor-not-allowed'
-                              : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40'
+                            ? 'bg-green-400 dark:bg-green-600 text-white cursor-not-allowed'
+                            : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40'
                             }`}
                         >
                           <Show when={props.isInstalling()} fallback={
