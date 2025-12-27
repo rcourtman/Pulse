@@ -1720,6 +1720,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			ID:            payload.ID,
 			Name:          payload.Name,
 			Image:         payload.Image,
+			ImageDigest:   payload.ImageDigest,
 			State:         payload.State,
 			Status:        payload.Status,
 			Health:        payload.Health,
@@ -1733,6 +1734,17 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			CreatedAt:     payload.CreatedAt,
 			StartedAt:     payload.StartedAt,
 			FinishedAt:    payload.FinishedAt,
+		}
+
+		// Copy update status if provided by agent
+		if payload.UpdateStatus != nil {
+			container.UpdateStatus = &models.DockerContainerUpdateStatus{
+				UpdateAvailable: payload.UpdateStatus.UpdateAvailable,
+				CurrentDigest:   payload.UpdateStatus.CurrentDigest,
+				LatestDigest:    payload.UpdateStatus.LatestDigest,
+				LastChecked:     payload.UpdateStatus.LastChecked,
+				Error:           payload.UpdateStatus.Error,
+			}
 		}
 
 		if len(payload.Ports) > 0 {

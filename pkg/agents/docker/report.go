@@ -55,6 +55,7 @@ type Container struct {
 	ID                  string             `json:"id"`
 	Name                string             `json:"name"`
 	Image               string             `json:"image"`
+	ImageDigest         string             `json:"imageDigest,omitempty"` // Current image digest for update detection
 	CreatedAt           time.Time          `json:"createdAt"`
 	State               string             `json:"state"`
 	Status              string             `json:"status"`
@@ -77,6 +78,7 @@ type Container struct {
 	BlockIO             *ContainerBlockIO  `json:"blockIo,omitempty"`
 	Mounts              []ContainerMount   `json:"mounts,omitempty"`
 	Podman              *PodmanContainer   `json:"podman,omitempty"`
+	UpdateStatus        *UpdateStatus      `json:"updateStatus,omitempty"` // Image update detection status
 }
 
 // ContainerPort tracks an exposed container port mapping.
@@ -124,6 +126,15 @@ type ContainerMount struct {
 	Propagation string `json:"propagation,omitempty"`
 	Name        string `json:"name,omitempty"`
 	Driver      string `json:"driver,omitempty"`
+}
+
+// UpdateStatus tracks the image update status for a container.
+type UpdateStatus struct {
+	UpdateAvailable bool      `json:"updateAvailable"`
+	CurrentDigest   string    `json:"currentDigest,omitempty"`
+	LatestDigest    string    `json:"latestDigest,omitempty"`
+	LastChecked     time.Time `json:"lastChecked"`
+	Error           string    `json:"error,omitempty"` // e.g., "rate limited", "auth required"
 }
 
 // AgentKey returns the stable identifier for a reporting agent.
