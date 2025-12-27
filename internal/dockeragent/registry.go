@@ -272,39 +272,49 @@ func (r *RegistryChecker) getAuthToken(ctx context.Context, registry, repository
 	// Docker Hub requires auth token even for public images
 	if registry == "registry-1.docker.io" {
 		tokenURL := fmt.Sprintf("https://auth.docker.io/token?service=registry.docker.io&scope=repository:%s:pull", repository)
+		return r.fetchAuthToken(ctx, tokenURL)
+	}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenURL, nil)
-		if err != nil {
-			return "", err
-		}
-
-		resp, err := r.httpClient.Do(req)
-		if err != nil {
-			return "", err
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			return "", fmt.Errorf("token request failed: %d", resp.StatusCode)
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return "", err
-		}
-
-		var tokenResp struct {
-			Token string `json:"token"`
-		}
-		if err := json.Unmarshal(body, &tokenResp); err != nil {
-			return "", err
-		}
-
-		return tokenResp.Token, nil
+	// GitHub Container Registry (ghcr.io) requires auth token for public images
+	if registry == "ghcr.io" {
+		tokenURL := fmt.Sprintf("https://ghcr.io/token?service=ghcr.io&scope=repository:%s:pull", repository)
+		return r.fetchAuthToken(ctx, tokenURL)
 	}
 
 	// For other registries, try anonymous access first
 	return "", nil
+}
+
+// fetchAuthToken fetches an auth token from a token endpoint.
+func (r *RegistryChecker) fetchAuthToken(ctx context.Context, tokenURL string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenURL, nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("token request failed: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var tokenResp struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
+		return "", err
+	}
+
+	return tokenResp.Token, nil
 }
 
 func (r *RegistryChecker) getCached(key string) *cacheEntry {

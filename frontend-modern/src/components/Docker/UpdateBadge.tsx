@@ -58,11 +58,20 @@ export const UpdateBadge: Component<UpdateBadgeProps> = (props) => {
 export const UpdateIcon: Component<{ updateStatus?: DockerContainerUpdateStatus }> = (props) => {
     const hasUpdate = () => props.updateStatus?.updateAvailable === true;
 
+    const getTooltip = () => {
+        if (!props.updateStatus) return 'Image update available';
+
+        const current = props.updateStatus.currentDigest?.slice(0, 12) || 'unknown';
+        const latest = props.updateStatus.latestDigest?.slice(0, 12) || 'unknown';
+
+        return `Update available\nCurrent: ${current}...\nLatest: ${latest}...`;
+    };
+
     return (
         <Show when={hasUpdate()}>
             <span
-                class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-                title={`Image update available`}
+                class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 cursor-help"
+                title={getTooltip()}
             >
                 <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
