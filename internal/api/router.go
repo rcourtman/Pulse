@@ -1183,6 +1183,16 @@ func (r *Router) setupRoutes() {
 	r.aiSettingsHandler.SetMetadataProvider(metadataProvider)
 	// Wire license checker for Pro feature gating (AI Patrol, Alert Analysis, Auto-Fix)
 	r.aiSettingsHandler.SetLicenseChecker(r.licenseHandlers.Service())
+	// Wire license checker for alert manager Pro features (Update Alerts)
+	if r.monitor != nil {
+		alertMgr := r.monitor.GetAlertManager()
+		if alertMgr != nil {
+			licSvc := r.licenseHandlers.Service()
+			alertMgr.SetLicenseChecker(func(feature string) bool {
+				return licSvc.HasFeature(feature)
+			})
+		}
+	}
 	r.mux.HandleFunc("/api/settings/ai", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetAISettings)))
 	r.mux.HandleFunc("/api/settings/ai/update", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleUpdateAISettings)))
 	r.mux.HandleFunc("/api/ai/test", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestAIConnection)))
