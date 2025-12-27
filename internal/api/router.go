@@ -377,6 +377,33 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/updates/history", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleListUpdateHistory)))
 	r.mux.HandleFunc("/api/updates/history/entry", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleGetUpdateHistoryEntry)))
 
+	// Infrastructure update detection routes (Docker containers, packages, etc.)
+	infraUpdateHandlers := NewUpdateDetectionHandlers(r.monitor)
+	r.mux.HandleFunc("/api/infra-updates", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, infraUpdateHandlers.HandleGetInfraUpdates)))
+	r.mux.HandleFunc("/api/infra-updates/summary", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, infraUpdateHandlers.HandleGetInfraUpdatesSummary)))
+	r.mux.HandleFunc("/api/infra-updates/check", RequireAuth(r.config, RequireScope(config.ScopeMonitoringWrite, infraUpdateHandlers.HandleTriggerInfraUpdateCheck)))
+	r.mux.HandleFunc("/api/infra-updates/host/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, func(w http.ResponseWriter, req *http.Request) {
+		// Extract host ID from path: /api/infra-updates/host/{hostId}
+		hostID := strings.TrimPrefix(req.URL.Path, "/api/infra-updates/host/")
+		hostID = strings.TrimSuffix(hostID, "/")
+		if hostID == "" {
+			writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Host ID is required", nil)
+			return
+		}
+		infraUpdateHandlers.HandleGetInfraUpdatesForHost(w, req, hostID)
+	})))
+	r.mux.HandleFunc("/api/infra-updates/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, func(w http.ResponseWriter, req *http.Request) {
+		// Extract resource ID from path: /api/infra-updates/{resourceId}
+		resourceID := strings.TrimPrefix(req.URL.Path, "/api/infra-updates/")
+		resourceID = strings.TrimSuffix(resourceID, "/")
+		if resourceID == "" || resourceID == "summary" || resourceID == "check" || strings.HasPrefix(resourceID, "host/") {
+			// Let specific handlers deal with these
+			http.NotFound(w, req)
+			return
+		}
+		infraUpdateHandlers.HandleGetInfraUpdateForResource(w, req, resourceID)
+	})))
+
 	// Config management routes
 	r.mux.HandleFunc("/api/config/nodes", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
