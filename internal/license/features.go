@@ -4,11 +4,14 @@ package license
 // Feature constants represent gated features in Pulse Pro.
 // These are embedded in license JWTs and checked at runtime.
 const (
-	// Pro tier features
+	// Pro tier features - AI
 	FeatureAIPatrol     = "ai_patrol"     // Background AI health monitoring
 	FeatureAIAlerts     = "ai_alerts"     // AI analysis when alerts fire
 	FeatureAIAutoFix    = "ai_autofix"    // Automatic remediation
 	FeatureKubernetesAI = "kubernetes_ai" // AI analysis of K8s (NOT basic monitoring)
+
+	// Pro tier features - Monitoring
+	FeatureUpdateAlerts = "update_alerts" // Alerts for pending container/package updates
 
 	// MSP tier features (FUTURE - not in v1 launch)
 	FeatureMultiUser   = "multi_user"   // RBAC - NOT IMPLEMENTED YET
@@ -39,24 +42,28 @@ var TierFeatures = map[Tier][]string{
 		FeatureAIAlerts,
 		FeatureAIAutoFix,
 		FeatureKubernetesAI,
+		FeatureUpdateAlerts,
 	},
 	TierProAnnual: {
 		FeatureAIPatrol,
 		FeatureAIAlerts,
 		FeatureAIAutoFix,
 		FeatureKubernetesAI,
+		FeatureUpdateAlerts,
 	},
 	TierLifetime: {
 		FeatureAIPatrol,
 		FeatureAIAlerts,
 		FeatureAIAutoFix,
 		FeatureKubernetesAI,
+		FeatureUpdateAlerts,
 	},
 	TierMSP: {
 		FeatureAIPatrol,
 		FeatureAIAlerts,
 		FeatureAIAutoFix,
 		FeatureKubernetesAI,
+		FeatureUpdateAlerts,
 		FeatureUnlimited,
 		// Note: FeatureMultiUser, FeatureWhiteLabel, FeatureMultiTenant
 		// are on the roadmap but NOT included until implemented
@@ -66,6 +73,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureAIAlerts,
 		FeatureAIAutoFix,
 		FeatureKubernetesAI,
+		FeatureUpdateAlerts,
 		FeatureUnlimited,
 		FeatureMultiUser,
 		FeatureWhiteLabel,
@@ -118,6 +126,8 @@ func GetFeatureDisplayName(feature string) string {
 		return "AI Auto-Fix"
 	case FeatureKubernetesAI:
 		return "Kubernetes AI Analysis"
+	case FeatureUpdateAlerts:
+		return "Update Alerts (Container/Package Updates)"
 	case FeatureMultiUser:
 		return "Multi-User / RBAC"
 	case FeatureWhiteLabel:
