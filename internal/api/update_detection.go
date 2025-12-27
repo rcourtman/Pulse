@@ -3,8 +3,9 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/updatedetection"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -12,27 +13,41 @@ import (
 // UpdateDetectionHandlers manages API endpoints for infrastructure update detection.
 // This is separate from UpdateHandlers which handles Pulse self-updates.
 type UpdateDetectionHandlers struct {
-	manager *updatedetection.Manager
+	monitor *monitoring.Monitor
 }
 
 // NewUpdateDetectionHandlers creates a new update detection handlers group.
-func NewUpdateDetectionHandlers(manager *updatedetection.Manager) *UpdateDetectionHandlers {
-	return &UpdateDetectionHandlers{manager: manager}
+func NewUpdateDetectionHandlers(monitor *monitoring.Monitor) *UpdateDetectionHandlers {
+	return &UpdateDetectionHandlers{monitor: monitor}
+}
+
+// ContainerUpdateInfo represents a container with an available update
+type ContainerUpdateInfo struct {
+	HostID           string `json:"hostId"`
+	HostName         string `json:"hostName"`
+	ContainerID      string `json:"containerId"`
+	ContainerName    string `json:"containerName"`
+	Image            string `json:"image"`
+	CurrentDigest    string `json:"currentDigest,omitempty"`
+	LatestDigest     string `json:"latestDigest,omitempty"`
+	UpdateAvailable  bool   `json:"updateAvailable"`
+	LastChecked      int64  `json:"lastChecked,omitempty"`
+	Error            string `json:"error,omitempty"`
+	ResourceType     string `json:"resourceType"`
 }
 
 // HandleGetInfraUpdates returns all tracked infrastructure updates with optional filtering.
 // GET /api/infra-updates
 //
 //	?hostId=<id>         Filter by host
-//	?resourceType=docker Filter by type
-//	?severity=security   Filter by severity
+//	?resourceType=docker Filter by type (currently only docker supported)
 func (h *UpdateDetectionHandlers) HandleGetInfraUpdates(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
 		return
 	}
 
-	if h.manager == nil {
+	if h.monitor == nil {
 		if err := utils.WriteJSONResponse(w, map[string]any{
 			"updates": []any{},
 			"total":   0,
@@ -44,19 +59,16 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdates(w http.ResponseWriter, r
 
 	// Parse query filters
 	query := r.URL.Query()
-	filters := updatedetection.UpdateFilters{
-		HostID:       query.Get("hostId"),
-		ResourceType: query.Get("resourceType"),
-	}
+	hostIDFilter := query.Get("hostId")
+	resourceTypeFilter := strings.ToLower(query.Get("resourceType"))
 
-	if severity := query.Get("severity"); severity != "" {
-		filters.Severity = updatedetection.UpdateSeverity(severity)
-	}
-	if updateType := query.Get("type"); updateType != "" {
-		filters.UpdateType = updatedetection.UpdateType(updateType)
-	}
+	// Collect updates from Docker hosts
+	updates := h.collectDockerUpdates(hostIDFilter)
 
-	updates := h.manager.GetUpdates(filters)
+	// Filter by resource type if specified
+	if resourceTypeFilter != "" && resourceTypeFilter != "docker" {
+		updates = []ContainerUpdateInfo{} // Only docker supported currently
+	}
 
 	response := map[string]any{
 		"updates": updates,
@@ -76,20 +88,24 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdateForResource(w http.Respons
 		return
 	}
 
-	if h.manager == nil {
+	if h.monitor == nil {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "No update found for resource", nil)
 		return
 	}
 
-	update := h.manager.GetUpdatesForResource(resourceID)
-	if update == nil {
-		writeErrorResponse(w, http.StatusNotFound, "not_found", "No update found for resource", nil)
-		return
+	// ResourceID format: docker:<hostId>/<containerId>
+	updates := h.collectDockerUpdates("")
+	for _, update := range updates {
+		id := "docker:" + update.HostID + "/" + update.ContainerID
+		if id == resourceID || update.ContainerID == resourceID {
+			if err := utils.WriteJSONResponse(w, update); err != nil {
+				log.Error().Err(err).Msg("Failed to serialize update response")
+			}
+			return
+		}
 	}
 
-	if err := utils.WriteJSONResponse(w, update); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize update response")
-	}
+	writeErrorResponse(w, http.StatusNotFound, "not_found", "No update found for resource", nil)
 }
 
 // HandleGetInfraUpdatesSummary returns aggregated update statistics per host.
@@ -100,7 +116,7 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesSummary(w http.ResponseWr
 		return
 	}
 
-	if h.manager == nil {
+	if h.monitor == nil {
 		if err := utils.WriteJSONResponse(w, map[string]any{
 			"summaries":    map[string]any{},
 			"totalUpdates": 0,
@@ -110,12 +126,26 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesSummary(w http.ResponseWr
 		return
 	}
 
-	summaries := h.manager.GetSummary()
-	totalUpdates := h.manager.GetTotalCount()
+	updates := h.collectDockerUpdates("")
+
+	// Aggregate by host
+	summaries := make(map[string]map[string]any)
+	for _, update := range updates {
+		if _, ok := summaries[update.HostID]; !ok {
+			summaries[update.HostID] = map[string]any{
+				"hostId":     update.HostID,
+				"hostName":   update.HostName,
+				"totalCount": 0,
+				"containers": 0,
+			}
+		}
+		summaries[update.HostID]["totalCount"] = summaries[update.HostID]["totalCount"].(int) + 1
+		summaries[update.HostID]["containers"] = summaries[update.HostID]["containers"].(int) + 1
+	}
 
 	response := map[string]any{
 		"summaries":    summaries,
-		"totalUpdates": totalUpdates,
+		"totalUpdates": len(updates),
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -134,7 +164,7 @@ func (h *UpdateDetectionHandlers) HandleTriggerInfraUpdateCheck(w http.ResponseW
 		return
 	}
 
-	if h.manager == nil {
+	if h.monitor == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "service_unavailable", "Update detection not available", nil)
 		return
 	}
@@ -153,10 +183,11 @@ func (h *UpdateDetectionHandlers) HandleTriggerInfraUpdateCheck(w http.ResponseW
 	}
 
 	// For now, return a placeholder response - the actual check will be performed
-	// by agents on their next cycle or when we add server-side registry checking
+	// by agents on their next cycle
 	response := map[string]any{
 		"success": true,
-		"message": "Update check queued",
+		"message": "Update check will be performed on next agent report cycle",
+		"note":    "Docker agents check registries periodically (every 6 hours by default)",
 	}
 
 	if req.HostID != "" {
@@ -179,7 +210,7 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesForHost(w http.ResponseWr
 		return
 	}
 
-	if h.manager == nil {
+	if h.monitor == nil {
 		if err := utils.WriteJSONResponse(w, map[string]any{
 			"updates": []any{},
 			"total":   0,
@@ -190,7 +221,7 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesForHost(w http.ResponseWr
 		return
 	}
 
-	updates := h.manager.GetUpdatesForHost(hostID)
+	updates := h.collectDockerUpdates(hostID)
 
 	response := map[string]any{
 		"updates": updates,
@@ -201,4 +232,56 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesForHost(w http.ResponseWr
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize host updates response")
 	}
+}
+
+// collectDockerUpdates gathers update information from Docker hosts
+func (h *UpdateDetectionHandlers) collectDockerUpdates(hostIDFilter string) []ContainerUpdateInfo {
+	var updates []ContainerUpdateInfo
+
+	state := h.monitor.GetState()
+
+	for _, host := range state.DockerHosts {
+		// Filter by host ID if specified
+		if hostIDFilter != "" && host.ID != hostIDFilter {
+			continue
+		}
+
+		for _, container := range host.Containers {
+			if container.UpdateStatus == nil {
+				continue
+			}
+
+			// Only include containers with updates available or errors
+			if !container.UpdateStatus.UpdateAvailable && container.UpdateStatus.Error == "" {
+				continue
+			}
+
+			update := ContainerUpdateInfo{
+				HostID:          host.ID,
+				HostName:        host.DisplayName,
+				ContainerID:     container.ID,
+				ContainerName:   strings.TrimPrefix(container.Name, "/"),
+				Image:           container.Image,
+				UpdateAvailable: container.UpdateStatus.UpdateAvailable,
+				ResourceType:    "docker",
+			}
+
+			if container.UpdateStatus.CurrentDigest != "" {
+				update.CurrentDigest = container.UpdateStatus.CurrentDigest
+			}
+			if container.UpdateStatus.LatestDigest != "" {
+				update.LatestDigest = container.UpdateStatus.LatestDigest
+			}
+			if !container.UpdateStatus.LastChecked.IsZero() {
+				update.LastChecked = container.UpdateStatus.LastChecked.Unix()
+			}
+			if container.UpdateStatus.Error != "" {
+				update.Error = container.UpdateStatus.Error
+			}
+
+			updates = append(updates, update)
+		}
+	}
+
+	return updates
 }
