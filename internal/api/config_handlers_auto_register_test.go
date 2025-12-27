@@ -264,3 +264,47 @@ func TestAutoRegisterDuplicateHostnameSeparateNodes(t *testing.T) {
 		t.Errorf("second node name = %q, want %q (should be disambiguated)", node2.Name, "px1 (10.0.2.224)")
 	}
 }
+
+// TestExtractHostIP verifies the IP extraction from host URLs.
+func TestExtractHostIP(t *testing.T) {
+	tests := []struct {
+		name     string
+		hostURL  string
+		expected string
+	}{
+		{
+			name:     "IP-based URL",
+			hostURL:  "https://192.168.1.100:8006",
+			expected: "192.168.1.100",
+		},
+		{
+			name:     "hostname URL returns empty",
+			hostURL:  "https://pve.local:8006",
+			expected: "",
+		},
+		{
+			name:     "IPv6 URL",
+			hostURL:  "https://[::1]:8006",
+			expected: "::1",
+		},
+		{
+			name:     "empty URL",
+			hostURL:  "",
+			expected: "",
+		},
+		{
+			name:     "invalid URL",
+			hostURL:  "not-a-url",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractHostIP(tt.hostURL)
+			if got != tt.expected {
+				t.Errorf("extractHostIP(%q) = %q, want %q", tt.hostURL, got, tt.expected)
+			}
+		})
+	}
+}
