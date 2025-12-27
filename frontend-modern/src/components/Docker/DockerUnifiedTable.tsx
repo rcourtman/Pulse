@@ -28,6 +28,7 @@ import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import { UrlEditPopover } from '@/components/shared/UrlEditPopover';
+import { UpdateIcon } from '@/components/Docker/UpdateBadge';
 import type { ColumnConfig } from '@/types/responsive';
 
 const typeBadgeClass = (type: 'container' | 'service' | 'task' | 'unknown') => {
@@ -609,6 +610,11 @@ const containerMatchesToken = (
 
   if (token.key === 'state') {
     return state.includes(token.value) || health.includes(token.value);
+  }
+
+  // Special filter for containers with updates available
+  if (token.key === 'has' && token.value === 'update') {
+    return container.updateStatus?.updateAvailable === true;
   }
 
   const fields: string[] = [
@@ -1291,12 +1297,15 @@ const DockerContainerRow: Component<{
             class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 overflow-hidden"
             style={{ "max-width": "200px" }}
           >
-            <span
-              class="block truncate"
-              title={container.image || undefined}
-            >
-              {container.image || '—'}
-            </span>
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span
+                class="truncate"
+                title={container.image || undefined}
+              >
+                {container.image || '—'}
+              </span>
+              <UpdateIcon updateStatus={container.updateStatus} />
+            </div>
           </div>
         );
       case 'status':

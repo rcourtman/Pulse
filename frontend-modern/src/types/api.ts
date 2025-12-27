@@ -347,6 +347,7 @@ export interface DockerContainer {
   id: string;
   name: string;
   image: string;
+  imageDigest?: string; // Current image digest (sha256:...)
   state: string;
   status: string;
   health?: string;
@@ -369,6 +370,16 @@ export interface DockerContainer {
   blockIo?: DockerContainerBlockIO;
   mounts?: DockerContainerMount[];
   podman?: PodmanContainerMetadata;
+  updateStatus?: DockerContainerUpdateStatus; // Image update detection status
+}
+
+// Update status for container images
+export interface DockerContainerUpdateStatus {
+  updateAvailable: boolean;
+  currentDigest?: string;
+  latestDigest?: string;
+  lastChecked: number;
+  error?: string;
 }
 
 export interface DockerContainerPort {

@@ -105,6 +105,7 @@ type Agent struct {
 	prevContainerCPU    map[string]cpuSample
 	preCPUStatsFailures int
 	reportBuffer        *buffer.Queue[agentsdocker.Report]
+	registryChecker     *RegistryChecker // For checking container image updates
 }
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.
@@ -257,6 +258,7 @@ func New(cfg Config) (*Agent, error) {
 		stateFilters:     stateFilters,
 		prevContainerCPU: make(map[string]cpuSample),
 		reportBuffer:     buffer.New[agentsdocker.Report](bufferCapacity),
+		registryChecker:  NewRegistryChecker(*logger),
 	}
 
 	for _, state := range stateFilters {
@@ -929,6 +931,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		ID:                  summary.ID,
 		Name:                trimLeadingSlash(summary.Names),
 		Image:               summary.Image,
+		ImageDigest:         summary.ImageID, // sha256:... digest of the image
 		CreatedAt:           createdAt,
 		State:               summary.State,
 		Status:              summary.Status,
@@ -955,6 +958,23 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 	if a.runtime == RuntimePodman {
 		if meta := extractPodmanMetadata(labels); meta != nil {
 			container.Podman = meta
+		}
+	}
+
+	// Check for image updates if registry checker is enabled
+	if a.registryChecker != nil && a.registryChecker.Enabled() {
+		// Use the container's current image digest for comparison
+		// The ImageDigest from summary.ImageID is the local image ID, which we use
+		// to compare with the registry's latest manifest digest
+		result := a.registryChecker.CheckImageUpdate(ctx, container.Image, container.ImageDigest)
+		if result != nil {
+			container.UpdateStatus = &agentsdocker.UpdateStatus{
+				UpdateAvailable: result.UpdateAvailable,
+				CurrentDigest:   result.CurrentDigest,
+				LatestDigest:    result.LatestDigest,
+				LastChecked:     result.CheckedAt,
+				Error:           result.Error,
+			}
 		}
 	}
 

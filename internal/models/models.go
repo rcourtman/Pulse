@@ -416,6 +416,7 @@ type DockerContainer struct {
 	ID                  string                       `json:"id"`
 	Name                string                       `json:"name"`
 	Image               string                       `json:"image"`
+	ImageDigest         string                       `json:"imageDigest,omitempty"` // Current image digest (sha256:...)
 	State               string                       `json:"state"`
 	Status              string                       `json:"status"`
 	Health              string                       `json:"health,omitempty"`
@@ -437,6 +438,16 @@ type DockerContainer struct {
 	BlockIO             *DockerContainerBlockIO      `json:"blockIo,omitempty"`
 	Mounts              []DockerContainerMount       `json:"mounts,omitempty"`
 	Podman              *DockerPodmanContainer       `json:"podman,omitempty"`
+	UpdateStatus        *DockerContainerUpdateStatus `json:"updateStatus,omitempty"` // Image update detection status
+}
+
+// DockerContainerUpdateStatus tracks the image update status for a container.
+type DockerContainerUpdateStatus struct {
+	UpdateAvailable bool      `json:"updateAvailable"`
+	CurrentDigest   string    `json:"currentDigest,omitempty"`
+	LatestDigest    string    `json:"latestDigest,omitempty"`
+	LastChecked     time.Time `json:"lastChecked"`
+	Error           string    `json:"error,omitempty"` // e.g., "rate limited", "auth required"
 }
 
 // DockerPodmanContainer captures Podman-specific annotations for a container.
