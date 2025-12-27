@@ -658,11 +658,13 @@ fi
 
 # --- Service Installation ---
 
-# If Proxmox mode is enabled, clear the state file to ensure fresh registration
-# This allows re-installation to re-create the Proxmox API token
+# If Proxmox mode is enabled, clear the state files to ensure fresh registration
+# This allows re-installation to re-create the Proxmox API tokens
 if [[ "$ENABLE_PROXMOX" == "true" ]]; then
     log_info "Clearing Proxmox state for fresh registration..."
     rm -f /var/lib/pulse-agent/proxmox-registered 2>/dev/null || true
+    rm -f /var/lib/pulse-agent/proxmox-pve-registered 2>/dev/null || true
+    rm -f /var/lib/pulse-agent/proxmox-pbs-registered 2>/dev/null || true
 fi
 
 # 1. macOS (Launchd)
