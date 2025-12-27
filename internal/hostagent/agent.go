@@ -156,9 +156,11 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	platform := normalisePlatform(info.Platform)
-	osName := strings.TrimSpace(info.PlatformFamily)
+	// Use Platform (specific distro like "ubuntu") over PlatformFamily (distro family like "debian")
+	// This ensures Ubuntu shows as "ubuntu 24.04" not "debian 24.04" (refs #927)
+	osName := strings.TrimSpace(info.Platform)
 	if osName == "" {
-		osName = strings.TrimSpace(info.Platform)
+		osName = strings.TrimSpace(info.PlatformFamily)
 	}
 	osVersion := strings.TrimSpace(info.PlatformVersion)
 	kernelVersion := strings.TrimSpace(info.KernelVersion)
