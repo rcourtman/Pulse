@@ -1175,6 +1175,58 @@ func normalizeNodeHost(rawHost, nodeType string) (string, error) {
 	return parsed.String(), nil
 }
 
+// extractHostIP extracts the IP address from a host URL if it's an IP-based URL.
+// Returns empty string if the URL uses a hostname instead of an IP.
+func extractHostIP(hostURL string) string {
+	parsed, err := url.Parse(hostURL)
+	if err != nil {
+		return ""
+	}
+	hostname := parsed.Hostname()
+	if hostname == "" {
+		return ""
+	}
+	// Check if hostname is an IP address
+	if ip := net.ParseIP(hostname); ip != nil {
+		return ip.String()
+	}
+	return ""
+}
+
+// resolveHostnameToIP attempts to resolve a hostname URL to its first IP address.
+// Returns empty string if resolution fails or times out.
+func resolveHostnameToIP(hostURL string) string {
+	parsed, err := url.Parse(hostURL)
+	if err != nil {
+		return ""
+	}
+	hostname := parsed.Hostname()
+	if hostname == "" {
+		return ""
+	}
+
+	// Don't try to resolve if it's already an IP
+	if ip := net.ParseIP(hostname); ip != nil {
+		return ip.String()
+	}
+
+	// Resolve with a short timeout to avoid blocking
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	var resolver net.Resolver
+	addrs, err := resolver.LookupHost(ctx, hostname)
+	if err != nil || len(addrs) == 0 {
+		log.Debug().
+			Str("hostname", hostname).
+			Err(err).
+			Msg("Failed to resolve hostname for duplicate detection")
+		return ""
+	}
+
+	return addrs[0]
+}
+
 // disambiguateNodeName ensures a node name is unique by appending the host IP if needed.
 // This handles cases where multiple Proxmox hosts have the same hostname (e.g., "px1" on different networks).
 // Returns the original name if unique, or "name (ip)" if duplicates exist.
@@ -5958,8 +6010,12 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	// Also match by name+tokenID for DHCP scenarios where IP changed but it's the same host.
 	// Different physical hosts can have the same hostname (e.g., "px1" on different networks)
 	// but they'll have different tokens, so we only merge if BOTH name AND token match.
-	// See: Issue #891, #104, and multiple fix attempts in Dec 2025.
+	// See: Issue #891, #104, #924, and multiple fix attempts in Dec 2025.
 	existingIndex := -1
+
+	// Extract IP from the new host URL for DNS comparison
+	newHostIP := extractHostIP(host)
+
 	if req.Type == "pve" {
 		for i, node := range h.config.PVEInstances {
 			if node.Host == host {
@@ -5978,6 +6034,26 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 					Msg("Detected IP change for existing node - updating host")
 				break
 			}
+			// Agent registration: check if existing hostname resolves to the new IP
+			// This catches the case where a node was manually added by hostname and
+			// then the agent registers using the IP address. (Issue #924)
+			if req.Source == "agent" && newHostIP != "" {
+				existingHostIP := extractHostIP(node.Host)
+				if existingHostIP == "" {
+					// Existing config uses hostname, try to resolve it
+					existingHostIP = resolveHostnameToIP(node.Host)
+				}
+				if existingHostIP == newHostIP {
+					existingIndex = i
+					log.Info().
+						Str("existingHost", node.Host).
+						Str("newHost", host).
+						Str("resolvedIP", newHostIP).
+						Str("node", node.Name).
+						Msg("Agent registration detected existing node by IP resolution - updating instead of creating duplicate")
+					break
+				}
+			}
 		}
 	} else {
 		for i, node := range h.config.PBSInstances {
@@ -5994,6 +6070,23 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 					Str("node", req.ServerName).
 					Msg("Detected IP change for existing node - updating host")
 				break
+			}
+			// Agent registration: check if existing hostname resolves to the new IP
+			if req.Source == "agent" && newHostIP != "" {
+				existingHostIP := extractHostIP(node.Host)
+				if existingHostIP == "" {
+					existingHostIP = resolveHostnameToIP(node.Host)
+				}
+				if existingHostIP == newHostIP {
+					existingIndex = i
+					log.Info().
+						Str("existingHost", node.Host).
+						Str("newHost", host).
+						Str("resolvedIP", newHostIP).
+						Str("node", node.Name).
+						Msg("Agent registration detected existing node by IP resolution - updating instead of creating duplicate")
+					break
+				}
 			}
 		}
 	}
