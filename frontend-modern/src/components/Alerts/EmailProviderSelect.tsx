@@ -155,10 +155,20 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
           <label class={labelClass()}>SMTP port</label>
           <input
             type="number"
-            value={props.config.port}
-            onInput={(e) =>
-              props.onChange({ ...props.config, port: parseInt(e.currentTarget.value) || 587 })
-            }
+            value={props.config.port || ''}
+            onInput={(e) => {
+              const value = e.currentTarget.value;
+              // Allow empty field while typing, parse as number when valid
+              const port = value === '' ? 0 : parseInt(value, 10);
+              props.onChange({ ...props.config, port: isNaN(port) ? 0 : port });
+            }}
+            onBlur={(e) => {
+              // Apply default on blur if empty or invalid
+              const value = parseInt(e.currentTarget.value, 10);
+              if (!value || isNaN(value)) {
+                props.onChange({ ...props.config, port: 587 });
+              }
+            }}
             placeholder="587"
             class={controlClass('px-2 py-1.5')}
           />
