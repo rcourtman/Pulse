@@ -28,7 +28,7 @@ import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import { UrlEditPopover } from '@/components/shared/UrlEditPopover';
-import { UpdateIcon } from '@/components/Docker/UpdateBadge';
+import { UpdateButton } from '@/components/Docker/UpdateBadge';
 import type { ColumnConfig } from '@/types/responsive';
 
 const typeBadgeClass = (type: 'container' | 'service' | 'task' | 'unknown') => {
@@ -1304,7 +1304,13 @@ const DockerContainerRow: Component<{
               >
                 {container.image || '—'}
               </span>
-              <UpdateIcon updateStatus={container.updateStatus} />
+              <UpdateButton
+                updateStatus={container.updateStatus}
+                hostId={host.id}
+                containerId={container.id}
+                containerName={container.name}
+                compact
+              />
             </div>
           </div>
         );

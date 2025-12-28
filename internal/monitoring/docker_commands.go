@@ -13,6 +13,8 @@ import (
 const (
 	// DockerCommandTypeStop instructs the agent to stop reporting and uninstall itself.
 	DockerCommandTypeStop = "stop"
+	// DockerCommandTypeUpdateContainer instructs the agent to update a container to its latest image.
+	DockerCommandTypeUpdateContainer = "update_container"
 
 	// DockerCommandStatusQueued indicates the command is queued and waiting to be dispatched.
 	DockerCommandStatusQueued = "queued"
@@ -147,6 +149,68 @@ func (m *Monitor) queueDockerStopCommand(hostID string) (models.DockerHostComman
 		Str("dockerHostID", hostID).
 		Str("commandID", cmd.status.ID).
 		Msg("Queued docker host stop command")
+
+	return cmd.status, nil
+}
+
+// QueueDockerContainerUpdateCommand enqueues an update command for a specific container.
+func (m *Monitor) QueueDockerContainerUpdateCommand(hostID, containerID, containerName string) (models.DockerHostCommandStatus, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	hostID = normalizeDockerHostID(hostID)
+	if hostID == "" {
+		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host id is required")
+	}
+
+	containerID = strings.TrimSpace(containerID)
+	if containerID == "" {
+		return models.DockerHostCommandStatus{}, fmt.Errorf("container id is required")
+	}
+
+	// Ensure the host exists
+	var hostExists bool
+	for _, host := range m.state.GetDockerHosts() {
+		if host.ID == hostID {
+			hostExists = true
+			break
+		}
+	}
+	if !hostExists {
+		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host %q not found", hostID)
+	}
+
+	// Check for existing commands in progress for this host
+	if existing, ok := m.dockerCommands[hostID]; ok {
+		switch existing.status.Status {
+		case DockerCommandStatusQueued, DockerCommandStatusDispatched, DockerCommandStatusAcknowledged:
+			return existing.status, fmt.Errorf("docker host %q already has a command in progress", hostID)
+		}
+	}
+
+	// Create payload with container information
+	payload := map[string]any{
+		"containerId":   containerID,
+		"containerName": containerName,
+	}
+
+	cmd := newDockerHostCommand(DockerCommandTypeUpdateContainer, fmt.Sprintf("Updating container %s", containerName), dockerCommandDefaultTTL, payload)
+	if m.dockerCommands == nil {
+		m.dockerCommands = make(map[string]*dockerHostCommand)
+	}
+	m.dockerCommands[hostID] = &cmd
+	if m.dockerCommandIndex == nil {
+		m.dockerCommandIndex = make(map[string]string)
+	}
+	m.dockerCommandIndex[cmd.status.ID] = hostID
+
+	m.state.SetDockerHostCommand(hostID, &cmd.status)
+	log.Info().
+		Str("dockerHostID", hostID).
+		Str("containerId", containerID).
+		Str("containerName", containerName).
+		Str("commandID", cmd.status.ID).
+		Msg("Queued docker container update command")
 
 	return cmd.status, nil
 }

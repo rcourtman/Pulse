@@ -19,6 +19,7 @@ func (n Node) ToFrontend() NodeFrontend {
 		DisplayName:                  n.DisplayName,
 		Instance:                     n.Instance,
 		Host:                         n.Host,
+		GuestURL:                     n.GuestURL,
 		Status:                       n.Status,
 		Type:                         n.Type,
 		CPU:                          n.CPU,
@@ -596,6 +597,16 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 			AutoUpdatePolicy:  c.Podman.AutoUpdatePolicy,
 			AutoUpdateRestart: c.Podman.AutoUpdateRestart,
 			UserNamespace:     c.Podman.UserNamespace,
+		}
+	}
+
+	if c.UpdateStatus != nil {
+		container.UpdateStatus = &DockerContainerUpdateStatusFrontend{
+			UpdateAvailable: c.UpdateStatus.UpdateAvailable,
+			CurrentDigest:   c.UpdateStatus.CurrentDigest,
+			LatestDigest:    c.UpdateStatus.LatestDigest,
+			LastChecked:     timeToUnixMillis(c.UpdateStatus.LastChecked),
+			Error:           c.UpdateStatus.Error,
 		}
 	}
 

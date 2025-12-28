@@ -568,6 +568,61 @@ export class MonitoringAPI {
 
     return data;
   }
+
+  /**
+   * Triggers an update for a Docker container on a specific host.
+   * The update will pull the latest image and recreate the container.
+   */
+  static async updateDockerContainer(
+    hostId: string,
+    containerId: string,
+    containerName: string
+  ): Promise<UpdateDockerContainerResponse> {
+    const url = `${this.baseUrl}/agents/docker/containers/update`;
+
+    const response = await apiFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ hostId, containerId, containerName }),
+    });
+
+    if (!response.ok) {
+      let message = `Failed with status ${response.status}`;
+      try {
+        const text = await response.text();
+        if (text?.trim()) {
+          message = text.trim();
+          try {
+            const parsed = JSON.parse(text);
+            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+              message = parsed.error.trim();
+            } else if (typeof parsed?.message === 'string' && parsed.message.trim()) {
+              message = parsed.message.trim();
+            }
+          } catch (_jsonErr) {
+            // ignore JSON parse errors, fallback to raw text
+          }
+        }
+      } catch (_err) {
+        // ignore read error, keep default message
+      }
+
+      throw new Error(message);
+    }
+
+    const text = await response.text();
+    if (!text?.trim()) {
+      return { success: true };
+    }
+
+    try {
+      return JSON.parse(text) as UpdateDockerContainerResponse;
+    } catch (err) {
+      throw new Error((err as Error).message || 'Failed to parse update container response');
+    }
+  }
 }
 
 export interface DeleteDockerHostResponse {
@@ -582,3 +637,16 @@ export interface DeleteKubernetesClusterResponse {
   clusterId?: string;
   message?: string;
 }
+
+export interface UpdateDockerContainerResponse {
+  success?: boolean;
+  commandId?: string;
+  hostId?: string;
+  container?: {
+    id: string;
+    name: string;
+  };
+  message?: string;
+  note?: string;
+}
+
