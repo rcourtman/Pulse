@@ -6159,7 +6159,9 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 
 func (m *Manager) removeActiveAlertNoLock(alertID string) {
 	delete(m.activeAlerts, alertID)
-	delete(m.ackState, alertID)
+	// NOTE: Don't delete ackState here - preserve it so if the same alert
+	// reappears (e.g., powered-off VM during backup), the acknowledgement
+	// is restored via preserveAlertState. ackState is cleaned up in Cleanup().
 }
 
 // GetActiveAlerts returns all active alerts
@@ -7942,6 +7944,17 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	for id, alert := range m.activeAlerts {
 		if alert.Acknowledged && alert.AckTime != nil && now.Sub(*alert.AckTime) > maxAge {
 			m.removeActiveAlertNoLock(id)
+		}
+	}
+
+	// Clean up stale ackState entries for alerts that no longer exist
+	// Keep ackState for 1 hour to handle transient alert clears (e.g., backups)
+	ackStateTTL := 1 * time.Hour
+	for id, record := range m.ackState {
+		if _, alertExists := m.activeAlerts[id]; !alertExists {
+			if now.Sub(record.time) > ackStateTTL {
+				delete(m.ackState, id)
+			}
 		}
 	}
 
