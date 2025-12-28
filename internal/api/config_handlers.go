@@ -6010,8 +6010,9 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	// Also match by name+tokenID for DHCP scenarios where IP changed but it's the same host.
 	// Different physical hosts can have the same hostname (e.g., "px1" on different networks)
 	// but they'll have different tokens, so we only merge if BOTH name AND token match.
-	// See: Issue #891, #104, #924, and multiple fix attempts in Dec 2025.
+	// See: Issue #891, #104, #924, #940 and multiple fix attempts in Dec 2025.
 	existingIndex := -1
+	preserveHost := false // When true, keep user's configured hostname instead of overwriting with agent's IP
 
 	// Extract IP from the new host URL for DNS comparison
 	newHostIP := extractHostIP(host)
@@ -6037,6 +6038,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			// Agent registration: check if existing hostname resolves to the new IP
 			// This catches the case where a node was manually added by hostname and
 			// then the agent registers using the IP address. (Issue #924)
+			// We preserve the user's configured hostname instead of overwriting with IP. (Issue #940)
 			if req.Source == "agent" && newHostIP != "" {
 				existingHostIP := extractHostIP(node.Host)
 				if existingHostIP == "" {
@@ -6045,12 +6047,13 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				}
 				if existingHostIP == newHostIP {
 					existingIndex = i
+					preserveHost = true // Keep user's configured hostname
 					log.Info().
 						Str("existingHost", node.Host).
 						Str("newHost", host).
 						Str("resolvedIP", newHostIP).
 						Str("node", node.Name).
-						Msg("Agent registration detected existing node by IP resolution - updating instead of creating duplicate")
+						Msg("Agent registration detected existing node by IP resolution - preserving configured hostname")
 					break
 				}
 			}
@@ -6072,6 +6075,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				break
 			}
 			// Agent registration: check if existing hostname resolves to the new IP
+			// We preserve the user's configured hostname instead of overwriting with IP. (Issue #940)
 			if req.Source == "agent" && newHostIP != "" {
 				existingHostIP := extractHostIP(node.Host)
 				if existingHostIP == "" {
@@ -6079,12 +6083,13 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				}
 				if existingHostIP == newHostIP {
 					existingIndex = i
+					preserveHost = true // Keep user's configured hostname
 					log.Info().
 						Str("existingHost", node.Host).
 						Str("newHost", host).
 						Str("resolvedIP", newHostIP).
 						Str("node", node.Name).
-						Msg("Agent registration detected existing node by IP resolution - updating instead of creating duplicate")
+						Msg("Agent registration detected existing node by IP resolution - preserving configured hostname")
 					break
 				}
 			}
@@ -6097,7 +6102,10 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		if req.Type == "pve" {
 			instance := &h.config.PVEInstances[existingIndex]
 			// Update host in case IP changed (DHCP scenario)
-			instance.Host = host
+			// But preserve user's configured hostname when matched by IP resolution (Issue #940)
+			if !preserveHost {
+				instance.Host = host
+			}
 			// Clear password auth when switching to token auth
 			instance.User = ""
 			instance.Password = ""
@@ -6132,7 +6140,10 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		} else {
 			instance := &h.config.PBSInstances[existingIndex]
 			// Update host in case IP changed (DHCP scenario)
-			instance.Host = host
+			// But preserve user's configured hostname when matched by IP resolution (Issue #940)
+			if !preserveHost {
+				instance.Host = host
+			}
 			// Clear password auth when switching to token auth
 			instance.User = ""
 			instance.Password = ""
