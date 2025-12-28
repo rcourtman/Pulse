@@ -74,6 +74,8 @@ var virtualFSTypes = map[string]bool{
 	"hugetlbfs":  true,
 	"mqueue":     true,
 	"bpf":        true,
+	"overlay":    true, // Docker/container overlay filesystems (issue #942)
+	"overlayfs":  true, // Alternative overlay name
 }
 
 // networkFSPatterns are substrings that indicate network/remote filesystems.
