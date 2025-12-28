@@ -269,6 +269,41 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Preserve original headers/customFields if the incoming values are redacted
+	// This happens when the frontend sends back masked values from GetWebhooks
+	existingWebhooks := h.monitor.GetNotificationManager().GetWebhooks()
+	for _, existing := range existingWebhooks {
+		if existing.ID == webhookID {
+			// Preserve headers if incoming contains redacted values
+			if len(webhook.Headers) > 0 && len(existing.Headers) > 0 {
+				hasRedacted := false
+				for _, v := range webhook.Headers {
+					if v == "***REDACTED***" {
+						hasRedacted = true
+						break
+					}
+				}
+				if hasRedacted {
+					webhook.Headers = existing.Headers
+				}
+			}
+			// Preserve customFields if incoming contains redacted values
+			if len(webhook.CustomFields) > 0 && len(existing.CustomFields) > 0 {
+				hasRedacted := false
+				for _, v := range webhook.CustomFields {
+					if v == "***REDACTED***" {
+						hasRedacted = true
+						break
+					}
+				}
+				if hasRedacted {
+					webhook.CustomFields = existing.CustomFields
+				}
+			}
+			break
+		}
+	}
+
 	// Validate webhook URL
 	if err := h.monitor.GetNotificationManager().ValidateWebhookURL(webhook.URL); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid webhook URL: %v", err), http.StatusBadRequest)
