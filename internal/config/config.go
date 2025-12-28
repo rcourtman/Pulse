@@ -689,6 +689,10 @@ func Load() (*Config, error) {
 			}
 			// Load HideLocalLogin
 			cfg.HideLocalLogin = systemSettings.HideLocalLogin
+			// Load PublicURL from settings (will be overridden by env var if set)
+			if systemSettings.PublicURL != "" {
+				cfg.PublicURL = systemSettings.PublicURL
+			}
 
 			// Load metrics retention settings (only override if explicitly set)
 			if systemSettings.MetricsRetentionRawHours > 0 {

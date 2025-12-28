@@ -946,6 +946,7 @@ type SystemSettings struct {
 	SSHPort                      int             `json:"sshPort,omitempty"`                    // Default SSH port for temperature monitoring (0 = use 22)
 	WebhookAllowedPrivateCIDRs   string          `json:"webhookAllowedPrivateCIDRs,omitempty"` // Comma-separated list of private CIDR ranges allowed for webhooks (e.g., "192.168.1.0/24,10.0.0.0/8")
 	HideLocalLogin               bool            `json:"hideLocalLogin"`                       // Hide local login form (username/password)
+	PublicURL                    string          `json:"publicURL,omitempty"`                  // Public URL for email notifications (e.g., http://192.168.1.100:8080)
 
 	// Metrics retention configuration (in hours)
 	// These control how long historical metrics are stored at each aggregation tier.
