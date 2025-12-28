@@ -31,6 +31,8 @@ interface NetworkSettingsPanelProps {
   setAllowedEmbedOrigins: Setter<string>;
   webhookAllowedPrivateCIDRs: Accessor<string>;
   setWebhookAllowedPrivateCIDRs: Setter<string>;
+  publicURL: Accessor<string>;
+  setPublicURL: Setter<string>;
 
   // Handlers
   handleDiscoveryEnabledChange: (enabled: boolean) => Promise<boolean>;
@@ -415,6 +417,73 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 configuration and restart Pulse to change them here.
               </div>
             </Show>
+          </section>
+
+          {/* Public URL Setting */}
+          <section class="space-y-3">
+            <h4 class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"></path>
+                <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"></path>
+              </svg>
+              Public URL
+            </h4>
+            <div class="space-y-2">
+              <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                Dashboard URL for Notifications
+              </label>
+              <p class="text-xs text-gray-600 dark:text-gray-400">
+                The URL included in email alerts to link back to Pulse. Required for Docker deployments with custom ports.
+              </p>
+              <div class="relative">
+                <input
+                  type="text"
+                  value={props.publicURL()}
+                  onChange={(e) => {
+                    if (!props.envOverrides().publicURL) {
+                      props.setPublicURL(e.currentTarget.value);
+                      props.setHasUnsavedChanges(true);
+                    }
+                  }}
+                  disabled={props.envOverrides().publicURL}
+                  placeholder="http://192.168.1.100:8080"
+                  class={`w-full px-3 py-1.5 text-sm border rounded-lg ${
+                    props.envOverrides().publicURL
+                      ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75'
+                      : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
+                  }`}
+                />
+                {props.envOverrides().publicURL && (
+                  <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
+                    <div class="flex items-center gap-1">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                        />
+                      </svg>
+                      <span>Overridden by PULSE_PUBLIC_URL environment variable</span>
+                    </div>
+                    <div class="mt-1 text-amber-700 dark:text-amber-300">
+                      Remove the env var and restart to enable UI configuration
+                    </div>
+                  </div>
+                )}
+              </div>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Example: If you access Pulse at <code>http://myserver:8080</code>, enter that URL here.
+                Leave empty to auto-detect (may not work correctly with Docker port mappings).
+              </p>
+            </div>
           </section>
 
           {/* CORS Settings Section */}

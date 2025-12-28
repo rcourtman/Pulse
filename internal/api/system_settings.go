@@ -582,6 +582,10 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["webhookAllowedPrivateCIDRs"]; ok {
 		settings.WebhookAllowedPrivateCIDRs = updates.WebhookAllowedPrivateCIDRs
 	}
+	// Allow configuring public URL for notifications (used in email alerts)
+	if _, ok := rawRequest["publicURL"]; ok {
+		settings.PublicURL = updates.PublicURL
+	}
 
 	// Boolean fields need special handling since false is a valid value
 	if _, ok := rawRequest["autoUpdateEnabled"]; ok {
@@ -736,6 +740,17 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 				log.Error().Err(err).Msg("Failed to update webhook allowed private CIDRs")
 				http.Error(w, fmt.Sprintf("Invalid webhook allowed private CIDRs: %v", err), http.StatusBadRequest)
 				return
+			}
+		}
+	}
+
+	// Update public URL for notifications if changed
+	if _, ok := rawRequest["publicURL"]; ok {
+		h.config.PublicURL = settings.PublicURL
+		if h.monitor != nil {
+			if nm := h.monitor.GetNotificationManager(); nm != nil {
+				nm.SetPublicURL(settings.PublicURL)
+				log.Info().Str("publicURL", settings.PublicURL).Msg("Updated notification public URL from settings")
 			}
 		}
 	}

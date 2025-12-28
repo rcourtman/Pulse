@@ -747,6 +747,9 @@ const Settings: Component<SettingsProps> = (props) => {
   // Webhook security settings
   const [webhookAllowedPrivateCIDRs, setWebhookAllowedPrivateCIDRs] = createSignal('');
 
+  // Public URL for notifications
+  const [publicURL, setPublicURL] = createSignal('');
+
   // Update settings
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
   const [updateInfo, setUpdateInfo] = createSignal<UpdateInfo | null>(null);
@@ -1764,6 +1767,8 @@ const Settings: Component<SettingsProps> = (props) => {
         setAllowedEmbedOrigins(systemSettings.allowedEmbedOrigins || '');
         // Load webhook security settings
         setWebhookAllowedPrivateCIDRs(systemSettings.webhookAllowedPrivateCIDRs || '');
+        // Load public URL for notifications
+        setPublicURL(systemSettings.publicURL || '');
         setTemperatureMonitoringEnabled(
           typeof systemSettings.temperatureMonitoringEnabled === 'boolean'
             ? systemSettings.temperatureMonitoringEnabled
@@ -1903,6 +1908,7 @@ const Settings: Component<SettingsProps> = (props) => {
           allowEmbedding: allowEmbedding(),
           allowedEmbedOrigins: allowedEmbedOrigins(),
           webhookAllowedPrivateCIDRs: webhookAllowedPrivateCIDRs(),
+          publicURL: publicURL(),
         });
       }
 
@@ -3385,6 +3391,8 @@ const Settings: Component<SettingsProps> = (props) => {
                   setAllowedEmbedOrigins={setAllowedEmbedOrigins}
                   webhookAllowedPrivateCIDRs={webhookAllowedPrivateCIDRs}
                   setWebhookAllowedPrivateCIDRs={setWebhookAllowedPrivateCIDRs}
+                  publicURL={publicURL}
+                  setPublicURL={setPublicURL}
                   handleDiscoveryEnabledChange={handleDiscoveryEnabledChange}
                   handleDiscoveryModeChange={handleDiscoveryModeChange}
                   setDiscoveryMode={setDiscoveryMode}
