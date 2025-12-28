@@ -11,6 +11,7 @@ type NodeFrontend struct {
 	DisplayName                  string       `json:"displayName"`
 	Instance                     string       `json:"instance"`
 	Host                         string       `json:"host,omitempty"`
+	GuestURL                     string       `json:"guestURL,omitempty"` // Optional guest-accessible URL (for navigation)
 	Status                       string       `json:"status"`
 	Type                         string       `json:"type"`
 	CPU                          float64      `json:"cpu"`
@@ -261,10 +262,21 @@ type DockerContainerFrontend struct {
 	Networks            []DockerContainerNetworkFrontend `json:"networks,omitempty"`
 	WritableLayerBytes  int64                            `json:"writableLayerBytes,omitempty"`
 	RootFilesystemBytes int64                            `json:"rootFilesystemBytes,omitempty"`
-	BlockIO             *DockerContainerBlockIOFrontend  `json:"blockIo,omitempty"`
-	Mounts              []DockerContainerMountFrontend   `json:"mounts,omitempty"`
-	Podman              *DockerPodmanContainerFrontend   `json:"podman,omitempty"`
+	BlockIO             *DockerContainerBlockIOFrontend      `json:"blockIo,omitempty"`
+	Mounts              []DockerContainerMountFrontend       `json:"mounts,omitempty"`
+	Podman              *DockerPodmanContainerFrontend       `json:"podman,omitempty"`
+	UpdateStatus        *DockerContainerUpdateStatusFrontend `json:"updateStatus,omitempty"`
 }
+
+// DockerContainerUpdateStatusFrontend tracks the image update status for a container.
+type DockerContainerUpdateStatusFrontend struct {
+	UpdateAvailable bool   `json:"updateAvailable"`
+	CurrentDigest   string `json:"currentDigest,omitempty"`
+	LatestDigest    string `json:"latestDigest,omitempty"`
+	LastChecked     int64  `json:"lastChecked"`
+	Error           string `json:"error,omitempty"` // e.g., "rate limited", "auth required"
+}
+
 
 // DockerContainerPortFrontend represents a container port mapping
 type DockerContainerPortFrontend struct {

@@ -23,6 +23,8 @@ type CommandAck struct {
 const (
 	// CommandTypeStop instructs the agent to stop reporting and shut down.
 	CommandTypeStop = "stop"
+	// CommandTypeUpdateContainer instructs the agent to update a specific container to its latest image.
+	CommandTypeUpdateContainer = "update_container"
 
 	// CommandStatusAcknowledged indicates a command was received and is in progress.
 	CommandStatusAcknowledged = "acknowledged"

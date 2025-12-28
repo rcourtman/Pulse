@@ -1208,6 +1208,8 @@ func (a *Agent) handleCommand(ctx context.Context, target TargetConfig, command 
 	switch strings.ToLower(command.Type) {
 	case agentsdocker.CommandTypeStop:
 		return a.handleStopCommand(ctx, target, command)
+	case agentsdocker.CommandTypeUpdateContainer:
+		return a.handleUpdateContainerCommand(ctx, target, command)
 	default:
 		a.logger.Warn().Str("command", command.Type).Msg("Received unsupported control command")
 		return nil

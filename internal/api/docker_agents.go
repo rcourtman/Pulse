@@ -458,3 +458,59 @@ func (h *DockerAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWriter, 
 		log.Error().Err(err).Msg("Failed to serialize docker host custom display name response")
 	}
 }
+
+// HandleContainerUpdate triggers a container update on a Docker host.
+// POST /api/agents/docker/containers/{containerId}/update
+func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
+		return
+	}
+
+	// Limit request body to 8KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
+	defer r.Body.Close()
+
+	var req struct {
+		HostID        string `json:"hostId"`
+		ContainerID   string `json:"containerId"`
+		ContainerName string `json:"containerName"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", map[string]string{"error": err.Error()})
+		return
+	}
+
+	if req.HostID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Host ID is required", nil)
+		return
+	}
+	if req.ContainerID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_container_id", "Container ID is required", nil)
+		return
+	}
+
+	// Queue the update command
+	commandStatus, err := h.monitor.QueueDockerContainerUpdateCommand(req.HostID, req.ContainerID, req.ContainerName)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "update_command_failed", err.Error(), nil)
+		return
+	}
+
+	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+
+	if err := utils.WriteJSONResponse(w, map[string]any{
+		"success":   true,
+		"commandId": commandStatus.ID,
+		"hostId":    req.HostID,
+		"container": map[string]string{
+			"id":   req.ContainerID,
+			"name": req.ContainerName,
+		},
+		"message": "Container update command queued",
+		"note":    "The update will be executed on the next agent report cycle",
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to serialize container update response")
+	}
+}
+
