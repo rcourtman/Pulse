@@ -48,7 +48,7 @@ COPY VERSION ./
 # Must be at internal/api/frontend-modern for Go embed
 COPY --from=frontend-builder /app/frontend-modern/dist ./internal/api/frontend-modern/dist
 
-# Build the binaries with embedded frontend
+# Build the main pulse binary for all target architectures
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
     VERSION="v$(cat VERSION | tr -d '\n')" && \
@@ -58,10 +58,14 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     if [ -n "${PULSE_LICENSE_PUBLIC_KEY}" ]; then \
       LICENSE_LDFLAGS="-X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=${PULSE_LICENSE_PUBLIC_KEY}"; \
     fi && \
-    CGO_ENABLED=0 GOOS=linux go build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
       -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT} -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION} ${LICENSE_LDFLAGS}" \
       -trimpath \
-      -o pulse ./cmd/pulse
+      -o pulse-linux-amd64 ./cmd/pulse && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
+      -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT} -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION} ${LICENSE_LDFLAGS}" \
+      -trimpath \
+      -o pulse-linux-arm64 ./cmd/pulse
 
 # Build docker-agent binaries (optional cross-arch builds controlled by BUILD_AGENT)
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
@@ -253,12 +257,23 @@ ENTRYPOINT ["/usr/local/bin/pulse-docker-agent"]
 # Final stage (Pulse server runtime)
 FROM alpine:3.20 AS runtime
 
+# Use TARGETARCH to select the correct binary for the build platform
+ARG TARGETARCH
+
 RUN apk --no-cache add ca-certificates tzdata su-exec openssh-client
 
 WORKDIR /app
 
-# Copy binaries from builder (frontend is embedded)
-COPY --from=backend-builder /app/pulse .
+# Copy all pulse binaries, then select the correct one for target architecture
+COPY --from=backend-builder /app/pulse-linux-* /tmp/
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        cp /tmp/pulse-linux-arm64 ./pulse; \
+    else \
+        cp /tmp/pulse-linux-amd64 ./pulse; \
+    fi && \
+    chmod +x ./pulse && \
+    rm -rf /tmp/pulse-linux-*
+
 COPY --from=backend-builder /app/pulse-docker-agent .
 
 # Copy VERSION file
@@ -284,8 +299,14 @@ RUN chmod 755 /opt/pulse/scripts/*.sh /opt/pulse/scripts/*.ps1
 # Copy all binaries for download endpoint
 RUN mkdir -p /opt/pulse/bin
 
-# Main pulse server binary (for validation)
-COPY --from=backend-builder /app/pulse /opt/pulse/bin/pulse
+# Main pulse server binary (for validation) - copy both architectures
+COPY --from=backend-builder /app/pulse-linux-amd64 /opt/pulse/bin/pulse-linux-amd64
+COPY --from=backend-builder /app/pulse-linux-arm64 /opt/pulse/bin/pulse-linux-arm64
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        ln -s pulse-linux-arm64 /opt/pulse/bin/pulse; \
+    else \
+        ln -s pulse-linux-amd64 /opt/pulse/bin/pulse; \
+    fi
 
 # Docker agent binaries (all architectures)
 COPY --from=backend-builder /app/pulse-docker-agent-linux-amd64 /opt/pulse/bin/
