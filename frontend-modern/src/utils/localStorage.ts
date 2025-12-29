@@ -110,6 +110,9 @@ export const STORAGE_KEYS = {
   METRICS_VIEW_MODE: 'metricsViewMode', // 'bars' | 'sparklines'
   METRICS_TIME_RANGE: 'metricsTimeRange', // '15m' | '1h' | '4h' | '24h'
 
+  // Temperature display
+  TEMPERATURE_UNIT: 'temperatureUnit', // 'celsius' | 'fahrenheit'
+
   // Column visibility
   DASHBOARD_HIDDEN_COLUMNS: 'dashboardHiddenColumns',
   HOSTS_HIDDEN_COLUMNS: 'hostsHiddenColumns',

@@ -1,4 +1,5 @@
 import { Component, createMemo } from 'solid-js';
+import { formatTemperature } from '@/utils/temperature';
 
 interface TemperatureGaugeProps {
     value: number;
@@ -21,7 +22,7 @@ export const TemperatureGauge: Component<TemperatureGaugeProps> = (props) => {
 
     return (
         <span class={`text-xs whitespace-nowrap ${textColorClass()} ${props.class || ''}`}>
-            {Math.round(props.value)}°C
+            {formatTemperature(props.value)}
         </span>
     );
 };

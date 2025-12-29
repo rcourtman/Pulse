@@ -1,6 +1,7 @@
 import { Component, For, Show, createMemo } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { formatBytes } from '@/utils/format';
+import { formatTemperature } from '@/utils/temperature';
 import type { PhysicalDisk } from '@/types/api';
 import { useWebSocket } from '@/App';
 
@@ -267,7 +268,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                     : 'text-green-600 dark:text-green-400'
                                   }`}
                               >
-                                {disk.temperature}°C
+                                {formatTemperature(disk.temperature)}
                               </span>
                             </Show>
                           </td>
