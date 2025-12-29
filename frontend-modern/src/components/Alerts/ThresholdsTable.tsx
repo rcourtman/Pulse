@@ -42,6 +42,7 @@ import type {
 import { ResourceTable, Resource, GroupHeaderMeta } from './ResourceTable';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { logger } from '@/utils/logger';
+import { formatTemperature } from '@/utils/temperature';
 type OverrideType =
   | 'guest'
   | 'node'
@@ -574,9 +575,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       return `${value}%`;
     }
 
-    // Temperature in Celsius
+    // Temperature
     if (metric === 'temperature') {
-      return `${value}°C`;
+      return formatTemperature(value);
     }
 
     if (metric === 'restartWindow') {

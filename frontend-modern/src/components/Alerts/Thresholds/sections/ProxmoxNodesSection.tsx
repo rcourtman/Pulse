@@ -13,6 +13,7 @@ import { GlobalDefaultsRow } from '../components/GlobalDefaultsRow';
 import type { ThresholdResource, ThresholdValues, ThresholdColumn } from '../types';
 import type { Alert, Node } from '@/types/api';
 import type { RawOverrideConfig } from '@/types/alerts';
+import { formatTemperature, getTemperatureSymbol } from '@/utils/temperature';
 
 /**
  * Column definitions for Proxmox nodes
@@ -21,7 +22,7 @@ const NODE_COLUMNS: ThresholdColumn[] = [
     { key: 'cpu', label: 'CPU %', unit: '%' },
     { key: 'memory', label: 'Memory %', unit: '%' },
     { key: 'disk', label: 'Disk %', unit: '%' },
-    { key: 'temperature', label: 'Temp °C', unit: '°C' },
+    { key: 'temperature', label: `Temp ${getTemperatureSymbol()}`, unit: getTemperatureSymbol() },
 ];
 
 export interface ProxmoxNodesSectionProps {
@@ -174,7 +175,7 @@ export const ProxmoxNodesSection: Component<ProxmoxNodesSectionProps> = (props) 
         if (value === undefined || value === null) return '—';
         if (value <= 0) return 'Off';
 
-        if (metric === 'temperature') return `${value}°C`;
+        if (metric === 'temperature') return formatTemperature(value);
         if (['cpu', 'memory', 'disk'].includes(metric)) return `${value}%`;
         return String(value);
     };

@@ -7,6 +7,7 @@
 
 import { Component, Show } from 'solid-js';
 import { getThresholdSeverityColor, SEVERITY_COLORS } from '../types';
+import { formatTemperature } from '@/utils/temperature';
 
 export interface ThresholdBadgeProps {
     /** The metric key (cpu, memory, disk, etc.) */
@@ -43,7 +44,7 @@ const formatDisplayValue = (metric: string, value: number | undefined): string =
 
     // Temperature
     if (metric === 'temperature') {
-        return `${value}°C`;
+        return formatTemperature(value);
     }
 
     // Time-based

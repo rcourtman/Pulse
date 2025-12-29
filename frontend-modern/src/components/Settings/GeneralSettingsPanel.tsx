@@ -6,6 +6,8 @@ import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import Activity from 'lucide-solid/icons/activity';
 import Sun from 'lucide-solid/icons/sun';
 import Moon from 'lucide-solid/icons/moon';
+import Thermometer from 'lucide-solid/icons/thermometer';
+import { temperatureStore } from '@/utils/temperature';
 
 const PVE_POLLING_MIN_SECONDS = 10;
 const PVE_POLLING_MAX_SECONDS = 3600;
@@ -56,8 +58,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <div class="flex items-center gap-3">
               {/* Animated theme icon */}
               <div class={`relative p-2.5 rounded-xl transition-all duration-300 ${props.darkMode()
-                  ? 'bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25'
-                  : 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/25'
+                ? 'bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25'
+                : 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/25'
                 }`}>
                 <div class="relative w-5 h-5">
                   <Sun class={`absolute inset-0 w-5 h-5 text-white transition-all duration-300 ${props.darkMode() ? 'opacity-0 rotate-90 scale-50' : 'opacity-100 rotate-0 scale-100'
@@ -84,6 +86,45 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 }
               }}
             />
+          </div>
+
+          {/* Temperature Unit Selector */}
+          <div class="flex items-center justify-between gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div class="flex items-center gap-3">
+              <div class="p-2.5 rounded-xl bg-gradient-to-br from-orange-400 to-red-500 shadow-lg shadow-orange-500/25">
+                <Thermometer class="w-5 h-5 text-white" strokeWidth={2} />
+              </div>
+              <div class="text-sm text-gray-600 dark:text-gray-400">
+                <p class="font-medium text-gray-900 dark:text-gray-100">
+                  Temperature unit
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  Display temperatures in Celsius or Fahrenheit
+                </p>
+              </div>
+            </div>
+            <div class="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+              <button
+                type="button"
+                class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${temperatureStore.unit() === 'celsius'
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+                onClick={() => temperatureStore.setUnit('celsius')}
+              >
+                °C
+              </button>
+              <button
+                type="button"
+                class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${temperatureStore.unit() === 'fahrenheit'
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+                onClick={() => temperatureStore.setUnit('fahrenheit')}
+              >
+                °F
+              </button>
+            </div>
           </div>
         </div>
       </Card>

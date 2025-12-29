@@ -4,6 +4,7 @@ import { Portal } from 'solid-js/web';
 import { useNavigate } from '@solidjs/router';
 import type { Host, HostRAIDArray } from '@/types/api';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
+import { formatTemperature } from '@/utils/temperature';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
@@ -285,7 +286,7 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
         onMouseLeave={handleMouseLeave}
       >
         <Show when={primaryTemp() !== null} fallback={<span class="text-gray-400">—</span>}>
-          {Math.round(primaryTemp()!)}°C
+          {formatTemperature(primaryTemp())}
         </Show>
       </span>
 
@@ -312,7 +313,7 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
                       return (
                         <div class="flex justify-between gap-3 py-0.5">
                           <span class="text-gray-400 truncate max-w-[140px]">{formatSensorName(name)}</span>
-                          <span class={`font-medium font-mono ${colorClass}`}>{Math.round(temp)}°C</span>
+                          <span class={`font-medium font-mono ${colorClass}`}>{formatTemperature(temp)}</span>
                         </div>
                       );
                     }}
@@ -346,7 +347,7 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
                           <span class="text-gray-400 truncate max-w-[140px]" title={disk.model}>
                             {disk.device}
                           </span>
-                          <span class={`font-medium font-mono ${colorClass}`}>{temp}°C</span>
+                          <span class={`font-medium font-mono ${colorClass}`}>{formatTemperature(temp)}</span>
                         </div>
                       );
                     }}
@@ -383,7 +384,7 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
                       return (
                         <div class="flex justify-between gap-3 py-0.5">
                           <span class="text-gray-400 truncate max-w-[140px]">{formatSensorName(name)}</span>
-                          <span class={`font-medium font-mono ${colorClass}`}>{Math.round(temp)}°C</span>
+                          <span class={`font-medium font-mono ${colorClass}`}>{formatTemperature(temp)}</span>
                         </div>
                       );
                     }}

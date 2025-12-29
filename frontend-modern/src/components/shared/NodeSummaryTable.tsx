@@ -5,7 +5,7 @@ import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { Card } from '@/components/shared/Card';
 import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
-import { getCpuTemperature } from '@/utils/temperature';
+import { getCpuTemperature, formatTemperature } from '@/utils/temperature';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -696,7 +696,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                                 const max = typeof cpuMaxValue === 'number' ? Math.round(cpuMaxValue) : undefined;
 
                                 return (
-                                  <div title={`Min: ${min ?? '-'}°C, Max: ${max ?? '-'}°C${hasGPU ? `\nGPU: ${gpus.map(g => `${g.edge ?? g.junction ?? g.mem}°C`).join(', ')}` : ''}`}>
+                                  <div title={`Min: ${min !== undefined ? formatTemperature(min) : '-'}, Max: ${max !== undefined ? formatTemperature(max) : '-'}${hasGPU ? `\nGPU: ${gpus.map(g => formatTemperature(g.edge ?? g.junction ?? g.mem)).join(', ')}` : ''}`}>
                                     <TemperatureGauge
                                       value={value}
                                       min={min}

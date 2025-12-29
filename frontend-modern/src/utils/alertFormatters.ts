@@ -1,10 +1,12 @@
 /**
  * Utility functions for formatting alert values based on their metric type.
- * Temperature metrics should show °C, not percentages.
+ * Temperature metrics show the user-selected unit (°C or °F).
  */
 
+import { getTemperatureSymbol } from './temperature';
+
 /**
- * Metric types that are measured in degrees Celsius rather than percentages.
+ * Metric types that are measured in degrees (temperature) rather than percentages.
  */
 const TEMPERATURE_METRIC_TYPES = new Set(['temperature', 'temp']);
 
@@ -16,14 +18,14 @@ const THROUGHPUT_METRIC_TYPES = new Set(['diskRead', 'diskWrite', 'networkIn', '
 /**
  * Returns the appropriate unit suffix for a given metric type.
  * @param metricType The alert's metric type (e.g., 'cpu', 'memory', 'temperature')
- * @returns The unit suffix to append to values (e.g., '%', '°C', ' MB/s')
+ * @returns The unit suffix to append to values (e.g., '%', '°C', '°F', ' MB/s')
  */
 export function getAlertUnit(metricType?: string): string {
     if (!metricType) return '%';
     const typeLower = metricType.toLowerCase();
 
     if (TEMPERATURE_METRIC_TYPES.has(typeLower)) {
-        return '°C';
+        return getTemperatureSymbol();
     }
 
     if (THROUGHPUT_METRIC_TYPES.has(typeLower)) {
