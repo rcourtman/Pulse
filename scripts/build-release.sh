@@ -113,12 +113,7 @@ for build_name in "${build_order[@]}"; do
         -o "$BUILD_DIR/pulse-$build_name" \
         ./cmd/pulse
 
-    # Build docker agent binary
-    env $build_env go build \
-        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=v${VERSION}" \
-        -trimpath \
-        -o "$BUILD_DIR/pulse-docker-agent-$build_name" \
-        ./cmd/pulse-docker-agent
+
 
     # Build temperature proxy binary
     env $build_env go build \
@@ -140,7 +135,7 @@ for build_name in "${build_order[@]}"; do
 
     # Copy architecture-specific runtime binaries
     cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/bin/pulse"
-    cp "$BUILD_DIR/pulse-docker-agent-$build_name" "$staging_dir/bin/pulse-docker-agent"
+
     cp "$BUILD_DIR/pulse-host-agent-$build_name" "$staging_dir/bin/pulse-host-agent"
     cp "$BUILD_DIR/pulse-sensor-proxy-$build_name" "$staging_dir/bin/pulse-sensor-proxy"
 
@@ -201,7 +196,7 @@ mkdir -p "$universal_dir/scripts"
 # Copy all binaries to bin/ directory to maintain consistent structure
 for build_name in "${build_order[@]}"; do
     cp "$BUILD_DIR/pulse-$build_name" "$universal_dir/bin/pulse-${build_name}"
-    cp "$BUILD_DIR/pulse-docker-agent-$build_name" "$universal_dir/bin/pulse-docker-agent-${build_name}"
+
     cp "$BUILD_DIR/pulse-host-agent-$build_name" "$universal_dir/bin/pulse-host-agent-${build_name}"
     cp "$BUILD_DIR/pulse-agent-$build_name" "$universal_dir/bin/pulse-agent-${build_name}"
     cp "$BUILD_DIR/pulse-sensor-proxy-$build_name" "$universal_dir/bin/pulse-sensor-proxy-${build_name}"
@@ -243,28 +238,6 @@ esac
 EOF
 chmod +x "$universal_dir/bin/pulse"
 
-cat > "$universal_dir/bin/pulse-docker-agent" << 'EOF'
-#!/bin/sh
-# Auto-detect architecture and run appropriate pulse-docker-agent binary
-
-ARCH=$(uname -m)
-case "$ARCH" in
-    x86_64|amd64)
-        exec "$(dirname "$0")/pulse-docker-agent-linux-amd64" "$@"
-        ;;
-    aarch64|arm64)
-        exec "$(dirname "$0")/pulse-docker-agent-linux-arm64" "$@"
-        ;;
-    armv7l|armhf)
-        exec "$(dirname "$0")/pulse-docker-agent-linux-armv7" "$@"
-        ;;
-    *)
-        echo "Unsupported architecture: $ARCH" >&2
-        exit 1
-        ;;
-esac
-EOF
-chmod +x "$universal_dir/bin/pulse-docker-agent"
 
 cat > "$universal_dir/bin/pulse-sensor-proxy" << 'EOF'
 #!/bin/sh
