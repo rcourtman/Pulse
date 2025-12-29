@@ -182,14 +182,14 @@ func main() {
 			AgentType:          "unified",
 			AgentVersion:       Version,
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
-			DisableAutoUpdate:  true,
+			DisableAutoUpdate:  cfg.DisableAutoUpdate,
 			LogLevel:           cfg.LogLevel,
 			Logger:             &logger,
 			SwarmScope:         "node",
 			IncludeContainers:  true,
 			IncludeServices:    true,
 			IncludeTasks:       true,
-			CollectDiskMetrics: true,
+			CollectDiskMetrics: false,
 		}
 
 		dockerAgent, err = dockeragent.New(dockerCfg)
