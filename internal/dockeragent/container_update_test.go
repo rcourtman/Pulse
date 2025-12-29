@@ -57,7 +57,7 @@ func TestUpdateContainer_Errors(t *testing.T) {
 			logger: logger,
 		}
 
-		result := agent.updateContainer(context.Background(), "container1")
+		result := agent.updateContainerWithProgress(context.Background(), "container1", nil)
 		if result.Error == "" {
 			t.Fatal("expected error for inspect failure")
 		}
@@ -76,7 +76,7 @@ func TestUpdateContainer_Errors(t *testing.T) {
 			logger: logger,
 		}
 
-		result := agent.updateContainer(context.Background(), "container1")
+		result := agent.updateContainerWithProgress(context.Background(), "container1", nil)
 		if result.Error == "" {
 			t.Fatal("expected error for pull failure")
 		}
@@ -98,7 +98,7 @@ func TestUpdateContainer_Errors(t *testing.T) {
 			logger: logger,
 		}
 
-		result := agent.updateContainer(context.Background(), "container1")
+		result := agent.updateContainerWithProgress(context.Background(), "container1", nil)
 		if result.Error == "" {
 			t.Fatal("expected error for stop failure")
 		}
@@ -128,7 +128,7 @@ func TestUpdateContainer_Errors(t *testing.T) {
 			logger: logger,
 		}
 
-		result := agent.updateContainer(context.Background(), "container1")
+		result := agent.updateContainerWithProgress(context.Background(), "container1", nil)
 		if result.Error == "" {
 			t.Fatal("expected error for rename failure")
 		}
@@ -166,7 +166,7 @@ func TestUpdateContainer_Errors(t *testing.T) {
 			logger: logger,
 		}
 
-		result := agent.updateContainer(context.Background(), "container1")
+		result := agent.updateContainerWithProgress(context.Background(), "container1", nil)
 		if result.Error == "" {
 			t.Fatal("expected error for create failure")
 		}
@@ -212,7 +212,7 @@ func TestUpdateContainer_Errors(t *testing.T) {
 			logger: logger,
 		}
 
-		result := agent.updateContainer(context.Background(), "container1")
+		result := agent.updateContainerWithProgress(context.Background(), "container1", nil)
 		if result.Error == "" {
 			t.Fatal("expected error for start failure")
 		}
@@ -276,7 +276,7 @@ func TestUpdateContainer_Success(t *testing.T) {
 		logger: logger,
 	}
 
-	result := agent.updateContainer(context.Background(), "container1")
+	result := agent.updateContainerWithProgress(context.Background(), "container1", nil)
 	if !result.Success {
 		t.Fatalf("expected success, got error %q", result.Error)
 	}
@@ -339,7 +339,7 @@ func TestUpdateContainer_CleanupError(t *testing.T) {
 		logger: logger,
 	}
 
-	result := agent.updateContainer(context.Background(), "container1")
+	result := agent.updateContainerWithProgress(context.Background(), "container1", nil)
 	if !result.Success {
 		t.Fatalf("expected success, got error %q", result.Error)
 	}

@@ -52,6 +52,7 @@ func TestCollectContainer(t *testing.T) {
 			Health:    &containertypes.Health{Status: "healthy"},
 		}
 		inspect.Config.Env = []string{"PASSWORD=secret", "PATH=/bin"}
+		inspect.Config.Image = "nginx@sha256:abc123"
 		inspect.NetworkSettings.Networks["net1"].IPAddress = "10.0.0.2"
 		inspect.Mounts = []containertypes.MountPoint{
 			{Type: "bind", Source: "/data", Destination: "/data", RW: true},
@@ -107,8 +108,11 @@ func TestCollectContainer(t *testing.T) {
 		if container.Podman == nil || container.Podman.PodName != "mypod" {
 			t.Fatalf("expected podman metadata")
 		}
-		if container.UpdateStatus == nil || container.UpdateStatus.Error == "" {
-			t.Fatalf("expected update status for digest-pinned image")
+		if container.UpdateStatus == nil {
+			t.Fatal("expected update status for digest-pinned image, got nil")
+		}
+		if container.UpdateStatus.Error == "" {
+			t.Fatalf("expected update status for digest-pinned image, got empty error. Status: %+v", container.UpdateStatus)
 		}
 		if len(container.Networks) == 0 {
 			t.Fatalf("expected networks to be populated")

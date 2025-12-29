@@ -11,11 +11,13 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery/envdetect"
 )
 
+var detectEnvironmentFn = envdetect.DetectEnvironment
+
 // BuildScanner creates a discovery scanner configured using the supplied discovery config.
 func BuildScanner(cfg config.DiscoveryConfig) (*pkgdiscovery.Scanner, error) {
 	cfg = config.NormalizeDiscoveryConfig(cfg)
 
-	profile, err := envdetect.DetectEnvironment()
+	profile, err := detectEnvironmentFn()
 	if err != nil {
 		return nil, err
 	}

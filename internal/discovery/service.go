@@ -90,6 +90,9 @@ type discoveryScanner interface {
 type scannerFactory func(config.DiscoveryConfig) (discoveryScanner, error)
 
 var (
+	newScannerFn = func() discoveryScanner {
+		return pkgdiscovery.NewScanner()
+	}
 	discoveryScanResults = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "pulse",
@@ -144,7 +147,7 @@ func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfg
 	}
 
 	return &Service{
-		scanner:      pkgdiscovery.NewScanner(),
+		scanner:      newScannerFn(),
 		wsHub:        wsHub,
 		cache:        &DiscoveryCache{},
 		interval:     interval,
@@ -366,11 +369,11 @@ func (s *Service) performScan() {
 	}
 	if err != nil {
 		log.Warn().Err(err).Msg("Environment detection failed during discovery; falling back to default scanner configuration")
-		newScanner = pkgdiscovery.NewScanner()
+		newScanner = newScannerFn()
 	}
 	if newScanner == nil {
 		log.Warn().Msg("Discovery scanner factory returned nil; using default scanner configuration")
-		newScanner = pkgdiscovery.NewScanner()
+		newScanner = newScannerFn()
 	}
 	s.mu.Lock()
 	s.scanner = newScanner

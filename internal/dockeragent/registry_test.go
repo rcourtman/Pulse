@@ -138,6 +138,24 @@ func TestRegistryChecker_DigestsDiffer(t *testing.T) {
 			latest:  "abc123",
 			want:    false, // Should match after normalization
 		},
+		{
+			name:    "match second digest in list",
+			current: "sha256:abc123",
+			latest:  "def456,abc123",
+			want:    false, // Should match one of them
+		},
+		{
+			name:    "match first digest in list",
+			current: "sha256:def456",
+			latest:  "def456,abc123",
+			want:    false, // Should match one of them
+		},
+		{
+			name:    "no match in list",
+			current: "sha256:xyz789",
+			latest:  "def456,abc123",
+			want:    true, // No match found
+		},
 	}
 
 	for _, tt := range tests {
