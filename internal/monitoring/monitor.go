@@ -322,6 +322,111 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 	return updated
 }
 
+// mergeHostAgentSMARTIntoDisks merges SMART temperature data from linked host agents
+// into physical disks for Proxmox nodes. This allows disk temps collected by the
+// pulse-agent running on a PVE node to populate the Physical Disks view.
+func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host) []models.PhysicalDisk {
+	if len(disks) == 0 || len(nodes) == 0 || len(hosts) == 0 {
+		return disks
+	}
+
+	// Build a map of host ID to host for quick lookup
+	hostByID := make(map[string]*models.Host, len(hosts))
+	for i := range hosts {
+		hostByID[hosts[i].ID] = &hosts[i]
+	}
+
+	// Build a map of node name to linked host's SMART data
+	smartByNodeName := make(map[string][]models.HostDiskSMART)
+	for _, node := range nodes {
+		if node.LinkedHostAgentID == "" {
+			continue
+		}
+		host, ok := hostByID[node.LinkedHostAgentID]
+		if !ok || len(host.Sensors.SMART) == 0 {
+			continue
+		}
+		smartByNodeName[node.Name] = host.Sensors.SMART
+		log.Debug().
+			Str("nodeName", node.Name).
+			Str("hostAgentID", node.LinkedHostAgentID).
+			Int("smartDiskCount", len(host.Sensors.SMART)).
+			Msg("mergeHostAgentSMARTIntoDisks: found linked host agent with SMART data")
+	}
+
+	if len(smartByNodeName) == 0 {
+		return disks
+	}
+
+	updated := make([]models.PhysicalDisk, len(disks))
+	copy(updated, disks)
+
+	for i := range updated {
+		// Skip if temperature is already populated
+		if updated[i].Temperature > 0 {
+			continue
+		}
+
+		smartData, ok := smartByNodeName[updated[i].Node]
+		if !ok || len(smartData) == 0 {
+			continue
+		}
+
+		// Try to match by WWN (most reliable)
+		if updated[i].WWN != "" {
+			for _, disk := range smartData {
+				if disk.WWN != "" && strings.EqualFold(disk.WWN, updated[i].WWN) {
+					if disk.Temperature > 0 && !disk.Standby {
+						updated[i].Temperature = disk.Temperature
+						log.Debug().
+							Str("device", updated[i].DevPath).
+							Str("wwn", updated[i].WWN).
+							Int("temp", disk.Temperature).
+							Msg("Matched host agent SMART temperature by WWN")
+					}
+					break
+				}
+			}
+		}
+
+		// Fall back to serial number match
+		if updated[i].Serial != "" && updated[i].Temperature == 0 {
+			for _, disk := range smartData {
+				if disk.Serial != "" && strings.EqualFold(disk.Serial, updated[i].Serial) {
+					if disk.Temperature > 0 && !disk.Standby {
+						updated[i].Temperature = disk.Temperature
+						log.Debug().
+							Str("device", updated[i].DevPath).
+							Str("serial", updated[i].Serial).
+							Int("temp", disk.Temperature).
+							Msg("Matched host agent SMART temperature by serial")
+					}
+					break
+				}
+			}
+		}
+
+		// Last resort: match by device path
+		if updated[i].Temperature == 0 {
+			normalizedDevPath := strings.TrimPrefix(updated[i].DevPath, "/dev/")
+			for _, disk := range smartData {
+				normalizedDiskDev := strings.TrimPrefix(disk.Device, "/dev/")
+				if normalizedDiskDev == normalizedDevPath {
+					if disk.Temperature > 0 && !disk.Standby {
+						updated[i].Temperature = disk.Temperature
+						log.Debug().
+							Str("device", updated[i].DevPath).
+							Int("temp", disk.Temperature).
+							Msg("Matched host agent SMART temperature by device path")
+					}
+					break
+				}
+			}
+		}
+	}
+
+	return updated
+}
 func lookupClusterEndpointLabel(instance *config.PVEInstance, nodeName string) string {
 	if instance == nil {
 		return ""
@@ -5539,6 +5644,8 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			}
 			if len(existing) > 0 {
 				updated := mergeNVMeTempsIntoDisks(existing, modelNodes)
+				// Also merge SMART data from linked host agents
+				updated = mergeHostAgentSMARTIntoDisks(updated, modelNodes, currentState.Hosts)
 				m.state.UpdatePhysicalDisks(instanceName, updated)
 			}
 		} else {
@@ -5690,6 +5797,8 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				}
 
 				allDisks = mergeNVMeTempsIntoDisks(allDisks, modelNodesCopy)
+				// Also merge SMART data from linked host agents
+				allDisks = mergeHostAgentSMARTIntoDisks(allDisks, modelNodesCopy, currentState.Hosts)
 
 				// Update physical disks in state
 				log.Debug().
