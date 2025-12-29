@@ -140,12 +140,16 @@ Safe to run multiple times (idempotent).
 			allowedNodesPath = filepath.Join(filepath.Dir(cfgPath), "allowed_nodes.yaml")
 		}
 
-		if err := migrateInlineToFile(cfgPath, allowedNodesPath); err != nil {
+		migrated, err := migrateInlineToFile(cfgPath, allowedNodesPath)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Migration failed: %v\n", err)
 			return err
 		}
 
-		fmt.Println("Migration complete: inline allowed_nodes moved to file")
+		if migrated {
+			fmt.Println("Migration complete: inline allowed_nodes moved to file")
+		}
+		// Silent success when nothing to migrate (idempotent)
 		return nil
 	},
 }
@@ -539,13 +543,16 @@ func extractNodesFromYAML(data []byte) []string {
 }
 
 // migrateInlineToFile atomically migrates inline allowed_nodes from config.yaml to allowed_nodes.yaml
-func migrateInlineToFile(configPath, allowedNodesPath string) error {
+// Returns (true, nil) if migration was performed, (false, nil) if nothing to migrate, or (false, err) on error.
+func migrateInlineToFile(configPath, allowedNodesPath string) (bool, error) {
 	configLockPath := configPath + ".lock"
 	allowedNodesLockPath := allowedNodesPath + ".lock"
 
+	var migrated bool
+
 	// Lock both files in consistent order to prevent deadlocks
 	// Always lock config.yaml before allowed_nodes.yaml
-	return withLockedFile(configLockPath, func(configLock *os.File) error {
+	err := withLockedFile(configLockPath, func(configLock *os.File) error {
 		return withLockedFile(allowedNodesLockPath, func(allowedNodesLock *os.File) error {
 			// Read current config
 			configData, err := os.ReadFile(configPath)
@@ -562,6 +569,15 @@ func migrateInlineToFile(configPath, allowedNodesPath string) error {
 				return fmt.Errorf("failed to parse config: %w", err)
 			}
 
+			// Check if inline allowed_nodes exists - this determines if migration is needed
+			_, hasInlineNodes := config["allowed_nodes"]
+			_, hasFileRef := config["allowed_nodes_file"]
+
+			// If already using file mode and no inline nodes, nothing to migrate
+			if !hasInlineNodes && hasFileRef {
+				return nil
+			}
+
 			// Extract inline nodes (if any)
 			var inlineNodes []string
 			if allowedNodes, ok := config["allowed_nodes"]; ok {
@@ -573,6 +589,9 @@ func migrateInlineToFile(configPath, allowedNodesPath string) error {
 					}
 				}
 			}
+
+			// Mark that migration is being performed
+			migrated = hasInlineNodes
 
 			// Remove inline allowed_nodes block from config
 			delete(config, "allowed_nodes")
@@ -616,4 +635,5 @@ func migrateInlineToFile(configPath, allowedNodesPath string) error {
 			return atomicWriteFile(allowedNodesPath, finalData, 0644)
 		})
 	})
+	return migrated, err
 }

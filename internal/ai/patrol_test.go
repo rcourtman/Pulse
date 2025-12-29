@@ -1,10 +1,12 @@
 package ai
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -1063,6 +1065,118 @@ func TestPatrolService_SetRunHistoryPersistence_Nil(t *testing.T) {
 	err := ps.SetRunHistoryPersistence(nil)
 	if err != nil {
 		t.Errorf("Expected no error with nil persistence, got: %v", err)
+	}
+}
+
+type mockFindingsPersistence struct {
+	loadErr error
+}
+
+func (m *mockFindingsPersistence) SaveFindings(findings map[string]*Finding) error {
+	return nil
+}
+
+func (m *mockFindingsPersistence) LoadFindings() (map[string]*Finding, error) {
+	if m.loadErr != nil {
+		return nil, m.loadErr
+	}
+	return make(map[string]*Finding), nil
+}
+
+func TestPatrolService_SetFindingsPersistence(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	err := ps.SetFindingsPersistence(&mockFindingsPersistence{})
+	if err != nil {
+		t.Errorf("Expected no error with persistence, got: %v", err)
+	}
+}
+
+func TestPatrolService_SetFindingsPersistence_Error(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	err := ps.SetFindingsPersistence(&mockFindingsPersistence{loadErr: errors.New("load failed")})
+	if err == nil {
+		t.Error("Expected error when persistence load fails")
+	}
+}
+
+func TestPatrolService_SetRunHistoryPersistence(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	mockPersistence := &mockPatrolHistoryPersistence{
+		runs: []PatrolRunRecord{{ID: "run-1"}},
+	}
+
+	err := ps.SetRunHistoryPersistence(mockPersistence)
+	if err != nil {
+		t.Errorf("Expected no error with persistence, got: %v", err)
+	}
+}
+
+func TestPatrolService_SetRunHistoryPersistence_Error(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	mockPersistence := &mockPatrolHistoryPersistence{
+		loadErr: errors.New("load failed"),
+	}
+
+	err := ps.SetRunHistoryPersistence(mockPersistence)
+	if err == nil {
+		t.Error("Expected error when run history persistence load fails")
+	}
+}
+
+func TestPatrolService_IncidentStore(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	store := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	ps.SetIncidentStore(store)
+
+	if got := ps.GetIncidentStore(); got != store {
+		t.Errorf("Expected incident store to match")
+	}
+}
+
+func TestPatrolService_GetThresholds(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	thresholds := ps.GetThresholds()
+	if thresholds.StorageWarning == 0 {
+		t.Errorf("Expected thresholds to be initialized")
+	}
+}
+
+func TestPatrolService_GetIntelligence(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.stateProvider = &mockStateProvider{}
+
+	intel := ps.GetIntelligence()
+	if intel == nil {
+		t.Fatal("Expected intelligence facade to be created")
+	}
+	if intel != ps.GetIntelligence() {
+		t.Fatal("Expected GetIntelligence to return cached instance")
+	}
+}
+
+func TestPatrolService_Stop(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Stop should no-op when not running
+	ps.Stop()
+
+	ps.running = true
+	ps.stopCh = make(chan struct{})
+	ps.Stop()
+
+	ps.mu.RLock()
+	running := ps.running
+	ps.mu.RUnlock()
+	if running {
+		t.Error("Expected patrol service to be stopped")
+	}
+
+	select {
+	case <-ps.stopCh:
+	default:
+		t.Error("Expected stop channel to be closed")
 	}
 }
 
