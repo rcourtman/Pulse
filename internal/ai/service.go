@@ -1730,8 +1730,8 @@ Always execute the commands rather than telling the user how to do it.`
 		}
 	}
 
-	// Stream the final content
-	callback(StreamEvent{Type: "content", Data: finalContent})
+	// Don't stream finalContent here - it was already streamed in the iteration above
+	// Sending it again causes duplicate responses (issue #947)
 	callback(StreamEvent{Type: "done"})
 
 	return &ExecuteResponse{

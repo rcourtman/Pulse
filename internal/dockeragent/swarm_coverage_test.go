@@ -24,6 +24,7 @@ func TestMapSwarmService(t *testing.T) {
 					"com.docker.stack.namespace": "stack",
 				},
 			},
+			Mode: swarmtypes.ServiceMode{Replicated: &swarmtypes.ReplicatedService{}},
 			TaskTemplate: swarmtypes.TaskSpec{
 				ContainerSpec: &swarmtypes.ContainerSpec{
 					Image: "nginx:latest",
@@ -128,7 +129,7 @@ func TestMapSwarmTask(t *testing.T) {
 			ID:        "task2",
 			ServiceID: "svc2",
 			Status: swarmtypes.TaskStatus{
-				State: swarmtypes.TaskStateCompleted,
+				State: swarmtypes.TaskStateComplete,
 				ContainerStatus: &swarmtypes.ContainerStatus{
 					ContainerID: "container-full",
 				},
@@ -169,7 +170,7 @@ func TestCollectSwarmDataFromManager(t *testing.T) {
 	}
 
 	info := systemtypes.Info{
-		Swarm: systemtypes.SwarmInfo{
+		Swarm: swarmtypes.Info{
 			NodeID: "node1",
 		},
 	}
@@ -198,8 +199,8 @@ func TestCollectSwarmData(t *testing.T) {
 	t.Run("inactive swarm returns info only", func(t *testing.T) {
 		agent := &Agent{supportsSwarm: true, cfg: Config{SwarmScope: swarmScopeNode}}
 		info := systemtypes.Info{
-			Swarm: systemtypes.SwarmInfo{
-				NodeID:        "node1",
+			Swarm: swarmtypes.Info{
+				NodeID:         "node1",
 				LocalNodeState: swarmtypes.LocalNodeStatePending,
 			},
 		}
@@ -250,7 +251,7 @@ func TestCollectSwarmData(t *testing.T) {
 		}
 
 		info := systemtypes.Info{
-			Swarm: systemtypes.SwarmInfo{
+			Swarm: swarmtypes.Info{
 				NodeID:           "node1",
 				ControlAvailable: true,
 				LocalNodeState:   swarmtypes.LocalNodeStateActive,
@@ -291,7 +292,7 @@ func TestCollectSwarmData(t *testing.T) {
 		}
 
 		info := systemtypes.Info{
-			Swarm: systemtypes.SwarmInfo{
+			Swarm: swarmtypes.Info{
 				NodeID:           "node1",
 				ControlAvailable: true,
 				LocalNodeState:   swarmtypes.LocalNodeStateActive,

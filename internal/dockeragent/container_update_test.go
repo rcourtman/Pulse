@@ -34,7 +34,7 @@ func baseInspect() containertypes.InspectResponse {
 		Config: &containertypes.Config{
 			Image: "nginx:latest",
 		},
-		NetworkSettings: &network.NetworkSettings{
+		NetworkSettings: &containertypes.NetworkSettings{
 			Networks: map[string]*network.EndpointSettings{
 				"net1": {Aliases: []string{"app"}},
 				"net2": {Aliases: []string{"app2"}},
@@ -187,9 +187,6 @@ func TestUpdateContainer_Errors(t *testing.T) {
 					return io.NopCloser(strings.NewReader("{}")), nil
 				},
 				containerStopFn: func(context.Context, string, containertypes.StopOptions) error {
-					return nil
-				},
-				containerRenameFn: func(context.Context, string, string) error {
 					return nil
 				},
 				containerCreateFn: func(context.Context, *containertypes.Config, *containertypes.HostConfig, *network.NetworkingConfig, *v1.Platform, string) (containertypes.CreateResponse, error) {

@@ -2,6 +2,7 @@ package dockeragent
 
 import (
 	"context"
+	"crypto/rand"
 	"io"
 	"os"
 	"os/exec"
@@ -14,15 +15,16 @@ import (
 )
 
 var (
-	connectRuntimeFn   = connectRuntime
-	hostmetricsCollect = hostmetrics.Collect
-	newTickerFn        = time.NewTicker
-	newTimerFn         = time.NewTimer
-	randomDurationFn   = randomDuration
-	nowFn              = time.Now
-	sleepFn            = time.Sleep
+	connectRuntimeFn         = connectRuntime
+	hostmetricsCollect       = hostmetrics.Collect
+	newTickerFn              = time.NewTicker
+	newTimerFn               = time.NewTimer
+	randomDurationFn         = randomDuration
+	nowFn                    = time.Now
+	sleepFn                  = time.Sleep
 	buildRuntimeCandidatesFn = buildRuntimeCandidates
 	tryRuntimeCandidateFn    = tryRuntimeCandidate
+	randIntFn                = rand.Int
 	osExecutableFn     = os.Executable
 	osCreateTempFn     = os.CreateTemp
 	closeFileFn        = func(f *os.File) error { return f.Close() }
@@ -45,8 +47,10 @@ var (
 		"/etc/machine-id",
 		"/var/lib/dbus/machine-id",
 	}
-	unraidVersionPath = "/etc/unraid-version"
-	unraidPersistPath = "/boot/config/plugins/pulse-docker-agent/pulse-docker-agent"
+	unraidVersionPath       = "/etc/unraid-version"
+	unraidPersistPath       = "/boot/config/plugins/pulse-docker-agent/pulse-docker-agent"
+	unraidStartupScriptPath = "/boot/config/go.d/pulse-docker-agent.sh"
+	agentLogPath            = "/var/log/pulse-docker-agent.log"
 	openProcUptime    = func() (io.ReadCloser, error) {
 		return os.Open("/proc/uptime")
 	}

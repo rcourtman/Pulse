@@ -31,11 +31,11 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			},
 		}
 
-		got := agent.calculateContainerCPUPercent("container1", stats)
+		got := agent.calculateContainerCPUPercent("container-123456", stats)
 		if got <= 0 {
 			t.Fatalf("expected percent > 0, got %f", got)
 		}
-		if _, ok := agent.prevContainerCPU["container1"]; !ok {
+		if _, ok := agent.prevContainerCPU["container-123456"]; !ok {
 			t.Fatal("expected current sample to be stored")
 		}
 	})
@@ -57,11 +57,11 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			},
 		}
 
-		got := agent.calculateContainerCPUPercent("container1", stats)
+		got := agent.calculateContainerCPUPercent("container-123456", stats)
 		if got != 0 {
 			t.Fatalf("expected 0, got %f", got)
 		}
-		if _, ok := agent.prevContainerCPU["container1"]; !ok {
+		if _, ok := agent.prevContainerCPU["container-123456"]; !ok {
 			t.Fatal("expected sample to be stored")
 		}
 	})
@@ -70,7 +70,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 		agent := &Agent{
 			logger: logger,
 			prevContainerCPU: map[string]cpuSample{
-				"container1": {
+			"container-123456": {
 					totalUsage:  100,
 					systemUsage: 1000,
 					onlineCPUs:  2,
@@ -89,7 +89,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			PreCPUStats: containertypes.CPUStats{},
 		}
 
-		got := agent.calculateContainerCPUPercent("container1", stats)
+		got := agent.calculateContainerCPUPercent("container-123456", stats)
 		if got <= 0 {
 			t.Fatalf("expected percent > 0, got %f", got)
 		}
@@ -100,7 +100,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			logger: logger,
 			cpuCount: 4,
 			prevContainerCPU: map[string]cpuSample{
-				"container1": {
+			"container-123456": {
 					totalUsage:  100,
 					systemUsage: 1000,
 					onlineCPUs:  0,
@@ -119,7 +119,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			PreCPUStats: containertypes.CPUStats{},
 		}
 
-		got := agent.calculateContainerCPUPercent("container1", stats)
+		got := agent.calculateContainerCPUPercent("container-123456", stats)
 		if got <= 0 {
 			t.Fatalf("expected percent > 0, got %f", got)
 		}
@@ -129,7 +129,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 		agent := &Agent{
 			logger: logger,
 			prevContainerCPU: map[string]cpuSample{
-				"container1": {
+			"container-123456": {
 					totalUsage:  100,
 					systemUsage: 1000,
 					onlineCPUs:  0,
@@ -148,7 +148,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			PreCPUStats: containertypes.CPUStats{},
 		}
 
-		got := agent.calculateContainerCPUPercent("container1", stats)
+		got := agent.calculateContainerCPUPercent("container-123456", stats)
 		if got != 0 {
 			t.Fatalf("expected 0, got %f", got)
 		}
@@ -170,7 +170,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 		}
 
 		for i := 0; i < 10; i++ {
-			_ = agent.calculateContainerCPUPercent("container1", stats)
+			_ = agent.calculateContainerCPUPercent("container-123456", stats)
 		}
 	})
 }

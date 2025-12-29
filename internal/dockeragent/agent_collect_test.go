@@ -76,7 +76,7 @@ func TestCollectContainer(t *testing.T) {
 		}
 
 		summary := containertypes.Summary{
-			ID:      "container1",
+			ID:      "container-123456",
 			Names:   []string{"/app"},
 			Image:   "nginx@sha256:abc123",
 			ImageID: "sha256:local",
@@ -119,7 +119,7 @@ func TestCollectContainer(t *testing.T) {
 		agent := &Agent{
 			logger: logger,
 			prevContainerCPU: map[string]cpuSample{
-				"container1": {totalUsage: 1},
+				"container-123456": {totalUsage: 1},
 			},
 			docker: &fakeDockerClient{
 				containerInspectWithRawFn: func(context.Context, string, bool) (containertypes.InspectResponse, []byte, error) {
@@ -130,7 +130,7 @@ func TestCollectContainer(t *testing.T) {
 			},
 		}
 
-		summary := containertypes.Summary{ID: "container1", Names: []string{"/app"}, State: "exited"}
+		summary := containertypes.Summary{ID: "container-123456", Names: []string{"/app"}, State: "exited"}
 		if _, err := agent.collectContainer(context.Background(), summary); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -149,7 +149,7 @@ func TestCollectContainer(t *testing.T) {
 			logger: logger,
 		}
 
-		if _, err := agent.collectContainer(context.Background(), containertypes.Summary{ID: "container1"}); err == nil {
+		if _, err := agent.collectContainer(context.Background(), containertypes.Summary{ID: "container-123456"}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -169,7 +169,7 @@ func TestCollectContainer(t *testing.T) {
 			logger: logger,
 		}
 
-		if _, err := agent.collectContainer(context.Background(), containertypes.Summary{ID: "container1"}); err == nil {
+		if _, err := agent.collectContainer(context.Background(), containertypes.Summary{ID: "container-123456"}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -189,7 +189,7 @@ func TestCollectContainer(t *testing.T) {
 			logger: logger,
 		}
 
-		if _, err := agent.collectContainer(context.Background(), containertypes.Summary{ID: "container1"}); err == nil {
+		if _, err := agent.collectContainer(context.Background(), containertypes.Summary{ID: "container-123456"}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
