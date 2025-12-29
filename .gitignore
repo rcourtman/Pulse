@@ -176,3 +176,4 @@ landing-page/
 # Local Gemini config
 .gemini/
 deployment/
+start-pulse-agent.sh
