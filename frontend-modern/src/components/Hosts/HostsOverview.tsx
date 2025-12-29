@@ -979,16 +979,17 @@ interface HostRowProps {
 }
 
 const HostRow: Component<HostRowProps> = (props) => {
-  const { host } = props;
+  // NOTE: Do NOT destructure props.host - it breaks SolidJS reactivity!
+  // Always access props.host directly to ensure updates flow through.
 
   // Check if this host is in AI context
-  const isInAIContext = createMemo(() => aiChatStore.enabled && aiChatStore.hasContextItem(host.id));
+  const isInAIContext = createMemo(() => aiChatStore.enabled && aiChatStore.hasContextItem(props.host.id));
 
   // URL editing using shared hook
   const urlEdit = createUrlEditState();
 
   const handleStartEditingUrl = (e: MouseEvent) => {
-    urlEdit.startEditing(host.id, props.customUrl || '', e);
+    urlEdit.startEditing(props.host.id, props.customUrl || '', e);
   };
 
   const handleSaveUrl = async () => {
@@ -996,10 +997,10 @@ const HostRow: Component<HostRowProps> = (props) => {
     urlEdit.setIsSaving(true);
     try {
       if (url) {
-        await props.onUpdateCustomUrl(host.id, url);
+        await props.onUpdateCustomUrl(props.host.id, url);
         showSuccess('Host URL saved');
       } else {
-        await props.onDeleteCustomUrl(host.id);
+        await props.onDeleteCustomUrl(props.host.id);
         showSuccess('Host URL removed');
       }
       urlEdit.finishEditing();
@@ -1013,7 +1014,7 @@ const HostRow: Component<HostRowProps> = (props) => {
   const handleDeleteUrl = async () => {
     urlEdit.setIsSaving(true);
     try {
-      await props.onDeleteCustomUrl(host.id);
+      await props.onDeleteCustomUrl(props.host.id);
       showSuccess('Host URL removed');
       urlEdit.finishEditing();
     } catch (err) {
@@ -1025,16 +1026,16 @@ const HostRow: Component<HostRowProps> = (props) => {
 
   // Build context for AI - includes routing fields
   const buildHostContext = (): Record<string, unknown> => ({
-    hostName: host.displayName || host.hostname,
-    hostname: host.hostname,
-    node: host.hostname,           // Used by AI for command routing
-    target_host: host.hostname,    // Explicit routing hint
-    platform: host.platform,
-    osName: host.osName,
-    osVersion: host.osVersion,
-    cpuUsage: host.cpuUsage ? `${host.cpuUsage.toFixed(1)}%` : undefined,
-    memoryUsage: host.memory?.usage ? `${host.memory.usage.toFixed(1)}%` : undefined,
-    uptime: host.uptimeSeconds ? formatUptime(host.uptimeSeconds) : undefined,
+    hostName: props.host.displayName || props.host.hostname,
+    hostname: props.host.hostname,
+    node: props.host.hostname,           // Used by AI for command routing
+    target_host: props.host.hostname,    // Explicit routing hint
+    platform: props.host.platform,
+    osName: props.host.osName,
+    osVersion: props.host.osVersion,
+    cpuUsage: props.host.cpuUsage ? `${props.host.cpuUsage.toFixed(1)}%` : undefined,
+    memoryUsage: props.host.memory?.usage ? `${props.host.memory.usage.toFixed(1)}%` : undefined,
+    uptime: props.host.uptimeSeconds ? formatUptime(props.host.uptimeSeconds) : undefined,
   });
 
   // Handle row click - toggle AI context selection
@@ -1046,10 +1047,10 @@ const HostRow: Component<HostRowProps> = (props) => {
 
     // If AI is enabled, toggle AI context
     if (aiChatStore.enabled) {
-      if (aiChatStore.hasContextItem(host.id)) {
-        aiChatStore.removeContextItem(host.id);
+      if (aiChatStore.hasContextItem(props.host.id)) {
+        aiChatStore.removeContextItem(props.host.id);
       } else {
-        aiChatStore.addContextItem('host', host.id, host.displayName || host.hostname, buildHostContext());
+        aiChatStore.addContextItem('host', props.host.id, props.host.displayName || props.host.hostname, buildHostContext());
         if (!aiChatStore.isOpen) {
           aiChatStore.open();
         }
@@ -1057,10 +1058,11 @@ const HostRow: Component<HostRowProps> = (props) => {
     }
   };
 
-  const hostStatus = createMemo(() => getHostStatusIndicator(host));
-  const isOnline = () => host.status === 'online';
-  const cpuPercent = host.cpuUsage ?? 0;
-  const diskStats = props.getDiskStats(host);
+  // Reactive getters to ensure values update when WebSocket data changes
+  const hostStatus = createMemo(() => getHostStatusIndicator(props.host));
+  const isOnline = () => props.host.status === 'online';
+  const cpuPercent = () => props.host.cpuUsage ?? 0;
+  const diskStats = () => props.getDiskStats(props.host);
 
   const rowClass = () => {
     const base = 'transition-all duration-200';
@@ -1086,16 +1088,16 @@ const HostRow: Component<HostRowProps> = (props) => {
             <div class="min-w-0 flex items-center gap-1.5 group/name">
               <div>
                 <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                  {host.displayName || host.hostname || host.id}
+                  {props.host.displayName || props.host.hostname || props.host.id}
                 </p>
-                <Show when={host.displayName && host.displayName !== host.hostname}>
+                <Show when={props.host.displayName && props.host.displayName !== props.host.hostname}>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
-                    {host.hostname}
+                    {props.host.hostname}
                   </p>
                 </Show>
-                <Show when={host.lastSeen}>
+                <Show when={props.host.lastSeen}>
                   <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
-                    Updated {formatRelativeTime(host.lastSeen!)}
+                    Updated {formatRelativeTime(props.host.lastSeen!)}
                   </p>
                 </Show>
               </div>
@@ -1151,10 +1153,10 @@ const HostRow: Component<HostRowProps> = (props) => {
         <Show when={props.isColVisible('platform')}>
           <td class="px-2 py-1 align-middle">
             <div class="text-xs text-gray-700 dark:text-gray-300">
-              <p class="font-medium capitalize whitespace-nowrap">{host.platform || '—'}</p>
-              <Show when={host.osName}>
+              <p class="font-medium capitalize whitespace-nowrap">{props.host.platform || '—'}</p>
+              <Show when={props.host.osName}>
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
-                  {host.osName} {host.osVersion}
+                  {props.host.osName} {props.host.osVersion}
                 </p>
               </Show>
             </div>
@@ -1166,9 +1168,9 @@ const HostRow: Component<HostRowProps> = (props) => {
           <td class="px-2 py-1 align-middle" style={{ "min-width": props.isMobile() ? "60px" : "140px", "width": props.isMobile() ? undefined : "140px", "max-width": props.isMobile() ? undefined : "140px" }}>
             <Show when={isOnline()} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
               <EnhancedCPUBar
-                usage={cpuPercent}
-                loadAverage={host.loadAverage?.[0]}
-                cores={props.isMobile() ? undefined : host.cpuCount}
+                usage={cpuPercent()}
+                loadAverage={props.host.loadAverage?.[0]}
+                cores={props.isMobile() ? undefined : props.host.cpuCount}
               />
             </Show>
           </td>
@@ -1179,11 +1181,11 @@ const HostRow: Component<HostRowProps> = (props) => {
           <td class="px-2 py-1 align-middle" style={{ "min-width": props.isMobile() ? "60px" : "140px", "width": props.isMobile() ? undefined : "140px", "max-width": props.isMobile() ? undefined : "140px" }}>
             <Show when={isOnline()} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
               <StackedMemoryBar
-                used={host.memory?.used || 0}
-                total={host.memory?.total || 0}
-                balloon={host.memory?.balloon || 0}
-                swapUsed={host.memory?.swapUsed || 0}
-                swapTotal={host.memory?.swapTotal || 0}
+                used={props.host.memory?.used || 0}
+                total={props.host.memory?.total || 0}
+                balloon={props.host.memory?.balloon || 0}
+                swapUsed={props.host.memory?.swapUsed || 0}
+                swapTotal={props.host.memory?.swapTotal || 0}
               />
             </Show>
           </td>
@@ -1194,12 +1196,12 @@ const HostRow: Component<HostRowProps> = (props) => {
           <td class="px-2 py-1 align-middle" style={{ "min-width": props.isMobile() ? "60px" : "140px", "width": props.isMobile() ? undefined : "140px", "max-width": props.isMobile() ? undefined : "140px" }}>
             <Show when={isOnline()} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
               <StackedDiskBar
-                disks={host.disks}
+                disks={props.host.disks}
                 aggregateDisk={{
-                  total: diskStats.total,
-                  used: diskStats.used,
-                  free: diskStats.total - diskStats.used,
-                  usage: diskStats.percent / 100
+                  total: diskStats().total,
+                  used: diskStats().used,
+                  free: diskStats().total - diskStats().used,
+                  usage: diskStats().percent / 100
                 }}
               />
             </Show>
@@ -1210,7 +1212,7 @@ const HostRow: Component<HostRowProps> = (props) => {
         <Show when={props.isColVisible('temp')}>
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <HostTemperatureCell sensors={host.sensors} />
+              <HostTemperatureCell sensors={props.host.sensors} />
             </div>
           </td>
         </Show>
@@ -1219,9 +1221,9 @@ const HostRow: Component<HostRowProps> = (props) => {
         <Show when={props.isColVisible('uptime')}>
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <Show when={isOnline() && host.uptimeSeconds} fallback={<span class="text-xs text-gray-400">—</span>}>
+              <Show when={isOnline() && props.host.uptimeSeconds} fallback={<span class="text-xs text-gray-400">—</span>}>
                 <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                  {formatUptime(host.uptimeSeconds!)}
+                  {formatUptime(props.host.uptimeSeconds!)}
                 </span>
               </Show>
             </div>
@@ -1232,9 +1234,9 @@ const HostRow: Component<HostRowProps> = (props) => {
         <Show when={props.isColVisible('agent')}>
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <Show when={host.agentVersion} fallback={<span class="text-xs text-gray-400">—</span>}>
+              <Show when={props.host.agentVersion} fallback={<span class="text-xs text-gray-400">—</span>}>
                 <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                  {host.agentVersion}
+                  {props.host.agentVersion}
                 </span>
               </Show>
             </div>
@@ -1245,7 +1247,7 @@ const HostRow: Component<HostRowProps> = (props) => {
         <Show when={props.isColVisible('ip')}>
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <HostNetworkInfoCell networkInterfaces={host.networkInterfaces || []} />
+              <HostNetworkInfoCell networkInterfaces={props.host.networkInterfaces || []} />
             </div>
           </td>
         </Show>
@@ -1254,9 +1256,9 @@ const HostRow: Component<HostRowProps> = (props) => {
         <Show when={props.isColVisible('arch')}>
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <Show when={host.architecture} fallback={<span class="text-xs text-gray-400">—</span>}>
+              <Show when={props.host.architecture} fallback={<span class="text-xs text-gray-400">—</span>}>
                 <span class="text-[10px] text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                  {host.architecture}
+                  {props.host.architecture}
                 </span>
               </Show>
             </div>
@@ -1267,12 +1269,12 @@ const HostRow: Component<HostRowProps> = (props) => {
         <Show when={props.isColVisible('kernel')}>
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <Show when={host.kernelVersion} fallback={<span class="text-xs text-gray-400">—</span>}>
+              <Show when={props.host.kernelVersion} fallback={<span class="text-xs text-gray-400">—</span>}>
                 <span
                   class="text-[10px] text-gray-700 dark:text-gray-300 max-w-[100px] truncate"
-                  title={host.kernelVersion}
+                  title={props.host.kernelVersion}
                 >
-                  {host.kernelVersion}
+                  {props.host.kernelVersion}
                 </span>
               </Show>
             </div>
@@ -1283,7 +1285,7 @@ const HostRow: Component<HostRowProps> = (props) => {
         <Show when={props.isColVisible('raid')}>
           <td class="px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <HostRAIDStatusCell raid={host.raid} />
+              <HostRAIDStatusCell raid={props.host.raid} />
             </div>
           </td>
         </Show>
@@ -1291,7 +1293,7 @@ const HostRow: Component<HostRowProps> = (props) => {
 
       {/* URL editing popover - using shared component */}
       <UrlEditPopover
-        isOpen={urlEdit.isEditing() && urlEdit.editingId() === host.id}
+        isOpen={urlEdit.isEditing() && urlEdit.editingId() === props.host.id}
         value={urlEdit.editingValue()}
         position={urlEdit.position()}
         isSaving={urlEdit.isSaving()}

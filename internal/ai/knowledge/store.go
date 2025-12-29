@@ -41,6 +41,9 @@ type Store struct {
 	crypto  *crypto.CryptoManager
 }
 
+var newCryptoManagerAt = crypto.NewCryptoManagerAt
+var beforeKnowledgeWriteLock func()
+
 // NewStore creates a new knowledge store with encryption
 func NewStore(dataDir string) (*Store, error) {
 	knowledgeDir := filepath.Join(dataDir, "knowledge")
@@ -49,7 +52,7 @@ func NewStore(dataDir string) (*Store, error) {
 	}
 
 	// Initialize crypto manager for encryption (uses same key as other Pulse secrets)
-	cryptoMgr, err := crypto.NewCryptoManagerAt(dataDir)
+	cryptoMgr, err := newCryptoManagerAt(dataDir)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to initialize crypto for knowledge store, data will be unencrypted")
 	}
@@ -82,6 +85,9 @@ func (s *Store) GetKnowledge(guestID string) (*GuestKnowledge, error) {
 	s.mu.RUnlock()
 
 	// Load from disk
+	if beforeKnowledgeWriteLock != nil {
+		beforeKnowledgeWriteLock()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -486,4 +492,3 @@ finalize:
 
 	return result
 }
-
