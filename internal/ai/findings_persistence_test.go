@@ -1,6 +1,8 @@
 package ai
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -130,6 +132,21 @@ func TestFindingsPersistenceAdapter_SaveEmpty(t *testing.T) {
 	err := adapter.SaveFindings(map[string]*Finding{})
 	if err != nil {
 		t.Fatalf("failed to save empty findings: %v", err)
+	}
+}
+
+func TestFindingsPersistenceAdapter_LoadError(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	adapter := NewFindingsPersistenceAdapter(persistence)
+
+	badPath := filepath.Join(tmp, "ai_findings.json")
+	if err := os.Mkdir(badPath, 0700); err != nil {
+		t.Fatalf("failed to create directory at %s: %v", badPath, err)
+	}
+
+	if _, err := adapter.LoadFindings(); err == nil {
+		t.Fatal("expected error when findings path is a directory")
 	}
 }
 
@@ -346,4 +363,3 @@ func TestFindingsPersistenceAdapter_PreservesDismissals(t *testing.T) {
 		t.Error("suppressed finding should not be active")
 	}
 }
-

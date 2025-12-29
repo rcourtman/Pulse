@@ -26,6 +26,12 @@ func TestAlertManagerAdapter_NilManager(t *testing.T) {
 	if got := a.GetRecentlyResolved(30); got != nil {
 		t.Fatalf("GetRecentlyResolved = %+v, want nil", got)
 	}
+	if got := a.GetAlertsByResource("resource"); got != nil {
+		t.Fatalf("GetAlertsByResource = %+v, want nil", got)
+	}
+	if got := a.GetAlertHistory("resource", 10); got != nil {
+		t.Fatalf("GetAlertHistory = %+v, want nil", got)
+	}
 }
 
 func TestAlertManagerAdapter_ConvertsAndFilters(t *testing.T) {
@@ -177,4 +183,12 @@ func TestFormatDuration(t *testing.T) {
 	}
 }
 
+func TestAlertConversions_Nil(t *testing.T) {
+	if info := convertAlertFromManager(nil); info.ID != "" {
+		t.Fatalf("expected empty AlertInfo from nil manager alert, got %+v", info)
+	}
+	if info := convertAlertFromModels(nil); info.ID != "" {
+		t.Fatalf("expected empty AlertInfo from nil models alert, got %+v", info)
+	}
+}
 

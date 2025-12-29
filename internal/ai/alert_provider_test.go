@@ -113,6 +113,43 @@ func TestService_buildAlertContext_Empty(t *testing.T) {
 	}
 }
 
+func TestService_buildAlertContext_NoActiveWithResolved(t *testing.T) {
+	now := time.Now()
+	resolved := make([]ResolvedAlertInfo, 0, 6)
+	for i := 0; i < 6; i++ {
+		resolved = append(resolved, ResolvedAlertInfo{
+			AlertInfo: AlertInfo{
+				ID:           "r" + string(rune('a'+i)),
+				Type:         "disk",
+				Level:        "warning",
+				ResourceID:   "storage:local",
+				ResourceName: "local",
+				Message:      "disk ok",
+				Duration:     "10 mins",
+			},
+			ResolvedTime: now.Add(-time.Duration(i) * time.Minute),
+			Duration:     "10 mins",
+		})
+	}
+
+	s := &Service{}
+	s.SetAlertProvider(&stubAlertProvider{
+		active:   nil,
+		resolved: resolved,
+	})
+
+	ctx := s.buildAlertContext()
+	if !strings.Contains(ctx, "No Active Alerts") {
+		t.Fatalf("expected no active alerts section, got: %s", ctx)
+	}
+	if !strings.Contains(ctx, "Recently Resolved") {
+		t.Fatalf("expected recently resolved section, got: %s", ctx)
+	}
+	if !strings.Contains(ctx, "... and 1 more") {
+		t.Fatalf("expected overflow line for resolved alerts, got: %s", ctx)
+	}
+}
+
 func TestService_buildTargetAlertContext(t *testing.T) {
 	s := &Service{}
 	s.SetAlertProvider(&stubAlertProvider{
@@ -131,16 +168,44 @@ func TestService_buildTargetAlertContext(t *testing.T) {
 	}
 }
 
+func TestService_buildTargetAlertContext_Empty(t *testing.T) {
+	s := &Service{}
+	if got := s.buildTargetAlertContext("node:pve1"); got != "" {
+		t.Fatalf("expected empty string with no provider, got: %q", got)
+	}
+
+	s.SetAlertProvider(&stubAlertProvider{
+		active: []AlertInfo{
+			{ID: "a1", Level: "critical", Type: "cpu", ResourceID: "node:pve1", ResourceName: "pve1"},
+		},
+	})
+	if got := s.buildTargetAlertContext(""); got != "" {
+		t.Fatalf("expected empty string for empty resource ID, got: %q", got)
+	}
+	if got := s.buildTargetAlertContext("node:missing"); got != "" {
+		t.Fatalf("expected empty string for missing resource, got: %q", got)
+	}
+}
+
 func TestFormatTimeAgo(t *testing.T) {
 	now := time.Now()
 	if got := formatTimeAgo(now.Add(-10 * time.Second)); got != "just now" {
 		t.Fatalf("formatTimeAgo(<1m) = %q", got)
 	}
+	if got := formatTimeAgo(now.Add(-1 * time.Minute)); got != "1 minute" {
+		t.Fatalf("formatTimeAgo(1m) = %q", got)
+	}
 	if got := formatTimeAgo(now.Add(-2 * time.Minute)); got != "2 minutes" {
 		t.Fatalf("formatTimeAgo(2m) = %q", got)
 	}
+	if got := formatTimeAgo(now.Add(-1 * time.Hour)); got != "1 hour" {
+		t.Fatalf("formatTimeAgo(1h) = %q", got)
+	}
 	if got := formatTimeAgo(now.Add(-2 * time.Hour)); got != "2 hours" {
 		t.Fatalf("formatTimeAgo(2h) = %q", got)
+	}
+	if got := formatTimeAgo(now.Add(-24 * time.Hour)); got != "1 day" {
+		t.Fatalf("formatTimeAgo(1d) = %q", got)
 	}
 	if got := formatTimeAgo(now.Add(-48 * time.Hour)); got != "2 days" {
 		t.Fatalf("formatTimeAgo(2d) = %q", got)
@@ -164,4 +229,3 @@ func TestGenerateAlertInvestigationPrompt(t *testing.T) {
 		t.Fatalf("unexpected prompt: %s", out)
 	}
 }
-
