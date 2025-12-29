@@ -67,42 +67,7 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
       -trimpath \
       -o pulse-linux-arm64 ./cmd/pulse
 
-# Build docker-agent binaries (optional cross-arch builds controlled by BUILD_AGENT)
-RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
-    --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
-    VERSION="v$(cat VERSION | tr -d '\n')" && \
-    if [ "${BUILD_AGENT:-1}" = "1" ]; then \
-      CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
-        -trimpath \
-        -o pulse-docker-agent-linux-amd64 ./cmd/pulse-docker-agent && \
-      CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
-        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
-        -trimpath \
-        -o pulse-docker-agent-linux-arm64 ./cmd/pulse-docker-agent && \
-      CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build \
-        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
-        -trimpath \
-        -o pulse-docker-agent-linux-armv7 ./cmd/pulse-docker-agent && \
-      CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build \
-        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
-        -trimpath \
-        -o pulse-docker-agent-linux-armv6 ./cmd/pulse-docker-agent && \
-      CGO_ENABLED=0 GOOS=linux GOARCH=386 go build \
-        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
-        -trimpath \
-        -o pulse-docker-agent-linux-386 ./cmd/pulse-docker-agent; \
-    else \
-      CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
-        -trimpath \
-        -o pulse-docker-agent-linux-amd64 ./cmd/pulse-docker-agent && \
-      cp pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-arm64 && \
-      cp pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-armv7 && \
-      cp pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-armv6 && \
-      cp pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-386; \
-    fi && \
-    cp pulse-docker-agent-linux-amd64 pulse-docker-agent
+
 
 # Build host-agent binaries for all platforms (for download endpoint)
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
@@ -233,20 +198,25 @@ RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app
 
-# Copy all agent binaries first
-COPY --from=backend-builder /app/pulse-docker-agent-linux-* /tmp/
+# Copy all unified agent binaries first
+COPY --from=backend-builder /app/pulse-agent-linux-* /tmp/
 
 # Select the appropriate architecture binary
 # Docker buildx automatically sets TARGETARCH (amd64, arm64, arm) and TARGETVARIANT (v7)
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
-        cp /tmp/pulse-docker-agent-linux-arm64 /usr/local/bin/pulse-docker-agent; \
+        cp /tmp/pulse-agent-linux-arm64 /usr/local/bin/pulse-agent; \
     elif [ "$TARGETARCH" = "arm" ]; then \
-        cp /tmp/pulse-docker-agent-linux-armv7 /usr/local/bin/pulse-docker-agent; \
+        cp /tmp/pulse-agent-linux-armv7 /usr/local/bin/pulse-agent; \
     else \
-        cp /tmp/pulse-docker-agent-linux-amd64 /usr/local/bin/pulse-docker-agent; \
+        cp /tmp/pulse-agent-linux-amd64 /usr/local/bin/pulse-agent; \
     fi && \
-    chmod +x /usr/local/bin/pulse-docker-agent && \
-    rm -rf /tmp/pulse-docker-agent-*
+    chmod +x /usr/local/bin/pulse-agent && \
+    rm -rf /tmp/pulse-agent-*
+
+# Create shim for pulse-docker-agent to maintain backward compatibility
+RUN echo '#!/bin/sh' > /usr/local/bin/pulse-docker-agent && \
+    echo 'exec /usr/local/bin/pulse-agent --enable-docker "$@"' >> /usr/local/bin/pulse-docker-agent && \
+    chmod +x /usr/local/bin/pulse-docker-agent
 
 COPY --from=backend-builder /app/VERSION /VERSION
 
@@ -274,7 +244,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     chmod +x ./pulse && \
     rm -rf /tmp/pulse-linux-*
 
-COPY --from=backend-builder /app/pulse-docker-agent .
+
 
 # Copy VERSION file
 COPY --from=backend-builder /app/VERSION .
@@ -309,12 +279,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     fi
 
 # Docker agent binaries (all architectures)
-COPY --from=backend-builder /app/pulse-docker-agent-linux-amd64 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-docker-agent-linux-arm64 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-docker-agent-linux-armv7 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-docker-agent-linux-armv6 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-docker-agent-linux-386 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-docker-agent /opt/pulse/bin/pulse-docker-agent
+
 
 # Host agent binaries (all platforms and architectures)
 COPY --from=backend-builder /app/pulse-host-agent-linux-amd64 /opt/pulse/bin/

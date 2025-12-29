@@ -87,10 +87,7 @@ build-agents:
 	@echo "Building agent binaries for all platforms..."
 	@mkdir -p bin
 	@VERSION=$$(cat VERSION | tr -d '\n') && \
-	echo "Building docker agent binaries (version: v$$VERSION)..." && \
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=v$$VERSION" -trimpath -o bin/pulse-docker-agent-linux-amd64 ./cmd/pulse-docker-agent && \
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=v$$VERSION" -trimpath -o bin/pulse-docker-agent-linux-arm64 ./cmd/pulse-docker-agent && \
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=v$$VERSION" -trimpath -o bin/pulse-docker-agent-linux-armv7 ./cmd/pulse-docker-agent && \
+
 	echo "Building host agent binaries..." && \
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-linux-amd64 ./cmd/pulse-host-agent && \
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-linux-arm64 ./cmd/pulse-host-agent && \
