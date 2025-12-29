@@ -372,17 +372,13 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
     const targets = updateableContainers();
     if (targets.length === 0) return;
 
-    // Use a unique ID for this batch operation to update the toast
-    const toastId = `batch-update-${Date.now()}`;
-
     // Initial toast
-    showToast({
-      id: toastId,
-      title: 'Batch Update Started',
-      message: `Preparing to update ${targets.length} containers...`,
-      tone: 'info',
-      duration: 10000,
-    });
+    showToast(
+      'info',
+      'Batch Update Started',
+      `Preparing to update ${targets.length} containers...`,
+      10000,
+    );
 
     let successCount = 0;
     let failCount = 0;
@@ -415,11 +411,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
     } else if (successCount === 0) {
       showError(`Failed to queue any updates. Check console for details.`);
     } else {
-      showToast({
-        title: 'Batch Update Completed',
-        message: `Queued ${successCount} updates. ${failCount} failed.`,
-        tone: 'warning',
-      });
+      showToast('warning', 'Batch Update Completed', `Queued ${successCount} updates. ${failCount} failed.`);
     }
   };
 
