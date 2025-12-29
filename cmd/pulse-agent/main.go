@@ -431,7 +431,8 @@ func loadConfig() Config {
 
 	// Flags
 	urlFlag := flag.String("url", envURL, "Pulse server URL")
-	tokenFlag := flag.String("token", envToken, "Pulse API token")
+	tokenFlag := flag.String("token", envToken, "Pulse API token (prefer --token-file for security)")
+	tokenFileFlag := flag.String("token-file", "", "Path to file containing Pulse API token (more secure than --token)")
 	intervalFlag := flag.Duration("interval", defaultInterval, "Reporting interval")
 	hostnameFlag := flag.String("hostname", envHostname, "Override hostname")
 	agentIDFlag := flag.String("agent-id", envAgentID, "Override agent identifier")
@@ -476,9 +477,10 @@ func loadConfig() Config {
 		pulseURL = "http://localhost:7655"
 	}
 
-	token := strings.TrimSpace(*tokenFlag)
+	// Resolve token with priority: --token > --token-file > env > default file
+	token := resolveToken(*tokenFlag, *tokenFileFlag, envToken)
 	if token == "" {
-		fmt.Fprintln(os.Stderr, "error: Pulse API token is required")
+		fmt.Fprintln(os.Stderr, "error: Pulse API token is required (use --token, --token-file, PULSE_TOKEN env, or /var/lib/pulse-agent/token)")
 		os.Exit(1)
 	}
 
@@ -627,6 +629,44 @@ func resolveEnableCommands(enableFlag, disableFlag bool, envEnable, envDisable s
 
 	// Default: commands disabled
 	return false
+}
+
+// resolveToken resolves the API token with priority:
+// 1. --token flag (direct value)
+// 2. --token-file flag (read from file)
+// 3. PULSE_TOKEN environment variable
+// 4. Default token file at /var/lib/pulse-agent/token
+//
+// Reading from a file is more secure than CLI args as tokens won't appear in `ps` output.
+func resolveToken(tokenFlag, tokenFileFlag, envToken string) string {
+	// 1. Direct token from --token flag
+	if t := strings.TrimSpace(tokenFlag); t != "" {
+		return t
+	}
+
+	// 2. Token from --token-file flag
+	if tokenFileFlag != "" {
+		if content, err := os.ReadFile(tokenFileFlag); err == nil {
+			if t := strings.TrimSpace(string(content)); t != "" {
+				return t
+			}
+		}
+	}
+
+	// 3. PULSE_TOKEN environment variable
+	if t := strings.TrimSpace(envToken); t != "" {
+		return t
+	}
+
+	// 4. Default token file (most secure method for systemd services)
+	defaultTokenFile := "/var/lib/pulse-agent/token"
+	if content, err := os.ReadFile(defaultTokenFile); err == nil {
+		if t := strings.TrimSpace(string(content)); t != "" {
+			return t
+		}
+	}
+
+	return ""
 }
 
 // initDockerWithRetry attempts to initialize the Docker agent with exponential backoff.

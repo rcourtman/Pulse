@@ -537,14 +537,7 @@ func (a *Agent) Run(ctx context.Context) error {
 
 	initialDelay := 5*time.Second + randomDurationFn(startupJitterWindow)
 	updateTimer := newTimerFn(initialDelay)
-	defer func() {
-		if !updateTimer.Stop() {
-			select {
-			case <-updateTimer.C:
-			default:
-			}
-		}
-	}()
+	defer stopTimer(updateTimer)
 
 	if err := a.collectOnce(ctx); err != nil {
 		if errors.Is(err, ErrStopRequested) {
@@ -556,12 +549,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			if !updateTimer.Stop() {
-				select {
-				case <-updateTimer.C:
-				default:
-				}
-			}
+			stopTimer(updateTimer)
 			return ctx.Err()
 		case <-ticker.C:
 			if err := a.collectOnce(ctx); err != nil {
@@ -577,6 +565,15 @@ func (a *Agent) Run(ctx context.Context) error {
 				nextDelay = updateInterval
 			}
 			updateTimer.Reset(nextDelay)
+		}
+	}
+}
+
+func stopTimer(timer *time.Timer) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
 		}
 	}
 }
@@ -1924,7 +1921,7 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 		tmpFile.Close()
 		return fmt.Errorf("downloaded binary exceeds maximum size (%d bytes)", maxBinarySize)
 	}
-	if err := tmpFile.Close(); err != nil {
+	if err := closeFileFn(tmpFile); err != nil {
 		return fmt.Errorf("failed to close temp file: %w", err)
 	}
 
