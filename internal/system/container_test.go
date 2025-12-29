@@ -1,8 +1,17 @@
 package system
 
 import (
+	"errors"
+	"os"
 	"testing"
 )
+
+func resetSystemFns() {
+	envGetFn = os.Getenv
+	statFn = os.Stat
+	readFileFn = os.ReadFile
+	hostnameFn = os.Hostname
+}
 
 func TestIsHexString(t *testing.T) {
 	tests := []struct {
@@ -133,20 +142,226 @@ func TestContainerMarkers(t *testing.T) {
 }
 
 func TestInContainer(t *testing.T) {
-	// This is an integration test that depends on the runtime environment
-	// We can't mock the file system easily, but we can verify it doesn't panic
-	result := InContainer()
-	t.Logf("InContainer() = %v (depends on test environment)", result)
+	t.Run("Forced", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		envGetFn = func(key string) string {
+			if key == "PULSE_FORCE_CONTAINER" {
+				return "true"
+			}
+			return ""
+		}
+
+		if !InContainer() {
+			t.Fatal("expected forced container")
+		}
+	})
+
+	t.Run("DockerEnvFile", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		envGetFn = func(string) string { return "" }
+		statFn = func(path string) (os.FileInfo, error) {
+			if path == "/.dockerenv" {
+				return nil, nil
+			}
+			return nil, errors.New("missing")
+		}
+		readFileFn = func(string) ([]byte, error) { return nil, errors.New("missing") }
+
+		if !InContainer() {
+			t.Fatal("expected docker env file")
+		}
+	})
+
+	t.Run("ContainerEnvFile", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		envGetFn = func(string) string { return "" }
+		statFn = func(path string) (os.FileInfo, error) {
+			if path == "/run/.containerenv" {
+				return nil, nil
+			}
+			return nil, errors.New("missing")
+		}
+		readFileFn = func(string) ([]byte, error) { return nil, errors.New("missing") }
+
+		if !InContainer() {
+			t.Fatal("expected container env file")
+		}
+	})
+
+	t.Run("ContainerEnvVar", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		envGetFn = func(key string) string {
+			if key == "container" {
+				return "lxc"
+			}
+			return ""
+		}
+		statFn = func(string) (os.FileInfo, error) { return nil, errors.New("missing") }
+		readFileFn = func(string) ([]byte, error) { return nil, errors.New("missing") }
+
+		if !InContainer() {
+			t.Fatal("expected container env var")
+		}
+	})
+
+	t.Run("ProcEnviron", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		envGetFn = func(string) string { return "" }
+		statFn = func(string) (os.FileInfo, error) { return nil, errors.New("missing") }
+		readFileFn = func(path string) ([]byte, error) {
+			if path == "/proc/1/environ" {
+				return []byte("container=lxc\x00"), nil
+			}
+			return nil, errors.New("missing")
+		}
+
+		if !InContainer() {
+			t.Fatal("expected container environ")
+		}
+	})
+
+	t.Run("CgroupMarker", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		envGetFn = func(string) string { return "" }
+		statFn = func(string) (os.FileInfo, error) { return nil, errors.New("missing") }
+		readFileFn = func(path string) ([]byte, error) {
+			if path == "/proc/1/environ" {
+				return []byte("container=host"), nil
+			}
+			if path == "/proc/1/cgroup" {
+				return []byte("0::/docker/abc"), nil
+			}
+			return nil, errors.New("missing")
+		}
+
+		if !InContainer() {
+			t.Fatal("expected container cgroup marker")
+		}
+	})
+
+	t.Run("NotContainer", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		envGetFn = func(string) string { return "" }
+		statFn = func(string) (os.FileInfo, error) { return nil, errors.New("missing") }
+		readFileFn = func(path string) ([]byte, error) {
+			if path == "/proc/1/environ" {
+				return []byte("container=host"), nil
+			}
+			if path == "/proc/1/cgroup" {
+				return []byte("0::/user.slice"), nil
+			}
+			return nil, errors.New("missing")
+		}
+
+		if InContainer() {
+			t.Fatal("expected non-container")
+		}
+	})
 }
 
 func TestDetectDockerContainerName(t *testing.T) {
-	// This is an integration test that depends on the runtime environment
-	result := DetectDockerContainerName()
-	t.Logf("DetectDockerContainerName() = %q (depends on test environment)", result)
+	t.Run("HostnameName", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		hostnameFn = func() (string, error) { return "my-container", nil }
+
+		if got := DetectDockerContainerName(); got != "my-container" {
+			t.Fatalf("expected hostname name, got %q", got)
+		}
+	})
+
+	t.Run("HostnameHexShort", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		hostnameFn = func() (string, error) { return "abcdef123456", nil }
+		readFileFn = func(string) ([]byte, error) { return []byte("0::/docker/abcdef"), nil }
+
+		if got := DetectDockerContainerName(); got != "" {
+			t.Fatalf("expected empty name, got %q", got)
+		}
+	})
+
+	t.Run("HostnameHexLong", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		hostnameFn = func() (string, error) { return "abcdef1234567890abcdef1234567890", nil }
+
+		if got := DetectDockerContainerName(); got == "" {
+			t.Fatal("expected hostname for long hex")
+		}
+	})
+
+	t.Run("HostnameError", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		hostnameFn = func() (string, error) { return "", errors.New("fail") }
+		readFileFn = func(string) ([]byte, error) { return []byte("0::/docker/abcdef"), nil }
+
+		if got := DetectDockerContainerName(); got != "" {
+			t.Fatalf("expected empty name, got %q", got)
+		}
+	})
 }
 
 func TestDetectLXCCTID(t *testing.T) {
-	// This is an integration test that depends on the runtime environment
-	result := DetectLXCCTID()
-	t.Logf("DetectLXCCTID() = %q (depends on test environment)", result)
+	t.Run("FromCgroupLXC", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		readFileFn = func(path string) ([]byte, error) {
+			if path == "/proc/1/cgroup" {
+				return []byte("0::/lxc/123"), nil
+			}
+			return nil, errors.New("missing")
+		}
+		hostnameFn = func() (string, error) { return "999", nil }
+
+		if got := DetectLXCCTID(); got != "123" {
+			t.Fatalf("expected CTID 123, got %q", got)
+		}
+	})
+
+	t.Run("FromCgroupPayload", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		readFileFn = func(path string) ([]byte, error) {
+			if path == "/proc/1/cgroup" {
+				return []byte("0::/lxc.payload.456"), nil
+			}
+			return nil, errors.New("missing")
+		}
+		hostnameFn = func() (string, error) { return "999", nil }
+
+		if got := DetectLXCCTID(); got != "456" {
+			t.Fatalf("expected CTID 456, got %q", got)
+		}
+	})
+
+	t.Run("FromMachineLXC", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		readFileFn = func(path string) ([]byte, error) {
+			if path == "/proc/1/cgroup" {
+				return []byte("0::/machine.slice/machine-lxc-789"), nil
+			}
+			return nil, errors.New("missing")
+		}
+		hostnameFn = func() (string, error) { return "999", nil }
+
+		if got := DetectLXCCTID(); got != "789" {
+			t.Fatalf("expected CTID 789, got %q", got)
+		}
+	})
+
+	t.Run("FromHostname", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		readFileFn = func(string) ([]byte, error) { return []byte("0::/user.slice"), nil }
+		hostnameFn = func() (string, error) { return "321", nil }
+
+		if got := DetectLXCCTID(); got != "321" {
+			t.Fatalf("expected CTID 321, got %q", got)
+		}
+	})
+
+	t.Run("NoMatch", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		readFileFn = func(string) ([]byte, error) { return []byte("0::/user.slice"), nil }
+		hostnameFn = func() (string, error) { return "host", nil }
+
+		if got := DetectLXCCTID(); got != "" {
+			t.Fatalf("expected empty CTID, got %q", got)
+		}
+	})
 }

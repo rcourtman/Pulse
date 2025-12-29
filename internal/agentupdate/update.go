@@ -32,6 +32,24 @@ const (
 	downloadTimeout = 5 * time.Minute
 )
 
+var (
+	maxBinarySizeBytes      int64 = maxBinarySize
+	runtimeGOOS                   = runtime.GOOS
+	runtimeGOARCH                 = runtime.GOARCH
+	unameCommand                  = func() ([]byte, error) { return exec.Command("uname", "-m").Output() }
+	unraidVersionPath             = "/etc/unraid-version"
+	unraidPersistentPathFn        = unraidPersistentPath
+	restartProcessFn              = restartProcess
+	osExecutableFn                = os.Executable
+	evalSymlinksFn                = filepath.EvalSymlinks
+	createTempFn                  = os.CreateTemp
+	chmodFn                       = os.Chmod
+	renameFn                      = os.Rename
+	closeFileFn                   = func(f *os.File) error { return f.Close() }
+	readFileFn                    = os.ReadFile
+	writeFileFn                   = os.WriteFile
+)
+
 // Config holds the configuration for the updater.
 type Config struct {
 	// PulseURL is the base URL of the Pulse server (e.g., "https://pulse.example.com:7655")
@@ -66,6 +84,8 @@ type Updater struct {
 	logger zerolog.Logger
 
 	performUpdateFn func(context.Context) error
+	initialDelay    time.Duration
+	newTicker       func(time.Duration) *time.Ticker
 }
 
 // New creates a new Updater with the given configuration.
@@ -95,6 +115,8 @@ func New(cfg Config) *Updater {
 		logger: logger,
 	}
 	u.performUpdateFn = u.performUpdate
+	u.initialDelay = 5 * time.Second
+	u.newTicker = time.NewTicker
 	return u
 }
 
@@ -114,11 +136,11 @@ func (u *Updater) RunLoop(ctx context.Context) {
 	select {
 	case <-ctx.Done():
 		return
-	case <-time.After(5 * time.Second):
+	case <-time.After(u.initialDelay):
 		u.CheckAndUpdate(ctx)
 	}
 
-	ticker := time.NewTicker(u.cfg.CheckInterval)
+	ticker := u.newTicker(u.cfg.CheckInterval)
 	defer ticker.Stop()
 
 	for {
@@ -228,7 +250,7 @@ func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
 
 // isUnraid checks if we're running on Unraid by looking for /etc/unraid-version
 func isUnraid() bool {
-	_, err := os.Stat("/etc/unraid-version")
+	_, err := os.Stat(unraidVersionPath)
 	return err == nil
 }
 
@@ -245,7 +267,7 @@ func verifyBinaryMagic(path string) error {
 		return fmt.Errorf("failed to read magic bytes: %w", err)
 	}
 
-	switch runtime.GOOS {
+	switch runtimeGOOS {
 	case "linux":
 		// ELF magic: 0x7f 'E' 'L' 'F'
 		if magic[0] == 0x7f && magic[1] == 'E' && magic[2] == 'L' && magic[3] == 'F' {
@@ -286,10 +308,14 @@ func unraidPersistentPath(agentName string) string {
 
 // performUpdate downloads and installs the new agent binary.
 func (u *Updater) performUpdate(ctx context.Context) error {
-	execPath, err := os.Executable()
+	execPath, err := osExecutableFn()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
+	return u.performUpdateWithExecPath(ctx, execPath)
+}
+
+func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string) error {
 
 	// Build download URL
 	downloadBase := fmt.Sprintf("%s/download/%s", strings.TrimRight(u.cfg.PulseURL, "/"), u.cfg.AgentName)
@@ -303,7 +329,7 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 	candidates = append(candidates, downloadBase)
 
 	var resp *http.Response
-	var lastErr error
+	lastErr := errors.New("failed to download binary")
 
 	for _, url := range candidates {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -335,9 +361,6 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 	}
 
 	if resp == nil {
-		if lastErr == nil {
-			lastErr = errors.New("failed to download binary")
-		}
 		return lastErr
 	}
 	defer resp.Body.Close()
@@ -346,7 +369,7 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 	checksumHeader := strings.TrimSpace(resp.Header.Get("X-Checksum-Sha256"))
 
 	// Resolve symlinks to get the real path for atomic rename
-	realExecPath, err := filepath.EvalSymlinks(execPath)
+	realExecPath, err := evalSymlinksFn(execPath)
 	if err != nil {
 		// Fall back to original path if symlink resolution fails
 		realExecPath = execPath
@@ -355,7 +378,7 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 	// Create temporary file in the same directory as the target binary
 	// to ensure atomic rename works (os.Rename fails across filesystems)
 	targetDir := filepath.Dir(realExecPath)
-	tmpFile, err := os.CreateTemp(targetDir, u.cfg.AgentName+"-*.tmp")
+	tmpFile, err := createTempFn(targetDir, u.cfg.AgentName+"-*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
@@ -364,17 +387,17 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 
 	// Write downloaded binary with checksum calculation and size limit
 	hasher := sha256.New()
-	limitedReader := io.LimitReader(resp.Body, maxBinarySize+1) // +1 to detect overflow
+	limitedReader := io.LimitReader(resp.Body, maxBinarySizeBytes+1) // +1 to detect overflow
 	written, err := io.Copy(tmpFile, io.TeeReader(limitedReader, hasher))
 	if err != nil {
-		tmpFile.Close()
+		closeFileFn(tmpFile)
 		return fmt.Errorf("failed to write binary: %w", err)
 	}
-	if written > maxBinarySize {
-		tmpFile.Close()
-		return fmt.Errorf("downloaded binary exceeds maximum size (%d bytes)", maxBinarySize)
+	if written > maxBinarySizeBytes {
+		closeFileFn(tmpFile)
+		return fmt.Errorf("downloaded binary exceeds maximum size (%d bytes)", maxBinarySizeBytes)
 	}
-	if err := tmpFile.Close(); err != nil {
+	if err := closeFileFn(tmpFile); err != nil {
 		return fmt.Errorf("failed to close temp file: %w", err)
 	}
 
@@ -397,19 +420,19 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 	u.logger.Debug().Str("checksum", downloadChecksum).Msg("Checksum verified")
 
 	// Make executable
-	if err := os.Chmod(tmpPath, 0755); err != nil {
+	if err := chmodFn(tmpPath, 0755); err != nil {
 		return fmt.Errorf("failed to chmod: %w", err)
 	}
 
 	// Atomic replacement with backup (use realExecPath for rename operations)
 	backupPath := realExecPath + ".backup"
-	if err := os.Rename(realExecPath, backupPath); err != nil {
+	if err := renameFn(realExecPath, backupPath); err != nil {
 		return fmt.Errorf("failed to backup current binary: %w", err)
 	}
 
-	if err := os.Rename(tmpPath, realExecPath); err != nil {
+	if err := renameFn(tmpPath, realExecPath); err != nil {
 		// Restore backup on failure
-		os.Rename(backupPath, realExecPath)
+		renameFn(backupPath, realExecPath)
 		return fmt.Errorf("failed to replace binary: %w", err)
 	}
 
@@ -418,26 +441,26 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 
 	// Write previous version to a file so the agent can report "updated from X" on next start
 	updateInfoPath := filepath.Join(targetDir, ".pulse-update-info")
-	_ = os.WriteFile(updateInfoPath, []byte(u.cfg.CurrentVersion), 0644)
+	_ = writeFileFn(updateInfoPath, []byte(u.cfg.CurrentVersion), 0644)
 
 	// On Unraid, also update the persistent copy on the flash drive
 	// This ensures the update survives reboots
 	if isUnraid() {
-		persistPath := unraidPersistentPath(u.cfg.AgentName)
+		persistPath := unraidPersistentPathFn(u.cfg.AgentName)
 		if _, err := os.Stat(persistPath); err == nil {
 			// Persistent path exists, update it
 			u.logger.Debug().Str("path", persistPath).Msg("Updating Unraid persistent binary")
 
 			// Read the newly installed binary
-			newBinary, err := os.ReadFile(execPath)
+			newBinary, err := readFileFn(execPath)
 			if err != nil {
 				u.logger.Warn().Err(err).Msg("Failed to read new binary for Unraid persistence")
 			} else {
 				// Write to persistent storage (atomic via temp file)
 				tmpPersist := persistPath + ".tmp"
-				if err := os.WriteFile(tmpPersist, newBinary, 0644); err != nil {
+				if err := writeFileFn(tmpPersist, newBinary, 0644); err != nil {
 					u.logger.Warn().Err(err).Msg("Failed to write Unraid persistent binary")
-				} else if err := os.Rename(tmpPersist, persistPath); err != nil {
+				} else if err := renameFn(tmpPersist, persistPath); err != nil {
 					u.logger.Warn().Err(err).Msg("Failed to rename Unraid persistent binary")
 					os.Remove(tmpPersist)
 				} else {
@@ -448,19 +471,19 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 	}
 
 	// Restart the process using platform-specific implementation
-	return restartProcess(execPath)
+	return restartProcessFn(execPath)
 }
 
 // GetUpdatedFromVersion checks if the agent was recently updated and returns the previous version.
 // Returns empty string if no update info exists. Clears the info file after reading.
 func GetUpdatedFromVersion() string {
-	execPath, err := os.Executable()
+	execPath, err := osExecutableFn()
 	if err != nil {
 		return ""
 	}
 
 	// Resolve symlinks to get the real path
-	realExecPath, err := filepath.EvalSymlinks(execPath)
+	realExecPath, err := evalSymlinksFn(execPath)
 	if err != nil {
 		realExecPath = execPath
 	}
@@ -479,8 +502,8 @@ func GetUpdatedFromVersion() string {
 
 // determineArch returns the architecture string for download URLs (e.g., "linux-amd64", "darwin-arm64").
 func determineArch() string {
-	os := runtime.GOOS
-	arch := runtime.GOARCH
+	os := runtimeGOOS
+	arch := runtimeGOARCH
 
 	// Normalize architecture
 	switch arch {
@@ -497,7 +520,7 @@ func determineArch() string {
 	}
 
 	// Fall back to uname for edge cases on unknown OS
-	out, err := exec.Command("uname", "-m").Output()
+	out, err := unameCommand()
 	if err != nil {
 		return ""
 	}

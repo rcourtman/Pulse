@@ -12,24 +12,33 @@ import (
 	"time"
 )
 
+var commandRunner = func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	return stdout.Bytes(), stderr.Bytes(), err
+}
+
 // ClusterStatus represents the complete Ceph cluster status as collected by the agent.
 type ClusterStatus struct {
-	FSID          string         `json:"fsid"`
-	Health        HealthStatus   `json:"health"`
-	MonMap        MonitorMap     `json:"monMap,omitempty"`
-	MgrMap        ManagerMap     `json:"mgrMap,omitempty"`
-	OSDMap        OSDMap         `json:"osdMap"`
-	PGMap         PGMap          `json:"pgMap"`
-	Pools         []Pool         `json:"pools,omitempty"`
-	Services      []ServiceInfo  `json:"services,omitempty"`
-	CollectedAt   time.Time      `json:"collectedAt"`
+	FSID        string        `json:"fsid"`
+	Health      HealthStatus  `json:"health"`
+	MonMap      MonitorMap    `json:"monMap,omitempty"`
+	MgrMap      ManagerMap    `json:"mgrMap,omitempty"`
+	OSDMap      OSDMap        `json:"osdMap"`
+	PGMap       PGMap         `json:"pgMap"`
+	Pools       []Pool        `json:"pools,omitempty"`
+	Services    []ServiceInfo `json:"services,omitempty"`
+	CollectedAt time.Time     `json:"collectedAt"`
 }
 
 // HealthStatus represents Ceph cluster health.
 type HealthStatus struct {
-	Status   string              `json:"status"` // HEALTH_OK, HEALTH_WARN, HEALTH_ERR
-	Checks   map[string]Check    `json:"checks,omitempty"`
-	Summary  []HealthSummary     `json:"summary,omitempty"`
+	Status  string           `json:"status"` // HEALTH_OK, HEALTH_WARN, HEALTH_ERR
+	Checks  map[string]Check `json:"checks,omitempty"`
+	Summary []HealthSummary  `json:"summary,omitempty"`
 }
 
 // Check represents a health check detail.
@@ -70,28 +79,28 @@ type ManagerMap struct {
 
 // OSDMap represents OSD status summary.
 type OSDMap struct {
-	Epoch    int `json:"epoch"`
-	NumOSDs  int `json:"numOsds"`
-	NumUp    int `json:"numUp"`
-	NumIn    int `json:"numIn"`
-	NumDown  int `json:"numDown,omitempty"`
-	NumOut   int `json:"numOut,omitempty"`
+	Epoch   int `json:"epoch"`
+	NumOSDs int `json:"numOsds"`
+	NumUp   int `json:"numUp"`
+	NumIn   int `json:"numIn"`
+	NumDown int `json:"numDown,omitempty"`
+	NumOut  int `json:"numOut,omitempty"`
 }
 
 // PGMap represents placement group statistics.
 type PGMap struct {
-	NumPGs         int     `json:"numPgs"`
-	BytesTotal     uint64  `json:"bytesTotal"`
-	BytesUsed      uint64  `json:"bytesUsed"`
-	BytesAvailable uint64  `json:"bytesAvailable"`
-	DataBytes      uint64  `json:"dataBytes,omitempty"`
-	UsagePercent   float64 `json:"usagePercent"`
-	DegradedRatio  float64 `json:"degradedRatio,omitempty"`
-	MisplacedRatio float64 `json:"misplacedRatio,omitempty"`
-	ReadBytesPerSec  uint64 `json:"readBytesPerSec,omitempty"`
-	WriteBytesPerSec uint64 `json:"writeBytesPerSec,omitempty"`
-	ReadOpsPerSec    uint64 `json:"readOpsPerSec,omitempty"`
-	WriteOpsPerSec   uint64 `json:"writeOpsPerSec,omitempty"`
+	NumPGs           int     `json:"numPgs"`
+	BytesTotal       uint64  `json:"bytesTotal"`
+	BytesUsed        uint64  `json:"bytesUsed"`
+	BytesAvailable   uint64  `json:"bytesAvailable"`
+	DataBytes        uint64  `json:"dataBytes,omitempty"`
+	UsagePercent     float64 `json:"usagePercent"`
+	DegradedRatio    float64 `json:"degradedRatio,omitempty"`
+	MisplacedRatio   float64 `json:"misplacedRatio,omitempty"`
+	ReadBytesPerSec  uint64  `json:"readBytesPerSec,omitempty"`
+	WriteBytesPerSec uint64  `json:"writeBytesPerSec,omitempty"`
+	ReadOpsPerSec    uint64  `json:"readOpsPerSec,omitempty"`
+	WriteOpsPerSec   uint64  `json:"writeOpsPerSec,omitempty"`
 }
 
 // Pool represents a Ceph pool.
@@ -106,16 +115,16 @@ type Pool struct {
 
 // ServiceInfo represents a Ceph service summary.
 type ServiceInfo struct {
-	Type     string `json:"type"` // mon, mgr, osd, mds, rgw
-	Running  int    `json:"running"`
-	Total    int    `json:"total"`
-	Daemons  []string `json:"daemons,omitempty"`
+	Type    string   `json:"type"` // mon, mgr, osd, mds, rgw
+	Running int      `json:"running"`
+	Total   int      `json:"total"`
+	Daemons []string `json:"daemons,omitempty"`
 }
 
 // IsAvailable checks if the ceph CLI is available on the system.
 func IsAvailable(ctx context.Context) bool {
-	cmd := exec.CommandContext(ctx, "which", "ceph")
-	return cmd.Run() == nil
+	_, _, err := commandRunner(ctx, "which", "ceph")
+	return err == nil
 }
 
 // Collect gathers Ceph cluster status using the ceph CLI.
@@ -160,17 +169,13 @@ func runCephCommand(ctx context.Context, args ...string) ([]byte, error) {
 	cmdCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(cmdCtx, "ceph", args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("ceph %s failed: %w (stderr: %s)", 
-			strings.Join(args, " "), err, stderr.String())
+	stdout, stderr, err := commandRunner(cmdCtx, "ceph", args...)
+	if err != nil {
+		return nil, fmt.Errorf("ceph %s failed: %w (stderr: %s)",
+			strings.Join(args, " "), err, string(stderr))
 	}
 
-	return stdout.Bytes(), nil
+	return stdout, nil
 }
 
 // parseStatus parses the output of `ceph status --format json`.
@@ -178,8 +183,8 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 	var raw struct {
 		FSID   string `json:"fsid"`
 		Health struct {
-			Status  string `json:"status"`
-			Checks  map[string]struct {
+			Status string `json:"status"`
+			Checks map[string]struct {
 				Severity string `json:"severity"`
 				Summary  struct {
 					Message string `json:"message"`
@@ -198,10 +203,10 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 			} `json:"mons"`
 		} `json:"monmap"`
 		MgrMap struct {
-			Available bool   `json:"available"`
-			NumActive int    `json:"num_active_name,omitempty"` 
+			Available  bool   `json:"available"`
+			NumActive  int    `json:"num_active_name,omitempty"`
 			ActiveName string `json:"active_name"`
-			Standbys  []struct {
+			Standbys   []struct {
 				Name string `json:"name"`
 			} `json:"standbys"`
 		} `json:"mgrmap"`
@@ -212,17 +217,17 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 			NumIn  int `json:"num_in_osds"`
 		} `json:"osdmap"`
 		PGMap struct {
-			NumPGs     int     `json:"num_pgs"`
-			BytesTotal uint64  `json:"bytes_total"`
-			BytesUsed  uint64  `json:"bytes_used"`
-			BytesAvail uint64  `json:"bytes_avail"`
-			DataBytes  uint64  `json:"data_bytes"`
-			DegradedRatio float64 `json:"degraded_ratio"`
-			MisplacedRatio float64 `json:"misplaced_ratio"`
-			ReadBytesPerSec  uint64 `json:"read_bytes_sec"`
-			WriteBytesPerSec uint64 `json:"write_bytes_sec"`
-			ReadOpsPerSec    uint64 `json:"read_op_per_sec"`
-			WriteOpsPerSec   uint64 `json:"write_op_per_sec"`
+			NumPGs           int     `json:"num_pgs"`
+			BytesTotal       uint64  `json:"bytes_total"`
+			BytesUsed        uint64  `json:"bytes_used"`
+			BytesAvail       uint64  `json:"bytes_avail"`
+			DataBytes        uint64  `json:"data_bytes"`
+			DegradedRatio    float64 `json:"degraded_ratio"`
+			MisplacedRatio   float64 `json:"misplaced_ratio"`
+			ReadBytesPerSec  uint64  `json:"read_bytes_sec"`
+			WriteBytesPerSec uint64  `json:"write_bytes_sec"`
+			ReadOpsPerSec    uint64  `json:"read_op_per_sec"`
+			WriteOpsPerSec   uint64  `json:"write_op_per_sec"`
 		} `json:"pgmap"`
 	}
 
@@ -255,13 +260,13 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 			NumOut:  raw.OSDMap.NumOSD - raw.OSDMap.NumIn,
 		},
 		PGMap: PGMap{
-			NumPGs:         raw.PGMap.NumPGs,
-			BytesTotal:     raw.PGMap.BytesTotal,
-			BytesUsed:      raw.PGMap.BytesUsed,
-			BytesAvailable: raw.PGMap.BytesAvail,
-			DataBytes:      raw.PGMap.DataBytes,
-			DegradedRatio:  raw.PGMap.DegradedRatio,
-			MisplacedRatio: raw.PGMap.MisplacedRatio,
+			NumPGs:           raw.PGMap.NumPGs,
+			BytesTotal:       raw.PGMap.BytesTotal,
+			BytesUsed:        raw.PGMap.BytesUsed,
+			BytesAvailable:   raw.PGMap.BytesAvail,
+			DataBytes:        raw.PGMap.DataBytes,
+			DegradedRatio:    raw.PGMap.DegradedRatio,
+			MisplacedRatio:   raw.PGMap.MisplacedRatio,
 			ReadBytesPerSec:  raw.PGMap.ReadBytesPerSec,
 			WriteBytesPerSec: raw.PGMap.WriteBytesPerSec,
 			ReadOpsPerSec:    raw.PGMap.ReadOpsPerSec,

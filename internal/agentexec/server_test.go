@@ -42,6 +42,9 @@ func TestConnectedAgentLookups(t *testing.T) {
 	if !ok || agentID != "a2" {
 		t.Fatalf("expected GetAgentForHost(host2) = (a2, true), got (%q, %v)", agentID, ok)
 	}
+	if _, ok := s.GetAgentForHost("missing"); ok {
+		t.Fatalf("expected missing host to return false")
+	}
 
 	agents := s.GetConnectedAgents()
 	if len(agents) != 2 {

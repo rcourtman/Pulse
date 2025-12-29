@@ -14,9 +14,13 @@ import (
 
 // Pre-compiled regexes for performance (avoid recompilation on each call)
 var (
-	mdDeviceRe = regexp.MustCompile(`^(md\d+)\s*:`)
-	slotRe     = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s+(/dev/.+)$`)
-	speedRe    = regexp.MustCompile(`speed=(\S+)`)
+	mdDeviceRe       = regexp.MustCompile(`^(md\d+)\s*:`)
+	slotRe           = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s+(/dev/.+)$`)
+	speedRe          = regexp.MustCompile(`speed=(\S+)`)
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		cmd := exec.CommandContext(ctx, name, args...)
+		return cmd.Output()
+	}
 )
 
 // CollectArrays discovers and collects status for all mdadm RAID arrays on the system.
@@ -56,8 +60,8 @@ func isMdadmAvailable(ctx context.Context) bool {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "mdadm", "--version")
-	return cmd.Run() == nil
+	_, err := runCommandOutput(ctx, "mdadm", "--version")
+	return err == nil
 }
 
 // listArrayDevices scans /proc/mdstat to find all md devices
@@ -65,8 +69,7 @@ func listArrayDevices(ctx context.Context) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "cat", "/proc/mdstat")
-	output, err := cmd.Output()
+	output, err := runCommandOutput(ctx, "cat", "/proc/mdstat")
 	if err != nil {
 		return nil, fmt.Errorf("read /proc/mdstat: %w", err)
 	}
@@ -89,8 +92,7 @@ func collectArrayDetail(ctx context.Context, device string) (host.RAIDArray, err
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "mdadm", "--detail", device)
-	output, err := cmd.Output()
+	output, err := runCommandOutput(ctx, "mdadm", "--detail", device)
 	if err != nil {
 		return host.RAIDArray{}, fmt.Errorf("mdadm --detail %s: %w", device, err)
 	}
@@ -220,8 +222,7 @@ func getRebuildSpeed(device string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "cat", "/proc/mdstat")
-	output, err := cmd.Output()
+	output, err := runCommandOutput(ctx, "cat", "/proc/mdstat")
 	if err != nil {
 		return ""
 	}

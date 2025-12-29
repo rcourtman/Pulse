@@ -52,8 +52,8 @@ type mockThresholdProvider struct {
 	storage    float64
 }
 
-func (m *mockThresholdProvider) GetNodeCPUThreshold() float64    { return m.nodeCPU }
-func (m *mockThresholdProvider) GetNodeMemoryThreshold() float64 { return m.nodeMemory }
+func (m *mockThresholdProvider) GetNodeCPUThreshold() float64     { return m.nodeCPU }
+func (m *mockThresholdProvider) GetNodeMemoryThreshold() float64  { return m.nodeMemory }
 func (m *mockThresholdProvider) GetGuestCPUThreshold() float64    { return 0 }
 func (m *mockThresholdProvider) GetGuestMemoryThreshold() float64 { return m.guestMem }
 func (m *mockThresholdProvider) GetGuestDiskThreshold() float64   { return m.guestDisk }
@@ -61,11 +61,17 @@ func (m *mockThresholdProvider) GetStorageThreshold() float64     { return m.sto
 
 type mockResourceProvider struct {
 	ResourceProvider
-	getAllFunc          func() []resources.Resource
-	getStatsFunc        func() resources.StoreStats
-	getSummaryFunc      func() resources.ResourceSummary
+	getAllFunc            func() []resources.Resource
+	getStatsFunc          func() resources.StoreStats
+	getSummaryFunc        func() resources.ResourceSummary
 	getInfrastructureFunc func() []resources.Resource
-	getWorkloadsFunc    func() []resources.Resource
+	getWorkloadsFunc      func() []resources.Resource
+	getByTypeFunc         func(t resources.ResourceType) []resources.Resource
+	getTopCPUFunc         func(limit int, types []resources.ResourceType) []resources.Resource
+	getTopMemoryFunc      func(limit int, types []resources.ResourceType) []resources.Resource
+	getTopDiskFunc        func(limit int, types []resources.ResourceType) []resources.Resource
+	getRelatedFunc        func(resourceID string) map[string][]resources.Resource
+	findContainerHostFunc func(containerNameOrID string) string
 }
 
 func (m *mockResourceProvider) GetAll() []resources.Resource {
@@ -99,23 +105,46 @@ func (m *mockResourceProvider) GetWorkloads() []resources.Resource {
 	return nil
 }
 func (m *mockResourceProvider) GetType(t resources.ResourceType) []resources.Resource { return nil }
+func (m *mockResourceProvider) GetByType(t resources.ResourceType) []resources.Resource {
+	if m.getByTypeFunc != nil {
+		return m.getByTypeFunc(t)
+	}
+	return nil
+}
 func (m *mockResourceProvider) GetTopByCPU(limit int, types []resources.ResourceType) []resources.Resource {
+	if m.getTopCPUFunc != nil {
+		return m.getTopCPUFunc(limit, types)
+	}
 	return nil
 }
 func (m *mockResourceProvider) GetTopByMemory(limit int, types []resources.ResourceType) []resources.Resource {
+	if m.getTopMemoryFunc != nil {
+		return m.getTopMemoryFunc(limit, types)
+	}
 	return nil
 }
 func (m *mockResourceProvider) GetTopByDisk(limit int, types []resources.ResourceType) []resources.Resource {
+	if m.getTopDiskFunc != nil {
+		return m.getTopDiskFunc(limit, types)
+	}
 	return nil
 }
 func (m *mockResourceProvider) GetRelated(resourceID string) map[string][]resources.Resource {
+	if m.getRelatedFunc != nil {
+		return m.getRelatedFunc(resourceID)
+	}
 	return nil
 }
-func (m *mockResourceProvider) FindContainerHost(containerNameOrID string) string { return "" }
+func (m *mockResourceProvider) FindContainerHost(containerNameOrID string) string {
+	if m.findContainerHostFunc != nil {
+		return m.findContainerHostFunc(containerNameOrID)
+	}
+	return ""
+}
 
 type mockAgentServer struct {
-	agents        []agentexec.ConnectedAgent
-	executeFunc   func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error)
+	agents      []agentexec.ConnectedAgent
+	executeFunc func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error)
 }
 
 func (m *mockAgentServer) GetConnectedAgents() []agentexec.ConnectedAgent {

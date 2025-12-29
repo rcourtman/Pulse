@@ -284,10 +284,6 @@ func (s *Service) buildUnifiedResourceContext() string {
 		}
 	}
 
-	if len(sections) == 0 {
-		return ""
-	}
-
 	result := "\n\n" + strings.Join(sections, "\n")
 
 	// Limit context size

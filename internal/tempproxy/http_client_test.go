@@ -2,6 +2,8 @@ package tempproxy
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -360,6 +362,55 @@ func TestHTTPClient_GetTemperature_RetryOnTransportError(t *testing.T) {
 	}
 }
 
+func TestHTTPClient_GetTemperature_RequestBuildError(t *testing.T) {
+	client := NewHTTPClient("http://[::1", "token")
+	_, err := client.GetTemperature("node1")
+
+	if err == nil {
+		t.Fatal("Expected error for request creation")
+	}
+
+	proxyErr, ok := err.(*ProxyError)
+	if !ok {
+		t.Fatalf("Expected *ProxyError, got %T", err)
+	}
+	if proxyErr.Type != ErrorTypeTransport {
+		t.Errorf("Type = %v, want ErrorTypeTransport", proxyErr.Type)
+	}
+	if !strings.Contains(proxyErr.Message, "failed to create HTTP request") {
+		t.Errorf("Message = %q, want request creation failure", proxyErr.Message)
+	}
+}
+
+func TestHTTPClient_GetTemperature_ReadBodyError(t *testing.T) {
+	attempts := 0
+	client := NewHTTPClient("https://example.com", "token")
+	client.httpClient.Transport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		attempts++
+		if attempts == 1 {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       errReadCloser{},
+				Header:     make(http.Header),
+			}, nil
+		}
+		body := `{"node":"node1","temperature":"{}"}`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Header:     make(http.Header),
+		}, nil
+	})
+
+	_, err := client.GetTemperature("node1")
+	if err != nil {
+		t.Fatalf("Expected success after retry, got %v", err)
+	}
+	if attempts < 2 {
+		t.Fatalf("Expected retry after read error, got %d attempts", attempts)
+	}
+}
+
 func TestHTTPClient_HealthCheck_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/health" {
@@ -395,6 +446,26 @@ func TestHTTPClient_HealthCheck_NotConfigured(t *testing.T) {
 	}
 	if proxyErr.Type != ErrorTypeTransport {
 		t.Errorf("Type = %v, want ErrorTypeTransport", proxyErr.Type)
+	}
+}
+
+func TestHTTPClient_HealthCheck_RequestBuildError(t *testing.T) {
+	client := NewHTTPClient("http://[::1", "token")
+	err := client.HealthCheck()
+
+	if err == nil {
+		t.Fatal("Expected error for request creation")
+	}
+
+	proxyErr, ok := err.(*ProxyError)
+	if !ok {
+		t.Fatalf("Expected *ProxyError, got %T", err)
+	}
+	if proxyErr.Type != ErrorTypeTransport {
+		t.Errorf("Type = %v, want ErrorTypeTransport", proxyErr.Type)
+	}
+	if !strings.Contains(proxyErr.Message, "failed to create HTTP request") {
+		t.Errorf("Message = %q, want request creation failure", proxyErr.Message)
 	}
 }
 
@@ -492,4 +563,20 @@ func TestHTTPClient_Fields(t *testing.T) {
 	if client.timeout != 60*time.Second {
 		t.Errorf("timeout = %v, want 60s", client.timeout)
 	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+type errReadCloser struct{}
+
+func (errReadCloser) Read(p []byte) (int, error) {
+	return 0, errors.New("read failed")
+}
+
+func (errReadCloser) Close() error {
+	return nil
 }

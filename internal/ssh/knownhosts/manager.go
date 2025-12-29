@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -44,10 +45,31 @@ const (
 )
 
 var (
+	mkdirAllFn       = os.MkdirAll
+	statFn           = os.Stat
+	openFileFn       = os.OpenFile
+	openFn           = os.Open
+	appendOpenFileFn = func(path string) (io.WriteCloser, error) {
+		return openFileFn(path, os.O_APPEND|os.O_WRONLY, 0o600)
+	}
+	keyscanCmdRunner = func(ctx context.Context, args ...string) ([]byte, error) {
+		cmd := exec.CommandContext(ctx, "ssh-keyscan", args...)
+		return cmd.CombinedOutput()
+	}
+
 	// ErrNoHostKeys is returned when ssh-keyscan yields no usable entries.
 	ErrNoHostKeys = errors.New("knownhosts: no host keys discovered")
 	// ErrHostKeyChanged signals that a host key already exists with a different fingerprint.
 	ErrHostKeyChanged = errors.New("knownhosts: host key changed")
+)
+
+var (
+	defaultMkdirAllFn       = mkdirAllFn
+	defaultStatFn           = statFn
+	defaultOpenFileFn       = openFileFn
+	defaultOpenFn           = openFn
+	defaultAppendOpenFileFn = appendOpenFileFn
+	defaultKeyscanCmdRunner = keyscanCmdRunner
 )
 
 // HostKeyChangeError describes a detected host key mismatch.
@@ -214,17 +236,17 @@ func (m *manager) Path() string {
 
 func (m *manager) ensureKnownHostsFile() error {
 	dir := filepath.Dir(m.path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := mkdirAllFn(dir, 0o700); err != nil {
 		return fmt.Errorf("knownhosts: mkdir %s: %w", dir, err)
 	}
 
-	if _, err := os.Stat(m.path); err == nil {
+	if _, err := statFn(m.path); err == nil {
 		return nil
 	} else if !os.IsNotExist(err) {
 		return err
 	}
 
-	f, err := os.OpenFile(m.path, os.O_CREATE|os.O_WRONLY, 0o600)
+	f, err := openFileFn(m.path, os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("knownhosts: create %s: %w", m.path, err)
 	}
@@ -232,7 +254,7 @@ func (m *manager) ensureKnownHostsFile() error {
 }
 
 func appendHostKey(path string, entries [][]byte) error {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
+	f, err := appendOpenFileFn(path)
 	if err != nil {
 		return fmt.Errorf("knownhosts: open %s: %w", path, err)
 	}
@@ -287,7 +309,7 @@ func normalizeHostEntry(host string, entry []byte) ([]byte, string, error) {
 }
 
 func findHostKeyLine(path, host, keyType string) (string, error) {
-	f, err := os.Open(path)
+	f, err := openFn(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", nil
@@ -328,10 +350,6 @@ func hostLineMatches(host, line string) bool {
 	}
 
 	fields := strings.Fields(trimmed)
-	if len(fields) == 0 {
-		return false
-	}
-
 	return hostFieldMatches(host, fields[0])
 }
 
@@ -396,8 +414,7 @@ func defaultKeyscan(ctx context.Context, host string, port int, timeout time.Dur
 	}
 	args = append(args, host)
 
-	cmd := exec.CommandContext(scanCtx, "ssh-keyscan", args...)
-	output, err := cmd.CombinedOutput()
+	output, err := keyscanCmdRunner(scanCtx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("%w (output: %s)", err, strings.TrimSpace(string(output)))
 	}

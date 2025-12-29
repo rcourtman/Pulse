@@ -44,6 +44,28 @@ var (
 	defaultTimeFmt = time.RFC3339
 )
 
+var (
+	nowFn           = time.Now
+	isTerminalFn    = term.IsTerminal
+	mkdirAllFn      = os.MkdirAll
+	openFileFn      = os.OpenFile
+	openFn          = os.Open
+	statFn          = os.Stat
+	readDirFn       = os.ReadDir
+	renameFn        = os.Rename
+	removeFn        = os.Remove
+	copyFn          = io.Copy
+	gzipNewWriterFn = gzip.NewWriter
+	statFileFn      = func(file *os.File) (os.FileInfo, error) { return file.Stat() }
+	closeFileFn     = func(file *os.File) error { return file.Close() }
+	compressFn      = compressAndRemove
+)
+
+var (
+	defaultStatFileFn  = statFileFn
+	defaultCloseFileFn = closeFileFn
+)
+
 func init() {
 	baseLogger = zerolog.New(baseWriter).With().Timestamp().Logger()
 	log.Logger = baseLogger
@@ -137,7 +159,7 @@ func isTerminal(file *os.File) bool {
 	if file == nil {
 		return false
 	}
-	return term.IsTerminal(int(file.Fd()))
+	return isTerminalFn(int(file.Fd()))
 }
 
 type rollingFileWriter struct {
@@ -157,7 +179,7 @@ func newRollingFileWriter(cfg Config) (io.Writer, error) {
 	}
 
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := mkdirAllFn(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("create log directory: %w", err)
 	}
 
@@ -205,13 +227,13 @@ func (w *rollingFileWriter) openOrCreateLocked() error {
 		return nil
 	}
 
-	file, err := os.OpenFile(w.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	file, err := openFileFn(w.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("open log file: %w", err)
 	}
 	w.file = file
 
-	info, err := file.Stat()
+	info, err := statFileFn(file)
 	if err != nil {
 		w.currentSize = 0
 		return nil
@@ -225,11 +247,11 @@ func (w *rollingFileWriter) rotateLocked() error {
 		return err
 	}
 
-	if _, err := os.Stat(w.path); err == nil {
-		rotated := fmt.Sprintf("%s.%s", w.path, time.Now().Format("20060102-150405"))
-		if err := os.Rename(w.path, rotated); err == nil {
+	if _, err := statFn(w.path); err == nil {
+		rotated := fmt.Sprintf("%s.%s", w.path, nowFn().Format("20060102-150405"))
+		if err := renameFn(w.path, rotated); err == nil {
 			if w.compress {
-				go compressAndRemove(rotated)
+				go compressFn(rotated)
 			}
 		}
 	}
@@ -242,7 +264,7 @@ func (w *rollingFileWriter) closeLocked() error {
 	if w.file == nil {
 		return nil
 	}
-	err := w.file.Close()
+	err := closeFileFn(w.file)
 	w.file = nil
 	w.currentSize = 0
 	return err
@@ -256,9 +278,9 @@ func (w *rollingFileWriter) cleanupOldFiles() {
 	dir := filepath.Dir(w.path)
 	base := filepath.Base(w.path)
 	prefix := base + "."
-	cutoff := time.Now().Add(-w.maxAge)
+	cutoff := nowFn().Add(-w.maxAge)
 
-	entries, err := os.ReadDir(dir)
+	entries, err := readDirFn(dir)
 	if err != nil {
 		return
 	}
@@ -273,26 +295,26 @@ func (w *rollingFileWriter) cleanupOldFiles() {
 			continue
 		}
 		if info.ModTime().Before(cutoff) {
-			_ = os.Remove(filepath.Join(dir, name))
+			_ = removeFn(filepath.Join(dir, name))
 		}
 	}
 }
 
 func compressAndRemove(path string) {
-	in, err := os.Open(path)
+	in, err := openFn(path)
 	if err != nil {
 		return
 	}
 	defer in.Close()
 
 	outPath := path + ".gz"
-	out, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	out, err := openFileFn(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return
 	}
 
-	gw := gzip.NewWriter(out)
-	if _, err = io.Copy(gw, in); err != nil {
+	gw := gzipNewWriterFn(out)
+	if _, err = copyFn(gw, in); err != nil {
 		gw.Close()
 		out.Close()
 		return
@@ -302,5 +324,5 @@ func compressAndRemove(path string) {
 		return
 	}
 	out.Close()
-	_ = os.Remove(path)
+	_ = removeFn(path)
 }
