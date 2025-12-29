@@ -958,10 +958,14 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 
 	// Check for image updates if registry checker is enabled
 	if a.registryChecker != nil && a.registryChecker.Enabled() {
-		// Use the container's current image digest for comparison
-		// The ImageDigest from summary.ImageID is the local image ID, which we use
-		// to compare with the registry's latest manifest digest
-		result := a.registryChecker.CheckImageUpdate(ctx, container.Image, container.ImageDigest)
+		// Get the actual manifest digest (RepoDigest) from the image for accurate comparison.
+		// The ImageID is a local content-addressable ID that differs from the registry manifest digest.
+		digestForComparison := a.getImageRepoDigest(containerCtx, summary.ImageID, summary.Image)
+		if digestForComparison == "" {
+			// Fall back to ImageID if we can't get RepoDigest (shouldn't compare as equal)
+			digestForComparison = summary.ImageID
+		}
+		result := a.registryChecker.CheckImageUpdate(ctx, container.Image, digestForComparison)
 		if result != nil {
 			container.UpdateStatus = &agentsdocker.UpdateStatus{
 				UpdateAvailable: result.UpdateAvailable,
@@ -983,6 +987,84 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 	}
 
 	return container, nil
+}
+
+// getImageRepoDigest retrieves the RepoDigest for an image, which is the actual
+// manifest digest from the registry. This is necessary because Docker's ImageID
+// is a local content-addressable hash that differs from the registry manifest digest.
+// For multi-arch images, the registry returns a manifest list digest, while Docker
+// stores the platform-specific image config digest locally.
+func (a *Agent) getImageRepoDigest(ctx context.Context, imageID, imageName string) string {
+	imageInspect, _, err := a.docker.ImageInspectWithRaw(ctx, imageID)
+	if err != nil {
+		a.logger.Debug().
+			Err(err).
+			Str("imageID", imageID).
+			Str("imageName", imageName).
+			Msg("Failed to inspect image for RepoDigest")
+		return ""
+	}
+
+	if len(imageInspect.RepoDigests) == 0 {
+		// Locally built images won't have RepoDigests
+		return ""
+	}
+
+	// Try to find a RepoDigest that matches the image reference
+	// RepoDigests format: "registry/repo@sha256:..."
+	for _, repoDigest := range imageInspect.RepoDigests {
+		// Extract just the digest part (after @)
+		if idx := strings.LastIndex(repoDigest, "@"); idx >= 0 {
+			repoRef := repoDigest[:idx] // e.g., "docker.io/library/nginx"
+			digest := repoDigest[idx+1:] // e.g., "sha256:abc..."
+
+			// Check if this RepoDigest matches our image reference
+			// Normalize both for comparison
+			if matchesImageReference(imageName, repoRef) {
+				return digest
+			}
+		}
+	}
+
+	// If no exact match, return the first RepoDigest's digest
+	// This handles cases where the image was pulled with a different tag
+	if idx := strings.LastIndex(imageInspect.RepoDigests[0], "@"); idx >= 0 {
+		return imageInspect.RepoDigests[0][idx+1:]
+	}
+
+	return ""
+}
+
+// matchesImageReference checks if a RepoDigest repository matches an image reference.
+// It handles Docker Hub's various naming conventions.
+func matchesImageReference(imageName, repoRef string) bool {
+	// Normalize image name by removing tag
+	if idx := strings.LastIndex(imageName, ":"); idx >= 0 {
+		// Make sure it's a tag, not a port (check if there's a / after it)
+		if !strings.Contains(imageName[idx:], "/") {
+			imageName = imageName[:idx]
+		}
+	}
+
+	// Direct match
+	if imageName == repoRef {
+		return true
+	}
+
+	// Docker Hub library images: "nginx" == "docker.io/library/nginx"
+	if repoRef == "docker.io/library/"+imageName {
+		return true
+	}
+
+	// Docker Hub with namespace: "myuser/myapp" == "docker.io/myuser/myapp"
+	if repoRef == "docker.io/"+imageName {
+		return true
+	}
+
+	// Registry prefix matching (e.g., "ghcr.io/user/repo" matches "ghcr.io/user/repo")
+	// Already handled by direct match above
+
+	return false
 }
 
 func extractPodmanMetadata(labels map[string]string) *agentsdocker.PodmanContainer {

@@ -54,3 +54,24 @@ func TestBaselineStoreAdapter_NilStore(t *testing.T) {
 	}
 }
 
+func TestBaselineStoreAdapter_NilFactory(t *testing.T) {
+	if NewBaselineStoreAdapter(nil) != nil {
+		t.Fatalf("expected nil adapter for nil store")
+	}
+}
+
+func TestBaselineStoreAdapter_MissingBaseline(t *testing.T) {
+	store := baseline.NewStore(baseline.StoreConfig{MinSamples: 1})
+	adapter := NewBaselineStoreAdapter(store)
+	if adapter == nil {
+		t.Fatalf("expected adapter")
+	}
+
+	if _, _, _, ok := adapter.GetBaseline("missing", "cpu"); ok {
+		t.Fatalf("expected ok=false for missing baseline")
+	}
+
+	if _, _, _, _, ok := adapter.CheckAnomaly("missing", "cpu", 42); ok {
+		t.Fatalf("expected ok=false for missing anomaly data")
+	}
+}

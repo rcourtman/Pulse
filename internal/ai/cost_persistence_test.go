@@ -1,6 +1,8 @@
 package ai
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -105,5 +107,20 @@ func TestCostPersistenceAdapter_SaveEmpty(t *testing.T) {
 	err := adapter.SaveUsageHistory([]cost.UsageEvent{})
 	if err != nil {
 		t.Fatalf("failed to save empty usage history: %v", err)
+	}
+}
+
+func TestCostPersistenceAdapter_LoadError(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	adapter := NewCostPersistenceAdapter(persistence)
+
+	badPath := filepath.Join(tmp, "ai_usage_history.json")
+	if err := os.Mkdir(badPath, 0700); err != nil {
+		t.Fatalf("failed to create directory at %s: %v", badPath, err)
+	}
+
+	if _, err := adapter.LoadUsageHistory(); err == nil {
+		t.Fatal("expected error when usage history path is a directory")
 	}
 }

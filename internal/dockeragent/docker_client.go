@@ -28,5 +28,6 @@ type dockerClient interface {
 	ContainerRemove(ctx context.Context, containerID string, options containertypes.RemoveOptions) error
 	ServiceList(ctx context.Context, options swarmtypes.ServiceListOptions) ([]swarmtypes.Service, error)
 	TaskList(ctx context.Context, options swarmtypes.TaskListOptions) ([]swarmtypes.Task, error)
+	ImageInspectWithRaw(ctx context.Context, imageID string) (image.InspectResponse, []byte, error)
 	Close() error
 }
