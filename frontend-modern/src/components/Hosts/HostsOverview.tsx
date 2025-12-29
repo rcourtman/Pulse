@@ -152,10 +152,19 @@ function HostNetworkInfoCell(props: { networkInterfaces: NetworkInterface[] }) {
 }
 
 // Temperature cell with rich tooltip showing all sensor readings
+interface HostDiskSMARTForCell {
+  device: string;
+  model?: string;
+  temperature: number;
+  health?: string;
+  standby?: boolean;
+}
+
 interface HostSensorSummaryForCell {
   temperatureCelsius?: Record<string, number>;
   fanRpm?: Record<string, number>;
   additional?: Record<string, number>;
+  smart?: HostDiskSMARTForCell[];
 }
 
 function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null | undefined }) {
@@ -164,27 +173,42 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
 
   // Get the primary (highest) temperature for display
   const primaryTemp = createMemo(() => {
-    if (!props.sensors?.temperatureCelsius) return null;
-    const temps = Object.values(props.sensors.temperatureCelsius);
-    if (temps.length === 0) return null;
-    // Find package/composite temp first, otherwise show max
-    const keys = Object.keys(props.sensors.temperatureCelsius);
-    const packageKey = keys.find(k =>
-      k.toLowerCase().includes('package') ||
-      k.toLowerCase().includes('composite') ||
-      k.toLowerCase().includes('tctl')
-    );
-    if (packageKey) return props.sensors.temperatureCelsius[packageKey];
-    return Math.max(...temps);
+    // First try CPU/sensor temperatures
+    if (props.sensors?.temperatureCelsius) {
+      const temps = Object.values(props.sensors.temperatureCelsius);
+      if (temps.length > 0) {
+        // Find package/composite temp first, otherwise show max
+        const keys = Object.keys(props.sensors.temperatureCelsius);
+        const packageKey = keys.find(k =>
+          k.toLowerCase().includes('package') ||
+          k.toLowerCase().includes('composite') ||
+          k.toLowerCase().includes('tctl')
+        );
+        if (packageKey) return props.sensors.temperatureCelsius[packageKey];
+        return Math.max(...temps);
+      }
+    }
+    // Fall back to max SMART disk temperature if no sensor temps
+    if (props.sensors?.smart && props.sensors.smart.length > 0) {
+      const diskTemps = props.sensors.smart
+        .filter(d => !d.standby && d.temperature > 0)
+        .map(d => d.temperature);
+      if (diskTemps.length > 0) {
+        return Math.max(...diskTemps);
+      }
+    }
+    return null;
   });
 
   const hasSensors = () => {
     const temps = props.sensors?.temperatureCelsius;
     const fans = props.sensors?.fanRpm;
     const additional = props.sensors?.additional;
+    const smart = props.sensors?.smart;
     return (temps && Object.keys(temps).length > 0) ||
       (fans && Object.keys(fans).length > 0) ||
-      (additional && Object.keys(additional).length > 0);
+      (additional && Object.keys(additional).length > 0) ||
+      (smart && smart.length > 0);
   };
 
   // Color based on temperature
@@ -237,6 +261,12 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
     return Object.entries(props.sensors.additional).sort(([a], [b]) => a.localeCompare(b));
   });
 
+  // Sort SMART disks by device name
+  const sortedSmart = createMemo(() => {
+    if (!props.sensors?.smart) return [];
+    return [...props.sensors.smart].sort((a, b) => a.device.localeCompare(b.device));
+  });
+
   // Format sensor name for display (e.g., "nct6687_cpu_fan" -> "CPU Fan")
   const formatSensorName = (name: string) => {
     // Remove chip prefix (e.g., "nct6687_" or "coretemp_")
@@ -283,6 +313,40 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
                         <div class="flex justify-between gap-3 py-0.5">
                           <span class="text-gray-400 truncate max-w-[140px]">{formatSensorName(name)}</span>
                           <span class={`font-medium font-mono ${colorClass}`}>{Math.round(temp)}°C</span>
+                        </div>
+                      );
+                    }}
+                  </For>
+                </div>
+              </Show>
+
+              {/* Disk temperatures section (SMART) */}
+              <Show when={sortedSmart().length > 0}>
+                <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                  Disk Temperatures
+                </div>
+                <div class="space-y-0.5 mb-2">
+                  <For each={sortedSmart()}>
+                    {(disk) => {
+                      if (disk.standby) {
+                        return (
+                          <div class="flex justify-between gap-3 py-0.5">
+                            <span class="text-gray-400 truncate max-w-[140px]" title={disk.model}>
+                              {disk.device}
+                            </span>
+                            <span class="font-medium font-mono text-gray-500">standby</span>
+                          </div>
+                        );
+                      }
+                      const temp = disk.temperature;
+                      // For HDDs, 45°C is warm, 50°C+ is hot; for SSDs use higher thresholds
+                      const colorClass = temp >= 55 ? 'text-red-400' : temp >= 45 ? 'text-yellow-400' : 'text-gray-200';
+                      return (
+                        <div class="flex justify-between gap-3 py-0.5">
+                          <span class="text-gray-400 truncate max-w-[140px]" title={disk.model}>
+                            {disk.device}
+                          </span>
+                          <span class={`font-medium font-mono ${colorClass}`}>{temp}°C</span>
                         </div>
                       );
                     }}
