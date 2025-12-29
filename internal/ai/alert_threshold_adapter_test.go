@@ -53,3 +53,32 @@ func TestAlertThresholdAdapter_UsesAlertManagerConfig(t *testing.T) {
 	}
 }
 
+func TestAlertThresholdAdapter_Fallbacks(t *testing.T) {
+	mgr := alerts.NewManager()
+	cfg := mgr.GetConfig()
+
+	cfg.NodeDefaults.CPU = nil
+	cfg.NodeDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 0, Clear: 0}
+	cfg.GuestDefaults.Memory = nil
+	cfg.GuestDefaults.Disk = &alerts.HysteresisThreshold{Trigger: 0, Clear: 0}
+	cfg.StorageDefault.Trigger = 0
+
+	mgr.UpdateConfig(cfg)
+
+	a := NewAlertThresholdAdapter(mgr)
+	if a.GetNodeCPUThreshold() != 80 {
+		t.Fatalf("GetNodeCPUThreshold default = %v", a.GetNodeCPUThreshold())
+	}
+	if a.GetNodeMemoryThreshold() != 85 {
+		t.Fatalf("GetNodeMemoryThreshold default = %v", a.GetNodeMemoryThreshold())
+	}
+	if a.GetGuestMemoryThreshold() != 85 {
+		t.Fatalf("GetGuestMemoryThreshold default = %v", a.GetGuestMemoryThreshold())
+	}
+	if a.GetGuestDiskThreshold() != 90 {
+		t.Fatalf("GetGuestDiskThreshold default = %v", a.GetGuestDiskThreshold())
+	}
+	if a.GetStorageThreshold() != 85 {
+		t.Fatalf("GetStorageThreshold default = %v", a.GetStorageThreshold())
+	}
+}

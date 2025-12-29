@@ -32,6 +32,7 @@ type fakeDockerClient struct {
 	containerRemoveFn         func(ctx context.Context, id string, opts containertypes.RemoveOptions) error
 	serviceListFn             func(ctx context.Context, opts swarmtypes.ServiceListOptions) ([]swarmtypes.Service, error)
 	taskListFn                func(ctx context.Context, opts swarmtypes.TaskListOptions) ([]swarmtypes.Task, error)
+	imageInspectWithRawFn     func(ctx context.Context, imageID string) (image.InspectResponse, []byte, error)
 	closeFn                   func() error
 }
 
@@ -135,6 +136,14 @@ func (f *fakeDockerClient) TaskList(ctx context.Context, opts swarmtypes.TaskLis
 		return nil, errors.New("unexpected TaskList call")
 	}
 	return f.taskListFn(ctx, opts)
+}
+
+func (f *fakeDockerClient) ImageInspectWithRaw(ctx context.Context, imageID string) (image.InspectResponse, []byte, error) {
+	if f.imageInspectWithRawFn == nil {
+		// Return empty response with no RepoDigests by default (simulates locally built image)
+		return image.InspectResponse{}, nil, nil
+	}
+	return f.imageInspectWithRawFn(ctx, imageID)
 }
 
 func (f *fakeDockerClient) Close() error {

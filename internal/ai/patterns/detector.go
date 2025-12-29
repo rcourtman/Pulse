@@ -410,9 +410,6 @@ func (d *Detector) loadFromDisk() error {
 	d.events = data.Events
 	d.patterns = make(map[string]*Pattern, len(data.Patterns))
 	for k, v := range data.Patterns {
-		if v == nil {
-			continue
-		}
 		d.patterns[k] = v
 	}
 
