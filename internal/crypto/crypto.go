@@ -14,6 +14,16 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var defaultDataDirFn = utils.GetDataDir
+
+var legacyKeyPath = "/etc/pulse/.encryption.key"
+
+var randReader = rand.Reader
+
+var newCipher = aes.NewCipher
+
+var newGCM = cipher.NewGCM
+
 // CryptoManager handles encryption/decryption of sensitive data
 type CryptoManager struct {
 	key     []byte
@@ -23,7 +33,7 @@ type CryptoManager struct {
 // NewCryptoManagerAt creates a new crypto manager with an explicit data directory override.
 func NewCryptoManagerAt(dataDir string) (*CryptoManager, error) {
 	if dataDir == "" {
-		dataDir = utils.GetDataDir()
+		dataDir = defaultDataDirFn()
 	}
 	keyPath := filepath.Join(dataDir, ".encryption.key")
 
@@ -41,11 +51,12 @@ func NewCryptoManagerAt(dataDir string) (*CryptoManager, error) {
 // getOrCreateKeyAt gets the encryption key or creates one if it doesn't exist
 func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 	if dataDir == "" {
-		dataDir = utils.GetDataDir()
+		dataDir = defaultDataDirFn()
 	}
 
 	keyPath := filepath.Join(dataDir, ".encryption.key")
-	oldKeyPath := "/etc/pulse/.encryption.key"
+	oldKeyPath := legacyKeyPath
+	oldKeyDir := filepath.Dir(oldKeyPath)
 
 	log.Debug().
 		Str("dataDir", dataDir).
@@ -78,7 +89,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 	// Check for key in old location and migrate if found (only if paths differ)
 	// CRITICAL: This code deletes the encryption key at oldKeyPath after migrating it.
 	// Adding extensive logging to diagnose recurring key deletion bug.
-	if dataDir != "/etc/pulse" && keyPath != oldKeyPath {
+	if dataDir != oldKeyDir && keyPath != oldKeyPath {
 		log.Warn().
 			Str("dataDir", dataDir).
 			Str("keyPath", keyPath).
@@ -135,7 +146,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		log.Debug().
 			Str("dataDir", dataDir).
 			Str("keyPath", keyPath).
-			Bool("sameAsOldPath", dataDir == "/etc/pulse").
+			Bool("sameAsOldPath", dataDir == oldKeyDir).
 			Msg("Skipping key migration check (dataDir is /etc/pulse or paths match)")
 	}
 
@@ -171,7 +182,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 
 	// Generate new key (only if no encrypted data exists)
 	key := make([]byte, 32) // AES-256
-	if _, err := io.ReadFull(rand.Reader, key); err != nil {
+	if _, err := io.ReadFull(randReader, key); err != nil {
 		return nil, fmt.Errorf("failed to generate key: %w", err)
 	}
 
@@ -205,18 +216,18 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 		}
 	}
 
-	block, err := aes.NewCipher(c.key)
+	block, err := newCipher(c.key)
 	if err != nil {
 		return nil, err
 	}
 
-	gcm, err := cipher.NewGCM(block)
+	gcm, err := newGCM(block)
 	if err != nil {
 		return nil, err
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+	if _, err := io.ReadFull(randReader, nonce); err != nil {
 		return nil, err
 	}
 
@@ -226,12 +237,12 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 
 // Decrypt decrypts data using AES-GCM
 func (c *CryptoManager) Decrypt(ciphertext []byte) ([]byte, error) {
-	block, err := aes.NewCipher(c.key)
+	block, err := newCipher(c.key)
 	if err != nil {
 		return nil, err
 	}
 
-	gcm, err := cipher.NewGCM(block)
+	gcm, err := newGCM(block)
 	if err != nil {
 		return nil, err
 	}

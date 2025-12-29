@@ -51,6 +51,25 @@ var requiredHostAgentBinaries = []HostAgentBinary{
 
 var downloadMu sync.Mutex
 
+var (
+	httpClient            = &http.Client{Timeout: 2 * time.Minute}
+	downloadURLForVersion = func(version string) string {
+		return fmt.Sprintf("https://github.com/rcourtman/Pulse/releases/download/%[1]s/pulse-%[1]s.tar.gz", version)
+	}
+	downloadAndInstallHostAgentBinariesFn = DownloadAndInstallHostAgentBinaries
+	findMissingHostAgentBinariesFn        = findMissingHostAgentBinaries
+	mkdirAllFn                            = os.MkdirAll
+	createTempFn                          = os.CreateTemp
+	removeFn                              = os.Remove
+	openFileFn                            = os.Open
+	openFileModeFn                        = os.OpenFile
+	renameFn                              = os.Rename
+	symlinkFn                             = os.Symlink
+	copyFn                                = io.Copy
+	chmodFileFn                           = func(f *os.File, mode os.FileMode) error { return f.Chmod(mode) }
+	closeFileFn                           = func(f *os.File) error { return f.Close() }
+)
+
 // HostAgentSearchPaths returns the directories to search for host agent binaries.
 func HostAgentSearchPaths() []string {
 	primary := strings.TrimSpace(os.Getenv("PULSE_BIN_DIR"))
@@ -77,7 +96,7 @@ func HostAgentSearchPaths() []string {
 // The returned map contains any binaries that remain missing after the attempt.
 func EnsureHostAgentBinaries(version string) map[string]HostAgentBinary {
 	binDirs := HostAgentSearchPaths()
-	missing := findMissingHostAgentBinaries(binDirs)
+	missing := findMissingHostAgentBinariesFn(binDirs)
 	if len(missing) == 0 {
 		return nil
 	}
@@ -86,7 +105,7 @@ func EnsureHostAgentBinaries(version string) map[string]HostAgentBinary {
 	defer downloadMu.Unlock()
 
 	// Re-check after acquiring the lock in case another goroutine restored them.
-	missing = findMissingHostAgentBinaries(binDirs)
+	missing = findMissingHostAgentBinariesFn(binDirs)
 	if len(missing) == 0 {
 		return nil
 	}
@@ -101,7 +120,7 @@ func EnsureHostAgentBinaries(version string) map[string]HostAgentBinary {
 		Strs("missing_platforms", missingPlatforms).
 		Msg("Host agent binaries missing - attempting to download bundle from GitHub release")
 
-	if err := DownloadAndInstallHostAgentBinaries(version, binDirs[0]); err != nil {
+	if err := downloadAndInstallHostAgentBinariesFn(version, binDirs[0]); err != nil {
 		log.Error().
 			Err(err).
 			Str("target_dir", binDirs[0]).
@@ -110,7 +129,7 @@ func EnsureHostAgentBinaries(version string) map[string]HostAgentBinary {
 		return missing
 	}
 
-	if remaining := findMissingHostAgentBinaries(binDirs); len(remaining) > 0 {
+	if remaining := findMissingHostAgentBinariesFn(binDirs); len(remaining) > 0 {
 		stillMissing := make([]string, 0, len(remaining))
 		for key := range remaining {
 			stillMissing = append(stillMissing, key)
@@ -133,19 +152,18 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 		return fmt.Errorf("cannot download host agent bundle for non-release version %q", version)
 	}
 
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+	if err := mkdirAllFn(targetDir, 0o755); err != nil {
 		return fmt.Errorf("failed to ensure bin directory %s: %w", targetDir, err)
 	}
 
-	url := fmt.Sprintf("https://github.com/rcourtman/Pulse/releases/download/%[1]s/pulse-%[1]s.tar.gz", normalizedVersion)
-	tempFile, err := os.CreateTemp("", "pulse-host-agent-*.tar.gz")
+	url := downloadURLForVersion(normalizedVersion)
+	tempFile, err := createTempFn("", "pulse-host-agent-*.tar.gz")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary archive file: %w", err)
 	}
-	defer os.Remove(tempFile.Name())
+	defer removeFn(tempFile.Name())
 
-	client := &http.Client{Timeout: 2 * time.Minute}
-	resp, err := client.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to download host agent bundle from %s: %w", url, err)
 	}
@@ -160,7 +178,7 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 		return fmt.Errorf("failed to save host agent bundle: %w", err)
 	}
 
-	if err := tempFile.Close(); err != nil {
+	if err := closeFileFn(tempFile); err != nil {
 		return fmt.Errorf("failed to close temporary bundle file: %w", err)
 	}
 
@@ -204,7 +222,7 @@ func normalizeVersionTag(version string) string {
 }
 
 func extractHostAgentBinaries(archivePath, targetDir string) error {
-	file, err := os.Open(archivePath)
+	file, err := openFileFn(archivePath)
 	if err != nil {
 		return fmt.Errorf("failed to open host agent bundle: %w", err)
 	}
@@ -230,10 +248,6 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 				break
 			}
 			return fmt.Errorf("failed to read host agent bundle: %w", err)
-		}
-
-		if header == nil {
-			continue
 		}
 
 		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeSymlink {
@@ -265,10 +279,10 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 	}
 
 	for _, link := range symlinks {
-		if err := os.Remove(link.path); err != nil && !os.IsNotExist(err) {
+		if err := removeFn(link.path); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("failed to replace existing symlink %s: %w", link.path, err)
 		}
-		if err := os.Symlink(link.target, link.path); err != nil {
+		if err := symlinkFn(link.target, link.path); err != nil {
 			// Fallback: copy the referenced file if symlinks are not permitted
 			source := filepath.Join(targetDir, link.target)
 			if err := copyHostAgentFile(source, link.path); err != nil {
@@ -281,31 +295,31 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 }
 
 func writeHostAgentFile(destination string, reader io.Reader, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+	if err := mkdirAllFn(filepath.Dir(destination), 0o755); err != nil {
 		return fmt.Errorf("failed to create directory for %s: %w", destination, err)
 	}
 
-	tmpFile, err := os.CreateTemp(filepath.Dir(destination), "pulse-host-agent-*")
+	tmpFile, err := createTempFn(filepath.Dir(destination), "pulse-host-agent-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file for %s: %w", destination, err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer removeFn(tmpFile.Name())
 
-	if _, err := io.Copy(tmpFile, reader); err != nil {
-		tmpFile.Close()
+	if _, err := copyFn(tmpFile, reader); err != nil {
+		closeFileFn(tmpFile)
 		return fmt.Errorf("failed to extract %s: %w", destination, err)
 	}
 
-	if err := tmpFile.Chmod(normalizeExecutableMode(mode)); err != nil {
-		tmpFile.Close()
+	if err := chmodFileFn(tmpFile, normalizeExecutableMode(mode)); err != nil {
+		closeFileFn(tmpFile)
 		return fmt.Errorf("failed to set permissions on %s: %w", destination, err)
 	}
 
-	if err := tmpFile.Close(); err != nil {
+	if err := closeFileFn(tmpFile); err != nil {
 		return fmt.Errorf("failed to finalize %s: %w", destination, err)
 	}
 
-	if err := os.Rename(tmpFile.Name(), destination); err != nil {
+	if err := renameFn(tmpFile.Name(), destination); err != nil {
 		return fmt.Errorf("failed to install %s: %w", destination, err)
 	}
 
@@ -313,23 +327,23 @@ func writeHostAgentFile(destination string, reader io.Reader, mode os.FileMode) 
 }
 
 func copyHostAgentFile(source, destination string) error {
-	src, err := os.Open(source)
+	src, err := openFileFn(source)
 	if err != nil {
 		return fmt.Errorf("failed to open %s for fallback copy: %w", source, err)
 	}
 	defer src.Close()
 
-	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+	if err := mkdirAllFn(filepath.Dir(destination), 0o755); err != nil {
 		return fmt.Errorf("failed to prepare directory for %s: %w", destination, err)
 	}
 
-	dst, err := os.OpenFile(destination, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
+	dst, err := openFileModeFn(destination, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
 	if err != nil {
 		return fmt.Errorf("failed to create fallback copy %s: %w", destination, err)
 	}
 	defer dst.Close()
 
-	if _, err := io.Copy(dst, src); err != nil {
+	if _, err := copyFn(dst, src); err != nil {
 		return fmt.Errorf("failed to copy %s to %s: %w", source, destination, err)
 	}
 

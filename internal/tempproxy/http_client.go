@@ -80,7 +80,11 @@ func (c *HTTPClient) GetTemperature(nodeHost string) (string, error) {
 	req.Header.Set("Accept", "application/json")
 
 	// Execute request with retries
-	var lastErr error
+	var lastErr error = &ProxyError{
+		Type:      ErrorTypeUnknown,
+		Message:   "all retry attempts failed",
+		Retryable: false,
+	}
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
 			backoff := calculateBackoff(attempt)
@@ -167,15 +171,7 @@ func (c *HTTPClient) GetTemperature(nodeHost string) (string, error) {
 	}
 
 	// All retries exhausted
-	if lastErr != nil {
-		return "", lastErr
-	}
-
-	return "", &ProxyError{
-		Type:      ErrorTypeUnknown,
-		Message:   "all retry attempts failed",
-		Retryable: false,
-	}
+	return "", lastErr
 }
 
 // HealthCheck calls the proxy /health endpoint to verify connectivity.

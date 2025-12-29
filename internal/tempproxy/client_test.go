@@ -201,6 +201,12 @@ func TestContains(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "case insensitive upper substr",
+			s:        "connection refused",
+			substrs:  []string{"REFUSED"},
+			expected: true,
+		},
+		{
 			name:     "empty string",
 			s:        "",
 			substrs:  []string{"test"},

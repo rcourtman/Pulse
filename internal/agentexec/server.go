@@ -20,19 +20,26 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+var (
+	jsonMarshal     = json.Marshal
+	pingInterval    = 5 * time.Second
+	pingWriteWait   = 5 * time.Second
+	readFileTimeout = 30 * time.Second
+)
+
 // Server manages WebSocket connections from agents
 type Server struct {
 	mu            sync.RWMutex
-	agents        map[string]*agentConn // agentID -> connection
+	agents        map[string]*agentConn                // agentID -> connection
 	pendingReqs   map[string]chan CommandResultPayload // requestID -> response channel
 	validateToken func(token string) bool
 }
 
 type agentConn struct {
-	conn      *websocket.Conn
-	agent     ConnectedAgent
-	writeMu   sync.Mutex
-	done      chan struct{}
+	conn    *websocket.Conn
+	agent   ConnectedAgent
+	writeMu sync.Mutex
+	done    chan struct{}
 }
 
 // NewServer creates a new agent execution server
@@ -94,7 +101,7 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse registration payload
-	payloadBytes, err := json.Marshal(msg.Payload)
+	payloadBytes, err := jsonMarshal(msg.Payload)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to marshal registration payload")
 		conn.Close()
@@ -258,7 +265,7 @@ func (s *Server) readLoop(ac *agentConn) {
 }
 
 func (s *Server) pingLoop(ac *agentConn, done chan struct{}) {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(pingInterval)
 	defer ticker.Stop()
 
 	// Track consecutive ping failures to detect dead connections faster
@@ -273,7 +280,7 @@ func (s *Server) pingLoop(ac *agentConn, done chan struct{}) {
 			return
 		case <-ticker.C:
 			ac.writeMu.Lock()
-			err := ac.conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(5*time.Second))
+			err := ac.conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(pingWriteWait))
 			ac.writeMu.Unlock()
 			if err != nil {
 				consecutiveFailures++
@@ -283,14 +290,14 @@ func (s *Server) pingLoop(ac *agentConn, done chan struct{}) {
 					Str("hostname", ac.agent.Hostname).
 					Int("consecutive_failures", consecutiveFailures).
 					Msg("Failed to send ping to agent")
-				
+
 				if consecutiveFailures >= maxConsecutiveFailures {
 					log.Error().
 						Str("agent_id", ac.agent.AgentID).
 						Str("hostname", ac.agent.Hostname).
 						Int("failures", consecutiveFailures).
 						Msg("Agent connection appears dead after multiple ping failures, closing connection")
-					
+
 					// Close the connection - this will cause readLoop to exit and clean up
 					ac.conn.Close()
 					return
@@ -404,7 +411,7 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 	}
 
 	// Wait for result
-	timeout := 30 * time.Second
+	timeout := readFileTimeout
 	select {
 	case result := <-respCh:
 		return &result, nil

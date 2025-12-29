@@ -2,10 +2,50 @@ package crypto
 
 import (
 	"bytes"
+	"crypto/cipher"
+	"encoding/base64"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+type errReader struct {
+	err error
+}
+
+func (e errReader) Read(p []byte) (int, error) {
+	return 0, e.err
+}
+
+func withDefaultDataDir(t *testing.T, dir string) {
+	t.Helper()
+	orig := defaultDataDirFn
+	defaultDataDirFn = func() string { return dir }
+	t.Cleanup(func() { defaultDataDirFn = orig })
+}
+
+func withLegacyKeyPath(t *testing.T, path string) {
+	t.Helper()
+	orig := legacyKeyPath
+	legacyKeyPath = path
+	t.Cleanup(func() { legacyKeyPath = orig })
+}
+
+func withRandReader(t *testing.T, r io.Reader) {
+	t.Helper()
+	orig := randReader
+	randReader = r
+	t.Cleanup(func() { randReader = orig })
+}
+
+func withNewGCM(t *testing.T, fn func(cipher.Block) (cipher.AEAD, error)) {
+	t.Helper()
+	orig := newGCM
+	newGCM = fn
+	t.Cleanup(func() { newGCM = orig })
+}
 
 func TestEncryptDecrypt(t *testing.T) {
 	// Create a temp directory for the test
@@ -149,6 +189,33 @@ func TestEncryptionKeyFilePermissions(t *testing.T) {
 	}
 }
 
+func TestNewCryptoManagerAt_DefaultDataDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	withDefaultDataDir(t, tmpDir)
+
+	cm, err := NewCryptoManagerAt("")
+	if err != nil {
+		t.Fatalf("NewCryptoManagerAt() error: %v", err)
+	}
+	if cm.keyPath != filepath.Join(tmpDir, ".encryption.key") {
+		t.Fatalf("keyPath = %q, want %q", cm.keyPath, filepath.Join(tmpDir, ".encryption.key"))
+	}
+}
+
+func TestNewCryptoManagerAt_KeyError(t *testing.T) {
+	tmpDir := t.TempDir()
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
+	err := os.WriteFile(filepath.Join(tmpDir, "nodes.enc"), []byte("data"), 0600)
+	if err != nil {
+		t.Fatalf("Failed to create encrypted file: %v", err)
+	}
+
+	_, err = NewCryptoManagerAt(tmpDir)
+	if err == nil {
+		t.Fatal("Expected error when encrypted data exists without a key")
+	}
+}
+
 func TestDecryptInvalidData(t *testing.T) {
 	tmpDir := t.TempDir()
 	cm, err := NewCryptoManagerAt(tmpDir)
@@ -172,6 +239,217 @@ func TestDecryptInvalidData(t *testing.T) {
 	_, err = cm.Decrypt([]byte{0x01, 0x02, 0x03})
 	if err == nil {
 		t.Error("Decrypt() should fail on data too short for nonce")
+	}
+}
+
+func TestGetOrCreateKeyAt_InvalidBase64(t *testing.T) {
+	tmpDir := t.TempDir()
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
+
+	keyPath := filepath.Join(tmpDir, ".encryption.key")
+	if err := os.WriteFile(keyPath, []byte("not-base64"), 0600); err != nil {
+		t.Fatalf("Failed to write key file: %v", err)
+	}
+
+	key, err := getOrCreateKeyAt(tmpDir)
+	if err != nil {
+		t.Fatalf("getOrCreateKeyAt() error: %v", err)
+	}
+	if len(key) != 32 {
+		t.Fatalf("expected 32-byte key, got %d", len(key))
+	}
+}
+
+func TestGetOrCreateKeyAt_DefaultDataDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	withDefaultDataDir(t, tmpDir)
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
+
+	key, err := getOrCreateKeyAt("")
+	if err != nil {
+		t.Fatalf("getOrCreateKeyAt() error: %v", err)
+	}
+	if len(key) != 32 {
+		t.Fatalf("expected 32-byte key, got %d", len(key))
+	}
+}
+
+func TestGetOrCreateKeyAt_InvalidLength(t *testing.T) {
+	tmpDir := t.TempDir()
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
+
+	shortKey := make([]byte, 16)
+	for i := range shortKey {
+		shortKey[i] = byte(i)
+	}
+	encoded := base64.StdEncoding.EncodeToString(shortKey)
+	if err := os.WriteFile(filepath.Join(tmpDir, ".encryption.key"), []byte(encoded), 0600); err != nil {
+		t.Fatalf("Failed to write key file: %v", err)
+	}
+
+	key, err := getOrCreateKeyAt(tmpDir)
+	if err != nil {
+		t.Fatalf("getOrCreateKeyAt() error: %v", err)
+	}
+	if len(key) != 32 {
+		t.Fatalf("expected 32-byte key, got %d", len(key))
+	}
+}
+
+func TestGetOrCreateKeyAt_SkipMigrationWhenPathsMatch(t *testing.T) {
+	tmpDir := t.TempDir()
+	withLegacyKeyPath(t, filepath.Join(tmpDir, ".encryption.key"))
+
+	key, err := getOrCreateKeyAt(tmpDir)
+	if err != nil {
+		t.Fatalf("getOrCreateKeyAt() error: %v", err)
+	}
+	if len(key) != 32 {
+		t.Fatalf("expected 32-byte key, got %d", len(key))
+	}
+}
+
+func TestGetOrCreateKeyAt_MigrateSuccess(t *testing.T) {
+	legacyDir := t.TempDir()
+	legacyPath := filepath.Join(legacyDir, ".encryption.key")
+	withLegacyKeyPath(t, legacyPath)
+
+	oldKey := make([]byte, 32)
+	for i := range oldKey {
+		oldKey[i] = byte(i)
+	}
+	encoded := base64.StdEncoding.EncodeToString(oldKey)
+	if err := os.WriteFile(legacyPath, []byte(encoded), 0600); err != nil {
+		t.Fatalf("Failed to write legacy key: %v", err)
+	}
+
+	newDir := t.TempDir()
+	key, err := getOrCreateKeyAt(newDir)
+	if err != nil {
+		t.Fatalf("getOrCreateKeyAt() error: %v", err)
+	}
+	if !bytes.Equal(key, oldKey) {
+		t.Fatalf("migrated key mismatch")
+	}
+	contents, err := os.ReadFile(filepath.Join(newDir, ".encryption.key"))
+	if err != nil {
+		t.Fatalf("Failed to read migrated key: %v", err)
+	}
+	if string(contents) != encoded {
+		t.Fatalf("migrated key contents mismatch")
+	}
+}
+
+func TestGetOrCreateKeyAt_MigrateMkdirError(t *testing.T) {
+	legacyDir := t.TempDir()
+	legacyPath := filepath.Join(legacyDir, ".encryption.key")
+	withLegacyKeyPath(t, legacyPath)
+
+	oldKey := make([]byte, 32)
+	for i := range oldKey {
+		oldKey[i] = byte(i)
+	}
+	encoded := base64.StdEncoding.EncodeToString(oldKey)
+	if err := os.WriteFile(legacyPath, []byte(encoded), 0600); err != nil {
+		t.Fatalf("Failed to write legacy key: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	dataFile := filepath.Join(tmpDir, "datafile")
+	if err := os.WriteFile(dataFile, []byte("x"), 0600); err != nil {
+		t.Fatalf("Failed to write data file: %v", err)
+	}
+
+	key, err := getOrCreateKeyAt(dataFile)
+	if err != nil {
+		t.Fatalf("getOrCreateKeyAt() error: %v", err)
+	}
+	if !bytes.Equal(key, oldKey) {
+		t.Fatalf("expected legacy key on mkdir error")
+	}
+}
+
+func TestGetOrCreateKeyAt_MigrateWriteError(t *testing.T) {
+	legacyDir := t.TempDir()
+	legacyPath := filepath.Join(legacyDir, ".encryption.key")
+	withLegacyKeyPath(t, legacyPath)
+
+	oldKey := make([]byte, 32)
+	for i := range oldKey {
+		oldKey[i] = byte(i)
+	}
+	encoded := base64.StdEncoding.EncodeToString(oldKey)
+	if err := os.WriteFile(legacyPath, []byte(encoded), 0600); err != nil {
+		t.Fatalf("Failed to write legacy key: %v", err)
+	}
+
+	newDir := t.TempDir()
+	keyPath := filepath.Join(newDir, ".encryption.key")
+	if err := os.MkdirAll(keyPath, 0700); err != nil {
+		t.Fatalf("Failed to create key path dir: %v", err)
+	}
+
+	key, err := getOrCreateKeyAt(newDir)
+	if err != nil {
+		t.Fatalf("getOrCreateKeyAt() error: %v", err)
+	}
+	if !bytes.Equal(key, oldKey) {
+		t.Fatalf("expected legacy key on write error")
+	}
+}
+
+func TestGetOrCreateKeyAt_EncryptedDataExists(t *testing.T) {
+	tmpDir := t.TempDir()
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "nodes.enc"), []byte("data"), 0600); err != nil {
+		t.Fatalf("Failed to write encrypted file: %v", err)
+	}
+
+	_, err := getOrCreateKeyAt(tmpDir)
+	if err == nil {
+		t.Fatal("Expected error when encrypted data exists")
+	}
+}
+
+func TestGetOrCreateKeyAt_RandReaderError(t *testing.T) {
+	tmpDir := t.TempDir()
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
+	withRandReader(t, errReader{err: errors.New("read failed")})
+
+	_, err := getOrCreateKeyAt(tmpDir)
+	if err == nil {
+		t.Fatal("Expected error from rand reader")
+	}
+}
+
+func TestGetOrCreateKeyAt_CreateDirError(t *testing.T) {
+	tmpDir := t.TempDir()
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
+
+	dataFile := filepath.Join(tmpDir, "datafile")
+	if err := os.WriteFile(dataFile, []byte("x"), 0600); err != nil {
+		t.Fatalf("Failed to write data file: %v", err)
+	}
+
+	_, err := getOrCreateKeyAt(dataFile)
+	if err == nil {
+		t.Fatal("Expected error when creating directory")
+	}
+}
+
+func TestGetOrCreateKeyAt_SaveKeyError(t *testing.T) {
+	tmpDir := t.TempDir()
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
+
+	keyPath := filepath.Join(tmpDir, ".encryption.key")
+	if err := os.MkdirAll(keyPath, 0700); err != nil {
+		t.Fatalf("Failed to create key path dir: %v", err)
+	}
+
+	_, err := getOrCreateKeyAt(tmpDir)
+	if err == nil {
+		t.Fatal("Expected error when saving key")
 	}
 }
 
@@ -213,6 +491,57 @@ func TestEncryptionUniqueness(t *testing.T) {
 
 	if !bytes.Equal(decrypted1, plaintext) || !bytes.Equal(decrypted2, plaintext) {
 		t.Error("Different ciphertexts didn't decrypt to same plaintext")
+	}
+}
+
+func TestEncryptInvalidKey(t *testing.T) {
+	cm := &CryptoManager{key: []byte("short")}
+	if _, err := cm.Encrypt([]byte("data")); err == nil {
+		t.Fatal("Expected error for invalid key length")
+	}
+}
+
+func TestDecryptInvalidKey(t *testing.T) {
+	cm := &CryptoManager{key: []byte("short")}
+	if _, err := cm.Decrypt([]byte("data")); err == nil {
+		t.Fatal("Expected error for invalid key length")
+	}
+}
+
+func TestEncryptNonceReadError(t *testing.T) {
+	withRandReader(t, errReader{err: errors.New("nonce read error")})
+	cm := &CryptoManager{key: make([]byte, 32)}
+	if _, err := cm.Encrypt([]byte("data")); err == nil {
+		t.Fatal("Expected error reading nonce")
+	}
+}
+
+func TestEncryptDecryptGCMError(t *testing.T) {
+	withNewGCM(t, func(cipher.Block) (cipher.AEAD, error) {
+		return nil, errors.New("gcm error")
+	})
+
+	cm := &CryptoManager{key: make([]byte, 32)}
+	if _, err := cm.Encrypt([]byte("data")); err == nil {
+		t.Fatal("Expected Encrypt error from GCM")
+	}
+	if _, err := cm.Decrypt([]byte("data")); err == nil {
+		t.Fatal("Expected Decrypt error from GCM")
+	}
+}
+
+func TestEncryptStringError(t *testing.T) {
+	cm := &CryptoManager{key: []byte("short")}
+	if _, err := cm.EncryptString("data"); err == nil {
+		t.Fatal("Expected EncryptString error")
+	}
+}
+
+func TestDecryptStringError(t *testing.T) {
+	cm := &CryptoManager{key: make([]byte, 32)}
+	encoded := base64.StdEncoding.EncodeToString([]byte("short"))
+	if _, err := cm.DecryptString(encoded); err == nil {
+		t.Fatal("Expected DecryptString error")
 	}
 }
 

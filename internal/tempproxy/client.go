@@ -24,6 +24,13 @@ const (
 	maxRetries     = 3
 )
 
+var statFn = os.Stat
+
+var dialContextFn = func(ctx context.Context, network, address string, timeout time.Duration) (net.Conn, error) {
+	dialer := net.Dialer{Timeout: timeout}
+	return dialer.DialContext(ctx, network, address)
+}
+
 // ErrorType classifies proxy errors for better error handling
 type ErrorType int
 
@@ -66,9 +73,9 @@ type Client struct {
 func NewClient() *Client {
 	socketPath := os.Getenv("PULSE_SENSOR_PROXY_SOCKET")
 	if socketPath == "" {
-		if _, err := os.Stat(defaultSocketPath); err == nil {
+		if _, err := statFn(defaultSocketPath); err == nil {
 			socketPath = defaultSocketPath
-		} else if _, err := os.Stat(containerSocketPath); err == nil {
+		} else if _, err := statFn(containerSocketPath); err == nil {
 			socketPath = containerSocketPath
 		} else {
 			socketPath = defaultSocketPath
@@ -83,7 +90,7 @@ func NewClient() *Client {
 
 // IsAvailable checks if the proxy is running and accessible
 func (c *Client) IsAvailable() bool {
-	_, err := os.Stat(c.socketPath)
+	_, err := statFn(c.socketPath)
 	return err == nil
 }
 
@@ -312,13 +319,8 @@ func (c *Client) callWithContext(ctx context.Context, method string, params map[
 
 // callOnce sends a single RPC request without retries
 func (c *Client) callOnce(ctx context.Context, method string, params map[string]interface{}) (*RPCResponse, error) {
-	// Create a dialer with context
-	dialer := net.Dialer{
-		Timeout: c.timeout,
-	}
-
 	// Connect to unix socket with context
-	conn, err := dialer.DialContext(ctx, "unix", c.socketPath)
+	conn, err := dialContextFn(ctx, "unix", c.socketPath, c.timeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to proxy: %w", err)
 	}
@@ -366,10 +368,6 @@ func (c *Client) GetStatus() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	if !resp.Success {
-		return nil, fmt.Errorf("proxy error: %s", resp.Error)
-	}
-
 	return resp.Data, nil
 }
 
@@ -378,13 +376,6 @@ func (c *Client) RegisterNodes() ([]map[string]interface{}, error) {
 	resp, err := c.call("register_nodes", nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if !resp.Success {
-		if proxyErr := classifyError(nil, resp.Error); proxyErr != nil {
-			return nil, proxyErr
-		}
-		return nil, fmt.Errorf("proxy error: %s", resp.Error)
 	}
 
 	// Extract nodes array from data
@@ -422,18 +413,6 @@ func (c *Client) GetTemperature(nodeHost string) (string, error) {
 		return "", err
 	}
 
-	if !resp.Success {
-		if proxyErr := classifyError(nil, resp.Error); proxyErr != nil {
-			return "", proxyErr
-		}
-		return "", &ProxyError{
-			Type:      ErrorTypeUnknown,
-			Message:   resp.Error,
-			Retryable: false,
-			Wrapped:   fmt.Errorf("%s", resp.Error),
-		}
-	}
-
 	// Extract temperature JSON string
 	tempRaw, ok := resp.Data["temperature"]
 	if !ok {
@@ -455,16 +434,8 @@ func (c *Client) RequestCleanup(host string) error {
 		params["host"] = host
 	}
 
-	resp, err := c.call("request_cleanup", params)
-	if err != nil {
+	if _, err := c.call("request_cleanup", params); err != nil {
 		return err
-	}
-
-	if !resp.Success {
-		if resp.Error != "" {
-			return fmt.Errorf("proxy error: %s", resp.Error)
-		}
-		return fmt.Errorf("proxy rejected cleanup request")
 	}
 
 	return nil

@@ -167,9 +167,6 @@ func (s *IncidentStore) RecordAlertAcknowledged(alert *alerts.Alert, user string
 	defer s.mu.Unlock()
 
 	incident := s.ensureIncidentForAlertLocked(alert)
-	if incident == nil {
-		return
-	}
 
 	incident.Acknowledged = true
 	if alert.AckTime != nil {
@@ -198,9 +195,6 @@ func (s *IncidentStore) RecordAlertUnacknowledged(alert *alerts.Alert, user stri
 	defer s.mu.Unlock()
 
 	incident := s.ensureIncidentForAlertLocked(alert)
-	if incident == nil {
-		return
-	}
 
 	incident.Acknowledged = false
 	incident.AckTime = nil

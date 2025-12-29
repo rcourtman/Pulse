@@ -5,6 +5,13 @@ import (
 	"strings"
 )
 
+var (
+	envGetFn   = os.Getenv
+	statFn     = os.Stat
+	readFileFn = os.ReadFile
+	hostnameFn = os.Hostname
+)
+
 var containerMarkers = []string{
 	"docker",
 	"lxc",
@@ -19,24 +26,24 @@ var containerMarkers = []string{
 // InContainer reports whether Pulse is running inside a containerised environment.
 func InContainer() bool {
 	// Allow operators to force container behaviour when automatic detection falls short.
-	if isTruthy(os.Getenv("PULSE_FORCE_CONTAINER")) {
+	if isTruthy(envGetFn("PULSE_FORCE_CONTAINER")) {
 		return true
 	}
 
-	if _, err := os.Stat("/.dockerenv"); err == nil {
+	if _, err := statFn("/.dockerenv"); err == nil {
 		return true
 	}
-	if _, err := os.Stat("/run/.containerenv"); err == nil {
+	if _, err := statFn("/run/.containerenv"); err == nil {
 		return true
 	}
 
 	// Check common environment hints provided by systemd/nspawn, LXC, etc.
-	if val := strings.ToLower(strings.TrimSpace(os.Getenv("container"))); val != "" && val != "host" {
+	if val := strings.ToLower(strings.TrimSpace(envGetFn("container"))); val != "" && val != "host" {
 		return true
 	}
 
 	// Some distros expose the container hint through PID 1's environment.
-	if data, err := os.ReadFile("/proc/1/environ"); err == nil {
+	if data, err := readFileFn("/proc/1/environ"); err == nil {
 		lower := strings.ToLower(string(data))
 		if strings.Contains(lower, "container=") && !strings.Contains(lower, "container=host") {
 			return true
@@ -44,7 +51,7 @@ func InContainer() bool {
 	}
 
 	// Fall back to cgroup inspection which covers older Docker/LXC setups.
-	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
+	if data, err := readFileFn("/proc/1/cgroup"); err == nil {
 		content := strings.ToLower(string(data))
 		for _, marker := range containerMarkers {
 			if strings.Contains(content, marker) {
@@ -60,7 +67,7 @@ func InContainer() bool {
 // Returns empty string if not in Docker or name cannot be determined.
 func DetectDockerContainerName() string {
 	// Method 1: Check hostname (Docker uses container ID or name as hostname)
-	if hostname, err := os.Hostname(); err == nil && hostname != "" {
+	if hostname, err := hostnameFn(); err == nil && hostname != "" {
 		// Docker hostnames are either short container ID (12 chars) or custom name
 		// If it looks like a container ID (hex), skip it - user needs to use name
 		if !isHexString(hostname) || len(hostname) > 12 {
@@ -69,7 +76,7 @@ func DetectDockerContainerName() string {
 	}
 
 	// Method 2: Try reading from /proc/self/cgroup
-	if data, err := os.ReadFile("/proc/self/cgroup"); err == nil {
+	if data, err := readFileFn("/proc/self/cgroup"); err == nil {
 		// Look for patterns like: 0::/docker/<container-id>
 		// But we can't get name from cgroup, only ID
 		_ = data // placeholder for future enhancement
@@ -91,7 +98,7 @@ func isHexString(s string) bool {
 // Returns empty string if not in an LXC container or CTID cannot be determined.
 func DetectLXCCTID() string {
 	// Method 1: Parse /proc/1/cgroup for LXC container ID
-	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
+	if data, err := readFileFn("/proc/1/cgroup"); err == nil {
 		lines := strings.Split(string(data), "\n")
 		for _, line := range lines {
 			// Look for patterns like: 0::/lxc/123 or 0::/lxc.payload.123
@@ -119,7 +126,7 @@ func DetectLXCCTID() string {
 	}
 
 	// Method 2: Check hostname (some LXC containers use CTID as hostname)
-	if hostname, err := os.Hostname(); err == nil && isNumeric(hostname) {
+	if hostname, err := hostnameFn(); err == nil && isNumeric(hostname) {
 		return hostname
 	}
 

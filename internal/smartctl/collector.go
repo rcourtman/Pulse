@@ -13,17 +13,25 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var (
+	execLookPath     = exec.LookPath
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return exec.CommandContext(ctx, name, args...).Output()
+	}
+	timeNow = time.Now
+)
+
 // DiskSMART represents S.M.A.R.T. data for a single disk.
 type DiskSMART struct {
-	Device      string    `json:"device"`                // Device path (e.g., /dev/sda)
-	Model       string    `json:"model,omitempty"`       // Disk model
-	Serial      string    `json:"serial,omitempty"`      // Serial number
-	WWN         string    `json:"wwn,omitempty"`         // World Wide Name
-	Type        string    `json:"type,omitempty"`        // Transport type: sata, sas, nvme
-	Temperature int       `json:"temperature"`           // Temperature in Celsius
-	Health      string    `json:"health,omitempty"`      // PASSED, FAILED, UNKNOWN
-	Standby     bool      `json:"standby,omitempty"`     // True if disk was in standby
-	LastUpdated time.Time `json:"lastUpdated"`           // When this reading was taken
+	Device      string    `json:"device"`            // Device path (e.g., /dev/sda)
+	Model       string    `json:"model,omitempty"`   // Disk model
+	Serial      string    `json:"serial,omitempty"`  // Serial number
+	WWN         string    `json:"wwn,omitempty"`     // World Wide Name
+	Type        string    `json:"type,omitempty"`    // Transport type: sata, sas, nvme
+	Temperature int       `json:"temperature"`       // Temperature in Celsius
+	Health      string    `json:"health,omitempty"`  // PASSED, FAILED, UNKNOWN
+	Standby     bool      `json:"standby,omitempty"` // True if disk was in standby
+	LastUpdated time.Time `json:"lastUpdated"`       // When this reading was taken
 }
 
 // smartctlJSON represents the JSON output from smartctl --json.
@@ -85,8 +93,7 @@ func CollectLocal(ctx context.Context) ([]DiskSMART, error) {
 // listBlockDevices returns a list of block devices suitable for SMART queries.
 func listBlockDevices(ctx context.Context) ([]string, error) {
 	// Use lsblk to find disks (not partitions)
-	cmd := exec.CommandContext(ctx, "lsblk", "-d", "-n", "-o", "NAME,TYPE")
-	output, err := cmd.Output()
+	output, err := runCommandOutput(ctx, "lsblk", "-d", "-n", "-o", "NAME,TYPE")
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +121,7 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 	defer cancel()
 
 	// Check if smartctl is available
-	smartctlPath, err := exec.LookPath("smartctl")
+	smartctlPath, err := execLookPath("smartctl")
 	if err != nil {
 		return nil, err
 	}
@@ -124,8 +131,7 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 	// -i: device info
 	// -A: attributes (for temperature)
 	// --json=o: output original smartctl JSON format
-	cmd := exec.CommandContext(cmdCtx, smartctlPath, "-n", "standby", "-i", "-A", "-H", "--json=o", device)
-	output, err := cmd.Output()
+	output, err := runCommandOutput(cmdCtx, smartctlPath, "-n", "standby", "-i", "-A", "-H", "--json=o", device)
 
 	// smartctl returns non-zero exit codes for various conditions
 	// Exit code 2 means drive is in standby - that's okay
@@ -137,7 +143,7 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 				return &DiskSMART{
 					Device:      filepath.Base(device),
 					Standby:     true,
-					LastUpdated: time.Now(),
+					LastUpdated: timeNow(),
 				}, nil
 			}
 			// Other exit codes might still have valid JSON output
@@ -161,7 +167,7 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 		Model:       smartData.ModelName,
 		Serial:      smartData.SerialNumber,
 		Type:        detectDiskType(smartData),
-		LastUpdated: time.Now(),
+		LastUpdated: timeNow(),
 	}
 
 	// Build WWN string if available
