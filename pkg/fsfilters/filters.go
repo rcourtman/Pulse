@@ -76,6 +76,7 @@ var virtualFSTypes = map[string]bool{
 	"bpf":        true,
 	"overlay":    true, // Docker/container overlay filesystems (issue #942)
 	"overlayfs":  true, // Alternative overlay name
+	"autofs":     true, // Systemd automount placeholders (issue #942)
 }
 
 // networkFSPatterns are substrings that indicate network/remote filesystems.
