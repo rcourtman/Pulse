@@ -110,6 +110,7 @@ Pulse can detect and apply updates to your Docker containers directly from the U
 1. **Update Detection**: Pulse compares the local image digest with the latest digest from the container registry
 2. **Visual Indicator**: Containers with available updates show a blue upward arrow icon
 3. **One-Click Update**: Click the update button, confirm, and Pulse handles the rest
+4. **Batch Updates**: Use the **"Update All"** button in the filter bar to update multiple containers safely in sequence
 
 ### Updating a Container
 
@@ -122,6 +123,15 @@ Pulse can detect and apply updates to your Docker containers directly from the U
    - Create a backup (renamed with `_pulse_backup_` suffix)
    - Start a new container with the same configuration
    - Clean up the backup after 5 minutes
+
+### Batch Updates
+
+When multiple containers have updates available, an **"Update All"** button appears in the filter bar.
+1. Click **"Update All"**
+2. Confirm the action in the toast notification
+3. Pulse queues the updates and processes them in parallel batches (default 5 concurrent updates)
+4. A progress indicator shows the status of the batch operation
+5. Failed updates are pushed to the end of the queue and reported in the final summary
 
 ### Safety Features
 

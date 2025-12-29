@@ -209,13 +209,46 @@ func (a *Agent) updateContainer(ctx context.Context, containerID string) Contain
 		return result
 	}
 
-	a.logger.Info().Str("container", result.ContainerName).Msg("New container started successfully")
+	a.logger.Info().Str("container", result.ContainerName).Msg("New container started, verifying stability...")
 
-	// 9. Get the new image digest
-	newInspect, err := a.docker.ContainerInspect(ctx, newContainerID)
-	if err == nil {
-		result.NewImageDigest = newInspect.Image
+	// 9. Verify container stability
+	// Wait a few seconds to ensure it doesn't crash immediately
+	sleepFn(5 * time.Second)
+
+	verifyInspect, err := a.docker.ContainerInspect(ctx, newContainerID)
+	if err != nil {
+		result.Error = fmt.Sprintf("Failed to inspect new container during verification: %v", err)
+		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to verify container stability")
+		// Rollback
+		_ = a.docker.ContainerRemove(ctx, newContainerID, container.RemoveOptions{Force: true})
+		_ = a.docker.ContainerRename(ctx, backupName, result.ContainerName)
+		_ = a.docker.ContainerStart(ctx, containerID, container.StartOptions{})
+		return result
 	}
+
+	// Check if running
+	if !verifyInspect.State.Running {
+		result.Error = fmt.Sprintf("New container crashed immediately (exit code %d): %s", verifyInspect.State.ExitCode, verifyInspect.State.Error)
+		a.logger.Error().Str("container", result.ContainerName).Int("exitCode", verifyInspect.State.ExitCode).Msg("New container crashed, rolling back")
+		// Rollback
+		_ = a.docker.ContainerRemove(ctx, newContainerID, container.RemoveOptions{Force: true})
+		_ = a.docker.ContainerRename(ctx, backupName, result.ContainerName)
+		_ = a.docker.ContainerStart(ctx, containerID, container.StartOptions{})
+		return result
+	}
+
+	// Check health if available
+	if verifyInspect.State.Health != nil && verifyInspect.State.Health.Status == "unhealthy" {
+		result.Error = "New container reported unhealthy status"
+		a.logger.Error().Str("container", result.ContainerName).Msg("New container unhealthy, rolling back")
+		// Rollback
+		_ = a.docker.ContainerRemove(ctx, newContainerID, container.RemoveOptions{Force: true})
+		_ = a.docker.ContainerRename(ctx, backupName, result.ContainerName)
+		_ = a.docker.ContainerStart(ctx, containerID, container.StartOptions{})
+		return result
+	}
+
+	result.NewImageDigest = verifyInspect.Image
 
 	// 10. Schedule cleanup of backup container after a delay
 	// This gives time to verify the new container is working

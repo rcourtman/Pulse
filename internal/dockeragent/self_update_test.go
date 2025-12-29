@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1065,6 +1066,11 @@ func TestSelfUpdate(t *testing.T) {
 		swap(t, &syscallExecFn, func(string, []string, []string) error {
 			return nil
 		})
+		// Mock pre-flight check to succeed
+		swap(t, &execCommandContextFn, func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+			// echo returns 0 exit code
+			return exec.Command("echo", "ok")
+		})
 
 		if err := agent.selfUpdate(context.Background()); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -1107,6 +1113,10 @@ func TestSelfUpdate(t *testing.T) {
 		swap(t, &goArch, "amd64")
 		swap(t, &syscallExecFn, func(string, []string, []string) error {
 			return errors.New("exec failed")
+		})
+		// Mock pre-flight check to succeed
+		swap(t, &execCommandContextFn, func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+			return exec.Command("echo", "ok")
 		})
 
 		if err := agent.selfUpdate(context.Background()); err == nil {

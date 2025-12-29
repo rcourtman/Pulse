@@ -63,4 +63,7 @@ var (
 	selfUpdateFunc = func(a *Agent, ctx context.Context) error {
 		return a.selfUpdate(ctx)
 	}
+	execCommandContextFn = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, name, arg...)
+	}
 )

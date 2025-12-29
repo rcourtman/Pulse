@@ -77,6 +77,8 @@ Access the dashboard at `http://<your-ip>:7655`.
 - **[API Reference](docs/API.md)**: Integrate Pulse with your own tools.
 - **[Architecture](ARCHITECTURE.md)**: High-level system design and data flow.
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)**: Solutions to common issues.
+- **[Agent Security](docs/AGENT_SECURITY.md)**: Details on signed updates and verification.
+- **[Docker Monitoring](docs/DOCKER.md)**: Setup and management of Docker agents.
 
 ## 🌐 Community Integrations
 
