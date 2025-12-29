@@ -260,11 +260,12 @@ export function useResourcesAsLegacy() {
         const legacy = wsStore.state.vms ?? [];
         // If we don't have unified resources yet, use legacy arrays directly
         if (!hasUnifiedResources()) {
-            return legacy;
+            // Spread to create new array reference for reactivity (see asHosts for details)
+            return [...legacy];
         }
         // If legacy data exists (or there are no VM resources), keep using it.
         if (legacy.length > 0 || !hasVmResources()) {
-            return legacy;
+            return [...legacy];
         }
 
         return byType('vm').map(r => {
@@ -321,11 +322,12 @@ export function useResourcesAsLegacy() {
         const legacy = wsStore.state.containers ?? [];
         // If we don't have unified resources yet, use legacy arrays directly
         if (!hasUnifiedResources()) {
-            return legacy;
+            // Spread to create new array reference for reactivity (see asHosts for details)
+            return [...legacy];
         }
         // If legacy data exists (or there are no container resources), keep using it.
         if (legacy.length > 0 || !hasContainerResources()) {
-            return legacy;
+            return [...legacy];
         }
 
         // Include both traditional LXC containers and OCI containers (Proxmox VE 9.1+).
@@ -391,11 +393,16 @@ export function useResourcesAsLegacy() {
         const legacy = wsStore.state.hosts ?? [];
         // If we don't have unified resources yet, use legacy arrays directly
         if (!hasUnifiedResources()) {
-            return legacy;
+            // IMPORTANT: Spread to create a new array reference. The store's array is
+            // updated in-place by reconcile(), but createMemo only notifies dependents
+            // when the returned value changes by reference. Without spreading, downstream
+            // memos like sortedHosts() wouldn't re-run when host properties change.
+            return [...legacy];
         }
         // If legacy data exists (or there are no host resources), keep using it.
         if (legacy.length > 0 || !hasHostResources()) {
-            return legacy;
+            // Same as above - spread to create new reference for reactivity
+            return [...legacy];
         }
 
         return byType('host').map((r) => {
@@ -480,12 +487,12 @@ export function useResourcesAsLegacy() {
         const legacy = wsStore.state.nodes ?? [];
         // If we don't have unified resources yet, use legacy arrays directly
         if (!hasUnifiedResources()) {
-            // Return legacy nodes array as-is (it's already in the right format)
-            return legacy;
+            // Spread to create new array reference for reactivity (see asHosts for details)
+            return [...legacy];
         }
         // If legacy data exists (or there are no node resources), keep using it.
         if (legacy.length > 0 || !hasNodeResources()) {
-            return legacy;
+            return [...legacy];
         }
 
         return byType('node').map(r => {
@@ -549,11 +556,12 @@ export function useResourcesAsLegacy() {
         const legacy = wsStore.state.dockerHosts ?? [];
         // If we don't have unified resources yet, use legacy arrays directly
         if (!hasUnifiedResources()) {
-            return legacy;
+            // Spread to create new array reference for reactivity (see asHosts for details)
+            return [...legacy];
         }
         // If legacy data exists (or there are no docker-host resources), keep using it.
         if (legacy.length > 0 || !hasDockerHostResources()) {
-            return legacy;
+            return [...legacy];
         }
 
         const dockerHostResources = byType('docker-host');
