@@ -195,6 +195,12 @@ func TestSendReportToTarget(t *testing.T) {
 	})
 
 	t.Run("stop command", func(t *testing.T) {
+		prevPath := os.Getenv("PATH")
+		_ = os.Setenv("PATH", "")
+		t.Cleanup(func() {
+			_ = os.Setenv("PATH", prevPath)
+		})
+
 		var ackBody bytes.Buffer
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch {

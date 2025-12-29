@@ -1248,12 +1248,12 @@ func (a *Agent) disableSelf(ctx context.Context) error {
 	}
 
 	// Remove Unraid startup script if present to prevent restart on reboot.
-	if err := removeFileIfExists("/boot/config/go.d/pulse-docker-agent.sh"); err != nil {
+	if err := removeFileIfExists(unraidStartupScriptPath); err != nil {
 		a.logger.Warn().Err(err).Msg("Failed to remove Unraid startup script")
 	}
 
 	// Best-effort log cleanup (ignore errors).
-	_ = removeFileIfExists("/var/log/pulse-docker-agent.log")
+	_ = removeFileIfExists(agentLogPath)
 
 	return nil
 }
@@ -1632,7 +1632,7 @@ func randomDuration(max time.Duration) time.Duration {
 		return 0
 	}
 
-	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	n, err := randIntFn(rand.Reader, big.NewInt(int64(max)))
 	if err != nil {
 		return 0
 	}

@@ -97,6 +97,7 @@ func TestStopTimer(t *testing.T) {
 
 	t.Run("timer fired and drained", func(t *testing.T) {
 		timer := time.NewTimer(0)
+		time.Sleep(time.Millisecond)
 		stopTimer(timer)
 		select {
 		case <-timer.C:
@@ -217,6 +218,77 @@ func TestCollectOnce(t *testing.T) {
 		}
 		if agent.reportBuffer.Len() != 0 {
 			t.Fatalf("expected buffer to be flushed")
+		}
+	})
+}
+
+func TestRun(t *testing.T) {
+	t.Run("stop requested on startup", func(t *testing.T) {
+		swap(t, &connectRuntimeFn, func(_ RuntimeKind, _ *zerolog.Logger) (dockerClient, systemtypes.Info, RuntimeKind, error) {
+			return &fakeDockerClient{
+				infoFunc: func(context.Context) (systemtypes.Info, error) {
+					return systemtypes.Info{}, ErrStopRequested
+				},
+			}, systemtypes.Info{}, RuntimeDocker, nil
+		})
+
+		agent := &Agent{
+			cfg: Config{
+				Interval: 10 * time.Millisecond,
+			},
+			docker: &fakeDockerClient{
+				infoFunc: func(context.Context) (systemtypes.Info, error) {
+					return systemtypes.Info{}, ErrStopRequested
+				},
+			},
+			logger: zerolog.Nop(),
+		}
+
+		if err := agent.Run(context.Background()); err != nil {
+			t.Fatalf("expected nil, got %v", err)
+		}
+	})
+
+	t.Run("ticker and update timer", func(t *testing.T) {
+		swap(t, &randomDurationFn, func(time.Duration) time.Duration {
+			return -5 * time.Second
+		})
+		swap(t, &hostmetricsCollect, func(context.Context, []string) (hostmetrics.Snapshot, error) {
+			return hostmetrics.Snapshot{}, nil
+		})
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			cfg: Config{
+				Interval:          5 * time.Millisecond,
+				DisableAutoUpdate: true,
+			},
+			docker: &fakeDockerClient{
+				infoFunc: func(context.Context) (systemtypes.Info, error) {
+					return systemtypes.Info{ID: "daemon", ServerVersion: "24.0.0"}, nil
+				},
+			},
+			logger:       zerolog.Nop(),
+			targets:      []TargetConfig{{URL: server.URL, Token: "token"}},
+			httpClients:  map[bool]*http.Client{false: server.Client()},
+			reportBuffer: buffer.New[agentsdocker.Report](10),
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() {
+			done <- agent.Run(ctx)
+		}()
+
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+
+		if err := <-done; !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context canceled, got %v", err)
 		}
 	})
 }
