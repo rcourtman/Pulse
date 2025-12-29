@@ -136,6 +136,7 @@ func main() {
 			ProxmoxType:        cfg.ProxmoxType,
 			EnableCommands:     cfg.EnableCommands,
 			DiskExclude:        cfg.DiskExclude,
+			ReportIP:           cfg.ReportIP,
 		}
 
 		agent, err := hostagent.New(hostCfg)
@@ -355,6 +356,9 @@ type Config struct {
 	// Disk filtering
 	DiskExclude []string // Mount points or patterns to exclude from disk monitoring
 
+	// Network configuration
+	ReportIP string // IP address to report (for multi-NIC systems)
+
 	// Health/metrics server
 	HealthAddr string
 
@@ -395,6 +399,7 @@ func loadConfig() Config {
 	envKubeIncludeAllDeployments := utils.GetenvTrim("PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS")
 	envKubeMaxPods := utils.GetenvTrim("PULSE_KUBE_MAX_PODS")
 	envDiskExclude := utils.GetenvTrim("PULSE_DISK_EXCLUDE")
+	envReportIP := utils.GetenvTrim("PULSE_REPORT_IP")
 
 	// Defaults
 	defaultInterval := 30 * time.Second
@@ -453,6 +458,7 @@ func loadConfig() Config {
 	kubeIncludeAllPodsFlag := flag.Bool("kube-include-all-pods", utils.ParseBool(envKubeIncludeAllPods), "Include all non-succeeded pods (may be large)")
 	kubeIncludeAllDeploymentsFlag := flag.Bool("kube-include-all-deployments", utils.ParseBool(envKubeIncludeAllDeployments), "Include all deployments, not just problem ones")
 	kubeMaxPodsFlag := flag.Int("kube-max-pods", defaultInt(envKubeMaxPods, 200), "Max pods included in report")
+	reportIPFlag := flag.String("report-ip", envReportIP, "IP address to report (for multi-NIC systems)")
 	showVersion := flag.Bool("version", false, "Print the agent version and exit")
 
 	var tagFlags multiValue
@@ -530,6 +536,7 @@ func loadConfig() Config {
 		KubeIncludeAllDeployments: *kubeIncludeAllDeploymentsFlag,
 		KubeMaxPods:               *kubeMaxPodsFlag,
 		DiskExclude:               diskExclude,
+		ReportIP:                  strings.TrimSpace(*reportIPFlag),
 	}
 }
 

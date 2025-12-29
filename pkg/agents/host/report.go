@@ -44,6 +44,7 @@ type HostInfo struct {
 	CPUCount      int       `json:"cpuCount,omitempty"`
 	UptimeSeconds int64     `json:"uptimeSeconds,omitempty"`
 	LoadAverage   []float64 `json:"loadAverage,omitempty"`
+	ReportIP      string    `json:"reportIp,omitempty"` // User-specified IP for multi-NIC systems
 }
 
 // Metrics encapsulates primary resource metrics for a host.

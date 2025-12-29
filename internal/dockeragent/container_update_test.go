@@ -351,4 +351,116 @@ func TestHandleUpdateContainerCommand(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+
+	t.Run("ack error stops early", func(t *testing.T) {
+		badTarget := TargetConfig{URL: "http://example.com/\x7f"}
+		agent.hostID = "host1"
+
+		cmd := agentsdocker.Command{
+			ID:   "cmd3",
+			Type: agentsdocker.CommandTypeUpdateContainer,
+			Payload: map[string]any{
+				"containerId": "container1",
+			},
+		}
+
+		if err := agent.handleUpdateContainerCommand(context.Background(), badTarget, cmd); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("update failure sends failed ack", func(t *testing.T) {
+		var ack agentsdocker.CommandAck
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(body, &ack)
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			logger: zerolog.Nop(),
+			hostID: "host1",
+			httpClients: map[bool]*http.Client{
+				false: server.Client(),
+			},
+			docker: &fakeDockerClient{
+				containerInspectFn: func(context.Context, string) (containertypes.InspectResponse, error) {
+					return containertypes.InspectResponse{}, errors.New("inspect failed")
+				},
+			},
+		}
+
+		cmd := agentsdocker.Command{
+			ID:   "cmd4",
+			Type: agentsdocker.CommandTypeUpdateContainer,
+			Payload: map[string]any{
+				"containerId": "container1",
+			},
+		}
+
+		if err := agent.handleUpdateContainerCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, cmd); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if ack.Status != agentsdocker.CommandStatusFailed {
+			t.Fatalf("expected failed status, got %q", ack.Status)
+		}
+	})
+
+	t.Run("completion ack error", func(t *testing.T) {
+		calls := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls++
+			if calls == 2 {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			logger: zerolog.Nop(),
+			hostID: "host1",
+			httpClients: map[bool]*http.Client{
+				false: server.Client(),
+			},
+			docker: &fakeDockerClient{
+				containerInspectFn: func(_ context.Context, id string) (containertypes.InspectResponse, error) {
+					inspect := baseInspect()
+					if id == "new123" {
+						inspect.ContainerJSONBase.Image = "sha256:new0000000000"
+					}
+					return inspect, nil
+				},
+				imagePullFn: func(context.Context, string, image.PullOptions) (io.ReadCloser, error) {
+					return io.NopCloser(strings.NewReader("{}")), nil
+				},
+				containerStopFn: func(context.Context, string, containertypes.StopOptions) error {
+					return nil
+				},
+				containerRenameFn: func(context.Context, string, string) error {
+					return nil
+				},
+				containerCreateFn: func(context.Context, *containertypes.Config, *containertypes.HostConfig, *network.NetworkingConfig, *v1.Platform, string) (containertypes.CreateResponse, error) {
+					return containertypes.CreateResponse{ID: "new123"}, nil
+				},
+				containerStartFn: func(context.Context, string, containertypes.StartOptions) error {
+					return nil
+				},
+			},
+		}
+
+		cmd := agentsdocker.Command{
+			ID:   "cmd5",
+			Type: agentsdocker.CommandTypeUpdateContainer,
+			Payload: map[string]any{
+				"containerId": "container1",
+			},
+		}
+
+		if err := agent.handleUpdateContainerCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, cmd); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
 }
