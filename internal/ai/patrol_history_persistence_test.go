@@ -1,8 +1,13 @@
 package ai
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 // mockPatrolHistoryPersistence implements PatrolHistoryPersistence for testing
@@ -226,6 +231,18 @@ func TestPatrolRunHistoryStore_SetPersistence_TrimToMax(t *testing.T) {
 	}
 }
 
+func TestPatrolRunHistoryStore_SetPersistence_LoadError(t *testing.T) {
+	store := NewPatrolRunHistoryStore(10)
+	mockPersistence := &mockPatrolHistoryPersistence{
+		loadErr: errors.New("load failed"),
+	}
+
+	err := store.SetPersistence(mockPersistence)
+	if err == nil {
+		t.Fatal("expected error from SetPersistence when load fails")
+	}
+}
+
 func TestPatrolRunHistoryStore_FlushPersistence(t *testing.T) {
 	store := NewPatrolRunHistoryStore(10)
 
@@ -277,6 +294,62 @@ func TestPatrolRunHistoryStore_ScheduleSave(t *testing.T) {
 	}
 }
 
+func TestPatrolRunHistoryStore_ScheduleSave_StopsExistingTimer(t *testing.T) {
+	store := NewPatrolRunHistoryStore(10)
+	store.saveDebounce = 50 * time.Millisecond
+
+	mockPersistence := &mockPatrolHistoryPersistence{}
+	store.SetPersistence(mockPersistence)
+	mockPersistence.saveCalls = 0
+
+	store.Add(PatrolRunRecord{ID: "run-1"})
+	store.Add(PatrolRunRecord{ID: "run-2"})
+
+	time.Sleep(120 * time.Millisecond)
+
+	if mockPersistence.saveCalls != 1 {
+		t.Errorf("expected 1 save call after reschedule, got %d", mockPersistence.saveCalls)
+	}
+}
+
+func TestPatrolRunHistoryStore_ScheduleSave_Cancelled(t *testing.T) {
+	store := NewPatrolRunHistoryStore(10)
+	store.saveDebounce = 50 * time.Millisecond
+
+	mockPersistence := &mockPatrolHistoryPersistence{}
+	store.SetPersistence(mockPersistence)
+	mockPersistence.saveCalls = 0
+
+	store.Add(PatrolRunRecord{ID: "run-1"})
+
+	store.mu.Lock()
+	store.savePending = false
+	store.mu.Unlock()
+
+	time.Sleep(120 * time.Millisecond)
+
+	if mockPersistence.saveCalls != 0 {
+		t.Errorf("expected no save calls after cancellation, got %d", mockPersistence.saveCalls)
+	}
+}
+
+func TestPatrolRunHistoryStore_ScheduleSave_Error(t *testing.T) {
+	store := NewPatrolRunHistoryStore(10)
+	store.saveDebounce = 50 * time.Millisecond
+
+	mockPersistence := &mockPatrolHistoryPersistence{saveErr: errors.New("save failed")}
+	store.SetPersistence(mockPersistence)
+	mockPersistence.saveCalls = 0
+
+	store.Add(PatrolRunRecord{ID: "run-1"})
+
+	time.Sleep(120 * time.Millisecond)
+
+	if mockPersistence.saveCalls < 1 {
+		t.Errorf("expected save to be attempted, got %d calls", mockPersistence.saveCalls)
+	}
+}
+
 func TestPatrolRunHistoryStore_ScheduleSave_NoPersistence(t *testing.T) {
 	store := NewPatrolRunHistoryStore(10)
 
@@ -287,4 +360,72 @@ func TestPatrolRunHistoryStore_ScheduleSave_NoPersistence(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// No error or panic is success
+}
+
+func TestPatrolHistoryPersistenceAdapter_SaveAndLoad(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+
+	adapter := NewPatrolHistoryPersistenceAdapter(persistence)
+	if adapter == nil {
+		t.Fatal("expected adapter to be created")
+	}
+
+	runs := []PatrolRunRecord{
+		{
+			ID:               "run-1",
+			StartedAt:        time.Now().Add(-2 * time.Minute),
+			CompletedAt:      time.Now().Add(-1 * time.Minute),
+			Duration:         time.Minute,
+			Type:             "manual",
+			ResourcesChecked: 10,
+			NodesChecked:     2,
+			GuestsChecked:    5,
+			DockerChecked:    1,
+			StorageChecked:   1,
+			HostsChecked:     0,
+			PBSChecked:       0,
+			NewFindings:      1,
+			ExistingFindings: 2,
+			ResolvedFindings: 1,
+			AutoFixCount:     0,
+			FindingsSummary:  "summary",
+			FindingIDs:       []string{"f1", "f2"},
+			ErrorCount:       0,
+			Status:           "ok",
+			AIAnalysis:       "analysis",
+			InputTokens:      100,
+			OutputTokens:     200,
+		},
+	}
+
+	if err := adapter.SavePatrolRunHistory(runs); err != nil {
+		t.Fatalf("save failed: %v", err)
+	}
+
+	loaded, err := adapter.LoadPatrolRunHistory()
+	if err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
+	if len(loaded) != 1 || loaded[0].ID != "run-1" {
+		t.Fatalf("unexpected loaded runs: %+v", loaded)
+	}
+	if loaded[0].Duration != runs[0].Duration {
+		t.Fatalf("expected duration %v, got %v", runs[0].Duration, loaded[0].Duration)
+	}
+}
+
+func TestPatrolHistoryPersistenceAdapter_LoadError(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	adapter := NewPatrolHistoryPersistenceAdapter(persistence)
+
+	badPath := filepath.Join(tmp, "ai_patrol_runs.json")
+	if err := os.Mkdir(badPath, 0700); err != nil {
+		t.Fatalf("failed to create directory at %s: %v", badPath, err)
+	}
+
+	if _, err := adapter.LoadPatrolRunHistory(); err == nil {
+		t.Fatal("expected error when patrol runs path is a directory")
+	}
 }

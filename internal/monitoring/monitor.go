@@ -1299,6 +1299,12 @@ func (m *Monitor) UpdateHostAgentConfig(hostID string, commandsEnabled *bool) er
 		return fmt.Errorf("failed to save host config: %w", err)
 	}
 
+	// Also update the Host model in state for immediate UI feedback
+	// The agent will confirm on its next report, but this provides instant feedback
+	if commandsEnabled != nil {
+		m.state.SetHostCommandsEnabled(hostID, *commandsEnabled)
+	}
+
 	log.Info().
 		Str("hostId", hostID).
 		Interface("commandsEnabled", commandsEnabled).

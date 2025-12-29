@@ -2164,6 +2164,25 @@ func (s *State) TouchHost(hostID string, ts time.Time) bool {
 	return false
 }
 
+// SetHostCommandsEnabled updates the CommandsEnabled flag for a host.
+// This allows the UI to immediately reflect config changes without waiting for agent confirmation.
+func (s *State) SetHostCommandsEnabled(hostID string, enabled bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, host := range s.Hosts {
+		if host.ID == hostID {
+			if host.CommandsEnabled != enabled {
+				host.CommandsEnabled = enabled
+				s.Hosts[i] = host
+				s.LastUpdate = time.Now()
+			}
+			return true
+		}
+	}
+	return false
+}
+
 // UpdateStorage updates the storage in the state
 func (s *State) UpdateStorage(storage []Storage) {
 	s.mu.Lock()
