@@ -520,10 +520,6 @@ func CalculateTrend(samples []float64, currentValue float64) *TrendPrediction {
 		denominator += (x - meanX) * (x - meanX)
 	}
 	
-	if denominator == 0 {
-		return nil // Can't calculate slope
-	}
-	
 	slope := numerator / denominator
 	
 	// slope is change per sample, convert to daily change
