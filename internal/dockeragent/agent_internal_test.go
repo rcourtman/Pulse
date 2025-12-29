@@ -1,7 +1,10 @@
 package dockeragent
 
 import (
+	"errors"
+	"io"
 	"math"
+	"math/big"
 	"reflect"
 	"testing"
 	"time"
@@ -34,6 +37,19 @@ func TestNormalizeTargets(t *testing.T) {
 	}
 }
 
+func TestNormalizeTargetsSkipsEmpty(t *testing.T) {
+	targets, err := normalizeTargets([]TargetConfig{
+		{URL: "", Token: ""},
+		{URL: "https://pulse.example.com", Token: "token"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(targets))
+	}
+}
+
 func TestNormalizeTargetsInvalid(t *testing.T) {
 	if _, err := normalizeTargets([]TargetConfig{{URL: "", Token: "token"}}); err == nil {
 		t.Fatalf("expected error for missing URL")
@@ -52,6 +68,24 @@ func TestNormalizeContainerStates(t *testing.T) {
 	expected := []string{"running", "exited"}
 	if !reflect.DeepEqual(states, expected) {
 		t.Fatalf("expected %v, got %v", expected, states)
+	}
+}
+
+func TestNormalizeContainerStatesEmpty(t *testing.T) {
+	states, err := normalizeContainerStates(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if states != nil {
+		t.Fatalf("expected nil, got %v", states)
+	}
+
+	states, err = normalizeContainerStates([]string{"", "  "})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(states) != 0 {
+		t.Fatalf("expected empty slice, got %v", states)
 	}
 }
 
@@ -965,6 +999,24 @@ func TestBuildRuntimeCandidatesContent(t *testing.T) {
 	})
 }
 
+func TestBuildRuntimeCandidatesEnv(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "unix:///tmp/docker.sock")
+	t.Setenv("CONTAINER_HOST", "unix:///tmp/container.sock")
+	t.Setenv("PODMAN_HOST", "unix:///tmp/podman.sock")
+
+	candidates := buildRuntimeCandidates(RuntimeAuto)
+	labels := make(map[string]struct{}, len(candidates))
+	for _, c := range candidates {
+		labels[c.label] = struct{}{}
+	}
+
+	for _, label := range []string{"DOCKER_HOST", "CONTAINER_HOST", "PODMAN_HOST"} {
+		if _, ok := labels[label]; !ok {
+			t.Fatalf("expected candidate %q", label)
+		}
+	}
+}
+
 func TestRandomDuration(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1009,6 +1061,16 @@ func TestRandomDuration(t *testing.T) {
 			t.Error("randomDuration appears to not be random")
 		}
 	})
+}
+
+func TestRandomDurationRandError(t *testing.T) {
+	swap(t, &randIntFn, func(io.Reader, *big.Int) (*big.Int, error) {
+		return nil, errors.New("boom")
+	})
+
+	if got := randomDuration(10 * time.Second); got != 0 {
+		t.Fatalf("expected 0 on rand error, got %v", got)
+	}
 }
 
 func TestDetermineSelfUpdateArch(t *testing.T) {

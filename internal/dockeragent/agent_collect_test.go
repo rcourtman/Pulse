@@ -286,6 +286,32 @@ func TestPrimaryTargetAndHTTPClient(t *testing.T) {
 			t.Fatal("expected fallback client")
 		}
 	})
+
+	t.Run("http client fallback prefers secure", func(t *testing.T) {
+		secure := &http.Client{}
+		agent := &Agent{
+			httpClients: map[bool]*http.Client{
+				false: secure,
+			},
+		}
+		got := agent.httpClientFor(TargetConfig{InsecureSkipVerify: true})
+		if got != secure {
+			t.Fatal("expected secure fallback client")
+		}
+	})
+
+	t.Run("http client fallback prefers insecure", func(t *testing.T) {
+		insecure := &http.Client{}
+		agent := &Agent{
+			httpClients: map[bool]*http.Client{
+				true: insecure,
+			},
+		}
+		got := agent.httpClientFor(TargetConfig{InsecureSkipVerify: false})
+		if got != insecure {
+			t.Fatal("expected insecure fallback client")
+		}
+	})
 }
 
 func TestNewHTTPClient(t *testing.T) {

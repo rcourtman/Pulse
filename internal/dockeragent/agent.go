@@ -1588,11 +1588,14 @@ func parseTime(value string) time.Time {
 	if value == "" || value == "0001-01-01T00:00:00Z" {
 		return time.Time{}
 	}
-	if t, err := time.Parse(time.RFC3339Nano, value); err == nil {
-		return t
-	}
-	if t, err := time.Parse(time.RFC3339, value); err == nil {
-		return t
+	if strings.Contains(value, ".") {
+		if t, err := time.Parse(time.RFC3339Nano, value); err == nil {
+			return t
+		}
+	} else {
+		if t, err := time.Parse(time.RFC3339, value); err == nil {
+			return t
+		}
 	}
 	return time.Time{}
 }

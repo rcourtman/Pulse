@@ -54,6 +54,33 @@ func TestDetermineSelfUpdateArch_Coverage(t *testing.T) {
 			t.Fatalf("expected empty result, got %q", got)
 		}
 	})
+
+	t.Run("uname arm variants", func(t *testing.T) {
+		swap(t, &goArch, "other")
+		swap(t, &unameMachine, func() (string, error) {
+			return "armv7l", nil
+		})
+		if got := determineSelfUpdateArch(); got != "linux-armv7" {
+			t.Fatalf("expected linux-armv7, got %q", got)
+		}
+
+		swap(t, &unameMachine, func() (string, error) {
+			return "aarch64", nil
+		})
+		if got := determineSelfUpdateArch(); got != "linux-arm64" {
+			t.Fatalf("expected linux-arm64, got %q", got)
+		}
+	})
+
+	t.Run("uname unknown", func(t *testing.T) {
+		swap(t, &goArch, "other")
+		swap(t, &unameMachine, func() (string, error) {
+			return "mips", nil
+		})
+		if got := determineSelfUpdateArch(); got != "" {
+			t.Fatalf("expected empty result, got %q", got)
+		}
+	})
 }
 
 func TestResolveSymlink(t *testing.T) {
@@ -96,6 +123,18 @@ func TestVerifyELFMagic(t *testing.T) {
 	}
 	if err := verifyELFMagic(invalid); err == nil {
 		t.Fatal("expected error for invalid magic")
+	}
+
+	partial := filepath.Join(dir, "partial")
+	if err := os.WriteFile(partial, []byte{0x7f, 'E'}, 0600); err != nil {
+		t.Fatalf("write partial: %v", err)
+	}
+	if err := verifyELFMagic(partial); err == nil {
+		t.Fatal("expected error for short file")
+	}
+
+	if err := verifyELFMagic(filepath.Join(dir, "missing")); err == nil {
+		t.Fatal("expected error for missing file")
 	}
 }
 
@@ -907,6 +946,49 @@ func TestSelfUpdate(t *testing.T) {
 
 		if err := agent.selfUpdate(context.Background()); err != nil {
 			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("arch fallback to default", func(t *testing.T) {
+		body := elfBytes()
+		client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.RawQuery, "arch=") {
+				return &http.Response{
+					StatusCode: http.StatusNotFound,
+					Status:     "404",
+					Body:       io.NopCloser(strings.NewReader("missing")),
+					Header:     make(http.Header),
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(body)),
+				Header:     http.Header{"X-Checksum-Sha256": []string{sha256Hex(body)}},
+			}, nil
+		})}
+
+		agent := &Agent{
+			logger:  zerolog.Nop(),
+			targets: []TargetConfig{{URL: "http://example.com", Token: "token"}},
+			httpClients: map[bool]*http.Client{
+				false: client,
+			},
+		}
+		dir := t.TempDir()
+		execPath := filepath.Join(dir, "exec")
+		if err := os.WriteFile(execPath, elfBytes(), 0700); err != nil {
+			t.Fatalf("write exec: %v", err)
+		}
+		swap(t, &osExecutableFn, func() (string, error) {
+			return execPath, nil
+		})
+		swap(t, &goArch, "amd64")
+		swap(t, &syscallExecFn, func(string, []string, []string) error {
+			return errors.New("exec failed")
+		})
+
+		if err := agent.selfUpdate(context.Background()); err == nil {
+			t.Fatal("expected error from exec")
 		}
 	})
 }

@@ -194,6 +194,24 @@ func TestSendReportToTarget(t *testing.T) {
 		}
 	})
 
+	t.Run("empty response body", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			logger:  zerolog.Nop(),
+			httpClients: map[bool]*http.Client{
+				false: server.Client(),
+			},
+		}
+
+		if err := agent.sendReportToTarget(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, []byte(`{}`), 0); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
 	t.Run("stop command", func(t *testing.T) {
 		prevPath := os.Getenv("PATH")
 		_ = os.Setenv("PATH", "")
@@ -312,6 +330,64 @@ func TestHandleCommand(t *testing.T) {
 	if err := agent.handleCommand(context.Background(), TargetConfig{}, agentsdocker.Command{Type: "unknown"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
+	t.Run("stop command", func(t *testing.T) {
+		prev := os.Getenv("PATH")
+		_ = os.Setenv("PATH", "")
+		t.Cleanup(func() {
+			_ = os.Setenv("PATH", prev)
+		})
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			logger: zerolog.Nop(),
+			hostID: "host1",
+			httpClients: map[bool]*http.Client{
+				false: server.Client(),
+			},
+		}
+
+		err := agent.handleCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, agentsdocker.Command{ID: "cmd", Type: agentsdocker.CommandTypeStop})
+		if !errors.Is(err, ErrStopRequested) {
+			t.Fatalf("expected ErrStopRequested, got %v", err)
+		}
+	})
+
+	t.Run("update command", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			logger: zerolog.Nop(),
+			hostID: "host1",
+			httpClients: map[bool]*http.Client{
+				false: server.Client(),
+			},
+			docker: &fakeDockerClient{
+				containerInspectFn: func(context.Context, string) (containertypes.InspectResponse, error) {
+					return containertypes.InspectResponse{}, errors.New("inspect failed")
+				},
+			},
+		}
+
+		cmd := agentsdocker.Command{
+			ID:   "cmd2",
+			Type: agentsdocker.CommandTypeUpdateContainer,
+			Payload: map[string]any{
+				"containerId": "container1",
+			},
+		}
+
+		if err := agent.handleCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, cmd); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
 }
 
 func TestHandleStopCommand(t *testing.T) {
@@ -366,4 +442,58 @@ func TestHandleStopCommand(t *testing.T) {
 			t.Fatalf("expected ErrStopRequested, got %v", err)
 		}
 	})
+
+	t.Run("completion ack error", func(t *testing.T) {
+		prev := os.Getenv("PATH")
+		_ = os.Setenv("PATH", "")
+		t.Cleanup(func() {
+			_ = os.Setenv("PATH", prev)
+		})
+
+		agent := &Agent{
+			logger: zerolog.Nop(),
+			hostID: "host1",
+			httpClients: map[bool]*http.Client{
+				false: {Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+					return nil, errors.New("send failed")
+				})},
+			},
+		}
+
+		if err := agent.handleStopCommand(context.Background(), TargetConfig{URL: "http://example", Token: "token"}, agentsdocker.Command{ID: "cmd"}); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
+func TestDisableSelf(t *testing.T) {
+	prev := os.Getenv("PATH")
+	_ = os.Setenv("PATH", "")
+	t.Cleanup(func() {
+		_ = os.Setenv("PATH", prev)
+	})
+
+	baseDir := t.TempDir()
+	scriptDir := filepath.Join(baseDir, "script")
+	if err := os.MkdirAll(scriptDir, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(scriptDir, "file"), []byte("x"), 0600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	logDir := filepath.Join(baseDir, "logs")
+	if err := os.MkdirAll(logDir, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(logDir, "file"), []byte("x"), 0600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	swap(t, &unraidStartupScriptPath, scriptDir)
+	swap(t, &agentLogPath, logDir)
+
+	agent := &Agent{logger: zerolog.Nop()}
+	if err := agent.disableSelf(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }

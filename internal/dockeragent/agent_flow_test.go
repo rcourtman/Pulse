@@ -249,6 +249,36 @@ func TestRun(t *testing.T) {
 		}
 	})
 
+	t.Run("interval default and initial error", func(t *testing.T) {
+		agent := &Agent{
+			cfg: Config{
+				Interval: 0,
+			},
+			docker: &fakeDockerClient{
+				infoFunc: func(context.Context) (systemtypes.Info, error) {
+					return systemtypes.Info{}, errors.New("info failed")
+				},
+			},
+			logger: zerolog.Nop(),
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() {
+			done <- agent.Run(ctx)
+		}()
+
+		time.Sleep(10 * time.Millisecond)
+		cancel()
+
+		if err := <-done; !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context canceled, got %v", err)
+		}
+		if agent.cfg.Interval <= 0 {
+			t.Fatalf("expected interval to be defaulted")
+		}
+	})
+
 	t.Run("ticker and update timer", func(t *testing.T) {
 		swap(t, &randomDurationFn, func(time.Duration) time.Duration {
 			return -5 * time.Second
@@ -265,6 +295,49 @@ func TestRun(t *testing.T) {
 		agent := &Agent{
 			cfg: Config{
 				Interval:          5 * time.Millisecond,
+				DisableAutoUpdate: true,
+			},
+			docker: &fakeDockerClient{
+				infoFunc: func(context.Context) (systemtypes.Info, error) {
+					return systemtypes.Info{ID: "daemon", ServerVersion: "24.0.0"}, nil
+				},
+			},
+			logger:       zerolog.Nop(),
+			targets:      []TargetConfig{{URL: server.URL, Token: "token"}},
+			httpClients:  map[bool]*http.Client{false: server.Client()},
+			reportBuffer: buffer.New[agentsdocker.Report](10),
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() {
+			done <- agent.Run(ctx)
+		}()
+
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+
+		if err := <-done; !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context canceled, got %v", err)
+		}
+	})
+
+	t.Run("update timer reset when delay <= 0", func(t *testing.T) {
+		swap(t, &randomDurationFn, func(time.Duration) time.Duration {
+			return -25 * time.Hour
+		})
+		swap(t, &hostmetricsCollect, func(context.Context, []string) (hostmetrics.Snapshot, error) {
+			return hostmetrics.Snapshot{}, nil
+		})
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			cfg: Config{
+				Interval:          time.Hour,
 				DisableAutoUpdate: true,
 			},
 			docker: &fakeDockerClient{

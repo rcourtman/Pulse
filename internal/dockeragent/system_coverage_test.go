@@ -44,6 +44,13 @@ func TestReadProcUptime(t *testing.T) {
 			wantError: true,
 		},
 		{
+			name: "scanner error",
+			reader: func() (io.ReadCloser, error) {
+				return errReadCloser{err: errors.New("read failed")}, nil
+			},
+			wantError: true,
+		},
+		{
 			name: "success",
 			reader: func() (io.ReadCloser, error) {
 				return io.NopCloser(strings.NewReader("123.45 0.00")), nil

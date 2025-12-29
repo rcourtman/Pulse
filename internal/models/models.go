@@ -182,6 +182,7 @@ type Host struct {
 	LastSeen          time.Time              `json:"lastSeen"`
 	AgentVersion      string                 `json:"agentVersion,omitempty"`
 	CommandsEnabled   bool                   `json:"commandsEnabled,omitempty"` // Whether AI command execution is enabled
+	ReportIP          string                 `json:"reportIp,omitempty"`        // User-specified IP for multi-NIC systems
 	TokenID           string                 `json:"tokenId,omitempty"`
 	TokenName         string                 `json:"tokenName,omitempty"`
 	TokenHint         string                 `json:"tokenHint,omitempty"`
