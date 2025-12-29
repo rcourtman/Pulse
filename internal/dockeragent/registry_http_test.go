@@ -3,6 +3,7 @@ package dockeragent
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -11,18 +12,18 @@ import (
 
 func TestRegistryChecker_CheckImageUpdate_Behavior(t *testing.T) {
 	logger := zerolog.Nop()
-	checker := NewRegistryChecker(logger)
 
 	t.Run("disabled checker returns nil", func(t *testing.T) {
+		checker := NewRegistryChecker(logger)
 		checker.SetEnabled(false)
 		result := checker.CheckImageUpdate(context.Background(), "nginx:latest", "sha256:current")
 		if result != nil {
 			t.Error("Expected nil result when checker is disabled")
 		}
-		checker.SetEnabled(true)
 	})
 
 	t.Run("digest-pinned image skipped", func(t *testing.T) {
+		checker := NewRegistryChecker(logger)
 		result := checker.CheckImageUpdate(context.Background(), "nginx@sha256:abc123", "sha256:abc123")
 		if result == nil {
 			t.Fatal("Expected result for digest-pinned image")
@@ -36,11 +37,27 @@ func TestRegistryChecker_CheckImageUpdate_Behavior(t *testing.T) {
 	})
 
 	t.Run("empty image name", func(t *testing.T) {
+		checker := NewRegistryChecker(logger)
+		checker.httpClient = &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				switch req.URL.Host {
+				case "auth.docker.io":
+					return newStringResponse(http.StatusOK, nil, `{"token":"token"}`), nil
+				case "registry-1.docker.io":
+					return newStringResponse(http.StatusNotFound, nil, ""), nil
+				default:
+					return nil, fmt.Errorf("unexpected host %s", req.URL.Host)
+				}
+			}),
+		}
+
 		result := checker.CheckImageUpdate(context.Background(), "", "sha256:current")
 		if result == nil {
 			t.Fatal("Expected result for empty image")
 		}
-		// Should have an error since we can't parse empty image
+		if result.Error == "" {
+			t.Fatal("Expected error for empty image")
+		}
 	})
 }
 
@@ -193,63 +210,6 @@ func TestParseImageReference_EdgeCases(t *testing.T) {
 	}
 }
 
-// TestRegistryChecker_FetchDigest documents the fetchDigest behavior
-// Note: This function requires HTTPS, so we can't easily mock it with httptest
-// The function is tested via integration tests with real registries
-func TestRegistryChecker_FetchDigest_Documentation(t *testing.T) {
-	// fetchDigest:
-	// - Always uses HTTPS
-	// - Sets Accept headers for manifest types (OCI, Docker V2, V1)
-	// - Uses Docker-Content-Digest header if available
-	// - Falls back to Etag header if Docker-Content-Digest is missing
-	// - Returns error for 4xx/5xx status codes
-	// - Caches errors for rate limiting scenarios
-
-	t.Run("documents expected behavior", func(t *testing.T) {
-		logger := zerolog.Nop()
-		checker := NewRegistryChecker(logger)
-
-		// Attempting to fetch from an invalid registry should fail
-		ctx := context.Background()
-		_, err := checker.fetchDigest(ctx, "invalid.registry.test", "library/nginx", "latest")
-		if err == nil {
-			t.Error("Expected error when fetching from invalid registry")
-		}
-	})
-
-	t.Run("context cancellation", func(t *testing.T) {
-		logger := zerolog.Nop()
-		checker := NewRegistryChecker(logger)
-
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel() // Cancel before fetching
-
-		_, err := checker.fetchDigest(ctx, "registry-1.docker.io", "library/nginx", "latest")
-		if err == nil {
-			t.Error("Expected error when context is cancelled")
-		}
-	})
-}
-
-// TestRegistryChecker_AuthToken_Documentation documents the auth token behavior
-// Note: We can't easily test this with a mock server since the auth URL is hardcoded
-// The auth flow is tested via integration tests with real registries
-func TestRegistryChecker_AuthToken_Documentation(t *testing.T) {
-	t.Run("auth token documentation", func(t *testing.T) {
-		// Auth token flow for Docker Hub:
-		// 1. Request manifest without token
-		// 2. Receive 401 with Www-Authenticate header
-		// 3. Request token from auth.docker.io
-		// 4. Retry manifest request with Bearer token
-
-		// For GHCR:
-		// 1. Request token from ghcr.io/token
-		// 2. Use token for manifest request
-
-		// This behavior is tested via integration tests
-		t.Log("Auth token flow is verified via integration tests with real registries")
-	})
-}
 
 func TestImageUpdateResult_Fields(t *testing.T) {
 	result := ImageUpdateResult{

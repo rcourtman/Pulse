@@ -48,6 +48,7 @@ type AIConfig struct {
 	PatrolAnalyzeDocker   bool   `json:"patrol_analyze_docker"`             // Include Docker hosts in patrol
 	PatrolAnalyzeStorage  bool   `json:"patrol_analyze_storage"`            // Include storage in patrol
 	PatrolAutoFix         bool   `json:"patrol_auto_fix,omitempty"`         // When true, patrol can attempt automatic remediation (default: false, observe only)
+	UseProactiveThresholds bool  `json:"use_proactive_thresholds,omitempty"` // When true, patrol warns 5-15% BEFORE alert thresholds (default: false, use exact thresholds)
 	AutoFixModel          string `json:"auto_fix_model,omitempty"`          // Model for automatic remediation (defaults to PatrolModel, may want more capable model)
 
 	// Alert-triggered AI analysis - analyze specific resources when alerts fire

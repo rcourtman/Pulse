@@ -17,10 +17,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	containertypes "github.com/docker/docker/api/types/container"
@@ -28,7 +26,6 @@ import (
 	systemtypes "github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
 	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
-	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog"
@@ -86,7 +83,7 @@ const (
 // Agent collects Docker metrics and posts them to Pulse.
 type Agent struct {
 	cfg                 Config
-	docker              *client.Client
+	docker              dockerClient
 	daemonHost          string
 	daemonID            string // Cached at init; Podman can return unstable IDs across calls
 	runtime             RuntimeKind
@@ -183,7 +180,7 @@ func New(cfg Config) (*Agent, error) {
 		return nil, err
 	}
 
-	dockerClient, info, runtimeKind, err := connectRuntime(runtimePref, logger)
+	dockerClient, info, runtimeKind, err := connectRuntimeFn(runtimePref, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -357,8 +354,8 @@ type runtimeCandidate struct {
 	applyDockerEnv bool
 }
 
-func connectRuntime(preference RuntimeKind, logger *zerolog.Logger) (*client.Client, systemtypes.Info, RuntimeKind, error) {
-	candidates := buildRuntimeCandidates(preference)
+func connectRuntime(preference RuntimeKind, logger *zerolog.Logger) (dockerClient, systemtypes.Info, RuntimeKind, error) {
+	candidates := buildRuntimeCandidatesFn(preference)
 	var attempts []string
 
 	for _, candidate := range candidates {
@@ -370,7 +367,7 @@ func connectRuntime(preference RuntimeKind, logger *zerolog.Logger) (*client.Cli
 			opts = append(opts, client.WithHost(candidate.host))
 		}
 
-		cli, info, err := tryRuntimeCandidate(opts)
+		cli, info, err := tryRuntimeCandidateFn(opts)
 		if err != nil {
 			attempts = append(attempts, fmt.Sprintf("%s: %v", candidate.label, err))
 			continue
@@ -399,8 +396,8 @@ func connectRuntime(preference RuntimeKind, logger *zerolog.Logger) (*client.Cli
 	return nil, systemtypes.Info{}, RuntimeAuto, fmt.Errorf("failed to connect to container runtime: %s", strings.Join(attempts, "; "))
 }
 
-func tryRuntimeCandidate(opts []client.Opt) (*client.Client, systemtypes.Info, error) {
-	cli, err := client.NewClientWithOpts(opts...)
+func tryRuntimeCandidate(opts []client.Opt) (dockerClient, systemtypes.Info, error) {
+	cli, err := newDockerClientFn(opts...)
 	if err != nil {
 		return nil, systemtypes.Info{}, err
 	}
@@ -529,7 +526,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		a.cfg.Interval = interval
 	}
 
-	ticker := time.NewTicker(interval)
+	ticker := newTickerFn(interval)
 	defer ticker.Stop()
 
 	const (
@@ -538,8 +535,8 @@ func (a *Agent) Run(ctx context.Context) error {
 		recurringJitterWindow = 5 * time.Minute
 	)
 
-	initialDelay := 5*time.Second + randomDuration(startupJitterWindow)
-	updateTimer := time.NewTimer(initialDelay)
+	initialDelay := 5*time.Second + randomDurationFn(startupJitterWindow)
+	updateTimer := newTimerFn(initialDelay)
 	defer func() {
 		if !updateTimer.Stop() {
 			select {
@@ -575,7 +572,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			}
 		case <-updateTimer.C:
 			go a.checkForUpdates(ctx)
-			nextDelay := updateInterval + randomDuration(recurringJitterWindow)
+			nextDelay := updateInterval + randomDurationFn(recurringJitterWindow)
 			if nextDelay <= 0 {
 				nextDelay = updateInterval
 			}
@@ -686,7 +683,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 	uptime := readSystemUptime()
 
 	metricsCtx, metricsCancel := context.WithTimeout(ctx, 10*time.Second)
-	snapshot, err := hostmetrics.Collect(metricsCtx, nil)
+	snapshot, err := hostmetricsCollect(metricsCtx, nil)
 	metricsCancel()
 	if err != nil {
 		return agentsdocker.Report{}, fmt.Errorf("collect host metrics: %w", err)
@@ -1616,13 +1613,8 @@ func (a *Agent) Close() error {
 }
 
 func readMachineID() (string, error) {
-	paths := []string{
-		"/etc/machine-id",
-		"/var/lib/dbus/machine-id",
-	}
-
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
+	for _, path := range machineIDPaths {
+		data, err := osReadFileFn(path)
 		if err == nil {
 			return strings.TrimSpace(string(data)), nil
 		}
@@ -1749,7 +1741,7 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 		Msg("New agent version available, performing self-update")
 
 	// Perform self-update
-	if err := a.selfUpdate(ctx); err != nil {
+	if err := selfUpdateFunc(a, ctx); err != nil {
 		a.logger.Error().Err(err).Msg("Failed to self-update agent")
 		return
 	}
@@ -1759,7 +1751,7 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 
 // isUnraid checks if we're running on Unraid by looking for /etc/unraid-version
 func isUnraid() bool {
-	_, err := os.Stat("/etc/unraid-version")
+	_, err := osStatFn(unraidVersionPath)
 	return err == nil
 }
 
@@ -1790,7 +1782,7 @@ func verifyELFMagic(path string) error {
 }
 
 func determineSelfUpdateArch() string {
-	switch runtime.GOARCH {
+	switch goArch {
 	case "amd64":
 		return "linux-amd64"
 	case "arm64":
@@ -1799,12 +1791,12 @@ func determineSelfUpdateArch() string {
 		return "linux-armv7"
 	}
 
-	out, err := exec.Command("uname", "-m").Output()
+	out, err := unameMachine()
 	if err != nil {
 		return ""
 	}
 
-	normalized := strings.ToLower(strings.TrimSpace(string(out)))
+	normalized := strings.ToLower(strings.TrimSpace(out))
 	switch normalized {
 	case "x86_64", "amd64":
 		return "linux-amd64"
@@ -1825,7 +1817,7 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	}
 
 	// Get path to current executable
-	execPath, err := os.Executable()
+	execPath, err := osExecutableFn()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
@@ -1912,12 +1904,12 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	// Create temporary file in the same directory as the target binary
 	// to ensure atomic rename works (os.Rename fails across filesystems)
 	targetDir := filepath.Dir(realExecPath)
-	tmpFile, err := os.CreateTemp(targetDir, "pulse-docker-agent-*.tmp")
+	tmpFile, err := osCreateTempFn(targetDir, "pulse-docker-agent-*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file in %s: %w", targetDir, err)
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath) // Clean up if something goes wrong
+	defer osRemoveFn(tmpPath) // Clean up if something goes wrong
 
 	// Write downloaded binary to temp file with size limit (100 MB max)
 	const maxBinarySize = 100 * 1024 * 1024
@@ -1955,38 +1947,38 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	a.logger.Debug().Str("checksum", downloadChecksum).Msg("Self-update: checksum verified")
 
 	// Make temp file executable
-	if err := os.Chmod(tmpPath, 0755); err != nil {
+	if err := osChmodFn(tmpPath, 0755); err != nil {
 		return fmt.Errorf("failed to make temp file executable: %w", err)
 	}
 
 	// Create backup of current binary (use realExecPath for atomic operations)
 	backupPath := realExecPath + ".backup"
-	if err := os.Rename(realExecPath, backupPath); err != nil {
+	if err := osRenameFn(realExecPath, backupPath); err != nil {
 		return fmt.Errorf("failed to backup current binary: %w", err)
 	}
 
 	// Move new binary to current location
-	if err := os.Rename(tmpPath, realExecPath); err != nil {
+	if err := osRenameFn(tmpPath, realExecPath); err != nil {
 		// Restore backup on failure
-		os.Rename(backupPath, realExecPath)
+		_ = osRenameFn(backupPath, realExecPath)
 		return fmt.Errorf("failed to replace binary: %w", err)
 	}
 
 	// Remove backup on success
-	os.Remove(backupPath)
+	_ = osRemoveFn(backupPath)
 
 	// On Unraid, also update the persistent copy on the flash drive
 	if isUnraid() {
-		persistPath := "/boot/config/plugins/pulse-docker-agent/pulse-docker-agent"
-		if _, err := os.Stat(persistPath); err == nil {
+		persistPath := unraidPersistPath
+		if _, err := osStatFn(persistPath); err == nil {
 			a.logger.Debug().Str("path", persistPath).Msg("Updating Unraid persistent binary")
-			if newBinary, err := os.ReadFile(execPath); err == nil {
+			if newBinary, err := osReadFileFn(execPath); err == nil {
 				tmpPersist := persistPath + ".tmp"
-				if err := os.WriteFile(tmpPersist, newBinary, 0644); err != nil {
+				if err := osWriteFileFn(tmpPersist, newBinary, 0644); err != nil {
 					a.logger.Warn().Err(err).Msg("Failed to write Unraid persistent binary")
-				} else if err := os.Rename(tmpPersist, persistPath); err != nil {
+				} else if err := osRenameFn(tmpPersist, persistPath); err != nil {
 					a.logger.Warn().Err(err).Msg("Failed to rename Unraid persistent binary")
-					os.Remove(tmpPersist)
+					_ = osRemoveFn(tmpPersist)
 				} else {
 					a.logger.Info().Str("path", persistPath).Msg("Updated Unraid persistent binary")
 				}
@@ -1998,7 +1990,7 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	args := os.Args
 	env := os.Environ()
 
-	if err := syscall.Exec(execPath, args, env); err != nil {
+	if err := syscallExecFn(execPath, args, env); err != nil {
 		return fmt.Errorf("failed to restart agent: %w", err)
 	}
 

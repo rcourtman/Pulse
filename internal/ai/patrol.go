@@ -63,8 +63,16 @@ func DefaultPatrolThresholds() PatrolThresholds {
 }
 
 // CalculatePatrolThresholds derives patrol thresholds from alert thresholds
-// Patrol warns ~10% BEFORE the alert fires so users can take action early
+// This is the default mode which now uses EXACT thresholds (matching user configuration).
+// For proactive/early warning mode, use CalculatePatrolThresholdsWithMode(provider, true).
 func CalculatePatrolThresholds(provider ThresholdProvider) PatrolThresholds {
+	return CalculatePatrolThresholdsWithMode(provider, false)
+}
+
+// CalculatePatrolThresholdsWithMode derives patrol thresholds from alert thresholds
+// When proactiveMode is false (default): uses exact alert thresholds
+// When proactiveMode is true: warns 5-15% BEFORE alerts fire for early warning
+func CalculatePatrolThresholdsWithMode(provider ThresholdProvider, proactiveMode bool) PatrolThresholds {
 	if provider == nil {
 		return DefaultPatrolThresholds()
 	}
@@ -76,20 +84,40 @@ func CalculatePatrolThresholds(provider ThresholdProvider) PatrolThresholds {
 	guestDisk := provider.GetGuestDiskThreshold()
 	storage := provider.GetStorageThreshold()
 
-	// Calculate patrol thresholds (watch = alert-15%, warning = alert-5%)
+	if proactiveMode {
+		// Proactive mode: warn BEFORE thresholds are reached
+		// watch = alert-15%, warning = alert-5%
+		return PatrolThresholds{
+			NodeCPUWatch:    clampThreshold(nodeCPU - 15),
+			NodeCPUWarning:  clampThreshold(nodeCPU - 5),
+			NodeMemWatch:    clampThreshold(nodeMem - 15),
+			NodeMemWarning:  clampThreshold(nodeMem - 5),
+			GuestMemWatch:   clampThreshold(guestMem - 12),
+			GuestMemWarning: clampThreshold(guestMem - 5),
+			GuestDiskWatch:  clampThreshold(guestDisk - 15),
+			GuestDiskWarn:   clampThreshold(guestDisk - 8),
+			GuestDiskCrit:   clampThreshold(guestDisk - 3),
+			StorageWatch:    clampThreshold(storage - 15),
+			StorageWarning:  clampThreshold(storage - 8),
+			StorageCritical: clampThreshold(storage - 3),
+		}
+	}
+
+	// Exact mode (default): use exact alert thresholds
+	// Watch is slightly below warning, warning is at threshold
 	return PatrolThresholds{
-		NodeCPUWatch:    clampThreshold(nodeCPU - 15),
-		NodeCPUWarning:  clampThreshold(nodeCPU - 5),
-		NodeMemWatch:    clampThreshold(nodeMem - 15),
-		NodeMemWarning:  clampThreshold(nodeMem - 5),
-		GuestMemWatch:   clampThreshold(guestMem - 12),
-		GuestMemWarning: clampThreshold(guestMem - 5),
-		GuestDiskWatch:  clampThreshold(guestDisk - 15),
-		GuestDiskWarn:   clampThreshold(guestDisk - 8),
-		GuestDiskCrit:   clampThreshold(guestDisk - 3),
-		StorageWatch:    clampThreshold(storage - 15),
-		StorageWarning:  clampThreshold(storage - 8),
-		StorageCritical: clampThreshold(storage - 3),
+		NodeCPUWatch:    clampThreshold(nodeCPU - 5),  // Watch slightly before threshold
+		NodeCPUWarning:  nodeCPU,                       // Warning at exact threshold
+		NodeMemWatch:    clampThreshold(nodeMem - 5),
+		NodeMemWarning:  nodeMem,
+		GuestMemWatch:   clampThreshold(guestMem - 5),
+		GuestMemWarning: guestMem,
+		GuestDiskWatch:  clampThreshold(guestDisk - 5),
+		GuestDiskWarn:   guestDisk,
+		GuestDiskCrit:   guestDisk + 5, // Critical slightly above threshold
+		StorageWatch:    clampThreshold(storage - 5),
+		StorageWarning:  storage,
+		StorageCritical: storage + 5,
 	}
 }
 
@@ -228,7 +256,8 @@ type PatrolService struct {
 	intelligence *Intelligence
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
-	thresholds PatrolThresholds
+	thresholds     PatrolThresholds
+	proactiveMode  bool // When true, warn before thresholds; when false, use exact thresholds
 
 	// Runtime state
 	running          bool
@@ -310,17 +339,48 @@ func (p *PatrolService) SetConfig(cfg PatrolConfig) {
 }
 
 // SetThresholdProvider sets the provider for user-configured alert thresholds
-// This allows patrol to warn BEFORE alerts fire
+// This allows patrol to use user-configured thresholds for alerting
 func (p *PatrolService) SetThresholdProvider(provider ThresholdProvider) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.thresholdProvider = provider
-	p.thresholds = CalculatePatrolThresholds(provider)
+	p.thresholds = CalculatePatrolThresholdsWithMode(provider, p.proactiveMode)
 	log.Debug().
 		Float64("storageWatch", p.thresholds.StorageWatch).
 		Float64("storageWarning", p.thresholds.StorageWarning).
 		Float64("storageCritical", p.thresholds.StorageCritical).
+		Bool("proactiveMode", p.proactiveMode).
 		Msg("Patrol thresholds updated from alert config")
+}
+
+// SetProactiveMode configures whether patrol warns before thresholds (true) or at exact thresholds (false)
+func (p *PatrolService) SetProactiveMode(proactive bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.proactiveMode == proactive {
+		return // No change
+	}
+	p.proactiveMode = proactive
+	// Recalculate thresholds with new mode
+	p.thresholds = CalculatePatrolThresholdsWithMode(p.thresholdProvider, proactive)
+	log.Info().
+		Bool("proactiveMode", proactive).
+		Float64("storageWarning", p.thresholds.StorageWarning).
+		Msg("Patrol mode updated")
+}
+
+// GetProactiveMode returns whether proactive threshold mode is enabled
+func (p *PatrolService) GetProactiveMode() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.proactiveMode
+}
+
+// GetThresholds returns the current patrol thresholds (for display in UI)
+func (p *PatrolService) GetThresholds() PatrolThresholds {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.thresholds
 }
 
 // SetFindingsPersistence enables findings persistence (load from and save to disk)
