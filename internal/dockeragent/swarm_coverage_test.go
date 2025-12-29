@@ -327,15 +327,15 @@ func TestCollectSwarmData(t *testing.T) {
 				Image: "nginx:latest",
 				State: "running",
 				Labels: map[string]string{
-					"com.docker.swarm.service.id":    "svc1",
-					"com.docker.swarm.service.name":  "web",
-					"com.docker.swarm.task.id":       "task1",
-					"com.docker.swarm.task.slot":     "1",
-					"com.docker.swarm.task.message":  "ok",
-					"com.docker.swarm.task.error":    "",
-					"com.docker.stack.namespace":     "stack",
-					"com.docker.swarm.node.id":       "node1",
-					"com.docker.swarm.node.name":     "node1",
+					"com.docker.swarm.service.id":         "svc1",
+					"com.docker.swarm.service.name":       "web",
+					"com.docker.swarm.task.id":            "task1",
+					"com.docker.swarm.task.slot":          "1",
+					"com.docker.swarm.task.message":       "ok",
+					"com.docker.swarm.task.error":         "",
+					"com.docker.stack.namespace":          "stack",
+					"com.docker.swarm.node.id":            "node1",
+					"com.docker.swarm.node.name":          "node1",
 					"com.docker.swarm.task.desired-state": "running",
 				},
 			},
@@ -442,6 +442,86 @@ func TestCollectSwarmData(t *testing.T) {
 			t.Fatalf("expected swarm info")
 		}
 	})
+
+	t.Run("cluster info populated", func(t *testing.T) {
+		agent := &Agent{
+			supportsSwarm: true,
+			cfg: Config{
+				IncludeServices: false,
+				IncludeTasks:    false,
+				SwarmScope:      swarmScopeAuto,
+			},
+		}
+
+		info := systemtypes.Info{
+			Swarm: swarmtypes.Info{
+				NodeID:           "node1",
+				ControlAvailable: true,
+				LocalNodeState:   swarmtypes.LocalNodeStateActive,
+				Cluster: &swarmtypes.ClusterInfo{
+					ID: "cluster1",
+					Spec: swarmtypes.Spec{
+						Annotations: swarmtypes.Annotations{Name: "prod"},
+					},
+				},
+			},
+		}
+
+		services, tasks, swarmInfo := agent.collectSwarmData(context.Background(), info, nil)
+		if services != nil || tasks != nil {
+			t.Fatal("expected nil services/tasks when disabled")
+		}
+		if swarmInfo == nil || swarmInfo.ClusterID != "cluster1" || swarmInfo.ClusterName != "prod" {
+			t.Fatalf("expected cluster info to be populated")
+		}
+	})
+
+	t.Run("sorts tasks and services", func(t *testing.T) {
+		agent := &Agent{
+			supportsSwarm: true,
+			cfg: Config{
+				IncludeServices: true,
+				IncludeTasks:    true,
+				SwarmScope:      swarmScopeCluster,
+			},
+			docker: &fakeDockerClient{
+				serviceListFn: func(context.Context, swarmtypes.ServiceListOptions) ([]swarmtypes.Service, error) {
+					return []swarmtypes.Service{
+						{ID: "b", Spec: swarmtypes.ServiceSpec{Annotations: swarmtypes.Annotations{Name: "web"}}},
+						{ID: "a", Spec: swarmtypes.ServiceSpec{Annotations: swarmtypes.Annotations{Name: "web"}}},
+						{ID: "c", Spec: swarmtypes.ServiceSpec{Annotations: swarmtypes.Annotations{Name: "api"}}},
+					}, nil
+				},
+				taskListFn: func(context.Context, swarmtypes.TaskListOptions) ([]swarmtypes.Task, error) {
+					return []swarmtypes.Task{
+						{ID: "b", ServiceID: "a", Slot: 1},
+						{ID: "a", ServiceID: "a", Slot: 1},
+						{ID: "c", ServiceID: "a", Slot: 2},
+						{ID: "d", ServiceID: "c", Slot: 1},
+					}, nil
+				},
+			},
+		}
+
+		info := systemtypes.Info{
+			Swarm: swarmtypes.Info{
+				NodeID:           "node1",
+				ControlAvailable: true,
+				LocalNodeState:   swarmtypes.LocalNodeStateActive,
+			},
+		}
+
+		services, tasks, swarmInfo := agent.collectSwarmData(context.Background(), info, nil)
+		if swarmInfo == nil {
+			t.Fatalf("expected swarm info")
+		}
+		if len(tasks) != 4 || len(services) != 3 {
+			t.Fatalf("expected tasks and services")
+		}
+		if tasks[0].ServiceName == "" || services[0].Name == "" {
+			t.Fatalf("expected sorted outputs to be populated")
+		}
+	})
 }
 
 func TestDeriveSwarmTasksFromContainers(t *testing.T) {
@@ -459,15 +539,15 @@ func TestDeriveSwarmTasksFromContainers(t *testing.T) {
 			State:     "running",
 			CreatedAt: started,
 			Labels: map[string]string{
-				"com.docker.swarm.service.id":          "svc1",
-				"com.docker.swarm.service.name":        "web",
-				"com.docker.swarm.task.slot":           "notint",
-				"com.docker.swarm.task.message":        "ok",
-				"com.docker.swarm.task.error":          "err",
-				"com.docker.swarm.task.desired-state":  "running",
-				"com.docker.swarm.task.id":             "",
-				"com.docker.swarm.node.name":           "nodeA",
-				"com.docker.swarm.node.id":             "",
+				"com.docker.swarm.service.id":         "svc1",
+				"com.docker.swarm.service.name":       "web",
+				"com.docker.swarm.task.slot":          "notint",
+				"com.docker.swarm.task.message":       "ok",
+				"com.docker.swarm.task.error":         "err",
+				"com.docker.swarm.task.desired-state": "running",
+				"com.docker.swarm.task.id":            "",
+				"com.docker.swarm.node.name":          "nodeA",
+				"com.docker.swarm.node.id":            "",
 			},
 			StartedAt:  &started,
 			FinishedAt: &finished,
@@ -504,6 +584,12 @@ func TestDeriveSwarmTasksFromContainers(t *testing.T) {
 	}
 	if tasks[0].StartedAt == nil || tasks[0].CompletedAt == nil {
 		t.Fatalf("expected timestamps to be set from container")
+	}
+}
+
+func TestDeriveSwarmTasksFromContainersEmpty(t *testing.T) {
+	if tasks := deriveSwarmTasksFromContainers(nil, systemtypes.Info{}); tasks != nil {
+		t.Fatalf("expected nil tasks for empty input")
 	}
 }
 
@@ -554,5 +640,75 @@ func TestDeriveSwarmServicesFromData(t *testing.T) {
 
 	if got := deriveSwarmServicesFromData(nil, containers); got != nil {
 		t.Fatal("expected nil services for empty tasks")
+	}
+}
+
+func TestDeriveSwarmServicesFromDataNameFallback(t *testing.T) {
+	tasks := []agentsdocker.Task{
+		{
+			ID:           "task1",
+			ServiceID:    "",
+			ServiceName:  "api",
+			CurrentState: "running",
+		},
+	}
+
+	containers := []agentsdocker.Container{
+		{
+			ID:    "container1",
+			Image: "api:latest",
+			Labels: map[string]string{
+				"com.docker.swarm.service.name": "api",
+			},
+		},
+	}
+
+	services := deriveSwarmServicesFromData(tasks, containers)
+	if len(services) != 1 {
+		t.Fatalf("expected 1 service, got %d", len(services))
+	}
+	if services[0].ID != "api" {
+		t.Fatalf("expected service id to fall back to name")
+	}
+	if services[0].Labels != nil {
+		t.Fatalf("expected nil labels when none set")
+	}
+}
+
+func TestDeriveSwarmServicesFromDataEmptyAggregates(t *testing.T) {
+	tasks := []agentsdocker.Task{
+		{ID: "task1", ServiceID: "", ServiceName: ""},
+	}
+	containers := []agentsdocker.Container{
+		{ID: "container1"},
+		{
+			ID:     "container2",
+			Labels: map[string]string{"unrelated": "true"},
+		},
+		{
+			ID:     "container3",
+			Labels: map[string]string{"com.docker.swarm.service.id": "other"},
+		},
+	}
+
+	if services := deriveSwarmServicesFromData(tasks, containers); services != nil {
+		t.Fatalf("expected nil services for empty aggregates")
+	}
+}
+
+func TestDeriveSwarmServicesFromDataContainerSkips(t *testing.T) {
+	tasks := []agentsdocker.Task{
+		{ID: "task1", ServiceID: "svc1", ServiceName: "web", CurrentState: "running"},
+	}
+
+	containers := []agentsdocker.Container{
+		{ID: "container1"},
+		{ID: "container2", Labels: map[string]string{"foo": "bar"}},
+		{ID: "container3", Labels: map[string]string{"com.docker.swarm.service.id": "other"}},
+	}
+
+	services := deriveSwarmServicesFromData(tasks, containers)
+	if len(services) != 1 {
+		t.Fatalf("expected service aggregate to remain")
 	}
 }

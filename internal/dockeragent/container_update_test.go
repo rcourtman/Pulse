@@ -2,6 +2,7 @@ package dockeragent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -295,6 +296,57 @@ func TestUpdateContainer_Success(t *testing.T) {
 	mu.Unlock()
 }
 
+func TestUpdateContainer_CleanupError(t *testing.T) {
+	logger := zerolog.Nop()
+	swap(t, &sleepFn, func(time.Duration) {})
+	swap(t, &nowFn, func() time.Time {
+		return time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC)
+	})
+
+	cleanupErr := errors.New("cleanup failed")
+	done := make(chan struct{})
+
+	agent := &Agent{
+		docker: &fakeDockerClient{
+			containerInspectFn: func(_ context.Context, id string) (containertypes.InspectResponse, error) {
+				if id == "new123" {
+					inspect := baseInspect()
+					inspect.ContainerJSONBase.Image = "sha256:new0000000000"
+					return inspect, nil
+				}
+				return baseInspect(), nil
+			},
+			imagePullFn: func(context.Context, string, image.PullOptions) (io.ReadCloser, error) {
+				return io.NopCloser(strings.NewReader("{}")), nil
+			},
+			containerStopFn: func(context.Context, string, containertypes.StopOptions) error {
+				return nil
+			},
+			containerRenameFn: func(context.Context, string, string) error {
+				return nil
+			},
+			containerCreateFn: func(context.Context, *containertypes.Config, *containertypes.HostConfig, *network.NetworkingConfig, *v1.Platform, string) (containertypes.CreateResponse, error) {
+				return containertypes.CreateResponse{ID: "new123"}, nil
+			},
+			containerStartFn: func(context.Context, string, containertypes.StartOptions) error {
+				return nil
+			},
+			containerRemoveFn: func(context.Context, string, containertypes.RemoveOptions) error {
+				close(done)
+				return cleanupErr
+			},
+		},
+		logger: logger,
+	}
+
+	result := agent.updateContainer(context.Background(), "container1")
+	if !result.Success {
+		t.Fatalf("expected success, got error %q", result.Error)
+	}
+
+	<-done
+}
+
 func TestHandleUpdateContainerCommand(t *testing.T) {
 	logger := zerolog.Nop()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -348,6 +400,25 @@ func TestHandleUpdateContainerCommand(t *testing.T) {
 
 	t.Run("missing container id", func(t *testing.T) {
 		if err := agent.handleUpdateContainerCommand(context.Background(), TargetConfig{URL: server.URL}, agentsdocker.Command{ID: "cmd2"}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("missing container id ack failure", func(t *testing.T) {
+		if err := agent.handleUpdateContainerCommand(context.Background(), TargetConfig{URL: "http://example.com/\x7f"}, agentsdocker.Command{ID: "cmd2c"}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("container id wrong type", func(t *testing.T) {
+		cmd := agentsdocker.Command{
+			ID:   "cmd2b",
+			Type: agentsdocker.CommandTypeUpdateContainer,
+			Payload: map[string]any{
+				"containerId": 123,
+			},
+		}
+		if err := agent.handleUpdateContainerCommand(context.Background(), TargetConfig{URL: server.URL}, cmd); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})

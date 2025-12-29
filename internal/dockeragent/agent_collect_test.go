@@ -20,12 +20,12 @@ func TestCollectContainer(t *testing.T) {
 		stats := containertypes.StatsResponse{
 			Read: time.Now(),
 			CPUStats: containertypes.CPUStats{
-				CPUUsage: containertypes.CPUUsage{TotalUsage: 200000000},
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 200000000},
 				SystemUsage: 2000000000,
 				OnlineCPUs:  2,
 			},
 			PreCPUStats: containertypes.CPUStats{
-				CPUUsage: containertypes.CPUUsage{TotalUsage: 100000000},
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 100000000},
 				SystemUsage: 1000000000,
 			},
 			MemoryStats: containertypes.MemoryStats{
@@ -193,6 +193,49 @@ func TestCollectContainer(t *testing.T) {
 			t.Fatal("expected error")
 		}
 	})
+
+	t.Run("uptime negative clamped", func(t *testing.T) {
+		future := time.Now().Add(5 * time.Minute).Format(time.RFC3339Nano)
+		inspect := baseInspect()
+		inspect.ContainerJSONBase.State = &containertypes.State{
+			Running:   true,
+			StartedAt: future,
+		}
+
+		stats := containertypes.StatsResponse{
+			Read: time.Now(),
+			CPUStats: containertypes.CPUStats{
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 100},
+				SystemUsage: 1000,
+				OnlineCPUs:  1,
+			},
+			PreCPUStats: containertypes.CPUStats{
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 100},
+				SystemUsage: 1000,
+			},
+		}
+
+		agent := &Agent{
+			logger:           logger,
+			prevContainerCPU: make(map[string]cpuSample),
+			docker: &fakeDockerClient{
+				containerInspectWithRawFn: func(context.Context, string, bool) (containertypes.InspectResponse, []byte, error) {
+					return inspect, nil, nil
+				},
+				containerStatsOneShotFn: func(context.Context, string) (containertypes.StatsResponseReader, error) {
+					return statsReader(t, stats), nil
+				},
+			},
+		}
+
+		container, err := agent.collectContainer(context.Background(), containertypes.Summary{ID: "container-123456", Names: []string{"/app"}, State: "running"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if container.UptimeSeconds != 0 {
+			t.Fatalf("expected uptime to be clamped to 0, got %d", container.UptimeSeconds)
+		}
+	})
 }
 
 func TestCollectContainers(t *testing.T) {
@@ -215,7 +258,7 @@ func TestCollectContainers(t *testing.T) {
 
 	t.Run("filters and prune", func(t *testing.T) {
 		agent := &Agent{
-			logger: logger,
+			logger:       logger,
 			stateFilters: []string{"running"},
 			allowedStates: map[string]struct{}{
 				"running": {},
