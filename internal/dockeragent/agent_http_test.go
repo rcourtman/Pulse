@@ -10,9 +10,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	containertypes "github.com/docker/docker/api/types/container"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog"
 )
@@ -95,6 +98,13 @@ func TestSendReport(t *testing.T) {
 }
 
 func TestSendReportToTarget(t *testing.T) {
+	t.Run("request error", func(t *testing.T) {
+		agent := &Agent{logger: zerolog.Nop()}
+		if err := agent.sendReportToTarget(context.Background(), TargetConfig{URL: "http://example.com/\x7f"}, []byte(`{}`), 0); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
 	t.Run("host removed", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
@@ -103,8 +113,8 @@ func TestSendReportToTarget(t *testing.T) {
 		defer server.Close()
 
 		agent := &Agent{
-			logger:  zerolog.Nop(),
-			hostID:  "host1",
+			logger: zerolog.Nop(),
+			hostID: "host1",
 			httpClients: map[bool]*http.Client{
 				false: server.Client(),
 			},
@@ -112,6 +122,25 @@ func TestSendReportToTarget(t *testing.T) {
 		err := agent.sendReportToTarget(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, []byte(`{}`), 0)
 		if !errors.Is(err, ErrStopRequested) {
 			t.Fatalf("expected ErrStopRequested, got %v", err)
+		}
+	})
+
+	t.Run("command continue on nil error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"commands":[{"id":"cmd1","type":"unknown"}]}`))
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			logger: zerolog.Nop(),
+			httpClients: map[bool]*http.Client{
+				false: server.Client(),
+			},
+		}
+
+		if err := agent.sendReportToTarget(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, []byte(`{}`), 0); err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
@@ -123,7 +152,7 @@ func TestSendReportToTarget(t *testing.T) {
 		defer server.Close()
 
 		agent := &Agent{
-			logger:  zerolog.Nop(),
+			logger: zerolog.Nop(),
 			httpClients: map[bool]*http.Client{
 				false: server.Client(),
 			},
@@ -141,7 +170,7 @@ func TestSendReportToTarget(t *testing.T) {
 		defer server.Close()
 
 		agent := &Agent{
-			logger:  zerolog.Nop(),
+			logger: zerolog.Nop(),
 			httpClients: map[bool]*http.Client{
 				false: server.Client(),
 			},
@@ -164,7 +193,7 @@ func TestSendReportToTarget(t *testing.T) {
 		}
 
 		agent := &Agent{
-			logger:  zerolog.Nop(),
+			logger: zerolog.Nop(),
 			httpClients: map[bool]*http.Client{
 				false: client,
 			},
@@ -183,7 +212,7 @@ func TestSendReportToTarget(t *testing.T) {
 		defer server.Close()
 
 		agent := &Agent{
-			logger:  zerolog.Nop(),
+			logger: zerolog.Nop(),
 			httpClients: map[bool]*http.Client{
 				false: server.Client(),
 			},
@@ -201,7 +230,7 @@ func TestSendReportToTarget(t *testing.T) {
 		defer server.Close()
 
 		agent := &Agent{
-			logger:  zerolog.Nop(),
+			logger: zerolog.Nop(),
 			httpClients: map[bool]*http.Client{
 				false: server.Client(),
 			},
@@ -236,8 +265,8 @@ func TestSendReportToTarget(t *testing.T) {
 		defer server.Close()
 
 		agent := &Agent{
-			logger:  zerolog.Nop(),
-			hostID:  "host1",
+			logger: zerolog.Nop(),
+			hostID: "host1",
 			httpClients: map[bool]*http.Client{
 				false: server.Client(),
 			},
@@ -248,11 +277,56 @@ func TestSendReportToTarget(t *testing.T) {
 			t.Fatalf("expected ErrStopRequested, got %v", err)
 		}
 	})
+
+	t.Run("command error bubbles", func(t *testing.T) {
+		prevPath := os.Getenv("PATH")
+		_ = os.Setenv("PATH", "")
+		t.Cleanup(func() {
+			_ = os.Setenv("PATH", prevPath)
+		})
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/report"):
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"commands":[{"id":"cmd1","type":"stop"}]}`))
+			case strings.Contains(r.URL.Path, "/commands/"):
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte("boom"))
+			default:
+				w.WriteHeader(http.StatusNotFound)
+			}
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			logger: zerolog.Nop(),
+			hostID: "host1",
+			httpClients: map[bool]*http.Client{
+				false: server.Client(),
+			},
+		}
+
+		if err := agent.sendReportToTarget(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, []byte(`{}`), 0); err == nil {
+			t.Fatal("expected error")
+		}
+	})
 }
 
 func TestSendCommandAck(t *testing.T) {
 	t.Run("missing host id", func(t *testing.T) {
 		agent := &Agent{}
+		if err := agent.sendCommandAck(context.Background(), TargetConfig{URL: "http://example"}, "cmd", "status", "msg"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("marshal error", func(t *testing.T) {
+		swap(t, &jsonMarshalFn, func(any) ([]byte, error) {
+			return nil, errors.New("marshal failed")
+		})
+
+		agent := &Agent{hostID: "host1"}
 		if err := agent.sendCommandAck(context.Background(), TargetConfig{URL: "http://example"}, "cmd", "status", "msg"); err == nil {
 			t.Fatal("expected error")
 		}
@@ -418,6 +492,19 @@ func TestHandleStopCommand(t *testing.T) {
 		}
 	})
 
+	t.Run("disable error ack failure", func(t *testing.T) {
+		writeSystemctl(t, "echo 'access denied' >&2\nexit 1")
+
+		agent := &Agent{
+			logger: zerolog.Nop(),
+			hostID: "host1",
+		}
+
+		if err := agent.handleStopCommand(context.Background(), TargetConfig{URL: "http://example.com/\x7f", Token: "token"}, agentsdocker.Command{ID: "cmd"}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
 	t.Run("success returns stop requested", func(t *testing.T) {
 		prev := os.Getenv("PATH")
 		_ = os.Setenv("PATH", "")
@@ -462,6 +549,40 @@ func TestHandleStopCommand(t *testing.T) {
 
 		if err := agent.handleStopCommand(context.Background(), TargetConfig{URL: "http://example", Token: "token"}, agentsdocker.Command{ID: "cmd"}); err == nil {
 			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("stop service goroutine executes", func(t *testing.T) {
+		marker := filepath.Join(t.TempDir(), "called")
+		writeSystemctl(t, "if [ \"$1\" = \"disable\" ]; then exit 0; fi\nif [ \"$1\" = \"stop\" ]; then : > "+marker+"; exit 2; fi\nexit 0")
+		swap(t, &sleepFn, func(time.Duration) {})
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			logger: zerolog.Nop(),
+			hostID: "host1",
+			httpClients: map[bool]*http.Client{
+				false: server.Client(),
+			},
+		}
+
+		if err := agent.handleStopCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, agentsdocker.Command{ID: "cmd"}); !errors.Is(err, ErrStopRequested) {
+			t.Fatalf("expected ErrStopRequested, got %v", err)
+		}
+
+		deadline := time.Now().Add(200 * time.Millisecond)
+		for {
+			if _, err := os.Stat(marker); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("expected stopSystemdService to be invoked")
+			}
+			time.Sleep(5 * time.Millisecond)
 		}
 	})
 }

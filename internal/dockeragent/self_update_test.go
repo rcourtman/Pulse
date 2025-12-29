@@ -390,6 +390,37 @@ func TestSelfUpdate(t *testing.T) {
 		}
 	})
 
+	t.Run("symlink resolved", func(t *testing.T) {
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, errors.New("send failed")
+		})}
+
+		agent := &Agent{
+			logger:  zerolog.Nop(),
+			targets: []TargetConfig{{URL: "http://example.com", Token: "token"}},
+			httpClients: map[bool]*http.Client{
+				false: client,
+			},
+		}
+
+		dir := t.TempDir()
+		target := filepath.Join(dir, "exec-target")
+		if err := os.WriteFile(target, elfBytes(), 0700); err != nil {
+			t.Fatalf("write target: %v", err)
+		}
+		link := filepath.Join(dir, "exec-link")
+		if err := os.Symlink(target, link); err != nil {
+			t.Fatalf("symlink: %v", err)
+		}
+		swap(t, &osExecutableFn, func() (string, error) {
+			return link, nil
+		})
+
+		if err := agent.selfUpdate(context.Background()); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
 	t.Run("status error", func(t *testing.T) {
 		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 			return &http.Response{
@@ -874,6 +905,97 @@ func TestSelfUpdate(t *testing.T) {
 			}
 			return errors.New("rename failed")
 		})
+		swap(t, &syscallExecFn, func(string, []string, []string) error {
+			return errors.New("exec failed")
+		})
+
+		_ = agent.selfUpdate(context.Background())
+	})
+
+	t.Run("unraid rename persist error", func(t *testing.T) {
+		body := elfBytes()
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(body)),
+				Header:     http.Header{"X-Checksum-Sha256": []string{sha256Hex(body)}},
+			}, nil
+		})}
+
+		agent := &Agent{
+			logger:  zerolog.Nop(),
+			targets: []TargetConfig{{URL: "http://example.com", Token: "token"}},
+			httpClients: map[bool]*http.Client{
+				false: client,
+			},
+		}
+		dir := t.TempDir()
+		execPath := filepath.Join(dir, "exec")
+		if err := os.WriteFile(execPath, elfBytes(), 0700); err != nil {
+			t.Fatalf("write exec: %v", err)
+		}
+		swap(t, &osExecutableFn, func() (string, error) {
+			return execPath, nil
+		})
+		unraidPath := filepath.Join(dir, "unraid-version")
+		if err := os.WriteFile(unraidPath, []byte("1"), 0600); err != nil {
+			t.Fatalf("write unraid: %v", err)
+		}
+		swap(t, &unraidVersionPath, unraidPath)
+		persist := filepath.Join(dir, "persist")
+		if err := os.WriteFile(persist, []byte("old"), 0600); err != nil {
+			t.Fatalf("write persist: %v", err)
+		}
+		swap(t, &unraidPersistPath, persist)
+
+		swap(t, &osRenameFn, func(old, new string) error {
+			if new == persist {
+				return errors.New("rename failed")
+			}
+			return os.Rename(old, new)
+		})
+		swap(t, &syscallExecFn, func(string, []string, []string) error {
+			return errors.New("exec failed")
+		})
+
+		_ = agent.selfUpdate(context.Background())
+	})
+
+	t.Run("unraid persist success", func(t *testing.T) {
+		body := elfBytes()
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(body)),
+				Header:     http.Header{"X-Checksum-Sha256": []string{sha256Hex(body)}},
+			}, nil
+		})}
+
+		agent := &Agent{
+			logger:  zerolog.Nop(),
+			targets: []TargetConfig{{URL: "http://example.com", Token: "token"}},
+			httpClients: map[bool]*http.Client{
+				false: client,
+			},
+		}
+		dir := t.TempDir()
+		execPath := filepath.Join(dir, "exec")
+		if err := os.WriteFile(execPath, elfBytes(), 0700); err != nil {
+			t.Fatalf("write exec: %v", err)
+		}
+		swap(t, &osExecutableFn, func() (string, error) {
+			return execPath, nil
+		})
+		unraidPath := filepath.Join(dir, "unraid-version")
+		if err := os.WriteFile(unraidPath, []byte("1"), 0600); err != nil {
+			t.Fatalf("write unraid: %v", err)
+		}
+		swap(t, &unraidVersionPath, unraidPath)
+		persist := filepath.Join(dir, "persist")
+		if err := os.WriteFile(persist, []byte("old"), 0600); err != nil {
+			t.Fatalf("write persist: %v", err)
+		}
+		swap(t, &unraidPersistPath, persist)
 		swap(t, &syscallExecFn, func(string, []string, []string) error {
 			return errors.New("exec failed")
 		})

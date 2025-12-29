@@ -117,7 +117,7 @@ type cpuSample struct {
 
 // New creates a new Docker agent instance.
 func New(cfg Config) (*Agent, error) {
-	targets, err := normalizeTargets(cfg.Targets)
+	targets, err := normalizeTargetsFn(cfg.Targets)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func New(cfg Config) (*Agent, error) {
 			return nil, errors.New("at least one Pulse target is required")
 		}
 
-		targets, err = normalizeTargets([]TargetConfig{{
+		targets, err = normalizeTargetsFn([]TargetConfig{{
 			URL:                url,
 			Token:              token,
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
@@ -598,18 +598,14 @@ func (a *Agent) collectOnce(ctx context.Context) error {
 }
 
 func (a *Agent) flushBuffer(ctx context.Context) {
-	if a.reportBuffer.IsEmpty() {
+	report, ok := a.reportBuffer.Peek()
+	if !ok {
 		return
 	}
 
 	a.logger.Info().Int("count", a.reportBuffer.Len()).Msg("Flushing buffered docker reports")
 
-	for !a.reportBuffer.IsEmpty() {
-		report, ok := a.reportBuffer.Peek()
-		if !ok {
-			break
-		}
-
+	for {
 		if err := a.sendReport(ctx, report); err != nil {
 			if errors.Is(err, ErrStopRequested) {
 				return
@@ -618,6 +614,11 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 			return
 		}
 		a.reportBuffer.Pop()
+
+		report, ok = a.reportBuffer.Peek()
+		if !ok {
+			return
+		}
 	}
 }
 
@@ -1232,7 +1233,7 @@ func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, comm
 	// process is terminated by systemctl stop.
 	go func() {
 		// Small delay to ensure the ack response completes
-		time.Sleep(1 * time.Second)
+		sleepFn(1 * time.Second)
 		stopServiceCtx := context.Background()
 		if err := stopSystemdService(stopServiceCtx, "pulse-docker-agent"); err != nil {
 			a.logger.Warn().Err(err).Msg("Failed to stop systemd service, agent will exit normally")
@@ -1335,7 +1336,7 @@ func (a *Agent) sendCommandAck(ctx context.Context, target TargetConfig, command
 		Message: message,
 	}
 
-	body, err := json.Marshal(ackPayload)
+	body, err := jsonMarshalFn(ackPayload)
 	if err != nil {
 		return fmt.Errorf("marshal command acknowledgement: %w", err)
 	}
@@ -1854,7 +1855,7 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 
 	client := a.httpClientFor(target)
 	var resp *http.Response
-	var lastErr error
+	lastErr := errors.New("failed to download new binary")
 
 	for _, candidate := range candidates {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, candidate.url, nil)
@@ -1892,9 +1893,6 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	}
 
 	if resp == nil {
-		if lastErr == nil {
-			lastErr = errors.New("failed to download new binary")
-		}
 		return lastErr
 	}
 	defer resp.Body.Close()

@@ -1017,6 +1017,22 @@ func TestBuildRuntimeCandidatesEnv(t *testing.T) {
 	}
 }
 
+func TestBuildRuntimeCandidatesDeduplicates(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "unix:///tmp/shared.sock")
+	t.Setenv("CONTAINER_HOST", "unix:///tmp/shared.sock")
+
+	candidates := buildRuntimeCandidates(RuntimeAuto)
+	count := 0
+	for _, c := range candidates {
+		if c.host == "unix:///tmp/shared.sock" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected duplicate host to be deduplicated, got %d", count)
+	}
+}
+
 func TestRandomDuration(t *testing.T) {
 	tests := []struct {
 		name string

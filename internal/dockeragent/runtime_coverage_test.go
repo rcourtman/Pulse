@@ -134,4 +134,36 @@ func TestConnectRuntime(t *testing.T) {
 			t.Fatalf("expected runtime docker, got %v", runtimeKind)
 		}
 	})
+
+	t.Run("mismatch then success with host opts", func(t *testing.T) {
+		podman := &fakeDockerClient{daemonHost: "unix:///run/podman/podman.sock"}
+		docker := &fakeDockerClient{daemonHost: "unix:///var/run/docker.sock"}
+
+		swap(t, &buildRuntimeCandidatesFn, func(_ RuntimeKind) []runtimeCandidate {
+			return []runtimeCandidate{
+				{label: "podman", host: "unix:///run/podman/podman.sock", applyDockerEnv: true},
+				{label: "docker", host: "unix:///var/run/docker.sock"},
+			}
+		})
+
+		calls := 0
+		swap(t, &tryRuntimeCandidateFn, func(opts []client.Opt) (dockerClient, systemtypes.Info, error) {
+			calls++
+			if calls == 1 {
+				if len(opts) < 2 {
+					t.Fatalf("expected opts to include env and host")
+				}
+				return podman, systemtypes.Info{ServerVersion: "4.6.1"}, nil
+			}
+			return docker, systemtypes.Info{ServerVersion: "24.0.0"}, nil
+		})
+
+		cli, _, runtimeKind, err := connectRuntime(RuntimeDocker, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cli != docker || runtimeKind != RuntimeDocker {
+			t.Fatalf("expected docker runtime after mismatch")
+		}
+	})
 }

@@ -21,12 +21,12 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 		stats := containertypes.StatsResponse{
 			Read: time.Now(),
 			CPUStats: containertypes.CPUStats{
-				CPUUsage: containertypes.CPUUsage{TotalUsage: 200},
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 200},
 				SystemUsage: 2000,
 				OnlineCPUs:  2,
 			},
 			PreCPUStats: containertypes.CPUStats{
-				CPUUsage: containertypes.CPUUsage{TotalUsage: 100},
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 100},
 				SystemUsage: 1000,
 			},
 		}
@@ -48,11 +48,11 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 		stats := containertypes.StatsResponse{
 			Read: time.Now(),
 			CPUStats: containertypes.CPUStats{
-				CPUUsage: containertypes.CPUUsage{TotalUsage: 100},
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 100},
 				SystemUsage: 1000,
 			},
 			PreCPUStats: containertypes.CPUStats{
-				CPUUsage: containertypes.CPUUsage{TotalUsage: 100},
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 100},
 				SystemUsage: 1000,
 			},
 		}
@@ -70,7 +70,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 		agent := &Agent{
 			logger: logger,
 			prevContainerCPU: map[string]cpuSample{
-			"container-123456": {
+				"container-123456": {
 					totalUsage:  100,
 					systemUsage: 1000,
 					onlineCPUs:  2,
@@ -82,11 +82,14 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 		stats := containertypes.StatsResponse{
 			Read: time.Now(),
 			CPUStats: containertypes.CPUStats{
-				CPUUsage: containertypes.CPUUsage{TotalUsage: 200},
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 200},
 				SystemUsage: 2000,
 				OnlineCPUs:  0,
 			},
-			PreCPUStats: containertypes.CPUStats{},
+			PreCPUStats: containertypes.CPUStats{
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 200},
+				SystemUsage: 2000,
+			},
 		}
 
 		got := agent.calculateContainerCPUPercent("container-123456", stats)
@@ -97,10 +100,10 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 
 	t.Run("manual time delta fallback", func(t *testing.T) {
 		agent := &Agent{
-			logger: logger,
+			logger:   logger,
 			cpuCount: 4,
 			prevContainerCPU: map[string]cpuSample{
-			"container-123456": {
+				"container-123456": {
 					totalUsage:  100,
 					systemUsage: 1000,
 					onlineCPUs:  0,
@@ -112,11 +115,14 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 		stats := containertypes.StatsResponse{
 			Read: time.Now(),
 			CPUStats: containertypes.CPUStats{
-				CPUUsage: containertypes.CPUUsage{TotalUsage: 200},
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 200},
 				SystemUsage: 1000,
 				OnlineCPUs:  0,
 			},
-			PreCPUStats: containertypes.CPUStats{},
+			PreCPUStats: containertypes.CPUStats{
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 200},
+				SystemUsage: 1000,
+			},
 		}
 
 		got := agent.calculateContainerCPUPercent("container-123456", stats)
@@ -141,11 +147,14 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 		stats := containertypes.StatsResponse{
 			Read: time.Now(),
 			CPUStats: containertypes.CPUStats{
-				CPUUsage: containertypes.CPUUsage{TotalUsage: 50},
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 50},
 				SystemUsage: 1200,
 				OnlineCPUs:  2,
 			},
-			PreCPUStats: containertypes.CPUStats{},
+			PreCPUStats: containertypes.CPUStats{
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 50},
+				SystemUsage: 1200,
+			},
 		}
 
 		got := agent.calculateContainerCPUPercent("container-123456", stats)
@@ -170,11 +179,14 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 		stats := containertypes.StatsResponse{
 			Read: time.Now(),
 			CPUStats: containertypes.CPUStats{
-				CPUUsage: containertypes.CPUUsage{TotalUsage: 200},
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 200},
 				SystemUsage: 1100,
 				OnlineCPUs:  0,
 			},
-			PreCPUStats: containertypes.CPUStats{},
+			PreCPUStats: containertypes.CPUStats{
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 200},
+				SystemUsage: 1100,
+			},
 		}
 
 		if got := agent.calculateContainerCPUPercent("container-123456", stats); got != 0 {
@@ -183,6 +195,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 	})
 
 	t.Run("elapsed non-positive returns zero", func(t *testing.T) {
+		now := time.Now()
 		agent := &Agent{
 			logger: logger,
 			prevContainerCPU: map[string]cpuSample{
@@ -190,19 +203,22 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 					totalUsage:  100,
 					systemUsage: 1000,
 					onlineCPUs:  2,
-					read:        time.Now().Add(time.Second),
+					read:        now,
 				},
 			},
 		}
 
 		stats := containertypes.StatsResponse{
-			Read: time.Now(),
+			Read: now,
 			CPUStats: containertypes.CPUStats{
-				CPUUsage: containertypes.CPUUsage{TotalUsage: 200},
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 200},
 				SystemUsage: 900,
 				OnlineCPUs:  2,
 			},
-			PreCPUStats: containertypes.CPUStats{},
+			PreCPUStats: containertypes.CPUStats{
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 200},
+				SystemUsage: 900,
+			},
 		}
 
 		if got := agent.calculateContainerCPUPercent("container-123456", stats); got != 0 {
@@ -226,11 +242,14 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 		stats := containertypes.StatsResponse{
 			Read: time.Now(),
 			CPUStats: containertypes.CPUStats{
-				CPUUsage: containertypes.CPUUsage{TotalUsage: 200},
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 200},
 				SystemUsage: 1100,
 				OnlineCPUs:  2,
 			},
-			PreCPUStats: containertypes.CPUStats{},
+			PreCPUStats: containertypes.CPUStats{
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 200},
+				SystemUsage: 1100,
+			},
 		}
 
 		if got := agent.calculateContainerCPUPercent("container-123456", stats); got != 0 {
@@ -242,7 +261,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 		agent := &Agent{
 			logger: logger,
 			prevContainerCPU: map[string]cpuSample{
-			"container-123456": {
+				"container-123456": {
 					totalUsage:  100,
 					systemUsage: 1000,
 					onlineCPUs:  0,
@@ -254,7 +273,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 		stats := containertypes.StatsResponse{
 			Read: time.Time{},
 			CPUStats: containertypes.CPUStats{
-				CPUUsage: containertypes.CPUUsage{TotalUsage: 200},
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 200},
 				SystemUsage: 1000,
 				OnlineCPUs:  0,
 			},
@@ -276,10 +295,13 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 		stats := containertypes.StatsResponse{
 			Read: time.Now(),
 			CPUStats: containertypes.CPUStats{
-				CPUUsage: containertypes.CPUUsage{TotalUsage: 100},
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 100},
 				SystemUsage: 1000,
 			},
-			PreCPUStats: containertypes.CPUStats{},
+			PreCPUStats: containertypes.CPUStats{
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 100},
+				SystemUsage: 1000,
+			},
 		}
 
 		for i := 0; i < 10; i++ {
