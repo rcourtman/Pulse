@@ -101,6 +101,52 @@ docker compose up -d
 
 ---
 
+## 🔄 Container Updates
+
+Pulse can detect and apply updates to your Docker containers directly from the UI.
+
+### How It Works
+
+1. **Update Detection**: Pulse compares the local image digest with the latest digest from the container registry
+2. **Visual Indicator**: Containers with available updates show a blue upward arrow icon
+3. **One-Click Update**: Click the update button, confirm, and Pulse handles the rest
+
+### Updating a Container
+
+1. Navigate to the **Docker** tab
+2. Look for containers with a blue update arrow (⬆️)
+3. Click the update button → Click **Confirm**
+4. Pulse will:
+   - Pull the latest image
+   - Stop the current container
+   - Create a backup (renamed with `_pulse_backup_` suffix)
+   - Start a new container with the same configuration
+   - Clean up the backup after 5 minutes
+
+### Safety Features
+
+- **Automatic Backup**: The old container is renamed, not deleted, until the update succeeds
+- **Rollback on Failure**: If the new container fails to start, the old one is restored
+- **Configuration Preserved**: Networks, volumes, ports, environment variables are all preserved
+
+### Requirements
+
+- **Unified Agent v5.0.6+** running on the Docker host
+- Agent must have Docker socket access (`/var/run/docker.sock`)
+- Registry must be accessible for update detection (public registries work automatically)
+
+### Private Registries
+
+For private registries, ensure your Docker daemon has credentials configured:
+
+```bash
+docker login registry.example.com
+```
+
+The agent uses the Docker daemon's credentials for both pulling images and checking for updates.
+
+---
+
 ## 🛠️ Troubleshooting
 
 - **Forgot Password?**
