@@ -158,6 +158,7 @@ func TestShouldSkipFilesystem(t *testing.T) {
 		{"sysfs", "sysfs", "/sys", 0, 0, true},
 		{"proc", "proc", "/proc", 0, 0, true},
 		{"virtual fs case insensitive", "TMPFS", "/tmp", 1024, 512, true},
+		{"autofs automount", "autofs", "/mnt/samba/share", 0, 0, true},
 
 		// Network filesystem types
 		{"nfs mount", "nfs4", "/mnt/nas", 1000000, 500000, true},
