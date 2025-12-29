@@ -345,8 +345,9 @@ export interface SuppressionRule {
     resource_name?: string; // Human-readable name
     category?: FindingCategory; // Empty means "any category"
     description: string;    // User's reason
+    dismissed_reason?: 'not_an_issue' | 'expected_behavior' | 'will_fix_later'; // Why it was dismissed
     created_at: string;
-    created_from: 'finding' | 'manual';
+    created_from: 'finding' | 'dismissed' | 'manual'; // 'finding' = suppressed, 'dismissed' = just dismissed
     finding_id?: string;    // Original finding ID if created from dismissal
 }
 

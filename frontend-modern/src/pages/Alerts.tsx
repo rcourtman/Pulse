@@ -3248,7 +3248,7 @@ function OverviewTab(props: {
                       {(rule) => (
                         <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
                           <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 text-sm">
+                            <div class="flex items-center gap-2 text-sm flex-wrap">
                               <span class="font-medium text-gray-800 dark:text-gray-200">
                                 {rule.resource_name || rule.resource_id || 'Any resource'}
                               </span>
@@ -3262,28 +3262,49 @@ function OverviewTab(props: {
                                   Any category
                                 </span>
                               </Show>
-                              <span class="px-1.5 py-0.5 text-xs rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                                {rule.created_from === 'finding' ? 'From Finding' : 'Manual'}
-                              </span>
+                              {/* Show dismissal type with appropriate styling */}
+                              <Show when={rule.created_from === 'finding'}>
+                                <span class="px-1.5 py-0.5 text-xs rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+                                  🔇 Suppressed
+                                </span>
+                              </Show>
+                              <Show when={rule.created_from === 'dismissed'}>
+                                <span class={`px-1.5 py-0.5 text-xs rounded ${rule.dismissed_reason === 'expected_behavior'
+                                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                    : rule.dismissed_reason === 'will_fix_later'
+                                      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                                      : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                                  }`}>
+                                  {rule.dismissed_reason === 'expected_behavior' && '✓ Expected'}
+                                  {rule.dismissed_reason === 'will_fix_later' && '⏱ Noted'}
+                                  {rule.dismissed_reason === 'not_an_issue' && '✓ Not an Issue'}
+                                  {!rule.dismissed_reason && 'Dismissed'}
+                                </span>
+                              </Show>
+                              <Show when={rule.created_from === 'manual'}>
+                                <span class="px-1.5 py-0.5 text-xs rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                                  Manual
+                                </span>
+                              </Show>
                             </div>
                             <p class="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
                               {rule.description || 'No description'}
                             </p>
                           </div>
                           <button
-                            class="ml-3 px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
+                            class="ml-3 px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors flex-shrink-0"
                             onClick={async () => {
                               try {
                                 await deleteSuppressionRule(rule.id);
-                                notificationStore.success('Rule deleted');
+                                notificationStore.success(rule.created_from === 'manual' ? 'Rule deleted' : 'Finding reactivated');
                                 fetchAiData();
                               } catch (_err) {
                                 notificationStore.error('Failed to delete rule');
                               }
                             }}
-                            title="Delete this rule"
+                            title={rule.created_from === 'manual' ? 'Delete this rule' : 'Reactivate this finding'}
                           >
-                            Delete
+                            {rule.created_from === 'manual' ? 'Delete' : 'Reactivate'}
                           </button>
                         </div>
                       )}

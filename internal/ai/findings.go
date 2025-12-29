@@ -89,14 +89,15 @@ func (f *Finding) IsResolved() bool {
 // SuppressionRule represents a user-defined rule to suppress certain AI findings
 // Users can create these manually to prevent alerts before they happen
 type SuppressionRule struct {
-	ID           string          `json:"id"`
-	ResourceID   string          `json:"resource_id,omitempty"`   // Empty means "any resource"
-	ResourceName string          `json:"resource_name,omitempty"` // Human-readable name for display
-	Category     FindingCategory `json:"category,omitempty"`      // Empty means "any category"
-	Description  string          `json:"description"`             // User's reason, e.g., "dev VM runs hot"
-	CreatedAt    time.Time       `json:"created_at"`
-	CreatedFrom  string          `json:"created_from,omitempty"` // "finding" if created from a dismissed finding, "manual" if user-created
-	FindingID    string          `json:"finding_id,omitempty"`   // Original finding ID if created from dismissal
+	ID              string          `json:"id"`
+	ResourceID      string          `json:"resource_id,omitempty"`      // Empty means "any resource"
+	ResourceName    string          `json:"resource_name,omitempty"`    // Human-readable name for display
+	Category        FindingCategory `json:"category,omitempty"`         // Empty means "any category"
+	Description     string          `json:"description"`                // User's reason, e.g., "dev VM runs hot"
+	DismissedReason string          `json:"dismissed_reason,omitempty"` // "not_an_issue", "expected_behavior", "will_fix_later"
+	CreatedAt       time.Time       `json:"created_at"`
+	CreatedFrom     string          `json:"created_from,omitempty"` // "finding" if suppressed, "dismissed" if just dismissed, "manual" if user-created
+	FindingID       string          `json:"finding_id,omitempty"`   // Original finding ID if created from dismissal
 }
 
 // FindingsPersistence interface for saving/loading findings (avoids circular imports)
@@ -409,6 +410,41 @@ func (s *FindingsStore) Dismiss(id, reason, note string) bool {
 	// - Finding stays visible (not suppressed, not snoozed)
 	// - But is marked as dismissed/acknowledged so user knows they've reviewed it
 	// - Severity escalation will clear DismissedReason and reactivate
+
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+// Undismiss reverts a dismissed finding back to active state
+// This clears DismissedReason, Suppressed, and AcknowledgedAt
+// allowing the finding to be raised again
+func (s *FindingsStore) Undismiss(id string) bool {
+	s.mu.Lock()
+
+	f, exists := s.findings[id]
+	if !exists {
+		s.mu.Unlock()
+		return false
+	}
+
+	// Check if it was actually dismissed
+	if f.DismissedReason == "" && !f.Suppressed {
+		s.mu.Unlock()
+		return false
+	}
+
+	// Clear dismissal state
+	f.DismissedReason = ""
+	f.Suppressed = false
+	f.AcknowledgedAt = nil
+	// Keep UserNote in case user wants to see their notes
+
+	// If it was resolved, don't reactivate - user should manually reopen
+	// But if it's not resolved, it becomes active again
+	if f.ResolvedAt == nil && !f.IsSnoozed() {
+		s.activeCounts[f.Severity]++
+	}
 
 	s.mu.Unlock()
 	s.scheduleSave()
@@ -765,18 +801,30 @@ func (s *FindingsStore) GetSuppressionRules() []*SuppressionRule {
 		rules = append(rules, rule)
 	}
 
-	// Also include suppressed findings as rules (for visibility)
+	// Include all dismissed findings as rules (for visibility and to allow reverting)
+	// This covers both suppressed ("not_an_issue") and acknowledged ("expected_behavior", "will_fix_later")
 	for _, f := range s.findings {
-		if f.Suppressed {
+		if f.Suppressed || f.DismissedReason != "" {
+			createdFrom := "finding"
+			if !f.Suppressed && f.DismissedReason != "" {
+				// Mark as "dismissed" type to distinguish from permanent suppression
+				createdFrom = "dismissed"
+			}
+			// Handle nil AcknowledgedAt (shouldn't happen but be safe)
+			createdAt := f.LastSeenAt
+			if f.AcknowledgedAt != nil {
+				createdAt = *f.AcknowledgedAt
+			}
 			rules = append(rules, &SuppressionRule{
-				ID:           "finding_" + f.ID,
-				ResourceID:   f.ResourceID,
-				ResourceName: f.ResourceName,
-				Category:     f.Category,
-				Description:  f.UserNote,
-				CreatedAt:    *f.AcknowledgedAt,
-				CreatedFrom:  "finding",
-				FindingID:    f.ID,
+				ID:              "finding_" + f.ID,
+				ResourceID:      f.ResourceID,
+				ResourceName:    f.ResourceName,
+				Category:        f.Category,
+				Description:     f.UserNote,
+				DismissedReason: f.DismissedReason,
+				CreatedAt:       createdAt,
+				CreatedFrom:     createdFrom,
+				FindingID:       f.ID,
 			})
 		}
 	}
@@ -799,10 +847,16 @@ func (s *FindingsStore) DeleteSuppressionRule(ruleID string) bool {
 	// Check if it's a finding-based rule (e.g., "finding_abc123")
 	if strings.HasPrefix(ruleID, "finding_") {
 		findingID := strings.TrimPrefix(ruleID, "finding_")
-		if f, exists := s.findings[findingID]; exists && f.Suppressed {
-			// Un-suppress the finding
+		if f, exists := s.findings[findingID]; exists && (f.Suppressed || f.DismissedReason != "") {
+			// Un-suppress/undismiss the finding
+			wasActive := f.IsActive()
 			f.Suppressed = false
 			f.DismissedReason = ""
+			f.AcknowledgedAt = nil
+			// If it wasn't active before but is now, increment count
+			if !wasActive && f.IsActive() {
+				s.activeCounts[f.Severity]++
+			}
 			s.scheduleSave()
 			return true
 		}
