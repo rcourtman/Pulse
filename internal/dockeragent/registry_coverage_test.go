@@ -47,10 +47,10 @@ func TestRegistryChecker_CheckImageUpdate_CacheHits(t *testing.T) {
 
 	t.Run("cached error", func(t *testing.T) {
 		checker := NewRegistryChecker(logger)
-		cacheKey := "example.test/repo:tag"
+		cacheKey := "example.test/repo:tag|//"
 		checker.cacheError(cacheKey, "cached error")
 
-		result := checker.CheckImageUpdate(context.Background(), "example.test/repo:tag", "sha256:current")
+		result := checker.CheckImageUpdate(context.Background(), "example.test/repo:tag", "sha256:current", "", "", "")
 		if result == nil {
 			t.Fatal("Expected result for cached error")
 		}
@@ -64,10 +64,10 @@ func TestRegistryChecker_CheckImageUpdate_CacheHits(t *testing.T) {
 
 	t.Run("cached digest", func(t *testing.T) {
 		checker := NewRegistryChecker(logger)
-		cacheKey := "example.test/repo:tag"
+		cacheKey := "example.test/repo:tag|//"
 		checker.cacheDigest(cacheKey, "sha256:latest")
 
-		result := checker.CheckImageUpdate(context.Background(), "example.test/repo:tag", "sha256:current")
+		result := checker.CheckImageUpdate(context.Background(), "example.test/repo:tag", "sha256:current", "", "", "")
 		if result == nil {
 			t.Fatal("Expected result for cached digest")
 		}
@@ -91,7 +91,7 @@ func TestRegistryChecker_CheckImageUpdate_FetchPaths(t *testing.T) {
 			}),
 		}
 
-		result := checker.CheckImageUpdate(context.Background(), "example.test/repo:tag", "sha256:current")
+		result := checker.CheckImageUpdate(context.Background(), "example.test/repo:tag", "sha256:current", "", "", "")
 		if result == nil {
 			t.Fatal("Expected result on fetch error")
 		}
@@ -99,7 +99,7 @@ func TestRegistryChecker_CheckImageUpdate_FetchPaths(t *testing.T) {
 			t.Fatalf("Expected registry error, got %q", result.Error)
 		}
 
-		cacheKey := "example.test/repo:tag"
+		cacheKey := "example.test/repo:tag|//"
 		cached := checker.getCached(cacheKey)
 		if cached == nil || cached.err != "registry error: 500" {
 			t.Fatalf("Expected cached error to be stored, got %+v", cached)
@@ -117,7 +117,7 @@ func TestRegistryChecker_CheckImageUpdate_FetchPaths(t *testing.T) {
 			}),
 		}
 
-		result := checker.CheckImageUpdate(context.Background(), "example.test/repo:tag", "sha256:current")
+		result := checker.CheckImageUpdate(context.Background(), "example.test/repo:tag", "sha256:current", "", "", "")
 		if result == nil {
 			t.Fatal("Expected result on fetch success")
 		}
@@ -128,7 +128,7 @@ func TestRegistryChecker_CheckImageUpdate_FetchPaths(t *testing.T) {
 			t.Fatal("Expected update available for new digest")
 		}
 
-		cacheKey := "example.test/repo:tag"
+		cacheKey := "example.test/repo:tag|//"
 		cached := checker.getCached(cacheKey)
 		if cached == nil || cached.latestDigest != "sha256:latest" {
 			t.Fatalf("Expected cached digest to be stored, got %+v", cached)
@@ -200,7 +200,7 @@ func TestRegistryChecker_FetchDigest_StatusErrors(t *testing.T) {
 				},
 			}
 
-			_, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag")
+			_, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag", "", "", "")
 			if err == nil || err.Error() != tt.wantErr {
 				t.Fatalf("Expected error %q, got %v", tt.wantErr, err)
 			}
@@ -220,7 +220,7 @@ func TestRegistryChecker_FetchDigest_RequestError(t *testing.T) {
 		},
 	}
 
-	_, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag")
+	_, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag", "", "", "")
 	if err == nil || !strings.Contains(err.Error(), "request:") {
 		t.Fatalf("Expected request error, got %v", err)
 	}
@@ -229,7 +229,7 @@ func TestRegistryChecker_FetchDigest_RequestError(t *testing.T) {
 func TestRegistryChecker_FetchDigest_RequestCreationError(t *testing.T) {
 	checker := &RegistryChecker{httpClient: &http.Client{}}
 
-	_, err := checker.fetchDigest(context.Background(), "bad host", "repo", "tag")
+	_, err := checker.fetchDigest(context.Background(), "bad host", "repo", "tag", "", "", "")
 	if err == nil || !strings.Contains(err.Error(), "create request:") {
 		t.Fatalf("Expected create request error, got %v", err)
 	}
@@ -257,7 +257,7 @@ func TestRegistryChecker_FetchDigest_DigestHeaders(t *testing.T) {
 			},
 		}
 
-		digest, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag")
+		digest, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag", "", "", "")
 		if err != nil {
 			t.Fatalf("Expected digest, got error %v", err)
 		}
@@ -281,7 +281,7 @@ func TestRegistryChecker_FetchDigest_DigestHeaders(t *testing.T) {
 			},
 		}
 
-		digest, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag")
+		digest, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag", "", "", "")
 		if err != nil {
 			t.Fatalf("Expected digest, got error %v", err)
 		}
@@ -304,7 +304,7 @@ func TestRegistryChecker_FetchDigest_AuthPaths(t *testing.T) {
 			},
 		}
 
-		_, err := checker.fetchDigest(context.Background(), "registry-1.docker.io", "library/nginx", "latest")
+		_, err := checker.fetchDigest(context.Background(), "registry-1.docker.io", "library/nginx", "latest", "", "", "")
 		if err == nil || err.Error() != "auth: token request failed: 500" {
 			t.Fatalf("Expected auth error, got %v", err)
 		}
@@ -331,7 +331,7 @@ func TestRegistryChecker_FetchDigest_AuthPaths(t *testing.T) {
 			},
 		}
 
-		digest, err := checker.fetchDigest(context.Background(), "registry-1.docker.io", "library/nginx", "latest")
+		digest, err := checker.fetchDigest(context.Background(), "registry-1.docker.io", "library/nginx", "latest", "", "", "")
 		if err != nil {
 			t.Fatalf("Expected digest, got error %v", err)
 		}
