@@ -121,7 +121,7 @@ func (a *Agent) updateContainer(ctx context.Context, containerID string) Contain
 	a.logger.Info().Str("container", result.ContainerName).Msg("Container stopped")
 
 	// 4. Rename the old container for backup
-	backupName := result.ContainerName + "_pulse_backup_" + time.Now().Format("20060102_150405")
+	backupName := result.ContainerName + "_pulse_backup_" + nowFn().Format("20060102_150405")
 	if err := a.docker.ContainerRename(ctx, containerID, backupName); err != nil {
 		result.Error = fmt.Sprintf("Failed to rename container for backup: %v", err)
 		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to rename container for backup")
@@ -220,7 +220,7 @@ func (a *Agent) updateContainer(ctx context.Context, containerID string) Contain
 	// 10. Schedule cleanup of backup container after a delay
 	// This gives time to verify the new container is working
 	go func() {
-		time.Sleep(5 * time.Minute)
+		sleepFn(5 * time.Minute)
 		cleanupCtx := context.Background()
 		if err := a.docker.ContainerRemove(cleanupCtx, backupName, container.RemoveOptions{Force: true}); err != nil {
 			a.logger.Warn().Err(err).Str("backup", backupName).Msg("Failed to cleanup backup container")

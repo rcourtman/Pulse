@@ -45,18 +45,44 @@ func TestCalculatePatrolThresholds_FromProvider(t *testing.T) {
 		storage:    70,
 	}
 
+	// Default mode (exact thresholds)
 	thresholds := CalculatePatrolThresholds(provider)
 
-	// Watch thresholds should be alertThreshold - 15
-	expectedNodeCPUWatch := 90 - 15
+	// Watch thresholds should be alertThreshold - 5 (slight buffer)
+	expectedNodeCPUWatch := 90 - 5
 	if thresholds.NodeCPUWatch != float64(expectedNodeCPUWatch) {
 		t.Errorf("Expected NodeCPUWatch %d, got %f", expectedNodeCPUWatch, thresholds.NodeCPUWatch)
+	}
+
+	// Warning thresholds should be EXACT alert threshold (new default behavior)
+	expectedNodeCPUWarning := 90.0
+	if thresholds.NodeCPUWarning != expectedNodeCPUWarning {
+		t.Errorf("Expected NodeCPUWarning %f, got %f", expectedNodeCPUWarning, thresholds.NodeCPUWarning)
+	}
+}
+
+func TestCalculatePatrolThresholds_ProactiveMode(t *testing.T) {
+	provider := &mockThresholdProvider{
+		nodeCPU:    90,
+		nodeMemory: 85,
+		guestMem:   80,
+		guestDisk:  75,
+		storage:    70,
+	}
+
+	// Proactive mode (warn before thresholds)
+	thresholds := CalculatePatrolThresholdsWithMode(provider, true)
+
+	// Watch thresholds should be alertThreshold - 15 (early warning)
+	expectedNodeCPUWatch := 90 - 15
+	if thresholds.NodeCPUWatch != float64(expectedNodeCPUWatch) {
+		t.Errorf("Expected NodeCPUWatch %d in proactive mode, got %f", expectedNodeCPUWatch, thresholds.NodeCPUWatch)
 	}
 
 	// Warning thresholds should be alertThreshold - 5
 	expectedNodeCPUWarning := 90 - 5
 	if thresholds.NodeCPUWarning != float64(expectedNodeCPUWarning) {
-		t.Errorf("Expected NodeCPUWarning %d, got %f", expectedNodeCPUWarning, thresholds.NodeCPUWarning)
+		t.Errorf("Expected NodeCPUWarning %d in proactive mode, got %f", expectedNodeCPUWarning, thresholds.NodeCPUWarning)
 	}
 }
 
@@ -214,15 +240,76 @@ func TestPatrolService_SetThresholdProvider(t *testing.T) {
 
 	ps.SetThresholdProvider(provider)
 
-	// Verify thresholds were calculated
+	// Verify thresholds were calculated (default: exact mode)
 	ps.mu.RLock()
 	thresholds := ps.thresholds
 	ps.mu.RUnlock()
 
-	// Watch = alert - 15
-	expectedWatch := 95.0 - 15.0
+	// Watch = alert - 5 (slight buffer in exact mode)
+	expectedWatch := 95.0 - 5.0
 	if thresholds.NodeCPUWatch != expectedWatch {
 		t.Errorf("Expected NodeCPUWatch %f, got %f", expectedWatch, thresholds.NodeCPUWatch)
+	}
+
+	// Warning = exact alert threshold (new default)
+	expectedWarning := 95.0
+	if thresholds.NodeCPUWarning != expectedWarning {
+		t.Errorf("Expected NodeCPUWarning %f (exact threshold), got %f", expectedWarning, thresholds.NodeCPUWarning)
+	}
+}
+
+func TestPatrolService_SetProactiveMode(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	provider := &mockThresholdProvider{
+		nodeCPU:    95,
+		nodeMemory: 90,
+		guestMem:   85,
+		guestDisk:  80,
+		storage:    75,
+	}
+
+	ps.SetThresholdProvider(provider)
+
+	// Enable proactive mode
+	ps.SetProactiveMode(true)
+
+	if !ps.GetProactiveMode() {
+		t.Error("Expected proactive mode to be true")
+	}
+
+	// Verify thresholds were recalculated for proactive mode
+	ps.mu.RLock()
+	thresholds := ps.thresholds
+	ps.mu.RUnlock()
+
+	// Watch = alert - 15 in proactive mode
+	expectedWatch := 95.0 - 15.0
+	if thresholds.NodeCPUWatch != expectedWatch {
+		t.Errorf("Expected NodeCPUWatch %f in proactive mode, got %f", expectedWatch, thresholds.NodeCPUWatch)
+	}
+
+	// Warning = alert - 5 in proactive mode
+	expectedWarning := 95.0 - 5.0
+	if thresholds.NodeCPUWarning != expectedWarning {
+		t.Errorf("Expected NodeCPUWarning %f in proactive mode, got %f", expectedWarning, thresholds.NodeCPUWarning)
+	}
+
+	// Disable proactive mode
+	ps.SetProactiveMode(false)
+
+	if ps.GetProactiveMode() {
+		t.Error("Expected proactive mode to be false")
+	}
+
+	// Verify thresholds were recalculated back to exact mode
+	ps.mu.RLock()
+	thresholds = ps.thresholds
+	ps.mu.RUnlock()
+
+	// Warning should be exact threshold again
+	if thresholds.NodeCPUWarning != 95.0 {
+		t.Errorf("Expected NodeCPUWarning 95 (exact threshold) after disabling proactive mode, got %f", thresholds.NodeCPUWarning)
 	}
 }
 

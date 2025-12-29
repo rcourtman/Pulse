@@ -3,13 +3,12 @@ package dockeragent
 import (
 	"bufio"
 	"errors"
-	"os"
 	"strconv"
 	"strings"
 )
 
 func readProcUptime() (float64, error) {
-	f, err := os.Open("/proc/uptime")
+	f, err := openProcUptime()
 	if err != nil {
 		return 0, err
 	}
