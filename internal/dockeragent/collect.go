@@ -357,12 +357,15 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 	if a.registryChecker != nil && a.registryChecker.Enabled() {
 		// Get the actual manifest digest (RepoDigest) from the image for accurate comparison.
 		// The ImageID is a local content-addressable ID that differs from the registry manifest digest.
-		digestForComparison := a.getImageRepoDigest(containerCtx, summary.ImageID, summary.Image)
+		// We also get the architecture details to correctly resolve manifest lists from the registry.
+		digestForComparison, arch, os, variant := a.getImageRepoDigest(containerCtx, summary.ImageID, summary.Image)
+		
 		if digestForComparison == "" {
 			// Fall back to ImageID if we can't get RepoDigest (shouldn't compare as equal)
 			digestForComparison = summary.ImageID
 		}
-		result := a.registryChecker.CheckImageUpdate(ctx, container.Image, digestForComparison)
+		
+		result := a.registryChecker.CheckImageUpdate(ctx, container.Image, digestForComparison, arch, os, variant)
 		if result != nil {
 			container.UpdateStatus = &agentsdocker.UpdateStatus{
 				UpdateAvailable: result.UpdateAvailable,
@@ -386,12 +389,9 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 	return container, nil
 }
 
-// getImageRepoDigest retrieves the RepoDigest for an image, which is the actual
-// manifest digest from the registry. This is necessary because Docker's ImageID
-// is a local content-addressable hash that differs from the registry manifest digest.
-// For multi-arch images, the registry returns a manifest list digest, while Docker
-// stores the platform-specific image config digest locally.
-func (a *Agent) getImageRepoDigest(ctx context.Context, imageID, imageName string) string {
+// getImageRepoDigest retrieves the RepoDigest for an image and its platform details.
+// It returns the digest, architecture, OS, and variant.
+func (a *Agent) getImageRepoDigest(ctx context.Context, imageID, imageName string) (string, string, string, string) {
 	imageInspect, _, err := a.docker.ImageInspectWithRaw(ctx, imageID)
 	if err != nil {
 		a.logger.Debug().
@@ -399,12 +399,16 @@ func (a *Agent) getImageRepoDigest(ctx context.Context, imageID, imageName strin
 			Str("imageID", imageID).
 			Str("imageName", imageName).
 			Msg("Failed to inspect image for RepoDigest")
-		return ""
+		return "", "", "", ""
 	}
+
+	arch := imageInspect.Architecture
+	os := imageInspect.Os
+	variant := imageInspect.Variant
 
 	if len(imageInspect.RepoDigests) == 0 {
 		// Locally built images won't have RepoDigests
-		return ""
+		return "", arch, os, variant
 	}
 
 	// Try to find a RepoDigest that matches the image reference
@@ -418,7 +422,7 @@ func (a *Agent) getImageRepoDigest(ctx context.Context, imageID, imageName strin
 			// Check if this RepoDigest matches our image reference
 			// Normalize both for comparison
 			if matchesImageReference(imageName, repoRef) {
-				return digest
+				return digest, arch, os, variant
 			}
 		}
 	}
@@ -426,10 +430,10 @@ func (a *Agent) getImageRepoDigest(ctx context.Context, imageID, imageName strin
 	// If no exact match, return the first RepoDigest's digest
 	// This handles cases where the image was pulled with a different tag
 	if idx := strings.LastIndex(imageInspect.RepoDigests[0], "@"); idx >= 0 {
-		return imageInspect.RepoDigests[0][idx+1:]
+		return imageInspect.RepoDigests[0][idx+1:], arch, os, variant
 	}
 
-	return ""
+	return "", arch, os, variant
 }
 
 // matchesImageReference checks if a RepoDigest repository matches an image reference.

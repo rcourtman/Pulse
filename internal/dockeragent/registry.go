@@ -117,7 +117,7 @@ func (r *RegistryChecker) MarkChecked() {
 }
 
 // CheckImageUpdate checks if a newer version of the image is available.
-func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDigest string) *ImageUpdateResult {
+func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDigest, arch, os, variant string) *ImageUpdateResult {
 	if !r.Enabled() {
 		return nil
 	}
@@ -136,7 +136,8 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 	}
 
 	// Check cache first
-	cacheKey := fmt.Sprintf("%s/%s:%s", registry, repository, tag)
+	// internal/dockeragent/registry.go
+	cacheKey := fmt.Sprintf("%s/%s:%s|%s/%s/%s", registry, repository, tag, arch, os, variant)
 	if cached := r.getCached(cacheKey); cached != nil {
 		if cached.err != "" {
 			return &ImageUpdateResult{
@@ -157,7 +158,7 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 	}
 
 	// Fetch latest digest from registry
-	latestDigest, err := r.fetchDigest(ctx, registry, repository, tag)
+	latestDigest, err := r.fetchDigest(ctx, registry, repository, tag, arch, os, variant)
 	if err != nil {
 		// Cache the error to avoid hammering the registry
 		r.cacheError(cacheKey, err.Error())
@@ -203,7 +204,7 @@ func (r *RegistryChecker) digestsDiffer(current, latest string) bool {
 }
 
 // fetchDigest retrieves the digest for an image from the registry.
-func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository, tag string) (string, error) {
+func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository, tag, arch, os, variant string) (string, error) {
 	// Get auth token if needed
 	token, err := r.getAuthToken(ctx, registry, repository)
 	if err != nil {
@@ -260,11 +261,92 @@ func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository,
 		}
 	}
 
+	contentType := resp.Header.Get("Content-Type")
+	isManifestList := strings.Contains(contentType, "manifest.list") || strings.Contains(contentType, "image.index")
+
+	// If it's a manifest list and we have arch info, we need to resolve it
+	if isManifestList && arch != "" && os != "" {
+		return r.resolveManifestList(ctx, registry, repository, tag, arch, os, variant, token)
+	}
+
 	if digest == "" {
 		return "", fmt.Errorf("no digest in response")
 	}
 
 	return digest, nil
+}
+
+// resolveManifestList fetches the manifest list and finds the matching digest for the architecture.
+func (r *RegistryChecker) resolveManifestList(ctx context.Context, registry, repository, tag, arch, os, variant, token string) (string, error) {
+	manifestURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, tag)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("create list request: %w", err)
+	}
+
+	req.Header.Set("Accept", strings.Join([]string{
+		"application/vnd.docker.distribution.manifest.list.v2+json",
+		"application/vnd.docker.distribution.manifest.v2+json",
+		"application/vnd.oci.image.manifest.v1+json",
+		"application/vnd.oci.image.index.v1+json",
+	}, ", "))
+
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("list request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("fetch manifest list failed: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read list body: %w", err)
+	}
+
+	var list manifestList
+	if err := json.Unmarshal(body, &list); err != nil {
+		return "", fmt.Errorf("decode manifest list: %w", err)
+	}
+
+	// Find the matching manifest
+	// We matched arch and os. Variant is tricky as it's not always passed or available clearly.
+	// We'll prioritize exact match including variant (if we had it), but for now standard match.
+	// Since we strictly want to match what the local image is, and we'll get that from ImageInspect.
+	
+	// Simple matching logic for now: exact match on Arch and OS
+	for _, m := range list.Manifests {
+		if m.Platform.Architecture == arch && m.Platform.OS == os {
+			if variant != "" && m.Platform.Variant != "" && variant != m.Platform.Variant {
+				continue
+			}
+			return m.Digest, nil
+		}
+	}
+
+	return "", fmt.Errorf("no matching manifest found for %s/%s in list", os, arch)
+}
+
+type manifestList struct {
+	Manifests []manifestDescriptor `json:"manifests"`
+}
+
+type manifestDescriptor struct {
+	Digest   string           `json:"digest"`
+	Platform manifestPlatform `json:"platform"`
+}
+
+type manifestPlatform struct {
+	Architecture string `json:"architecture"`
+	OS           string `json:"os"`
+	Variant      string `json:"variant,omitempty"`
 }
 
 // getAuthToken retrieves an auth token for the registry.

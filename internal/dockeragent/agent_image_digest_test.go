@@ -20,7 +20,8 @@ func TestAgent_getImageRepoDigest_Error(t *testing.T) {
 		logger: zerolog.New(io.Discard),
 	}
 
-	if got := agent.getImageRepoDigest(context.Background(), "image-id", "nginx:latest"); got != "" {
+	got, _, _, _ := agent.getImageRepoDigest(context.Background(), "image-id", "nginx:latest")
+	if got != "" {
 		t.Fatalf("expected empty digest on error, got %q", got)
 	}
 }
@@ -35,7 +36,8 @@ func TestAgent_getImageRepoDigest_NoRepoDigests(t *testing.T) {
 		logger: zerolog.New(io.Discard),
 	}
 
-	if got := agent.getImageRepoDigest(context.Background(), "image-id", "nginx:latest"); got != "" {
+	got, _, _, _ := agent.getImageRepoDigest(context.Background(), "image-id", "nginx:latest")
+	if got != "" {
 		t.Fatalf("expected empty digest for no RepoDigests, got %q", got)
 	}
 }
@@ -50,7 +52,8 @@ func TestAgent_getImageRepoDigest_Match(t *testing.T) {
 		logger: zerolog.New(io.Discard),
 	}
 
-	if got := agent.getImageRepoDigest(context.Background(), "image-id", "nginx:latest"); got != "sha256:abc" {
+	got, _, _, _ := agent.getImageRepoDigest(context.Background(), "image-id", "nginx:latest")
+	if got != "sha256:abc" {
 		t.Fatalf("expected matching digest, got %q", got)
 	}
 }
@@ -68,7 +71,8 @@ func TestAgent_getImageRepoDigest_FallbackToFirst(t *testing.T) {
 		logger: zerolog.New(io.Discard),
 	}
 
-	if got := agent.getImageRepoDigest(context.Background(), "image-id", "custom:latest"); got != "sha256:first" {
+	got, _, _, _ := agent.getImageRepoDigest(context.Background(), "image-id", "custom:latest")
+	if got != "sha256:first" {
 		t.Fatalf("expected fallback digest, got %q", got)
 	}
 }
@@ -83,7 +87,8 @@ func TestAgent_getImageRepoDigest_InvalidRepoDigest(t *testing.T) {
 		logger: zerolog.New(io.Discard),
 	}
 
-	if got := agent.getImageRepoDigest(context.Background(), "image-id", "nginx:latest"); got != "" {
+	got, _, _, _ := agent.getImageRepoDigest(context.Background(), "image-id", "nginx:latest")
+	if got != "" {
 		t.Fatalf("expected empty digest for invalid repo digest, got %q", got)
 	}
 }

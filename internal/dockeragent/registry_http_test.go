@@ -16,7 +16,7 @@ func TestRegistryChecker_CheckImageUpdate_Behavior(t *testing.T) {
 	t.Run("disabled checker returns nil", func(t *testing.T) {
 		checker := NewRegistryChecker(logger)
 		checker.SetEnabled(false)
-		result := checker.CheckImageUpdate(context.Background(), "nginx:latest", "sha256:current")
+		result := checker.CheckImageUpdate(context.Background(), "nginx:latest", "sha256:current", "", "", "")
 		if result != nil {
 			t.Error("Expected nil result when checker is disabled")
 		}
@@ -24,7 +24,7 @@ func TestRegistryChecker_CheckImageUpdate_Behavior(t *testing.T) {
 
 	t.Run("digest-pinned image skipped", func(t *testing.T) {
 		checker := NewRegistryChecker(logger)
-		result := checker.CheckImageUpdate(context.Background(), "nginx@sha256:abc123", "sha256:abc123")
+		result := checker.CheckImageUpdate(context.Background(), "nginx@sha256:abc123", "sha256:abc123", "", "", "")
 		if result == nil {
 			t.Fatal("Expected result for digest-pinned image")
 		}
@@ -50,8 +50,8 @@ func TestRegistryChecker_CheckImageUpdate_Behavior(t *testing.T) {
 				}
 			}),
 		}
-
-		result := checker.CheckImageUpdate(context.Background(), "", "sha256:current")
+		
+		result := checker.CheckImageUpdate(context.Background(), "", "sha256:current", "", "", "")
 		if result == nil {
 			t.Fatal("Expected result for empty image")
 		}
