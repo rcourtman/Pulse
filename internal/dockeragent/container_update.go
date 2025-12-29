@@ -47,8 +47,16 @@ func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetC
 		return nil
 	}
 
-	// Perform the update
-	result := a.updateContainer(ctx, containerID)
+	// Create a progress callback to send step updates to Pulse
+	progressFn := func(step string) {
+		// Send progress update (using "in_progress" status with step message)
+		if err := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusInProgress, step); err != nil {
+			a.logger.Warn().Err(err).Str("step", step).Msg("Failed to send progress update")
+		}
+	}
+
+	// Perform the update with progress tracking
+	result := a.updateContainerWithProgress(ctx, containerID, progressFn)
 
 	// Send completion status
 	status := agentsdocker.CommandStatusCompleted
@@ -65,7 +73,7 @@ func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetC
 	return nil
 }
 
-// updateContainer performs the actual container update operation.
+// updateContainerWithProgress performs the actual container update operation with progress reporting.
 // This is the core logic that:
 // 1. Inspects the current container configuration
 // 2. Pulls the latest image
@@ -73,9 +81,18 @@ func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetC
 // 4. Creates a new container with the same config
 // 5. Starts the new container
 // 6. Cleans up on success or rolls back on failure
-func (a *Agent) updateContainer(ctx context.Context, containerID string) ContainerUpdateResult {
+//
+// The progressFn callback is called at each step to report progress to Pulse.
+func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID string, progressFn func(step string)) ContainerUpdateResult {
 	result := ContainerUpdateResult{
 		ContainerID: containerID,
+	}
+
+	// Helper to report progress (handles nil progressFn)
+	reportProgress := func(step string) {
+		if progressFn != nil {
+			progressFn(step)
+		}
 	}
 
 	// 1. Inspect the current container to get its full configuration
@@ -89,6 +106,15 @@ func (a *Agent) updateContainer(ctx context.Context, containerID string) Contain
 	result.ContainerName = strings.TrimPrefix(inspect.Name, "/")
 	result.OldImageDigest = inspect.Image
 
+	// Reject updates for backup containers (created during previous updates)
+	if strings.Contains(result.ContainerName, "_pulse_backup_") {
+		result.Error = "Cannot update backup containers - these are temporary and should be cleaned up"
+		a.logger.Warn().
+			Str("container", result.ContainerName).
+			Msg("Rejecting update request for backup container")
+		return result
+	}
+
 	a.logger.Info().
 		Str("container", result.ContainerName).
 		Str("image", inspect.Config.Image).
@@ -96,6 +122,7 @@ func (a *Agent) updateContainer(ctx context.Context, containerID string) Contain
 
 	// 2. Pull the latest image
 	imageName := inspect.Config.Image
+	reportProgress(fmt.Sprintf("Pulling image %s...", imageName))
 	a.logger.Info().Str("image", imageName).Msg("Pulling latest image")
 
 	pullResp, err := a.docker.ImagePull(ctx, imageName, image.PullOptions{})
@@ -111,6 +138,7 @@ func (a *Agent) updateContainer(ctx context.Context, containerID string) Contain
 	a.logger.Info().Str("image", imageName).Msg("Successfully pulled latest image")
 
 	// 3. Stop the current container
+	reportProgress(fmt.Sprintf("Stopping container %s...", result.ContainerName))
 	stopTimeout := 30 // seconds
 	if err := a.docker.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &stopTimeout}); err != nil {
 		result.Error = fmt.Sprintf("Failed to stop container: %v", err)
@@ -133,6 +161,8 @@ func (a *Agent) updateContainer(ctx context.Context, containerID string) Contain
 	result.BackupCreated = true
 	result.BackupContainer = backupName
 	a.logger.Info().Str("backup", backupName).Msg("Container renamed for backup")
+
+	reportProgress(fmt.Sprintf("Creating new container %s...", result.ContainerName))
 
 	// 5. Prepare network configuration
 	// We need to handle network settings carefully
@@ -199,6 +229,7 @@ func (a *Agent) updateContainer(ctx context.Context, containerID string) Contain
 	}
 
 	// 8. Start the new container
+	reportProgress(fmt.Sprintf("Starting container %s...", result.ContainerName))
 	if err := a.docker.ContainerStart(ctx, newContainerID, container.StartOptions{}); err != nil {
 		result.Error = fmt.Sprintf("Failed to start new container: %v", err)
 		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to start new container")
@@ -212,6 +243,7 @@ func (a *Agent) updateContainer(ctx context.Context, containerID string) Contain
 	a.logger.Info().Str("container", result.ContainerName).Msg("New container started, verifying stability...")
 
 	// 9. Verify container stability
+	reportProgress("Verifying container stability...")
 	// Wait a few seconds to ensure it doesn't crash immediately
 	sleepFn(5 * time.Second)
 

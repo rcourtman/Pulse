@@ -30,6 +30,12 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 		return
 	}
 
+	// Skip updates if running as part of the unified agent
+	if a.cfg.AgentType == "unified" {
+		a.logger.Debug().Msg("Skipping update check - running in unified agent mode")
+		return
+	}
+
 	a.logger.Debug().Msg("Checking for agent updates")
 
 	target := a.primaryTarget()

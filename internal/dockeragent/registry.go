@@ -116,6 +116,18 @@ func (r *RegistryChecker) MarkChecked() {
 	r.lastFullCheck = time.Now()
 }
 
+// ForceCheck clears the cache and resets the last check timestamp.
+func (r *RegistryChecker) ForceCheck() {
+	r.mu.Lock()
+	r.lastFullCheck = time.Time{}
+	r.mu.Unlock()
+
+	r.cache.mu.Lock()
+	defer r.cache.mu.Unlock()
+	r.cache.entries = make(map[string]cacheEntry)
+}
+
+
 // CheckImageUpdate checks if a newer version of the image is available.
 func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDigest, arch, os, variant string) *ImageUpdateResult {
 	if !r.Enabled() {
@@ -137,8 +149,13 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 
 	// Check cache first
 	// internal/dockeragent/registry.go
+	// Check cache first
+	// internal/dockeragent/registry.go
 	cacheKey := fmt.Sprintf("%s/%s:%s|%s/%s/%s", registry, repository, tag, arch, os, variant)
+	r.logger.Debug().Str("image", image).Str("cacheKey", cacheKey).Msg("Checking update (internal)")
+
 	if cached := r.getCached(cacheKey); cached != nil {
+		r.logger.Debug().Str("image", image).Msg("Cache hit for update check")
 		if cached.err != "" {
 			return &ImageUpdateResult{
 				Image:           image,
@@ -158,7 +175,7 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 	}
 
 	// Fetch latest digest from registry
-	latestDigest, err := r.fetchDigest(ctx, registry, repository, tag, arch, os, variant)
+	latestDigest, headDigest, err := r.fetchDigest(ctx, registry, repository, tag, arch, os, variant)
 	if err != nil {
 		// Cache the error to avoid hammering the registry
 		r.cacheError(cacheKey, err.Error())
@@ -178,14 +195,33 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 		}
 	}
 
+	// Store both digests in cache (comma separated) to allow matching against either
+	cacheValue := latestDigest
+	if headDigest != latestDigest && headDigest != "" {
+		cacheValue = latestDigest + "," + headDigest
+	}
+
 	// Cache the successful result
-	r.cacheDigest(cacheKey, latestDigest)
+	r.cacheDigest(cacheKey, cacheValue)
+
+	updateAvailable := r.digestsDiffer(currentDigest, cacheValue)
+
+	r.logger.Info().
+		Str("image", image).
+		Str("currentDigest", currentDigest).
+		Str("latestDigest", latestDigest).
+		Str("headDigest", headDigest).
+		Str("arch", arch).
+		Str("os", os).
+		Str("variant", variant).
+		Bool("updateAvailable", updateAvailable).
+		Msg("Checked image update")
 
 	return &ImageUpdateResult{
 		Image:           image,
 		CurrentDigest:   currentDigest,
 		LatestDigest:    latestDigest,
-		UpdateAvailable: r.digestsDiffer(currentDigest, latestDigest),
+		UpdateAvailable: updateAvailable,
 		CheckedAt:       time.Now(),
 	}
 }
@@ -196,19 +232,27 @@ func (r *RegistryChecker) digestsDiffer(current, latest string) bool {
 		return false
 	}
 
-	// Normalize digests - remove "sha256:" prefix for comparison if present in only one
-	normCurrent := strings.TrimPrefix(current, "sha256:")
-	normLatest := strings.TrimPrefix(latest, "sha256:")
+	// Normalize digests - lowercase and remove "sha256:" prefix
+	normCurrent := strings.ToLower(strings.TrimPrefix(current, "sha256:"))
 
-	return normCurrent != normLatest
+	// latest may contain multiple comma-separated digests (resolved + head)
+	for _, l := range strings.Split(latest, ",") {
+		normLatest := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(l), "sha256:"))
+		if normCurrent == normLatest {
+			return false // Match found
+		}
+	}
+
+	return true // No match found
 }
 
 // fetchDigest retrieves the digest for an image from the registry.
-func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository, tag, arch, os, variant string) (string, error) {
+// Returns the resolved platform-specific digest AND the raw HEAD digest (which might be a manifest list).
+func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository, tag, arch, os, variant string) (string, string, error) {
 	// Get auth token if needed
 	token, err := r.getAuthToken(ctx, registry, repository)
 	if err != nil {
-		return "", fmt.Errorf("auth: %w", err)
+		return "", "", fmt.Errorf("auth: %w", err)
 	}
 
 	// Construct the manifest URL
@@ -216,7 +260,7 @@ func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository,
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, manifestURL, nil)
 	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
+		return "", "", fmt.Errorf("create request: %w", err)
 	}
 
 	// Accept headers for multi-arch manifest support
@@ -233,21 +277,21 @@ func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository,
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("request: %w", err)
+		return "", "", fmt.Errorf("request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return "", fmt.Errorf("authentication required")
+		return "", "", fmt.Errorf("authentication required")
 	}
 	if resp.StatusCode == http.StatusNotFound {
-		return "", fmt.Errorf("image not found")
+		return "", "", fmt.Errorf("image not found")
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return "", fmt.Errorf("rate limited")
+		return "", "", fmt.Errorf("rate limited")
 	}
 	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("registry error: %d", resp.StatusCode)
+		return "", "", fmt.Errorf("registry error: %d", resp.StatusCode)
 	}
 
 	// Get digest from Docker-Content-Digest header
@@ -266,14 +310,15 @@ func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository,
 
 	// If it's a manifest list and we have arch info, we need to resolve it
 	if isManifestList && arch != "" && os != "" {
-		return r.resolveManifestList(ctx, registry, repository, tag, arch, os, variant, token)
+		resolved, err := r.resolveManifestList(ctx, registry, repository, tag, arch, os, variant, token)
+		return resolved, digest, err
 	}
 
 	if digest == "" {
-		return "", fmt.Errorf("no digest in response")
+		return "", "", fmt.Errorf("no digest in response")
 	}
 
-	return digest, nil
+	return digest, digest, nil
 }
 
 // resolveManifestList fetches the manifest list and finds the matching digest for the architecture.
@@ -327,6 +372,13 @@ func (r *RegistryChecker) resolveManifestList(ctx context.Context, registry, rep
 			if variant != "" && m.Platform.Variant != "" && variant != m.Platform.Variant {
 				continue
 			}
+			r.logger.Debug().
+				Str("image", repository+":"+tag).
+				Str("arch", arch).
+				Str("variant", variant).
+				Str("foundDigest", m.Digest).
+				Str("foundVariant", m.Platform.Variant).
+				Msg("Resolved manifest list digest")
 			return m.Digest, nil
 		}
 	}
@@ -452,9 +504,23 @@ func parseImageReference(image string) (registry, repository, tag string) {
 	registry = "registry-1.docker.io"
 	tag = "latest"
 
-	// Check if this is a digest-pinned image (image@sha256:...)
-	if strings.Contains(image, "@sha256:") {
+	// Check if this is a digest or digest-pinned image (image@sha256: or sha256:...)
+	if strings.Contains(image, "@sha256:") || strings.HasPrefix(image, "sha256:") || isValidDigest(image) {
 		return "", "", ""
+	}
+
+	// Also check for 64-character hex strings (often used as image IDs)
+	if len(image) == 64 {
+		isHex := true
+		for _, c := range image {
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+				isHex = false
+				break
+			}
+		}
+		if isHex {
+			return "", "", ""
+		}
 	}
 
 	// Split off the tag first

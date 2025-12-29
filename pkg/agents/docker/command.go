@@ -25,9 +25,13 @@ const (
 	CommandTypeStop = "stop"
 	// CommandTypeUpdateContainer instructs the agent to update a specific container to its latest image.
 	CommandTypeUpdateContainer = "update_container"
+	// CommandTypeCheckUpdates instructs the agent to clear its registry cache and check for updates immediately.
+	CommandTypeCheckUpdates = "check_updates"
 
 	// CommandStatusAcknowledged indicates a command was received and is in progress.
 	CommandStatusAcknowledged = "acknowledged"
+	// CommandStatusInProgress indicates an intermediate progress update during command execution.
+	CommandStatusInProgress = "in_progress"
 	// CommandStatusCompleted indicates the command completed successfully.
 	CommandStatusCompleted = "completed"
 	// CommandStatusFailed indicates the command failed.

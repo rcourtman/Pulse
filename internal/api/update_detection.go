@@ -182,25 +182,62 @@ func (h *UpdateDetectionHandlers) HandleTriggerInfraUpdateCheck(w http.ResponseW
 		return
 	}
 
-	// For now, return a placeholder response - the actual check will be performed
-	// by agents on their next cycle
-	response := map[string]any{
-		"success": true,
-		"message": "Update check will be performed on next agent report cycle",
-		"note":    "Docker agents check registries periodically (every 6 hours by default)",
-	}
-
+	// Handle host-level check
 	if req.HostID != "" {
-		response["hostId"] = req.HostID
-	}
-	if req.ResourceID != "" {
-		response["resourceId"] = req.ResourceID
+		commandStatus, err := h.monitor.QueueDockerCheckUpdatesCommand(req.HostID)
+		if err != nil {
+			writeErrorResponse(w, http.StatusBadRequest, "check_updates_failed", err.Error(), nil)
+			return
+		}
+
+		if err := utils.WriteJSONResponse(w, map[string]any{
+			"success":   true,
+			"commandId": commandStatus.ID,
+			"hostId":    req.HostID,
+			"message":   "Update check command queued for host",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to serialize check response")
+		}
+		return
 	}
 
-	if err := utils.WriteJSONResponse(w, response); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize check response")
+	// Handle resource-level check (currently we just check the whole host)
+	if req.ResourceID != "" {
+		// Try to find which host this resource belongs to
+		updates := h.collectDockerUpdates("")
+		var hostID string
+		for _, update := range updates {
+			if update.ContainerID == req.ResourceID || ("docker:"+update.HostID+"/"+update.ContainerID) == req.ResourceID {
+				hostID = update.HostID
+				break
+			}
+		}
+
+		if hostID == "" {
+			writeErrorResponse(w, http.StatusNotFound, "not_found", "Resource not found or has no update status", nil)
+			return
+		}
+
+		commandStatus, err := h.monitor.QueueDockerCheckUpdatesCommand(hostID)
+		if err != nil {
+			writeErrorResponse(w, http.StatusBadRequest, "check_updates_failed", err.Error(), nil)
+			return
+		}
+
+		if err := utils.WriteJSONResponse(w, map[string]any{
+			"success":   true,
+			"commandId": commandStatus.ID,
+			"hostId":    hostID,
+			"message":   "Update check command queued for host",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to serialize check response")
+		}
+		return
 	}
+
+	writeErrorResponse(w, http.StatusBadRequest, "missing_params", "Either hostId or resourceId is required", nil)
 }
+
 
 // HandleGetInfraUpdatesForHost returns all updates for a specific host.
 // GET /api/infra-updates/host/{hostId}

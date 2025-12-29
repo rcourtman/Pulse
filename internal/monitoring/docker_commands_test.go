@@ -1191,3 +1191,31 @@ func TestAcknowledgeDockerCommandErrorPaths(t *testing.T) {
 		})
 	}
 }
+
+func TestQueueDockerContainerUpdateCommand(t *testing.T) {
+	t.Parallel()
+
+	monitor := newTestMonitorForCommands(t)
+	host := models.DockerHost{
+		ID:       "host-1",
+		Hostname: "node-1",
+		Status:   "online",
+	}
+	monitor.state.UpsertDockerHost(host)
+
+	containerID := "test-container"
+	containerName := "my-app"
+
+	cmdStatus, err := monitor.QueueDockerContainerUpdateCommand(host.ID, containerID, containerName)
+	if err != nil {
+		t.Fatalf("Failed to queue update command: %v", err)
+	}
+
+	if !strings.HasSuffix(cmdStatus.ID, ":"+containerID) {
+		t.Errorf("Expected command ID to end with :%s, got %s", containerID, cmdStatus.ID)
+	}
+
+	if cmdStatus.Type != DockerCommandTypeUpdateContainer {
+		t.Errorf("Expected type %s, got %s", DockerCommandTypeUpdateContainer, cmdStatus.Type)
+	}
+}

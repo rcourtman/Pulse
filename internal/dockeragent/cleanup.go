@@ -9,7 +9,7 @@ import (
 )
 
 // cleanupOrphanedBackups searches for and removes any Pulse backup containers
-// (created during updates) that are older than 1 hour.
+// (created during updates) that are older than 15 minutes.
 func (a *Agent) cleanupOrphanedBackups(ctx context.Context) {
 	a.logger.Debug().Msg("Checking for orphaned backup containers")
 
@@ -37,12 +37,28 @@ func (a *Agent) cleanupOrphanedBackups(ctx context.Context) {
 			continue
 		}
 
-		// Check age
-		created := time.Unix(c.Created, 0)
-		if time.Since(created) > 1*time.Hour {
+		// Check age based on the timestamp in the name, not the container's creation date
+		// (Renaming a container does not change its creation date)
+		parts := strings.Split(c.Names[0], "_pulse_backup_")
+		if len(parts) < 2 {
+			continue
+		}
+		
+		timestampStr := parts[len(parts)-1]
+		backupTime, err := time.Parse("20060102_150405", timestampStr)
+		if err != nil {
+			// If we can't parse the timestamp, fall back to creation date as a safety
+			created := time.Unix(c.Created, 0)
+			if time.Since(created) < 15*time.Minute {
+				continue
+			}
+			backupTime = created
+		}
+
+		if time.Since(backupTime) > 15*time.Minute {
 			a.logger.Info().
 				Str("container", c.Names[0]).
-				Time("created", created).
+				Time("backupTime", backupTime).
 				Msg("Removing orphaned backup container")
 
 			if err := a.docker.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
