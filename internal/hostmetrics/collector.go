@@ -115,6 +115,11 @@ func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
 	seen := make(map[string]struct{}, len(partitions))
 	zfsDatasets := make([]zfsDatasetUsage, 0)
 
+	// Track device+total combinations to deduplicate shared folders (Synology, BTRFS bind mounts).
+	// Key: "device:total_bytes", Value: mountpoint we already recorded.
+	// This prevents counting the same underlying volume multiple times. Related to #953.
+	deviceTotals := make(map[string]string, len(partitions))
+
 	for _, part := range partitions {
 		if part.Mountpoint == "" {
 			continue
@@ -165,6 +170,26 @@ func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
 		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(part.Fstype, part.Mountpoint, usage.Total, usage.Used); shouldSkip {
 			continue
 		}
+
+		// Deduplicate by device + total bytes (issue #953).
+		// Synology NAS and similar systems create multiple "shared folders" as bind mounts
+		// or BTRFS subvolumes that all report the same device and total capacity.
+		// Only count each unique device+total combination once.
+		deviceKey := fmt.Sprintf("%s:%d", part.Device, usage.Total)
+		if existingMount, exists := deviceTotals[deviceKey]; exists {
+			// Prefer shorter/shallower mountpoints (e.g., /volume1 over /volume1/docker)
+			if len(part.Mountpoint) >= len(existingMount) {
+				continue
+			}
+			// This mountpoint is shallower - remove the old entry and use this one
+			for i := len(disks) - 1; i >= 0; i-- {
+				if disks[i].Mountpoint == existingMount {
+					disks = append(disks[:i], disks[i+1:]...)
+					break
+				}
+			}
+		}
+		deviceTotals[deviceKey] = part.Mountpoint
 
 		disks = append(disks, agentshost.Disk{
 			Device:     part.Device,

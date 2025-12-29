@@ -22,6 +22,9 @@ func TestIsMockResource(t *testing.T) {
 	if !IsMockResource("node/pve1", "", "") {
 		t.Fatal("expected mock resource to be detected for pattern match")
 	}
+	if IsMockResource("", "", "") {
+		t.Fatal("expected empty resource values to be treated as non-mock")
+	}
 	if IsMockResource("node/prod1", "production", "node1") {
 		t.Fatal("expected non-mock resource to return false")
 	}
@@ -71,7 +74,7 @@ func TestGenerateDemoAIResponse(t *testing.T) {
 		{"backup", "pbs backup status", "Backup Status Review"},
 		{"cpu", "cpu load is high", "CPU/Performance Analysis"},
 		{"hello", "hello there", "Pulse AI Assistant"},
-		{"default", "tell me something", "This Demo Shows"},
+		{"default", "status report", "This Demo Shows"},
 	}
 
 	for _, tt := range tests {
