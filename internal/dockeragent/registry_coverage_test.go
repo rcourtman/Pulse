@@ -200,7 +200,7 @@ func TestRegistryChecker_FetchDigest_StatusErrors(t *testing.T) {
 				},
 			}
 
-			_, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag", "", "", "")
+			_, _, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag", "", "", "")
 			if err == nil || err.Error() != tt.wantErr {
 				t.Fatalf("Expected error %q, got %v", tt.wantErr, err)
 			}
@@ -220,7 +220,7 @@ func TestRegistryChecker_FetchDigest_RequestError(t *testing.T) {
 		},
 	}
 
-	_, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag", "", "", "")
+	_, _, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag", "", "", "")
 	if err == nil || !strings.Contains(err.Error(), "request:") {
 		t.Fatalf("Expected request error, got %v", err)
 	}
@@ -229,7 +229,7 @@ func TestRegistryChecker_FetchDigest_RequestError(t *testing.T) {
 func TestRegistryChecker_FetchDigest_RequestCreationError(t *testing.T) {
 	checker := &RegistryChecker{httpClient: &http.Client{}}
 
-	_, err := checker.fetchDigest(context.Background(), "bad host", "repo", "tag", "", "", "")
+	_, _, err := checker.fetchDigest(context.Background(), "bad host", "repo", "tag", "", "", "")
 	if err == nil || !strings.Contains(err.Error(), "create request:") {
 		t.Fatalf("Expected create request error, got %v", err)
 	}
@@ -257,7 +257,7 @@ func TestRegistryChecker_FetchDigest_DigestHeaders(t *testing.T) {
 			},
 		}
 
-		digest, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag", "", "", "")
+		digest, _, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag", "", "", "")
 		if err != nil {
 			t.Fatalf("Expected digest, got error %v", err)
 		}
@@ -281,7 +281,7 @@ func TestRegistryChecker_FetchDigest_DigestHeaders(t *testing.T) {
 			},
 		}
 
-		digest, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag", "", "", "")
+		digest, _, err := checker.fetchDigest(context.Background(), "example.test", "repo", "tag", "", "", "")
 		if err != nil {
 			t.Fatalf("Expected digest, got error %v", err)
 		}
@@ -304,7 +304,7 @@ func TestRegistryChecker_FetchDigest_AuthPaths(t *testing.T) {
 			},
 		}
 
-		_, err := checker.fetchDigest(context.Background(), "registry-1.docker.io", "library/nginx", "latest", "", "", "")
+		_, _, err := checker.fetchDigest(context.Background(), "registry-1.docker.io", "library/nginx", "latest", "", "", "")
 		if err == nil || err.Error() != "auth: token request failed: 500" {
 			t.Fatalf("Expected auth error, got %v", err)
 		}
@@ -331,7 +331,7 @@ func TestRegistryChecker_FetchDigest_AuthPaths(t *testing.T) {
 			},
 		}
 
-		digest, err := checker.fetchDigest(context.Background(), "registry-1.docker.io", "library/nginx", "latest", "", "", "")
+		digest, _, err := checker.fetchDigest(context.Background(), "registry-1.docker.io", "library/nginx", "latest", "", "", "")
 		if err != nil {
 			t.Fatalf("Expected digest, got error %v", err)
 		}

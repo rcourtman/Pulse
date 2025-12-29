@@ -1,12 +1,28 @@
 package discovery
 
 import (
+	"errors"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	pkgdiscovery "github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery/envdetect"
 )
+
+func mustCIDR(t *testing.T, value string) net.IPNet {
+	t.Helper()
+	_, cidr, err := net.ParseCIDR(value)
+	if err != nil {
+		t.Fatalf("parse CIDR %s: %v", value, err)
+	}
+	return *cidr
+}
+
+func resetDetectEnvironment() {
+	detectEnvironmentFn = envdetect.DetectEnvironment
+}
 
 func TestParseCIDRs(t *testing.T) {
 	tests := []struct {
@@ -268,6 +284,260 @@ func TestEnvironmentFromOverride(t *testing.T) {
 				t.Errorf("environmentFromOverride(%q) ok = %v, want %v", tt.value, gotOK, tt.wantOK)
 			}
 		})
+	}
+}
+
+func TestBuildScanner(t *testing.T) {
+	t.Cleanup(resetDetectEnvironment)
+
+	profile := &envdetect.EnvironmentProfile{
+		Type:   envdetect.Native,
+		Phases: []envdetect.SubnetPhase{{Name: "local", Subnets: []net.IPNet{mustCIDR(t, "192.168.1.0/24")}}},
+		Policy: envdetect.DefaultScanPolicy(),
+	}
+	detectEnvironmentFn = func() (*envdetect.EnvironmentProfile, error) {
+		return profile, nil
+	}
+
+	scanner, err := BuildScanner(config.DefaultDiscoveryConfig())
+	if err != nil {
+		t.Fatalf("BuildScanner error: %v", err)
+	}
+	if scanner == nil {
+		t.Fatalf("expected scanner")
+	}
+}
+
+func TestBuildScannerError(t *testing.T) {
+	t.Cleanup(resetDetectEnvironment)
+
+	detectEnvironmentFn = func() (*envdetect.EnvironmentProfile, error) {
+		return nil, errors.New("detect failed")
+	}
+
+	if _, err := BuildScanner(config.DefaultDiscoveryConfig()); err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestApplyConfigToProfileNil(t *testing.T) {
+	ApplyConfigToProfile(nil, config.DefaultDiscoveryConfig())
+}
+
+func TestApplyConfigToProfileOverridesAndPolicies(t *testing.T) {
+	profile := &envdetect.EnvironmentProfile{
+		Type: envdetect.Unknown,
+		Phases: []envdetect.SubnetPhase{
+			{Name: "container_network", Subnets: []net.IPNet{mustCIDR(t, "10.0.0.0/24"), mustCIDR(t, "192.168.0.0/24")}},
+			{Name: "local", Subnets: []net.IPNet{mustCIDR(t, "172.16.0.0/24")}},
+		},
+		Policy: envdetect.DefaultScanPolicy(),
+	}
+
+	cfg := config.DiscoveryConfig{
+		EnvironmentOverride: "docker_bridge",
+		SubnetBlocklist:     []string{"192.168.0.0/24"},
+		SubnetAllowlist:     []string{"10.0.0.0/24", "192.168.0.0/24", "invalid"},
+		MaxHostsPerScan:     10,
+		MaxConcurrent:       20,
+		EnableReverseDNS:    true,
+		ScanGateways:        true,
+		DialTimeout:         1500,
+		HTTPTimeout:         2500,
+		IPBlocklist:         []string{"192.168.1.10", "invalid"},
+	}
+
+	ApplyConfigToProfile(profile, cfg)
+
+	if profile.Type != envdetect.DockerBridge {
+		t.Fatalf("expected DockerBridge env, got %v", profile.Type)
+	}
+	if len(profile.Phases) == 0 || profile.Phases[0].Name != "config_allowlist" {
+		t.Fatalf("expected allowlist phase first, got %#v", profile.Phases)
+	}
+	if len(profile.Phases[0].Subnets) != 1 {
+		t.Fatalf("expected allowlist to filter blocklisted subnet")
+	}
+	if profile.Policy.MaxHostsPerScan != 10 || profile.Policy.MaxConcurrent != 20 {
+		t.Fatalf("policy not updated: %+v", profile.Policy)
+	}
+	if !profile.Policy.EnableReverseDNS || !profile.Policy.ScanGateways {
+		t.Fatalf("policy flags not updated")
+	}
+	if profile.Policy.DialTimeout != 1500*time.Millisecond || profile.Policy.HTTPTimeout != 2500*time.Millisecond {
+		t.Fatalf("policy timeouts not updated: %+v", profile.Policy)
+	}
+	if len(profile.IPBlocklist) != 1 {
+		t.Fatalf("expected one IP in blocklist, got %d", len(profile.IPBlocklist))
+	}
+}
+
+func TestApplyConfigToProfileSkipsEmptyIPBlocklistEntries(t *testing.T) {
+	profile := &envdetect.EnvironmentProfile{
+		Type:   envdetect.Native,
+		Policy: envdetect.DefaultScanPolicy(),
+	}
+
+	cfg := config.DiscoveryConfig{
+		IPBlocklist: []string{"", "   ", "192.168.1.10"},
+	}
+
+	ApplyConfigToProfile(profile, cfg)
+
+	if len(profile.IPBlocklist) != 1 {
+		t.Fatalf("expected 1 IP in blocklist, got %d", len(profile.IPBlocklist))
+	}
+}
+
+func TestApplyConfigToProfileInvalidEnvironmentOverride(t *testing.T) {
+	profile := &envdetect.EnvironmentProfile{
+		Type:   envdetect.Native,
+		Phases: []envdetect.SubnetPhase{},
+		Policy: envdetect.DefaultScanPolicy(),
+	}
+	cfg := config.DiscoveryConfig{EnvironmentOverride: "invalid_env"}
+
+	ApplyConfigToProfile(profile, cfg)
+	if len(profile.Warnings) == 0 {
+		t.Fatalf("expected warning for invalid environment override")
+	}
+}
+
+func TestApplyConfigToProfilePrunesContainerPhase(t *testing.T) {
+	profile := &envdetect.EnvironmentProfile{
+		Type: envdetect.LXCUnprivileged,
+		Phases: []envdetect.SubnetPhase{
+			{Name: "container_phase", Subnets: []net.IPNet{mustCIDR(t, "10.0.0.0/24")}},
+			{Name: "lxc_parent", Subnets: []net.IPNet{mustCIDR(t, "192.168.0.0/24")}},
+		},
+		Policy: envdetect.DefaultScanPolicy(),
+	}
+
+	ApplyConfigToProfile(profile, config.DefaultDiscoveryConfig())
+	if len(profile.Phases) != 1 || profile.Phases[0].Name != "lxc_parent" {
+		t.Fatalf("expected container phase pruned, got %#v", profile.Phases)
+	}
+}
+
+func TestApplyConfigToProfileBlocklistWarnings(t *testing.T) {
+	profile := &envdetect.EnvironmentProfile{
+		Type:   envdetect.Unknown,
+		Phases: []envdetect.SubnetPhase{},
+		Policy: envdetect.DefaultScanPolicy(),
+	}
+
+	cfg := config.DiscoveryConfig{
+		SubnetBlocklist: []string{"invalid"},
+	}
+	ApplyConfigToProfile(profile, cfg)
+	if len(profile.Warnings) == 0 {
+		t.Fatalf("expected warnings for invalid CIDR")
+	}
+}
+
+func TestApplyConfigToProfileAllowsConfigAllowlist(t *testing.T) {
+	profile := &envdetect.EnvironmentProfile{
+		Type: envdetect.Native,
+		Phases: []envdetect.SubnetPhase{
+			{Name: "local", Subnets: []net.IPNet{mustCIDR(t, "10.0.0.0/24")}},
+		},
+		Policy: envdetect.DefaultScanPolicy(),
+	}
+
+	cfg := config.DiscoveryConfig{
+		SubnetAllowlist: []string{"10.0.0.0/24"},
+	}
+
+	ApplyConfigToProfile(profile, cfg)
+	if len(profile.Phases) == 0 || profile.Phases[0].Name != "config_allowlist" {
+		t.Fatalf("expected allowlist phase, got %#v", profile.Phases)
+	}
+}
+
+func TestApplyConfigToProfileNoProfileWarnings(t *testing.T) {
+	profile := &envdetect.EnvironmentProfile{
+		Type:         envdetect.Native,
+		Phases:       []envdetect.SubnetPhase{},
+		Policy:       envdetect.DefaultScanPolicy(),
+		Warnings:     nil,
+		ExtraTargets: []net.IP{},
+	}
+	cfg := config.DiscoveryConfig{
+		IPBlocklist: []string{"bad"},
+	}
+	ApplyConfigToProfile(profile, cfg)
+	if len(profile.Warnings) == 0 {
+		t.Fatalf("expected warnings for invalid IP")
+	}
+}
+
+func TestApplyConfigToProfileBlocksSubnets(t *testing.T) {
+	subnet := mustCIDR(t, "10.0.0.0/24")
+	profile := &envdetect.EnvironmentProfile{
+		Type: envdetect.Native,
+		Phases: []envdetect.SubnetPhase{
+			{Name: "local", Subnets: []net.IPNet{subnet}},
+		},
+		Policy: envdetect.DefaultScanPolicy(),
+	}
+	cfg := config.DiscoveryConfig{
+		SubnetBlocklist: []string{"10.0.0.0/24"},
+	}
+
+	ApplyConfigToProfile(profile, cfg)
+	if len(profile.Phases) != 0 {
+		t.Fatalf("expected phases filtered, got %#v", profile.Phases)
+	}
+}
+
+func TestApplyConfigToProfileAllowsBlockedAllowlist(t *testing.T) {
+	profile := &envdetect.EnvironmentProfile{
+		Type:   envdetect.Native,
+		Phases: []envdetect.SubnetPhase{},
+		Policy: envdetect.DefaultScanPolicy(),
+	}
+	cfg := config.DiscoveryConfig{
+		SubnetAllowlist: []string{"10.0.0.0/24"},
+		SubnetBlocklist: []string{"10.0.0.0/24"},
+	}
+
+	ApplyConfigToProfile(profile, cfg)
+	if len(profile.Phases) != 0 {
+		t.Fatalf("expected allowlist filtered by blocklist")
+	}
+}
+
+func TestApplyConfigToProfileKeepsUnknownEnvironmentPhases(t *testing.T) {
+	profile := &envdetect.EnvironmentProfile{
+		Type: envdetect.Unknown,
+		Phases: []envdetect.SubnetPhase{
+			{Name: "local", Subnets: []net.IPNet{mustCIDR(t, "10.0.0.0/24")}},
+		},
+		Policy: envdetect.DefaultScanPolicy(),
+	}
+	cfg := config.DiscoveryConfig{
+		EnvironmentOverride: "auto",
+	}
+
+	ApplyConfigToProfile(profile, cfg)
+	if len(profile.Phases) != 1 {
+		t.Fatalf("expected phases kept for unknown env")
+	}
+}
+
+func TestApplyConfigToProfileUsesNewScanner(t *testing.T) {
+	profile := &envdetect.EnvironmentProfile{
+		Type:   envdetect.Native,
+		Phases: []envdetect.SubnetPhase{},
+		Policy: envdetect.DefaultScanPolicy(),
+	}
+
+	cfg := config.DefaultDiscoveryConfig()
+	ApplyConfigToProfile(profile, cfg)
+
+	scanner, err := pkgdiscovery.NewScannerWithProfile(profile), error(nil)
+	if err != nil || scanner == nil {
+		t.Fatalf("expected scanner from profile")
 	}
 }
 
