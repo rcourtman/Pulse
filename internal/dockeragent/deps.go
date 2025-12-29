@@ -25,6 +25,7 @@ var (
 	tryRuntimeCandidateFn    = tryRuntimeCandidate
 	osExecutableFn     = os.Executable
 	osCreateTempFn     = os.CreateTemp
+	closeFileFn        = func(f *os.File) error { return f.Close() }
 	osRenameFn         = os.Rename
 	osChmodFn          = os.Chmod
 	osRemoveFn         = os.Remove

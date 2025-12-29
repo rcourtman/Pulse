@@ -1,0 +1,176 @@
+package dockeragent
+
+import (
+	"testing"
+	"time"
+
+	containertypes "github.com/docker/docker/api/types/container"
+	"github.com/rs/zerolog"
+)
+
+func TestCalculateContainerCPUPercent(t *testing.T) {
+	logger := zerolog.Nop()
+
+	t.Run("uses precpu stats", func(t *testing.T) {
+		agent := &Agent{
+			logger:           logger,
+			prevContainerCPU: make(map[string]cpuSample),
+			cpuCount:         2,
+		}
+
+		stats := containertypes.StatsResponse{
+			Read: time.Now(),
+			CPUStats: containertypes.CPUStats{
+				CPUUsage: containertypes.CPUUsage{TotalUsage: 200},
+				SystemUsage: 2000,
+				OnlineCPUs:  2,
+			},
+			PreCPUStats: containertypes.CPUStats{
+				CPUUsage: containertypes.CPUUsage{TotalUsage: 100},
+				SystemUsage: 1000,
+			},
+		}
+
+		got := agent.calculateContainerCPUPercent("container1", stats)
+		if got <= 0 {
+			t.Fatalf("expected percent > 0, got %f", got)
+		}
+		if _, ok := agent.prevContainerCPU["container1"]; !ok {
+			t.Fatal("expected current sample to be stored")
+		}
+	})
+
+	t.Run("first manual sample returns zero", func(t *testing.T) {
+		agent := &Agent{
+			logger:           logger,
+			prevContainerCPU: make(map[string]cpuSample),
+		}
+		stats := containertypes.StatsResponse{
+			Read: time.Now(),
+			CPUStats: containertypes.CPUStats{
+				CPUUsage: containertypes.CPUUsage{TotalUsage: 100},
+				SystemUsage: 1000,
+			},
+			PreCPUStats: containertypes.CPUStats{
+				CPUUsage: containertypes.CPUUsage{TotalUsage: 100},
+				SystemUsage: 1000,
+			},
+		}
+
+		got := agent.calculateContainerCPUPercent("container1", stats)
+		if got != 0 {
+			t.Fatalf("expected 0, got %f", got)
+		}
+		if _, ok := agent.prevContainerCPU["container1"]; !ok {
+			t.Fatal("expected sample to be stored")
+		}
+	})
+
+	t.Run("manual system delta uses previous sample", func(t *testing.T) {
+		agent := &Agent{
+			logger: logger,
+			prevContainerCPU: map[string]cpuSample{
+				"container1": {
+					totalUsage:  100,
+					systemUsage: 1000,
+					onlineCPUs:  2,
+					read:        time.Now().Add(-time.Second),
+				},
+			},
+		}
+
+		stats := containertypes.StatsResponse{
+			Read: time.Now(),
+			CPUStats: containertypes.CPUStats{
+				CPUUsage: containertypes.CPUUsage{TotalUsage: 200},
+				SystemUsage: 2000,
+				OnlineCPUs:  0,
+			},
+			PreCPUStats: containertypes.CPUStats{},
+		}
+
+		got := agent.calculateContainerCPUPercent("container1", stats)
+		if got <= 0 {
+			t.Fatalf("expected percent > 0, got %f", got)
+		}
+	})
+
+	t.Run("manual time delta fallback", func(t *testing.T) {
+		agent := &Agent{
+			logger: logger,
+			cpuCount: 4,
+			prevContainerCPU: map[string]cpuSample{
+				"container1": {
+					totalUsage:  100,
+					systemUsage: 1000,
+					onlineCPUs:  0,
+					read:        time.Now().Add(-2 * time.Second),
+				},
+			},
+		}
+
+		stats := containertypes.StatsResponse{
+			Read: time.Now(),
+			CPUStats: containertypes.CPUStats{
+				CPUUsage: containertypes.CPUUsage{TotalUsage: 200},
+				SystemUsage: 1000,
+				OnlineCPUs:  0,
+			},
+			PreCPUStats: containertypes.CPUStats{},
+		}
+
+		got := agent.calculateContainerCPUPercent("container1", stats)
+		if got <= 0 {
+			t.Fatalf("expected percent > 0, got %f", got)
+		}
+	})
+
+	t.Run("no valid delta returns zero", func(t *testing.T) {
+		agent := &Agent{
+			logger: logger,
+			prevContainerCPU: map[string]cpuSample{
+				"container1": {
+					totalUsage:  100,
+					systemUsage: 1000,
+					onlineCPUs:  0,
+					read:        time.Time{},
+				},
+			},
+		}
+
+		stats := containertypes.StatsResponse{
+			Read: time.Time{},
+			CPUStats: containertypes.CPUStats{
+				CPUUsage: containertypes.CPUUsage{TotalUsage: 200},
+				SystemUsage: 1000,
+				OnlineCPUs:  0,
+			},
+			PreCPUStats: containertypes.CPUStats{},
+		}
+
+		got := agent.calculateContainerCPUPercent("container1", stats)
+		if got != 0 {
+			t.Fatalf("expected 0, got %f", got)
+		}
+	})
+
+	t.Run("warn after repeated failures", func(t *testing.T) {
+		agent := &Agent{
+			logger:           logger,
+			prevContainerCPU: make(map[string]cpuSample),
+		}
+
+		stats := containertypes.StatsResponse{
+			Read: time.Now(),
+			CPUStats: containertypes.CPUStats{
+				CPUUsage: containertypes.CPUUsage{TotalUsage: 100},
+				SystemUsage: 1000,
+			},
+			PreCPUStats: containertypes.CPUStats{},
+		}
+
+		for i := 0; i < 10; i++ {
+			_ = agent.calculateContainerCPUPercent("container1", stats)
+		}
+	})
+}
