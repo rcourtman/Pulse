@@ -227,6 +227,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# --- URL Normalization ---
+# Strip trailing slashes from PULSE_URL to prevent double-slash URLs
+# (e.g., http://host:7655//download/... which would match frontend routes)
+if [[ -n "$PULSE_URL" ]]; then
+    PULSE_URL="${PULSE_URL%/}"
+fi
+
 # --- Platform Auto-Detection ---
 # Only auto-detect if flags weren't explicitly set
 log_info "Detecting available platforms..."
