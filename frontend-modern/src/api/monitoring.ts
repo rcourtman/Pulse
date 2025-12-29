@@ -623,7 +623,50 @@ export class MonitoringAPI {
       throw new Error((err as Error).message || 'Failed to parse update container response');
     }
   }
+
+  /**
+   * Triggers an immediate update check for all containers on a specific Docker host.
+   */
+  static async checkDockerUpdates(hostId: string): Promise<{ success: boolean; commandId?: string }> {
+    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(hostId)}/check-updates`;
+
+    const response = await apiFetch(url, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      let message = `Failed with status ${response.status}`;
+      try {
+        const text = await response.text();
+        if (text?.trim()) {
+          try {
+            const parsed = JSON.parse(text);
+            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+              message = parsed.error.trim();
+            }
+          } catch (_jsonErr) {
+            message = text.trim();
+          }
+        }
+      } catch (_err) {
+        // ignore read error
+      }
+      throw new Error(message);
+    }
+
+    const text = await response.text();
+    if (!text?.trim()) {
+      return { success: true };
+    }
+
+    try {
+      return JSON.parse(text) as { success: boolean; commandId?: string };
+    } catch (err) {
+      throw new Error((err as Error).message || 'Failed to parse check updates response');
+    }
+  }
 }
+
 
 export interface DeleteDockerHostResponse {
   success?: boolean;

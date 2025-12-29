@@ -55,10 +55,19 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 
 	agentID := a.cfg.AgentID
 	if agentID == "" {
+		// In unified mode, prefer machineID (which matches what hostagent uses)
+		// over daemonID to ensure a single agent entry in the backend.
+		// For standalone mode, we prefer daemonID for backward compatibility.
+		if a.cfg.AgentType == "unified" {
+			agentID = a.machineID
+		}
+		
 		// Use cached daemon ID from init rather than info.ID from current call.
 		// Podman can return different/empty IDs across calls, causing token
 		// binding conflicts on the server.
-		agentID = a.daemonID
+		if agentID == "" {
+			agentID = a.daemonID
+		}
 	}
 	if agentID == "" {
 		agentID = a.machineID
@@ -170,6 +179,18 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 			if _, ok := a.allowedStates[strings.ToLower(summary.State)]; !ok {
 				continue
 			}
+		}
+
+		// Skip backup containers created during updates - they're temporary
+		isBackup := false
+		for _, name := range summary.Names {
+			if strings.Contains(name, "_pulse_backup_") {
+				isBackup = true
+				break
+			}
+		}
+		if isBackup {
+			continue
 		}
 
 		active[summary.ID] = struct{}{}
@@ -360,19 +381,46 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		// We also get the architecture details to correctly resolve manifest lists from the registry.
 		digestForComparison, arch, os, variant := a.getImageRepoDigest(containerCtx, summary.ImageID, summary.Image)
 		
-		if digestForComparison == "" {
-			// Fall back to ImageID if we can't get RepoDigest (shouldn't compare as equal)
-			digestForComparison = summary.ImageID
+		var imageToCheck string
+		// Always prefer the image name from inspect config as it's the authoritative source
+		// and avoids issues with short IDs or digests in summary.
+		// HOWEVER, if the config image IS a digest (starts with sha256:), fall back to container.Image
+		// which usually contains the human-readable tag/name.
+		imageToCheck = container.Image
+		if inspect.Config != nil && inspect.Config.Image != "" {
+			if !strings.HasPrefix(inspect.Config.Image, "sha256:") {
+				imageToCheck = inspect.Config.Image
+			}
 		}
-		
-		result := a.registryChecker.CheckImageUpdate(ctx, container.Image, digestForComparison, arch, os, variant)
-		if result != nil {
+
+		// Additional safety: if imageToCheck is still a SHA, we can't check it
+		if strings.HasPrefix(imageToCheck, "sha256:") {
 			container.UpdateStatus = &agentsdocker.UpdateStatus{
-				UpdateAvailable: result.UpdateAvailable,
-				CurrentDigest:   result.CurrentDigest,
-				LatestDigest:    result.LatestDigest,
-				LastChecked:     result.CheckedAt,
-				Error:           result.Error,
+				UpdateAvailable: false,
+				CurrentDigest:   digestForComparison,
+				LastChecked:     time.Now(),
+				Error:           "digest-pinned image",
+			}
+			// Skip to end of update check block - don't call registry
+		} else {
+			a.logger.Debug().
+				Str("container", container.Name).
+				Str("image", imageToCheck).
+				Str("compareDigest", digestForComparison).
+				Str("arch", arch).
+				Str("os", os).
+				Str("variant", variant).
+				Msg("Checking update for container")
+
+			result := a.registryChecker.CheckImageUpdate(ctx, imageToCheck, digestForComparison, arch, os, variant)
+			if result != nil {
+				container.UpdateStatus = &agentsdocker.UpdateStatus{
+					UpdateAvailable: result.UpdateAvailable,
+					CurrentDigest:   result.CurrentDigest,
+					LatestDigest:    result.LatestDigest,
+					LastChecked:     result.CheckedAt,
+					Error:           result.Error,
+				}
 			}
 		}
 	}

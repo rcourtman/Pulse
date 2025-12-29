@@ -18,6 +18,8 @@ interface DockerFilterProps {
   onClearHost?: () => void;
   updateAvailableCount?: number;
   onUpdateAll?: () => void;
+  onCheckUpdates?: (hostId: string) => void;
+  activeHostId?: string | null;
 }
 
 const UpdateAllButton: Component<{ count: number; onUpdate: () => void }> = (props) => {
@@ -55,6 +57,50 @@ const UpdateAllButton: Component<{ count: number; onUpdate: () => void }> = (pro
     </button>
   );
 };
+
+const RefreshButton: Component<{ onRefresh: () => void }> = (props) => {
+  const [loading, setLoading] = createSignal(false);
+
+  const handleClick = async () => {
+    if (loading()) return;
+    setLoading(true);
+    try {
+      await props.onRefresh();
+    } finally {
+      // Keep it loading for a bit to show it happened
+      setTimeout(() => setLoading(false), 1000);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={loading()}
+      class={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg transition-all ${loading()
+        ? 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed'
+        : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'
+        }`}
+      title="Force check for container updates on this host"
+    >
+      <svg
+        class={`h-3.5 w-3.5 ${loading() ? 'animate-spin' : ''}`}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+        />
+      </svg>
+      <span>{loading() ? 'Checking...' : 'Check Updates'}</span>
+    </button>
+  );
+};
+
 
 export const DockerFilter: Component<DockerFilterProps> = (props) => {
   const historyManager = createSearchHistoryManager(STORAGE_KEYS.DOCKER_SEARCH_HISTORY);
@@ -442,6 +488,7 @@ export const DockerFilter: Component<DockerFilterProps> = (props) => {
           </Show>
 
           {/* Metrics View Toggle */}
+          {/* Metrics View Toggle */}
           <MetricsViewToggle />
 
           <Show when={props.updateAvailableCount && props.updateAvailableCount > 1}>
@@ -452,7 +499,16 @@ export const DockerFilter: Component<DockerFilterProps> = (props) => {
             />
           </Show>
 
+
+          <Show when={props.onCheckUpdates && props.activeHostId}>
+            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" aria-hidden="true"></div>
+            <RefreshButton
+              onRefresh={() => props.onCheckUpdates!(props.activeHostId!)}
+            />
+          </Show>
+
           <Show when={hasActiveFilters()}>
+
             <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" aria-hidden="true"></div>
             <button
               type="button"

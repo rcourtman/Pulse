@@ -15,6 +15,8 @@ const (
 	DockerCommandTypeStop = "stop"
 	// DockerCommandTypeUpdateContainer instructs the agent to update a container to its latest image.
 	DockerCommandTypeUpdateContainer = "update_container"
+	// DockerCommandTypeCheckUpdates instructs the agent to check for container updates immediately.
+	DockerCommandTypeCheckUpdates = "check_updates"
 
 	// DockerCommandStatusQueued indicates the command is queued and waiting to be dispatched.
 	DockerCommandStatusQueued = "queued"
@@ -26,6 +28,8 @@ const (
 	DockerCommandStatusCompleted = "completed"
 	// DockerCommandStatusFailed indicates the command failed.
 	DockerCommandStatusFailed = "failed"
+	// DockerCommandStatusInProgress indicates the command is actively running.
+	DockerCommandStatusInProgress = "in_progress"
 	// DockerCommandStatusExpired indicates Pulse abandoned the command.
 	DockerCommandStatusExpired = "expired"
 )
@@ -67,6 +71,15 @@ func (cmd *dockerHostCommand) markDispatched() {
 	cmd.status.Status = DockerCommandStatusDispatched
 	cmd.status.DispatchedAt = &now
 	cmd.status.UpdatedAt = now
+}
+
+func (cmd *dockerHostCommand) markInProgress(message string) {
+	now := time.Now().UTC()
+	cmd.status.Status = DockerCommandStatusInProgress
+	cmd.status.UpdatedAt = now
+	if message != "" {
+		cmd.status.Message = message
+	}
 }
 
 func (cmd *dockerHostCommand) markAcknowledged(message string) {
@@ -195,6 +208,9 @@ func (m *Monitor) QueueDockerContainerUpdateCommand(hostID, containerID, contain
 	}
 
 	cmd := newDockerHostCommand(DockerCommandTypeUpdateContainer, fmt.Sprintf("Updating container %s", containerName), dockerCommandDefaultTTL, payload)
+	// Encode container ID in command ID so frontend can track it
+	cmd.status.ID = fmt.Sprintf("%s:%s", cmd.status.ID, containerID)
+
 	if m.dockerCommands == nil {
 		m.dockerCommands = make(map[string]*dockerHostCommand)
 	}
@@ -211,6 +227,57 @@ func (m *Monitor) QueueDockerContainerUpdateCommand(hostID, containerID, contain
 		Str("containerName", containerName).
 		Str("commandID", cmd.status.ID).
 		Msg("Queued docker container update command")
+
+	return cmd.status, nil
+}
+
+// QueueDockerCheckUpdatesCommand queues a command to check for container updates on a Docker host.
+func (m *Monitor) QueueDockerCheckUpdatesCommand(hostID string) (models.DockerHostCommandStatus, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	hostID = normalizeDockerHostID(hostID)
+	if hostID == "" {
+		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host id is required")
+	}
+
+	// Ensure the host exists
+	var hostExists bool
+	for _, host := range m.state.GetDockerHosts() {
+		if host.ID == hostID {
+			hostExists = true
+			break
+		}
+	}
+	if !hostExists {
+		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host %q not found", hostID)
+	}
+
+	// Check for existing commands in progress for this host
+	if existing, ok := m.dockerCommands[hostID]; ok {
+		switch existing.status.Status {
+		case DockerCommandStatusQueued, DockerCommandStatusDispatched, DockerCommandStatusAcknowledged, DockerCommandStatusInProgress:
+			return existing.status, fmt.Errorf("docker host %q already has a command in progress", hostID)
+		}
+	}
+
+	cmd := newDockerHostCommand(DockerCommandTypeCheckUpdates, "Checking for container updates", dockerCommandDefaultTTL, nil)
+
+	// Save the command
+	if m.dockerCommands == nil {
+		m.dockerCommands = make(map[string]*dockerHostCommand)
+	}
+	m.dockerCommands[hostID] = &cmd
+	if m.dockerCommandIndex == nil {
+		m.dockerCommandIndex = make(map[string]string)
+	}
+	m.dockerCommandIndex[cmd.status.ID] = hostID
+
+	m.state.SetDockerHostCommand(hostID, &cmd.status)
+	log.Info().
+		Str("dockerHostID", hostID).
+		Str("commandID", cmd.status.ID).
+		Msg("Queued docker check updates command")
 
 	return cmd.status, nil
 }
@@ -290,6 +357,8 @@ func (m *Monitor) acknowledgeDockerCommand(commandID, hostID, status, message st
 	switch status {
 	case DockerCommandStatusAcknowledged:
 		cmd.markAcknowledged(message)
+	case DockerCommandStatusInProgress:
+		cmd.markInProgress(message)
 	case DockerCommandStatusCompleted:
 		cmd.markAcknowledged(message)
 		cmd.markCompleted(message)

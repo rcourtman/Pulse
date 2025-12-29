@@ -22,6 +22,7 @@ import { eventBus } from './events';
 import { ALERTS_ACTIVATION_EVENT, isAlertsActivationEnabled } from '@/utils/alertsActivation';
 import { pruneMetricsByPrefix } from './metricsHistory';
 import { getMetricKeyPrefix } from '@/utils/metricsKeys';
+import { syncWithHostCommand } from './containerUpdates';
 
 // Type-safe WebSocket store
 export function createWebSocketStore(url: string) {
@@ -580,6 +581,15 @@ export function createWebSocketStore(url: string) {
               if (shouldApplyHosts && processedHosts !== null) {
                 setState('hosts', reconcile(processedHosts, { key: 'id' }));
               }
+            }
+
+            // Sync container update states with host command statuses for real-time progress
+            if (shouldApplyDockerHosts && processedDockerHosts !== null) {
+              processedDockerHosts.forEach((host: DockerHost) => {
+                if (host.command) {
+                  syncWithHostCommand(host.id, host.command);
+                }
+              });
             }
             if (message.data.removedDockerHosts !== undefined) {
               const removed = Array.isArray(message.data.removedDockerHosts)

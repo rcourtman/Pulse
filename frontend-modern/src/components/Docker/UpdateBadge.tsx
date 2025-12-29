@@ -1,7 +1,15 @@
-import { Component, Show, createSignal } from 'solid-js';
+import { Component, Show, createSignal, createEffect, createMemo } from 'solid-js';
 import type { DockerContainerUpdateStatus } from '@/types/api';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { MonitoringAPI } from '@/api/monitoring';
+import {
+    getContainerUpdateState,
+    markContainerQueued,
+    markContainerUpdateSuccess,
+    markContainerUpdateError,
+    clearContainerUpdateState,
+    updateStates
+} from '@/stores/containerUpdates';
 
 
 interface UpdateBadgeProps {
@@ -115,48 +123,93 @@ interface UpdateButtonProps {
     containerName: string;
     compact?: boolean;
     onUpdateTriggered?: () => void;
+    externalState?: 'updating' | 'queued' | 'error';
 }
 
 type UpdateState = 'idle' | 'confirming' | 'updating' | 'success' | 'error';
 
 /**
  * UpdateButton displays a clickable button to trigger container updates.
- * Includes confirmation, loading states, and error handling.
+ * Uses a persistent store to maintain state across WebSocket refreshes.
  */
 export const UpdateButton: Component<UpdateButtonProps> = (props) => {
-    const [state, setState] = createSignal<UpdateState>('idle');
+    const [localState, setLocalState] = createSignal<'idle' | 'confirming'>('idle');
     const [errorMessage, setErrorMessage] = createSignal<string>('');
 
-    const hasUpdate = () => props.updateStatus?.updateAvailable === true;
+    // Get persistent state from store - this survives WebSocket updates
+    const storeState = createMemo(() => {
+        // Access updateStates() to create reactive dependency
+        updateStates();
+        return getContainerUpdateState(props.hostId, props.containerId);
+    });
+
+    // Derived state: check store first, then external prop, then local state
+    const currentState = (): UpdateState => {
+        const stored = storeState();
+        if (stored) {
+            switch (stored.state) {
+                case 'queued':
+                case 'updating':
+                    return 'updating';
+                case 'success':
+                    return 'success';
+                case 'error':
+                    return 'error';
+            }
+        }
+        if (props.externalState === 'updating') return 'updating';
+        if (props.externalState === 'queued') return 'updating';
+        if (props.externalState === 'error') return 'error';
+        return localState();
+    };
+
+    // Watch for update completion - when updateAvailable becomes false, the update succeeded
+    createEffect(() => {
+        const stored = storeState();
+        if (stored && (stored.state === 'queued' || stored.state === 'updating')) {
+            // If the container no longer has an update available, the update succeeded!
+            if (props.updateStatus?.updateAvailable === false) {
+                markContainerUpdateSuccess(props.hostId, props.containerId);
+            }
+        }
+    });
+
+    const hasUpdate = () => props.updateStatus?.updateAvailable === true || currentState() !== 'idle';
 
     const handleClick = async (e: MouseEvent) => {
         e.stopPropagation();
         e.preventDefault();
 
-        if (state() === 'idle') {
+        const state = currentState();
+
+        // Prevent clicking if already updating
+        if (state === 'updating' || state === 'success' || state === 'error') return;
+
+        if (state === 'idle') {
             // Show confirmation
-            setState('confirming');
+            setLocalState('confirming');
             return;
         }
 
-        if (state() === 'confirming') {
+        if (state === 'confirming') {
             // User confirmed, trigger update
-            setState('updating');
+            // Immediately set store state so it persists
+            markContainerQueued(props.hostId, props.containerId);
+            setLocalState('idle'); // Reset local state
+
             try {
                 await MonitoringAPI.updateDockerContainer(
                     props.hostId,
                     props.containerId,
                     props.containerName
                 );
-                setState('success');
+                // Command queued successfully - store already has 'queued' state
+                // The effect above will detect when updateAvailable becomes false
                 props.onUpdateTriggered?.();
-                // Reset after 3 seconds
-                setTimeout(() => setState('idle'), 3000);
             } catch (err) {
-                setErrorMessage((err as Error).message || 'Failed to trigger update');
-                setState('error');
-                // Reset after 5 seconds
-                setTimeout(() => setState('idle'), 5000);
+                const message = (err as Error).message || 'Failed to trigger update';
+                setErrorMessage(message);
+                markContainerUpdateError(props.hostId, props.containerId, message);
             }
         }
     };
@@ -164,12 +217,14 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
     const handleCancel = (e: MouseEvent) => {
         e.stopPropagation();
         e.preventDefault();
-        setState('idle');
+        setLocalState('idle');
+        // Also clear any store state if canceling
+        clearContainerUpdateState(props.hostId, props.containerId);
     };
 
     const getButtonClass = () => {
         const base = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-all';
-        switch (state()) {
+        switch (currentState()) {
             case 'confirming':
                 return `${base} bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-900/60`;
             case 'updating':
@@ -184,15 +239,23 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
     };
 
     const getTooltip = () => {
-        switch (state()) {
+        const stored = storeState();
+        switch (currentState()) {
             case 'confirming':
                 return 'Click again to confirm update';
-            case 'updating':
-                return 'Update in progress...';
+            case 'updating': {
+                const elapsed = stored ? Math.round((Date.now() - stored.startedAt) / 1000) : 0;
+                // Show the current step if available from backend
+                const step = stored?.message || 'Processing...';
+                if (elapsed > 60) {
+                    return `${step} (${Math.floor(elapsed / 60)}m ${elapsed % 60}s)`;
+                }
+                return `${step} (${elapsed}s)`;
+            }
             case 'success':
-                return 'Update command sent! Container will restart shortly.';
+                return '✓ Update completed successfully!';
             case 'error':
-                return `Error: ${errorMessage()}`;
+                return `✗ Update failed: ${stored?.message || errorMessage() || 'Unknown error'}`;
             default:
                 if (!props.updateStatus) return 'Update container';
                 const current = props.updateStatus.currentDigest?.slice(0, 12) || 'unknown';
@@ -209,7 +272,7 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
                     class={getButtonClass()}
                     onClick={handleClick}
                     onMouseDown={(e) => { e.stopPropagation(); }}
-                    disabled={state() === 'updating'}
+                    disabled={currentState() === 'updating'}
                     data-prevent-toggle
                     onMouseEnter={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
@@ -220,26 +283,26 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
                     }}
                     onMouseLeave={() => hideTooltip()}
                 >
-                    <Show when={state() === 'updating'}>
+                    <Show when={currentState() === 'updating'}>
                         {/* Spinner */}
                         <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
                     </Show>
-                    <Show when={state() === 'success'}>
+                    <Show when={currentState() === 'success'}>
                         {/* Check icon */}
                         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                     </Show>
-                    <Show when={state() === 'error'}>
+                    <Show when={currentState() === 'error'}>
                         {/* X icon */}
                         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </Show>
-                    <Show when={state() === 'idle' || state() === 'confirming'}>
+                    <Show when={currentState() === 'idle' || currentState() === 'confirming'}>
                         {/* Upload/update icon */}
                         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -247,14 +310,14 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
                     </Show>
                     <Show when={!props.compact}>
                         <span>
-                            {state() === 'confirming' ? 'Confirm?' :
-                                state() === 'updating' ? 'Updating...' :
-                                    state() === 'success' ? 'Queued!' :
-                                        state() === 'error' ? 'Failed' : 'Update'}
+                            {currentState() === 'confirming' ? 'Confirm?' :
+                                currentState() === 'updating' ? 'Updating...' :
+                                    currentState() === 'success' ? 'Queued!' :
+                                        currentState() === 'error' ? 'Failed' : 'Update'}
                         </span>
                     </Show>
                 </button>
-                <Show when={state() === 'confirming'}>
+                <Show when={currentState() === 'confirming'}>
                     <button
                         type="button"
                         class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"

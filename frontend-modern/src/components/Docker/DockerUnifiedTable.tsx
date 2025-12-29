@@ -75,6 +75,7 @@ interface DockerUnifiedTableProps {
   dockerMetadata?: Record<string, DockerMetadata>;
   dockerHostMetadata?: Record<string, DockerHostMetadata>;
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
+  batchUpdateState?: Record<string, 'updating' | 'queued' | 'error'>;
 }
 
 type SortKey =
@@ -802,6 +803,7 @@ const DockerContainerRow: Component<{
   resourceIndentClass?: string;
   aiEnabled?: boolean;
   initialNotes?: string[];
+  batchUpdateState?: Record<string, 'updating' | 'queued' | 'error'>;
 }> = (props) => {
   const { host, container } = props.row;
   const runtimeInfo = resolveHostRuntime(host);
@@ -821,6 +823,12 @@ const DockerContainerRow: Component<{
     return dockerEditingValues.get(resourceId()) || '';
   });
   let urlInputRef: HTMLInputElement | undefined;
+
+  const batchState = createMemo(() => {
+    if (!props.batchUpdateState) return undefined;
+    const key = `${host.id}:${container.id}`;
+    return props.batchUpdateState[key];
+  });
 
   // Annotations and AI state - use props passed from parent to avoid per-row API calls
   const aiEnabled = () => props.aiEnabled ?? false;
@@ -1310,6 +1318,7 @@ const DockerContainerRow: Component<{
                 containerId={container.id}
                 containerName={container.name}
                 compact
+                externalState={batchState()}
               />
             </div>
           </div>
@@ -2786,6 +2795,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
         resourceIndentClass={grouped ? GROUPED_RESOURCE_INDENT : UNGROUPED_RESOURCE_INDENT}
         aiEnabled={aiEnabled()}
         initialNotes={metadata?.notes}
+        batchUpdateState={props.batchUpdateState}
       />
 
     ) : (
