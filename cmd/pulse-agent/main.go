@@ -61,6 +61,12 @@ func main() {
 	logger := zerolog.New(os.Stdout).Level(cfg.LogLevel).With().Timestamp().Logger()
 	cfg.Logger = &logger
 
+	// 2a. Handle Self-Test
+	if cfg.SelfTest {
+		logger.Info().Msg("Self-test passed: config loaded and logger initialized")
+		os.Exit(0)
+	}
+
 	// 3. Check if running as Windows service
 	ranAsService, err := runAsWindowsService(cfg, logger)
 	if err != nil {
@@ -358,6 +364,7 @@ type Config struct {
 
 	// Network configuration
 	ReportIP string // IP address to report (for multi-NIC systems)
+	SelfTest bool   // Perform self-test and exit
 
 	// Health/metrics server
 	HealthAddr string
@@ -460,6 +467,7 @@ func loadConfig() Config {
 	kubeMaxPodsFlag := flag.Int("kube-max-pods", defaultInt(envKubeMaxPods, 200), "Max pods included in report")
 	reportIPFlag := flag.String("report-ip", envReportIP, "IP address to report (for multi-NIC systems)")
 	showVersion := flag.Bool("version", false, "Print the agent version and exit")
+	selfTest := flag.Bool("self-test", false, "Perform self-test and exit (used during auto-update)")
 
 	var tagFlags multiValue
 	flag.Var(&tagFlags, "tag", "Tag to apply (repeatable)")
@@ -537,6 +545,7 @@ func loadConfig() Config {
 		KubeMaxPods:               *kubeMaxPodsFlag,
 		DiskExclude:               diskExclude,
 		ReportIP:                  strings.TrimSpace(*reportIPFlag),
+		SelfTest:                  *selfTest,
 	}
 }
 

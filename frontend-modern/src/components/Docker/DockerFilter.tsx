@@ -16,7 +16,45 @@ interface DockerFilterProps {
   onReset?: () => void;
   activeHostName?: string;
   onClearHost?: () => void;
+  updateAvailableCount?: number;
+  onUpdateAll?: () => void;
 }
+
+const UpdateAllButton: Component<{ count: number; onUpdate: () => void }> = (props) => {
+  const [confirming, setConfirming] = createSignal(false);
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (confirming()) {
+          props.onUpdate();
+          setConfirming(false);
+        } else {
+          setConfirming(true);
+          // Auto-reset confirmation after 3s
+          setTimeout(() => setConfirming(false), 3000);
+        }
+      }}
+      class={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg transition-colors ${confirming()
+        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 hover:bg-amber-200'
+        : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 hover:bg-blue-200'
+        }`}
+      title={confirming() ? "Click again to confirm" : `Update ${props.count} containers`}
+    >
+      <Show when={!confirming()} fallback={
+        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+      }>
+        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+        </svg>
+      </Show>
+      <span>{confirming() ? 'Confirm Update All?' : `Update All (${props.count})`}</span>
+    </button>
+  );
+};
 
 export const DockerFilter: Component<DockerFilterProps> = (props) => {
   const historyManager = createSearchHistoryManager(STORAGE_KEYS.DOCKER_SEARCH_HISTORY);
@@ -405,6 +443,14 @@ export const DockerFilter: Component<DockerFilterProps> = (props) => {
 
           {/* Metrics View Toggle */}
           <MetricsViewToggle />
+
+          <Show when={props.updateAvailableCount && props.updateAvailableCount > 1}>
+            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" aria-hidden="true"></div>
+            <UpdateAllButton
+              count={props.updateAvailableCount!}
+              onUpdate={props.onUpdateAll!}
+            />
+          </Show>
 
           <Show when={hasActiveFilters()}>
             <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" aria-hidden="true"></div>
