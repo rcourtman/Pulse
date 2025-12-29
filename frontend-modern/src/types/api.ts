@@ -477,6 +477,18 @@ export interface HostSensorSummary {
   temperatureCelsius?: Record<string, number>;
   fanRpm?: Record<string, number>;
   additional?: Record<string, number>;
+  smart?: HostDiskSMART[]; // S.M.A.R.T. disk data
+}
+
+export interface HostDiskSMART {
+  device: string;        // Device name (e.g., sda)
+  model?: string;        // Disk model
+  serial?: string;       // Serial number
+  wwn?: string;          // World Wide Name
+  type?: string;         // Transport type: sata, sas, nvme
+  temperature: number;   // Temperature in Celsius
+  health?: string;       // PASSED, FAILED, UNKNOWN
+  standby?: boolean;     // True if disk was in standby
 }
 
 export interface HostRAIDArray {
