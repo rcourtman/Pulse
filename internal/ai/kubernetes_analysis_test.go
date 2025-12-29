@@ -1,9 +1,14 @@
 package ai
 
 import (
+	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -237,6 +242,22 @@ func TestKubernetesPodReason(t *testing.T) {
 			},
 			contains: []string{"containers=app"},
 		},
+		{
+			name: "pod with message and multiple containers",
+			pod: models.KubernetesPod{
+				Phase:    "Failed",
+				Message:  strings.Repeat("x", maxKubernetesMessageLength+10),
+				Restarts: 3,
+				Containers: []models.KubernetesPodContainer{
+					{Name: "ok", Ready: true, State: "running"},
+					{Name: "one", Ready: false, State: "waiting"},
+					{Name: "two", Ready: false, State: "terminated"},
+					{Name: "three", Ready: false, State: "waiting"},
+					{Name: "four", Ready: false, State: "waiting"},
+				},
+			},
+			contains: []string{"message=", "containers=", "restarts=3"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -312,6 +333,16 @@ func TestIsKubernetesDeploymentHealthy(t *testing.T) {
 				ReadyReplicas:     3,
 				AvailableReplicas: 2,
 				UpdatedReplicas:   3,
+			},
+			expected: false,
+		},
+		{
+			name: "not all updated",
+			deployment: models.KubernetesDeployment{
+				DesiredReplicas:   3,
+				ReadyReplicas:     3,
+				AvailableReplicas: 3,
+				UpdatedReplicas:   2,
 			},
 			expected: false,
 		},
@@ -465,6 +496,277 @@ func TestFormatPodRestarts(t *testing.T) {
 			t.Errorf("Expected 2 lines (limit), got %d", len(result))
 		}
 	})
+
+	t.Run("ties sort by name", func(t *testing.T) {
+		issues := []podIssue{
+			{namespace: "ns", name: "b-pod", restarts: 3},
+			{namespace: "ns", name: "a-pod", restarts: 3},
+		}
+		result := formatPodRestarts(issues, 10)
+		if len(result) != 2 {
+			t.Fatalf("Expected 2 lines, got %d", len(result))
+		}
+		if !strings.Contains(result[0], "a-pod") {
+			t.Fatalf("Expected tie-breaker to sort by name, got %q", result[0])
+		}
+	})
 }
 
+// ========================================
+// findKubernetesCluster tests
+// ========================================
 
+func TestFindKubernetesCluster(t *testing.T) {
+	clusters := []models.KubernetesCluster{
+		{ID: "cluster-1"},
+		{ID: "cluster-2"},
+	}
+
+	cluster, ok := findKubernetesCluster(clusters, "cluster-2")
+	if !ok || cluster.ID != "cluster-2" {
+		t.Fatalf("expected to find cluster-2, got ok=%t id=%s", ok, cluster.ID)
+	}
+
+	if _, ok := findKubernetesCluster(clusters, "missing"); ok {
+		t.Fatal("expected missing cluster to return ok=false")
+	}
+}
+
+// ========================================
+// kubernetesClusterDisplayName tests
+// ========================================
+
+func TestKubernetesClusterDisplayName(t *testing.T) {
+	cluster := models.KubernetesCluster{
+		ID:                "id",
+		Name:              "name",
+		DisplayName:       "display",
+		CustomDisplayName: "custom",
+	}
+	if got := kubernetesClusterDisplayName(cluster); got != "custom" {
+		t.Fatalf("expected custom display name, got %s", got)
+	}
+
+	cluster.CustomDisplayName = ""
+	if got := kubernetesClusterDisplayName(cluster); got != "display" {
+		t.Fatalf("expected display name, got %s", got)
+	}
+
+	cluster.DisplayName = ""
+	if got := kubernetesClusterDisplayName(cluster); got != "name" {
+		t.Fatalf("expected name, got %s", got)
+	}
+
+	cluster.Name = ""
+	if got := kubernetesClusterDisplayName(cluster); got != "id" {
+		t.Fatalf("expected id, got %s", got)
+	}
+}
+
+// ========================================
+// summarizeKubernetesNodes tests
+// ========================================
+
+func TestSummarizeKubernetesNodes(t *testing.T) {
+	nodes := []models.KubernetesNode{
+		{Name: "node-1", Ready: true},
+		{Name: "node-2", Ready: false, Unschedulable: true},
+	}
+
+	summary, issues := summarizeKubernetesNodes(nodes)
+	if !strings.Contains(summary, "2 total, 1 ready, 1 not ready, 1 unschedulable") {
+		t.Fatalf("unexpected summary: %s", summary)
+	}
+	if len(issues) != 1 || !strings.Contains(issues[0], "node-2") {
+		t.Fatalf("unexpected issues: %+v", issues)
+	}
+}
+
+func TestSummarizeKubernetesNodes_Truncates(t *testing.T) {
+	nodes := make([]models.KubernetesNode, maxKubernetesNodeIssues+1)
+	for i := range nodes {
+		nodes[i] = models.KubernetesNode{Name: "node-" + string(rune('a'+i)), Ready: false}
+	}
+
+	_, issues := summarizeKubernetesNodes(nodes)
+	if len(issues) != maxKubernetesNodeIssues+1 {
+		t.Fatalf("expected truncated issues list, got %d", len(issues))
+	}
+	if !strings.Contains(issues[len(issues)-1], "and 1 more") {
+		t.Fatalf("expected truncation message, got %s", issues[len(issues)-1])
+	}
+}
+
+// ========================================
+// summarizeKubernetesPods tests
+// ========================================
+
+func TestSummarizeKubernetesPods(t *testing.T) {
+	pods := []models.KubernetesPod{
+		{
+			Name:      "ok",
+			Namespace: "default",
+			Phase:     "Running",
+			Containers: []models.KubernetesPodContainer{
+				{Name: "app", Ready: true, State: "running"},
+			},
+		},
+		{
+			Name:      "bad",
+			Namespace: "default",
+			Phase:     "Running",
+			Restarts:  2,
+			Containers: []models.KubernetesPodContainer{
+				{Name: "app", Ready: false, State: "waiting", Reason: "CrashLoopBackOff"},
+			},
+		},
+		{Name: "pending", Namespace: "default", Phase: "Pending"},
+		{Name: "failed", Namespace: "default", Phase: "Failed", Reason: "Error", Message: "failed", Restarts: 1},
+		{Name: "unknown", Namespace: "default", Phase: ""},
+		{Name: "succeeded", Namespace: "default", Phase: "Succeeded"},
+	}
+
+	summary, issues, restarts := summarizeKubernetesPods(pods)
+	if !strings.Contains(summary, "6 total") || !strings.Contains(summary, "2 running") || !strings.Contains(summary, "1 pending") ||
+		!strings.Contains(summary, "1 failed") || !strings.Contains(summary, "1 succeeded") || !strings.Contains(summary, "1 unknown") {
+		t.Fatalf("unexpected summary: %s", summary)
+	}
+	if len(issues) == 0 {
+		t.Fatalf("expected pod issues, got none")
+	}
+	if len(restarts) != 2 {
+		t.Fatalf("expected restart leaders, got %d", len(restarts))
+	}
+}
+
+// ========================================
+// summarizeKubernetesDeployments tests
+// ========================================
+
+func TestSummarizeKubernetesDeployments(t *testing.T) {
+	deployments := []models.KubernetesDeployment{
+		{Namespace: "default", Name: "ok", DesiredReplicas: 2, ReadyReplicas: 2, UpdatedReplicas: 2, AvailableReplicas: 2},
+		{Namespace: "default", Name: "bad", DesiredReplicas: 2, ReadyReplicas: 1, UpdatedReplicas: 1, AvailableReplicas: 1},
+	}
+
+	summary, issues := summarizeKubernetesDeployments(deployments)
+	if !strings.Contains(summary, "2 total, 1 healthy, 1 unhealthy") {
+		t.Fatalf("unexpected summary: %s", summary)
+	}
+	if len(issues) != 1 || !strings.Contains(issues[0], "default/bad") {
+		t.Fatalf("unexpected issues: %+v", issues)
+	}
+}
+
+func TestSummarizeKubernetesDeployments_Truncates(t *testing.T) {
+	deployments := make([]models.KubernetesDeployment, maxKubernetesDeploymentIssues+1)
+	for i := range deployments {
+		deployments[i] = models.KubernetesDeployment{
+			Namespace:         "ns",
+			Name:              "dep-" + string(rune('a'+i)),
+			DesiredReplicas:   2,
+			ReadyReplicas:     0,
+			UpdatedReplicas:   0,
+			AvailableReplicas: 0,
+		}
+	}
+
+	_, issues := summarizeKubernetesDeployments(deployments)
+	if len(issues) != maxKubernetesDeploymentIssues+1 {
+		t.Fatalf("expected truncated issues list, got %d", len(issues))
+	}
+	if !strings.Contains(issues[len(issues)-1], "and 1 more") {
+		t.Fatalf("expected truncation message, got %s", issues[len(issues)-1])
+	}
+}
+
+// ========================================
+// buildKubernetesClusterContext tests
+// ========================================
+
+func TestBuildKubernetesClusterContext(t *testing.T) {
+	now := time.Now().Add(-5 * time.Minute)
+	cluster := models.KubernetesCluster{
+		ID:                "cluster-1",
+		Name:              "prod",
+		Status:            "healthy",
+		Version:           "1.27",
+		Server:            "https://kube.local",
+		Context:           "prod",
+		AgentVersion:      "v1",
+		IntervalSeconds:   60,
+		LastSeen:          now,
+		PendingUninstall:  true,
+		Nodes:             []models.KubernetesNode{{Name: "node-1", Ready: false, Unschedulable: true}},
+		Pods: []models.KubernetesPod{
+			{Name: "pod-1", Namespace: "default", Phase: "Pending"},
+			{Name: "pod-2", Namespace: "default", Phase: "Running", Restarts: 2},
+		},
+		Deployments:       []models.KubernetesDeployment{{Namespace: "default", Name: "dep", DesiredReplicas: 1}},
+	}
+
+	ctx := buildKubernetesClusterContext(cluster)
+	if !strings.Contains(ctx, "Cluster Summary") || !strings.Contains(ctx, "Pending uninstall: true") {
+		t.Fatalf("unexpected context: %s", ctx)
+	}
+	if !strings.Contains(ctx, "Unhealthy Nodes") || !strings.Contains(ctx, "Unhealthy Pods") {
+		t.Fatalf("expected unhealthy sections, got: %s", ctx)
+	}
+	if !strings.Contains(ctx, "Pods With Restarts") {
+		t.Fatalf("expected pod restarts section, got: %s", ctx)
+	}
+	if !strings.Contains(ctx, "Deployments Not Fully Available") {
+		t.Fatalf("expected deployment issues section, got: %s", ctx)
+	}
+}
+
+// ========================================
+// AnalyzeKubernetesCluster tests
+// ========================================
+
+func TestAnalyzeKubernetesCluster_Errors(t *testing.T) {
+	svc := &Service{}
+
+	if _, err := svc.AnalyzeKubernetesCluster(context.Background(), ""); err == nil {
+		t.Fatal("expected error for missing cluster ID")
+	}
+
+	if _, err := svc.AnalyzeKubernetesCluster(context.Background(), "cluster-1"); !errors.Is(err, ErrKubernetesStateUnavailable) {
+		t.Fatalf("expected ErrKubernetesStateUnavailable, got %v", err)
+	}
+
+	svc.SetStateProvider(&mockStateProvider{})
+	if _, err := svc.AnalyzeKubernetesCluster(context.Background(), "cluster-1"); !errors.Is(err, ErrKubernetesClusterNotFound) {
+		t.Fatalf("expected ErrKubernetesClusterNotFound, got %v", err)
+	}
+}
+
+func TestAnalyzeKubernetesCluster_Success(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	svc := NewService(persistence, nil)
+	svc.cfg = &config.AIConfig{Enabled: true, Model: "anthropic:test-model"}
+	svc.provider = &mockProvider{
+		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+			return &providers.ChatResponse{Content: "ok"}, nil
+		},
+	}
+
+	cluster := models.KubernetesCluster{
+		ID:   "cluster-1",
+		Name: "prod",
+	}
+	svc.SetStateProvider(&mockStateProvider{
+		state: models.StateSnapshot{
+			KubernetesClusters: []models.KubernetesCluster{cluster},
+		},
+	})
+
+	resp, err := svc.AnalyzeKubernetesCluster(context.Background(), "cluster-1")
+	if err != nil {
+		t.Fatalf("AnalyzeKubernetesCluster failed: %v", err)
+	}
+	if resp == nil || resp.Content != "ok" {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+}
