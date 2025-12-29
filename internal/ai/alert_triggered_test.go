@@ -72,6 +72,38 @@ func TestAlertTriggeredAnalyzer_AnalyzeNodeFromAlert(t *testing.T) {
 	}
 }
 
+func TestAlertTriggeredAnalyzer_AnalyzeNodeFromAlert_ByNodeField(t *testing.T) {
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			Nodes: []models.Node{
+				{ID: "node/pve1", Name: "pve1", Status: "online", CPU: 0.95},
+			},
+		},
+	}
+	patrolService := &PatrolService{thresholds: DefaultPatrolThresholds()}
+	analyzer := NewAlertTriggeredAnalyzer(patrolService, stateProvider)
+
+	alert := &alerts.Alert{
+		ID:         "alert-1",
+		Type:       "node_cpu",
+		ResourceID: "node/other",
+		Node:       "pve1",
+	}
+
+	findings := analyzer.analyzeNodeFromAlert(context.Background(), alert)
+	if len(findings) == 0 {
+		t.Error("Expected findings when node matches alert.Node")
+	}
+}
+
+func TestAlertTriggeredAnalyzer_AnalyzeNodeFromAlert_NoState(t *testing.T) {
+	analyzer := NewAlertTriggeredAnalyzer(&PatrolService{}, nil)
+	alert := &alerts.Alert{ID: "alert-1", ResourceID: "node/pve1"}
+	if findings := analyzer.analyzeNodeFromAlert(context.Background(), alert); findings != nil {
+		t.Errorf("Expected nil findings with no state provider, got %v", findings)
+	}
+}
+
 func TestAlertTriggeredAnalyzer_AnalyzeGuestFromAlert(t *testing.T) {
 	stateProvider := &mockStateProvider{
 		state: models.StateSnapshot{
@@ -149,6 +181,44 @@ func TestAlertTriggeredAnalyzer_AnalyzeGuestFromAlert(t *testing.T) {
 	}
 }
 
+func TestAlertTriggeredAnalyzer_AnalyzeGuestFromAlert_NoState(t *testing.T) {
+	analyzer := NewAlertTriggeredAnalyzer(&PatrolService{}, nil)
+	alert := &alerts.Alert{ID: "alert-1", ResourceID: "qemu/100"}
+	if findings := analyzer.analyzeGuestFromAlert(context.Background(), alert); findings != nil {
+		t.Errorf("Expected nil findings with no state provider, got %v", findings)
+	}
+}
+
+func TestAlertTriggeredAnalyzer_AnalyzeGuestFromAlert_ByName(t *testing.T) {
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			VMs: []models.VM{
+				{
+					ID:     "qemu/100",
+					Name:   "vm-name",
+					Node:   "pve1",
+					Status: "running",
+					CPU:    0.9,
+					Memory: models.Memory{Usage: 95.0},
+					Disk:   models.Disk{Usage: 90.0},
+				},
+			},
+		},
+	}
+	patrolService := &PatrolService{thresholds: DefaultPatrolThresholds()}
+	analyzer := NewAlertTriggeredAnalyzer(patrolService, stateProvider)
+
+	alert := &alerts.Alert{
+		ID:           "vm-alert",
+		Type:         "vm_memory",
+		ResourceName: "vm-name",
+	}
+	findings := analyzer.analyzeGuestFromAlert(context.Background(), alert)
+	if len(findings) == 0 {
+		t.Error("Expected findings when guest matches ResourceName")
+	}
+}
+
 func TestAlertTriggeredAnalyzer_AnalyzeDockerFromAlert(t *testing.T) {
 	stateProvider := &mockStateProvider{
 		state: models.StateSnapshot{
@@ -219,6 +289,14 @@ func TestAlertTriggeredAnalyzer_AnalyzeDockerFromAlert(t *testing.T) {
 	}
 }
 
+func TestAlertTriggeredAnalyzer_AnalyzeDockerFromAlert_NoState(t *testing.T) {
+	analyzer := NewAlertTriggeredAnalyzer(&PatrolService{}, nil)
+	alert := &alerts.Alert{ID: "alert-1", ResourceID: "docker-host"}
+	if findings := analyzer.analyzeDockerFromAlert(context.Background(), alert); findings != nil {
+		t.Errorf("Expected nil findings with no state provider, got %v", findings)
+	}
+}
+
 func TestAlertTriggeredAnalyzer_AnalyzeStorageFromAlert(t *testing.T) {
 	stateProvider := &mockStateProvider{
 		state: models.StateSnapshot{
@@ -261,6 +339,14 @@ func TestAlertTriggeredAnalyzer_AnalyzeStorageFromAlert(t *testing.T) {
 	findingsMissing := analyzer.analyzeStorageFromAlert(context.Background(), alertMissing)
 	if len(findingsMissing) != 0 {
 		t.Errorf("Expected 0 findings for missing storage, got %d", len(findingsMissing))
+	}
+}
+
+func TestAlertTriggeredAnalyzer_AnalyzeStorageFromAlert_NoState(t *testing.T) {
+	analyzer := NewAlertTriggeredAnalyzer(&PatrolService{}, nil)
+	alert := &alerts.Alert{ID: "alert-1", ResourceID: "storage-1"}
+	if findings := analyzer.analyzeStorageFromAlert(context.Background(), alert); findings != nil {
+		t.Errorf("Expected nil findings with no state provider, got %v", findings)
 	}
 }
 
@@ -689,6 +775,18 @@ func TestAlertTriggeredAnalyzer_AnalyzeResourceByAlert(t *testing.T) {
 		t.Error("Expected findings for container/VM alert, got 0")
 	}
 
+	// Test generic disk alert routing
+	alertDisk := &alerts.Alert{
+		ID:           "disk-alert",
+		Type:         "disk",
+		ResourceID:   "test-vm",
+		ResourceName: "test-vm",
+	}
+	findingsDisk := analyzer.analyzeResourceByAlert(context.Background(), alertDisk)
+	if len(findingsDisk) == 0 {
+		t.Error("Expected findings for generic disk alert, got 0")
+	}
+
 	// Test unknown alert type
 	alertUnknown := &alerts.Alert{
 		ID:   "unknown-alert",
@@ -699,11 +797,139 @@ func TestAlertTriggeredAnalyzer_AnalyzeResourceByAlert(t *testing.T) {
 		t.Errorf("Expected 0 findings for unknown alert type, got %d", len(findingsUnknown))
 	}
 
+	// Test Docker alert type
+	stateProvider.state.DockerHosts = []models.DockerHost{
+		{ID: "dh-1", Hostname: "docker-host", Status: "offline"},
+	}
+	alertDocker := &alerts.Alert{
+		ID:           "docker-alert",
+		Type:         "docker_offline",
+		ResourceID:   "dh-1",
+		ResourceName: "docker-host",
+	}
+	findingsDocker := analyzer.analyzeResourceByAlert(context.Background(), alertDocker)
+	if len(findingsDocker) == 0 {
+		t.Error("Expected findings for docker alert, got 0")
+	}
+
+	// Test storage alert type
+	stateProvider.state.Storage = []models.Storage{
+		{ID: "storage-1", Name: "local", Usage: 95.0, Total: 100, Used: 95},
+	}
+	alertStorage := &alerts.Alert{
+		ID:           "storage-alert",
+		Type:         "storage_usage",
+		ResourceID:   "storage-1",
+		ResourceName: "local",
+	}
+	findingsStorage := analyzer.analyzeResourceByAlert(context.Background(), alertStorage)
+	if len(findingsStorage) == 0 {
+		t.Error("Expected findings for storage alert, got 0")
+	}
+
+	// Test cpu alert with node resource ID
+	alertNodeCPU := &alerts.Alert{
+		ID:         "node-cpu",
+		Type:       "cpu",
+		ResourceID: "cluster/node/pve1",
+		ResourceName: "pve1",
+	}
+	findingsNodeCPU := analyzer.analyzeResourceByAlert(context.Background(), alertNodeCPU)
+	if len(findingsNodeCPU) == 0 {
+		t.Error("Expected findings for node cpu alert, got 0")
+	}
+
 	// Test with nil patrol service
 	analyzerNoPatrol := NewAlertTriggeredAnalyzer(nil, stateProvider)
 	findingsNilPatrol := analyzerNoPatrol.analyzeResourceByAlert(context.Background(), alertNode)
 	if findingsNilPatrol != nil {
 		t.Error("Expected nil findings when patrol service is nil")
+	}
+}
+
+func TestAlertTriggeredAnalyzer_AnalyzeResource(t *testing.T) {
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			Nodes: []models.Node{
+				{ID: "node/pve1", Name: "pve1", Status: "online", CPU: 0.95},
+			},
+		},
+	}
+	patrolService := NewPatrolService(nil, nil)
+	patrolService.aiService = &Service{}
+
+	analyzer := NewAlertTriggeredAnalyzer(patrolService, stateProvider)
+
+	alert := &alerts.Alert{
+		ID:           "alert-1",
+		Type:         "node_cpu",
+		ResourceID:   "node/pve1",
+		ResourceName: "pve1",
+	}
+	analyzer.analyzeResource(alert, "node/pve1")
+
+	if analyzer.pending["node/pve1"] {
+		t.Error("Expected pending to be cleared after analysis")
+	}
+	if _, exists := analyzer.lastAnalyzed["node/pve1"]; !exists {
+		t.Error("Expected lastAnalyzed to be updated after analysis")
+	}
+	if len(patrolService.findings.GetAll(nil)) == 0 {
+		t.Error("Expected findings to be added after analysis")
+	}
+	for _, finding := range patrolService.findings.GetAll(nil) {
+		if finding.AlertID != "alert-1" {
+			t.Errorf("Expected AlertID to be set, got %s", finding.AlertID)
+		}
+	}
+}
+
+func TestAlertTriggeredAnalyzer_AnalyzeResource_NoFindings(t *testing.T) {
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			Nodes: []models.Node{
+				{ID: "node/pve1", Name: "pve1", Status: "online", CPU: 0.05},
+			},
+		},
+	}
+	patrolService := NewPatrolService(nil, nil)
+	patrolService.aiService = &Service{}
+
+	analyzer := NewAlertTriggeredAnalyzer(patrolService, stateProvider)
+
+	alert := &alerts.Alert{
+		ID:           "alert-1",
+		Type:         "node_cpu",
+		ResourceID:   "node/pve1",
+		ResourceName: "pve1",
+	}
+	analyzer.analyzeResource(alert, "node/pve1")
+
+	if len(patrolService.findings.GetAll(nil)) != 0 {
+		t.Error("Expected no findings for healthy resource")
+	}
+}
+
+func TestAlertTriggeredAnalyzer_AnalyzeGenericResourceFromAlert_FallbackToNode(t *testing.T) {
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			Nodes: []models.Node{
+				{ID: "node/pve1", Name: "pve1", Status: "online", CPU: 0.95},
+			},
+		},
+	}
+	patrolService := &PatrolService{thresholds: DefaultPatrolThresholds()}
+	analyzer := NewAlertTriggeredAnalyzer(patrolService, stateProvider)
+
+	alert := &alerts.Alert{
+		ID:           "generic-alert",
+		Type:         "cpu",
+		ResourceID:   "pve1",
+		ResourceName: "pve1",
+	}
+	findings := analyzer.analyzeGenericResourceFromAlert(context.Background(), alert)
+	if len(findings) == 0 {
+		t.Error("Expected findings from node fallback")
 	}
 }
 
@@ -783,5 +1009,43 @@ func TestAlertTriggeredAnalyzer_AnalyzeGuestFromAlert_PreservesBackup(t *testing
 
 	if !foundStale {
 		t.Error("Expected 'backup-stale' finding for very old backup, but didn't find it. LastBackup might not be getting passed correctly.")
+	}
+}
+
+func TestAlertTriggeredAnalyzer_AnalyzeGuestFromAlert_ContainerBackup(t *testing.T) {
+	lastBackup := time.Now().Add(-2 * time.Hour)
+
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			Containers: []models.Container{
+				{
+					ID:         "lxc/200",
+					Name:       "backup-ct",
+					Status:     "running",
+					CPU:        0.5,
+					Memory:     models.Memory{Usage: 95.0},
+					Disk:       models.Disk{Usage: 90.0},
+					LastBackup: lastBackup,
+				},
+			},
+		},
+	}
+
+	patrolService := &PatrolService{
+		thresholds: DefaultPatrolThresholds(),
+	}
+
+	analyzer := NewAlertTriggeredAnalyzer(patrolService, stateProvider)
+
+	alertCT := &alerts.Alert{
+		ID:           "ct-alert",
+		Type:         "lxc_memory",
+		ResourceID:   "lxc/200",
+		ResourceName: "backup-ct",
+	}
+
+	findings := analyzer.analyzeGuestFromAlert(context.Background(), alertCT)
+	if len(findings) == 0 {
+		t.Error("Expected findings for container with backup set, got 0")
 	}
 }
