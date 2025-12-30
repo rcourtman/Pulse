@@ -205,7 +205,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                       <button
                         type="button"
                         onClick={() => navigator.clipboard.writeText('docker pull rcourtman/pulse:latest && docker restart pulse')}
-                        class="absolute top-1.5 right-1.5 p-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                        class="absolute top-1.5 right-1.5 p-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-60 hover:opacity-100 transition-opacity"
                         title="Copy to clipboard"
                       >
                         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -319,7 +319,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                           <button
                             type="button"
                             onClick={() => navigator.clipboard.writeText('update')}
-                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-60 hover:opacity-100 transition-opacity"
                             title="Copy to clipboard"
                           >
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -347,7 +347,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                           <button
                             type="button"
                             onClick={() => navigator.clipboard.writeText('docker pull rcourtman/pulse:latest')}
-                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-60 hover:opacity-100 transition-opacity"
                             title="Copy to clipboard"
                           >
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -367,7 +367,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                           <button
                             type="button"
                             onClick={() => navigator.clipboard.writeText('docker restart pulse')}
-                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-60 hover:opacity-100 transition-opacity"
                             title="Copy to clipboard"
                           >
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -395,7 +395,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                           <button
                             type="button"
                             onClick={() => navigator.clipboard.writeText('sudo systemctl stop pulse')}
-                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-60 hover:opacity-100 transition-opacity"
                             title="Copy to clipboard"
                           >
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -416,7 +416,7 @@ sudo tar -xzf pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /
                           <button
                             type="button"
                             onClick={() => navigator.clipboard.writeText(`curl -LO https://github.com/rcourtman/Pulse/releases/download/${props.updateInfo()?.latestVersion}/pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz\nsudo tar -xzf pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /usr/local/bin pulse`)}
-                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-60 hover:opacity-100 transition-opacity"
                             title="Copy to clipboard"
                           >
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -436,7 +436,7 @@ sudo tar -xzf pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /
                           <button
                             type="button"
                             onClick={() => navigator.clipboard.writeText('sudo systemctl start pulse')}
-                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-60 hover:opacity-100 transition-opacity"
                             title="Copy to clipboard"
                           >
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -461,7 +461,7 @@ sudo tar -xzf pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /
                           <button
                             type="button"
                             onClick={() => navigator.clipboard.writeText('git pull origin main')}
-                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-60 hover:opacity-100 transition-opacity"
                             title="Copy to clipboard"
                           >
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -481,7 +481,7 @@ sudo tar -xzf pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /
                           <button
                             type="button"
                             onClick={() => navigator.clipboard.writeText('make build && make run')}
-                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                            class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-60 hover:opacity-100 transition-opacity"
                             title="Copy to clipboard"
                           >
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
