@@ -205,8 +205,10 @@ type ThresholdConfig struct {
 	NetworkOut          *HysteresisThreshold `json:"networkOut,omitempty"`
 	Usage               *HysteresisThreshold `json:"usage,omitempty"`       // For storage devices
 	Temperature         *HysteresisThreshold `json:"temperature,omitempty"` // For node CPU temperature
+	Backup              *BackupAlertConfig   `json:"backup,omitempty"`
+	Snapshot            *SnapshotAlertConfig `json:"snapshot,omitempty"`
 	Note                *string              `json:"note,omitempty"`
-	// Legacy fields for backward compatibility
+	// Legacy thresholds for backwards compatibility
 	CPULegacy        *float64 `json:"cpuLegacy,omitempty"`
 	MemoryLegacy     *float64 `json:"memoryLegacy,omitempty"`
 	DiskLegacy       *float64 `json:"diskLegacy,omitempty"`
@@ -359,11 +361,12 @@ type BackupAlertConfig struct {
 
 // GuestLookup describes a guest identity used for snapshot/backup evaluations.
 type GuestLookup struct {
-	Name     string
-	Instance string
-	Node     string
-	Type     string
-	VMID     int
+	ResourceID string
+	Name       string
+	Instance   string
+	Node       string
+	Type       string
+	VMID       int
 }
 
 // AlertConfig represents the complete alert configuration
@@ -4716,32 +4719,49 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			sizeGiB = float64(snapshot.SizeBytes) / gib
 		}
 
-		var (
-			ageLevel       AlertLevel
-			ageThreshold   int
-			sizeLevel      AlertLevel
-			sizeThreshold  float64
-			triggeredStats []string
-		)
+		// Determine thresholds for this snapshot
+		resourceID := fmt.Sprintf("%s:%s:%d", snapshot.Instance, snapshot.Node, snapshot.VMID)
+		m.mu.RLock()
+		gh := m.getGuestThresholds(nil, resourceID)
+		m.mu.RUnlock()
 
-		if snapshotCfg.CriticalDays > 0 && ageDays >= float64(snapshotCfg.CriticalDays) {
+		if gh.Disabled {
+			continue
+		}
+
+		currentSnapshotCfg := snapshotCfg
+		if gh.Snapshot != nil {
+			currentSnapshotCfg = *gh.Snapshot
+		}
+
+		if !currentSnapshotCfg.Enabled {
+			continue
+		}
+
+		var ageLevel AlertLevel
+		var ageThreshold int
+		var sizeLevel AlertLevel
+		var sizeThreshold float64
+		var triggeredStats []string
+
+		if currentSnapshotCfg.CriticalDays > 0 && ageDays >= float64(currentSnapshotCfg.CriticalDays) {
 			ageLevel = AlertLevelCritical
-			ageThreshold = snapshotCfg.CriticalDays
+			ageThreshold = currentSnapshotCfg.CriticalDays
 			triggeredStats = append(triggeredStats, "age")
-		} else if snapshotCfg.WarningDays > 0 && ageDays >= float64(snapshotCfg.WarningDays) {
+		} else if currentSnapshotCfg.WarningDays > 0 && ageDays >= float64(currentSnapshotCfg.WarningDays) {
 			ageLevel = AlertLevelWarning
-			ageThreshold = snapshotCfg.WarningDays
+			ageThreshold = currentSnapshotCfg.WarningDays
 			triggeredStats = append(triggeredStats, "age")
 		}
 
 		if snapshot.SizeBytes > 0 {
-			if snapshotCfg.CriticalSizeGiB > 0 && sizeGiB >= snapshotCfg.CriticalSizeGiB {
+			if currentSnapshotCfg.CriticalSizeGiB > 0 && sizeGiB >= currentSnapshotCfg.CriticalSizeGiB {
 				sizeLevel = AlertLevelCritical
-				sizeThreshold = snapshotCfg.CriticalSizeGiB
+				sizeThreshold = currentSnapshotCfg.CriticalSizeGiB
 				triggeredStats = append(triggeredStats, "size")
-			} else if snapshotCfg.WarningSizeGiB > 0 && sizeGiB >= snapshotCfg.WarningSizeGiB {
+			} else if currentSnapshotCfg.WarningSizeGiB > 0 && sizeGiB >= currentSnapshotCfg.WarningSizeGiB {
 				sizeLevel = AlertLevelWarning
-				sizeThreshold = snapshotCfg.WarningSizeGiB
+				sizeThreshold = currentSnapshotCfg.WarningSizeGiB
 				triggeredStats = append(triggeredStats, "size")
 			}
 		}
@@ -5141,15 +5161,33 @@ func (m *Manager) CheckBackups(
 		}
 		ageDaysRounded := math.Round(ageDays*10) / 10
 
+		// Determine thresholds for this backup
+		currentBackupCfg := backupCfg
+		if record.lookup.ResourceID != "" {
+			m.mu.RLock()
+			gh := m.getGuestThresholds(nil, record.lookup.ResourceID)
+			m.mu.RUnlock()
+			if gh.Disabled {
+				continue
+			}
+			if gh.Backup != nil {
+				currentBackupCfg = *gh.Backup
+			}
+		}
+
+		if !currentBackupCfg.Enabled {
+			continue
+		}
+
 		var level AlertLevel
 		var threshold int
 		switch {
-		case backupCfg.CriticalDays > 0 && ageDays >= float64(backupCfg.CriticalDays):
+		case currentBackupCfg.CriticalDays > 0 && ageDays >= float64(currentBackupCfg.CriticalDays):
 			level = AlertLevelCritical
-			threshold = backupCfg.CriticalDays
-		case backupCfg.WarningDays > 0 && ageDays >= float64(backupCfg.WarningDays):
+			threshold = currentBackupCfg.CriticalDays
+		case currentBackupCfg.WarningDays > 0 && ageDays >= float64(currentBackupCfg.WarningDays):
 			level = AlertLevelWarning
-			threshold = backupCfg.WarningDays
+			threshold = currentBackupCfg.WarningDays
 		default:
 			continue
 		}

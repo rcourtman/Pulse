@@ -8608,11 +8608,12 @@ func buildGuestLookups(snapshot models.StateSnapshot, metadataStore *config.Gues
 
 	for _, vm := range snapshot.VMs {
 		info := alerts.GuestLookup{
-			Name:     vm.Name,
-			Instance: vm.Instance,
-			Node:     vm.Node,
-			Type:     vm.Type,
-			VMID:     vm.VMID,
+			ResourceID: makeGuestID(vm.Instance, vm.Node, vm.VMID),
+			Name:       vm.Name,
+			Instance:   vm.Instance,
+			Node:       vm.Node,
+			Type:       vm.Type,
+			VMID:       vm.VMID,
 		}
 		key := alerts.BuildGuestKey(vm.Instance, vm.Node, vm.VMID)
 		byKey[key] = info
@@ -8628,11 +8629,12 @@ func buildGuestLookups(snapshot models.StateSnapshot, metadataStore *config.Gues
 
 	for _, ct := range snapshot.Containers {
 		info := alerts.GuestLookup{
-			Name:     ct.Name,
-			Instance: ct.Instance,
-			Node:     ct.Node,
-			Type:     ct.Type,
-			VMID:     ct.VMID,
+			ResourceID: makeGuestID(ct.Instance, ct.Node, ct.VMID),
+			Name:       ct.Name,
+			Instance:   ct.Instance,
+			Node:       ct.Node,
+			Type:       ct.Type,
+			VMID:       ct.VMID,
 		}
 		key := alerts.BuildGuestKey(ct.Instance, ct.Node, ct.VMID)
 		if _, exists := byKey[key]; !exists {
