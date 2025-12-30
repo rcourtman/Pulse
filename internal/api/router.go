@@ -1588,18 +1588,22 @@ func (r *Router) StartPatrol(ctx context.Context) {
 					r.aiSettingsHandler.SetMetricsHistoryProvider(adapter)
 				}
 
-				// Initialize baseline store for anomaly detection
-				// Uses config dir for persistence
-				baselineCfg := ai.DefaultBaselineConfig()
-				if r.persistence != nil {
-					baselineCfg.DataDir = r.persistence.DataDir()
-				}
-				baselineStore := ai.NewBaselineStore(baselineCfg)
-				if baselineStore != nil {
-					r.aiSettingsHandler.SetBaselineStore(baselineStore)
+				// Only initialize baseline learning if AI is enabled
+				// This prevents anomaly data from being collected and displayed when AI is disabled
+				if r.aiSettingsHandler.IsAIEnabled() {
+					// Initialize baseline store for anomaly detection
+					// Uses config dir for persistence
+					baselineCfg := ai.DefaultBaselineConfig()
+					if r.persistence != nil {
+						baselineCfg.DataDir = r.persistence.DataDir()
+					}
+					baselineStore := ai.NewBaselineStore(baselineCfg)
+					if baselineStore != nil {
+						r.aiSettingsHandler.SetBaselineStore(baselineStore)
 
-					// Start background baseline learning loop
-					go r.startBaselineLearning(ctx, baselineStore, metricsHistory)
+						// Start background baseline learning loop
+						go r.startBaselineLearning(ctx, baselineStore, metricsHistory)
+					}
 				}
 			}
 		}
@@ -1626,63 +1630,67 @@ func (r *Router) StartPatrol(ctx context.Context) {
 			r.aiSettingsHandler.SetRemediationLog(remediationLog)
 		}
 
-		// Initialize pattern detector for failure prediction
-		patternDetector := ai.NewPatternDetector(ai.PatternDetectorConfig{
-			MaxEvents:       5000,
-			MinOccurrences:  3,
-			PatternWindow:   90 * 24 * time.Hour,
-			PredictionLimit: 30 * 24 * time.Hour,
-			DataDir:         dataDir,
-		})
-		if patternDetector != nil {
-			r.aiSettingsHandler.SetPatternDetector(patternDetector)
+		// Only initialize pattern and correlation detectors if AI is enabled
+		// This prevents these subsystems from collecting data and displaying findings when AI is disabled
+		if r.aiSettingsHandler.IsAIEnabled() {
+			// Initialize pattern detector for failure prediction
+			patternDetector := ai.NewPatternDetector(ai.PatternDetectorConfig{
+				MaxEvents:       5000,
+				MinOccurrences:  3,
+				PatternWindow:   90 * 24 * time.Hour,
+				PredictionLimit: 30 * 24 * time.Hour,
+				DataDir:         dataDir,
+			})
+			if patternDetector != nil {
+				r.aiSettingsHandler.SetPatternDetector(patternDetector)
 
-			// Wire alert history to pattern detector for event tracking
-			if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
-				alertManager.OnAlertHistory(func(alert alerts.Alert) {
-					// Convert alert type to trackable event
-					patternDetector.RecordFromAlert(alert.ResourceID, alert.Type+"_"+string(alert.Level), alert.StartTime)
-				})
-				log.Info().Msg("AI Pattern Detector: Wired to alert history for failure prediction")
-			}
-		}
-
-		// Initialize correlation detector for multi-resource relationships
-		correlationDetector := ai.NewCorrelationDetector(ai.CorrelationConfig{
-			MaxEvents:         10000,
-			CorrelationWindow: 10 * time.Minute,
-			MinOccurrences:    3,
-			RetentionWindow:   30 * 24 * time.Hour,
-			DataDir:           dataDir,
-		})
-		if correlationDetector != nil {
-			r.aiSettingsHandler.SetCorrelationDetector(correlationDetector)
-
-			// Wire alert history to correlation detector
-			if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
-				alertManager.OnAlertHistory(func(alert alerts.Alert) {
-					// Record as correlation event
-					eventType := ai.CorrelationEventType(ai.CorrelationEventAlert)
-					switch alert.Type {
-					case "cpu":
-						eventType = ai.CorrelationEventHighCPU
-					case "memory":
-						eventType = ai.CorrelationEventHighMem
-					case "disk":
-						eventType = ai.CorrelationEventDiskFull
-					case "offline", "connectivity":
-						eventType = ai.CorrelationEventOffline
-					}
-					correlationDetector.RecordEvent(ai.CorrelationEvent{
-						ResourceID:   alert.ResourceID,
-						ResourceName: alert.ResourceName,
-						ResourceType: alert.Type,
-						EventType:    eventType,
-						Timestamp:    alert.StartTime,
-						Value:        alert.Value,
+				// Wire alert history to pattern detector for event tracking
+				if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+					alertManager.OnAlertHistory(func(alert alerts.Alert) {
+						// Convert alert type to trackable event
+						patternDetector.RecordFromAlert(alert.ResourceID, alert.Type+"_"+string(alert.Level), alert.StartTime)
 					})
-				})
-				log.Info().Msg("AI Correlation Detector: Wired to alert history for multi-resource analysis")
+					log.Info().Msg("AI Pattern Detector: Wired to alert history for failure prediction")
+				}
+			}
+
+			// Initialize correlation detector for multi-resource relationships
+			correlationDetector := ai.NewCorrelationDetector(ai.CorrelationConfig{
+				MaxEvents:         10000,
+				CorrelationWindow: 10 * time.Minute,
+				MinOccurrences:    3,
+				RetentionWindow:   30 * 24 * time.Hour,
+				DataDir:           dataDir,
+			})
+			if correlationDetector != nil {
+				r.aiSettingsHandler.SetCorrelationDetector(correlationDetector)
+
+				// Wire alert history to correlation detector
+				if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
+					alertManager.OnAlertHistory(func(alert alerts.Alert) {
+						// Record as correlation event
+						eventType := ai.CorrelationEventType(ai.CorrelationEventAlert)
+						switch alert.Type {
+						case "cpu":
+							eventType = ai.CorrelationEventHighCPU
+						case "memory":
+							eventType = ai.CorrelationEventHighMem
+						case "disk":
+							eventType = ai.CorrelationEventDiskFull
+						case "offline", "connectivity":
+							eventType = ai.CorrelationEventOffline
+						}
+						correlationDetector.RecordEvent(ai.CorrelationEvent{
+							ResourceID:   alert.ResourceID,
+							ResourceName: alert.ResourceName,
+							ResourceType: alert.Type,
+							EventType:    eventType,
+							Timestamp:    alert.StartTime,
+							Value:        alert.Value,
+						})
+					})
+					log.Info().Msg("AI Correlation Detector: Wired to alert history for multi-resource analysis")
+				}
 			}
 		}
 
