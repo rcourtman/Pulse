@@ -441,6 +441,20 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
     }
   };
 
+  // Get the command status for the selected host to show checking indicator
+  const selectedHostCommandStatus = createMemo(() => {
+    const hostId = selectedHostId();
+    if (!hostId) return undefined;
+
+    const host = props.hosts.find(h => h.id === hostId);
+    if (!host?.command) return undefined;
+
+    // Only show status for check_updates commands
+    if (host.command.type !== 'check_updates') return undefined;
+
+    return host.command.status;
+  });
+
   const renderFilter = () => (
     <DockerFilter
       search={search}
@@ -459,6 +473,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
       onUpdateAll={handleUpdateAll}
       onCheckUpdates={handleCheckUpdates}
       activeHostId={selectedHostId()}
+      checkingUpdatesStatus={selectedHostCommandStatus()}
     />
   );
 
