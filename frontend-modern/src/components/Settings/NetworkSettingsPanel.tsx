@@ -162,11 +162,10 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   <div class="space-y-2">
                     {/* Auto mode */}
                     <label
-                      class={`flex items-start gap-3 rounded-lg border p-2 transition-colors ${
-                        props.discoveryMode() === 'auto'
-                          ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
-                          : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'
-                      }`}
+                      class={`flex items-start gap-3 rounded-lg border p-2 transition-colors ${props.discoveryMode() === 'auto'
+                        ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
+                        : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'
+                        }`}
                     >
                       <input
                         type="radio"
@@ -196,11 +195,10 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
 
                     {/* Custom mode */}
                     <label
-                      class={`flex items-start gap-3 rounded-lg border p-2 transition-colors ${
-                        props.discoveryMode() === 'custom'
-                          ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
-                          : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'
-                      }`}
+                      class={`flex items-start gap-3 rounded-lg border p-2 transition-colors ${props.discoveryMode() === 'custom'
+                        ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
+                        : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'
+                        }`}
                     >
                       <input
                         type="radio"
@@ -242,11 +240,10 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                             return (
                               <button
                                 type="button"
-                                class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${
-                                  isActive
-                                    ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
-                                    : 'border-gray-300 text-gray-700 hover:border-blue-400 hover:bg-blue-50 dark:border-gray-600 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-blue-900/30'
-                                }`}
+                                class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${isActive
+                                  ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
+                                  : 'border-gray-300 text-gray-700 hover:border-blue-400 hover:bg-blue-50 dark:border-gray-600 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-blue-900/30'
+                                  }`}
                                 onClick={async () => {
                                   if (props.envOverrides().discoverySubnet) {
                                     return;
@@ -328,11 +325,10 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                         ? 'auto (scan every network phase)'
                         : '192.168.1.0/24, 10.0.0.0/24'
                     }
-                    class={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      props.envOverrides().discoverySubnet
-                        ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-200 cursor-not-allowed opacity-60'
-                        : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900/70'
-                    }`}
+                    class={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${props.envOverrides().discoverySubnet
+                      ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-200 cursor-not-allowed opacity-60'
+                      : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900/70'
+                      }`}
                     disabled={props.envOverrides().discoverySubnet}
                     onInput={(e) => {
                       if (props.envOverrides().discoverySubnet) {
@@ -446,7 +442,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 <input
                   type="text"
                   value={props.publicURL()}
-                  onChange={(e) => {
+                  onInput={(e) => {
                     if (!props.envOverrides().publicURL) {
                       props.setPublicURL(e.currentTarget.value);
                       props.setHasUnsavedChanges(true);
@@ -454,11 +450,10 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   }}
                   disabled={props.envOverrides().publicURL}
                   placeholder="http://192.168.1.100:8080"
-                  class={`w-full px-3 py-1.5 text-sm border rounded-lg ${
-                    props.envOverrides().publicURL
-                      ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75'
-                      : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
-                  }`}
+                  class={`w-full px-3 py-1.5 text-sm border rounded-lg ${props.envOverrides().publicURL
+                    ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75'
+                    : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
+                    }`}
                 />
                 {props.envOverrides().publicURL && (
                   <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
@@ -513,7 +508,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 <input
                   type="text"
                   value={props.allowedOrigins()}
-                  onChange={(e) => {
+                  onInput={(e) => {
                     if (!props.envOverrides().allowedOrigins) {
                       props.setAllowedOrigins(e.currentTarget.value);
                       props.setHasUnsavedChanges(true);
@@ -521,11 +516,10 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   }}
                   disabled={props.envOverrides().allowedOrigins}
                   placeholder="* or https://example.com"
-                  class={`w-full px-3 py-1.5 text-sm border rounded-lg ${
-                    props.envOverrides().allowedOrigins
-                      ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75'
-                      : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
-                  }`}
+                  class={`w-full px-3 py-1.5 text-sm border rounded-lg ${props.envOverrides().allowedOrigins
+                    ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75'
+                    : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
+                    }`}
                 />
                 {props.envOverrides().allowedOrigins && (
                   <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
