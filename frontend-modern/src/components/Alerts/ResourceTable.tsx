@@ -85,6 +85,8 @@ export interface Resource {
   toggleTitleDisabled?: string;
   editable?: boolean;
   note?: string;
+  backup?: any;
+  snapshot?: any;
   [key: string]: unknown;
 }
 
@@ -120,6 +122,8 @@ interface ResourceTableProps {
   globalOfflineSeverity?: 'warning' | 'critical';
   onSetGlobalOfflineState?: (state: OfflineState) => void;
   onSetOfflineState?: (resourceId: string, state: OfflineState) => void;
+  onToggleBackup?: (resourceId: string, forceState?: boolean) => void;
+  onToggleSnapshot?: (resourceId: string, forceState?: boolean) => void;
   showDelayColumn?: boolean;
   globalDelaySeconds?: number;
   editingId: () => string | null;
@@ -234,6 +238,8 @@ export function ResourceTable(props: ResourceTableProps) {
       ['memory critical %', 'memoryCriticalPct'],
       ['warning size (gib)', 'warningSizeGiB'],
       ['critical size (gib)', 'criticalSizeGiB'],
+      ['backup', 'backup'],
+      ['snapshot', 'snapshot'],
     ]).get(key);
     if (mapped) {
       return mapped;
@@ -1211,6 +1217,29 @@ export function ResourceTable(props: ResourceTableProps) {
                                       resourceSupportsMetric(resource.type, metric);
                                     const bounds = metricBounds(metric);
                                     const isDisabled = () => thresholds()?.[metric] === -1;
+                                    const isSpecialToggle = metric === 'backup' || metric === 'snapshot';
+
+                                    if (isSpecialToggle) {
+                                      const config = metric === 'backup' ? resource.backup : resource.snapshot;
+                                      const isEnabled = config?.enabled ?? true;
+                                      const onToggle = metric === 'backup' ? props.onToggleBackup : props.onToggleSnapshot;
+                                      const titlePrefix = metric === 'backup' ? 'Backup' : 'Snapshot';
+
+                                      return (
+                                        <td class="p-1 px-2 text-center align-middle">
+                                          <Show when={onToggle} fallback={<span class="text-sm text-gray-400">-</span>}>
+                                            <div class="flex items-center justify-center">
+                                              <StatusBadge
+                                                isEnabled={isEnabled}
+                                                onToggle={() => onToggle?.(resource.id)}
+                                                titleEnabled={`${titlePrefix} alerts enabled. Click to disable for this resource.`}
+                                                titleDisabled={`${titlePrefix} alerts disabled. Click to enable for this resource.`}
+                                              />
+                                            </div>
+                                          </Show>
+                                        </td>
+                                      );
+                                    }
 
                                     const openMetricEditor = (e: MouseEvent) => {
                                       e.stopPropagation();
