@@ -20,6 +20,17 @@ func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// AI must be enabled to return intelligence data
+	if !h.aiService.IsEnabled() {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"patterns": []interface{}{},
+			"message":  "AI is not enabled",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write patterns response")
+		}
+		return
+	}
+
 	patrol := h.aiService.GetPatrolService()
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
@@ -89,6 +100,17 @@ func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Req
 func (h *AISettingsHandler) HandleGetPredictions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// AI must be enabled to return intelligence data
+	if !h.aiService.IsEnabled() {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"predictions": []interface{}{},
+			"message":     "AI is not enabled",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write predictions response")
+		}
 		return
 	}
 
@@ -163,6 +185,17 @@ func (h *AISettingsHandler) HandleGetPredictions(w http.ResponseWriter, r *http.
 func (h *AISettingsHandler) HandleGetCorrelations(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// AI must be enabled to return intelligence data
+	if !h.aiService.IsEnabled() {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"correlations": []interface{}{},
+			"message":      "AI is not enabled",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write correlations response")
+		}
 		return
 	}
 
@@ -244,6 +277,17 @@ func (h *AISettingsHandler) HandleGetRecentChanges(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// AI must be enabled to return intelligence data
+	if !h.aiService.IsEnabled() {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"changes": []interface{}{},
+			"message": "AI is not enabled",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write changes response")
+		}
+		return
+	}
+
 	patrol := h.aiService.GetPatrolService()
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
@@ -322,6 +366,17 @@ func (h *AISettingsHandler) HandleGetBaselines(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// AI must be enabled to return intelligence data
+	if !h.aiService.IsEnabled() {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"baselines": []interface{}{},
+			"message":   "AI is not enabled",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write baselines response")
+		}
+		return
+	}
+
 	patrol := h.aiService.GetPatrolService()
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
@@ -392,6 +447,17 @@ func (h *AISettingsHandler) HandleGetBaselines(w http.ResponseWriter, r *http.Re
 func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// AI must be enabled to return intelligence data
+	if !h.aiService.IsEnabled() {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"remediations": []interface{}{},
+			"message":      "AI is not enabled",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write remediations response")
+		}
 		return
 	}
 
@@ -536,6 +602,17 @@ func remediationStatsFromRecords(records []ai.RemediationRecord) map[string]int 
 func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// AI must be enabled to return intelligence data
+	if !h.aiService.IsEnabled() {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"anomalies": []interface{}{},
+			"message":   "AI is not enabled",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write anomalies response")
+		}
 		return
 	}
 
@@ -768,6 +845,19 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 func (h *AISettingsHandler) HandleGetLearningStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// AI must be enabled to return learning status
+	if !h.aiService.IsEnabled() {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"resources_baselined": 0,
+			"total_metrics":       0,
+			"status":              "ai_disabled",
+			"message":             "AI is not enabled",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write learning status response")
+		}
 		return
 	}
 

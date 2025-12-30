@@ -78,6 +78,11 @@ func (h *AISettingsHandler) StartPatrol(ctx context.Context) {
 	h.aiService.StartPatrol(ctx)
 }
 
+// IsAIEnabled returns true if AI features are enabled
+func (h *AISettingsHandler) IsAIEnabled() bool {
+	return h.aiService.IsEnabled()
+}
+
 // SetPatrolThresholdProvider sets the threshold provider for the patrol service
 func (h *AISettingsHandler) SetPatrolThresholdProvider(provider ai.ThresholdProvider) {
 	h.aiService.SetPatrolThresholdProvider(provider)
