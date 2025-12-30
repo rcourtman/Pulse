@@ -1419,9 +1419,13 @@ func Load() (*Config, error) {
 
 	// Initialize logging with configuration values
 	logging.Init(logging.Config{
-		Format:    cfg.LogFormat,
-		Level:     cfg.LogLevel,
-		Component: "pulse-config",
+		Format:     cfg.LogFormat,
+		Level:      cfg.LogLevel,
+		Component:  "pulse-config",
+		FilePath:   cfg.LogFile,
+		MaxSizeMB:  cfg.LogMaxSize,
+		MaxAgeDays: cfg.LogMaxAge,
+		Compress:   cfg.LogCompress,
 	})
 
 	// Initialize DNS cache with configured timeout
