@@ -138,6 +138,12 @@
     }
   }
 
+  /* Full-width mode - removes max-width constraint for large monitors */
+  .pulse-shell--full-width {
+    max-width: 100%;
+    padding-inline: clamp(1rem, 2vw, 3rem);
+  }
+
   .pulse-panel {
     padding: clamp(0.75rem, 1.8vw, 1.5rem);
   }

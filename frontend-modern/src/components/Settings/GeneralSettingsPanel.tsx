@@ -7,7 +7,9 @@ import Activity from 'lucide-solid/icons/activity';
 import Sun from 'lucide-solid/icons/sun';
 import Moon from 'lucide-solid/icons/moon';
 import Thermometer from 'lucide-solid/icons/thermometer';
+import Maximize2 from 'lucide-solid/icons/maximize-2';
 import { temperatureStore } from '@/utils/temperature';
+import { layoutStore } from '@/utils/layout';
 
 const PVE_POLLING_MIN_SECONDS = 10;
 const PVE_POLLING_MAX_SECONDS = 3600;
@@ -125,6 +127,30 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 °F
               </button>
             </div>
+          </div>
+
+          {/* Full-width Mode Toggle */}
+          <div class="flex items-center justify-between gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div class="flex items-center gap-3">
+              <div class={`p-2.5 rounded-xl transition-all duration-300 ${layoutStore.isFullWidth()
+                  ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/25'
+                  : 'bg-gradient-to-br from-gray-400 to-gray-500 shadow-lg shadow-gray-500/25'
+                }`}>
+                <Maximize2 class="w-5 h-5 text-white" strokeWidth={2} />
+              </div>
+              <div class="text-sm text-gray-600 dark:text-gray-400">
+                <p class="font-medium text-gray-900 dark:text-gray-100">
+                  Full-width mode
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  Expand content to use all available screen width on large monitors
+                </p>
+              </div>
+            </div>
+            <Toggle
+              checked={layoutStore.isFullWidth()}
+              onChange={() => layoutStore.toggle()}
+            />
           </div>
         </div>
       </Card>

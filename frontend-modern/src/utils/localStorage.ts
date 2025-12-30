@@ -64,6 +64,7 @@ export const STORAGE_KEYS = {
   // UI preferences
   DARK_MODE: 'darkMode',
   SIDEBAR_COLLAPSED: 'sidebarCollapsed',
+  FULL_WIDTH_MODE: 'fullWidthMode',
 
   // Metadata
   GUEST_METADATA: 'pulseGuestMetadata',

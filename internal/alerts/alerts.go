@@ -2701,6 +2701,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		// Clear any existing host alerts when all host alerts are disabled
 		m.clearHostMetricAlerts(host.ID)
 		m.clearHostDiskAlerts(host.ID)
+		m.clearHostRAIDAlerts(host.ID)
 		return
 	}
 
@@ -2709,6 +2710,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		if thresholds.Disabled {
 			m.clearHostMetricAlerts(host.ID)
 			m.clearHostDiskAlerts(host.ID)
+			m.clearHostRAIDAlerts(host.ID)
 			return
 		}
 	}
@@ -2788,6 +2790,16 @@ func (m *Manager) CheckHost(host models.Host) {
 	// Check RAID arrays for degraded or failed state
 	if len(host.RAID) > 0 {
 		for _, array := range host.RAID {
+			// Skip Synology internal system arrays (md0/md1) which often report false positives.
+			// DSM handles these differently and they're not user-facing storage arrays.
+			deviceLower := strings.ToLower(strings.TrimPrefix(array.Device, "/dev/"))
+			if deviceLower == "md0" || deviceLower == "md1" {
+				// Still clear any existing alerts for these devices
+				alertID := fmt.Sprintf("host-%s-raid-%s", host.ID, sanitizeRAIDDevice(array.Device))
+				m.clearAlert(alertID)
+				continue
+			}
+
 			raidResourceID := fmt.Sprintf("host-%s-raid-%s", host.ID, sanitizeRAIDDevice(array.Device))
 			raidName := fmt.Sprintf("%s - %s (%s)", resourceName, array.Device, array.Level)
 
@@ -2939,6 +2951,7 @@ func (m *Manager) HandleHostRemoved(host models.Host) {
 	m.HandleHostOnline(host)
 	m.clearHostMetricAlerts(host.ID)
 	m.clearHostDiskAlerts(host.ID)
+	m.clearHostRAIDAlerts(host.ID)
 }
 
 // HandleHostOffline raises an alert when a host agent stops reporting.
@@ -3104,6 +3117,23 @@ func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct
 			continue
 		}
 		m.clearAlertNoLock(alertID)
+	}
+}
+
+func (m *Manager) clearHostRAIDAlerts(hostID string) {
+	if hostID == "" {
+		return
+	}
+
+	prefix := fmt.Sprintf("host-%s-raid-", hostID)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for alertID := range m.activeAlerts {
+		if strings.HasPrefix(alertID, prefix) {
+			m.clearAlertNoLock(alertID)
+		}
 	}
 }
 
