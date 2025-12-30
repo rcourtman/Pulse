@@ -70,7 +70,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
           text: 'LOW LIFE',
         };
       }
-      const label = normalizedHealth === 'PASSED' ? 'HEALTHY' : normalizedHealth || 'HEALTHY';
+      const label = normalizedHealth === 'PASSED' ? 'HEALTHY' : normalizedHealth;
       return {
         color: 'text-green-700 dark:text-green-400',
         bgColor: 'bg-green-100 dark:bg-green-900/30',
@@ -120,7 +120,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
             {selectedNodeName() && <p class="text-xs mt-1">for node {selectedNodeName()}</p>}
             {props.searchTerm && <p class="text-xs mt-1">matching "{props.searchTerm}"</p>}
           </div>
-          <Show when={!props.searchTerm && props.disks.length === 0}>
+          <Show when={!props.searchTerm && (props.disks || []).length === 0}>
             <Show
               when={hasPVENodes()}
               fallback={

@@ -23,6 +23,7 @@ import { Login } from './components/Login';
 import { logger } from './utils/logger';
 import { POLLING_INTERVALS } from './constants';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { layoutStore } from '@/utils/layout';
 import { UpdatesAPI } from './api/updates';
 import type { VersionInfo } from './api/updates';
 import { apiFetch } from './utils/apiClient';
@@ -1186,7 +1187,7 @@ function AppLayout(props: {
   };
 
   return (
-    <div class="pulse-shell">
+    <div class={`pulse-shell ${layoutStore.isFullWidth() ? 'pulse-shell--full-width' : ''}`}>
       {/* Header */}
       <div class="header mb-3 flex items-center justify-between gap-2 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0">
         <div class="flex items-center gap-2 sm:flex-initial sm:gap-2 sm:col-start-2 sm:col-end-3 sm:justify-self-center">
