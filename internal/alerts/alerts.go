@@ -922,6 +922,15 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 		return false
 	}
 
+	// Don't dispatch notifications for acknowledged alerts
+	if alert.Acknowledged {
+		log.Debug().
+			Str("alertID", alert.ID).
+			Str("ackUser", alert.AckUser).
+			Msg("Alert notification suppressed - already acknowledged")
+		return false
+	}
+
 	// Check for flapping (caller must hold m.mu)
 	if m.checkFlappingLocked(alert.ID) {
 		log.Debug().
