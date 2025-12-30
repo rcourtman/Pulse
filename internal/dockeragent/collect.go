@@ -715,11 +715,25 @@ func calculateCPUPercent(stats containertypes.StatsResponse, hostCPUs int) float
 
 func calculateMemoryUsage(stats containertypes.StatsResponse) (usage int64, limit int64, percent float64) {
 	usage = int64(stats.MemoryStats.Usage)
+
+	// Subtract reclaimable cache from usage to match `docker stats` behavior.
+	// Docker subtracts cache/file to show "actual" memory usage rather than
+	// memory.current which includes reclaimable filesystem cache.
+	//
+	// cgroup v1: "cache" stat contains the reclaimable cache
+	// cgroup v2: "cache" doesn't exist, use "inactive_file" (preferred) or "file"
+	var cacheBytes uint64
 	if cache, ok := stats.MemoryStats.Stats["cache"]; ok {
-		usage -= int64(cache)
+		// cgroup v1
+		cacheBytes = cache
+	} else if inactiveFile, ok := stats.MemoryStats.Stats["inactive_file"]; ok {
+		// cgroup v2: inactive_file is the reclaimable portion of file cache
+		// This matches what docker CLI does internally
+		cacheBytes = inactiveFile
 	}
-	if usage < 0 {
-		usage = int64(stats.MemoryStats.Usage)
+
+	if cacheBytes > 0 && int64(cacheBytes) < usage {
+		usage -= int64(cacheBytes)
 	}
 
 	limit = int64(stats.MemoryStats.Limit)
