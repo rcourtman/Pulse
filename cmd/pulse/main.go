@@ -97,9 +97,13 @@ func runServer() {
 
 	// Re-initialize logging with configuration-driven settings
 	logging.Init(logging.Config{
-		Format:    cfg.LogFormat,
-		Level:     cfg.LogLevel,
-		Component: "pulse",
+		Format:     cfg.LogFormat,
+		Level:      cfg.LogLevel,
+		Component:  "pulse",
+		FilePath:   cfg.LogFile,
+		MaxSizeMB:  cfg.LogMaxSize,
+		MaxAgeDays: cfg.LogMaxAge,
+		Compress:   cfg.LogCompress,
 	})
 
 	// Initialize license public key for Pro feature validation
