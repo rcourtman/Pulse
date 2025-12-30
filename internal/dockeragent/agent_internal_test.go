@@ -324,7 +324,7 @@ func TestCalculateMemoryUsage(t *testing.T) {
 			wantPercent: 25.0,
 		},
 		{
-			name: "cache larger than usage falls back to raw usage",
+			name: "cache larger than usage keeps raw usage",
 			stats: containertypes.StatsResponse{
 				MemoryStats: containertypes.MemoryStats{
 					Usage: 1000000,
@@ -332,9 +332,22 @@ func TestCalculateMemoryUsage(t *testing.T) {
 					Stats: map[string]uint64{"cache": 2000000}, // more than usage
 				},
 			},
-			wantUsage:   1000000, // falls back to raw usage
+			wantUsage:   1000000, // keeps raw usage when cache > usage
 			wantLimit:   4000000,
 			wantPercent: 25.0,
+		},
+		{
+			name: "cgroup v2 uses inactive_file when no cache",
+			stats: containertypes.StatsResponse{
+				MemoryStats: containertypes.MemoryStats{
+					Usage: 1000000,
+					Limit: 4000000,
+					Stats: map[string]uint64{"inactive_file": 300000}, // cgroup v2 style
+				},
+			},
+			wantUsage:   700000, // 1000000 - 300000
+			wantLimit:   4000000,
+			wantPercent: 17.5,
 		},
 		{
 			name: "zero limit returns zero percent",
