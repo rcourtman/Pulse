@@ -13226,7 +13226,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 			Hostname: "testhost",
 			RAID: []models.HostRAIDArray{
 				{
-					Device:        "/dev/md0",
+					Device:        "/dev/md2", // Note: md0/md1 are skipped for Synology compatibility
 					Level:         "raid1",
 					State:         "degraded",
 					TotalDevices:  2,
@@ -13239,7 +13239,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["host-host1-raid-md0"]
+		alert := m.activeAlerts["host-host1-raid-md2"]
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13259,7 +13259,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 			Hostname: "testhost",
 			RAID: []models.HostRAIDArray{
 				{
-					Device:         "/dev/md0",
+					Device:         "/dev/md2", // Note: md0/md1 are skipped for Synology compatibility
 					Level:          "raid1",
 					State:          "recovering",
 					TotalDevices:   2,
@@ -13273,7 +13273,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["host-host1-raid-md0"]
+		alert := m.activeAlerts["host-host1-raid-md2"]
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13289,8 +13289,8 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m := newTestManager(t)
 
 		m.mu.Lock()
-		m.activeAlerts["host-host1-raid-md0"] = &Alert{
-			ID:    "host-host1-raid-md0",
+		m.activeAlerts["host-host1-raid-md2"] = &Alert{
+			ID:    "host-host1-raid-md2",
 			Type:  "raid",
 			Level: AlertLevelCritical,
 		}
@@ -13301,7 +13301,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 			Hostname: "testhost",
 			RAID: []models.HostRAIDArray{
 				{
-					Device:        "/dev/md0",
+					Device:        "/dev/md2", // Note: md0/md1 are skipped for Synology compatibility
 					Level:         "raid1",
 					State:         "active",
 					TotalDevices:  2,
@@ -13314,7 +13314,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["host-host1-raid-md0"]
+		_, exists := m.activeAlerts["host-host1-raid-md2"]
 		m.mu.RUnlock()
 
 		if exists {
@@ -13331,7 +13331,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 			Hostname: "testhost",
 			RAID: []models.HostRAIDArray{
 				{
-					Device:        "/dev/md0",
+					Device:        "/dev/md2", // Note: md0/md1 are skipped for Synology compatibility
 					Level:         "raid1",
 					State:         "active", // State might say active but with failed devices
 					TotalDevices:  2,
@@ -13344,7 +13344,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["host-host1-raid-md0"]
+		alert := m.activeAlerts["host-host1-raid-md2"]
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13364,7 +13364,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 			Hostname: "testhost",
 			RAID: []models.HostRAIDArray{
 				{
-					Device:        "/dev/md0",
+					Device:        "/dev/md2", // Note: md0/md1 are skipped for Synology compatibility
 					Level:         "raid1",
 					State:         "resync",
 					TotalDevices:  2,
@@ -13377,7 +13377,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["host-host1-raid-md0"]
+		alert := m.activeAlerts["host-host1-raid-md2"]
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13394,8 +13394,8 @@ func TestCheckHostComprehensive(t *testing.T) {
 
 		originalTime := time.Now().Add(-1 * time.Hour)
 		m.mu.Lock()
-		m.activeAlerts["host-host1-raid-md0"] = &Alert{
-			ID:        "host-host1-raid-md0",
+		m.activeAlerts["host-host1-raid-md2"] = &Alert{
+			ID:        "host-host1-raid-md2",
 			Type:      "raid",
 			Level:     AlertLevelCritical,
 			StartTime: originalTime,
@@ -13407,7 +13407,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 			Hostname: "testhost",
 			RAID: []models.HostRAIDArray{
 				{
-					Device:        "/dev/md0",
+					Device:        "/dev/md2", // Note: md0/md1 are skipped for Synology compatibility
 					Level:         "raid1",
 					State:         "degraded",
 					TotalDevices:  2,
@@ -13420,7 +13420,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["host-host1-raid-md0"]
+		alert := m.activeAlerts["host-host1-raid-md2"]
 		m.mu.RUnlock()
 
 		if alert == nil {
