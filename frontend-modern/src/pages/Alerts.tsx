@@ -1,4 +1,5 @@
 import { createSignal, Show, For, createMemo, createEffect, onMount, onCleanup } from 'solid-js';
+import { useBeforeLeave } from '@solidjs/router';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import type { JSX } from 'solid-js';
 import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
@@ -221,6 +222,8 @@ interface Override {
   disabled?: boolean; // Completely disable alerts for this guest/storage
   disableConnectivity?: boolean; // For nodes/hosts - disable offline/connectivity alerts
   poweredOffSeverity?: 'warning' | 'critical';
+  backup?: BackupAlertConfig;
+  snapshot?: SnapshotAlertConfig;
   thresholds: {
     cpu?: number;
     memory?: number;
@@ -461,9 +464,17 @@ export const extractTriggerValues = (
   const result: Record<string, number> = {};
   Object.entries(thresholds).forEach(([key, value]) => {
     // Skip non-threshold fields
-    if (key === 'disabled' || key === 'disableConnectivity' || key === 'poweredOffSeverity' || key === 'note') return;
+    if (
+      key === 'disabled' ||
+      key === 'disableConnectivity' ||
+      key === 'poweredOffSeverity' ||
+      key === 'note' ||
+      key === 'backup' ||
+      key === 'snapshot'
+    )
+      return;
     if (typeof value === 'string') return;
-    result[key] = getTriggerValue(value);
+    result[key] = getTriggerValue(value as any);
   });
   return result;
 };
@@ -580,6 +591,30 @@ export function Alerts() {
     setShowQuickTip(false);
     localStorage.setItem('hideAlertsQuickTip', 'true');
   };
+
+  // Add beforeunload listener to warn about unsaved changes
+  createEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges()) {
+        e.preventDefault();
+        e.returnValue = ''; // Standard way to show confirmation dialog
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    onCleanup(() => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    });
+  });
+
+  // Warn when navigating within the app
+  useBeforeLeave((e) => {
+    if (hasUnsavedChanges()) {
+      if (!confirm('You have unsaved changes that will be lost. Discard changes and leave?')) {
+        e.preventDefault();
+      }
+    }
+  });
 
   // Store references to child component data
   let destinationsRef: DestinationsRef = {};
@@ -852,6 +887,8 @@ export function Alerts() {
                         ? 'warning'
                         : undefined,
                   thresholds: extractTriggerValues(thresholds),
+                  backup: thresholds.backup,
+                  snapshot: thresholds.snapshot,
                 });
               }
             }
@@ -3270,10 +3307,10 @@ function OverviewTab(props: {
                               </Show>
                               <Show when={rule.created_from === 'dismissed'}>
                                 <span class={`px-1.5 py-0.5 text-xs rounded ${rule.dismissed_reason === 'expected_behavior'
-                                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                                    : rule.dismissed_reason === 'will_fix_later'
-                                      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
-                                      : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                  : rule.dismissed_reason === 'will_fix_later'
+                                    ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
                                   }`}>
                                   {rule.dismissed_reason === 'expected_behavior' && '✓ Expected'}
                                   {rule.dismissed_reason === 'will_fix_later' && '⏱ Noted'}
