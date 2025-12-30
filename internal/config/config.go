@@ -75,8 +75,8 @@ type Config struct {
 	BackendPort  int    `envconfig:"BACKEND_PORT" default:"3000"`
 	FrontendHost string `envconfig:"FRONTEND_HOST" default:""`
 	FrontendPort int    `envconfig:"FRONTEND_PORT" default:"7655"`
-	ConfigPath   string `envconfig:"CONFIG_PATH" default:"/etc/pulse"`
-	DataPath     string `envconfig:"DATA_PATH" default:"/var/lib/pulse"`
+	ConfigPath   string `envconfig:"CONFIG_PATH"`
+	DataPath     string `envconfig:"DATA_DIR"`
 	AppRoot      string `json:"-"`                                // Root directory of the application (where binary lives)
 	PublicURL    string `envconfig:"PULSE_PUBLIC_URL" default:""` // Full URL to access Pulse (e.g., http://192.168.1.100:7655)
 	AgentConnectURL string `envconfig:"PULSE_AGENT_CONNECT_URL" default:""` // Dedicated direct connect URL for agents (e.g. http://192.168.1.5:7655)

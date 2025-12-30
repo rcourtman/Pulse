@@ -3559,8 +3559,8 @@ print_completion() {
     fi
 
     # Show bootstrap token on fresh install
-    local DATA_DIR="${DATA_PATH:-/var/lib/pulse}"
-    local TOKEN_FILE="$DATA_DIR/.bootstrap_token"
+    local TOKEN_DATA_DIR="${CONFIG_DIR:-/etc/pulse}"
+    local TOKEN_FILE="$TOKEN_DATA_DIR/.bootstrap_token"
     if [[ -f "$TOKEN_FILE" ]]; then
         BOOTSTRAP_TOKEN=$(cat "$TOKEN_FILE" 2>/dev/null | tr -d '\n')
         if [[ -n "$BOOTSTRAP_TOKEN" ]]; then
