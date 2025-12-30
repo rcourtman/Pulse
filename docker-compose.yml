@@ -5,6 +5,11 @@ services:
     image: ${PULSE_IMAGE:-rcourtman/pulse:latest}
     container_name: pulse
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "${PULSE_PORT:-7655}:7655"
     volumes:
