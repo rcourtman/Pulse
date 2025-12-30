@@ -253,6 +253,12 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 		if applicableRule.Thresholds.DisableConnectivity {
 			thresholds.DisableConnectivity = true
 		}
+		if applicableRule.Thresholds.Backup != nil {
+			thresholds.Backup = applicableRule.Thresholds.Backup
+		}
+		if applicableRule.Thresholds.Snapshot != nil {
+			thresholds.Snapshot = applicableRule.Thresholds.Snapshot
+		}
 
 		log.Debug().
 			Str("guest", guestID).
@@ -313,6 +319,12 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 			thresholds.NetworkOut = ensureHysteresisThreshold(override.NetworkOut)
 		} else if override.NetworkOutLegacy != nil {
 			thresholds.NetworkOut = m.convertLegacyThreshold(override.NetworkOutLegacy)
+		}
+		if override.Backup != nil {
+			thresholds.Backup = override.Backup
+		}
+		if override.Snapshot != nil {
+			thresholds.Snapshot = override.Snapshot
 		}
 	}
 

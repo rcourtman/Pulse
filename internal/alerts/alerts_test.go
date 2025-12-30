@@ -660,6 +660,70 @@ func TestCheckSnapshotsForInstanceCreatesAndClearsAlerts(t *testing.T) {
 	}
 }
 
+func TestCheckSnapshotsRespectsOverrides(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	cfg := AlertConfig{
+		Enabled: true,
+		SnapshotDefaults: SnapshotAlertConfig{
+			Enabled:      true,
+			WarningDays:  7,
+			CriticalDays: 14,
+		},
+	}
+	m.UpdateConfig(cfg)
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.mu.Unlock()
+
+	now := time.Now()
+	snapshots := []models.GuestSnapshot{
+		{
+			ID:       "inst:node:100:weekly",
+			Name:     "weekly",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     100,
+			Time:     now.Add(-10 * 24 * time.Hour), // Triggers Warning (10 > 7)
+		},
+	}
+	resourceKey := "inst:node:100"
+	guestNames := map[string]string{
+		resourceKey: "app-server",
+	}
+
+	// 1. Verify warning alert is created
+	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
+	m.mu.RLock()
+	alert, exists := m.activeAlerts["snapshot-age-inst:node:100:weekly"]
+	m.mu.RUnlock()
+	if !exists {
+		t.Fatalf("expected snapshot warning alert")
+	}
+	if alert.Level != AlertLevelWarning {
+		t.Fatalf("expected warning alert, got %s", alert.Level)
+	}
+
+	// 2. Disable via override
+	cfg = m.GetConfig()
+	cfg.Overrides = map[string]ThresholdConfig{
+		"inst:node:100": {
+			Snapshot: &SnapshotAlertConfig{Enabled: false},
+		},
+	}
+	m.UpdateConfig(cfg)
+	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
+	m.mu.RLock()
+	_, exists = m.activeAlerts["snapshot-age-inst:node:100:weekly"]
+	m.mu.RUnlock()
+	if exists {
+		t.Fatalf("expected snapshot alert to be suppressed by override")
+	}
+}
+
+
 func TestCheckSnapshotsForInstanceTriggersOnSnapshotSize(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
@@ -874,6 +938,111 @@ func TestCheckBackupsCreatesAndClearsAlerts(t *testing.T) {
 		t.Fatalf("expected backup-age alert to clear after fresh backup")
 	}
 }
+
+func TestCheckBackupsRespectsOverrides(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  7,
+		CriticalDays: 14,
+	}
+	m.config.TimeThreshold = 0
+	m.mu.Unlock()
+
+	now := time.Now()
+	storageBackups := []models.StorageBackup{
+		{
+			ID:       "inst-node-100-backup",
+			Storage:  "local",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     100,
+			Time:     now.Add(-10 * 24 * time.Hour), // Triggers Warning (10 > 7)
+		},
+	}
+
+	key := BuildGuestKey("inst", "node", 100)
+	resourceID := "inst:node:100"
+	guestsByKey := map[string]GuestLookup{
+		key: {
+			ResourceID: resourceID,
+			Name:       "app-server",
+			Instance:   "inst",
+			Node:       "node",
+			Type:       "qemu",
+			VMID:       100,
+		},
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"100": {guestsByKey[key]},
+	}
+
+	// 1. Verify warning alert is created with defaults
+	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+	m.mu.RLock()
+	alert, exists := m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
+	m.mu.RUnlock()
+	if !exists {
+		t.Fatalf("expected backup warning alert")
+	}
+	if alert.Level != AlertLevelWarning {
+		t.Fatalf("expected warning alert, got %s", alert.Level)
+	}
+
+	// 2. Apply override to disable backup alerts for this guest
+	cfg := m.GetConfig()
+	cfg.Overrides = map[string]ThresholdConfig{
+		resourceID: {
+			Backup: &BackupAlertConfig{Enabled: false},
+		},
+	}
+	m.UpdateConfig(cfg)
+
+	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+	m.mu.RLock()
+	_, exists = m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
+	m.mu.RUnlock()
+	if exists {
+		t.Fatalf("expected backup alert to be cleared/suppressed by override")
+	}
+
+	// 3. Apply override to change thresholds
+	cfg.Overrides[resourceID] = ThresholdConfig{
+		Backup: &BackupAlertConfig{
+			Enabled:      true,
+			WarningDays:  15, // 10 < 15, so no alert
+			CriticalDays: 20,
+		},
+	}
+	m.UpdateConfig(cfg)
+	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+	m.mu.RLock()
+	_, exists = m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
+	m.mu.RUnlock()
+	if exists {
+		t.Fatalf("expected no backup alert with increased thresholds in override")
+	}
+
+	// 4. Test global guest disable
+	cfg.Overrides[resourceID] = ThresholdConfig{
+		Disabled: true,
+	}
+	m.UpdateConfig(cfg)
+	storageBackups[0].Time = now.Add(-30 * 24 * time.Hour) // Way past defaults
+	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+	m.mu.RLock()
+	_, exists = m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
+	m.mu.RUnlock()
+	if exists {
+		t.Fatalf("expected no backup alert for globally disabled guest")
+	}
+}
+
 
 func TestCheckBackupsHandlesPbsOnlyGuests(t *testing.T) {
 	m := newTestManager(t)
