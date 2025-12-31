@@ -197,3 +197,122 @@ func TestNVMeTemperatureFallback(t *testing.T) {
 		t.Errorf("NVMe temperature not set correctly")
 	}
 }
+
+func TestMatchesDeviceExclude(t *testing.T) {
+	tests := []struct {
+		name       string
+		deviceName string
+		devicePath string
+		patterns   []string
+		expected   bool
+	}{
+		{
+			name:       "exact match on name",
+			deviceName: "sda",
+			devicePath: "/dev/sda",
+			patterns:   []string{"sda"},
+			expected:   true,
+		},
+		{
+			name:       "exact match on full path",
+			deviceName: "sda",
+			devicePath: "/dev/sda",
+			patterns:   []string{"/dev/sda"},
+			expected:   true,
+		},
+		{
+			name:       "no match",
+			deviceName: "sdb",
+			devicePath: "/dev/sdb",
+			patterns:   []string{"sda"},
+			expected:   false,
+		},
+		{
+			name:       "prefix pattern on name",
+			deviceName: "nvme0n1",
+			devicePath: "/dev/nvme0n1",
+			patterns:   []string{"nvme*"},
+			expected:   true,
+		},
+		{
+			name:       "prefix pattern on path",
+			deviceName: "nvme0n1",
+			devicePath: "/dev/nvme0n1",
+			patterns:   []string{"/dev/nvme*"},
+			expected:   true,
+		},
+		{
+			name:       "contains pattern",
+			deviceName: "sdcache1",
+			devicePath: "/dev/sdcache1",
+			patterns:   []string{"*cache*"},
+			expected:   true,
+		},
+		{
+			name:       "contains pattern no match",
+			deviceName: "sda",
+			devicePath: "/dev/sda",
+			patterns:   []string{"*cache*"},
+			expected:   false,
+		},
+		{
+			name:       "empty patterns",
+			deviceName: "sda",
+			devicePath: "/dev/sda",
+			patterns:   []string{},
+			expected:   false,
+		},
+		{
+			name:       "nil patterns",
+			deviceName: "sda",
+			devicePath: "/dev/sda",
+			patterns:   nil,
+			expected:   false,
+		},
+		{
+			name:       "multiple patterns first matches",
+			deviceName: "sda",
+			devicePath: "/dev/sda",
+			patterns:   []string{"sda", "sdb"},
+			expected:   true,
+		},
+		{
+			name:       "multiple patterns second matches",
+			deviceName: "sdb",
+			devicePath: "/dev/sdb",
+			patterns:   []string{"sda", "sdb"},
+			expected:   true,
+		},
+		{
+			name:       "whitespace trimmed",
+			deviceName: "sda",
+			devicePath: "/dev/sda",
+			patterns:   []string{"  sda  "},
+			expected:   true,
+		},
+		{
+			name:       "empty pattern ignored",
+			deviceName: "sda",
+			devicePath: "/dev/sda",
+			patterns:   []string{"", "   ", "sdb"},
+			expected:   false,
+		},
+		{
+			name:       "sd prefix pattern",
+			deviceName: "sdc",
+			devicePath: "/dev/sdc",
+			patterns:   []string{"sd*"},
+			expected:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchesDeviceExclude(tt.deviceName, tt.devicePath, tt.patterns)
+			if result != tt.expected {
+				t.Errorf("matchesDeviceExclude(%q, %q, %v) = %t, want %t",
+					tt.deviceName, tt.devicePath, tt.patterns, result, tt.expected)
+			}
+		})
+	}
+}

@@ -22,7 +22,7 @@ func TestListBlockDevices(t *testing.T) {
 		return []byte(out), nil
 	}
 
-	devices, err := listBlockDevices(context.Background())
+	devices, err := listBlockDevices(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("listBlockDevices error: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestListBlockDevicesError(t *testing.T) {
 		return nil, errors.New("boom")
 	}
 
-	if _, err := listBlockDevices(context.Background()); err == nil {
+	if _, err := listBlockDevices(context.Background(), nil); err == nil {
 		t.Fatalf("expected error")
 	}
 }
@@ -65,7 +65,7 @@ func TestCollectLocalNoDevices(t *testing.T) {
 		return nil, errors.New("unexpected command")
 	}
 
-	result, err := CollectLocal(context.Background())
+	result, err := CollectLocal(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("CollectLocal error: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestCollectLocalListDevicesError(t *testing.T) {
 		return nil, errors.New("lsblk failed")
 	}
 
-	if _, err := CollectLocal(context.Background()); err == nil {
+	if _, err := CollectLocal(context.Background(), nil); err == nil {
 		t.Fatalf("expected list error")
 	}
 }
@@ -123,7 +123,7 @@ func TestCollectLocalSkipsErrors(t *testing.T) {
 		return nil, errors.New("unexpected command")
 	}
 
-	result, err := CollectLocal(context.Background())
+	result, err := CollectLocal(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("CollectLocal error: %v", err)
 	}
