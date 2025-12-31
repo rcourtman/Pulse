@@ -42,6 +42,9 @@ type ReplicationJob struct {
 }
 
 // GetReplicationStatus returns the replication jobs configured on a PVE instance.
+// It fetches job configuration from /cluster/replication and then enriches each
+// job with status data (last_sync, next_sync, duration, fail_count, state) from
+// /nodes/{node}/replication/{id}/status.
 func (c *Client) GetReplicationStatus(ctx context.Context) ([]ReplicationJob, error) {
 	resp, err := c.get(ctx, "/cluster/replication")
 	if err != nil {
@@ -62,7 +65,82 @@ func (c *Client) GetReplicationStatus(ctx context.Context) ([]ReplicationJob, er
 		jobs = append(jobs, parseReplicationJob(entry))
 	}
 
+	// Enrich jobs with status data from the per-node status endpoint
+	// The /cluster/replication endpoint only returns config, not status
+	for i := range jobs {
+		c.enrichReplicationJobStatus(ctx, &jobs[i])
+	}
+
 	return jobs, nil
+}
+
+// enrichReplicationJobStatus fetches status data for a replication job from
+// /nodes/{node}/replication/{id}/status and merges it into the job struct.
+func (c *Client) enrichReplicationJobStatus(ctx context.Context, job *ReplicationJob) {
+	// Status is stored on the source node
+	sourceNode := job.Source
+	if sourceNode == "" {
+		return
+	}
+
+	jobID := job.ID
+	if jobID == "" {
+		return
+	}
+
+	endpoint := fmt.Sprintf("/nodes/%s/replication/%s/status", sourceNode, jobID)
+	resp, err := c.get(ctx, endpoint)
+	if err != nil {
+		// Silently ignore - status endpoint may not be available or job may be new
+		return
+	}
+	defer resp.Body.Close()
+
+	var statusResp struct {
+		Data []map[string]json.RawMessage `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&statusResp); err != nil {
+		return
+	}
+
+	// The status endpoint returns an array, usually with one entry
+	if len(statusResp.Data) == 0 {
+		return
+	}
+
+	status := statusResp.Data[0]
+
+	// Parse and merge status fields
+	if t, unix := parseReplicationTime(decodeRaw(status["last_sync"])); t != nil {
+		job.LastSyncTime = t
+		job.LastSyncUnix = unix
+	}
+
+	if t, unix := parseReplicationTime(decodeRaw(status["next_sync"])); t != nil {
+		job.NextSyncTime = t
+		job.NextSyncUnix = unix
+	}
+
+	if failCount, ok := intFromAny(decodeRaw(status["fail_count"])); ok {
+		job.FailCount = failCount
+	}
+
+	if duration, _ := parseDurationSeconds(decodeRaw(status["duration"])); duration > 0 {
+		job.DurationSeconds = duration
+		job.LastSyncDurationSeconds = duration
+	}
+
+	if state := stringFromAny(decodeRaw(status["state"])); state != "" {
+		job.State = state
+		if job.Status == "" {
+			job.Status = state
+		}
+	}
+
+	if errMsg := stringFromAny(decodeRaw(status["error"])); errMsg != "" {
+		job.Error = errMsg
+	}
 }
 
 func parseReplicationJob(entry map[string]json.RawMessage) ReplicationJob {
