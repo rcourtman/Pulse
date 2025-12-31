@@ -623,6 +623,35 @@ detect_os() {
     fi
 }
 
+# Restore SELinux contexts for installed binaries
+# On SELinux-enforcing systems (Fedora, RHEL, CentOS), binaries in non-standard
+# locations need proper security contexts for systemd to execute them.
+restore_selinux_contexts() {
+    # Check if SELinux is available and enforcing
+    if ! command -v getenforce >/dev/null 2>&1; then
+        return 0  # SELinux not installed
+    fi
+
+    if [[ "$(getenforce 2>/dev/null)" != "Enforcing" ]]; then
+        return 0  # SELinux not enforcing
+    fi
+
+    # restorecon is the proper way to fix SELinux contexts
+    if command -v restorecon >/dev/null 2>&1; then
+        print_info "Restoring SELinux contexts for installed binaries..."
+        restorecon -Rv "$INSTALL_DIR/bin/" >/dev/null 2>&1 || true
+        restorecon -v /usr/local/bin/pulse* >/dev/null 2>&1 || true
+        print_success "SELinux contexts restored"
+    else
+        # Fallback to chcon if restorecon isn't available
+        if command -v chcon >/dev/null 2>&1; then
+            print_info "Setting SELinux contexts for installed binaries..."
+            find "$INSTALL_DIR/bin/" -type f -executable -exec chcon -t bin_t {} \; 2>/dev/null || true
+            find /usr/local/bin/ -name 'pulse*' -exec chcon -h -t bin_t {} \; 2>/dev/null || true
+        fi
+    fi
+}
+
 check_proxmox_host() {
     # Check if this is a Proxmox VE host
     if command -v pvesh &> /dev/null && [[ -d /etc/pve ]]; then
@@ -2637,6 +2666,9 @@ download_pulse() {
             print_success "Version verified: $INSTALLED_VERSION"
         fi
     
+        # Restore SELinux contexts for installed binaries (Fedora, RHEL, etc.)
+        restore_selinux_contexts
+
         # Cleanup
         rm -rf "$TEMP_EXTRACT" "$ARCHIVE_PATH"
     fi  # End of SKIP_DOWNLOAD check
