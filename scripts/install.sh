@@ -98,6 +98,33 @@ fail() {
     exit 1
 }
 
+# --- SELinux Context Restoration ---
+# On SELinux-enforcing systems (Fedora, RHEL, CentOS), binaries in non-standard
+# locations need proper security contexts for systemd to execute them.
+restore_selinux_contexts() {
+    # Check if SELinux is available and enforcing
+    if ! command -v getenforce >/dev/null 2>&1; then
+        return 0  # SELinux not installed
+    fi
+
+    if [[ "$(getenforce 2>/dev/null)" != "Enforcing" ]]; then
+        return 0  # SELinux not enforcing
+    fi
+
+    # restorecon is the proper way to fix SELinux contexts
+    if command -v restorecon >/dev/null 2>&1; then
+        log_info "Restoring SELinux contexts for installed binaries..."
+        restorecon -v "${INSTALL_DIR}/${BINARY_NAME}" >/dev/null 2>&1 || true
+        log_info "SELinux context restored"
+    else
+        # Fallback to chcon if restorecon isn't available
+        if command -v chcon >/dev/null 2>&1; then
+            log_info "Setting SELinux context for installed binary..."
+            chcon -t bin_t "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+        fi
+    fi
+}
+
 # --- Auto-Detection Functions ---
 detect_docker() {
     # Check if Docker is available and accessible
@@ -1274,6 +1301,9 @@ WantedBy=multi-user.target
 EOF
     # Restrict service file permissions (contains no secrets now, but good practice)
     chmod 644 "$UNIT"
+
+    # Restore SELinux contexts (required for Fedora, RHEL, CentOS)
+    restore_selinux_contexts
 
     systemctl daemon-reload
     systemctl enable "${AGENT_NAME}"
