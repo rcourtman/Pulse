@@ -234,15 +234,11 @@ RUN apk --no-cache add ca-certificates tzdata su-exec openssh-client
 
 WORKDIR /app
 
-# Copy all pulse binaries, then select the correct one for target architecture
-COPY --from=backend-builder /app/pulse-linux-* /tmp/
-RUN if [ "$TARGETARCH" = "arm64" ]; then \
-        cp /tmp/pulse-linux-arm64 ./pulse; \
-    else \
-        cp /tmp/pulse-linux-amd64 ./pulse; \
-    fi && \
-    chmod +x ./pulse && \
-    rm -rf /tmp/pulse-linux-*
+# Copy the correct pulse binary for target architecture directly
+# Use separate COPY commands with TARGETARCH to avoid copying both binaries
+# (copying to /tmp then deleting wastes space due to Docker layer immutability)
+COPY --from=backend-builder /app/pulse-linux-${TARGETARCH:-amd64} ./pulse
+RUN chmod +x ./pulse
 
 
 
