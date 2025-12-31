@@ -540,7 +540,8 @@ type Manager struct {
 type ackRecord struct {
 	acknowledged bool
 	user         string
-	time         time.Time
+	time         time.Time      // When the alert was acknowledged
+	inactiveAt   time.Time      // When the alert was removed (zero if still active)
 }
 
 type dockerRestartRecord struct {
@@ -6239,6 +6240,11 @@ func (m *Manager) removeActiveAlertNoLock(alertID string) {
 	// NOTE: Don't delete ackState here - preserve it so if the same alert
 	// reappears (e.g., powered-off VM during backup), the acknowledgement
 	// is restored via preserveAlertState. ackState is cleaned up in Cleanup().
+	// Update inactiveAt so the cleanup TTL is measured from removal time, not ack time.
+	if record, exists := m.ackState[alertID]; exists {
+		record.inactiveAt = time.Now()
+		m.ackState[alertID] = record
+	}
 }
 
 // GetActiveAlerts returns all active alerts
@@ -8025,11 +8031,18 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	}
 
 	// Clean up stale ackState entries for alerts that no longer exist
-	// Keep ackState for 1 hour to handle transient alert clears (e.g., backups)
+	// Keep ackState for 1 hour after the alert was removed (not from ack time)
+	// to handle transient alert clears (e.g., backups of powered-off VMs)
 	ackStateTTL := 1 * time.Hour
 	for id, record := range m.ackState {
 		if _, alertExists := m.activeAlerts[id]; !alertExists {
-			if now.Sub(record.time) > ackStateTTL {
+			// Use inactiveAt (when alert was removed) for TTL, not ack time
+			checkTime := record.inactiveAt
+			if checkTime.IsZero() {
+				// Fallback for legacy entries without inactiveAt
+				checkTime = record.time
+			}
+			if now.Sub(checkTime) > ackStateTTL {
 				delete(m.ackState, id)
 			}
 		}
@@ -8990,7 +9003,12 @@ func (m *Manager) cleanupStaleMaps() {
 	// Clean up ackState for alerts that no longer exist and are older than threshold
 	for alertID, record := range m.ackState {
 		if _, hasAlert := m.activeAlerts[alertID]; !hasAlert {
-			if now.Sub(record.time) > staleThreshold {
+			// Use inactiveAt (when alert was removed) for TTL, not ack time
+			checkTime := record.inactiveAt
+			if checkTime.IsZero() {
+				checkTime = record.time
+			}
+			if now.Sub(checkTime) > staleThreshold {
 				delete(m.ackState, alertID)
 				cleaned++
 			}
