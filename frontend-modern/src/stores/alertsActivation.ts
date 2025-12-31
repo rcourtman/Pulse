@@ -127,6 +127,18 @@ const getBackupThresholds = (): { freshHours: number; staleHours: number } => {
   };
 };
 
+// Get temperature threshold from config (for display coloring)
+const getTemperatureThreshold = (): number => {
+  const cfg = config();
+  // nodeDefaults.temperature is a HysteresisThreshold with trigger/clear
+  const tempConfig = cfg?.nodeDefaults?.temperature;
+  if (typeof tempConfig === 'object' && tempConfig !== null && 'trigger' in tempConfig) {
+    return (tempConfig as { trigger: number }).trigger;
+  }
+  // Fallback to default 80°C
+  return 80;
+};
+
 // Export the store
 export const useAlertsActivation = () => ({
   // Signals
@@ -139,6 +151,7 @@ export const useAlertsActivation = () => ({
   // Computed
   isPastObservationWindow,
   getBackupThresholds,
+  getTemperatureThreshold,
 
   // Actions
   refreshConfig,

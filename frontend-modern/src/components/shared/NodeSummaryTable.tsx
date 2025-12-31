@@ -38,6 +38,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   const { isMobile } = useBreakpoint();
   const { viewMode } = useMetricsViewMode();
 
+  // Get user-configured temperature threshold for display coloring
+  const temperatureThreshold = createMemo(() => alertsActivation.getTemperatureThreshold());
+
   const isTemperatureMonitoringEnabled = (node: Node): boolean => {
     const globalEnabled = props.globalTemperatureMonitoringEnabled ?? true;
     if (node.temperatureMonitoringEnabled !== undefined && node.temperatureMonitoringEnabled !== null) {
@@ -701,13 +704,19 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                                       value={value}
                                       min={min}
                                       max={max}
+                                      critical={temperatureThreshold()}
+                                      warning={Math.max(0, temperatureThreshold() - 5)}
                                     />
                                   </div>
                                 );
                               }
 
                               return (
-                                <TemperatureGauge value={value} />
+                                <TemperatureGauge
+                                  value={value}
+                                  critical={temperatureThreshold()}
+                                  warning={Math.max(0, temperatureThreshold() - 5)}
+                                />
                               );
                             })()}
                           </Show>
