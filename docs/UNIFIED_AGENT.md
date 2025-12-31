@@ -148,6 +148,8 @@ The agent can report S.M.A.R.T. disk temperatures when running in Agent mode. Th
 - Disks in standby mode are reported as such (no temperature) to avoid waking them
 - S.M.A.R.T. data is collected alongside other host metrics
 - If `smartctl` is not available, S.M.A.R.T. monitoring is silently skipped
+- **Disk exclusions** (`--disk-exclude` / `PULSE_DISK_EXCLUDE`) also apply to S.M.A.R.T. monitoring.
+  Use patterns like `sda`, `/dev/sdb`, `nvme*`, or `*cache*` to exclude specific block devices.
 
 
 ## Auto-Update

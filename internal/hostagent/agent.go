@@ -87,16 +87,16 @@ var readFile = os.ReadFile
 var netInterfaces = net.Interfaces
 
 var (
-	hostInfoWithContext    = gohost.InfoWithContext
-	hostUptimeWithContext  = gohost.UptimeWithContext
-	hostmetricsCollect     = hostmetrics.Collect
-	sensorsCollectLocal    = sensors.CollectLocal
-	sensorsParse           = sensors.Parse
-	sensorsCollectPower    = sensors.CollectPower
-	mdadmCollectArrays     = mdadm.CollectArrays
-	cephCollect            = ceph.Collect
-	smartctlCollectLocal   = smartctl.CollectLocal
-	nowUTC                 = func() time.Time { return time.Now().UTC() }
+	hostInfoWithContext   = gohost.InfoWithContext
+	hostUptimeWithContext = gohost.UptimeWithContext
+	hostmetricsCollect    = hostmetrics.Collect
+	sensorsCollectLocal   = sensors.CollectLocal
+	sensorsParse          = sensors.Parse
+	sensorsCollectPower   = sensors.CollectPower
+	mdadmCollectArrays    = mdadm.CollectArrays
+	cephCollect           = ceph.Collect
+	smartctlCollectLocal  = smartctl.CollectLocal
+	nowUTC                = func() time.Time { return time.Now().UTC() }
 )
 
 // New constructs a fully initialised host Agent.
@@ -443,7 +443,7 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 
 	// Parse response to check for server-side config overrides
 	var reportResp struct {
-		Success bool `json:"success"`
+		Success bool   `json:"success"`
 		HostID  string `json:"hostId"`
 		Config  *struct {
 			CommandsEnabled *bool `json:"commandsEnabled"`
@@ -747,7 +747,7 @@ func (a *Agent) collectSMARTData(ctx context.Context) []agentshost.DiskSMART {
 		return nil
 	}
 
-	smartData, err := smartctlCollectLocal(ctx)
+	smartData, err := smartctlCollectLocal(ctx, a.cfg.DiskExclude)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to collect S.M.A.R.T. data (smartctl may not be installed)")
 		return nil

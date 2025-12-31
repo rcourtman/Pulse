@@ -63,9 +63,10 @@ type smartctlJSON struct {
 }
 
 // CollectLocal collects S.M.A.R.T. data from all local block devices.
-func CollectLocal(ctx context.Context) ([]DiskSMART, error) {
+// The diskExclude parameter specifies patterns for devices to skip (e.g., "sda", "/dev/nvme*", "*cache*").
+func CollectLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, error) {
 	// List block devices
-	devices, err := listBlockDevices(ctx)
+	devices, err := listBlockDevices(ctx, diskExclude)
 	if err != nil {
 		log.Debug().Err(err).Msg("Failed to list block devices for SMART collection")
 		return nil, err
@@ -91,7 +92,8 @@ func CollectLocal(ctx context.Context) ([]DiskSMART, error) {
 }
 
 // listBlockDevices returns a list of block devices suitable for SMART queries.
-func listBlockDevices(ctx context.Context) ([]string, error) {
+// Devices matching any of the diskExclude patterns are skipped.
+func listBlockDevices(ctx context.Context, diskExclude []string) ([]string, error) {
 	// Use lsblk to find disks (not partitions)
 	output, err := runCommandOutput(ctx, "lsblk", "-d", "-n", "-o", "NAME,TYPE")
 	if err != nil {
@@ -107,11 +109,61 @@ func listBlockDevices(ctx context.Context) ([]string, error) {
 		name, devType := fields[0], fields[1]
 		// Only include disk types (not loop, rom, partition)
 		if devType == "disk" {
-			devices = append(devices, "/dev/"+name)
+			devicePath := "/dev/" + name
+			// Check exclusion patterns
+			if matchesDeviceExclude(name, devicePath, diskExclude) {
+				log.Debug().Str("device", devicePath).Msg("Skipping excluded device for SMART collection")
+				continue
+			}
+			devices = append(devices, devicePath)
 		}
 	}
 
 	return devices, nil
+}
+
+// matchesDeviceExclude checks if a block device matches any exclusion pattern.
+// Patterns can match against the device name (e.g., "sda", "nvme0n1") or the full
+// path (e.g., "/dev/sda"). Supports:
+//   - Exact match: "sda" matches device named "sda"
+//   - Prefix pattern (ending with *): "nvme*" matches "nvme0n1", "nvme1n1", etc.
+//   - Contains pattern (surrounded by *): "*cache*" matches any device with "cache" in name
+func matchesDeviceExclude(name, devicePath string, excludePatterns []string) bool {
+	if len(excludePatterns) == 0 {
+		return false
+	}
+
+	for _, pattern := range excludePatterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+
+		// Contains pattern: *substring*
+		if strings.HasPrefix(pattern, "*") && strings.HasSuffix(pattern, "*") && len(pattern) > 2 {
+			substring := pattern[1 : len(pattern)-1]
+			if strings.Contains(name, substring) || strings.Contains(devicePath, substring) {
+				return true
+			}
+			continue
+		}
+
+		// Prefix pattern: prefix*
+		if strings.HasSuffix(pattern, "*") {
+			prefix := pattern[:len(pattern)-1]
+			if strings.HasPrefix(name, prefix) || strings.HasPrefix(devicePath, prefix) {
+				return true
+			}
+			continue
+		}
+
+		// Exact match against name or full path
+		if name == pattern || devicePath == pattern {
+			return true
+		}
+	}
+
+	return false
 }
 
 // collectDeviceSMART runs smartctl on a single device and parses the result.
