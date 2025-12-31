@@ -55,25 +55,29 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 
 	agentID := a.cfg.AgentID
 	if agentID == "" {
-		// In unified mode, prefer machineID (which matches what hostagent uses)
-		// over daemonID to ensure a single agent entry in the backend.
-		// For standalone mode, we prefer daemonID for backward compatibility.
+		// In unified mode, use the EXACT same fallback chain as hostagent:
+		// machineID -> hostname. Never use daemonID in unified mode because
+		// hostagent doesn't use it, and using different IDs causes token
+		// binding conflicts on the server (reported in #985, #986).
 		if a.cfg.AgentType == "unified" {
 			agentID = a.machineID
-		}
-		
-		// Use cached daemon ID from init rather than info.ID from current call.
-		// Podman can return different/empty IDs across calls, causing token
-		// binding conflicts on the server.
-		if agentID == "" {
+			if agentID == "" {
+				agentID = a.hostName
+			}
+		} else {
+			// Standalone mode: prefer daemonID for backward compatibility,
+			// then fall back to machineID -> hostname.
+			// Use cached daemon ID from init rather than info.ID from current call.
+			// Podman can return different/empty IDs across calls, causing token
+			// binding conflicts on the server.
 			agentID = a.daemonID
+			if agentID == "" {
+				agentID = a.machineID
+			}
+			if agentID == "" {
+				agentID = a.hostName
+			}
 		}
-	}
-	if agentID == "" {
-		agentID = a.machineID
-	}
-	if agentID == "" {
-		agentID = a.hostName
 	}
 	a.hostID = agentID
 
@@ -214,7 +218,7 @@ func (a *Agent) pruneStaleCPUSamples(active map[string]struct{}) {
 	for id := range a.prevContainerCPU {
 		if _, ok := active[id]; !ok {
 			delete(a.prevContainerCPU, id)
-			// Reset stats failure counter when containers are removed, 
+			// Reset stats failure counter when containers are removed,
 			// though it's global per agent so not strictly necessary but good hygiene
 		}
 	}
@@ -380,7 +384,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		// The ImageID is a local content-addressable ID that differs from the registry manifest digest.
 		// We also get the architecture details to correctly resolve manifest lists from the registry.
 		digestForComparison, arch, os, variant := a.getImageRepoDigest(containerCtx, summary.ImageID, summary.Image)
-		
+
 		var imageToCheck string
 		// Always prefer the image name from inspect config as it's the authoritative source
 		// and avoids issues with short IDs or digests in summary.
@@ -464,7 +468,7 @@ func (a *Agent) getImageRepoDigest(ctx context.Context, imageID, imageName strin
 	for _, repoDigest := range imageInspect.RepoDigests {
 		// Extract just the digest part (after @)
 		if idx := strings.LastIndex(repoDigest, "@"); idx >= 0 {
-			repoRef := repoDigest[:idx] // e.g., "docker.io/library/nginx"
+			repoRef := repoDigest[:idx]  // e.g., "docker.io/library/nginx"
 			digest := repoDigest[idx+1:] // e.g., "sha256:abc..."
 
 			// Check if this RepoDigest matches our image reference
