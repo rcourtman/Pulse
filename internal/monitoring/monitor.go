@@ -2393,6 +2393,13 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		IsLegacy:        isLegacyHostAgent(report.Agent.Type),
 	}
 
+	// Apply any pending commands execution override from server config
+	// This ensures the UI remains stable when the user toggles this setting,
+	// even if the agent hasn't yet picked up the new config in this report cycle.
+	if cfg := m.GetHostAgentConfig(identifier); cfg.CommandsEnabled != nil {
+		host.CommandsEnabled = *cfg.CommandsEnabled
+	}
+
 	if len(host.LoadAverage) == 0 {
 		host.LoadAverage = nil
 	}
