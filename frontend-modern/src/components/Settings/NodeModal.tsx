@@ -83,6 +83,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     fingerprint: '',
     verifySSL: true,
     monitorPhysicalDisks: false,
+    physicalDiskPollingMinutes: 5,
     monitorMailStats: true,
     monitorQueues: true,
     monitorQuarantine: true,
@@ -265,6 +266,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         node.type === 'pve'
           ? (node as NodeConfig & { monitorPhysicalDisks?: boolean }).monitorPhysicalDisks ?? true
           : false,
+      physicalDiskPollingMinutes:
+        node.type === 'pve'
+          ? (node as NodeConfig & { physicalDiskPollingMinutes?: number }).physicalDiskPollingMinutes ?? 5
+          : 5,
       monitorMailStats: pmgConfig?.monitorMailStats ?? true,
       monitorQueues: pmgConfig?.monitorQueues ?? true,
       monitorQuarantine: pmgConfig?.monitorQuarantine ?? true,
@@ -325,6 +330,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         monitorStorage: true,
         monitorBackups: true,
         monitorPhysicalDisks: data.monitorPhysicalDisks,
+        physicalDiskPollingMinutes: data.physicalDiskPollingMinutes,
       });
     } else if (props.nodeType === 'pbs') {
       Object.assign(nodeData, {

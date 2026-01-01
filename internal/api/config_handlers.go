@@ -386,6 +386,7 @@ type NodeConfigRequest struct {
 	MonitorStorage               *bool  `json:"monitorStorage,omitempty"`               // PVE only
 	MonitorBackups               *bool  `json:"monitorBackups,omitempty"`               // PVE only
 	MonitorPhysicalDisks         *bool  `json:"monitorPhysicalDisks,omitempty"`         // PVE only (nil = enabled by default)
+	PhysicalDiskPollingMinutes   *int   `json:"physicalDiskPollingMinutes,omitempty"`   // PVE only (0 = default 5m)
 	TemperatureMonitoringEnabled *bool  `json:"temperatureMonitoringEnabled,omitempty"` // All types (nil = use global setting)
 	MonitorDatastores            *bool  `json:"monitorDatastores,omitempty"`            // PBS only
 	MonitorSyncJobs              *bool  `json:"monitorSyncJobs,omitempty"`              // PBS only
@@ -416,6 +417,7 @@ type NodeResponse struct {
 	MonitorStorage               bool                     `json:"monitorStorage,omitempty"`
 	MonitorBackups               bool                     `json:"monitorBackups,omitempty"`
 	MonitorPhysicalDisks         *bool                    `json:"monitorPhysicalDisks,omitempty"`
+	PhysicalDiskPollingMinutes   int                      `json:"physicalDiskPollingMinutes,omitempty"`
 	TemperatureMonitoringEnabled *bool                    `json:"temperatureMonitoringEnabled,omitempty"`
 	TemperatureTransport         string                   `json:"temperatureTransport,omitempty"`
 	MonitorDatastores            bool                     `json:"monitorDatastores,omitempty"`
@@ -852,6 +854,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 			MonitorStorage:               pve.MonitorStorage,
 			MonitorBackups:               pve.MonitorBackups,
 			MonitorPhysicalDisks:         pve.MonitorPhysicalDisks,
+			PhysicalDiskPollingMinutes:   pve.PhysicalDiskPollingMinutes,
 			TemperatureMonitoringEnabled: pve.TemperatureMonitoringEnabled,
 			TemperatureTransport:         h.resolveTemperatureTransport(pve.TemperatureMonitoringEnabled, pve.TemperatureProxyURL, pve.TemperatureProxyToken, socketAvailable, containerSSHBlocked),
 			Status:                       h.getNodeStatus("pve", pve.Name),
@@ -1478,11 +1481,11 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 					// Return success - the cluster is now updated with new endpoints
 					w.Header().Set("Content-Type", "application/json")
 					json.NewEncoder(w).Encode(map[string]interface{}{
-						"success":       true,
-						"merged":        true,
-						"cluster":       clusterName,
-						"existingNode":  existingInstance.Name,
-						"message":       fmt.Sprintf("Node merged into existing cluster '%s' (already configured as '%s')", clusterName, existingInstance.Name),
+						"success":        true,
+						"merged":         true,
+						"cluster":        clusterName,
+						"existingNode":   existingInstance.Name,
+						"message":        fmt.Sprintf("Node merged into existing cluster '%s' (already configured as '%s')", clusterName, existingInstance.Name),
 						"totalEndpoints": len(existingInstance.ClusterEndpoints),
 					})
 					return
@@ -1537,11 +1540,16 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			MonitorStorage:               monitorStorage,
 			MonitorBackups:               monitorBackups,
 			MonitorPhysicalDisks:         req.MonitorPhysicalDisks,
+			PhysicalDiskPollingMinutes:   0,
 			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
 			IsCluster:                    isCluster,
 			ClusterName:                  clusterName,
 			ClusterEndpoints:             clusterEndpoints,
 		}
+		if req.PhysicalDiskPollingMinutes != nil {
+			pve.PhysicalDiskPollingMinutes = *req.PhysicalDiskPollingMinutes
+		}
+
 		h.config.PVEInstances = append(h.config.PVEInstances, pve)
 
 		if isCluster {
@@ -1556,7 +1564,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		// Parse PBS authentication details
 		var pbsUser string
 		var pbsPassword string
-	var pbsTokenName string
+		var pbsTokenName string
 		var pbsTokenValue string
 
 		// Determine authentication method
@@ -1609,7 +1617,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 					// Successfully created token - use it instead of password
 					pbsTokenName = tokenID
 					pbsTokenValue = tokenSecret
-					pbsUser = ""      // Clear password auth fields
+					pbsUser = "" // Clear password auth fields
 					pbsPassword = ""
 					log.Info().
 						Str("host", host).
@@ -2199,6 +2207,9 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		}
 		if req.MonitorPhysicalDisks != nil {
 			pve.MonitorPhysicalDisks = req.MonitorPhysicalDisks
+		}
+		if req.PhysicalDiskPollingMinutes != nil {
+			pve.PhysicalDiskPollingMinutes = *req.PhysicalDiskPollingMinutes
 		}
 		if req.TemperatureMonitoringEnabled != nil {
 			pve.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
