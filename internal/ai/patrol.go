@@ -3161,7 +3161,11 @@ func (p *PatrolService) parseFindingBlock(block string) *Finding {
 	// (e.g. high-cpu vs high-memory) while maintaining stability checks
 	normalizedKey := normalizeFindingKey(key)
 	if normalizedKey == "" {
-		normalizedKey = "llm-finding"
+		// Fallback to title-based key if LLM didn't provide one
+		normalizedKey = normalizeFindingKey(title)
+		if normalizedKey == "" {
+			normalizedKey = "llm-finding"
+		}
 	}
 	id := generateFindingID(resource, string(cat), normalizedKey)
 
