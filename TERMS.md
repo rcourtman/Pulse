@@ -25,7 +25,7 @@ The Software includes features ("AI Patrol", "Auto-Fix", "Autonomous Mode") that
 You agree to indemnify and hold harmless the Author from and against all claims, damages, losses, liabilities, costs, and expenses (including reasonable attorneys' fees) arising out of or related to your use of the Software.
 
 ## 6. GOVERNING LAW
-Any legal action or proceeding related to this Agreement shall be brought in the courts of [Your State/Country].
+This Agreement shall be governed by and construed in accordance with the laws of England and Wales. Any legal action or proceeding related to this Agreement shall be brought exclusively in the courts of England and Wales.
 
 ---
 *Pulse is a product by rcourtman.*
