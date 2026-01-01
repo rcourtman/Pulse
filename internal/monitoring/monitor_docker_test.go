@@ -870,3 +870,90 @@ func TestApplyDockerReport_MissingHostname(t *testing.T) {
 		t.Errorf("expected 'missing hostname' in error message, got: %v", err)
 	}
 }
+
+func TestApplyDockerReport_ReconnectWithoutMachineID(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	// Report with NO AgentID and NO MachineID, but valid Hostname.
+	// This simulates a containerized agent without persistent ID or machine-id mount.
+	report := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "", // Empty AgentID
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:  "reconnect-host",
+			MachineID: "", // Empty MachineID
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	token := &config.APITokenRecord{ID: "token-reconnect", Name: "Test Token"}
+
+	// First report - should succeed
+	host1, err := monitor.ApplyDockerReport(report, token)
+	if err != nil {
+		t.Fatalf("First ApplyDockerReport failed: %v", err)
+	}
+	if host1.ID == "" {
+		t.Fatal("First host has empty ID")
+	}
+
+	// Second report - identical to first
+	// This must succeed by matching the existing host via Hostname + Token
+	host2, err := monitor.ApplyDockerReport(report, token)
+	if err != nil {
+		t.Fatalf("Second ApplyDockerReport failed: %v", err)
+	}
+
+	// Verify that we matched the existing host instead of creating a new one
+	if host1.ID != host2.ID {
+		t.Errorf("Host IDs mismatch: %q vs %q - expected them to remain the same", host1.ID, host2.ID)
+	}
+}
+
+func TestApplyDockerReport_SameHostnameDifferentTokens(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	// Two agents with the same hostname but different tokens should be treated as DIFFERENT hosts.
+	// This tests that our Hostname+Token matching doesn't incorrectly merge unrelated agents.
+	reportA := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "", // Empty AgentID
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:  "shared-hostname",
+			MachineID: "", // Empty MachineID
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	tokenA := &config.APITokenRecord{ID: "token-A", Name: "Token A"}
+	tokenB := &config.APITokenRecord{ID: "token-B", Name: "Token B"}
+
+	// Agent A reports first
+	hostA, err := monitor.ApplyDockerReport(reportA, tokenA)
+	if err != nil {
+		t.Fatalf("Agent A report failed: %v", err)
+	}
+
+	// Agent B reports with same hostname but different token
+	hostB, err := monitor.ApplyDockerReport(reportA, tokenB)
+	if err != nil {
+		t.Fatalf("Agent B report failed: %v", err)
+	}
+
+	// They should have DIFFERENT IDs since they use different tokens
+	if hostA.ID == hostB.ID {
+		t.Errorf("Hosts should have different IDs but both have %q", hostA.ID)
+	}
+
+	// Verify both hosts exist in state
+	hosts := monitor.state.GetDockerHosts()
+	if len(hosts) != 2 {
+		t.Errorf("Expected 2 hosts in state, got %d", len(hosts))
+	}
+}
