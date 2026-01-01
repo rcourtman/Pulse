@@ -182,6 +182,7 @@ jobs:
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache,mode=max
           build-args: |
             PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+            VERSION=${{ needs.extract_version.outputs.tag }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/pulse:staging-${{ needs.extract_version.outputs.tag }}
 
@@ -198,13 +199,14 @@ jobs:
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache,mode=max
           build-args: |
             PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+            VERSION=${{ needs.extract_version.outputs.tag }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:staging-${{ needs.extract_version.outputs.tag }}
 
       - name: Build Docker images for integration tests
         run: |
           docker build -t pulse-mock-github:test tests/integration/mock-github-server
-          docker build -t pulse:test -f Dockerfile --target runtime --cache-from ghcr.io/${{ github.repository_owner }}/pulse:buildcache --build-arg BUILDKIT_INLINE_CACHE=1 --build-arg PULSE_LICENSE_PUBLIC_KEY="$PULSE_LICENSE_PUBLIC_KEY" .
+          docker build -t pulse:test -f Dockerfile --target runtime --cache-from ghcr.io/${{ github.repository_owner }}/pulse:buildcache --build-arg BUILDKIT_INLINE_CACHE=1 --build-arg PULSE_LICENSE_PUBLIC_KEY="$PULSE_LICENSE_PUBLIC_KEY" --build-arg VERSION="${{ needs.extract_version.outputs.tag }}" .
         env:
           PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
 
