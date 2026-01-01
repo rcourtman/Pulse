@@ -1174,6 +1174,9 @@ func (p *PatrolService) analyzeNode(node models.Node) []*Finding {
 			Description:    fmt.Sprintf("Node '%s' is not responding", node.Name),
 			Recommendation: "Check network connectivity, SSH access, and Proxmox services on the node",
 		})
+
+		// Record event for correlation
+		p.recordEvent(node.ID, node.Name, "node", CorrelationEventOffline, 0)
 	}
 
 	// High CPU - use dynamic thresholds from user's alert config
@@ -1216,7 +1219,21 @@ func (p *PatrolService) analyzeNode(node models.Node) []*Finding {
 			Recommendation: "Consider migrating some VMs to other nodes or increasing node RAM",
 			Evidence:       fmt.Sprintf("Memory: %.1f%%", memUsagePct),
 		})
+
+		// Record event for correlation
+		p.recordEvent(node.ID, node.Name, "node", CorrelationEventHighMem, memUsagePct)
 	}
+
+	// Record CPU event if high
+	if cpuPct > p.thresholds.NodeCPUWatch {
+		p.recordEvent(node.ID, node.Name, "node", CorrelationEventHighCPU, cpuPct)
+	}
+
+	// Run anomaly detection
+	findings = append(findings, p.checkAnomalies(node.ID, node.Name, "node", map[string]float64{
+		"cpu":    cpuPct,
+		"memory": memUsagePct,
+	})...)
 
 	return findings
 }
@@ -1256,6 +1273,9 @@ func (p *PatrolService) analyzeGuest(id, name, guestType, node, status string,
 			Recommendation: "Consider increasing allocated RAM or investigating memory-hungry processes",
 			Evidence:       fmt.Sprintf("Memory: %.1f%%", memPct),
 		})
+
+		// Record event for correlation
+		p.recordEvent(id, name, guestType, CorrelationEventHighMem, memPct)
 	}
 
 	// High disk usage - use dynamic thresholds
@@ -1322,6 +1342,13 @@ func (p *PatrolService) analyzeGuest(id, name, guestType, node, status string,
 		})
 	}
 
+	// Run anomaly detection
+	findings = append(findings, p.checkAnomalies(id, name, guestType, map[string]float64{
+		"cpu":    cpu * 100,
+		"memory": memPct,
+		"disk":   diskPct,
+	})...)
+
 	return findings
 }
 
@@ -1357,6 +1384,9 @@ func (p *PatrolService) analyzeDockerHost(host models.DockerHost) []*Finding {
 			Recommendation: "Check network connectivity and pulse-agent service on the host",
 			Evidence:       fmt.Sprintf("Status: %s", host.Status),
 		})
+
+		// Record event for correlation
+		p.recordEvent(host.ID, hostName, "docker_host", CorrelationEventOffline, 0)
 	}
 
 	// Host not seen recently (stale data)
@@ -1400,6 +1430,9 @@ func (p *PatrolService) analyzeDockerHost(host models.DockerHost) []*Finding {
 				Recommendation: fmt.Sprintf("Check container logs: docker logs %s", containerName),
 				Evidence:       fmt.Sprintf("State: %s, Restarts: %d", c.State, c.RestartCount),
 			})
+
+			// Record restart event for correlation
+			p.recordEvent(c.ID, containerName, "docker_container", CorrelationEventRestart, float64(c.RestartCount))
 		}
 
 		// Unhealthy containers (health check failing)
@@ -1458,6 +1491,9 @@ func (p *PatrolService) analyzeDockerHost(host models.DockerHost) []*Finding {
 				Recommendation: "Check for runaway processes or resource-intensive operations",
 				Evidence:       fmt.Sprintf("CPU: %.1f%%", c.CPUPercent),
 			})
+
+			// Record event for correlation
+			p.recordEvent(c.ID, containerName, "docker_container", CorrelationEventHighCPU, c.CPUPercent)
 		}
 
 		// High memory usage
@@ -1480,7 +1516,16 @@ func (p *PatrolService) analyzeDockerHost(host models.DockerHost) []*Finding {
 				Recommendation: "Consider increasing container memory limit or optimizing memory usage",
 				Evidence:       fmt.Sprintf("Memory: %.1f%%", c.MemoryPercent),
 			})
+
+			// Record event for correlation
+			p.recordEvent(c.ID, containerName, "docker_container", CorrelationEventHighMem, c.MemoryPercent)
 		}
+
+		// Run anomaly detection for container
+		findings = append(findings, p.checkAnomalies(c.ID, containerName, "docker_container", map[string]float64{
+			"cpu":    c.CPUPercent,
+			"memory": c.MemoryPercent,
+		})...)
 	}
 
 	return findings
@@ -1521,6 +1566,11 @@ func (p *PatrolService) analyzeStorage(storage models.Storage) []*Finding {
 			Evidence:       fmt.Sprintf("Usage: %.1f%%", usage),
 		})
 	}
+
+	// Run anomaly detection
+	findings = append(findings, p.checkAnomalies(storage.ID, storage.Name, "storage", map[string]float64{
+		"disk": usage,
+	})...)
 
 	return findings
 }
@@ -1884,7 +1934,68 @@ func (p *PatrolService) analyzeHost(host models.Host) []*Finding {
 			Description:    fmt.Sprintf("Host '%s' agent is not reporting", hostName),
 			Recommendation: "Check network connectivity and pulse-agent service status",
 		})
+
+		// Record event for correlation
+		p.recordEvent(host.ID, hostName, "host", CorrelationEventOffline, 0)
 	}
+
+	// Check CPU usage
+	if host.CPUUsage > 90 {
+		severity := FindingSeverityWatch
+		if host.CPUUsage > 95 {
+			severity = FindingSeverityWarning
+		}
+		findings = append(findings, &Finding{
+			ID:             generateFindingID(host.ID, "performance", "high-cpu"),
+			Key:            "host-high-cpu",
+			Severity:       severity,
+			Category:       FindingCategoryPerformance,
+			ResourceID:     host.ID,
+			ResourceName:   hostName,
+			ResourceType:   "host",
+			Title:          "High CPU usage",
+			Description:    fmt.Sprintf("Host '%s' CPU at %.0f%%", hostName, host.CPUUsage),
+			Recommendation: "Check for runaway processes or resource-intensive operations",
+			Evidence:       fmt.Sprintf("CPU: %.1f%%", host.CPUUsage),
+		})
+
+		// Record event for correlation
+		p.recordEvent(host.ID, hostName, "host", CorrelationEventHighCPU, host.CPUUsage)
+	}
+
+	// Check Memory usage
+	memPct := 0.0
+	if host.Memory.Total > 0 {
+		memPct = float64(host.Memory.Used) / float64(host.Memory.Total) * 100
+	}
+	if memPct > 90 {
+		severity := FindingSeverityWatch
+		if memPct > 95 {
+			severity = FindingSeverityWarning
+		}
+		findings = append(findings, &Finding{
+			ID:             generateFindingID(host.ID, "performance", "high-memory"),
+			Key:            "host-high-memory",
+			Severity:       severity,
+			Category:       FindingCategoryPerformance,
+			ResourceID:     host.ID,
+			ResourceName:   hostName,
+			ResourceType:   "host",
+			Title:          "High memory usage",
+			Description:    fmt.Sprintf("Host '%s' memory at %.0f%%", hostName, memPct),
+			Recommendation: "Check for memory leaks or investigate memory-intensive operations",
+			Evidence:       fmt.Sprintf("Memory: %.1f%%", memPct),
+		})
+
+		// Record event for correlation
+		p.recordEvent(host.ID, hostName, "host", CorrelationEventHighMem, memPct)
+	}
+
+	// Run anomaly detection
+	findings = append(findings, p.checkAnomalies(host.ID, hostName, "host", map[string]float64{
+		"cpu":    host.CPUUsage,
+		"memory": memPct,
+	})...)
 
 	// Check RAID arrays
 	for _, raid := range host.RAID {
@@ -2596,6 +2707,7 @@ func (p *PatrolService) buildEnrichedContext(state models.StateSnapshot) string 
 	knowledgeStore := p.knowledgeStore
 	baselineStore := p.baselineStore
 	changeDetector := p.changeDetector
+	correlationDetector := p.correlationDetector
 	p.mu.RUnlock()
 
 	// If no metrics history, fall back to basic summary
@@ -2647,13 +2759,29 @@ func (p *PatrolService) buildEnrichedContext(state models.StateSnapshot) string 
 
 		if len(newChanges) > 0 {
 			log.Debug().Int("new_changes", len(newChanges)).Msg("AI Patrol: Detected infrastructure changes")
+
+			// Record events for correlation analysis
+			if correlationDetector != nil {
+				for _, change := range newChanges {
+					var eventType CorrelationEventType
+					switch change.ChangeType {
+					case memory.ChangeMigrated:
+						eventType = CorrelationEventMigration
+					case memory.ChangeRestarted:
+						eventType = CorrelationEventRestart
+					default:
+						continue
+					}
+
+					p.recordEvent(change.ResourceID, "", change.ResourceType, eventType, 0)
+				}
+			}
 		}
 	}
 
 	// Append failure predictions if pattern detector is available
 	p.mu.RLock()
 	patternDetector := p.patternDetector
-	correlationDetector := p.correlationDetector
 	p.mu.RUnlock()
 
 	if patternDetector != nil {
@@ -2919,6 +3047,74 @@ Only report NEW issues or issues where the severity has clearly escalated.`)
 	}
 
 	return basePrompt
+}
+
+// recordEvent records an event in the correlation detector if it's significant
+func (p *PatrolService) recordEvent(resourceID, resourceName, resourceType string, eventType CorrelationEventType, value float64) {
+	p.mu.RLock()
+	cd := p.correlationDetector
+	p.mu.RUnlock()
+
+	if cd == nil {
+		return
+	}
+
+	cd.RecordEvent(CorrelationEvent{
+		ID:           fmt.Sprintf("%s-%s-%d", resourceID, eventType, time.Now().Unix()),
+		ResourceID:   resourceID,
+		ResourceName: resourceName,
+		ResourceType: resourceType,
+		EventType:    eventType,
+		Timestamp:    time.Now(),
+		Value:        value,
+	})
+}
+
+// checkAnomalies uses learned baselines to detect abnormal metric values
+func (p *PatrolService) checkAnomalies(resourceID, resourceName, resourceType string, metrics map[string]float64) []*Finding {
+	p.mu.RLock()
+	bs := p.baselineStore
+	p.mu.RUnlock()
+
+	if bs == nil {
+		return nil
+	}
+
+	var findings []*Finding
+	for metric, value := range metrics {
+		severity, zScore, bl := bs.CheckAnomaly(resourceID, metric, value)
+		// We only care about High or Critical anomalies (Z-score > 3.0)
+		if severity == baseline.AnomalyHigh || severity == baseline.AnomalyCritical {
+			findingSeverity := FindingSeverityWatch
+			if severity == baseline.AnomalyCritical {
+				findingSeverity = FindingSeverityWarning
+			}
+
+			findings = append(findings, &Finding{
+				ID:             generateFindingID(resourceID, "performance", "anomaly-"+metric),
+				Key:            "metric-anomaly",
+				Severity:       findingSeverity,
+				Category:       FindingCategoryPerformance,
+				ResourceID:     resourceID,
+				ResourceName:   resourceName,
+				ResourceType:   resourceType,
+				Title:          fmt.Sprintf("Anomalous %s usage", metric),
+				Description:    fmt.Sprintf("'%s' is showing abnormal %s usage of %.1f%% (typical mean: %.1f%%, dev: %.1f)", resourceName, metric, value, bl.Mean, bl.StdDev),
+				Recommendation: "Investigate if this change in behavior is expected for this resource.",
+				Evidence:       fmt.Sprintf("Current: %.1f, Baseline Mean: %.1f, Z-Score: %.1f", value, bl.Mean, zScore),
+			})
+
+			// Record this as an event for correlation if it's a spike
+			if metric == "cpu" {
+				p.recordEvent(resourceID, resourceName, resourceType, CorrelationEventHighCPU, value)
+			} else if metric == "memory" {
+				p.recordEvent(resourceID, resourceName, resourceType, CorrelationEventHighMem, value)
+			} else if metric == "disk" {
+				p.recordEvent(resourceID, resourceName, resourceType, CorrelationEventDiskFull, value)
+			}
+		}
+	}
+	return findings
 }
 
 // validateAIFindings filters out noisy/invalid findings from AI analysis
