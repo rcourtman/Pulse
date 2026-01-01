@@ -1855,7 +1855,10 @@ func (r *Router) reloadSystemSettings() {
 		r.cachedAllowedOrigins = systemSettings.AllowedEmbedOrigins
 
 		// Update HideLocalLogin so it takes effect immediately without restart
-		r.config.HideLocalLogin = systemSettings.HideLocalLogin
+		// BUT respect environment variable override if present
+		if !r.config.EnvOverrides["PULSE_AUTH_HIDE_LOCAL_LOGIN"] {
+			r.config.HideLocalLogin = systemSettings.HideLocalLogin
+		}
 
 		// Update webhook allowed private CIDRs in notification manager
 		if r.monitor != nil {
