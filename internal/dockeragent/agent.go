@@ -31,25 +31,26 @@ type TargetConfig struct {
 
 // Config describes runtime configuration for the Docker agent.
 type Config struct {
-	PulseURL           string
-	APIToken           string
-	Interval           time.Duration
-	HostnameOverride   string
-	AgentID            string
-	AgentType          string // "unified" when running as part of pulse-agent, empty for standalone
-	AgentVersion       string // Version to report; if empty, uses dockeragent.Version
-	InsecureSkipVerify bool
-	DisableAutoUpdate  bool
-	Targets            []TargetConfig
-	ContainerStates    []string
-	SwarmScope         string
-	Runtime            string
-	IncludeServices    bool
-	IncludeTasks       bool
-	IncludeContainers  bool
-	CollectDiskMetrics bool
-	LogLevel           zerolog.Level
-	Logger             *zerolog.Logger
+	PulseURL            string
+	APIToken            string
+	Interval            time.Duration
+	HostnameOverride    string
+	AgentID             string
+	AgentType           string // "unified" when running as part of pulse-agent, empty for standalone
+	AgentVersion        string // Version to report; if empty, uses dockeragent.Version
+	InsecureSkipVerify  bool
+	DisableAutoUpdate   bool
+	DisableUpdateChecks bool // Disable Docker image update detection (registry checks)
+	Targets             []TargetConfig
+	ContainerStates     []string
+	SwarmScope          string
+	Runtime             string
+	IncludeServices     bool
+	IncludeTasks        bool
+	IncludeContainers   bool
+	CollectDiskMetrics  bool
+	LogLevel            zerolog.Level
+	Logger              *zerolog.Logger
 }
 
 var allowedContainerStates = map[string]string{
@@ -246,7 +247,7 @@ func New(cfg Config) (*Agent, error) {
 		stateFilters:     stateFilters,
 		prevContainerCPU: make(map[string]cpuSample),
 		reportBuffer:     buffer.New[agentsdocker.Report](bufferCapacity),
-		registryChecker:  NewRegistryChecker(*logger),
+		registryChecker:  newRegistryCheckerWithConfig(*logger, !cfg.DisableUpdateChecks),
 	}
 
 	for _, state := range stateFilters {
@@ -766,7 +767,6 @@ func (a *Agent) handleCheckUpdatesCommand(ctx context.Context, target TargetConf
 	return nil
 }
 
-
 func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, command agentsdocker.Command) error {
 	a.logger.Info().Str("commandID", command.ID).Msg("Received stop command from Pulse")
 
@@ -958,7 +958,6 @@ func newHTTPClient(insecure bool) *http.Client {
 	}
 }
 
-
 func (a *Agent) Close() error {
 	return a.docker.Close()
 }
@@ -997,8 +996,6 @@ func readSystemUptime() int64 {
 	}
 	return int64(seconds)
 }
-
-
 
 // detectHostRemovedError checks if the response body contains a host removal error
 func detectHostRemovedError(body []byte) string {
