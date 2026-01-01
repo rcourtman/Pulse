@@ -174,6 +174,7 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
   const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
   const alertsActivation = useAlertsActivation();
   const threshold = createMemo(() => alertsActivation.getTemperatureThreshold());
+  let closeTimeout: number | undefined;
 
   // Get the primary (highest) temperature for display
   const primaryTemp = createMemo(() => {
@@ -236,12 +237,23 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
   }
 
   const handleMouseEnter = (e: MouseEvent) => {
+    if (closeTimeout) window.clearTimeout(closeTimeout);
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
     setShowTooltip(true);
   };
 
   const handleMouseLeave = () => {
+    closeTimeout = window.setTimeout(() => {
+      setShowTooltip(false);
+    }, 150);
+  };
+
+  const handleTooltipEnter = () => {
+    if (closeTimeout) window.clearTimeout(closeTimeout);
+  };
+
+  const handleTooltipLeave = () => {
     setShowTooltip(false);
   };
 
@@ -307,17 +319,19 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
       <Show when={showTooltip() && hasSensors()}>
         <Portal mount={document.body}>
           <div
-            class="fixed z-[9999] pointer-events-none"
+            class="fixed z-[9999]"
             style={{
               left: `${tooltipPos().x}px`,
               top: `${tooltipPos().y - 8}px`,
               transform: 'translate(-50%, -100%)',
             }}
+            onMouseEnter={handleTooltipEnter}
+            onMouseLeave={handleTooltipLeave}
           >
-            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[160px] max-w-[280px] border border-gray-700">
+            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[160px] max-w-[280px] border border-gray-700 max-h-[400px] overflow-y-auto custom-scrollbar">
               {/* Temperature section */}
               <Show when={sortedTemps().length > 0}>
-                <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1 sticky top-0 bg-gray-900 dark:bg-gray-800 z-10">
                   Temperatures
                 </div>
                 <div class="space-y-0.5 mb-2">
@@ -336,7 +350,7 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
 
               {/* Disk temperatures section (SMART) */}
               <Show when={sortedSmart().length > 0}>
-                <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1 sticky top-0 bg-gray-900 dark:bg-gray-800 z-10">
                   Disk Temperatures
                 </div>
                 <div class="space-y-0.5 mb-2">
@@ -370,7 +384,7 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
 
               {/* Fan speeds section */}
               <Show when={sortedFans().length > 0}>
-                <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1 sticky top-0 bg-gray-900 dark:bg-gray-800 z-10">
                   Fan Speeds
                 </div>
                 <div class="space-y-0.5 mb-2">
@@ -387,7 +401,7 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
 
               {/* Additional sensors section */}
               <Show when={sortedAdditional().length > 0}>
-                <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1 sticky top-0 bg-gray-900 dark:bg-gray-800 z-10">
                   Other Sensors
                 </div>
                 <div class="space-y-0.5">

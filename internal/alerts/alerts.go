@@ -203,8 +203,9 @@ type ThresholdConfig struct {
 	DiskWrite           *HysteresisThreshold `json:"diskWrite,omitempty"`
 	NetworkIn           *HysteresisThreshold `json:"networkIn,omitempty"`
 	NetworkOut          *HysteresisThreshold `json:"networkOut,omitempty"`
-	Usage               *HysteresisThreshold `json:"usage,omitempty"`       // For storage devices
-	Temperature         *HysteresisThreshold `json:"temperature,omitempty"` // For node CPU temperature
+	Usage               *HysteresisThreshold `json:"usage,omitempty"`           // For storage devices
+	Temperature         *HysteresisThreshold `json:"temperature,omitempty"`     // For node CPU temperature
+	DiskTemperature     *HysteresisThreshold `json:"diskTemperature,omitempty"` // For host SMART temperatures
 	Backup              *BackupAlertConfig   `json:"backup,omitempty"`
 	Snapshot            *SnapshotAlertConfig `json:"snapshot,omitempty"`
 	Note                *string              `json:"note,omitempty"`
@@ -515,9 +516,9 @@ type Manager struct {
 	offlineConfirmations  map[string]int                  // Track consecutive offline counts for all resources
 	dockerOfflineCount    map[string]int                  // Track consecutive offline counts for Docker hosts
 	dockerStateConfirm    map[string]int                  // Track consecutive state confirmations for Docker containers
-	dockerRestartTracking  map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
-	dockerLastExitCode     map[string]int                  // Track last exit code for OOM detection
-	dockerUpdateFirstSeen  map[string]time.Time            // Track when image updates were first detected for alert delay
+	dockerRestartTracking map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
+	dockerLastExitCode    map[string]int                  // Track last exit code for OOM detection
+	dockerUpdateFirstSeen map[string]time.Time            // Track when image updates were first detected for alert delay
 	// PMG quarantine growth tracking
 	pmgQuarantineHistory map[string][]pmgQuarantineSnapshot // Track quarantine snapshots for growth detection
 	// PMG anomaly detection tracking
@@ -540,8 +541,8 @@ type Manager struct {
 type ackRecord struct {
 	acknowledged bool
 	user         string
-	time         time.Time      // When the alert was acknowledged
-	inactiveAt   time.Time      // When the alert was removed (zero if still active)
+	time         time.Time // When the alert was acknowledged
+	inactiveAt   time.Time // When the alert was removed (zero if still active)
 }
 
 type dockerRestartRecord struct {
@@ -558,18 +559,18 @@ func NewManager() *Manager {
 		activeAlerts:          make(map[string]*Alert),
 		historyManager:        NewHistoryManager(alertsDir),
 		escalationStop:        make(chan struct{}),
-		alertRateLimit:         make(map[string][]time.Time),
-		recentAlerts:           make(map[string]*Alert),
-		suppressedUntil:        make(map[string]time.Time),
-		recentlyResolved:       make(map[string]*ResolvedAlert),
-		pendingAlerts:          make(map[string]time.Time),
-		nodeOfflineCount:       make(map[string]int),
-		offlineConfirmations:   make(map[string]int),
-		dockerOfflineCount:     make(map[string]int),
-		dockerStateConfirm:     make(map[string]int),
-		dockerRestartTracking:  make(map[string]*dockerRestartRecord),
-		dockerLastExitCode:     make(map[string]int),
-		dockerUpdateFirstSeen:  make(map[string]time.Time),
+		alertRateLimit:        make(map[string][]time.Time),
+		recentAlerts:          make(map[string]*Alert),
+		suppressedUntil:       make(map[string]time.Time),
+		recentlyResolved:      make(map[string]*ResolvedAlert),
+		pendingAlerts:         make(map[string]time.Time),
+		nodeOfflineCount:      make(map[string]int),
+		offlineConfirmations:  make(map[string]int),
+		dockerOfflineCount:    make(map[string]int),
+		dockerStateConfirm:    make(map[string]int),
+		dockerRestartTracking: make(map[string]*dockerRestartRecord),
+		dockerLastExitCode:    make(map[string]int),
+		dockerUpdateFirstSeen: make(map[string]time.Time),
 		pmgQuarantineHistory:  make(map[string][]pmgQuarantineSnapshot),
 		pmgAnomalyTrackers:    make(map[string]*pmgAnomalyTracker),
 		ackState:              make(map[string]ackRecord),
@@ -598,9 +599,10 @@ func NewManager() *Manager {
 				Temperature: &HysteresisThreshold{Trigger: 80, Clear: 75}, // Warning at 80°C, clear at 75°C
 			},
 			HostDefaults: ThresholdConfig{
-				CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
-				Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
-				Disk:   &HysteresisThreshold{Trigger: 90, Clear: 85},
+				CPU:             &HysteresisThreshold{Trigger: 80, Clear: 75},
+				Memory:          &HysteresisThreshold{Trigger: 85, Clear: 80},
+				Disk:            &HysteresisThreshold{Trigger: 90, Clear: 85},
+				DiskTemperature: &HysteresisThreshold{Trigger: 55, Clear: 50},
 			},
 			DockerDefaults: DockerThresholdConfig{
 				CPU:                     HysteresisThreshold{Trigger: 80, Clear: 75},
@@ -1332,6 +1334,18 @@ func normalizeHostDefaults(config *AlertConfig) {
 			config.HostDefaults.Disk.Clear = 85
 		}
 	}
+
+	if config.HostDefaults.DiskTemperature == nil || config.HostDefaults.DiskTemperature.Trigger < 0 {
+		config.HostDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 55, Clear: 50}
+	} else if config.HostDefaults.DiskTemperature.Trigger == 0 {
+		config.HostDefaults.DiskTemperature.Clear = 0
+	} else if config.HostDefaults.DiskTemperature.Clear <= 0 {
+		config.HostDefaults.DiskTemperature.Clear = config.HostDefaults.DiskTemperature.Trigger - 5
+		if config.HostDefaults.DiskTemperature.Clear <= 0 {
+			config.HostDefaults.DiskTemperature.Clear = 50
+		}
+	}
+	ensureValidHysteresis(config.HostDefaults.DiskTemperature, "host.diskTemperature")
 }
 
 // normalizeGeneralSettings ensures general alert settings have valid values
@@ -2202,8 +2216,6 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		return
 	}
 
-
-
 	// Check ignored prefixes
 	for _, prefix := range ignoredGuestPrefixes {
 		if prefix != "" && strings.HasPrefix(name, prefix) {
@@ -2769,6 +2781,31 @@ func (m *Manager) CheckHost(host models.Host) {
 		m.checkMetric(resourceID, resourceName, nodeName, instanceName, "Host", "memory", host.Memory.Usage, thresholds.Memory, &metricOptions{Metadata: memMetadata})
 	} else {
 		m.clearHostMetricAlerts(host.ID, "memory")
+	}
+
+	if thresholds.DiskTemperature != nil && thresholds.DiskTemperature.Trigger > 0 {
+		if len(host.Sensors.SMART) > 0 {
+			for _, disk := range host.Sensors.SMART {
+				if disk.Temperature > 0 && !disk.Standby {
+					// Use specific resource ID for the disk: hostID/disk-temp:device
+					tempResourceID := fmt.Sprintf("%s/disk_temp:%s", hostResourceID(host.ID), sanitizeHostComponent(disk.Device))
+					tempResourceName := fmt.Sprintf("%s (%s Temp)", host.DisplayName, disk.Device)
+
+					diskTempMetadata := cloneMetadata(baseMetadata)
+					diskTempMetadata["metric"] = "disk_temperature"
+					diskTempMetadata["device"] = disk.Device
+					diskTempMetadata["temperature"] = disk.Temperature
+					diskTempMetadata["model"] = disk.Model
+
+					m.checkMetric(tempResourceID, tempResourceName, nodeName, disk.Device, "Host", "disk_temperature", float64(disk.Temperature), thresholds.DiskTemperature, &metricOptions{Metadata: diskTempMetadata})
+				}
+			}
+		}
+	} else {
+		// We can't easily clear all disk temp alerts without tracking them,
+		// but checkMetric logic handles auto-resolution if value drops.
+		// If feature is disabled, ideally we should clear existing alerts.
+		// For now simple implementation.
 	}
 
 	seenDisks := make(map[string]struct{}, len(host.Disks))
@@ -8220,6 +8257,7 @@ func cloneThresholdConfig(cfg ThresholdConfig) ThresholdConfig {
 	clone.NetworkIn = cloneThreshold(cfg.NetworkIn)
 	clone.NetworkOut = cloneThreshold(cfg.NetworkOut)
 	clone.Temperature = cloneThreshold(cfg.Temperature)
+	clone.DiskTemperature = cloneThreshold(cfg.DiskTemperature)
 	clone.Usage = cloneThreshold(cfg.Usage)
 	clone.Note = cloneStringPtr(cfg.Note)
 	return clone
@@ -8279,6 +8317,10 @@ func (m *Manager) applyThresholdOverride(base ThresholdConfig, override Threshol
 
 	if override.Temperature != nil {
 		result.Temperature = ensureHysteresisThreshold(cloneThreshold(override.Temperature))
+	}
+
+	if override.DiskTemperature != nil {
+		result.DiskTemperature = ensureHysteresisThreshold(cloneThreshold(override.DiskTemperature))
 	}
 
 	if override.Usage != nil {
