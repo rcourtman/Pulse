@@ -26,7 +26,8 @@ func (r *Router) handleOIDCLogin(w http.ResponseWriter, req *http.Request) {
 	cfg := r.ensureOIDCConfig()
 	if cfg == nil || !cfg.Enabled {
 		if req.Method == http.MethodGet {
-			http.Error(w, "OIDC authentication is not enabled", http.StatusBadRequest)
+			// Redirect back to login with error instead of plain text
+			r.redirectOIDCError(w, req, "/", "oidc_disabled")
 			return
 		}
 		writeErrorResponse(w, http.StatusBadRequest, "oidc_disabled", "OIDC authentication is not enabled", nil)
@@ -40,7 +41,8 @@ func (r *Router) handleOIDCLogin(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		log.Error().Err(err).Str("issuer", cfg.IssuerURL).Msg("Failed to initialise OIDC service")
 		if req.Method == http.MethodGet {
-			http.Error(w, "OIDC provider is unavailable", http.StatusInternalServerError)
+			// Redirect back to login with error instead of plain text
+			r.redirectOIDCError(w, req, "/", "oidc_init_failed")
 			return
 		}
 		writeErrorResponse(w, http.StatusInternalServerError, "oidc_init_failed", "OIDC provider is unavailable", nil)
@@ -68,7 +70,7 @@ func (r *Router) handleOIDCLogin(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create OIDC state entry")
 		if req.Method == http.MethodGet {
-			http.Error(w, "Unable to start OIDC login", http.StatusInternalServerError)
+			r.redirectOIDCError(w, req, "/", "oidc_state_error")
 			return
 		}
 		writeErrorResponse(w, http.StatusInternalServerError, "oidc_state_error", "Unable to start OIDC login", nil)
