@@ -1186,6 +1186,9 @@ export const AISettings: Component = () => {
                         ? 'AI will execute all commands without asking for approval. Only enable if you trust your configured model.'
                         : 'AI will ask for approval before running commands that modify your system. Read-only commands (like df, ps, docker stats) run automatically.'}
                     </p>
+                    <div class="mt-2 p-2 bg-amber-100/50 dark:bg-amber-900/30 rounded border border-amber-200 dark:border-amber-800 text-[10px] text-amber-800 dark:text-amber-200">
+                      <strong>⚠️ Legal Disclaimer:</strong> AI models can hallucinate. You are responsible for any damage caused by autonomous actions. See <a href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md" target="_blank" class="underline">Terms of Service</a>.
+                    </div>
                     <Show when={autoFixLocked()}>
                       <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
                         Pulse Pro required for autonomous mode.{' '}
