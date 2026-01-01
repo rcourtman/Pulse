@@ -45,6 +45,8 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 | `--enable-host` | `PULSE_ENABLE_HOST` | Enable host metrics | `true` |
 | `--enable-docker` | `PULSE_ENABLE_DOCKER` | Force enable Docker metrics | **auto-detect** |
 | `--disable-docker` | - | Disable Docker even if detected | - |
+| `--docker-runtime` | `PULSE_DOCKER_RUNTIME` | Force container runtime: `auto`, `docker`, or `podman` | `auto` |
+
 | `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Force enable Kubernetes metrics | **auto-detect** |
 | `--disable-kubernetes` | - | Disable Kubernetes even if detected | - |
 | `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Force enable Proxmox integration | **auto-detect** |
