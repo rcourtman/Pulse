@@ -16,13 +16,19 @@ import (
 )
 
 func (r *Router) handleOIDCLogin(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPost {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
+	// Support both GET (direct redirect) and POST (JSON response)
+	// GET is preferred for browsers as it guarantees same-window navigation
+	if req.Method != http.MethodGet && req.Method != http.MethodPost {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET or POST is allowed", nil)
 		return
 	}
 
 	cfg := r.ensureOIDCConfig()
 	if cfg == nil || !cfg.Enabled {
+		if req.Method == http.MethodGet {
+			http.Error(w, "OIDC authentication is not enabled", http.StatusBadRequest)
+			return
+		}
 		writeErrorResponse(w, http.StatusBadRequest, "oidc_disabled", "OIDC authentication is not enabled", nil)
 		return
 	}
@@ -33,30 +39,50 @@ func (r *Router) handleOIDCLogin(w http.ResponseWriter, req *http.Request) {
 	service, err := r.getOIDCService(req.Context(), redirectURL)
 	if err != nil {
 		log.Error().Err(err).Str("issuer", cfg.IssuerURL).Msg("Failed to initialise OIDC service")
+		if req.Method == http.MethodGet {
+			http.Error(w, "OIDC provider is unavailable", http.StatusInternalServerError)
+			return
+		}
 		writeErrorResponse(w, http.StatusInternalServerError, "oidc_init_failed", "OIDC provider is unavailable", nil)
 		return
 	}
 
 	log.Debug().Str("issuer", cfg.IssuerURL).Str("client_id", cfg.ClientID).Msg("Starting OIDC login flow")
 
-	var payload struct {
-		ReturnTo string `json:"returnTo"`
+	var returnTo string
+	if req.Method == http.MethodPost {
+		var payload struct {
+			ReturnTo string `json:"returnTo"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil && err != io.EOF {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request payload", nil)
+			return
+		}
+		returnTo = sanitizeOIDCReturnTo(payload.ReturnTo)
+	} else {
+		// GET: read returnTo from query param
+		returnTo = sanitizeOIDCReturnTo(req.URL.Query().Get("returnTo"))
 	}
-	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil && err != io.EOF {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request payload", nil)
-		return
-	}
-
-	returnTo := sanitizeOIDCReturnTo(payload.ReturnTo)
 
 	state, entry, err := service.newStateEntry(returnTo)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create OIDC state entry")
+		if req.Method == http.MethodGet {
+			http.Error(w, "Unable to start OIDC login", http.StatusInternalServerError)
+			return
+		}
 		writeErrorResponse(w, http.StatusInternalServerError, "oidc_state_error", "Unable to start OIDC login", nil)
 		return
 	}
 
 	authURL := service.authCodeURL(state, entry)
+
+	// GET: direct HTTP redirect (guarantees same-window navigation in all browsers)
+	// POST: return JSON (for API clients/backwards compatibility)
+	if req.Method == http.MethodGet {
+		http.Redirect(w, req, authURL, http.StatusFound)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

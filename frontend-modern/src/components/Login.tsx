@@ -125,7 +125,7 @@ export const Login: Component<LoginProps> = (props) => {
     }
   });
 
-  const startOidcLogin = async () => {
+  const startOidcLogin = () => {
     if (!supportsOIDC()) return;
 
     setOidcError('');
@@ -133,30 +133,11 @@ export const Login: Component<LoginProps> = (props) => {
     setError('');
     setOidcLoading(true);
 
-    let redirecting = false;
-    try {
-      const data = await apiFetchJSON<{ authorizationUrl: string }>('/api/oidc/login', {
-        method: 'POST',
-        body: JSON.stringify({
-          returnTo: `${window.location.pathname}${window.location.search}`,
-        }),
-      });
-
-      if (data.authorizationUrl) {
-        redirecting = true;
-        window.location.href = data.authorizationUrl;
-        return;
-      }
-
-      throw new Error('OIDC response missing authorization URL');
-    } catch (err) {
-      logger.error('[Login] Failed to start OIDC login:', err);
-      setOidcError('Failed to start single sign-on. Please try again.');
-    } finally {
-      if (!redirecting) {
-        setOidcLoading(false);
-      }
-    }
+    // Navigate directly to the OIDC login endpoint using GET.
+    // The server will respond with an HTTP redirect to the OIDC provider.
+    // This guarantees same-window navigation in all browsers, including Arc.
+    const returnTo = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
+    window.location.href = `/api/oidc/login?returnTo=${returnTo}`;
   };
 
   // Auto-redirect to OIDC is intentionally disabled to prevent redirect loops
