@@ -140,6 +140,8 @@ const DEFAULT_SNAPSHOT_WARNING_SIZE = 0;
 const DEFAULT_SNAPSHOT_CRITICAL_SIZE = 0;
 const DEFAULT_BACKUP_WARNING = 7;
 const DEFAULT_BACKUP_CRITICAL = 14;
+const DEFAULT_BACKUP_FRESH_HOURS = 24;
+const DEFAULT_BACKUP_STALE_HOURS = 72;
 
 // Simple threshold object for the UI
 interface SimpleThresholds {
@@ -1182,11 +1184,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       enabled: false,
       warningDays: DEFAULT_BACKUP_WARNING,
       criticalDays: DEFAULT_BACKUP_CRITICAL,
+      freshHours: DEFAULT_BACKUP_FRESH_HOURS,
+      staleHours: DEFAULT_BACKUP_STALE_HOURS,
     };
 
   const sanitizeBackupConfig = (config: BackupAlertConfig): BackupAlertConfig => {
     let warning = Math.max(0, Math.round(config.warningDays ?? 0));
     let critical = Math.max(0, Math.round(config.criticalDays ?? 0));
+    let fresh = Math.max(0, Math.round(config.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS));
+    let stale = Math.max(0, Math.round(config.staleHours ?? DEFAULT_BACKUP_STALE_HOURS));
 
     if (critical > 0 && warning > critical) {
       warning = critical;
@@ -1195,10 +1201,17 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       critical = warning;
     }
 
+    // Ensure stale is at least fresh
+    if (stale < fresh) {
+      stale = fresh;
+    }
+
     return {
       enabled: !!config.enabled,
       warningDays: warning,
       criticalDays: critical,
+      freshHours: fresh,
+      staleHours: stale,
     };
   };
 
@@ -1218,6 +1231,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const backupDefaultsRecord = createMemo(() => {
     const current = props.backupDefaults();
     return {
+      'fresh hours': current.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS,
+      'stale hours': current.staleHours ?? DEFAULT_BACKUP_STALE_HOURS,
       'warning days': current.warningDays ?? 0,
       'critical days': current.criticalDays ?? 0,
     };
@@ -1226,6 +1241,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const backupFactoryDefaultsRecord = createMemo(() => {
     const factory = backupFactoryConfig();
     return {
+      'fresh hours': factory.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS,
+      'stale hours': factory.staleHours ?? DEFAULT_BACKUP_STALE_HOURS,
       'warning days': factory.warningDays ?? DEFAULT_BACKUP_WARNING,
       'critical days': factory.criticalDays ?? DEFAULT_BACKUP_CRITICAL,
     };
@@ -1254,7 +1271,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       (backupCurrent.warningDays ?? DEFAULT_BACKUP_WARNING) !==
       (backupFactory.warningDays ?? DEFAULT_BACKUP_WARNING) ||
       (backupCurrent.criticalDays ?? DEFAULT_BACKUP_CRITICAL) !==
-      (backupFactory.criticalDays ?? DEFAULT_BACKUP_CRITICAL)
+      (backupFactory.criticalDays ?? DEFAULT_BACKUP_CRITICAL) ||
+      (backupCurrent.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS) !==
+      (backupFactory.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS) ||
+      (backupCurrent.staleHours ?? DEFAULT_BACKUP_STALE_HOURS) !==
+      (backupFactory.staleHours ?? DEFAULT_BACKUP_STALE_HOURS)
       ? 1
       : 0;
   });
@@ -2852,6 +2873,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     },
                   ]}
                   columns={[
+                    'Fresh Hours',
+                    'Stale Hours',
                     'Warning Days',
                     'Critical Days',
                     'Warning Size (GiB)',
@@ -2875,6 +2898,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setGlobalDefaults={(value) => {
                     updateBackupDefaults((prev) => {
                       const currentRecord = {
+                        'fresh hours': prev.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS,
+                        'stale hours': prev.staleHours ?? DEFAULT_BACKUP_STALE_HOURS,
                         'warning days': prev.warningDays ?? 0,
                         'critical days': prev.criticalDays ?? 0,
                       };
@@ -2884,6 +2909,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                           : { ...currentRecord, ...value };
                       return {
                         ...prev,
+                        freshHours:
+                          typeof nextRecord['fresh hours'] === 'number'
+                            ? nextRecord['fresh hours']
+                            : prev.freshHours,
+                        staleHours:
+                          typeof nextRecord['stale hours'] === 'number'
+                            ? nextRecord['stale hours']
+                            : prev.staleHours,
                         warningDays:
                           typeof nextRecord['warning days'] === 'number'
                             ? nextRecord['warning days']
