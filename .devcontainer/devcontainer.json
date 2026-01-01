@@ -4,12 +4,18 @@
 		"dockerfile": "Dockerfile",
 		"context": "."
 	},
+	"features": {
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "20"
+		}
+	},
 	"customizations": {
 		"vscode": {
 			"extensions": [
 				"golang.go",
 				"dbaeumer.vscode-eslint",
-				"esbenp.prettier-vscode"
+				"esbenp.prettier-vscode",
+				"vue.volar"
 			],
 			"settings": {
 				"go.gopath": "/go",
@@ -17,7 +23,22 @@
 			}
 		}
 	},
-	"forwardPorts": [8080, 3000],
-	"postCreateCommand": "go version && node --version",
+	"forwardPorts": [7655, 7656],
+	"portsAttributes": {
+		"7655": {
+			"label": "Pulse Frontend",
+			"onAutoForward": "openBrowser"
+		},
+		"7656": {
+			"label": "Pulse Backend API",
+			"onAutoForward": "silent"
+		}
+	},
+	"containerEnv": {
+		"PULSE_DEV_API_HOST": "localhost",
+		"FRONTEND_DEV_HOST": "0.0.0.0",
+		"LAN_IP": "localhost"
+	},
+	"updateContentCommand": "sudo chown -R vscode:vscode /workspaces/pulse && cd frontend-modern && npm install",
 	"remoteUser": "vscode"
 }
