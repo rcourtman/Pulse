@@ -20,6 +20,7 @@ import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { aiChatStore } from '@/stores/aiChat';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useResourcesAsLegacy } from '@/hooks/useResources';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import { HostMetadataAPI, type HostMetadata } from '@/api/hostMetadata';
 import { UrlEditPopover, createUrlEditState } from '@/components/shared/UrlEditPopover';
 import { showSuccess, showError } from '@/utils/toast';
@@ -171,6 +172,8 @@ interface HostSensorSummaryForCell {
 function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null | undefined }) {
   const [showTooltip, setShowTooltip] = createSignal(false);
   const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
+  const alertsActivation = useAlertsActivation();
+  const threshold = createMemo(() => alertsActivation.getTemperatureThreshold());
 
   // Get the primary (highest) temperature for display
   const primaryTemp = createMemo(() => {
@@ -216,10 +219,21 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
   const textColorClass = createMemo(() => {
     const temp = primaryTemp();
     if (temp === null) return 'text-gray-400';
-    if (temp >= 80) return 'text-red-600 dark:text-red-400';
-    if (temp >= 70) return 'text-yellow-600 dark:text-yellow-400';
+    const critical = threshold();
+    const warning = Math.max(0, critical - 5);
+
+    if (temp >= critical) return 'text-red-600 dark:text-red-400';
+    if (temp >= warning) return 'text-yellow-600 dark:text-yellow-400';
     return 'text-gray-600 dark:text-gray-400';
   });
+
+  const tooltipColorClass = (temp: number) => {
+    const critical = threshold();
+    const warning = Math.max(0, critical - 5);
+    if (temp >= critical) return 'text-red-400';
+    if (temp >= warning) return 'text-yellow-400';
+    return 'text-gray-200';
+  }
 
   const handleMouseEnter = (e: MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -309,11 +323,10 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
                 <div class="space-y-0.5 mb-2">
                   <For each={sortedTemps()}>
                     {([name, temp]) => {
-                      const colorClass = temp >= 80 ? 'text-red-400' : temp >= 70 ? 'text-yellow-400' : 'text-gray-200';
                       return (
                         <div class="flex justify-between gap-3 py-0.5">
                           <span class="text-gray-400 truncate max-w-[140px]">{formatSensorName(name)}</span>
-                          <span class={`font-medium font-mono ${colorClass}`}>{formatTemperature(temp)}</span>
+                          <span class={`font-medium font-mono ${tooltipColorClass(temp)}`}>{formatTemperature(temp)}</span>
                         </div>
                       );
                     }}
@@ -380,11 +393,10 @@ function HostTemperatureCell(props: { sensors: HostSensorSummaryForCell | null |
                 <div class="space-y-0.5">
                   <For each={sortedAdditional()}>
                     {([name, temp]) => {
-                      const colorClass = temp >= 80 ? 'text-red-400' : temp >= 70 ? 'text-yellow-400' : 'text-gray-200';
                       return (
                         <div class="flex justify-between gap-3 py-0.5">
                           <span class="text-gray-400 truncate max-w-[140px]">{formatSensorName(name)}</span>
-                          <span class={`font-medium font-mono ${colorClass}`}>{formatTemperature(temp)}</span>
+                          <span class={`font-medium font-mono ${tooltipColorClass(temp)}`}>{formatTemperature(temp)}</span>
                         </div>
                       );
                     }}
