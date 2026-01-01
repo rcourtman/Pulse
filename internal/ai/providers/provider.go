@@ -7,11 +7,11 @@ import (
 
 // Message represents a chat message
 type Message struct {
-	Role             string        `json:"role"`    // "user", "assistant", "system"
-	Content          string        `json:"content"` // Text content (simple case)
-	ReasoningContent string        `json:"reasoning_content,omitempty"` // DeepSeek thinking mode
-	ToolCalls        []ToolCall    `json:"tool_calls,omitempty"` // For assistant messages with tool calls
-	ToolResult       *ToolResult   `json:"tool_result,omitempty"` // For user messages with tool results
+	Role             string      `json:"role"`                        // "user", "assistant", "system"
+	Content          string      `json:"content"`                     // Text content (simple case)
+	ReasoningContent string      `json:"reasoning_content,omitempty"` // DeepSeek thinking mode
+	ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`        // For assistant messages with tool calls
+	ToolResult       *ToolResult `json:"tool_result,omitempty"`       // For user messages with tool results
 }
 
 // ToolCall represents a tool invocation from the AI
@@ -30,11 +30,11 @@ type ToolResult struct {
 
 // Tool represents an AI tool definition
 type Tool struct {
-	Type        string                 `json:"type,omitempty"`        // "web_search_20250305" for web search, empty for regular tools
+	Type        string                 `json:"type,omitempty"` // "web_search_20250305" for web search, empty for regular tools
 	Name        string                 `json:"name"`
 	Description string                 `json:"description,omitempty"`
 	InputSchema map[string]interface{} `json:"input_schema,omitempty"`
-	MaxUses     int                    `json:"max_uses,omitempty"`    // For web search: limit searches per request
+	MaxUses     int                    `json:"max_uses,omitempty"` // For web search: limit searches per request
 }
 
 // ChatRequest represents a request to the AI provider
@@ -49,13 +49,13 @@ type ChatRequest struct {
 
 // ChatResponse represents a response from the AI provider
 type ChatResponse struct {
-	Content          string      `json:"content"`
-	ReasoningContent string      `json:"reasoning_content,omitempty"` // DeepSeek thinking mode
-	Model            string      `json:"model"`
-	StopReason       string      `json:"stop_reason,omitempty"` // "end_turn", "tool_use"
-	ToolCalls        []ToolCall  `json:"tool_calls,omitempty"` // Tool invocations
-	InputTokens      int         `json:"input_tokens,omitempty"`
-	OutputTokens     int         `json:"output_tokens,omitempty"`
+	Content          string     `json:"content"`
+	ReasoningContent string     `json:"reasoning_content,omitempty"` // DeepSeek thinking mode
+	Model            string     `json:"model"`
+	StopReason       string     `json:"stop_reason,omitempty"` // "end_turn", "tool_use"
+	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`  // Tool invocations
+	InputTokens      int        `json:"input_tokens,omitempty"`
+	OutputTokens     int        `json:"output_tokens,omitempty"`
 }
 
 // ModelInfo represents information about an available model

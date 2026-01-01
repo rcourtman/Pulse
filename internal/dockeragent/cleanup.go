@@ -43,7 +43,7 @@ func (a *Agent) cleanupOrphanedBackups(ctx context.Context) {
 		if len(parts) < 2 {
 			continue
 		}
-		
+
 		timestampStr := parts[len(parts)-1]
 		backupTime, err := time.Parse("20060102_150405", timestampStr)
 		if err != nil {

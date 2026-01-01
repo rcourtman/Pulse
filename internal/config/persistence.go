@@ -20,23 +20,23 @@ import (
 
 // ConfigPersistence handles saving and loading configuration
 type ConfigPersistence struct {
-	mu                 sync.RWMutex
-	tx                 *importTransaction
-	configDir          string
-	alertFile          string
-	emailFile          string
-	webhookFile        string
-	appriseFile        string
-	nodesFile          string
-	systemFile         string
-	oidcFile           string
+	mu                       sync.RWMutex
+	tx                       *importTransaction
+	configDir                string
+	alertFile                string
+	emailFile                string
+	webhookFile              string
+	appriseFile              string
+	nodesFile                string
+	systemFile               string
+	oidcFile                 string
 	apiTokensFile            string
 	envTokenSuppressionsFile string
 	aiFile                   string
-	aiFindingsFile     string
-	aiPatrolRunsFile   string
-	aiUsageHistoryFile string
-	crypto             *crypto.CryptoManager
+	aiFindingsFile           string
+	aiPatrolRunsFile         string
+	aiUsageHistoryFile       string
+	crypto                   *crypto.CryptoManager
 }
 
 // NewConfigPersistence creates a new config persistence manager.
@@ -69,21 +69,21 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 	}
 
 	cp := &ConfigPersistence{
-		configDir:          configDir,
-		alertFile:          filepath.Join(configDir, "alerts.json"),
-		emailFile:          filepath.Join(configDir, "email.enc"),
-		webhookFile:        filepath.Join(configDir, "webhooks.enc"),
-		appriseFile:        filepath.Join(configDir, "apprise.enc"),
-		nodesFile:          filepath.Join(configDir, "nodes.enc"),
-		systemFile:         filepath.Join(configDir, "system.json"),
-		oidcFile:           filepath.Join(configDir, "oidc.enc"),
-		apiTokensFile:             filepath.Join(configDir, "api_tokens.json"),
-		envTokenSuppressionsFile:  filepath.Join(configDir, "env_token_suppressions.json"),
-		aiFile:                    filepath.Join(configDir, "ai.enc"),
-		aiFindingsFile:     filepath.Join(configDir, "ai_findings.json"),
-		aiPatrolRunsFile:   filepath.Join(configDir, "ai_patrol_runs.json"),
-		aiUsageHistoryFile: filepath.Join(configDir, "ai_usage_history.json"),
-		crypto:             cryptoMgr,
+		configDir:                configDir,
+		alertFile:                filepath.Join(configDir, "alerts.json"),
+		emailFile:                filepath.Join(configDir, "email.enc"),
+		webhookFile:              filepath.Join(configDir, "webhooks.enc"),
+		appriseFile:              filepath.Join(configDir, "apprise.enc"),
+		nodesFile:                filepath.Join(configDir, "nodes.enc"),
+		systemFile:               filepath.Join(configDir, "system.json"),
+		oidcFile:                 filepath.Join(configDir, "oidc.enc"),
+		apiTokensFile:            filepath.Join(configDir, "api_tokens.json"),
+		envTokenSuppressionsFile: filepath.Join(configDir, "env_token_suppressions.json"),
+		aiFile:                   filepath.Join(configDir, "ai.enc"),
+		aiFindingsFile:           filepath.Join(configDir, "ai_findings.json"),
+		aiPatrolRunsFile:         filepath.Join(configDir, "ai_patrol_runs.json"),
+		aiUsageHistoryFile:       filepath.Join(configDir, "ai_usage_history.json"),
+		crypto:                   cryptoMgr,
 	}
 
 	log.Debug().

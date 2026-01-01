@@ -657,4 +657,3 @@ func TestIncidentStore_RecordNote_NonexistentIncident(t *testing.T) {
 		t.Error("expected false for non-existent incident")
 	}
 }
-

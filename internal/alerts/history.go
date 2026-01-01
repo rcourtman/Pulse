@@ -98,9 +98,9 @@ func (hm *HistoryManager) AddAlert(alert Alert) {
 	hm.history = append(hm.history, entry)
 	callbacks := hm.callbacks
 	hm.mu.Unlock()
-	
+
 	log.Debug().Str("alertID", alert.ID).Msg("Added alert to history")
-	
+
 	// Call callbacks outside the lock
 	for _, cb := range callbacks {
 		cb(alert)

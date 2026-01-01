@@ -23,7 +23,7 @@ func TestConfigPersistence_DataDir(t *testing.T) {
 func TestConfigPersistence_MigrateWebhooksIfNeeded(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
-	
+
 	// 1. Create legacy file
 	legacyFile := filepath.Join(tempDir, "webhooks.json")
 	legacyWebhooks := []notifications.WebhookConfig{
@@ -91,7 +91,7 @@ func TestConfigPersistence_PatrolRunHistory(t *testing.T) {
 func TestConfigPersistence_UpdateEnvFile(t *testing.T) {
 	tempDir := t.TempDir()
 	envFile := filepath.Join(tempDir, ".env")
-	
+
 	initialContent := `UPDATE_CHANNEL=stable
 AUTO_UPDATE_ENABLED=false
 POLLING_INTERVAL=10
@@ -99,7 +99,7 @@ CUSTOM_VAR=value`
 	os.WriteFile(envFile, []byte(initialContent), 0644)
 
 	cp := config.NewConfigPersistence(tempDir)
-	
+
 	settings := config.SystemSettings{
 		UpdateChannel:           "beta",
 		AutoUpdateEnabled:       true,

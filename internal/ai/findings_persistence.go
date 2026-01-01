@@ -89,4 +89,3 @@ func (a *FindingsPersistenceAdapter) LoadFindings() (map[string]*Finding, error)
 	}
 	return findings, nil
 }
-

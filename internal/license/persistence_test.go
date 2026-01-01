@@ -68,7 +68,7 @@ func TestPersistence(t *testing.T) {
 	t.Run("Load non-existent", func(t *testing.T) {
 		tmpDirEmpty, _ := os.MkdirTemp("", "pulse-license-test-empty-*")
 		defer os.RemoveAll(tmpDirEmpty)
-		
+
 		pEmpty, _ := NewPersistence(tmpDirEmpty)
 		key, err := pEmpty.Load()
 		if err != nil {
@@ -115,26 +115,26 @@ func TestPersistence(t *testing.T) {
 		if string(data) == testLicenseKey {
 			t.Error("License file should be encrypted, not raw text")
 		}
-		
+
 		// Ensure it's not JSON either in raw form
 		if data[0] == '{' {
 			t.Error("License file should be encrypted, not raw JSON")
 		}
 	})
-	
+
 	t.Run("Decrypt with wrong key material", func(t *testing.T) {
 		err := p.Save(testLicenseKey)
 		if err != nil {
 			t.Fatalf("Failed to save license: %v", err)
 		}
-		
+
 		// Create a new persistence with different encryption key
 		pWrong := &Persistence{
 			configDir:     tmpDir,
 			encryptionKey: "different-encryption-key",
 			machineID:     "different-machine-id",
 		}
-		
+
 		_, err = pWrong.Load()
 		if err == nil {
 			t.Error("Expected error when decrypting with wrong key material")
@@ -200,4 +200,3 @@ func TestPersistence(t *testing.T) {
 		}
 	})
 }
-

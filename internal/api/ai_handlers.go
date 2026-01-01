@@ -172,11 +172,11 @@ type AISettingsResponse struct {
 	AuthMethod     string `json:"auth_method"`     // "api_key" or "oauth"
 	OAuthConnected bool   `json:"oauth_connected"` // true if OAuth tokens are configured
 	// Patrol settings for token efficiency
-	PatrolSchedulePreset    string             `json:"patrol_schedule_preset"`    // DEPRECATED: legacy preset
-	PatrolIntervalMinutes   int                `json:"patrol_interval_minutes"`   // Patrol interval in minutes (0 = disabled)
-	PatrolAutoFix           bool               `json:"patrol_auto_fix"`           // true if patrol can auto-fix issues
-	AlertTriggeredAnalysis  bool               `json:"alert_triggered_analysis"`  // true if AI analyzes when alerts fire
-	UseProactiveThresholds  bool               `json:"use_proactive_thresholds"` // true if patrol warns before thresholds (false = use exact thresholds)
+	PatrolSchedulePreset   string             `json:"patrol_schedule_preset"`   // DEPRECATED: legacy preset
+	PatrolIntervalMinutes  int                `json:"patrol_interval_minutes"`  // Patrol interval in minutes (0 = disabled)
+	PatrolAutoFix          bool               `json:"patrol_auto_fix"`          // true if patrol can auto-fix issues
+	AlertTriggeredAnalysis bool               `json:"alert_triggered_analysis"` // true if AI analyzes when alerts fire
+	UseProactiveThresholds bool               `json:"use_proactive_thresholds"` // true if patrol warns before thresholds (false = use exact thresholds)
 	AvailableModels        []config.ModelInfo `json:"available_models"`         // List of models for current provider
 	// Multi-provider credentials - shows which providers are configured
 	AnthropicConfigured bool     `json:"anthropic_configured"`      // true if Anthropic API key or OAuth is set
@@ -207,11 +207,11 @@ type AISettingsUpdateRequest struct {
 	CustomContext  *string `json:"custom_context,omitempty"` // user-provided infrastructure context
 	AuthMethod     *string `json:"auth_method,omitempty"`    // "api_key" or "oauth"
 	// Patrol settings for token efficiency
-	PatrolSchedulePreset    *string `json:"patrol_schedule_preset,omitempty"`    // DEPRECATED: use patrol_interval_minutes
-	PatrolIntervalMinutes   *int    `json:"patrol_interval_minutes,omitempty"`   // Custom interval in minutes (0 = disabled, minimum 10)
-	PatrolAutoFix           *bool   `json:"patrol_auto_fix,omitempty"`           // true if patrol can auto-fix issues
-	AlertTriggeredAnalysis  *bool   `json:"alert_triggered_analysis,omitempty"`  // true if AI analyzes when alerts fire
-	UseProactiveThresholds  *bool   `json:"use_proactive_thresholds,omitempty"` // true if patrol warns before thresholds (default: false = exact thresholds)
+	PatrolSchedulePreset   *string `json:"patrol_schedule_preset,omitempty"`   // DEPRECATED: use patrol_interval_minutes
+	PatrolIntervalMinutes  *int    `json:"patrol_interval_minutes,omitempty"`  // Custom interval in minutes (0 = disabled, minimum 10)
+	PatrolAutoFix          *bool   `json:"patrol_auto_fix,omitempty"`          // true if patrol can auto-fix issues
+	AlertTriggeredAnalysis *bool   `json:"alert_triggered_analysis,omitempty"` // true if AI analyzes when alerts fire
+	UseProactiveThresholds *bool   `json:"use_proactive_thresholds,omitempty"` // true if patrol warns before thresholds (default: false = exact thresholds)
 	// Multi-provider credentials
 	AnthropicAPIKey *string `json:"anthropic_api_key,omitempty"` // Set Anthropic API key
 	OpenAIAPIKey    *string `json:"openai_api_key,omitempty"`    // Set OpenAI API key
@@ -273,18 +273,18 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		AuthMethod:     authMethod,
 		OAuthConnected: settings.OAuthAccessToken != "",
 		// Patrol settings
-		PatrolSchedulePreset:    settings.PatrolSchedulePreset,
-		PatrolIntervalMinutes:   settings.PatrolIntervalMinutes,
-		PatrolAutoFix:           settings.PatrolAutoFix,
-		AlertTriggeredAnalysis:  settings.AlertTriggeredAnalysis,
-		UseProactiveThresholds:  settings.UseProactiveThresholds,
-		AvailableModels:         nil, // Now populated via /api/ai/models endpoint
+		PatrolSchedulePreset:   settings.PatrolSchedulePreset,
+		PatrolIntervalMinutes:  settings.PatrolIntervalMinutes,
+		PatrolAutoFix:          settings.PatrolAutoFix,
+		AlertTriggeredAnalysis: settings.AlertTriggeredAnalysis,
+		UseProactiveThresholds: settings.UseProactiveThresholds,
+		AvailableModels:        nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
-		AnthropicConfigured: settings.HasProvider(config.AIProviderAnthropic),
-		OpenAIConfigured:    settings.HasProvider(config.AIProviderOpenAI),
-		DeepSeekConfigured:  settings.HasProvider(config.AIProviderDeepSeek),
-		GeminiConfigured:    settings.HasProvider(config.AIProviderGemini),
-		OllamaConfigured:    settings.HasProvider(config.AIProviderOllama),
+		AnthropicConfigured:   settings.HasProvider(config.AIProviderAnthropic),
+		OpenAIConfigured:      settings.HasProvider(config.AIProviderOpenAI),
+		DeepSeekConfigured:    settings.HasProvider(config.AIProviderDeepSeek),
+		GeminiConfigured:      settings.HasProvider(config.AIProviderGemini),
+		OllamaConfigured:      settings.HasProvider(config.AIProviderOllama),
 		OllamaBaseURL:         settings.GetBaseURLForProvider(config.AIProviderOllama),
 		OpenAIBaseURL:         settings.OpenAIBaseURL,
 		ConfiguredProviders:   settings.GetConfiguredProviders(),
@@ -573,18 +573,18 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		CustomContext:          settings.CustomContext,
 		AuthMethod:             authMethod,
 		OAuthConnected:         settings.OAuthAccessToken != "",
-		PatrolSchedulePreset:    settings.PatrolSchedulePreset,
-		PatrolIntervalMinutes:   settings.PatrolIntervalMinutes,
-		PatrolAutoFix:           settings.PatrolAutoFix,
-		AlertTriggeredAnalysis:  settings.AlertTriggeredAnalysis,
-		UseProactiveThresholds:  settings.UseProactiveThresholds,
-		AvailableModels:         nil, // Now populated via /api/ai/models endpoint
+		PatrolSchedulePreset:   settings.PatrolSchedulePreset,
+		PatrolIntervalMinutes:  settings.PatrolIntervalMinutes,
+		PatrolAutoFix:          settings.PatrolAutoFix,
+		AlertTriggeredAnalysis: settings.AlertTriggeredAnalysis,
+		UseProactiveThresholds: settings.UseProactiveThresholds,
+		AvailableModels:        nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
-		AnthropicConfigured: settings.HasProvider(config.AIProviderAnthropic),
-		OpenAIConfigured:    settings.HasProvider(config.AIProviderOpenAI),
-		DeepSeekConfigured:  settings.HasProvider(config.AIProviderDeepSeek),
-		GeminiConfigured:    settings.HasProvider(config.AIProviderGemini),
-		OllamaConfigured:    settings.HasProvider(config.AIProviderOllama),
+		AnthropicConfigured:   settings.HasProvider(config.AIProviderAnthropic),
+		OpenAIConfigured:      settings.HasProvider(config.AIProviderOpenAI),
+		DeepSeekConfigured:    settings.HasProvider(config.AIProviderDeepSeek),
+		GeminiConfigured:      settings.HasProvider(config.AIProviderGemini),
+		OllamaConfigured:      settings.HasProvider(config.AIProviderOllama),
 		OllamaBaseURL:         settings.GetBaseURLForProvider(config.AIProviderOllama),
 		OpenAIBaseURL:         settings.OpenAIBaseURL,
 		ConfiguredProviders:   settings.GetConfiguredProviders(),

@@ -383,4 +383,3 @@ func (h *HostAgentHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request)
 		log.Error().Err(err).Msg("Failed to serialize host unlink response")
 	}
 }
-

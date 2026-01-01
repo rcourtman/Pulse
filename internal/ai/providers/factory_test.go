@@ -51,7 +51,6 @@ func TestNewFromConfig_UnknownProvider(t *testing.T) {
 	}
 }
 
-
 func TestNewFromConfig_AnthropicWithAPIKey(t *testing.T) {
 	cfg := &config.AIConfig{
 		Enabled:  true,

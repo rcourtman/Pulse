@@ -162,7 +162,6 @@ func DefaultPolicy() *CommandPolicy {
 			`>\s*/dev/sd`,
 			`>\s*/dev/nvme`,
 
-
 			// System destruction
 			`shutdown`,
 			`reboot`,

@@ -87,4 +87,3 @@ func TestAgent_flushBuffer_RetryAfterTransientFailure(t *testing.T) {
 		t.Fatalf("expected buffer to be empty, has %d items", a.reportBuffer.Len())
 	}
 }
-

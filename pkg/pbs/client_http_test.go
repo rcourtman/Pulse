@@ -105,9 +105,9 @@ func TestClient_request_SendsTicketAndCSRFToken(t *testing.T) {
 	defer server.Close()
 
 	client, err := NewClient(ClientConfig{
-		Host:     server.URL,
-		User:     "root@pam",
-		Timeout:  2 * time.Second,
+		Host:    server.URL,
+		User:    "root@pam",
+		Timeout: 2 * time.Second,
 	})
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)

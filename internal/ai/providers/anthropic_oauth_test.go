@@ -414,4 +414,3 @@ func TestAnthropicOAuthClient_ListModels_UsesConfiguredHost(t *testing.T) {
 		t.Fatalf("unexpected models: %+v", models)
 	}
 }
-

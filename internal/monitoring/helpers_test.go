@@ -239,7 +239,6 @@ func TestMakeGuestID(t *testing.T) {
 	}
 }
 
-
 func TestConvertPoolInfoToModel(t *testing.T) {
 	t.Parallel()
 

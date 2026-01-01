@@ -18,15 +18,15 @@ import (
 
 // System call wrappers for testing
 var (
-	cpuCounts       = gocpu.CountsWithContext
-	cpuPercent      = gocpu.PercentWithContext
-	loadAvg         = goload.AvgWithContext
-	virtualMemory   = gomem.VirtualMemoryWithContext
-	diskPartitions  = godisk.PartitionsWithContext
-	diskUsage       = godisk.UsageWithContext
-	diskIOCounters  = godisk.IOCountersWithContext
-	netInterfaces   = gonet.InterfacesWithContext
-	netIOCounters   = gonet.IOCountersWithContext
+	cpuCounts      = gocpu.CountsWithContext
+	cpuPercent     = gocpu.PercentWithContext
+	loadAvg        = goload.AvgWithContext
+	virtualMemory  = gomem.VirtualMemoryWithContext
+	diskPartitions = godisk.PartitionsWithContext
+	diskUsage      = godisk.UsageWithContext
+	diskIOCounters = godisk.IOCountersWithContext
+	netInterfaces  = gonet.InterfacesWithContext
+	netIOCounters  = gonet.IOCountersWithContext
 )
 
 // Snapshot represents a host resource utilisation sample.

@@ -99,4 +99,3 @@ func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
 		t.Fatalf("expected last docker cpu point to match current, got=%v want=%v", got, want)
 	}
 }
-

@@ -94,4 +94,3 @@ func TestClient_GetZFSPoolsWithDetails_MergesDetailWhenAvailable(t *testing.T) {
 		t.Fatalf("expected data pool to fall back to list-only info, got: %+v", dataPool)
 	}
 }
-

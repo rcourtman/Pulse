@@ -18,10 +18,10 @@ func IsDemoMode() bool {
 // mockResourcePatterns contains name patterns that indicate mock/demo resources
 var mockResourcePatterns = []string{
 	"pve1", "pve2", "pve3", "pve4", "pve5", "pve6", "pve7", // mock PVE nodes
-	"mock-cluster", "mock-",                                 // generic mock prefixes
-	"Ceres", "Atlas", "Nova", "Orion", "Vega", "Rigel",     // mock host agent names
-	"docker-host-", "k8s-cluster-",                          // mock Docker/K8s names
-	"demo-",                                                 // demo prefixes
+	"mock-cluster", "mock-", // generic mock prefixes
+	"Ceres", "Atlas", "Nova", "Orion", "Vega", "Rigel", // mock host agent names
+	"docker-host-", "k8s-cluster-", // mock Docker/K8s names
+	"demo-", // demo prefixes
 }
 
 // IsMockResource returns true if the resource name/ID appears to be mock data
@@ -31,7 +31,7 @@ func IsMockResource(resourceID, resourceName, node string) bool {
 	if IsDemoMode() {
 		return false
 	}
-	
+
 	// Check against mock patterns
 	toCheck := []string{resourceID, resourceName, node}
 	for _, value := range toCheck {
@@ -46,7 +46,6 @@ func IsMockResource(resourceID, resourceName, node string) bool {
 	}
 	return false
 }
-
 
 // InjectDemoFindings populates the patrol service with realistic mock findings
 // This is used for demo instances to showcase AI features without actual AI API calls
@@ -80,7 +79,7 @@ func (p *PatrolService) InjectDemoFindings() {
 **Long-term:**
 - Add additional storage or migrate VMs to other pools
 - Enable ZFS compression if not already enabled`,
-			DetectedAt: now.Add(-2 * time.Hour),
+			DetectedAt:  now.Add(-2 * time.Hour),
 			LastSeenAt:  now.Add(-5 * time.Minute),
 			TimesRaised: 3,
 			Source:      "patrol",
@@ -101,7 +100,7 @@ func (p *PatrolService) InjectDemoFindings() {
 2. Check for memory leaks in Jellyfin: restart the service
 3. Limit transcoding to reduce memory pressure
 4. Review Jellyfin cache settings in the dashboard`,
-			DetectedAt: now.Add(-6 * time.Hour),
+			DetectedAt:  now.Add(-6 * time.Hour),
 			LastSeenAt:  now.Add(-10 * time.Minute),
 			TimesRaised: 5,
 			Source:      "patrol",
@@ -124,7 +123,7 @@ func (p *PatrolService) InjectDemoFindings() {
 
 **Manual backup:**
 ` + "`vzdump 105 --storage pbs --mode snapshot`",
-			DetectedAt: now.Add(-24 * time.Hour),
+			DetectedAt:  now.Add(-24 * time.Hour),
 			LastSeenAt:  now.Add(-15 * time.Minute),
 			TimesRaised: 2,
 			Source:      "patrol",
@@ -147,7 +146,7 @@ func (p *PatrolService) InjectDemoFindings() {
 **Consider:**
 - Live-migrate a VM to another node: ` + "`qm migrate <vmid> pve1 --online`" + `
 - Set CPU limits on high-usage VMs`,
-			DetectedAt: now.Add(-2 * time.Hour),
+			DetectedAt:  now.Add(-2 * time.Hour),
 			LastSeenAt:  now.Add(-8 * time.Minute),
 			TimesRaised: 4,
 			Source:      "patrol",
@@ -170,7 +169,7 @@ func (p *PatrolService) InjectDemoFindings() {
 - OOM kills: check ` + "`docker stats uptime-kuma`" + `
 - Configuration errors in environment variables
 - Database corruption (check data volume)`,
-			DetectedAt: now.Add(-12 * time.Hour),
+			DetectedAt:  now.Add(-12 * time.Hour),
 			LastSeenAt:  now.Add(-20 * time.Minute),
 			TimesRaised: 3,
 			Source:      "patrol",
@@ -228,10 +227,10 @@ func (p *PatrolService) injectDemoRunHistory() {
 	for i := 1; i <= 12; i++ {
 		offset := time.Duration(i*6) * time.Hour
 		startTime := now.Add(-offset)
-		
+
 		// Vary the duration slightly
-		duration := time.Duration(40 + (i % 30)) * time.Second
-		
+		duration := time.Duration(40+(i%30)) * time.Second
+
 		// Outcomes vary over time
 		var summary string
 		var status string
@@ -444,29 +443,29 @@ EVIDENCE: PermitRootLogin yes found in config
 // GenerateDemoAIStream acts like GenerateDemoAIResponse but streams content via callback
 func GenerateDemoAIStream(prompt string, callback StreamCallback) (*ExecuteResponse, error) {
 	resp := GenerateDemoAIResponse(prompt)
-	
+
 	// Simulate streaming by sending chunks
 	chunkSize := 10
 	content := resp.Content
-	
+
 	for i := 0; i < len(content); i += chunkSize {
 		end := i + chunkSize
 		if end > len(content) {
 			end = len(content)
 		}
-		
+
 		callback(StreamEvent{
 			Type: "content",
 			Data: content[i:end],
 		})
-		
+
 		// Tiny sleep to simulate generation speed
 		time.Sleep(10 * time.Millisecond)
 	}
-	
+
 	callback(StreamEvent{
 		Type: "done",
 	})
-	
+
 	return resp, nil
 }

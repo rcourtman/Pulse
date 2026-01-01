@@ -9,8 +9,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
 )
 
 func TestNewService(t *testing.T) {
@@ -288,11 +288,11 @@ func TestService_LookupNodeForVMID(t *testing.T) {
 
 func TestExtractVMIDFromCommand(t *testing.T) {
 	tests := []struct {
-		name             string
-		command          string
-		expectedVMID     int
-		expectedOwner    bool
-		expectedFound    bool
+		name          string
+		command       string
+		expectedVMID  int
+		expectedOwner bool
+		expectedFound bool
 	}{
 		{
 			name:          "pct exec",
@@ -465,7 +465,7 @@ func TestService_Execute(t *testing.T) {
 
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
-	
+
 	// Set enabled config
 	svc.cfg = &config.AIConfig{
 		Enabled: true,
@@ -503,7 +503,7 @@ func TestService_Execute_Error(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
 	svc.cfg = &config.AIConfig{Enabled: true}
-	
+
 	mockP := &mockProvider{
 		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
 			return nil, errors.New("API error")
@@ -526,7 +526,7 @@ func TestService_ExecuteStream(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
 	svc.cfg = &config.AIConfig{Enabled: true}
-	
+
 	mockP := &mockProvider{
 		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
 			return &providers.ChatResponse{
@@ -749,7 +749,7 @@ func TestService_SetMetricsHistoryProvider(t *testing.T) {
 
 func TestService_LicenseGating(t *testing.T) {
 	svc := NewService(nil, nil)
-	
+
 	// Default should be true when no checker is set (dev mode)
 	if !svc.HasLicenseFeature("test") {
 		t.Error("Expected true for no license checker (dev mode)")
@@ -757,11 +757,11 @@ func TestService_LicenseGating(t *testing.T) {
 
 	mockLC := &mockLicenseChecker{hasFeature: true}
 	svc.SetLicenseChecker(mockLC)
-	
+
 	if !svc.HasLicenseFeature("test") {
 		t.Error("Expected true with mock license checker")
 	}
-	
+
 	tier, ok := svc.GetLicenseState()
 	if tier != "active" || !ok {
 		t.Errorf("Expected active tier from mock, got %s, %v", tier, ok)
@@ -774,7 +774,7 @@ func TestService_IsAutonomous(t *testing.T) {
 	if !svc.IsAutonomous() {
 		t.Error("Expected true")
 	}
-	
+
 	svc.cfg.AutonomousMode = false
 	if svc.IsAutonomous() {
 		t.Error("Expected false")

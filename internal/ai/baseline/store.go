@@ -17,11 +17,11 @@ import (
 
 // MetricBaseline represents learned "normal" behavior for a single metric
 type MetricBaseline struct {
-	Mean        float64            `json:"mean"`         // Average value
-	StdDev      float64            `json:"stddev"`       // Standard deviation
-	Percentiles map[int]float64    `json:"percentiles"`  // 5, 25, 50, 75, 95
-	SampleCount int                `json:"sample_count"` // Number of samples used
-	
+	Mean        float64         `json:"mean"`         // Average value
+	StdDev      float64         `json:"stddev"`       // Standard deviation
+	Percentiles map[int]float64 `json:"percentiles"`  // 5, 25, 50, 75, 95
+	SampleCount int             `json:"sample_count"` // Number of samples used
+
 	// Time-of-day patterns (future enhancement)
 	HourlyMeans [24]float64 `json:"hourly_means,omitempty"`
 }
@@ -38,12 +38,12 @@ type ResourceBaseline struct {
 type Store struct {
 	mu        sync.RWMutex
 	baselines map[string]*ResourceBaseline // resourceID -> baseline
-	
+
 	// Configuration
-	learningWindow  time.Duration // How far back to learn from (default: 7 days)
-	minSamples      int           // Minimum samples needed (default: 50)
-	updateInterval  time.Duration // How often to recompute (default: 1 hour)
-	
+	learningWindow time.Duration // How far back to learn from (default: 7 days)
+	minSamples     int           // Minimum samples needed (default: 50)
+	updateInterval time.Duration // How often to recompute (default: 1 hour)
+
 	// Persistence
 	dataDir     string
 	persistence Persistence
@@ -57,21 +57,20 @@ type Persistence interface {
 
 // StoreConfig configures the baseline store
 type StoreConfig struct {
-	LearningWindow  time.Duration
-	MinSamples      int
-	UpdateInterval  time.Duration
-	DataDir         string
+	LearningWindow time.Duration
+	MinSamples     int
+	UpdateInterval time.Duration
+	DataDir        string
 }
 
 // DefaultConfig returns sensible defaults
 func DefaultConfig() StoreConfig {
 	return StoreConfig{
-		LearningWindow:  14 * 24 * time.Hour, // 14 days to capture weekly patterns
-		MinSamples:      50,
-		UpdateInterval:  1 * time.Hour,
+		LearningWindow: 14 * 24 * time.Hour, // 14 days to capture weekly patterns
+		MinSamples:     50,
+		UpdateInterval: 1 * time.Hour,
 	}
 }
-
 
 // NewStore creates a new baseline store
 func NewStore(cfg StoreConfig) *Store {
@@ -84,7 +83,7 @@ func NewStore(cfg StoreConfig) *Store {
 	if cfg.UpdateInterval == 0 {
 		cfg.UpdateInterval = 1 * time.Hour
 	}
-	
+
 	s := &Store{
 		baselines:      make(map[string]*ResourceBaseline),
 		learningWindow: cfg.LearningWindow,
@@ -92,7 +91,7 @@ func NewStore(cfg StoreConfig) *Store {
 		updateInterval: cfg.UpdateInterval,
 		dataDir:        cfg.DataDir,
 	}
-	
+
 	// Try to load existing baselines from disk
 	if cfg.DataDir != "" {
 		if err := s.loadFromDisk(); err != nil {
@@ -101,7 +100,7 @@ func NewStore(cfg StoreConfig) *Store {
 			log.Info().Int("count", len(s.baselines)).Msg("Loaded baselines from disk")
 		}
 	}
-	
+
 	return s
 }
 
@@ -122,13 +121,13 @@ func (s *Store) Learn(resourceID, resourceType, metric string, points []MetricPo
 			Msg("Insufficient data for baseline learning")
 		return nil // Not an error, just not enough data yet
 	}
-	
+
 	// Extract values
 	values := make([]float64, len(points))
 	for i, p := range points {
 		values[i] = p.Value
 	}
-	
+
 	// Compute statistics
 	baseline := &MetricBaseline{
 		Mean:        computeMean(values),
@@ -136,10 +135,10 @@ func (s *Store) Learn(resourceID, resourceType, metric string, points []MetricPo
 		Percentiles: computePercentiles(values),
 		SampleCount: len(values),
 	}
-	
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Get or create resource baseline
 	rb, exists := s.baselines[resourceID]
 	if !exists {
@@ -150,10 +149,10 @@ func (s *Store) Learn(resourceID, resourceType, metric string, points []MetricPo
 		}
 		s.baselines[resourceID] = rb
 	}
-	
+
 	rb.Metrics[metric] = baseline
 	rb.LastUpdated = time.Now()
-	
+
 	log.Debug().
 		Str("resource", resourceID).
 		Str("metric", metric).
@@ -161,7 +160,7 @@ func (s *Store) Learn(resourceID, resourceType, metric string, points []MetricPo
 		Float64("stddev", baseline.StdDev).
 		Int("samples", baseline.SampleCount).
 		Msg("Baseline learned")
-	
+
 	return nil
 }
 
@@ -169,12 +168,12 @@ func (s *Store) Learn(resourceID, resourceType, metric string, points []MetricPo
 func (s *Store) GetBaseline(resourceID, metric string) (*MetricBaseline, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	rb, exists := s.baselines[resourceID]
 	if !exists {
 		return nil, false
 	}
-	
+
 	mb, exists := rb.Metrics[metric]
 	return mb, exists
 }
@@ -183,12 +182,12 @@ func (s *Store) GetBaseline(resourceID, metric string) (*MetricBaseline, bool) {
 func (s *Store) GetResourceBaseline(resourceID string) (*ResourceBaseline, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	rb, exists := s.baselines[resourceID]
 	if !exists {
 		return nil, false
 	}
-	
+
 	// Return a copy to prevent mutation
 	copy := &ResourceBaseline{
 		ResourceID:   rb.ResourceID,
@@ -209,15 +208,15 @@ func (s *Store) IsAnomaly(resourceID, metric string, value float64) (bool, float
 	if !ok || baseline.SampleCount < s.minSamples {
 		return false, 0 // Not enough data to determine
 	}
-	
+
 	// Calculate absolute difference
 	absDiff := math.Abs(value - baseline.Mean)
-	
+
 	// Don't flag small absolute changes as anomalies
 	if absDiff < 3.0 {
 		return false, 0
 	}
-	
+
 	if baseline.StdDev == 0 {
 		// No variance - only flag if change is significant (> 5 percentage points)
 		if absDiff > 5.0 {
@@ -225,19 +224,19 @@ func (s *Store) IsAnomaly(resourceID, metric string, value float64) (bool, float
 		}
 		return false, 0
 	}
-	
+
 	// Apply minimum stddev floor
 	effectiveStdDev := baseline.StdDev
 	if effectiveStdDev < 1.0 {
 		effectiveStdDev = 1.0
 	}
-	
+
 	zScore := (value - baseline.Mean) / effectiveStdDev
-	
+
 	// Consider anything > 2 standard deviations as anomalous
 	// (covers ~95% of normal distribution)
 	isAnomaly := math.Abs(zScore) > 2.0
-	
+
 	return isAnomaly, zScore
 }
 
@@ -258,10 +257,10 @@ func (s *Store) CheckAnomaly(resourceID, metric string, value float64) (AnomalyS
 	if !ok || baseline.SampleCount < s.minSamples {
 		return AnomalyNone, 0, nil
 	}
-	
+
 	// Calculate absolute difference for threshold checks
 	absDiff := math.Abs(value - baseline.Mean)
-	
+
 	// Handle zero stddev case more intelligently
 	// When values have been completely stable, small variations aren't anomalies
 	if baseline.StdDev == 0 {
@@ -275,23 +274,23 @@ func (s *Store) CheckAnomaly(resourceID, metric string, value float64) (AnomalyS
 		// since we don't have historical variance data to judge severity
 		return AnomalyMedium, 0, baseline
 	}
-	
+
 	// Apply minimum stddev floor to prevent tiny variations from appearing extreme
 	// If historical stddev is < 1%, use 1% as the floor for z-score calculation
 	effectiveStdDev := baseline.StdDev
 	if effectiveStdDev < 1.0 {
 		effectiveStdDev = 1.0
 	}
-	
+
 	zScore := (value - baseline.Mean) / effectiveStdDev
 	absZ := math.Abs(zScore)
-	
+
 	// Also require a minimum absolute difference for practical significance
 	// Don't flag anomalies for changes < 3 percentage points regardless of z-score
 	if absDiff < 3.0 {
 		return AnomalyNone, zScore, baseline
 	}
-	
+
 	var severity AnomalySeverity
 	switch {
 	case absZ < 2.0:
@@ -305,47 +304,47 @@ func (s *Store) CheckAnomaly(resourceID, metric string, value float64) (AnomalyS
 	default:
 		severity = AnomalyCritical
 	}
-	
+
 	return severity, zScore, baseline
 }
 
 // AnomalyReport represents a detected anomaly for a single metric
 type AnomalyReport struct {
-	ResourceID   string          `json:"resource_id"`
-	ResourceName string          `json:"resource_name,omitempty"`
-	ResourceType string          `json:"resource_type,omitempty"`
-	Metric       string          `json:"metric"`
-	CurrentValue float64         `json:"current_value"`
-	BaselineMean float64         `json:"baseline_mean"`
-	BaselineStdDev float64       `json:"baseline_std_dev"`
-	ZScore       float64         `json:"z_score"`
-	Severity     AnomalySeverity `json:"severity"`
-	Description  string          `json:"description"`
+	ResourceID     string          `json:"resource_id"`
+	ResourceName   string          `json:"resource_name,omitempty"`
+	ResourceType   string          `json:"resource_type,omitempty"`
+	Metric         string          `json:"metric"`
+	CurrentValue   float64         `json:"current_value"`
+	BaselineMean   float64         `json:"baseline_mean"`
+	BaselineStdDev float64         `json:"baseline_std_dev"`
+	ZScore         float64         `json:"z_score"`
+	Severity       AnomalySeverity `json:"severity"`
+	Description    string          `json:"description"`
 }
 
 // CheckResourceAnomalies checks multiple metrics for a resource and returns all anomalies
 func (s *Store) CheckResourceAnomalies(resourceID string, metrics map[string]float64) []AnomalyReport {
 	var anomalies []AnomalyReport
-	
+
 	for metric, value := range metrics {
 		severity, zScore, baseline := s.CheckAnomaly(resourceID, metric, value)
 		if severity != AnomalyNone && baseline != nil {
 			// Compute ratio: current value / baseline mean
 			ratio := value / baseline.Mean
-			
+
 			// Apply metric-specific filters to reduce noise
 			// Different metrics have different thresholds for what's "actionable"
 			shouldReport := false
-			
+
 			switch metric {
 			case "disk":
 				// Disk is critical - report if:
 				// 1. Usage is above 85% (absolute threshold), OR
 				// 2. Usage increased by more than 15 percentage points from baseline
-				if value >= 85.0 || (value - baseline.Mean) >= 15.0 {
+				if value >= 85.0 || (value-baseline.Mean) >= 15.0 {
 					shouldReport = true
 				}
-				
+
 			case "cpu":
 				// CPU fluctuates a lot - only report if:
 				// 1. Current usage is above 70% (actually busy), AND
@@ -353,7 +352,7 @@ func (s *Store) CheckResourceAnomalies(resourceID string, metrics map[string]flo
 				if value >= 70.0 && ratio >= 2.0 {
 					shouldReport = true
 				}
-				
+
 			case "memory":
 				// Memory is more stable - report if:
 				// 1. Current usage is above 80% (getting tight), OR
@@ -361,43 +360,42 @@ func (s *Store) CheckResourceAnomalies(resourceID string, metrics map[string]flo
 				if value >= 80.0 || (ratio >= 1.5 && value >= 60.0) {
 					shouldReport = true
 				}
-				
+
 			default:
 				// For other metrics (network, etc), use 2x threshold
 				if ratio >= 2.0 || ratio <= 0.5 {
 					shouldReport = true
 				}
 			}
-			
+
 			if !shouldReport {
 				continue
 			}
-			
+
 			report := AnomalyReport{
-				ResourceID:   resourceID,
-				Metric:       metric,
-				CurrentValue: value,
-				ZScore:       zScore,
-				Severity:     severity,
-				BaselineMean: baseline.Mean,
+				ResourceID:     resourceID,
+				Metric:         metric,
+				CurrentValue:   value,
+				ZScore:         zScore,
+				Severity:       severity,
+				BaselineMean:   baseline.Mean,
 				BaselineStdDev: baseline.StdDev,
 			}
-			
+
 			// Generate human-readable description
 			direction := "above"
 			if zScore < 0 {
 				direction = "below"
 			}
 			report.Description = formatAnomalyDescription(metric, ratio, direction, severity)
-			
+
 			anomalies = append(anomalies, report)
 		}
 	}
-	
+
 	return anomalies
 
 }
-
 
 // formatAnomalyDescription generates a human-readable anomaly description
 func formatAnomalyDescription(metric string, ratio float64, direction string, severity AnomalySeverity) string {
@@ -414,7 +412,7 @@ func formatAnomalyDescription(metric string, ratio float64, direction string, se
 	case "network_out":
 		metricLabel = "Network outbound"
 	}
-	
+
 	severityLabel := ""
 	switch severity {
 	case AnomalyCritical:
@@ -426,7 +424,7 @@ func formatAnomalyDescription(metric string, ratio float64, direction string, se
 	case AnomalyLow:
 		severityLabel = "Minor anomaly: "
 	}
-	
+
 	return severityLabel + metricLabel + " is " + formatRatio(ratio) + " " + direction + " normal baseline"
 }
 
@@ -462,7 +460,7 @@ func (s *Store) GetAllAnomalies(metricsProvider func(resourceID string) map[stri
 		resourceIDs = append(resourceIDs, id)
 	}
 	s.mu.RUnlock()
-	
+
 	var allAnomalies []AnomalyReport
 	for _, resourceID := range resourceIDs {
 		metrics := metricsProvider(resourceID)
@@ -471,22 +469,22 @@ func (s *Store) GetAllAnomalies(metricsProvider func(resourceID string) map[stri
 			allAnomalies = append(allAnomalies, anomalies...)
 		}
 	}
-	
+
 	return allAnomalies
 }
 
 // TrendPrediction represents a forecast for when a resource might be exhausted
 type TrendPrediction struct {
-	ResourceID     string     `json:"resource_id"`
-	ResourceName   string     `json:"resource_name,omitempty"`
-	ResourceType   string     `json:"resource_type,omitempty"`
-	Metric         string     `json:"metric"`
-	CurrentValue   float64    `json:"current_value"`   // Current % usage
-	DailyChange    float64    `json:"daily_change"`    // Average change per day
-	DaysToFull     int        `json:"days_to_full"`    // Estimated days until 100% (or -1 if decreasing/stable)
-	Severity       string     `json:"severity"`        // "critical", "warning", "info"
-	Description    string     `json:"description"`
-	ConfidenceNote string     `json:"confidence_note,omitempty"`
+	ResourceID     string  `json:"resource_id"`
+	ResourceName   string  `json:"resource_name,omitempty"`
+	ResourceType   string  `json:"resource_type,omitempty"`
+	Metric         string  `json:"metric"`
+	CurrentValue   float64 `json:"current_value"` // Current % usage
+	DailyChange    float64 `json:"daily_change"`  // Average change per day
+	DaysToFull     int     `json:"days_to_full"`  // Estimated days until 100% (or -1 if decreasing/stable)
+	Severity       string  `json:"severity"`      // "critical", "warning", "info"
+	Description    string  `json:"description"`
+	ConfidenceNote string  `json:"confidence_note,omitempty"`
 }
 
 // CalculateTrend analyzes a time series of values and predicts future exhaustion
@@ -497,10 +495,10 @@ func CalculateTrend(samples []float64, currentValue float64) *TrendPrediction {
 	if len(samples) < 5 {
 		return nil // Not enough data for meaningful trend
 	}
-	
+
 	// Simple linear regression to find slope
 	n := float64(len(samples))
-	
+
 	// Calculate means
 	sumX := 0.0
 	sumY := 0.0
@@ -510,7 +508,7 @@ func CalculateTrend(samples []float64, currentValue float64) *TrendPrediction {
 	}
 	meanX := sumX / n
 	meanY := sumY / n
-	
+
 	// Calculate slope (least squares)
 	numerator := 0.0
 	denominator := 0.0
@@ -519,27 +517,27 @@ func CalculateTrend(samples []float64, currentValue float64) *TrendPrediction {
 		numerator += (x - meanX) * (v - meanY)
 		denominator += (x - meanX) * (x - meanX)
 	}
-	
+
 	slope := numerator / denominator
-	
+
 	// slope is change per sample, convert to daily change
 	// Assume samples are taken regularly; if 24 samples per day, divide by 24
 	// For now, assume hourly samples = 24 per day
 	samplesPerDay := 24.0
 	dailyChange := slope * samplesPerDay
-	
+
 	prediction := &TrendPrediction{
 		CurrentValue: currentValue,
 		DailyChange:  dailyChange,
 	}
-	
+
 	// Calculate days to full if trending upward
 	if dailyChange > 0.1 { // More than 0.1% increase per day
 		remaining := 100.0 - currentValue
 		if remaining > 0 {
 			daysToFull := remaining / dailyChange
 			prediction.DaysToFull = int(math.Ceil(daysToFull))
-			
+
 			// Set severity based on time to full
 			if prediction.DaysToFull <= 7 {
 				prediction.Severity = "critical"
@@ -568,7 +566,7 @@ func CalculateTrend(samples []float64, currentValue float64) *TrendPrediction {
 		prediction.Severity = "info"
 		prediction.Description = "Usage stable - no significant trend detected"
 	}
-	
+
 	return prediction
 }
 
@@ -581,7 +579,7 @@ func formatTrendDescription(daysToFull int, dailyChange float64, severity string
 	} else {
 		changeDesc = " (+" + floatToStr(dailyChange, 2) + "% per day)"
 	}
-	
+
 	switch severity {
 	case "critical":
 		return "⚠️ Resource will be full in " + timeFrame + changeDesc
@@ -625,7 +623,7 @@ func floatToStr(f float64, precision int) string {
 	// Simple implementation for small numbers
 	intPart := int(f)
 	fracPart := f - float64(intPart)
-	
+
 	if precision == 1 {
 		fracPart = math.Round(fracPart*10) / 10
 		if fracPart < 0.1 {
@@ -634,7 +632,7 @@ func floatToStr(f float64, precision int) string {
 		d := byte('0' + int(fracPart*10))
 		return string([]byte{'0' + byte(intPart), '.', d})
 	}
-	
+
 	fracPart = math.Round(fracPart*100) / 100
 	if fracPart < 0.01 {
 		return string([]byte{'0' + byte(intPart)})
@@ -650,7 +648,6 @@ func (s *Store) ResourceCount() int {
 	defer s.mu.RUnlock()
 	return len(s.baselines)
 }
-
 
 // FlatBaseline is a flattened representation of a single metric baseline for API responses
 type FlatBaseline struct {
@@ -668,7 +665,7 @@ type FlatBaseline struct {
 func (s *Store) GetAllBaselines() map[string]*FlatBaseline {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	result := make(map[string]*FlatBaseline)
 	for resourceID, rb := range s.baselines {
 		for metric, mb := range rb.Metrics {
@@ -701,10 +698,10 @@ func (s *Store) Save() error {
 	if s.dataDir == "" {
 		return nil
 	}
-	
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	return s.saveToDisk()
 }
 
@@ -713,27 +710,27 @@ func (s *Store) saveToDisk() error {
 	if s.dataDir == "" {
 		return nil
 	}
-	
+
 	path := filepath.Join(s.dataDir, "baselines.json")
-	
+
 	data, err := json.MarshalIndent(s.baselines, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	// Write to temp file first, then rename for atomicity
 	tmpPath := path + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		return err
 	}
-	
+
 	return os.Rename(tmpPath, path)
 }
 
 // loadFromDisk reads baselines from JSON file
 func (s *Store) loadFromDisk() error {
 	path := filepath.Join(s.dataDir, "baselines.json")
-	
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -741,7 +738,7 @@ func (s *Store) loadFromDisk() error {
 		}
 		return err
 	}
-	
+
 	return json.Unmarshal(data, &s.baselines)
 }
 
@@ -776,12 +773,12 @@ func computePercentiles(values []float64) map[int]float64 {
 	if len(values) == 0 {
 		return nil
 	}
-	
+
 	// Sort a copy
 	sorted := make([]float64, len(values))
 	copy(sorted, values)
 	sort.Float64s(sorted)
-	
+
 	percentiles := map[int]float64{
 		5:  percentile(sorted, 5),
 		25: percentile(sorted, 25),
@@ -789,7 +786,7 @@ func computePercentiles(values []float64) map[int]float64 {
 		75: percentile(sorted, 75),
 		95: percentile(sorted, 95),
 	}
-	
+
 	return percentiles
 }
 
@@ -797,16 +794,16 @@ func percentile(sorted []float64, p int) float64 {
 	if len(sorted) == 0 {
 		return 0
 	}
-	
+
 	// Use linear interpolation
 	rank := float64(p) / 100.0 * float64(len(sorted)-1)
 	lower := int(rank)
 	upper := lower + 1
-	
+
 	if upper >= len(sorted) {
 		return sorted[len(sorted)-1]
 	}
-	
+
 	// Interpolate
 	weight := rank - float64(lower)
 	return sorted[lower]*(1-weight) + sorted[upper]*weight

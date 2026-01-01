@@ -723,7 +723,6 @@ func TestCheckSnapshotsRespectsOverrides(t *testing.T) {
 	}
 }
 
-
 func TestCheckSnapshotsForInstanceTriggersOnSnapshotSize(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
@@ -1042,7 +1041,6 @@ func TestCheckBackupsRespectsOverrides(t *testing.T) {
 		t.Fatalf("expected no backup alert for globally disabled guest")
 	}
 }
-
 
 func TestCheckBackupsHandlesPbsOnlyGuests(t *testing.T) {
 	m := newTestManager(t)

@@ -263,7 +263,7 @@ func TestCounterWraparound(t *testing.T) {
 
 	// Test wraparound case (energy2 < energy1 means counter wrapped)
 	energy1 = uint64(18446744073709551610) // Close to max uint64
-	energy2 = uint64(100)                   // After wrap
+	energy2 = uint64(100)                  // After wrap
 
 	if energy2 >= energy1 {
 		deltaUJ = energy2 - energy1

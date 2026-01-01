@@ -174,15 +174,15 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		// Only set the first network here; we'll connect to others after creation
 		for netName, netConfig := range inspect.NetworkSettings.Networks {
 			networkingConfig.EndpointsConfig[netName] = &network.EndpointSettings{
-				Aliases:     netConfig.Aliases,
-				IPAMConfig:  netConfig.IPAMConfig,
-				Links:       netConfig.Links,
-				NetworkID:   netConfig.NetworkID,
-				EndpointID:  "", // Will be assigned
-				Gateway:     "", // Will be assigned
-				IPAddress:   "", // Will be assigned
-				MacAddress:  netConfig.MacAddress,
-				DriverOpts:  netConfig.DriverOpts,
+				Aliases:    netConfig.Aliases,
+				IPAMConfig: netConfig.IPAMConfig,
+				Links:      netConfig.Links,
+				NetworkID:  netConfig.NetworkID,
+				EndpointID: "", // Will be assigned
+				Gateway:    "", // Will be assigned
+				IPAddress:  "", // Will be assigned
+				MacAddress: netConfig.MacAddress,
+				DriverOpts: netConfig.DriverOpts,
 			}
 			break // Only set one network during creation
 		}

@@ -15,14 +15,14 @@ type ResourceProvider interface {
 	GetWorkloads() []resources.Resource
 	GetByType(t resources.ResourceType) []resources.Resource
 	GetStats() resources.StoreStats
-	
+
 	// Cross-platform query methods
 	GetTopByCPU(limit int, types []resources.ResourceType) []resources.Resource
 	GetTopByMemory(limit int, types []resources.ResourceType) []resources.Resource
 	GetTopByDisk(limit int, types []resources.ResourceType) []resources.Resource
 	GetRelated(resourceID string) map[string][]resources.Resource
 	GetResourceSummary() resources.ResourceSummary
-	
+
 	// AI Routing support
 	FindContainerHost(containerNameOrID string) string
 }
@@ -243,7 +243,7 @@ func (s *Service) buildUnifiedResourceContext() string {
 		if summary.WithAlerts > 0 {
 			sections = append(sections, fmt.Sprintf("- Resources with alerts: %d", summary.WithAlerts))
 		}
-		
+
 		// Show average resource usage by type
 		if len(summary.ByType) > 0 {
 			sections = append(sections, "- Average utilization by type:")

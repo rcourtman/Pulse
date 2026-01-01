@@ -33,21 +33,21 @@ const (
 )
 
 var (
-	maxBinarySizeBytes      int64 = maxBinarySize
-	runtimeGOOS                   = runtime.GOOS
-	runtimeGOARCH                 = runtime.GOARCH
-	unameCommand                  = func() ([]byte, error) { return exec.Command("uname", "-m").Output() }
-	unraidVersionPath             = "/etc/unraid-version"
-	unraidPersistentPathFn        = unraidPersistentPath
-	restartProcessFn              = restartProcess
-	osExecutableFn                = os.Executable
-	evalSymlinksFn                = filepath.EvalSymlinks
-	createTempFn                  = os.CreateTemp
-	chmodFn                       = os.Chmod
-	renameFn                      = os.Rename
-	closeFileFn                   = func(f *os.File) error { return f.Close() }
-	readFileFn                    = os.ReadFile
-	writeFileFn                   = os.WriteFile
+	maxBinarySizeBytes     int64 = maxBinarySize
+	runtimeGOOS                  = runtime.GOOS
+	runtimeGOARCH                = runtime.GOARCH
+	unameCommand                 = func() ([]byte, error) { return exec.Command("uname", "-m").Output() }
+	unraidVersionPath            = "/etc/unraid-version"
+	unraidPersistentPathFn       = unraidPersistentPath
+	restartProcessFn             = restartProcess
+	osExecutableFn               = os.Executable
+	evalSymlinksFn               = filepath.EvalSymlinks
+	createTempFn                 = os.CreateTemp
+	chmodFn                      = os.Chmod
+	renameFn                     = os.Rename
+	closeFileFn                  = func(f *os.File) error { return f.Close() }
+	readFileFn                   = os.ReadFile
+	writeFileFn                  = os.WriteFile
 )
 
 // Config holds the configuration for the updater.

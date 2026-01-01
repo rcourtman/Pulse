@@ -78,10 +78,10 @@ func TestConvertHostSensorsToTemperature_NVMe(t *testing.T) {
 func TestConvertHostSensorsToTemperature_GPU(t *testing.T) {
 	sensors := models.HostSensorSummary{
 		TemperatureCelsius: map[string]float64{
-			"cpu_package": 45.0,
-			"gpu_edge":    60.0,
+			"cpu_package":  45.0,
+			"gpu_edge":     60.0,
 			"gpu_junction": 65.0,
-			"gpu_mem":     55.0,
+			"gpu_mem":      55.0,
 		},
 	}
 	result := convertHostSensorsToTemperature(sensors, time.Now())

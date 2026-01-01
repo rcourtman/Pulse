@@ -134,7 +134,7 @@ func formatTrendLine(metric string, trend Trend) string {
 	}
 
 	metricLabel := strings.Title(metric)
-	
+
 	// Direction with rate
 	var directionStr string
 	switch trend.Direction {
@@ -188,7 +188,7 @@ func formatMetricSamples(metric string, points []MetricPoint) string {
 	}
 
 	metricLabel := strings.Title(metric)
-	
+
 	// Build compact arrow-separated value list
 	var values []string
 	prevValue := -1.0
@@ -486,9 +486,9 @@ func FormatGuestForContext(
 		ResourceName:  name,
 		Node:          node,
 		VMID:          vmid,
-		CurrentCPU:    cpu * 100,  // Convert from 0-1 to percentage
-		CurrentMemory: memUsage,   // Already 0-100 percentage from Memory.Usage
-		CurrentDisk:   diskUsage,  // Already 0-100 percentage from Disk.Usage
+		CurrentCPU:    cpu * 100, // Convert from 0-1 to percentage
+		CurrentMemory: memUsage,  // Already 0-100 percentage from Memory.Usage
+		CurrentDisk:   diskUsage, // Already 0-100 percentage from Disk.Usage
 		Status:        status,
 		Uptime:        time.Duration(uptime) * time.Second,
 		Trends:        trends,

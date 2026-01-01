@@ -145,12 +145,12 @@ func fallbackZFSDisks(bestDatasets map[string]zfsDatasetUsage, mountpoints map[s
 // zpool in different locations that might not be in the agent's PATH.
 // This helps fix issue #718 where TrueNAS reports inflated storage.
 var commonZpoolPaths = []string{
-	"/usr/sbin/zpool",         // TrueNAS SCALE, Debian, Ubuntu
-	"/sbin/zpool",             // FreeBSD, older Linux
-	"/usr/local/sbin/zpool",   // FreeBSD ports, custom builds
-	"/usr/local/bin/zpool",    // Custom installations
-	"/opt/zfs/bin/zpool",      // Some enterprise Linux
-	"/usr/bin/zpool",          // Some distributions
+	"/usr/sbin/zpool",       // TrueNAS SCALE, Debian, Ubuntu
+	"/sbin/zpool",           // FreeBSD, older Linux
+	"/usr/local/sbin/zpool", // FreeBSD ports, custom builds
+	"/usr/local/bin/zpool",  // Custom installations
+	"/opt/zfs/bin/zpool",    // Some enterprise Linux
+	"/usr/bin/zpool",        // Some distributions
 }
 
 // findZpool returns the path to the zpool binary by first trying exec.LookPath,

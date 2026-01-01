@@ -17,10 +17,10 @@ func TestAIConfigPersistence(t *testing.T) {
 	}
 
 	cfg := config.AIConfig{
-		Enabled: true,
+		Enabled:  true,
 		Provider: "anthropic",
-		APIKey: "test-key",
-		Model: "claude-3-opus",
+		APIKey:   "test-key",
+		Model:    "claude-3-opus",
 	}
 
 	if err := cp.SaveAIConfig(cfg); err != nil {
@@ -46,9 +46,9 @@ func TestAIFindingsPersistence(t *testing.T) {
 
 	findings := map[string]*config.AIFindingRecord{
 		"f1": {
-			ID: "f1",
-			Title: "Test Finding",
-			Severity: "warning",
+			ID:         "f1",
+			Title:      "Test Finding",
+			Severity:   "warning",
 			ResourceID: "res-1",
 		},
 	}
@@ -70,7 +70,7 @@ func TestAIFindingsPersistence(t *testing.T) {
 func TestIsEncryptionEnabled(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
-	
+
 	// NewConfigPersistence always enables encryption by generating a key if missing
 	if !cp.IsEncryptionEnabled() {
 		t.Error("Encryption should be enabled by default")
@@ -94,7 +94,7 @@ func TestMetadataPersistence(t *testing.T) {
 			Notes: []string{"Important guest"},
 		},
 	}
-	
+
 	// Create the file manually since SaveGuestMetadata doesn't exist in ConfigPersistence (it's in GuestMetadataStore)
 	// but LoadGuestMetadata is in ConfigPersistence.
 	// This tests the LoadGuestMetadata method in persistence.go
@@ -113,7 +113,7 @@ func TestMetadataPersistence(t *testing.T) {
 	// 2. Docker Metadata
 	dockerMeta := map[string]*config.DockerMetadata{
 		"docker-1": {
-			ID: "docker-1",
+			ID:    "docker-1",
 			Notes: []string{"Worker node"},
 		},
 	}

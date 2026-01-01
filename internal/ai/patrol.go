@@ -106,8 +106,8 @@ func CalculatePatrolThresholdsWithMode(provider ThresholdProvider, proactiveMode
 	// Exact mode (default): use exact alert thresholds
 	// Watch is slightly below warning, warning is at threshold
 	return PatrolThresholds{
-		NodeCPUWatch:    clampThreshold(nodeCPU - 5),  // Watch slightly before threshold
-		NodeCPUWarning:  nodeCPU,                       // Warning at exact threshold
+		NodeCPUWatch:    clampThreshold(nodeCPU - 5), // Watch slightly before threshold
+		NodeCPUWarning:  nodeCPU,                     // Warning at exact threshold
 		NodeMemWatch:    clampThreshold(nodeMem - 5),
 		NodeMemWarning:  nodeMem,
 		GuestMemWatch:   clampThreshold(guestMem - 5),
@@ -256,8 +256,8 @@ type PatrolService struct {
 	intelligence *Intelligence
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
-	thresholds     PatrolThresholds
-	proactiveMode  bool // When true, warn before thresholds; when false, use exact thresholds
+	thresholds    PatrolThresholds
+	proactiveMode bool // When true, warn before thresholds; when false, use exact thresholds
 
 	// Runtime state
 	running          bool
@@ -891,19 +891,19 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 			}
 
 			errorFinding := &Finding{
-				ID:           generateFindingID("ai-service", "reliability", "ai-patrol-error"),
-				Key:          "ai-patrol-error",
-				Severity:     "warning",
-				Category:     "reliability",
-				ResourceID:   "ai-service",
-				ResourceName: "AI Patrol Service",
-				ResourceType: "service",
-				Title:        title,
-				Description:  description,
+				ID:             generateFindingID("ai-service", "reliability", "ai-patrol-error"),
+				Key:            "ai-patrol-error",
+				Severity:       "warning",
+				Category:       "reliability",
+				ResourceID:     "ai-service",
+				ResourceName:   "AI Patrol Service",
+				ResourceType:   "service",
+				Title:          title,
+				Description:    description,
 				Recommendation: recommendation,
-				Evidence:     fmt.Sprintf("Error: %s", errMsg),
-				DetectedAt:   time.Now(),
-				LastSeenAt:   time.Now(),
+				Evidence:       fmt.Sprintf("Error: %s", errMsg),
+				DetectedAt:     time.Now(),
+				LastSeenAt:     time.Now(),
 			}
 			trackFinding(errorFinding)
 		} else if aiResult != nil {
@@ -999,7 +999,6 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 		ErrorCount:        runStats.errors,
 		Status:            status,
 	}
-
 
 	// Add AI analysis details if available
 	if runStats.aiAnalysis != nil {
@@ -1487,7 +1486,6 @@ func (p *PatrolService) analyzeDockerHost(host models.DockerHost) []*Finding {
 	return findings
 }
 
-
 // analyzeStorage checks storage for issues
 func (p *PatrolService) analyzeStorage(storage models.Storage) []*Finding {
 	var findings []*Finding
@@ -1646,7 +1644,6 @@ func (p *PatrolService) GetRunHistory(limit int) []PatrolRunRecord {
 // Only returns critical and warning findings - watch/info are filtered out as noise
 func (p *PatrolService) GetAllFindings() []*Finding {
 	findings := p.findings.GetActive(FindingSeverityWarning)
-
 
 	// Sort by severity (critical first) then by time
 	severityOrder := map[FindingSeverity]int{
@@ -2179,16 +2176,16 @@ func cleanThinkingTokens(content string) string {
 	if content == "" {
 		return content
 	}
-	
+
 	// Remove DeepSeek thinking markers and everything before them on the same line
 	// These appear as: <｜end▁of▁thinking｜> or <|end_of_thinking|>
 	thinkingMarkers := []string{
-		"<｜end▁of▁thinking｜>",  // DeepSeek Unicode variant
-		"<|end_of_thinking|>",    // ASCII variant
-		"<|end▁of▁thinking|>",   // Mixed variant
-		"</think>",               // Generic thinking block end
+		"<｜end▁of▁thinking｜>", // DeepSeek Unicode variant
+		"<|end_of_thinking|>", // ASCII variant
+		"<|end▁of▁thinking|>", // Mixed variant
+		"</think>",            // Generic thinking block end
 	}
-	
+
 	for _, marker := range thinkingMarkers {
 		for strings.Contains(content, marker) {
 			idx := strings.Index(content, marker)
@@ -2211,58 +2208,57 @@ func cleanThinkingTokens(content string) string {
 			}
 		}
 	}
-	
+
 	// Also remove any lines that look like internal reasoning
 	// These typically start with patterns like "Now, " or "Let's " after a blank line
 	lines := strings.Split(content, "\n")
 	var cleanedLines []string
 	skipUntilContent := false
-	
+
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Skip lines that look like internal reasoning
 		if skipUntilContent {
 			// Resume when we hit actual content (markdown headers, findings, etc.)
-			if strings.HasPrefix(trimmed, "#") || 
-			   strings.HasPrefix(trimmed, "[FINDING]") ||
-			   strings.HasPrefix(trimmed, "**") ||
-			   strings.HasPrefix(trimmed, "-") ||
-			   strings.HasPrefix(trimmed, "1.") {
+			if strings.HasPrefix(trimmed, "#") ||
+				strings.HasPrefix(trimmed, "[FINDING]") ||
+				strings.HasPrefix(trimmed, "**") ||
+				strings.HasPrefix(trimmed, "-") ||
+				strings.HasPrefix(trimmed, "1.") {
 				skipUntilContent = false
 			} else {
 				continue
 			}
 		}
-		
+
 		// Detect reasoning patterns (typically after empty lines)
 		if trimmed == "" && i+1 < len(lines) {
 			nextTrimmed := strings.TrimSpace(lines[i+1])
 			if strings.HasPrefix(nextTrimmed, "Now, ") ||
-			   strings.HasPrefix(nextTrimmed, "Let's ") ||
-			   strings.HasPrefix(nextTrimmed, "Let me ") ||
-			   strings.HasPrefix(nextTrimmed, "I should ") ||
-			   strings.HasPrefix(nextTrimmed, "I'll ") ||
-			   strings.HasPrefix(nextTrimmed, "I need to ") ||
-			   strings.HasPrefix(nextTrimmed, "Checking ") ||
-			   strings.HasPrefix(nextTrimmed, "Looking at ") {
+				strings.HasPrefix(nextTrimmed, "Let's ") ||
+				strings.HasPrefix(nextTrimmed, "Let me ") ||
+				strings.HasPrefix(nextTrimmed, "I should ") ||
+				strings.HasPrefix(nextTrimmed, "I'll ") ||
+				strings.HasPrefix(nextTrimmed, "I need to ") ||
+				strings.HasPrefix(nextTrimmed, "Checking ") ||
+				strings.HasPrefix(nextTrimmed, "Looking at ") {
 				skipUntilContent = true
 				continue
 			}
 		}
-		
+
 		cleanedLines = append(cleanedLines, line)
 	}
-	
+
 	// Clean up excessive blank lines
 	content = strings.Join(cleanedLines, "\n")
 	for strings.Contains(content, "\n\n\n") {
 		content = strings.ReplaceAll(content, "\n\n\n", "\n\n")
 	}
-	
+
 	return strings.TrimSpace(content)
 }
-
 
 // runAIAnalysis uses the LLM to analyze infrastructure and identify issues
 func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSnapshot) (*AIAnalysisResult, error) {
@@ -2325,10 +2321,10 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	if finalContent == "" {
 		finalContent = contentBuffer.String()
 	}
-	
+
 	// Clean any thinking tokens that might have leaked through from the provider
 	finalContent = cleanThinkingTokens(finalContent)
-	
+
 	inputTokens = resp.InputTokens
 	outputTokens = resp.OutputTokens
 
@@ -2414,7 +2410,6 @@ BEFORE CREATING A FINDING, ASK YOURSELF:
 3. If I woke someone up at 3am for this, would they thank me or curse me?
 
 If everything looks healthy, respond with NO findings. An empty report is the BEST report.`
-
 
 	if autoFix {
 		return basePrompt + `
@@ -2592,7 +2587,6 @@ func (p *PatrolService) buildInfrastructureSummary(state models.StateSnapshot) s
 
 	return sb.String()
 }
-
 
 // buildEnrichedContext creates context with historical trends and predictions
 // Falls back to basic summary if metrics history is not available

@@ -238,32 +238,32 @@ func TestRemediationLog_GetRecentRemediationStats(t *testing.T) {
 	now := time.Now()
 
 	r.Log(RemediationRecord{
-		Timestamp:  now.Add(-1 * time.Hour),
-		Problem:    "p1",
-		Action:     "a1",
-		Outcome:    OutcomeResolved,
-		Automatic:  true,
+		Timestamp: now.Add(-1 * time.Hour),
+		Problem:   "p1",
+		Action:    "a1",
+		Outcome:   OutcomeResolved,
+		Automatic: true,
 	})
 	r.Log(RemediationRecord{
-		Timestamp:  now.Add(-2 * time.Hour),
-		Problem:    "p2",
-		Action:     "a2",
-		Outcome:    OutcomePartial,
-		Automatic:  false,
+		Timestamp: now.Add(-2 * time.Hour),
+		Problem:   "p2",
+		Action:    "a2",
+		Outcome:   OutcomePartial,
+		Automatic: false,
 	})
 	r.Log(RemediationRecord{
-		Timestamp:  now.Add(-30 * time.Minute),
-		Problem:    "p3",
-		Action:     "a3",
-		Outcome:    OutcomeFailed,
-		Automatic:  true,
+		Timestamp: now.Add(-30 * time.Minute),
+		Problem:   "p3",
+		Action:    "a3",
+		Outcome:   OutcomeFailed,
+		Automatic: true,
 	})
 	r.Log(RemediationRecord{
-		Timestamp:  now.Add(-48 * time.Hour),
-		Problem:    "old",
-		Action:     "old",
-		Outcome:    OutcomeResolved,
-		Automatic:  false,
+		Timestamp: now.Add(-48 * time.Hour),
+		Problem:   "old",
+		Action:    "old",
+		Outcome:   OutcomeResolved,
+		Automatic: false,
 	})
 
 	// Get stats for last 24 hours
@@ -333,4 +333,3 @@ func TestChangeDetector_Limit(t *testing.T) {
 		t.Errorf("Expected max 5 changes due to limit, got %d", len(allChanges))
 	}
 }
-

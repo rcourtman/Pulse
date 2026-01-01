@@ -22,12 +22,12 @@ func (a *BaselineStoreAdapter) CheckAnomaly(resourceID, metric string, value flo
 	if a.store == nil {
 		return "", 0, 0, 0, false
 	}
-	
+
 	s, z, b := a.store.CheckAnomaly(resourceID, metric, value)
 	if b == nil {
 		return "", 0, 0, 0, false
 	}
-	
+
 	return string(s), z, b.Mean, b.StdDev, true
 }
 
@@ -36,11 +36,11 @@ func (a *BaselineStoreAdapter) GetBaseline(resourceID, metric string) (mean floa
 	if a.store == nil {
 		return 0, 0, 0, false
 	}
-	
+
 	b, exists := a.store.GetBaseline(resourceID, metric)
 	if !exists || b == nil {
 		return 0, 0, 0, false
 	}
-	
+
 	return b.Mean, b.StdDev, b.SampleCount, true
 }

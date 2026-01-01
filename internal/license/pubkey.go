@@ -61,7 +61,7 @@ func InitPublicKey() {
 func decodePublicKey(encoded string) (ed25519.PublicKey, error) {
 	// Remove any whitespace
 	encoded = strings.TrimSpace(encoded)
-	
+
 	// Try standard base64 first, then URL-safe
 	decoded, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {

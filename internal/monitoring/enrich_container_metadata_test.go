@@ -62,4 +62,3 @@ func TestEnrichContainerMetadata_DetectsOCIForStoppedContainer(t *testing.T) {
 		t.Fatalf("expected container.Type oci, got %q", container.Type)
 	}
 }
-

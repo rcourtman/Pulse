@@ -1081,4 +1081,3 @@ func TestAISettingsHandler_SetCorrelationDetector(t *testing.T) {
 	// Set nil correlation detector should not panic
 	handler.SetCorrelationDetector(nil)
 }
-

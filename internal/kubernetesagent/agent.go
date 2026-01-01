@@ -44,11 +44,11 @@ type Config struct {
 	KubeContext    string
 
 	// Report shaping
-	IncludeNamespaces      []string
-	ExcludeNamespaces      []string
-	IncludeAllPods         bool // Include all non-succeeded pods (still capped)
-	IncludeAllDeployments  bool // Include all deployments, not just problem ones
-	MaxPods                int  // Max pods included in the report
+	IncludeNamespaces     []string
+	ExcludeNamespaces     []string
+	IncludeAllPods        bool // Include all non-succeeded pods (still capped)
+	IncludeAllDeployments bool // Include all deployments, not just problem ones
+	MaxPods               int  // Max pods included in the report
 }
 
 type Agent struct {

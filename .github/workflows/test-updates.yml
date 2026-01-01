@@ -38,7 +38,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version-file: go.mod
           cache: true
 
       - name: Set up Node.js
@@ -82,8 +82,7 @@ jobs:
           MOCK_RATE_LIMIT: "false"
           MOCK_STALE_RELEASE: "false"
         run: |
-          docker compose -f docker-compose.test.yml up -d
-          sleep 15  # Wait for services to be ready
+          docker compose -f docker-compose.test.yml up -d --wait
           npx playwright test tests/00-diagnostic.spec.ts --reporter=list,html
           UPDATE_API_BASE_URL=http://localhost:7655 go test ../../tests/integration/api -run TestUpdateFlowIntegration -count=1
           docker compose -f docker-compose.test.yml down -v

@@ -81,7 +81,7 @@ func TestDetector_CorrelationDetection(t *testing.T) {
 
 	// Check correlations
 	correlations := d.GetCorrelations()
-	
+
 	found := false
 	for _, c := range correlations {
 		if c.SourceID == "storage-1" && c.TargetID == "vm-100" {
@@ -92,7 +92,7 @@ func TestDetector_CorrelationDetection(t *testing.T) {
 			break
 		}
 	}
-	
+
 	if !found {
 		t.Error("Expected correlation between storage-1 and vm-100")
 	}
@@ -230,7 +230,7 @@ func TestDetector_FormatForContext(t *testing.T) {
 	if context == "" {
 		t.Error("Expected non-empty context")
 	}
-	
+
 	if !contains(context, "Correlation") {
 		t.Errorf("Expected context to mention correlations: %s", context)
 	}
@@ -333,4 +333,3 @@ func TestIntToStr(t *testing.T) {
 		}
 	}
 }
-

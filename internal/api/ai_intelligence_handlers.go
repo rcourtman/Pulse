@@ -658,11 +658,11 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 
 	// Get all baselines and check current metrics
 	allBaselines := baselineStore.GetAllBaselines()
-	
+
 	// Group by resource ID
 	resourceMetrics := make(map[string]map[string]float64)
 	resourceInfo := make(map[string]struct{ name, rtype string })
-	
+
 	for _, baseline := range allBaselines {
 		if resourceID != "" && baseline.ResourceID != resourceID {
 			continue
@@ -674,18 +674,18 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 
 	// Get current state to extract live metrics
 	state := stateProvider.GetState()
-	
+
 	// Check VMs
 	for _, vm := range state.VMs {
 		if vm.Template {
 			continue // Skip templates
 		}
-		
+
 		// Skip VMs that aren't running - stopped VMs with 0% usage is expected, not an anomaly
 		if vm.Status != "running" {
 			continue
 		}
-		
+
 		// Skip if we don't have baselines for this resource
 		if _, ok := resourceMetrics[vm.ID]; !ok {
 			if resourceID == "" {
@@ -696,15 +696,14 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 			}
 		}
 
-		
 		metrics := map[string]float64{
-			"cpu":    vm.CPU * 100,      // CPU is already 0-1, convert to percentage
+			"cpu":    vm.CPU * 100,    // CPU is already 0-1, convert to percentage
 			"memory": vm.Memory.Usage, // Memory.Usage is already in percentage
 		}
 		if vm.Disk.Usage > 0 {
 			metrics["disk"] = vm.Disk.Usage
 		}
-		
+
 		anomalies := baselineStore.CheckResourceAnomalies(vm.ID, metrics)
 		for _, anomaly := range anomalies {
 			result = append(result, map[string]interface{}{
@@ -720,22 +719,22 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 				"description":      anomaly.Description,
 			})
 		}
-		
+
 		// Store info for any additional processing
 		resourceInfo[vm.ID] = struct{ name, rtype string }{vm.Name, "vm"}
 	}
-	
+
 	// Check Containers
 	for _, ct := range state.Containers {
 		if ct.Template {
 			continue // Skip templates
 		}
-		
+
 		// Skip containers that aren't running - stopped containers with 0% usage is expected, not an anomaly
 		if ct.Status != "running" {
 			continue
 		}
-		
+
 		// Skip if we don't have baselines for this resource
 		if _, ok := resourceMetrics[ct.ID]; !ok {
 			if resourceID == "" {
@@ -746,15 +745,14 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 			}
 		}
 
-		
 		metrics := map[string]float64{
-			"cpu":    ct.CPU * 100,      // CPU is already 0-1, convert to percentage
+			"cpu":    ct.CPU * 100,    // CPU is already 0-1, convert to percentage
 			"memory": ct.Memory.Usage, // Memory.Usage is already in percentage
 		}
 		if ct.Disk.Usage > 0 {
 			metrics["disk"] = ct.Disk.Usage
 		}
-		
+
 		anomalies := baselineStore.CheckResourceAnomalies(ct.ID, metrics)
 		for _, anomaly := range anomalies {
 			result = append(result, map[string]interface{}{
@@ -770,15 +768,15 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 				"description":      anomaly.Description,
 			})
 		}
-		
+
 		// Store info for any additional processing
 		resourceInfo[ct.ID] = struct{ name, rtype string }{ct.Name, "container"}
 	}
-	
+
 	// Check nodes
 	for _, node := range state.Nodes {
 		nodeID := node.ID
-		
+
 		// Skip if we don't have baselines for this resource
 		if _, ok := resourceMetrics[nodeID]; !ok {
 			if resourceID == "" {
@@ -788,12 +786,12 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 				continue
 			}
 		}
-		
+
 		metrics := map[string]float64{
-			"cpu":    node.CPU * 100,      // CPU is already 0-1, convert to percentage
+			"cpu":    node.CPU * 100,    // CPU is already 0-1, convert to percentage
 			"memory": node.Memory.Usage, // Memory.Usage is already in percentage
 		}
-		
+
 		anomalies := baselineStore.CheckResourceAnomalies(nodeID, metrics)
 		for _, anomaly := range anomalies {
 			result = append(result, map[string]interface{}{
@@ -812,7 +810,7 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 	}
 
 	count := len(result)
-	
+
 	// Count by severity for summary
 	severityCounts := map[string]int{
 		"critical": 0,
@@ -890,12 +888,12 @@ func (h *AISettingsHandler) HandleGetLearningStatus(w http.ResponseWriter, r *ht
 	// Get all baselines and count metrics
 	baselines := baselineStore.GetAllBaselines()
 	resourceCount := baselineStore.ResourceCount()
-	
+
 	// Count unique resources and total metrics
 	resourceIDs := make(map[string]bool)
 	totalMetrics := 0
 	metricCounts := make(map[string]int) // cpu, memory, disk counts
-	
+
 	for _, baseline := range baselines {
 		resourceIDs[baseline.ResourceID] = true
 		totalMetrics++

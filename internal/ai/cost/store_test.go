@@ -327,4 +327,3 @@ func TestSetPersistence_TrimsOldEventsOnLoad(t *testing.T) {
 		t.Fatalf("expected old events to be trimmed, got %d provider models", len(summary.ProviderModels))
 	}
 }
-

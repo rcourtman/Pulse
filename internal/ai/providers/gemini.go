@@ -57,10 +57,10 @@ func (c *GeminiClient) Name() string {
 
 // geminiRequest is the request body for the Gemini API
 type geminiRequest struct {
-	Contents         []geminiContent       `json:"contents"`
-	SystemInstruction *geminiContent       `json:"systemInstruction,omitempty"`
-	GenerationConfig *geminiGenerationConfig `json:"generationConfig,omitempty"`
-	Tools            []geminiToolDef       `json:"tools,omitempty"`
+	Contents          []geminiContent         `json:"contents"`
+	SystemInstruction *geminiContent          `json:"systemInstruction,omitempty"`
+	GenerationConfig  *geminiGenerationConfig `json:"generationConfig,omitempty"`
+	Tools             []geminiToolDef         `json:"tools,omitempty"`
 }
 
 type geminiContent struct {
@@ -69,8 +69,8 @@ type geminiContent struct {
 }
 
 type geminiPart struct {
-	Text          string               `json:"text,omitempty"`
-	FunctionCall  *geminiFunctionCall  `json:"functionCall,omitempty"`
+	Text             string                  `json:"text,omitempty"`
+	FunctionCall     *geminiFunctionCall     `json:"functionCall,omitempty"`
 	FunctionResponse *geminiFunctionResponse `json:"functionResponse,omitempty"`
 }
 
@@ -103,15 +103,15 @@ type geminiFunctionDeclaration struct {
 
 // geminiResponse is the response from the Gemini API
 type geminiResponse struct {
-	Candidates     []geminiCandidate    `json:"candidates"`
-	UsageMetadata  *geminiUsageMetadata `json:"usageMetadata"`
+	Candidates     []geminiCandidate     `json:"candidates"`
+	UsageMetadata  *geminiUsageMetadata  `json:"usageMetadata"`
 	PromptFeedback *geminiPromptFeedback `json:"promptFeedback,omitempty"`
 }
 
 type geminiCandidate struct {
-	Content       geminiContent   `json:"content"`
-	FinishReason  string          `json:"finishReason"`
-	SafetyRatings []geminySafety  `json:"safetyRatings,omitempty"`
+	Content       geminiContent  `json:"content"`
+	FinishReason  string         `json:"finishReason"`
+	SafetyRatings []geminySafety `json:"safetyRatings,omitempty"`
 }
 
 type geminySafety struct {
@@ -464,9 +464,9 @@ func (c *GeminiClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 
 	var result struct {
 		Models []struct {
-			Name        string   `json:"name"`
-			DisplayName string   `json:"displayName"`
-			Description string   `json:"description"`
+			Name                       string   `json:"name"`
+			DisplayName                string   `json:"displayName"`
+			Description                string   `json:"description"`
 			SupportedGenerationMethods []string `json:"supportedGenerationMethods"`
 		} `json:"models"`
 	}

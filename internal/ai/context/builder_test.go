@@ -406,8 +406,8 @@ func TestFilterRecentPoints_AllRecent(t *testing.T) {
 func TestFilterRecentPoints_FilterOld(t *testing.T) {
 	now := time.Now()
 	points := []MetricPoint{
-		{Timestamp: now.Add(-3 * time.Hour), Value: 1.0}, // Old
-		{Timestamp: now.Add(-2 * time.Hour), Value: 2.0}, // Old
+		{Timestamp: now.Add(-3 * time.Hour), Value: 1.0},    // Old
+		{Timestamp: now.Add(-2 * time.Hour), Value: 2.0},    // Old
 		{Timestamp: now.Add(-30 * time.Minute), Value: 3.0}, // Recent
 	}
 
@@ -423,33 +423,33 @@ func TestFilterRecentPoints_FilterOld(t *testing.T) {
 
 func TestFormatAnomalyDescription(t *testing.T) {
 	tests := []struct {
-		name      string
-		metric    string
-		current   float64
-		mean      float64
-		stddev    float64
-		severity  string
-		direction string
+		name         string
+		metric       string
+		current      float64
+		mean         float64
+		stddev       float64
+		severity     string
+		direction    string
 		wantContains []string
 	}{
 		{
-			name:      "cpu high",
-			metric:    "cpu",
-			current:   95.0,
-			mean:      50.0,
-			stddev:    10.0,
-			severity:  "significantly",
-			direction: "above",
+			name:         "cpu high",
+			metric:       "cpu",
+			current:      95.0,
+			mean:         50.0,
+			stddev:       10.0,
+			severity:     "significantly",
+			direction:    "above",
 			wantContains: []string{"Cpu", "significantly", "above", "95%", "50%"},
 		},
 		{
-			name:      "memory low",
-			metric:    "memory",
-			current:   20.0,
-			mean:      60.0,
-			stddev:    15.0,
-			severity:  "slightly",
-			direction: "below",
+			name:         "memory low",
+			metric:       "memory",
+			current:      20.0,
+			mean:         60.0,
+			stddev:       15.0,
+			severity:     "slightly",
+			direction:    "below",
 			wantContains: []string{"Memory", "slightly", "below", "20%", "60%"},
 		},
 	}
@@ -481,4 +481,3 @@ func TestFormatPredictionBasis(t *testing.T) {
 		t.Errorf("Expected 'based on' in result, got %q", result)
 	}
 }
-

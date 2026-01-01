@@ -22,17 +22,17 @@ After comprehensive analysis of your infrastructure, I identified several issues
 1. **Critical CPU overload on Tower host**`
 
 	result := cleanThinkingTokens(input)
-	
+
 	// Should NOT contain thinking markers
 	if contains(result, "<｜end▁of▁thinking｜>") {
 		t.Errorf("cleanThinkingTokens() should have removed DeepSeek thinking markers")
 	}
-	
+
 	// Should NOT contain internal reasoning
 	if contains(result, "Now, also consider") || contains(result, "Let's add an info") {
 		t.Errorf("cleanThinkingTokens() should have removed internal reasoning")
 	}
-	
+
 	// Should still contain the actual content
 	if !contains(result, "## Analysis Summary") {
 		t.Errorf("cleanThinkingTokens() removed header")
@@ -53,7 +53,7 @@ Now, let's check something.
 ## Real Content`
 
 	result := cleanThinkingTokens(input)
-	
+
 	if result != "## Real Content" {
 		t.Errorf("cleanThinkingTokens() failed for ASCII variant: got %q", result)
 	}
@@ -71,12 +71,12 @@ Now, I need to look at memory.
 - Issue 1`
 
 	result := cleanThinkingTokens(input)
-	
+
 	// Should remove the reasoning lines but keep the findings
 	if !contains(result, "## Analysis") || !contains(result, "### Findings") || !contains(result, "- Issue 1") {
 		t.Errorf("cleanThinkingTokens() removed too much: got %q", result)
 	}
-	
+
 	if contains(result, "Let's check") || contains(result, "Now, I need") {
 		t.Errorf("cleanThinkingTokens() should have removed reasoning: got %q", result)
 	}
@@ -100,7 +100,7 @@ This is a normal response without any thinking tokens.
 2. Issue two`
 
 	result := cleanThinkingTokens(input)
-	
+
 	// Should be mostly unchanged (just trimmed)
 	if result != input {
 		t.Errorf("cleanThinkingTokens() modified clean content:\nGot: %q\nExpected: %q", result, input)
