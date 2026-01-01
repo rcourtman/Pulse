@@ -57,6 +57,7 @@ data/
 .env
 .env.local
 .env.*.local
+.env.devcontainer
 
 # Build outputs
 dist/
