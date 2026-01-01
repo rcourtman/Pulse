@@ -184,6 +184,7 @@ func main() {
 			InsecureSkipVerify:  cfg.InsecureSkipVerify,
 			DisableAutoUpdate:   cfg.DisableAutoUpdate,
 			DisableUpdateChecks: cfg.DisableDockerUpdateChecks,
+			Runtime:             cfg.DockerRuntime,
 			LogLevel:            cfg.LogLevel,
 			Logger:              &logger,
 			SwarmScope:          "node",
@@ -356,7 +357,8 @@ type Config struct {
 
 	// Auto-update
 	DisableAutoUpdate         bool
-	DisableDockerUpdateChecks bool // Disable Docker image update detection
+	DisableDockerUpdateChecks bool   // Disable Docker image update detection
+	DockerRuntime             string // Force container runtime: docker, podman, or auto
 
 	// Security
 	EnableCommands bool // Enable command execution for AI auto-fix (disabled by default)
@@ -398,6 +400,7 @@ func loadConfig() Config {
 	envProxmoxType := utils.GetenvTrim("PULSE_PROXMOX_TYPE")
 	envDisableAutoUpdate := utils.GetenvTrim("PULSE_DISABLE_AUTO_UPDATE")
 	envDisableDockerUpdateChecks := utils.GetenvTrim("PULSE_DISABLE_DOCKER_UPDATE_CHECKS")
+	envDockerRuntime := utils.GetenvTrim("PULSE_DOCKER_RUNTIME")
 	envEnableCommands := utils.GetenvTrim("PULSE_ENABLE_COMMANDS")
 	envDisableCommands := utils.GetenvTrim("PULSE_DISABLE_COMMANDS") // deprecated
 	envHealthAddr := utils.GetenvTrim("PULSE_HEALTH_ADDR")
@@ -461,6 +464,7 @@ func loadConfig() Config {
 	proxmoxTypeFlag := flag.String("proxmox-type", envProxmoxType, "Proxmox type: pve or pbs (auto-detected if not specified)")
 	disableAutoUpdateFlag := flag.Bool("disable-auto-update", utils.ParseBool(envDisableAutoUpdate), "Disable automatic updates")
 	disableDockerUpdateChecksFlag := flag.Bool("disable-docker-update-checks", utils.ParseBool(envDisableDockerUpdateChecks), "Disable Docker image update detection (avoids Docker Hub rate limits)")
+	dockerRuntimeFlag := flag.String("docker-runtime", envDockerRuntime, "Container runtime: auto, docker, or podman (default: auto)")
 	enableCommandsFlag := flag.Bool("enable-commands", utils.ParseBool(envEnableCommands), "Enable command execution for AI auto-fix (disabled by default)")
 	disableCommandsFlag := flag.Bool("disable-commands", false, "[DEPRECATED] Commands are now disabled by default; use --enable-commands to enable")
 	healthAddrFlag := flag.String("health-addr", defaultHealthAddr, "Health/metrics server address (empty to disable)")
@@ -539,6 +543,7 @@ func loadConfig() Config {
 		ProxmoxType:               strings.TrimSpace(*proxmoxTypeFlag),
 		DisableAutoUpdate:         *disableAutoUpdateFlag,
 		DisableDockerUpdateChecks: *disableDockerUpdateChecksFlag,
+		DockerRuntime:             strings.TrimSpace(*dockerRuntimeFlag),
 		EnableCommands:            resolveEnableCommands(*enableCommandsFlag, *disableCommandsFlag, envEnableCommands, envDisableCommands),
 		HealthAddr:                strings.TrimSpace(*healthAddrFlag),
 		KubeconfigPath:            strings.TrimSpace(*kubeconfigFlag),
