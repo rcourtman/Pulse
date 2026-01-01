@@ -174,22 +174,23 @@ func main() {
 	var dockerAgent *dockeragent.Agent
 	if cfg.EnableDocker {
 		dockerCfg := dockeragent.Config{
-			PulseURL:           cfg.PulseURL,
-			APIToken:           cfg.APIToken,
-			Interval:           cfg.Interval,
-			HostnameOverride:   cfg.HostnameOverride,
-			AgentID:            cfg.AgentID,
-			AgentType:          "unified",
-			AgentVersion:       Version,
-			InsecureSkipVerify: cfg.InsecureSkipVerify,
-			DisableAutoUpdate:  cfg.DisableAutoUpdate,
-			LogLevel:           cfg.LogLevel,
-			Logger:             &logger,
-			SwarmScope:         "node",
-			IncludeContainers:  true,
-			IncludeServices:    true,
-			IncludeTasks:       true,
-			CollectDiskMetrics: false,
+			PulseURL:            cfg.PulseURL,
+			APIToken:            cfg.APIToken,
+			Interval:            cfg.Interval,
+			HostnameOverride:    cfg.HostnameOverride,
+			AgentID:             cfg.AgentID,
+			AgentType:           "unified",
+			AgentVersion:        Version,
+			InsecureSkipVerify:  cfg.InsecureSkipVerify,
+			DisableAutoUpdate:   cfg.DisableAutoUpdate,
+			DisableUpdateChecks: cfg.DisableDockerUpdateChecks,
+			LogLevel:            cfg.LogLevel,
+			Logger:              &logger,
+			SwarmScope:          "node",
+			IncludeContainers:   true,
+			IncludeServices:     true,
+			IncludeTasks:        true,
+			CollectDiskMetrics:  false,
 		}
 
 		dockerAgent, err = dockeragent.New(dockerCfg)
@@ -218,17 +219,17 @@ func main() {
 	// 10. Start Kubernetes Agent (if enabled)
 	if cfg.EnableKubernetes {
 		kubeCfg := kubernetesagent.Config{
-			PulseURL:           cfg.PulseURL,
-			APIToken:           cfg.APIToken,
-			Interval:           cfg.Interval,
-			AgentID:            cfg.AgentID,
-			AgentType:          "unified",
-			AgentVersion:       Version,
-			InsecureSkipVerify: cfg.InsecureSkipVerify,
-			LogLevel:           cfg.LogLevel,
-			Logger:             &logger,
-			KubeconfigPath:     cfg.KubeconfigPath,
-			KubeContext:        cfg.KubeContext,
+			PulseURL:              cfg.PulseURL,
+			APIToken:              cfg.APIToken,
+			Interval:              cfg.Interval,
+			AgentID:               cfg.AgentID,
+			AgentType:             "unified",
+			AgentVersion:          Version,
+			InsecureSkipVerify:    cfg.InsecureSkipVerify,
+			LogLevel:              cfg.LogLevel,
+			Logger:                &logger,
+			KubeconfigPath:        cfg.KubeconfigPath,
+			KubeContext:           cfg.KubeContext,
 			IncludeNamespaces:     cfg.KubeIncludeNamespaces,
 			ExcludeNamespaces:     cfg.KubeExcludeNamespaces,
 			IncludeAllPods:        cfg.KubeIncludeAllPods,
@@ -354,10 +355,11 @@ type Config struct {
 	ProxmoxType      string // "pve", "pbs", or "" for auto-detect
 
 	// Auto-update
-	DisableAutoUpdate bool
+	DisableAutoUpdate         bool
+	DisableDockerUpdateChecks bool // Disable Docker image update detection
 
 	// Security
-	EnableCommands  bool // Enable command execution for AI auto-fix (disabled by default)
+	EnableCommands bool // Enable command execution for AI auto-fix (disabled by default)
 
 	// Disk filtering
 	DiskExclude []string // Mount points or patterns to exclude from disk monitoring
@@ -370,8 +372,8 @@ type Config struct {
 	HealthAddr string
 
 	// Kubernetes
-	KubeconfigPath        string
-	KubeContext           string
+	KubeconfigPath            string
+	KubeContext               string
 	KubeIncludeNamespaces     []string
 	KubeExcludeNamespaces     []string
 	KubeIncludeAllPods        bool
@@ -395,6 +397,7 @@ func loadConfig() Config {
 	envEnableProxmox := utils.GetenvTrim("PULSE_ENABLE_PROXMOX")
 	envProxmoxType := utils.GetenvTrim("PULSE_PROXMOX_TYPE")
 	envDisableAutoUpdate := utils.GetenvTrim("PULSE_DISABLE_AUTO_UPDATE")
+	envDisableDockerUpdateChecks := utils.GetenvTrim("PULSE_DISABLE_DOCKER_UPDATE_CHECKS")
 	envEnableCommands := utils.GetenvTrim("PULSE_ENABLE_COMMANDS")
 	envDisableCommands := utils.GetenvTrim("PULSE_DISABLE_COMMANDS") // deprecated
 	envHealthAddr := utils.GetenvTrim("PULSE_HEALTH_ADDR")
@@ -457,6 +460,7 @@ func loadConfig() Config {
 	enableProxmoxFlag := flag.Bool("enable-proxmox", defaultEnableProxmox, "Enable Proxmox mode (creates API token, registers node)")
 	proxmoxTypeFlag := flag.String("proxmox-type", envProxmoxType, "Proxmox type: pve or pbs (auto-detected if not specified)")
 	disableAutoUpdateFlag := flag.Bool("disable-auto-update", utils.ParseBool(envDisableAutoUpdate), "Disable automatic updates")
+	disableDockerUpdateChecksFlag := flag.Bool("disable-docker-update-checks", utils.ParseBool(envDisableDockerUpdateChecks), "Disable Docker image update detection (avoids Docker Hub rate limits)")
 	enableCommandsFlag := flag.Bool("enable-commands", utils.ParseBool(envEnableCommands), "Enable command execution for AI auto-fix (disabled by default)")
 	disableCommandsFlag := flag.Bool("disable-commands", false, "[DEPRECATED] Commands are now disabled by default; use --enable-commands to enable")
 	healthAddrFlag := flag.String("health-addr", defaultHealthAddr, "Health/metrics server address (empty to disable)")
@@ -519,25 +523,26 @@ func loadConfig() Config {
 	}
 
 	return Config{
-		PulseURL:              pulseURL,
-		APIToken:              token,
-		Interval:              *intervalFlag,
-		HostnameOverride:      strings.TrimSpace(*hostnameFlag),
-		AgentID:               strings.TrimSpace(*agentIDFlag),
-		Tags:                  tags,
-		InsecureSkipVerify:    *insecureFlag,
-		LogLevel:              logLevel,
-		EnableHost:            *enableHostFlag,
-		EnableDocker:          *enableDockerFlag,
-		DockerConfigured:      dockerConfigured,
-		EnableKubernetes:      *enableKubernetesFlag,
-		EnableProxmox:         *enableProxmoxFlag,
-		ProxmoxType:           strings.TrimSpace(*proxmoxTypeFlag),
-		DisableAutoUpdate:     *disableAutoUpdateFlag,
-		EnableCommands:        resolveEnableCommands(*enableCommandsFlag, *disableCommandsFlag, envEnableCommands, envDisableCommands),
-		HealthAddr:            strings.TrimSpace(*healthAddrFlag),
-		KubeconfigPath:        strings.TrimSpace(*kubeconfigFlag),
-		KubeContext:           strings.TrimSpace(*kubeContextFlag),
+		PulseURL:                  pulseURL,
+		APIToken:                  token,
+		Interval:                  *intervalFlag,
+		HostnameOverride:          strings.TrimSpace(*hostnameFlag),
+		AgentID:                   strings.TrimSpace(*agentIDFlag),
+		Tags:                      tags,
+		InsecureSkipVerify:        *insecureFlag,
+		LogLevel:                  logLevel,
+		EnableHost:                *enableHostFlag,
+		EnableDocker:              *enableDockerFlag,
+		DockerConfigured:          dockerConfigured,
+		EnableKubernetes:          *enableKubernetesFlag,
+		EnableProxmox:             *enableProxmoxFlag,
+		ProxmoxType:               strings.TrimSpace(*proxmoxTypeFlag),
+		DisableAutoUpdate:         *disableAutoUpdateFlag,
+		DisableDockerUpdateChecks: *disableDockerUpdateChecksFlag,
+		EnableCommands:            resolveEnableCommands(*enableCommandsFlag, *disableCommandsFlag, envEnableCommands, envDisableCommands),
+		HealthAddr:                strings.TrimSpace(*healthAddrFlag),
+		KubeconfigPath:            strings.TrimSpace(*kubeconfigFlag),
+		KubeContext:               strings.TrimSpace(*kubeContextFlag),
 		KubeIncludeNamespaces:     kubeIncludeNamespaces,
 		KubeExcludeNamespaces:     kubeExcludeNamespaces,
 		KubeIncludeAllPods:        *kubeIncludeAllPodsFlag,

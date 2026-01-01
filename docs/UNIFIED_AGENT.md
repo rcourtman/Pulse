@@ -59,10 +59,12 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 | `--kube-include-all-deployments` | `PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS` | Include all deployments, not just problems | `false` |
 | `--kube-max-pods` | `PULSE_KUBE_MAX_PODS` | Max pods per report | `200` |
 | `--disable-auto-update` | `PULSE_DISABLE_AUTO_UPDATE` | Disable auto-updates | `false` |
+| `--disable-docker-update-checks` | `PULSE_DISABLE_DOCKER_UPDATE_CHECKS` | Disable Docker image update detection | `false` |
 | `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
 | `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
 | `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(machine-id)* |
 | `--health-addr` | `PULSE_HEALTH_ADDR` | Health/metrics server address | `:9191` |
+
 
 ## Auto-Detection
 

@@ -61,6 +61,11 @@ type ImageUpdateResult struct {
 
 // NewRegistryChecker creates a new registry checker for the Docker agent.
 func NewRegistryChecker(logger zerolog.Logger) *RegistryChecker {
+	return newRegistryCheckerWithConfig(logger, true)
+}
+
+// newRegistryCheckerWithConfig creates a registry checker with the enabled state set.
+func newRegistryCheckerWithConfig(logger zerolog.Logger, enabled bool) *RegistryChecker {
 	return &RegistryChecker{
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -78,7 +83,7 @@ func NewRegistryChecker(logger zerolog.Logger) *RegistryChecker {
 			entries: make(map[string]cacheEntry),
 		},
 		logger:        logger,
-		enabled:       true,
+		enabled:       enabled,
 		checkInterval: defaultCheckInterval,
 	}
 }
@@ -126,7 +131,6 @@ func (r *RegistryChecker) ForceCheck() {
 	defer r.cache.mu.Unlock()
 	r.cache.entries = make(map[string]cacheEntry)
 }
-
 
 // CheckImageUpdate checks if a newer version of the image is available.
 func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDigest, arch, os, variant string) *ImageUpdateResult {
@@ -365,7 +369,7 @@ func (r *RegistryChecker) resolveManifestList(ctx context.Context, registry, rep
 	// We matched arch and os. Variant is tricky as it's not always passed or available clearly.
 	// We'll prioritize exact match including variant (if we had it), but for now standard match.
 	// Since we strictly want to match what the local image is, and we'll get that from ImageInspect.
-	
+
 	// Simple matching logic for now: exact match on Arch and OS
 	for _, m := range list.Manifests {
 		if m.Platform.Architecture == arch && m.Platform.OS == os {
