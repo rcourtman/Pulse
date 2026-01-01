@@ -28,9 +28,9 @@ type CommandClient struct {
 	insecureSkipVerify bool
 	logger             zerolog.Logger
 
-	conn     *websocket.Conn
-	connMu   sync.Mutex
-	done     chan struct{}
+	conn   *websocket.Conn
+	connMu sync.Mutex
+	done   chan struct{}
 }
 
 // NewCommandClient creates a new command execution client

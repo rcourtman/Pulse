@@ -129,24 +129,24 @@ func (b *Builder) BuildForInfrastructure(state models.StateSnapshot) *Infrastruc
 			continue
 		}
 		trends := b.computeGuestTrends(ct.ID)
-		
+
 		// Determine container type - OCI containers are treated specially
 		containerType := "container"
 		if ct.IsOCI {
 			containerType = "oci_container"
 		}
-		
+
 		resourceCtx := FormatGuestForContext(
 			ct.ID, ct.Name, ct.Node, containerType, ct.Status,
 			ct.VMID,
 			ct.CPU, ct.Memory.Usage, ct.Disk.Usage,
 			ct.Uptime, ct.LastBackup, trends,
 		)
-		
+
 		// Add raw metric samples for LLM interpretation
 		// This lets the LLM see actual patterns without pre-computed heuristics
 		resourceCtx.MetricSamples = b.computeGuestMetricSamples(ct.ID)
-		
+
 		// Add OCI image info for AI context
 		if ct.IsOCI && ct.OSTemplate != "" {
 			if resourceCtx.Metadata == nil {
@@ -154,7 +154,7 @@ func (b *Builder) BuildForInfrastructure(state models.StateSnapshot) *Infrastruc
 			}
 			resourceCtx.Metadata["oci_image"] = ct.OSTemplate
 		}
-		
+
 		b.enrichWithNotes(&resourceCtx)
 		b.enrichWithAnomalies(&resourceCtx)
 		ctx.Containers = append(ctx.Containers, resourceCtx)
@@ -164,13 +164,13 @@ func (b *Builder) BuildForInfrastructure(state models.StateSnapshot) *Infrastruc
 	for _, storage := range state.Storage {
 		trends := b.computeStorageTrends(storage.ID)
 		resourceCtx := FormatStorageForContext(storage, trends)
-		
+
 		// Add capacity predictions for storage
 		if predictions := b.computeStoragePredictions(storage, trends); len(predictions) > 0 {
 			resourceCtx.Predictions = predictions
 			ctx.Predictions = append(ctx.Predictions, predictions...)
 		}
-		
+
 		ctx.Storage = append(ctx.Storage, resourceCtx)
 	}
 
@@ -204,7 +204,7 @@ func (b *Builder) BuildForInfrastructure(state models.StateSnapshot) *Infrastruc
 // computeNodeTrends computes trends for a node's metrics
 func (b *Builder) computeNodeTrends(nodeID string) map[string]Trend {
 	trends := make(map[string]Trend)
-	
+
 	if b.metricsHistory == nil || !b.includeTrends {
 		return trends
 	}
@@ -233,26 +233,26 @@ func (b *Builder) computeNodeTrends(nodeID string) map[string]Trend {
 // computeGuestTrends computes trends for a guest's metrics
 func (b *Builder) computeGuestTrends(guestID string) map[string]Trend {
 	trends := make(map[string]Trend)
-	
+
 	if b.metricsHistory == nil || !b.includeTrends {
 		return trends
 	}
 
 	// Get all metrics at once for efficiency
 	allMetrics := b.metricsHistory.GetAllGuestMetrics(guestID, b.trendWindow7d)
-	
+
 	for metric, points := range allMetrics {
 		if len(points) < 3 {
 			continue
 		}
-		
+
 		// Compute 24h trend
 		recent := filterRecentPoints(points, b.trendWindow24h)
 		if len(recent) >= 3 {
 			trend := ComputeTrend(recent, metric, b.trendWindow24h)
 			trends[metric+"_24h"] = trend
 		}
-		
+
 		// Compute 7d trend if enough data
 		if len(points) >= 10 {
 			trend := ComputeTrend(points, metric, b.trendWindow7d)
@@ -266,13 +266,13 @@ func (b *Builder) computeGuestTrends(guestID string) map[string]Trend {
 // computeStorageTrends computes trends for storage
 func (b *Builder) computeStorageTrends(storageID string) map[string]Trend {
 	trends := make(map[string]Trend)
-	
+
 	if b.metricsHistory == nil || !b.includeTrends {
 		return trends
 	}
 
 	allMetrics := b.metricsHistory.GetAllStorageMetrics(storageID, b.trendWindow7d)
-	
+
 	// Focus on usage metric for storage
 	if points, ok := allMetrics["usage"]; ok && len(points) >= 3 {
 		recent := filterRecentPoints(points, b.trendWindow24h)
@@ -325,15 +325,15 @@ func (b *Builder) computeStoragePredictions(storage models.Storage, trends map[s
 
 		if daysUntil > 0 && daysUntil <= 30 { // Only predict within 30 days
 			predictions = append(predictions, Prediction{
-				ResourceID:  storage.ID,
-				Metric:      "usage",
-				Event:       threshold.event,
-				ETA:         time.Now().Add(time.Duration(daysUntil*24) * time.Hour),
-				DaysUntil:   daysUntil,
-				Confidence:  trend.Confidence,
-				Basis:       formatPredictionBasis(trend),
-				GrowthRate:  trend.RatePerDay,
-				CurrentPct:  currentPct,
+				ResourceID: storage.ID,
+				Metric:     "usage",
+				Event:      threshold.event,
+				ETA:        time.Now().Add(time.Duration(daysUntil*24) * time.Hour),
+				DaysUntil:  daysUntil,
+				Confidence: trend.Confidence,
+				Basis:      formatPredictionBasis(trend),
+				GrowthRate: trend.RatePerDay,
+				CurrentPct: currentPct,
 			})
 		}
 	}
@@ -343,7 +343,7 @@ func (b *Builder) computeStoragePredictions(storage models.Storage, trends map[s
 
 // formatPredictionBasis creates explanation for a prediction
 func formatPredictionBasis(trend Trend) string {
-	return "Growing " + formatRate(trend.RatePerDay) + " based on " + 
+	return "Growing " + formatRate(trend.RatePerDay) + " based on " +
 		formatDuration(trend.Period) + " of data"
 }
 
@@ -440,12 +440,12 @@ func (b *Builder) enrichWithAnomalies(ctx *ResourceContext) {
 		}
 
 		anomaly := Anomaly{
-			Metric:    metric,
-			Current:   value,
-			Expected:  mean,
-			Deviation: zScore,
-			Severity:  severity,
-			Since:     time.Now(), // We don't track onset time yet
+			Metric:      metric,
+			Current:     value,
+			Expected:    mean,
+			Deviation:   zScore,
+			Severity:    severity,
+			Since:       time.Now(), // We don't track onset time yet
 			Description: formatAnomalyDescription(metric, value, mean, stddev, severity, direction),
 		}
 		ctx.Anomalies = append(ctx.Anomalies, anomaly)
@@ -523,11 +523,11 @@ func filterRecentPoints(points []MetricPoint, duration time.Duration) []MetricPo
 func (b *Builder) MergeContexts(target *ResourceContext, infrastructure *InfrastructureContext) string {
 	// For targeted requests, highlight the target first, then add relevant related context
 	var result strings.Builder
-	
+
 	result.WriteString("# Target Resource\n")
 	result.WriteString(FormatResourceContext(*target))
 	result.WriteString("\n")
-	
+
 	// Add related resources (same node, dependencies, etc.)
 	// This could be expanded with dependency mapping in the future
 	if target.Node != "" {
@@ -544,6 +544,6 @@ func (b *Builder) MergeContexts(target *ResourceContext, infrastructure *Infrast
 			}
 		}
 	}
-	
+
 	return result.String()
 }

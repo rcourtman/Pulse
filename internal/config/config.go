@@ -71,14 +71,14 @@ func IsPasswordHashed(password string) bool {
 // NOTE: The envconfig tags are legacy and not used - configuration is loaded from encrypted JSON files
 type Config struct {
 	// Server settings
-	BackendHost  string `envconfig:"BACKEND_HOST" default:""`
-	BackendPort  int    `envconfig:"BACKEND_PORT" default:"3000"`
-	FrontendHost string `envconfig:"FRONTEND_HOST" default:""`
-	FrontendPort int    `envconfig:"FRONTEND_PORT" default:"7655"`
-	ConfigPath   string `envconfig:"CONFIG_PATH"`
-	DataPath     string `envconfig:"DATA_DIR"`
-	AppRoot      string `json:"-"`                                // Root directory of the application (where binary lives)
-	PublicURL    string `envconfig:"PULSE_PUBLIC_URL" default:""` // Full URL to access Pulse (e.g., http://192.168.1.100:7655)
+	BackendHost     string `envconfig:"BACKEND_HOST" default:""`
+	BackendPort     int    `envconfig:"BACKEND_PORT" default:"3000"`
+	FrontendHost    string `envconfig:"FRONTEND_HOST" default:""`
+	FrontendPort    int    `envconfig:"FRONTEND_PORT" default:"7655"`
+	ConfigPath      string `envconfig:"CONFIG_PATH"`
+	DataPath        string `envconfig:"DATA_DIR"`
+	AppRoot         string `json:"-"`                                       // Root directory of the application (where binary lives)
+	PublicURL       string `envconfig:"PULSE_PUBLIC_URL" default:""`        // Full URL to access Pulse (e.g., http://192.168.1.100:7655)
 	AgentConnectURL string `envconfig:"PULSE_AGENT_CONNECT_URL" default:""` // Dedicated direct connect URL for agents (e.g. http://192.168.1.5:7655)
 
 	// Proxmox VE connections
@@ -129,17 +129,17 @@ type Config struct {
 	LogCompress bool   `envconfig:"LOG_COMPRESS" default:"true"`
 
 	// Security settings
-	APIToken                 string           `envconfig:"API_TOKEN"`
-	APITokenEnabled          bool             `envconfig:"API_TOKEN_ENABLED" default:"false"`
-	APITokens                []APITokenRecord `json:"-"`
-	SuppressedEnvMigrations  []string         `json:"-"` // Hashes of env tokens deleted by user (prevent re-migration)
-	AuthUser               string           `envconfig:"PULSE_AUTH_USER"`
-	AuthPass               string           `envconfig:"PULSE_AUTH_PASS"`
-	DisableAuthEnvDetected bool             `json:"-"`
-	DemoMode               bool             `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
-	AllowedOrigins         string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
-	IframeEmbeddingAllow   string           `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
-	HideLocalLogin         bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
+	APIToken                string           `envconfig:"API_TOKEN"`
+	APITokenEnabled         bool             `envconfig:"API_TOKEN_ENABLED" default:"false"`
+	APITokens               []APITokenRecord `json:"-"`
+	SuppressedEnvMigrations []string         `json:"-"` // Hashes of env tokens deleted by user (prevent re-migration)
+	AuthUser                string           `envconfig:"PULSE_AUTH_USER"`
+	AuthPass                string           `envconfig:"PULSE_AUTH_PASS"`
+	DisableAuthEnvDetected  bool             `json:"-"`
+	DemoMode                bool             `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
+	AllowedOrigins          string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
+	IframeEmbeddingAllow    string           `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
+	HideLocalLogin          bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
 
 	// Proxy authentication settings
 	ProxyAuthSecret        string `envconfig:"PROXY_AUTH_SECRET"`

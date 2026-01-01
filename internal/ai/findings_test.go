@@ -239,7 +239,7 @@ func TestFindingsStore_SetUserNote(t *testing.T) {
 
 func TestFindingsStore_Suppression(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	// Add a finding
 	finding := &Finding{
 		ID:           "f1",
@@ -276,7 +276,7 @@ func TestFindingsStore_Suppression(t *testing.T) {
 		Category:     FindingCategoryPerformance,
 	}
 	isNew := store.Add(finding2)
-	
+
 	if isNew {
 		t.Error("Expected Add to return false for suppressed finding")
 	}
@@ -291,7 +291,7 @@ func TestFindingsStore_Suppression(t *testing.T) {
 	if len(rules) == 0 {
 		t.Fatal("Should have at least one suppression rule")
 	}
-	
+
 	if !store.DeleteSuppressionRule(rules[0].ID) {
 		t.Fatal("DeleteSuppressionRule should return true")
 	}
@@ -303,7 +303,7 @@ func TestFindingsStore_Suppression(t *testing.T) {
 
 func TestFindingsStore_AddSuppressionRule(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	rule := store.AddSuppressionRule("res-1", "Res 1", FindingCategoryCapacity, "Manual suppression")
 	if rule == nil {
 		t.Fatal("AddSuppressionRule returned nil")
@@ -329,12 +329,12 @@ func TestFindingsStore_AddSuppressionRule(t *testing.T) {
 
 func TestFindingsStore_Cleanup(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	now := time.Now()
-	
+
 	// Add an active finding (should NOT be cleaned up)
 	store.Add(&Finding{ID: "active", Title: "Active"})
-	
+
 	// Add an old resolved finding (should BE cleaned up)
 	resolvedOld := &Finding{
 		ID:         "resolved-old",
@@ -342,7 +342,7 @@ func TestFindingsStore_Cleanup(t *testing.T) {
 		ResolvedAt: timePtr(now.Add(-48 * time.Hour)),
 	}
 	store.Add(resolvedOld)
-	
+
 	// Add a recent resolved finding (should NOT be cleaned up if maxAge is 24h)
 	resolvedRecent := &Finding{
 		ID:         "resolved-recent",
@@ -369,7 +369,7 @@ func TestFindingsStore_Cleanup(t *testing.T) {
 
 func TestFindingsStore_GetDismissedForContext(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	// Add dismissed finding
 	finding1 := &Finding{
 		ID:              "f1",
@@ -395,7 +395,7 @@ func TestFindingsStore_GetDismissedForContext(t *testing.T) {
 	store.Suppress("f2")
 
 	ctx := store.GetDismissedForContext()
-	
+
 	if !strings.Contains(ctx, "High CPU on web-1") {
 		t.Error("Context should contain dismissed finding title")
 	}
@@ -413,7 +413,7 @@ func TestFindingsStore_GetDismissedForContext(t *testing.T) {
 func TestFindingsStore_Persistence(t *testing.T) {
 	store := NewFindingsStore()
 	mockP := &mockPersistence{}
-	
+
 	err := store.SetPersistence(mockP)
 	if err != nil {
 		t.Fatalf("SetPersistence failed: %v", err)
@@ -421,7 +421,7 @@ func TestFindingsStore_Persistence(t *testing.T) {
 
 	// Add a finding - should trigger save (debounced, but we can ForceSave)
 	store.Add(&Finding{ID: "f1", Title: "Persist me"})
-	
+
 	err = store.ForceSave()
 	if err != nil {
 		t.Fatalf("ForceSave failed: %v", err)
@@ -846,7 +846,7 @@ func timePtr(t time.Time) *time.Time {
 
 func TestFindingsStore_DeleteSuppressionRule_NotFound(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	// Try to delete non-existent rule
 	if store.DeleteSuppressionRule("nonexistent-id") {
 		t.Error("DeleteSuppressionRule should return false for non-existent rule")
@@ -855,7 +855,7 @@ func TestFindingsStore_DeleteSuppressionRule_NotFound(t *testing.T) {
 
 func TestFindingsStore_SetPersistence_Nil(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	// Setting nil persistence should succeed (disables persistence)
 	err := store.SetPersistence(nil)
 	if err != nil {
@@ -865,7 +865,7 @@ func TestFindingsStore_SetPersistence_Nil(t *testing.T) {
 
 func TestFindingsStore_Acknowledge_NotFound(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	if store.Acknowledge("nonexistent") {
 		t.Error("Acknowledge should return false for non-existent finding")
 	}
@@ -873,7 +873,7 @@ func TestFindingsStore_Acknowledge_NotFound(t *testing.T) {
 
 func TestFindingsStore_Dismiss_NotFound(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	if store.Dismiss("nonexistent", "reason", "note") {
 		t.Error("Dismiss should return false for non-existent finding")
 	}
@@ -881,7 +881,7 @@ func TestFindingsStore_Dismiss_NotFound(t *testing.T) {
 
 func TestFindingsStore_SetUserNote_NotFound(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	if store.SetUserNote("nonexistent", "note") {
 		t.Error("SetUserNote should return false for non-existent finding")
 	}
@@ -889,7 +889,7 @@ func TestFindingsStore_SetUserNote_NotFound(t *testing.T) {
 
 func TestFindingsStore_Suppress_NotFound(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	if store.Suppress("nonexistent") {
 		t.Error("Suppress should return false for non-existent finding")
 	}
@@ -897,7 +897,7 @@ func TestFindingsStore_Suppress_NotFound(t *testing.T) {
 
 func TestFindingsStore_Resolve_NotFound(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	if store.Resolve("nonexistent", false) {
 		t.Error("Resolve should return false for non-existent finding")
 	}
@@ -905,7 +905,7 @@ func TestFindingsStore_Resolve_NotFound(t *testing.T) {
 
 func TestFindingsStore_Resolve_AlreadyResolved(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	finding := &Finding{
 		ID:         "f1",
 		ResourceID: "res-1",
@@ -914,13 +914,13 @@ func TestFindingsStore_Resolve_AlreadyResolved(t *testing.T) {
 	}
 	store.Add(finding)
 	store.Resolve("f1", false)
-	
+
 	// Verify it's resolved
 	f := store.Get("f1")
 	if !f.IsResolved() {
 		t.Error("Finding should be resolved after Resolve call")
 	}
-	
+
 	// Try to resolve again - should return false
 	if store.Resolve("f1", false) {
 		t.Error("Resolve should return false for already-resolved finding")
@@ -929,7 +929,7 @@ func TestFindingsStore_Resolve_AlreadyResolved(t *testing.T) {
 
 func TestFindingsStore_GetActive_Empty(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	active := store.GetActive(FindingSeverityInfo)
 	if len(active) != 0 {
 		t.Errorf("Expected 0 active findings from empty store, got %d", len(active))
@@ -938,15 +938,15 @@ func TestFindingsStore_GetActive_Empty(t *testing.T) {
 
 func TestFindingsStore_GetSummary(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	// Add findings of each severity
 	store.Add(&Finding{ID: "crit", Severity: FindingSeverityCritical, ResourceID: "r1", Title: "Critical"})
 	store.Add(&Finding{ID: "warn", Severity: FindingSeverityWarning, ResourceID: "r2", Title: "Warning"})
 	store.Add(&Finding{ID: "watch", Severity: FindingSeverityWatch, ResourceID: "r3", Title: "Watch"})
 	store.Add(&Finding{ID: "info", Severity: FindingSeverityInfo, ResourceID: "r4", Title: "Info"})
-	
+
 	summary := store.GetSummary()
-	
+
 	if summary.Critical != 1 {
 		t.Errorf("Expected 1 critical, got %d", summary.Critical)
 	}
@@ -969,7 +969,7 @@ func TestFindingsStore_GetSummary(t *testing.T) {
 
 func TestFindingsStore_GetDismissedForContext_Empty(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	ctx := store.GetDismissedForContext()
 	if ctx != "" {
 		t.Errorf("Expected empty context for empty store, got: %s", ctx)
@@ -985,12 +985,12 @@ func TestFinding_Status(t *testing.T) {
 	if !resolved.IsResolved() {
 		t.Error("Finding with ResolvedAt set should be resolved")
 	}
-	
+
 	notResolved := Finding{ID: "not-resolved"}
 	if notResolved.IsResolved() {
 		t.Error("Finding without ResolvedAt should not be resolved")
 	}
-	
+
 	// Test IsDismissed
 	dismissed := Finding{
 		ID:              "dismissed",
@@ -1005,15 +1005,15 @@ func TestFinding_Status(t *testing.T) {
 
 func TestFindingsStore_Add_EmptyID(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	finding := &Finding{
 		ResourceID: "res-1",
 		Title:      "Test",
 	}
-	
+
 	// Should generate ID if empty
 	store.Add(finding)
-	
+
 	// Verify something was added
 	all := store.GetAll(nil)
 	if len(all) != 1 {
@@ -1023,7 +1023,7 @@ func TestFindingsStore_Add_EmptyID(t *testing.T) {
 
 func TestFindingsStore_GetSuppressionRules_Empty(t *testing.T) {
 	store := NewFindingsStore()
-	
+
 	rules := store.GetSuppressionRules()
 	if len(rules) != 0 {
 		t.Errorf("Expected 0 rules from new store, got %d", len(rules))

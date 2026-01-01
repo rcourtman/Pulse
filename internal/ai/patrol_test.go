@@ -10,9 +10,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-
-
-
 func TestDefaultPatrolThresholds(t *testing.T) {
 	thresholds := DefaultPatrolThresholds()
 
@@ -93,13 +90,13 @@ func TestClampThreshold(t *testing.T) {
 		input    float64
 		expected float64
 	}{
-		{50, 50},   // Normal value passes through
-		{5, 10},    // Below minimum, clamped to 10
-		{-5, 10},   // Negative, clamped to 10
-		{100, 99},  // Above maximum, clamped to 99
-		{150, 99},  // Way above, clamped to 99
-		{10, 10},   // Exactly at minimum
-		{99, 99},   // Exactly at maximum
+		{50, 50},  // Normal value passes through
+		{5, 10},   // Below minimum, clamped to 10
+		{-5, 10},  // Negative, clamped to 10
+		{100, 99}, // Above maximum, clamped to 99
+		{150, 99}, // Way above, clamped to 99
+		{10, 10},  // Exactly at minimum
+		{99, 99},  // Exactly at maximum
 	}
 
 	for _, tt := range tests {
@@ -478,12 +475,12 @@ func TestPatrolService_GetCurrentStreamOutput(t *testing.T) {
 func TestPatrolService_SetMemoryProviders(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 
-	// Test SetChangeDetector  
+	// Test SetChangeDetector
 	changeDetector := &ChangeDetector{} // Would need proper initialization
 	ps.mu.Lock()
 	ps.changeDetector = changeDetector
 	ps.mu.Unlock()
-	
+
 	if ps.GetChangeDetector() != changeDetector {
 		t.Error("Expected change detector to be set")
 	}
@@ -493,7 +490,7 @@ func TestPatrolService_SetMemoryProviders(t *testing.T) {
 	ps.mu.Lock()
 	ps.remediationLog = remLog
 	ps.mu.Unlock()
-	
+
 	if ps.GetRemediationLog() != remLog {
 		t.Error("Expected remediation log to be set")
 	}
@@ -528,7 +525,7 @@ func TestPatrolRunRecord(t *testing.T) {
 func TestPatrolStatus_Fields(t *testing.T) {
 	now := time.Now()
 	next := now.Add(15 * time.Minute)
-	
+
 	status := PatrolStatus{
 		Running:          true,
 		Enabled:          true,
@@ -564,7 +561,7 @@ func TestFormatDurationPatrol(t *testing.T) {
 		{30 * time.Minute, "30m"},
 		{59 * time.Minute, "59m"},
 		{60 * time.Minute, "1h"},
-		{90 * time.Minute, "1h"},    // Less than 24h, shows hours
+		{90 * time.Minute, "1h"}, // Less than 24h, shows hours
 		{2 * time.Hour, "2h"},
 		{23 * time.Hour, "23h"},
 		{24 * time.Hour, "1d"},
@@ -608,7 +605,7 @@ func TestFormatBytesInt64(t *testing.T) {
 		input    int64
 		expected string
 	}{
-		{-100, "0 B"},     // Negative values return "0 B"
+		{-100, "0 B"}, // Negative values return "0 B"
 		{0, "0 B"},
 		{1024, "1.0 KB"},
 		{1073741824, "1.0 GB"},

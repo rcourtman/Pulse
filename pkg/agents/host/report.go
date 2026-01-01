@@ -25,7 +25,7 @@ type AgentInfo struct {
 	Type            string `json:"type,omitempty"` // "unified", "host", or "docker" - empty means legacy
 	IntervalSeconds int    `json:"intervalSeconds,omitempty"`
 	Hostname        string `json:"hostname,omitempty"`
-	UpdatedFrom     string `json:"updatedFrom,omitempty"` // Previous version if recently auto-updated
+	UpdatedFrom     string `json:"updatedFrom,omitempty"`     // Previous version if recently auto-updated
 	CommandsEnabled bool   `json:"commandsEnabled,omitempty"` // Whether AI command execution is enabled
 }
 
@@ -78,14 +78,14 @@ type Disk struct {
 // DiskIO represents disk I/O statistics for a block device.
 // These are cumulative counters since boot - the backend calculates rates.
 type DiskIO struct {
-	Device     string `json:"device"`               // e.g., "nvme0n1", "sda"
-	ReadBytes  uint64 `json:"readBytes,omitempty"`  // Total bytes read
-	WriteBytes uint64 `json:"writeBytes,omitempty"` // Total bytes written
-	ReadOps    uint64 `json:"readOps,omitempty"`    // Total read operations
-	WriteOps   uint64 `json:"writeOps,omitempty"`   // Total write operations
-	ReadTime   uint64 `json:"readTimeMs,omitempty"` // Total time spent reading (ms)
-	WriteTime  uint64 `json:"writeTimeMs,omitempty"`// Total time spent writing (ms)
-	IOTime     uint64 `json:"ioTimeMs,omitempty"`   // Total time spent doing I/O (ms)
+	Device     string `json:"device"`                // e.g., "nvme0n1", "sda"
+	ReadBytes  uint64 `json:"readBytes,omitempty"`   // Total bytes read
+	WriteBytes uint64 `json:"writeBytes,omitempty"`  // Total bytes written
+	ReadOps    uint64 `json:"readOps,omitempty"`     // Total read operations
+	WriteOps   uint64 `json:"writeOps,omitempty"`    // Total write operations
+	ReadTime   uint64 `json:"readTimeMs,omitempty"`  // Total time spent reading (ms)
+	WriteTime  uint64 `json:"writeTimeMs,omitempty"` // Total time spent writing (ms)
+	IOTime     uint64 `json:"ioTimeMs,omitempty"`    // Total time spent doing I/O (ms)
 }
 
 // NetworkInterface summarises network adapter statistics.
@@ -145,22 +145,22 @@ type RAIDDevice struct {
 
 // CephCluster represents Ceph cluster status collected by the host agent.
 type CephCluster struct {
-	FSID        string           `json:"fsid"`
-	Health      CephHealth       `json:"health"`
-	MonMap      CephMonitorMap   `json:"monMap,omitempty"`
-	MgrMap      CephManagerMap   `json:"mgrMap,omitempty"`
-	OSDMap      CephOSDMap       `json:"osdMap"`
-	PGMap       CephPGMap        `json:"pgMap"`
-	Pools       []CephPool       `json:"pools,omitempty"`
-	Services    []CephService    `json:"services,omitempty"`
-	CollectedAt string           `json:"collectedAt"`
+	FSID        string         `json:"fsid"`
+	Health      CephHealth     `json:"health"`
+	MonMap      CephMonitorMap `json:"monMap,omitempty"`
+	MgrMap      CephManagerMap `json:"mgrMap,omitempty"`
+	OSDMap      CephOSDMap     `json:"osdMap"`
+	PGMap       CephPGMap      `json:"pgMap"`
+	Pools       []CephPool     `json:"pools,omitempty"`
+	Services    []CephService  `json:"services,omitempty"`
+	CollectedAt string         `json:"collectedAt"`
 }
 
 // CephHealth represents Ceph cluster health status.
 type CephHealth struct {
-	Status  string                 `json:"status"` // HEALTH_OK, HEALTH_WARN, HEALTH_ERR
-	Checks  map[string]CephCheck   `json:"checks,omitempty"`
-	Summary []CephHealthSummary    `json:"summary,omitempty"`
+	Status  string               `json:"status"` // HEALTH_OK, HEALTH_WARN, HEALTH_ERR
+	Checks  map[string]CephCheck `json:"checks,omitempty"`
+	Summary []CephHealthSummary  `json:"summary,omitempty"`
 }
 
 // CephCheck represents a health check detail.

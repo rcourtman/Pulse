@@ -122,7 +122,7 @@ func TestService_LogRemediation_Nil(t *testing.T) {
 
 func TestService_AcquireExecutionSlot_Blocked(t *testing.T) {
 	svc := NewService(nil, nil)
-	
+
 	// Fill all slots (4 by default)
 	for i := 0; i < 4; i++ {
 		_, err := svc.acquireExecutionSlot(context.Background(), "chat")
@@ -134,7 +134,7 @@ func TestService_AcquireExecutionSlot_Blocked(t *testing.T) {
 	// Try to acquire one more with a canceled context - should fail via ctx.Done()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	
+
 	_, err := svc.acquireExecutionSlot(ctx, "chat")
 	if err == nil {
 		t.Error("Expected error when acquiring slot with canceled context")
@@ -143,7 +143,7 @@ func TestService_AcquireExecutionSlot_Blocked(t *testing.T) {
 	// Try to acquire one more with a timeout - should fail via timeout case
 	shortCtx, cancel2 := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel2()
-	
+
 	// We need to wait slightly more than the shortCtx but less than the 5s hardcoded timeout
 	// But wait, the hardcoded timeout in acquireExecutionSlot is the 3rd case.
 	// We want to hit the second case.
@@ -197,12 +197,12 @@ func TestConvertMetricPoints(t *testing.T) {
 	monitoringPoints := []monitoring.MetricPoint{
 		{Value: 1.2, Timestamp: now},
 	}
-	
+
 	aiPoints := convertMetricPoints(monitoringPoints)
 	if len(aiPoints) != 1 || aiPoints[0].Value != 1.2 || !aiPoints[0].Timestamp.Equal(now) {
 		t.Error("Conversion failed")
 	}
-	
+
 	if convertMetricPoints(nil) != nil {
 		t.Error("Should return nil for nil input")
 	}
@@ -373,7 +373,7 @@ func TestService_ExecuteStreamExtended(t *testing.T) {
 	// Initialize persistence to avoid nil pointer dereference in buildSystemPrompt
 	tmpDir := t.TempDir()
 	svc.persistence = config.NewConfigPersistence(tmpDir)
-	
+
 	svc.provider = mockProv
 	svc.cfg = &config.AIConfig{Enabled: true}
 	// Initialize limits so acquireExecutionSlot works
@@ -466,22 +466,22 @@ func TestApprovalNeededFromToolCall(t *testing.T) {
 func TestService_ExecuteTool_FetchURL(t *testing.T) {
 	svc := NewService(nil, nil)
 	// We need to mock fetchURL or just let it fail and check the error handling
-	
+
 	tc := providers.ToolCall{
 		Name: "fetch_url",
 		Input: map[string]interface{}{
 			"url": "http://example.com",
 		},
 	}
-	
+
 	ctx := context.Background()
 	req := ExecuteRequest{}
-	
+
 	result, exec := svc.executeTool(ctx, req, tc)
 	if exec.Name != "fetch_url" {
 		t.Errorf("Unexpected tool name: %s", exec.Name)
 	}
-	
+
 	// Since we are in a limited environment, fetch might fail or be blocked.
 	// But we want to see that executeTool handled it.
 	if result == "" {
@@ -535,17 +535,17 @@ func TestService_GetDebugContext(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
 	svc.cfg = &config.AIConfig{Enabled: true, CustomContext: "Test context"}
-	
+
 	stateProvider := &mockStateProvider{
 		state: models.StateSnapshot{
 			VMs: []models.VM{{Name: "vm-1", VMID: 100, Node: "node-1"}},
 		},
 	}
 	svc.SetStateProvider(stateProvider)
-	
+
 	req := ExecuteRequest{Prompt: "test"}
 	debug := svc.GetDebugContext(req)
-	
+
 	if debug["has_state_provider"] != true {
 		t.Error("Expected has_state_provider to be true")
 	}
@@ -668,7 +668,7 @@ func TestService_ExecuteTool_RunCommand(t *testing.T) {
 		},
 	}
 	svc := NewService(nil, mockAgentServer)
-	
+
 	// Mock policy
 	mockPolicy := &mockPolicy{
 		decision: agentexec.PolicyAllow,
@@ -717,7 +717,7 @@ func TestService_ExecuteTool_RunCommand(t *testing.T) {
 
 func TestService_ExecuteTool_SetResourceURL(t *testing.T) {
 	svc := NewService(nil, nil)
-	
+
 	// Mock metadata provider
 	mockMeta := &mockMetadataProvider{}
 	svc.metadataProvider = mockMeta
@@ -745,14 +745,14 @@ func TestService_ExecuteTool_SetResourceURL(t *testing.T) {
 
 func TestService_PatrolManagement(t *testing.T) {
 	svc := NewService(nil, nil)
-	
+
 	// Mock components
 	patrol := NewPatrolService(svc, nil)
 	svc.patrolService = patrol
-	
+
 	alertAnalyzer := NewAlertTriggeredAnalyzer(patrol, nil)
 	svc.alertTriggeredAnalyzer = alertAnalyzer
-	
+
 	mockLicense := &mockLicenseStore{
 		features: map[string]bool{
 			FeatureAIPatrol: true,
@@ -760,10 +760,10 @@ func TestService_PatrolManagement(t *testing.T) {
 		},
 	}
 	svc.licenseChecker = mockLicense
-	
+
 	svc.cfg = &config.AIConfig{
 		Enabled:                true,
-		PatrolEnabled:         true,
+		PatrolEnabled:          true,
 		PatrolIntervalMinutes:  30,
 		AlertTriggeredAnalysis: true,
 	}
@@ -772,7 +772,7 @@ func TestService_PatrolManagement(t *testing.T) {
 
 	// 1. Start Patrol
 	svc.StartPatrol(ctx)
-	
+
 	if patrol.GetConfig().Interval != 30*time.Minute {
 		t.Errorf("Patrol interval not set correctly: %v", patrol.GetConfig().Interval)
 	}
@@ -784,7 +784,7 @@ func TestService_PatrolManagement(t *testing.T) {
 	svc.cfg.PatrolIntervalMinutes = 60
 	svc.cfg.AlertTriggeredAnalysis = false
 	svc.ReconfigurePatrol()
-	
+
 	if patrol.GetConfig().Interval != 60*time.Minute {
 		t.Errorf("Patrol interval not updated: %v", patrol.GetConfig().Interval)
 	}
@@ -887,7 +887,7 @@ func TestService_TestConnection_Extended(t *testing.T) {
 	tmpDir := t.TempDir()
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
-	
+
 	// 1. Not configured
 	err := svc.TestConnection(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "no AI provider configured") {
@@ -926,16 +926,16 @@ func TestService_ExecuteTool_ResolveFinding(t *testing.T) {
 	tmpDir := t.TempDir()
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
-	
+
 	// Set up patrol service with findings store
 	stateProvider := &mockStateProvider{}
 	svc.SetStateProvider(stateProvider)
-	
+
 	patrol := svc.GetPatrolService()
 	if patrol == nil {
 		t.Fatal("Expected patrol service to be initialized")
 	}
-	
+
 	// Add a finding
 	finding := &Finding{
 		ID:           "test-finding-1",
@@ -945,10 +945,10 @@ func TestService_ExecuteTool_ResolveFinding(t *testing.T) {
 		Title:        "High CPU",
 	}
 	patrol.GetFindings().Add(finding)
-	
+
 	ctx := context.Background()
 	req := ExecuteRequest{FindingID: "test-finding-1"}
-	
+
 	// 1. Successful resolution
 	tc := providers.ToolCall{
 		Name: "resolve_finding",
@@ -957,7 +957,7 @@ func TestService_ExecuteTool_ResolveFinding(t *testing.T) {
 			"resolution_note": "Restarted the service",
 		},
 	}
-	
+
 	result, exec := svc.executeTool(ctx, req, tc)
 	if !exec.Success {
 		t.Errorf("Expected success, got failure: %s", result)
@@ -965,7 +965,7 @@ func TestService_ExecuteTool_ResolveFinding(t *testing.T) {
 	if !strings.Contains(result, "Finding resolved!") {
 		t.Errorf("Expected 'Finding resolved!' in result, got: %s", result)
 	}
-	
+
 	// 2. Missing finding_id (should use from request context)
 	req2 := ExecuteRequest{FindingID: "test-finding-1"}
 	tc2 := providers.ToolCall{
@@ -979,7 +979,7 @@ func TestService_ExecuteTool_ResolveFinding(t *testing.T) {
 	if exec2.Success {
 		t.Error("Expected failure for already resolved finding")
 	}
-	
+
 	// 3. Missing resolution_note
 	tc3 := providers.ToolCall{
 		Name: "resolve_finding",
@@ -994,10 +994,10 @@ func TestService_ExecuteTool_ResolveFinding(t *testing.T) {
 	if !strings.Contains(result3, "resolution_note is required") {
 		t.Errorf("Expected resolution_note error, got: %s", result3)
 	}
-	
+
 	// 4. Missing both
 	tc4 := providers.ToolCall{
-		Name: "resolve_finding",
+		Name:  "resolve_finding",
 		Input: map[string]interface{}{},
 	}
 	result4, exec4 := svc.executeTool(ctx, ExecuteRequest{}, tc4)
@@ -1013,9 +1013,9 @@ func TestService_ExecuteTool_SetResourceURL_EdgeCases(t *testing.T) {
 	svc := NewService(nil, nil)
 	mockMeta := &mockMetadataProvider{}
 	svc.metadataProvider = mockMeta
-	
+
 	ctx := context.Background()
-	
+
 	// 1. Missing resource_type
 	tc := providers.ToolCall{
 		Name: "set_resource_url",
@@ -1031,7 +1031,7 @@ func TestService_ExecuteTool_SetResourceURL_EdgeCases(t *testing.T) {
 	if !strings.Contains(result, "resource_type is required") {
 		t.Errorf("Expected resource_type error, got: %s", result)
 	}
-	
+
 	// 2. Missing resource_id but present in request context
 	tc2 := providers.ToolCall{
 		Name: "set_resource_url",
@@ -1048,7 +1048,7 @@ func TestService_ExecuteTool_SetResourceURL_EdgeCases(t *testing.T) {
 	if mockMeta.lastGuestID != "vm-from-context" {
 		t.Errorf("Expected resource_id from context, got: %s", mockMeta.lastGuestID)
 	}
-	
+
 	// 3. Missing resource_id completely
 	tc3 := providers.ToolCall{
 		Name: "set_resource_url",
@@ -1068,14 +1068,14 @@ func TestService_ExecuteTool_SetResourceURL_EdgeCases(t *testing.T) {
 
 func TestService_ExecuteTool_UnknownTool(t *testing.T) {
 	svc := NewService(nil, nil)
-	
+
 	tc := providers.ToolCall{
 		Name: "unknown_tool",
 		Input: map[string]interface{}{
 			"foo": "bar",
 		},
 	}
-	
+
 	result, exec := svc.executeTool(context.Background(), ExecuteRequest{}, tc)
 	if exec.Success {
 		t.Error("Expected failure for unknown tool")
@@ -1087,14 +1087,14 @@ func TestService_ExecuteTool_UnknownTool(t *testing.T) {
 
 func TestService_ExecuteTool_FetchURL_EmptyURL(t *testing.T) {
 	svc := NewService(nil, nil)
-	
+
 	tc := providers.ToolCall{
 		Name: "fetch_url",
 		Input: map[string]interface{}{
 			"url": "",
 		},
 	}
-	
+
 	result, exec := svc.executeTool(context.Background(), ExecuteRequest{}, tc)
 	if exec.Success {
 		t.Error("Expected failure for empty URL")
@@ -1114,7 +1114,7 @@ func TestService_ExecuteTool_RunCommand_WithTargetHost(t *testing.T) {
 	}
 	svc := NewService(nil, mockServer)
 	svc.policy = &mockPolicy{decision: agentexec.PolicyAllow}
-	
+
 	tc := providers.ToolCall{
 		Name: "run_command",
 		Input: map[string]interface{}{
@@ -1123,7 +1123,7 @@ func TestService_ExecuteTool_RunCommand_WithTargetHost(t *testing.T) {
 			"target_host": "target-node",
 		},
 	}
-	
+
 	req := ExecuteRequest{
 		TargetType: "vm",
 		TargetID:   "vm-100",
@@ -1131,7 +1131,7 @@ func TestService_ExecuteTool_RunCommand_WithTargetHost(t *testing.T) {
 			"node": "original-node",
 		},
 	}
-	
+
 	result, exec := svc.executeTool(context.Background(), req, tc)
 	if !exec.Success {
 		t.Errorf("Expected success, got failure: %s", result)
@@ -1150,28 +1150,28 @@ func TestService_HasAgentForTarget_WithResourceProvider(t *testing.T) {
 		agents: []agentexec.ConnectedAgent{mockAgent},
 	}
 	svc := NewService(nil, mockServer)
-	
+
 	// Mock resource provider that returns host for container
 	mockRP := &mockResourceProvider{}
 	mockRP.ResourceProvider = mockRP
 	svc.resourceProvider = mockRP
-	
+
 	// Overwrite FindContainerHost behavior
 	// The mock by default returns empty string, so this should fail
 	// But with containerName context, it will try the resource provider
-	
+
 	req := ExecuteRequest{
 		TargetType: "docker",
 		Context: map[string]interface{}{
 			"containerName": "some-container",
 		},
 	}
-	
+
 	// Without provider returning anything, should still return true (at least one agent)
 	if !svc.hasAgentForTarget(req) {
 		t.Error("Expected true when at least one agent is available")
 	}
-	
+
 	// With name context
 	req2 := ExecuteRequest{
 		TargetType: "docker",
@@ -1182,7 +1182,7 @@ func TestService_HasAgentForTarget_WithResourceProvider(t *testing.T) {
 	if !svc.hasAgentForTarget(req2) {
 		t.Error("Expected true with name context")
 	}
-	
+
 	// With guestName context
 	req3 := ExecuteRequest{
 		TargetType: "vm",
@@ -1204,9 +1204,9 @@ func TestService_HasAgentForTarget_HostFields(t *testing.T) {
 		agents: []agentexec.ConnectedAgent{mockAgent},
 	}
 	svc := NewService(nil, mockServer)
-	
+
 	hostFields := []string{"node", "host", "guest_node", "hostname", "host_name", "target_host"}
-	
+
 	for _, field := range hostFields {
 		t.Run(field, func(t *testing.T) {
 			req := ExecuteRequest{
@@ -1226,18 +1226,18 @@ func TestService_ListModelsWithCache_CacheHit(t *testing.T) {
 	tmpDir := t.TempDir()
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
-	
+
 	// Save a config
 	cfg := config.AIConfig{
 		Enabled:      true,
 		OpenAIAPIKey: "test-key",
 	}
 	persistence.SaveAIConfig(cfg)
-	
-	// Get the cache key that persistence would generate  
+
+	// Get the cache key that persistence would generate
 	loadedCfg, _ := persistence.LoadAIConfig()
 	cacheKey := buildModelsCacheKey(loadedCfg)
-	
+
 	// Pre-populate cache before the first call
 	svc.modelsCache.mu.Lock()
 	svc.modelsCache.key = cacheKey
@@ -1247,7 +1247,7 @@ func TestService_ListModelsWithCache_CacheHit(t *testing.T) {
 		{ID: "test-model", Name: "Test Model"},
 	}
 	svc.modelsCache.mu.Unlock()
-	
+
 	// Call should hit cache since we pre-populated it
 	models, cached, err := svc.ListModelsWithCache(context.Background())
 	if err != nil {
@@ -1276,7 +1276,7 @@ func TestProviderDisplayName_AllProviders(t *testing.T) {
 		{config.AIProviderOllama, "Ollama"},
 		{"custom_provider", "custom_provider"},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.provider, func(t *testing.T) {
 			got := providerDisplayName(tt.provider)
@@ -1292,7 +1292,7 @@ func TestService_ExecuteOnAgent_VMIDExtraction(t *testing.T) {
 		AgentID:  "agent-1",
 		Hostname: "node-1",
 	}
-	
+
 	var capturedCmd agentexec.ExecuteCommandPayload
 	mockServer := &mockAgentServer{
 		agents: []agentexec.ConnectedAgent{mockAgent},
@@ -1305,7 +1305,7 @@ func TestService_ExecuteOnAgent_VMIDExtraction(t *testing.T) {
 		},
 	}
 	svc := NewService(nil, mockServer)
-	
+
 	// Test with VMID in context as float64 (common from JSON)
 	req := ExecuteRequest{
 		TargetType: "container",
@@ -1315,7 +1315,7 @@ func TestService_ExecuteOnAgent_VMIDExtraction(t *testing.T) {
 			"vmid": float64(123),
 		},
 	}
-	
+
 	_, err := svc.executeOnAgent(context.Background(), req, "uptime")
 	if err != nil {
 		t.Fatalf("executeOnAgent failed: %v", err)
@@ -1323,7 +1323,7 @@ func TestService_ExecuteOnAgent_VMIDExtraction(t *testing.T) {
 	if capturedCmd.TargetID != "123" {
 		t.Errorf("Expected TargetID '123', got '%s'", capturedCmd.TargetID)
 	}
-	
+
 	// Test with VMID as int
 	req.Context["vmid"] = 456
 	_, err = svc.executeOnAgent(context.Background(), req, "uptime")
@@ -1333,7 +1333,7 @@ func TestService_ExecuteOnAgent_VMIDExtraction(t *testing.T) {
 	if capturedCmd.TargetID != "456" {
 		t.Errorf("Expected TargetID '456', got '%s'", capturedCmd.TargetID)
 	}
-	
+
 	// Test with VMID as string
 	req.Context["vmid"] = "789"
 	_, err = svc.executeOnAgent(context.Background(), req, "uptime")
@@ -1350,7 +1350,7 @@ func TestService_ExecuteOnAgent_AptNonInteractive(t *testing.T) {
 		AgentID:  "agent-1",
 		Hostname: "node-1",
 	}
-	
+
 	var capturedCmd agentexec.ExecuteCommandPayload
 	mockServer := &mockAgentServer{
 		agents: []agentexec.ConnectedAgent{mockAgent},
@@ -1360,12 +1360,12 @@ func TestService_ExecuteOnAgent_AptNonInteractive(t *testing.T) {
 		},
 	}
 	svc := NewService(nil, mockServer)
-	
+
 	req := ExecuteRequest{
 		TargetType: "host",
 		Context:    map[string]interface{}{"node": "node-1"},
 	}
-	
+
 	// apt command should get DEBIAN_FRONTEND prefix
 	_, err := svc.executeOnAgent(context.Background(), req, "apt update")
 	if err != nil {
@@ -1374,7 +1374,7 @@ func TestService_ExecuteOnAgent_AptNonInteractive(t *testing.T) {
 	if !strings.Contains(capturedCmd.Command, "DEBIAN_FRONTEND=noninteractive") {
 		t.Errorf("Expected DEBIAN_FRONTEND prefix for apt, got: %s", capturedCmd.Command)
 	}
-	
+
 	// dpkg command should also get prefix
 	_, err = svc.executeOnAgent(context.Background(), req, "dpkg --configure -a")
 	if err != nil {
@@ -1383,7 +1383,7 @@ func TestService_ExecuteOnAgent_AptNonInteractive(t *testing.T) {
 	if !strings.Contains(capturedCmd.Command, "DEBIAN_FRONTEND=noninteractive") {
 		t.Errorf("Expected DEBIAN_FRONTEND prefix for dpkg, got: %s", capturedCmd.Command)
 	}
-	
+
 	// If already has DEBIAN_FRONTEND, don't add again
 	_, err = svc.executeOnAgent(context.Background(), req, "DEBIAN_FRONTEND=noninteractive apt update")
 	if err != nil {
@@ -1399,13 +1399,13 @@ func TestService_ExecuteOnAgent_ResultHandling(t *testing.T) {
 		AgentID:  "agent-1",
 		Hostname: "node-1",
 	}
-	
+
 	svc := NewService(nil, nil)
 	req := ExecuteRequest{
 		TargetType: "host",
 		Context:    map[string]interface{}{"node": "node-1"},
 	}
-	
+
 	// Test with both stdout and stderr
 	mockServer := &mockAgentServer{
 		agents: []agentexec.ConnectedAgent{mockAgent},
@@ -1418,7 +1418,7 @@ func TestService_ExecuteOnAgent_ResultHandling(t *testing.T) {
 		},
 	}
 	svc.agentServer = mockServer
-	
+
 	output, err := svc.executeOnAgent(context.Background(), req, "ls")
 	if err != nil {
 		t.Fatalf("executeOnAgent failed: %v", err)
@@ -1426,7 +1426,7 @@ func TestService_ExecuteOnAgent_ResultHandling(t *testing.T) {
 	if !strings.Contains(output, "stdout content") || !strings.Contains(output, "STDERR") || !strings.Contains(output, "stderr content") {
 		t.Errorf("Expected combined output, got: %s", output)
 	}
-	
+
 	// Test with only stderr (failure case)
 	mockServer.executeFunc = func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
 		return &agentexec.CommandResultPayload{
@@ -1434,7 +1434,7 @@ func TestService_ExecuteOnAgent_ResultHandling(t *testing.T) {
 			Stderr:  "error message",
 		}, nil
 	}
-	
+
 	output, err = svc.executeOnAgent(context.Background(), req, "bad-command")
 	if err != nil {
 		t.Fatalf("executeOnAgent failed: %v", err)
@@ -1442,7 +1442,7 @@ func TestService_ExecuteOnAgent_ResultHandling(t *testing.T) {
 	if output != "error message" {
 		t.Errorf("Expected stderr as output, got: %s", output)
 	}
-	
+
 	// Test with error
 	mockServer.executeFunc = func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
 		return &agentexec.CommandResultPayload{
@@ -1450,7 +1450,7 @@ func TestService_ExecuteOnAgent_ResultHandling(t *testing.T) {
 			Error:   "command failed",
 		}, nil
 	}
-	
+
 	_, err = svc.executeOnAgent(context.Background(), req, "failing-command")
 	if err == nil {
 		t.Error("Expected error")
@@ -1467,18 +1467,18 @@ func TestService_ExecuteOnAgent_RoutingClarification(t *testing.T) {
 			{AgentID: "agent-2", Hostname: "host-2"},
 		},
 	})
-	
+
 	// No target node in context, multiple agents available -> clarification needed
 	req := ExecuteRequest{
 		TargetType: "host",
 	}
-	
+
 	output, err := svc.executeOnAgent(context.Background(), req, "hostname")
 	if err != nil {
 		t.Fatalf("executeOnAgent failed: %v", err)
 	}
 	t.Logf("Output: %s", output)
-	
+
 	if !strings.Contains(output, "ROUTING_CLARIFICATION_NEEDED") {
 		t.Errorf("Expected clarification needed response, got: %s", output)
 	}
@@ -1494,7 +1494,7 @@ func TestService_ExecuteOnAgent_TargetIDExtractionOnly(t *testing.T) {
 		},
 	}
 	svc := NewService(nil, mockServer)
-	
+
 	// No vmid in context, but TargetID has a number
 	req := ExecuteRequest{
 		TargetType: "container",
@@ -1503,12 +1503,12 @@ func TestService_ExecuteOnAgent_TargetIDExtractionOnly(t *testing.T) {
 			"node": "host-1", // Force routing
 		},
 	}
-	
+
 	_, err := svc.executeOnAgent(context.Background(), req, "uptime")
 	if err != nil {
 		t.Fatalf("executeOnAgent failed: %v", err)
 	}
-	
+
 	// Should have extracted 135 from delly-135
 	if capturedCmd.TargetID != "135" {
 		t.Errorf("Expected extracted TargetID '135', got '%s'", capturedCmd.TargetID)
@@ -1525,7 +1525,7 @@ func TestApprovalNeededFromToolCall_Extended(t *testing.T) {
 			"node": "node-1",
 		},
 	}
-	
+
 	tc := providers.ToolCall{
 		ID:   "call-1",
 		Name: "run_command",
@@ -1533,13 +1533,13 @@ func TestApprovalNeededFromToolCall_Extended(t *testing.T) {
 			"command": "reboot",
 		},
 	}
-	
+
 	// Case 1: Result doesn't have APPROVAL_REQUIRED prefix
 	_, ok := approvalNeededFromToolCall(req, tc, "regular result")
 	if ok {
 		t.Error("Expected false for regular result")
 	}
-	
+
 	// Case 2: Wrong tool name
 	tc2 := tc
 	tc2.Name = "fetch_url"
@@ -1547,7 +1547,7 @@ func TestApprovalNeededFromToolCall_Extended(t *testing.T) {
 	if ok {
 		t.Error("Expected false for non-run_command tool")
 	}
-	
+
 	// Case 3: Success with node from context
 	data, ok := approvalNeededFromToolCall(req, tc, "APPROVAL_REQUIRED: reason")
 	if !ok {
@@ -1556,14 +1556,14 @@ func TestApprovalNeededFromToolCall_Extended(t *testing.T) {
 	if data.TargetHost != "node-1" {
 		t.Errorf("Expected TargetHost node-1, got %s", data.TargetHost)
 	}
-	
+
 	// Case 4: Other context fields
 	req2 := ExecuteRequest{Context: map[string]interface{}{"hostname": "host-2"}}
 	data, _ = approvalNeededFromToolCall(req2, tc, "APPROVAL_REQUIRED: reason")
 	if data.TargetHost != "host-2" {
 		t.Errorf("Expected host-2, got %s", data.TargetHost)
 	}
-	
+
 	req3 := ExecuteRequest{Context: map[string]interface{}{"host_name": "host-3"}}
 	data, _ = approvalNeededFromToolCall(req3, tc, "APPROVAL_REQUIRED: reason")
 	if data.TargetHost != "host-3" {
@@ -1577,7 +1577,7 @@ func TestApprovalNeededFromToolCall_Extended(t *testing.T) {
 
 func TestService_getTools_Variants(t *testing.T) {
 	svc := NewService(nil, nil)
-	
+
 	// Case 1: Generic provider
 	tools := svc.getTools()
 	foundWebSearch := false
@@ -1589,7 +1589,7 @@ func TestService_getTools_Variants(t *testing.T) {
 	if foundWebSearch {
 		t.Error("Did not expect web_search tool for generic provider")
 	}
-	
+
 	// Case 2: Anthropic provider
 	svc.provider = &mockProvider{nameFunc: func() string { return "anthropic" }}
 	tools = svc.getTools()
@@ -1615,12 +1615,12 @@ func TestService_ExecuteStream_BudgetExceeded(t *testing.T) {
 	svc.mu.Lock()
 	svc.cfg = &config.AIConfig{
 		Enabled:          true,
-		CostBudgetUSD30d: 0.0001, // Very low budget
+		CostBudgetUSD30d: 0.0001,                // Very low budget
 		Model:            "anthropic:forbidden", // Force fallback to mock
 	}
 	svc.provider = &mockProvider{}
 	svc.mu.Unlock()
-	
+
 	// We need costStore to have some usage
 	costStore := cost.NewStore(30)
 	costStore.Record(cost.UsageEvent{
@@ -1632,12 +1632,12 @@ func TestService_ExecuteStream_BudgetExceeded(t *testing.T) {
 		OutputTokens: 1000000,
 	})
 	svc.costStore = costStore
-	
+
 	events := []StreamEvent{}
 	callback := func(e StreamEvent) {
 		events = append(events, e)
 	}
-	
+
 	// First call should fail synchronously with error
 	_, err := svc.ExecuteStream(context.Background(), ExecuteRequest{UseCase: "chat"}, callback)
 	if err == nil {
@@ -1663,17 +1663,17 @@ func TestService_ExecuteStream_ThinkingContent(t *testing.T) {
 	}
 	svc.provider = mock
 	svc.cfg = &config.AIConfig{Enabled: true, Model: "anthropic:test"}
-	
+
 	events := []StreamEvent{}
 	callback := func(e StreamEvent) {
 		events = append(events, e)
 	}
-	
+
 	_, err := svc.ExecuteStream(context.Background(), ExecuteRequest{}, callback)
 	if err != nil {
 		t.Fatalf("ExecuteStream failed: %v", err)
 	}
-	
+
 	foundThinking := false
 	for _, e := range events {
 		if e.Type == "thinking" && e.Data == "Thinking..." {
@@ -1691,7 +1691,7 @@ func TestService_ExecuteStream_PolicyBlock(t *testing.T) {
 	svc := NewService(persistence, &mockAgentServer{})
 	svc.policy = &mockPolicy{decision: agentexec.PolicyBlock}
 	svc.cfg = &config.AIConfig{Enabled: true, Model: "anthropic:test"}
-	
+
 	iteration := 0
 	mock := &mockProvider{
 		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
@@ -1711,17 +1711,17 @@ func TestService_ExecuteStream_PolicyBlock(t *testing.T) {
 		},
 	}
 	svc.provider = mock
-	
+
 	events := []StreamEvent{}
 	callback := func(e StreamEvent) {
 		events = append(events, e)
 	}
-	
+
 	_, err := svc.ExecuteStream(context.Background(), ExecuteRequest{}, callback)
 	if err != nil {
 		t.Fatalf("ExecuteStream failed: %v", err)
 	}
-	
+
 	foundBlocked := false
 	for _, e := range events {
 		if e.Type == "tool_end" {
@@ -1751,7 +1751,7 @@ func TestService_ExecuteStream_ResultTruncation(t *testing.T) {
 		},
 	})
 	svc.cfg = &config.AIConfig{Enabled: true, AutonomousMode: true, Model: "anthropic:test"}
-	
+
 	iteration := 0
 	mock := &mockProvider{
 		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
@@ -1777,12 +1777,12 @@ func TestService_ExecuteStream_ResultTruncation(t *testing.T) {
 		},
 	}
 	svc.provider = mock
-	
+
 	resp, err := svc.ExecuteStream(context.Background(), ExecuteRequest{TargetType: "guest"}, func(StreamEvent) {})
 	if err != nil {
 		t.Fatalf("ExecuteStream failed: %v", err)
 	}
-	
+
 	if resp.Content != "Verified truncation" {
 		t.Errorf("Expected 'Verified truncation', got %s", resp.Content)
 	}
@@ -1797,7 +1797,7 @@ func TestService_GetCostSummary_NoStore_Truncated(t *testing.T) {
 	if len(summary.ProviderModels) != 0 {
 		t.Error("Expected 0 provider models")
 	}
-	
+
 	// Test truncation branch
 	summary = svc.GetCostSummary(cost.DefaultMaxDays + 1)
 	if !summary.Truncated {
@@ -1807,7 +1807,7 @@ func TestService_GetCostSummary_NoStore_Truncated(t *testing.T) {
 
 func TestService_PatrolManagement_NilPatrol(t *testing.T) {
 	svc := &Service{}
-	
+
 	// These should not panic when patrol is nil
 	svc.StopPatrol()
 	svc.SetMetricsHistoryProvider(nil)
@@ -1818,19 +1818,19 @@ func TestService_StartPatrol_EdgeCases(t *testing.T) {
 	// Case 1: Patrol service is nil
 	svc := &Service{}
 	svc.StartPatrol(context.Background()) // Should not panic
-	
+
 	// Case 2: Config is nil
-	svc.patrolService = &PatrolService{} 
+	svc.patrolService = &PatrolService{}
 	svc.StartPatrol(context.Background())
-	
+
 	// Case 3: Patrol disabled in config
 	svc.cfg = &config.AIConfig{Enabled: true, PatrolSchedulePreset: "disabled"}
 	svc.StartPatrol(context.Background())
-	
+
 	// Case 4: License feature missing
 	svc.cfg = &config.AIConfig{Enabled: true, PatrolEnabled: true}
 	svc.licenseChecker = &mockLicenseStore{features: map[string]bool{FeatureAIPatrol: false}}
-	// This will still call Start but log info. 
+	// This will still call Start but log info.
 	svc.patrolService = &PatrolService{}
 }
 
@@ -1847,7 +1847,7 @@ func TestSanitizeError_Extended(t *testing.T) {
 		{fmt.Errorf("context deadline exceeded"), "timed out"},
 		{fmt.Errorf("some other error"), "some other error"},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.contains, func(t *testing.T) {
 			result := sanitizeError(tt.input)
@@ -1866,7 +1866,7 @@ func TestSanitizeError_Extended(t *testing.T) {
 
 func TestService_GetGuestID(t *testing.T) {
 	svc := NewService(nil, nil)
-	
+
 	tests := []struct {
 		req      ExecuteRequest
 		expected string
@@ -1877,7 +1877,7 @@ func TestService_GetGuestID(t *testing.T) {
 		{ExecuteRequest{TargetType: "vm", TargetID: "100"}, "vm-100"},
 		{ExecuteRequest{TargetType: "container", TargetID: "host:ct:abc"}, "container-host:ct:abc"},
 	}
-	
+
 	for _, tt := range tests {
 		result := svc.getGuestID(tt.req)
 		if result != tt.expected {
@@ -1892,23 +1892,23 @@ func TestService_LogRemediation_WithPatrolService(t *testing.T) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
-	
+
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
-	
+
 	// Set up patrol service
 	stateProvider := &mockStateProvider{}
 	svc.SetStateProvider(stateProvider)
-	
+
 	patrol := svc.GetPatrolService()
 	if patrol == nil {
 		t.Fatal("Expected patrol service")
 	}
-	
+
 	// Set up remediation log
 	remLog := NewRemediationLog(RemediationLogConfig{DataDir: tmpDir})
 	patrol.remediationLog = remLog
-	
+
 	// Test logging with context name
 	req := ExecuteRequest{
 		TargetID:   "vm-100-with-patrol",
@@ -1919,9 +1919,9 @@ func TestService_LogRemediation_WithPatrolService(t *testing.T) {
 		},
 		UseCase: "patrol",
 	}
-	
+
 	svc.logRemediation(req, "systemctl restart nginx", "output data", true)
-	
+
 	// Verify the log was created
 	history := remLog.GetForResource("vm-100-with-patrol", 10)
 	if len(history) != 1 {
@@ -1944,28 +1944,28 @@ func TestService_LogRemediation_LongPromptTruncation(t *testing.T) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
-	
+
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
-	
+
 	stateProvider := &mockStateProvider{}
 	svc.SetStateProvider(stateProvider)
-	
+
 	patrol := svc.GetPatrolService()
 	remLog := NewRemediationLog(RemediationLogConfig{DataDir: tmpDir})
 	patrol.remediationLog = remLog
-	
+
 	// Create a very long prompt
 	longPrompt := strings.Repeat("a", 300)
-	
+
 	req := ExecuteRequest{
 		TargetID:   "vm-100-truncation-test",
 		TargetType: "vm",
 		Prompt:     longPrompt,
 	}
-	
+
 	svc.logRemediation(req, "docker restart app", "output", false)
-	
+
 	history := remLog.GetForResource("vm-100-truncation-test", 10)
 	if len(history) != 1 {
 		t.Fatalf("Expected 1 record, got %d", len(history))
@@ -1985,17 +1985,17 @@ func TestService_LogRemediation_LongPromptTruncation(t *testing.T) {
 func TestService_KnowledgeStore_NotConfigured(t *testing.T) {
 	svc := NewService(nil, nil)
 	// knowledgeStore is nil
-	
+
 	_, err := svc.GetGuestKnowledge("test-guest")
 	if err == nil {
 		t.Error("Expected error when knowledge store not available")
 	}
-	
+
 	err = svc.SaveGuestNote("guest-1", "name", "vm", "cat", "title", "content")
 	if err == nil {
 		t.Error("Expected error when knowledge store not available")
 	}
-	
+
 	err = svc.DeleteGuestNote("guest-1", "note-1")
 	if err == nil {
 		t.Error("Expected error when knowledge store not available")
@@ -2012,21 +2012,21 @@ func TestService_LoadConfig_WithDisabledAI(t *testing.T) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
-	
+
 	persistence := config.NewConfigPersistence(tmpDir)
-	
+
 	// Save a disabled config
 	cfg := config.AIConfig{
 		Enabled: false,
 	}
 	persistence.SaveAIConfig(cfg)
-	
+
 	svc := NewService(persistence, nil)
 	err = svc.LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
-	
+
 	if svc.IsEnabled() {
 		t.Error("Expected AI to be disabled")
 	}
@@ -2038,9 +2038,9 @@ func TestService_LoadConfig_SmartFallback(t *testing.T) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
-	
+
 	persistence := config.NewConfigPersistence(tmpDir)
-	
+
 	// Config with Anthropic model selected but only OpenAI configured
 	// NewForModel("anthropic:...") will fail, triggering smart fallback to OpenAI
 	cfg := config.AIConfig{
@@ -2049,13 +2049,13 @@ func TestService_LoadConfig_SmartFallback(t *testing.T) {
 		OpenAIAPIKey: "test-openai-key",
 	}
 	persistence.SaveAIConfig(cfg)
-	
+
 	svc := NewService(persistence, nil)
 	err = svc.LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
-	
+
 	if svc.provider == nil {
 		t.Fatal("Expected provider to be set via smart fallback")
 	}
@@ -2064,16 +2064,15 @@ func TestService_LoadConfig_SmartFallback(t *testing.T) {
 	}
 }
 
-
 func TestService_LoadConfig_LegacyMigration(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pulse-loadconfig-legacy-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
-	
+
 	persistence := config.NewConfigPersistence(tmpDir)
-	
+
 	// Config with legacy fields but no provider credentials in new format
 	cfg := config.AIConfig{
 		Enabled:  true,
@@ -2082,13 +2081,13 @@ func TestService_LoadConfig_LegacyMigration(t *testing.T) {
 		Model:    "anthropic:claude-3-5-sonnet",
 	}
 	persistence.SaveAIConfig(cfg)
-	
+
 	svc := NewService(persistence, nil)
 	err = svc.LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
-	
+
 	// Should initialize via migration path
 	if svc.provider == nil {
 		t.Error("Expected provider to be initialized via legacy config")
@@ -2101,9 +2100,9 @@ func TestService_LoadConfig_LegacyMigration_Failure(t *testing.T) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
-	
+
 	persistence := config.NewConfigPersistence(tmpDir)
-	
+
 	// Legacy config with unknown provider to force NewFromConfig to fail
 	cfg := config.AIConfig{
 		Enabled:  true,
@@ -2112,13 +2111,13 @@ func TestService_LoadConfig_LegacyMigration_Failure(t *testing.T) {
 		Model:    "anthropic:claude-opus",
 	}
 	persistence.SaveAIConfig(cfg)
-	
+
 	svc := NewService(persistence, nil)
 	err = svc.LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
-	
+
 	if svc.provider != nil {
 		t.Error("Expected provider to be nil on migration failure")
 	}
@@ -2130,9 +2129,9 @@ func TestService_LoadConfig_SmartFallback_Variants(t *testing.T) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
-	
+
 	persistence := config.NewConfigPersistence(tmpDir)
-	
+
 	providers := []struct {
 		name   string
 		key    string
@@ -2150,7 +2149,7 @@ func TestService_LoadConfig_SmartFallback_Variants(t *testing.T) {
 				Enabled: true,
 				Model:   "openai:gpt-4", // selected
 			}
-			
+
 			// Set the specific key
 			switch p.name {
 			case "anthropic":
@@ -2162,14 +2161,14 @@ func TestService_LoadConfig_SmartFallback_Variants(t *testing.T) {
 			case "ollama":
 				cfg.OllamaBaseURL = "http://localhost:11434"
 			}
-			
+
 			persistence.SaveAIConfig(cfg)
 			svc := NewService(persistence, nil)
 			err = svc.LoadConfig()
 			if err != nil {
 				t.Fatalf("LoadConfig failed: %v", err)
 			}
-			
+
 			if svc.provider == nil || svc.provider.Name() != p.expect {
 				t.Errorf("Expected %s provider via fallback, got %v", p.expect, svc.provider)
 			}
@@ -2177,30 +2176,27 @@ func TestService_LoadConfig_SmartFallback_Variants(t *testing.T) {
 	}
 }
 
-
-
-
 func TestService_LoadConfig_NoProviders(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pulse-loadconfig-none-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
-	
+
 	persistence := config.NewConfigPersistence(tmpDir)
-	
+
 	// Enabled but no providers configured
 	cfg := config.AIConfig{
 		Enabled: true,
 	}
 	persistence.SaveAIConfig(cfg)
-	
+
 	svc := NewService(persistence, nil)
 	err = svc.LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
-	
+
 	if svc.provider != nil {
 		t.Error("Expected provider to be nil when no credentials configured")
 	}
@@ -2209,12 +2205,12 @@ func TestService_LoadConfig_NoProviders(t *testing.T) {
 func TestService_LoadConfig_PersistenceError(t *testing.T) {
 	tmpDir := t.TempDir()
 	persistence := config.NewConfigPersistence(tmpDir)
-	
+
 	// Write invalid JSON to ai.enc (this is tricky because it's encrypted)
 	// Actually, we can just make the directory unreadable or use a non-directory for the path
 	aiFilePath := filepath.Join(tmpDir, "ai.enc")
 	os.MkdirAll(aiFilePath, 0755) // Create directory where file should be
-	
+
 	svc := NewService(persistence, nil)
 	err := svc.LoadConfig()
 	if err == nil {
@@ -2225,11 +2221,11 @@ func TestService_LoadConfig_PersistenceError(t *testing.T) {
 func TestService_LoadConfig_FallbackFailure(t *testing.T) {
 	tmpDir := t.TempDir()
 	persistence := config.NewConfigPersistence(tmpDir)
-	
+
 	// Create a bit of a weird situation: Ollama is configured (which always "succeeds" to create client)
 	// but we want providers.NewForModel to fail for the fallback model.
 	// Actually, NewForModel only fails if provider is unknown or key is missing.
-	
+
 	// Selected model is unknown provider, triggers fallback.
 	// Fallback provider is Ollama.
 	cfg := config.AIConfig{
@@ -2238,11 +2234,11 @@ func TestService_LoadConfig_FallbackFailure(t *testing.T) {
 		OllamaBaseURL: "http://localhost:11434",
 	}
 	persistence.SaveAIConfig(cfg)
-	
+
 	svc := NewService(persistence, nil)
-	// We need providers.NewForModel to fail for Ollama fallback model? 
+	// We need providers.NewForModel to fail for Ollama fallback model?
 	// That's hard because Ollama NewForProvider always succeeds.
-	
+
 	err := svc.LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
@@ -2260,7 +2256,7 @@ func TestService_LoadConfig_FallbackFailure(t *testing.T) {
 func TestService_GetConfig_DefaultsWhenNil(t *testing.T) {
 	svc := NewService(nil, nil)
 	svc.cfg = nil
-	
+
 	cfg := svc.GetConfig()
 	if cfg != nil {
 		t.Error("Expected nil config when not configured")
@@ -2273,21 +2269,21 @@ func TestService_GetConfig_ReturnsCopy(t *testing.T) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
-	
+
 	persistence := config.NewConfigPersistence(tmpDir)
 	persistence.SaveAIConfig(config.AIConfig{
 		Enabled: true,
 		Model:   "test:model",
 	})
-	
+
 	svc := NewService(persistence, nil)
 	svc.LoadConfig()
-	
+
 	cfg := svc.GetConfig()
 	if cfg == nil {
 		t.Fatal("Expected config to be returned")
 	}
-	
+
 	if cfg.Model != "test:model" {
 		t.Errorf("Expected model 'test:model', got '%s'", cfg.Model)
 	}
@@ -2303,28 +2299,28 @@ func TestService_IsAutonomous_Variations(t *testing.T) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
-	
+
 	persistence := config.NewConfigPersistence(tmpDir)
-	
+
 	// Test with AutonomousMode = false
 	cfg := config.AIConfig{
 		Enabled:        true,
 		AutonomousMode: false,
 	}
 	persistence.SaveAIConfig(cfg)
-	
+
 	svc := NewService(persistence, nil)
 	svc.LoadConfig()
-	
+
 	if svc.IsAutonomous() {
 		t.Error("Expected not autonomous when mode is false")
 	}
-	
+
 	// Test with AutonomousMode = true
 	cfg.AutonomousMode = true
 	persistence.SaveAIConfig(cfg)
 	svc.LoadConfig()
-	
+
 	if !svc.IsAutonomous() {
 		t.Error("Expected autonomous when mode is true")
 	}
@@ -2337,20 +2333,20 @@ func TestService_IsAutonomous_Variations(t *testing.T) {
 func TestService_KnowledgeStore_Success(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, _ := knowledge.NewStore(tmpDir)
-	
+
 	svc := NewService(nil, nil)
 	svc.knowledgeStore = store
-	
+
 	_, err := svc.GetGuestKnowledge("vm-100")
 	if err != nil {
 		t.Errorf("GetGuestKnowledge failed: %v", err)
 	}
-	
+
 	err = svc.SaveGuestNote("vm-100", "test", "vm", "general", "title", "content")
 	if err != nil {
 		t.Errorf("SaveGuestNote failed: %v", err)
 	}
-	
+
 	err = svc.DeleteGuestNote("vm-100", "general-1")
 	if err != nil {
 		t.Errorf("DeleteGuestNote failed: %v", err)
@@ -2367,15 +2363,15 @@ func TestService_ListModelsWithCache_ProviderErrors(t *testing.T) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
-	
+
 	persistence := config.NewConfigPersistence(tmpDir)
 	persistence.SaveAIConfig(config.AIConfig{
 		Enabled:      true,
 		OpenAIAPIKey: "test-key",
 	})
-	
+
 	svc := NewService(persistence, nil)
-	
+
 	// The provider will fail because it's a real OpenAI provider with dummy key
 	_, cached, err := svc.ListModelsWithCache(context.Background())
 	if err != nil {
@@ -2394,15 +2390,15 @@ func TestService_GetDebugContext_Truncation(t *testing.T) {
 	tmpDir := t.TempDir()
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
-	
+
 	// Large custom context
 	svc.cfg = &config.AIConfig{
 		CustomContext: strings.Repeat("x", 300),
 	}
-	
+
 	stateProvider := &mockStateProvider{}
 	svc.stateProvider = stateProvider
-	
+
 	// Add many VMs to trigger truncation
 	state := models.StateSnapshot{}
 	for i := 0; i < 15; i++ {
@@ -2410,19 +2406,19 @@ func TestService_GetDebugContext_Truncation(t *testing.T) {
 		state.Containers = append(state.Containers, models.Container{VMID: i + 100, Name: fmt.Sprintf("ct-%d", i), Node: "node"})
 	}
 	stateProvider.state = state
-	
+
 	result := svc.GetDebugContext(ExecuteRequest{})
-	
+
 	preview := result["custom_context_preview"].(string)
 	if !strings.HasSuffix(preview, "...") || len(preview) != 203 {
 		t.Errorf("Expected truncated preview, got length %d", len(preview))
 	}
-	
+
 	sampleVMs := result["sample_vms"].([]string)
 	if len(sampleVMs) != 10 {
 		t.Errorf("Expected 10 sample VMs, got %d", len(sampleVMs))
 	}
-	
+
 	sampleCTs := result["sample_containers"].([]string)
 	if len(sampleCTs) != 10 {
 		t.Errorf("Expected 10 sample containers, got %d", len(sampleCTs))
@@ -2436,22 +2432,21 @@ func TestService_GetDebugContext_ShortContext(t *testing.T) {
 	svc.cfg = &config.AIConfig{
 		CustomContext: "short context",
 	}
-	
+
 	result := svc.GetDebugContext(ExecuteRequest{})
 	if result["custom_context_preview"] != "short context" {
 		t.Errorf("Expected 'short context', got %v", result["custom_context_preview"])
 	}
 }
 
-
 func TestService_ListModelsWithCache_ConfigErrors(t *testing.T) {
 	tmpDir := t.TempDir()
 	persistence := config.NewConfigPersistence(tmpDir)
-	
+
 	// Force LoadAIConfig failure
 	aiFilePath := filepath.Join(tmpDir, "ai.enc")
 	os.MkdirAll(aiFilePath, 0755)
-	
+
 	svc := NewService(persistence, nil)
 	_, _, err := svc.ListModelsWithCache(context.Background())
 	if err == nil {
@@ -2467,7 +2462,7 @@ func TestService_SetResourceURL_DockerType(t *testing.T) {
 	svc := NewService(nil, nil)
 	mockMeta := &mockMetadataProvider{}
 	svc.metadataProvider = mockMeta
-	
+
 	err := svc.SetResourceURL("docker", "host:container:abc123", "http://example.com:8080")
 	if err != nil {
 		t.Errorf("SetResourceURL failed: %v", err)
@@ -2481,7 +2476,7 @@ func TestService_SetResourceURL_HostType(t *testing.T) {
 	svc := NewService(nil, nil)
 	mockMeta := &mockMetadataProvider{}
 	svc.metadataProvider = mockMeta
-	
+
 	err := svc.SetResourceURL("host", "my-host", "http://host.local:9090")
 	if err != nil {
 		t.Errorf("SetResourceURL failed: %v", err)
@@ -2495,7 +2490,7 @@ func TestService_SetResourceURL_UnknownType(t *testing.T) {
 	svc := NewService(nil, nil)
 	mockMeta := &mockMetadataProvider{}
 	svc.metadataProvider = mockMeta
-	
+
 	err := svc.SetResourceURL("unknown", "id", "http://example.com")
 	if err == nil {
 		t.Error("Expected error for unknown resource type")
@@ -2505,7 +2500,7 @@ func TestService_SetResourceURL_UnknownType(t *testing.T) {
 func TestService_SetResourceURL_NoMetadataProvider(t *testing.T) {
 	svc := NewService(nil, nil)
 	svc.metadataProvider = nil
-	
+
 	err := svc.SetResourceURL("guest", "vm-100", "http://example.com")
 	if err == nil {
 		t.Error("Expected error when metadata provider not available")
@@ -2748,7 +2743,7 @@ func TestService_FindingContextInSystemPrompt(t *testing.T) {
 func TestService_FindingContextCommandRouting(t *testing.T) {
 	// Track which agent the command was routed to
 	routedToAgent := ""
-	
+
 	mockAgentServer := &mockAgentServer{
 		agents: []agentexec.ConnectedAgent{
 			{AgentID: "agent-delly", Hostname: "delly"},
@@ -2812,7 +2807,7 @@ func TestService_FindingContextCommandRouting(t *testing.T) {
 	}
 
 	result, exec := svc.executeTool(context.Background(), req, tc)
-	
+
 	if !exec.Success {
 		t.Errorf("Command execution failed: %s", result)
 	}

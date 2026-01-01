@@ -9,7 +9,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-
 func TestAlertTriggeredAnalyzer_AnalyzeNodeFromAlert(t *testing.T) {
 	// Create a mock state provider
 	stateProvider := &mockStateProvider{
@@ -439,7 +438,6 @@ func TestAlertTriggeredAnalyzer_AnalyzeGenericResourceFromAlert(t *testing.T) {
 	}
 }
 
-
 func TestAlertTriggeredAnalyzer_ResourceKeyFromAlert(t *testing.T) {
 	analyzer := NewAlertTriggeredAnalyzer(nil, nil)
 
@@ -495,7 +493,7 @@ func TestAlertTriggeredAnalyzer_CleanupOldCooldowns(t *testing.T) {
 	// Add some cooldown entries - one old, one recent
 	analyzer.mu.Lock()
 	analyzer.lastAnalyzed["old-resource"] = time.Now().Add(-2 * time.Hour) // > 1 hour old
-	analyzer.lastAnalyzed["recent-resource"] = time.Now()                   // Recent
+	analyzer.lastAnalyzed["recent-resource"] = time.Now()                  // Recent
 	analyzer.mu.Unlock()
 
 	// Cleanup
@@ -829,9 +827,9 @@ func TestAlertTriggeredAnalyzer_AnalyzeResourceByAlert(t *testing.T) {
 
 	// Test cpu alert with node resource ID
 	alertNodeCPU := &alerts.Alert{
-		ID:         "node-cpu",
-		Type:       "cpu",
-		ResourceID: "cluster/node/pve1",
+		ID:           "node-cpu",
+		Type:         "cpu",
+		ResourceID:   "cluster/node/pve1",
 		ResourceName: "pve1",
 	}
 	findingsNodeCPU := analyzer.analyzeResourceByAlert(context.Background(), alertNodeCPU)

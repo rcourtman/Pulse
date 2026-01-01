@@ -146,7 +146,7 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 		s.mu.RLock()
 		rp := s.resourceProvider
 		s.mu.RUnlock()
-		
+
 		if rp != nil {
 			// Try to find the host for this workload
 			resourceName := ""
@@ -157,7 +157,7 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 			} else if name, ok := req.Context["guestName"].(string); ok && name != "" {
 				resourceName = name
 			}
-			
+
 			if resourceName != "" {
 				if host := rp.FindContainerHost(resourceName); host != "" {
 					result.TargetNode = strings.ToLower(host)
@@ -252,7 +252,7 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 		return nil, &RoutingError{
 			TargetNode:      result.TargetNode,
 			AvailableAgents: agentHostnames,
-			Reason: fmt.Sprintf("No agent connected to node %q", result.TargetNode),
+			Reason:          fmt.Sprintf("No agent connected to node %q", result.TargetNode),
 			Suggestion: fmt.Sprintf("Install pulse-agent on %q, or ensure it's in a cluster with %s",
 				result.TargetNode, strings.Join(agentHostnames, ", ")),
 		}
@@ -325,7 +325,7 @@ func (s *Service) findClusterPeerAgent(targetNode string, agents []agentexec.Con
 	if s.persistence == nil {
 		return ""
 	}
-	
+
 	// Load nodes config to check cluster membership
 	nodesConfig, err := s.persistence.LoadNodesConfig()
 	if err != nil || nodesConfig == nil {

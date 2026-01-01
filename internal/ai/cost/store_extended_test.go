@@ -139,10 +139,10 @@ func TestEstimateUSD_AnthropicModels(t *testing.T) {
 		model string
 		known bool
 	}{
-		{"claude-sonnet-4-20250514", true},  // matches claude-sonnet*
-		{"claude-opus-4-20250514", true},    // matches claude-opus*
-		{"claude-haiku-something", true},    // matches claude-haiku*
-		{"unknown-claude", false},           // no match
+		{"claude-sonnet-4-20250514", true}, // matches claude-sonnet*
+		{"claude-opus-4-20250514", true},   // matches claude-opus*
+		{"claude-haiku-something", true},   // matches claude-haiku*
+		{"unknown-claude", false},          // no match
 	}
 
 	for _, tt := range tests {
@@ -174,8 +174,8 @@ func TestEstimateUSD_OpenAIModels(t *testing.T) {
 
 func TestEstimateUSD_DeepSeekModels(t *testing.T) {
 	tests := []struct {
-		model    string
-		known    bool
+		model string
+		known bool
 	}{
 		{"deepseek-chat", true},
 		{"deepseek-coder", true},
@@ -235,8 +235,6 @@ func TestSummary_RetentionInfo(t *testing.T) {
 		t.Errorf("Expected effective days 7, got %d", summary.EffectiveDays)
 	}
 }
-
-
 
 func TestClear_MultipleTimes(t *testing.T) {
 	store := NewStore(30)

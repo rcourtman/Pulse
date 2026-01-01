@@ -14,7 +14,6 @@ func init() {
 	os.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 }
 
-
 func TestTierHasFeature(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -133,27 +132,27 @@ func TestLicenseExpiration(t *testing.T) {
 			IssuedAt:  time.Now().Add(-33 * 24 * time.Hour).Unix(),
 			ExpiresAt: expiredAt,
 		}
-		
+
 		license := &License{
 			Raw:    testKey,
 			Claims: claims,
 		}
-		
+
 		// License is technically expired
 		if !license.IsExpired() {
 			t.Error("License should be expired")
 		}
-		
+
 		// But with grace period set, it should still work
 		gracePeriodEnd := time.Now().Add(4 * 24 * time.Hour)
 		license.GracePeriodEnd = &gracePeriodEnd
-		
+
 		// Service should recognize grace period
 		service := NewService()
 		service.mu.Lock()
 		service.license = license
 		service.mu.Unlock()
-		
+
 		// Should still have features during grace period
 		if !service.HasFeature(FeatureAIPatrol) {
 			t.Error("Should have feature during grace period")
@@ -161,7 +160,7 @@ func TestLicenseExpiration(t *testing.T) {
 		if !service.IsValid() {
 			t.Error("Should be valid during grace period")
 		}
-		
+
 		// Status should show grace period
 		status := service.Status()
 		if !status.InGracePeriod {
@@ -390,9 +389,9 @@ func TestPublicKeyRequiredWithoutDevMode(t *testing.T) {
 func TestStatusSetsGracePeriodDynamically(t *testing.T) {
 	// Test that Status() dynamically sets GracePeriodEnd when license expires
 	// without requiring HasFeature() to be called first
-	
+
 	service := NewService()
-	
+
 	// Create a license that expired 3 days ago (within 7-day grace)
 	expiredAt := time.Now().Add(-3 * 24 * time.Hour)
 	lic := &License{
@@ -406,25 +405,25 @@ func TestStatusSetsGracePeriodDynamically(t *testing.T) {
 		ValidatedAt: time.Now().Add(-33 * 24 * time.Hour),
 		// Note: GracePeriodEnd is NOT set - simulating runtime expiration
 	}
-	
+
 	// Manually set the license without grace period
 	service.mu.Lock()
 	service.license = lic
 	service.mu.Unlock()
-	
+
 	// Verify GracePeriodEnd is nil initially
 	if lic.GracePeriodEnd != nil {
 		t.Fatal("GracePeriodEnd should be nil initially")
 	}
-	
+
 	// Call Status() - this should set GracePeriodEnd dynamically
 	status := service.Status()
-	
+
 	// Verify Status() set the grace period
 	if lic.GracePeriodEnd == nil {
 		t.Fatal("Status() should have set GracePeriodEnd")
 	}
-	
+
 	// Status should show as valid during grace period
 	if !status.Valid {
 		t.Error("Status should be valid during grace period")
@@ -435,7 +434,7 @@ func TestStatusSetsGracePeriodDynamically(t *testing.T) {
 	if status.GracePeriodEnd == nil {
 		t.Error("Status should include GracePeriodEnd")
 	}
-	
+
 	// Verify HasFeature also works during grace
 	if !service.HasFeature(FeatureAIPatrol) {
 		t.Error("HasFeature should return true during grace period")
@@ -696,7 +695,7 @@ func TestValidateLicense_RealSignature(t *testing.T) {
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA","typ":"JWT"}`))
 	payloadBytes, _ := json.Marshal(claims)
 	payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
-	
+
 	signedData := header + "." + payload
 	signature := ed25519.Sign(priv, []byte(signedData))
 	sigEncoded := base64.RawURLEncoding.EncodeToString(signature)

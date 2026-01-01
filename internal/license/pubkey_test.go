@@ -13,10 +13,10 @@ func TestInitPublicKey(t *testing.T) {
 	base64Pub := base64.StdEncoding.EncodeToString(pub)
 
 	tests := []struct {
-		name          string
-		envKey        string
-		embeddedKey   string
-		devMode       string
+		name           string
+		envKey         string
+		embeddedKey    string
+		devMode        string
 		expectedLoaded bool
 	}{
 		{
@@ -78,7 +78,7 @@ func TestInitPublicKey(t *testing.T) {
 
 func TestDecodePublicKey(t *testing.T) {
 	pub, _, _ := ed25519.GenerateKey(nil)
-	
+
 	tests := []struct {
 		name    string
 		input   string

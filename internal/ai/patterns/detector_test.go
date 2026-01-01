@@ -70,7 +70,7 @@ func TestDetector_GetPredictions(t *testing.T) {
 	}
 
 	predictions := d.GetPredictions()
-	
+
 	// Should have a prediction for OOM
 	found := false
 	for _, p := range predictions {
@@ -83,7 +83,7 @@ func TestDetector_GetPredictions(t *testing.T) {
 			break
 		}
 	}
-	
+
 	if !found {
 		t.Error("Expected OOM prediction for vm-100")
 	}
@@ -160,7 +160,7 @@ func TestDetector_FormatForContext(t *testing.T) {
 	if context == "" {
 		t.Error("Expected non-empty context")
 	}
-	
+
 	if !contains(context, "OOM") && !contains(context, "oom") {
 		t.Errorf("Expected context to mention OOM: %s", context)
 	}
@@ -315,4 +315,3 @@ func TestIntToStr(t *testing.T) {
 		}
 	}
 }
-

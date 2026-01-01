@@ -777,4 +777,3 @@ func TestGetResourceSummary(t *testing.T) {
 		t.Errorf("Expected 2 VMs, got %d", vmStats.Count)
 	}
 }
-

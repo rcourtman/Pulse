@@ -39,7 +39,7 @@ func TestComputeTrend_Stable(t *testing.T) {
 	points := make([]MetricPoint, 24)
 	for i := 0; i < 24; i++ {
 		// Small random-looking variation around 50%, but no trend
-		offset := float64(i%3 - 1) * 0.2
+		offset := float64(i%3-1) * 0.2
 		points[i] = MetricPoint{
 			Value:     50 + offset,
 			Timestamp: now.Add(time.Duration(-24+i) * time.Hour),
@@ -92,7 +92,7 @@ func TestComputeTrend_Volatile(t *testing.T) {
 	trend := ComputeTrend(points, "cpu", 24*time.Hour)
 
 	if trend.Direction != TrendVolatile {
-		t.Errorf("Expected TrendVolatile, got %s (stddev: %.2f, mean: %.2f)", 
+		t.Errorf("Expected TrendVolatile, got %s (stddev: %.2f, mean: %.2f)",
 			trend.Direction, trend.StdDev, trend.Average)
 	}
 }
@@ -282,13 +282,13 @@ func TestComputeTrend_PercentageCapping(t *testing.T) {
 	// Even with a long time span, if the raw rate comes out absurdly high
 	// (which shouldn't happen with good data, but let's test the cap)
 	now := time.Now()
-	
+
 	// Create data that would naively produce a >100%/day rate
 	// 5 points over 2 hours with aggressive growth
 	points := make([]MetricPoint, 5)
 	for i := 0; i < 5; i++ {
 		points[i] = MetricPoint{
-			Value:     20 + float64(i)*10, // 20, 30, 40, 50, 60
+			Value:     20 + float64(i)*10,                              // 20, 30, 40, 50, 60
 			Timestamp: now.Add(time.Duration(-4+i) * 30 * time.Minute), // 30 min apart
 		}
 	}
@@ -320,11 +320,11 @@ func TestComputeTrend_MediumTimeSpan(t *testing.T) {
 	if trend.RatePerHour == 0 {
 		t.Errorf("Medium time span should have non-zero hourly rate")
 	}
-	
+
 	// But daily extrapolation should be constrained
 	observedChange := 1.5 * 6 // ~9% change
 	if trend.RatePerDay > observedChange*15 {
-		t.Errorf("Daily rate %.2f should not vastly exceed observed change %.2f", 
+		t.Errorf("Daily rate %.2f should not vastly exceed observed change %.2f",
 			trend.RatePerDay, observedChange)
 	}
 }
@@ -348,7 +348,7 @@ func TestComputeTrend_LongTimeSpanNoChange(t *testing.T) {
 	if trend.Direction == TrendGrowing {
 		t.Errorf("Stable oscillating data should not be classified as Growing")
 	}
-	
+
 	// Rate should be tiny
 	if trend.RatePerDay > 1 || trend.RatePerDay < -1 {
 		t.Errorf("Stable data should have near-zero rate, got %.2f/day", trend.RatePerDay)
@@ -439,5 +439,3 @@ func TestTrimTrailingZeros(t *testing.T) {
 		}
 	}
 }
-
-

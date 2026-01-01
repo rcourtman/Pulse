@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -687,22 +687,22 @@ func TestSummarizeKubernetesDeployments_Truncates(t *testing.T) {
 func TestBuildKubernetesClusterContext(t *testing.T) {
 	now := time.Now().Add(-5 * time.Minute)
 	cluster := models.KubernetesCluster{
-		ID:                "cluster-1",
-		Name:              "prod",
-		Status:            "healthy",
-		Version:           "1.27",
-		Server:            "https://kube.local",
-		Context:           "prod",
-		AgentVersion:      "v1",
-		IntervalSeconds:   60,
-		LastSeen:          now,
-		PendingUninstall:  true,
-		Nodes:             []models.KubernetesNode{{Name: "node-1", Ready: false, Unschedulable: true}},
+		ID:               "cluster-1",
+		Name:             "prod",
+		Status:           "healthy",
+		Version:          "1.27",
+		Server:           "https://kube.local",
+		Context:          "prod",
+		AgentVersion:     "v1",
+		IntervalSeconds:  60,
+		LastSeen:         now,
+		PendingUninstall: true,
+		Nodes:            []models.KubernetesNode{{Name: "node-1", Ready: false, Unschedulable: true}},
 		Pods: []models.KubernetesPod{
 			{Name: "pod-1", Namespace: "default", Phase: "Pending"},
 			{Name: "pod-2", Namespace: "default", Phase: "Running", Restarts: 2},
 		},
-		Deployments:       []models.KubernetesDeployment{{Namespace: "default", Name: "dep", DesiredReplicas: 1}},
+		Deployments: []models.KubernetesDeployment{{Namespace: "default", Name: "dep", DesiredReplicas: 1}},
 	}
 
 	ctx := buildKubernetesClusterContext(cluster)

@@ -267,21 +267,21 @@ func mergeTemperatureData(hostAgentTemp, proxyTemp *models.Temperature) *models.
 
 	// Start with host agent data as base since it's more reliable
 	result := &models.Temperature{
-		CPUPackage: hostAgentTemp.CPUPackage,
-		CPUMax:     hostAgentTemp.CPUMax,
-		CPUMin:     proxyTemp.CPUMin, // Preserve historical min
+		CPUPackage:   hostAgentTemp.CPUPackage,
+		CPUMax:       hostAgentTemp.CPUMax,
+		CPUMin:       proxyTemp.CPUMin,                                           // Preserve historical min
 		CPUMaxRecord: math.Max(hostAgentTemp.CPUPackage, proxyTemp.CPUMaxRecord), // Update historical max
-		MinRecorded: proxyTemp.MinRecorded,
-		MaxRecorded: proxyTemp.MaxRecorded,
-		Cores:       hostAgentTemp.Cores,
-		GPU:         hostAgentTemp.GPU,
-		NVMe:        hostAgentTemp.NVMe,
-		Available:   true,
-		HasCPU:      hostAgentTemp.HasCPU,
-		HasGPU:      hostAgentTemp.HasGPU,
-		HasNVMe:     hostAgentTemp.HasNVMe,
-		HasSMART:    hostAgentTemp.HasSMART || proxyTemp.HasSMART,
-		LastUpdate:  hostAgentTemp.LastUpdate,
+		MinRecorded:  proxyTemp.MinRecorded,
+		MaxRecorded:  proxyTemp.MaxRecorded,
+		Cores:        hostAgentTemp.Cores,
+		GPU:          hostAgentTemp.GPU,
+		NVMe:         hostAgentTemp.NVMe,
+		Available:    true,
+		HasCPU:       hostAgentTemp.HasCPU,
+		HasGPU:       hostAgentTemp.HasGPU,
+		HasNVMe:      hostAgentTemp.HasNVMe,
+		HasSMART:     hostAgentTemp.HasSMART || proxyTemp.HasSMART,
+		LastUpdate:   hostAgentTemp.LastUpdate,
 	}
 
 	// Use host agent CPU data if available, fall back to proxy

@@ -97,7 +97,7 @@ func applyTrendSanityChecks(trend Trend, actualSpan time.Duration, metricName st
 
 	// For percentage metrics (0-100 range), apply physical limits
 	// A metric bounded 0-100 can't grow more than 100% per day
-	isPercentageMetric := metricName == "cpu" || metricName == "memory" || metricName == "disk" || 
+	isPercentageMetric := metricName == "cpu" || metricName == "memory" || metricName == "disk" ||
 		metricName == "usage" || mean <= 100
 
 	if isPercentageMetric {
@@ -169,7 +169,7 @@ func linearRegression(points []MetricPoint) LinearRegressionResult {
 	}
 
 	n := float64(len(points))
-	
+
 	// Use time relative to first point for numerical stability
 	baseTime := points[0].Timestamp
 
@@ -277,19 +277,19 @@ func ComputePercentiles(points []MetricPoint, percentiles ...int) map[int]float6
 		if p < 0 || p > 100 {
 			continue
 		}
-		
+
 		// Calculate index for percentile
 		idx := float64(p) / 100.0 * float64(len(values)-1)
 		lower := int(math.Floor(idx))
 		upper := int(math.Ceil(idx))
-		
+
 		if lower >= len(values) {
 			lower = len(values) - 1
 		}
 		if upper >= len(values) {
 			upper = len(values) - 1
 		}
-		
+
 		if lower == upper {
 			result[p] = values[lower]
 		} else {
@@ -388,7 +388,7 @@ func trimTrailingZeros(s string) string {
 	if dotIdx == -1 {
 		return s // No decimal point
 	}
-	
+
 	// Trim trailing zeros after decimal
 	end := len(s)
 	for end > dotIdx+1 && s[end-1] == '0' {

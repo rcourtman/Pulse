@@ -18,12 +18,12 @@ func TestRouteToAgent_TargetHostExplicit(t *testing.T) {
 	}
 
 	tests := []struct {
-		name            string
-		req             ExecuteRequest
-		command         string
-		wantAgentID     string
-		wantHostname    string
-		wantMethod      string
+		name         string
+		req          ExecuteRequest
+		command      string
+		wantAgentID  string
+		wantHostname string
+		wantMethod   string
 	}{
 		{
 			name: "explicit node in context routes correctly",

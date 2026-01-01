@@ -87,14 +87,14 @@ func TestCommandClient_connectAndHandle_ExecutesCommandAndReturnsResult(t *testi
 	defer cancel()
 
 	client := &CommandClient{
-		pulseURL:  strings.TrimRight(server.URL, "/"),
-		apiToken:  "token",
-		agentID:   "agent-1",
-		hostname:  "host-1",
-		platform:  "linux",
-		version:   "1.2.3",
-		logger:    zerolog.Nop(),
-		done:      make(chan struct{}),
+		pulseURL: strings.TrimRight(server.URL, "/"),
+		apiToken: "token",
+		agentID:  "agent-1",
+		hostname: "host-1",
+		platform: "linux",
+		version:  "1.2.3",
+		logger:   zerolog.Nop(),
+		done:     make(chan struct{}),
 	}
 
 	errCh := make(chan error, 1)
@@ -129,4 +129,3 @@ func TestCommandClient_connectAndHandle_ExecutesCommandAndReturnsResult(t *testi
 		t.Fatalf("timed out waiting for connectAndHandle to return")
 	}
 }
-

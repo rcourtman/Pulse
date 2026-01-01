@@ -234,9 +234,9 @@ func TestFormatTrendLine(t *testing.T) {
 		expected string
 	}{
 		{
-			name:   "insufficient data",
-			metric: "cpu",
-			trend:  Trend{DataPoints: 2},
+			name:     "insufficient data",
+			metric:   "cpu",
+			trend:    Trend{DataPoints: 2},
 			expected: "",
 		},
 		{
@@ -385,11 +385,11 @@ func TestFormatGuestForContext(t *testing.T) {
 		"pve-1",
 		"vm",
 		"running",
-		100,   // VMID
-		0.35,  // CPU (0-1)
-		65.0,  // Memory (0-100)
-		45.0,  // Disk (0-100)
-		3600,  // 1 hour uptime
+		100,  // VMID
+		0.35, // CPU (0-1)
+		65.0, // Memory (0-100)
+		45.0, // Disk (0-100)
+		3600, // 1 hour uptime
 		lastBackup,
 		trends,
 	)
@@ -427,9 +427,9 @@ func TestFormatStorageForContext(t *testing.T) {
 		Name:   "local-zfs",
 		Node:   "pve-1",
 		Status: "available",
-		Used:   500 * 1024 * 1024 * 1024, // 500GB
+		Used:   500 * 1024 * 1024 * 1024,  // 500GB
 		Total:  1000 * 1024 * 1024 * 1024, // 1TB
-		Usage:  0, // Will be calculated
+		Usage:  0,                         // Will be calculated
 	}
 
 	trends := map[string]Trend{
@@ -721,7 +721,7 @@ func TestFormatMetricSamples_InsufficientData(t *testing.T) {
 
 func TestDownsampleMetrics(t *testing.T) {
 	now := time.Now()
-	
+
 	// Create 100 points
 	points := make([]MetricPoint, 100)
 	for i := 0; i < 100; i++ {
@@ -752,7 +752,7 @@ func TestDownsampleMetrics(t *testing.T) {
 
 func TestDownsampleMetrics_SmallInput(t *testing.T) {
 	now := time.Now()
-	
+
 	// Create 5 points - less than target
 	points := []MetricPoint{
 		{Value: 10, Timestamp: now.Add(-4 * time.Minute)},
@@ -773,11 +773,11 @@ func TestDownsampleMetrics_SmallInput(t *testing.T) {
 func TestFormatResourceContext_WithMetricSamples(t *testing.T) {
 	now := time.Now()
 	ctx := ResourceContext{
-		ResourceID:    "ct-105",
-		ResourceType:  "container",
-		ResourceName:  "frigate",
-		Status:        "running",
-		CurrentDisk:   30.7,
+		ResourceID:   "ct-105",
+		ResourceType: "container",
+		ResourceName: "frigate",
+		Status:       "running",
+		CurrentDisk:  30.7,
 		MetricSamples: map[string][]MetricPoint{
 			"disk": {
 				{Value: 26.2, Timestamp: now.Add(-3 * time.Hour)},
@@ -794,4 +794,3 @@ func TestFormatResourceContext_WithMetricSamples(t *testing.T) {
 		t.Error("Expected result to contain History section with metric samples")
 	}
 }
-

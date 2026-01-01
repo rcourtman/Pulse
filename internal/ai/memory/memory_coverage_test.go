@@ -794,7 +794,7 @@ func TestIncidentStore_LoadFromDisk_Scenarios(t *testing.T) {
 		}
 
 		store := &IncidentStore{
-			filePath:    path,
+			filePath:     path,
 			maxIncidents: 1,
 			maxAge:       24 * time.Hour,
 		}

@@ -65,15 +65,15 @@ type Anomaly struct {
 
 // Prediction represents a forecasted future event
 type Prediction struct {
-	ResourceID  string        // Which resource this prediction is for
-	Metric      string        // Which metric
-	Event       string        // Type of predicted event (capacity_full, oom, etc.)
-	ETA         time.Time     // When the event is predicted to occur
-	DaysUntil   float64       // Days until event
-	Confidence  float64       // 0-1 confidence level
-	Basis       string        // Explanation of how prediction was made
-	GrowthRate  float64       // Rate of change used for projection
-	CurrentPct  float64       // Current usage percentage
+	ResourceID string    // Which resource this prediction is for
+	Metric     string    // Which metric
+	Event      string    // Type of predicted event (capacity_full, oom, etc.)
+	ETA        time.Time // When the event is predicted to occur
+	DaysUntil  float64   // Days until event
+	Confidence float64   // 0-1 confidence level
+	Basis      string    // Explanation of how prediction was made
+	GrowthRate float64   // Rate of change used for projection
+	CurrentPct float64   // Current usage percentage
 }
 
 // Change represents a detected configuration or state change
@@ -91,23 +91,23 @@ type Change struct {
 type ChangeType string
 
 const (
-	ChangeCreated    ChangeType = "created"    // New resource appeared
-	ChangeDeleted    ChangeType = "deleted"    // Resource disappeared
-	ChangeConfig     ChangeType = "config"     // Configuration change (RAM, CPU)
-	ChangeStatus     ChangeType = "status"     // Status change (started, stopped)
-	ChangeMigrated   ChangeType = "migrated"   // Moved to different node
+	ChangeCreated     ChangeType = "created"     // New resource appeared
+	ChangeDeleted     ChangeType = "deleted"     // Resource disappeared
+	ChangeConfig      ChangeType = "config"      // Configuration change (RAM, CPU)
+	ChangeStatus      ChangeType = "status"      // Status change (started, stopped)
+	ChangeMigrated    ChangeType = "migrated"    // Moved to different node
 	ChangePerformance ChangeType = "performance" // Significant performance shift
 )
 
 // ResourceTrends contains all trend data for a single resource
 type ResourceTrends struct {
-	ResourceID   string           // Unique identifier
-	ResourceType string           // node, vm, container, storage, docker_host
-	ResourceName string           // Display name
-	Trends       map[string]Trend // Metric name -> trend data
-	DataAvailable bool            // Whether we have historical data for this resource
-	OldestData   time.Time        // Timestamp of oldest data point
-	NewestData   time.Time        // Timestamp of newest data point
+	ResourceID    string           // Unique identifier
+	ResourceType  string           // node, vm, container, storage, docker_host
+	ResourceName  string           // Display name
+	Trends        map[string]Trend // Metric name -> trend data
+	DataAvailable bool             // Whether we have historical data for this resource
+	OldestData    time.Time        // Timestamp of oldest data point
+	NewestData    time.Time        // Timestamp of newest data point
 }
 
 // ResourceContext contains all context for a single resource
@@ -119,11 +119,11 @@ type ResourceContext struct {
 	VMID         int    // Proxmox VMID for VMs/containers (0 if not applicable)
 
 	// Current state (point-in-time)
-	CurrentCPU     float64
-	CurrentMemory  float64
-	CurrentDisk    float64
-	Status         string
-	Uptime         time.Duration
+	CurrentCPU    float64
+	CurrentMemory float64
+	CurrentDisk   float64
+	Status        string
+	Uptime        time.Duration
 
 	// Historical analysis
 	Trends    map[string]Trend    // metric -> trend (24h and 7d)
@@ -139,10 +139,10 @@ type ResourceContext struct {
 	Predictions []Prediction
 
 	// Operational memory
-	UserNotes       []string  // User-provided annotations
-	PastIssues      []string  // Summary of past findings
-	LastRemediation string    // What was done last time
-	RecentChanges   []Change  // Recent configuration changes
+	UserNotes       []string // User-provided annotations
+	PastIssues      []string // Summary of past findings
+	LastRemediation string   // What was done last time
+	RecentChanges   []Change // Recent configuration changes
 
 	// Additional metadata (e.g., OCI image for OCI containers)
 	Metadata map[string]interface{}
@@ -152,11 +152,11 @@ type ResourceContext struct {
 type InfrastructureContext struct {
 	// Timestamp of this context snapshot
 	GeneratedAt time.Time
-	
+
 	// Summary statistics
-	TotalResources     int
-	ResourcesWithData  int // Resources with historical data available
-	
+	TotalResources    int
+	ResourcesWithData int // Resources with historical data available
+
 	// Categorized resources with their context
 	Nodes       []ResourceContext
 	VMs         []ResourceContext
@@ -164,7 +164,7 @@ type InfrastructureContext struct {
 	Storage     []ResourceContext
 	DockerHosts []ResourceContext
 	Hosts       []ResourceContext
-	
+
 	// Global insights
 	Anomalies   []Anomaly    // Cross-infrastructure anomalies
 	Predictions []Prediction // Capacity and failure predictions
@@ -173,12 +173,12 @@ type InfrastructureContext struct {
 
 // Stats contains summary statistics for a metric
 type Stats struct {
-	Count   int
-	Min     float64
-	Max     float64
-	Sum     float64
-	Mean    float64
-	StdDev  float64
+	Count  int
+	Min    float64
+	Max    float64
+	Sum    float64
+	Mean   float64
+	StdDev float64
 }
 
 // LinearRegressionResult contains the results of linear regression

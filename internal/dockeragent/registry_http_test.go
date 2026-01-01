@@ -50,7 +50,7 @@ func TestRegistryChecker_CheckImageUpdate_Behavior(t *testing.T) {
 				}
 			}),
 		}
-		
+
 		result := checker.CheckImageUpdate(context.Background(), "", "sha256:current", "", "", "")
 		if result == nil {
 			t.Fatal("Expected result for empty image")
@@ -209,7 +209,6 @@ func TestParseImageReference_EdgeCases(t *testing.T) {
 		})
 	}
 }
-
 
 func TestImageUpdateResult_Fields(t *testing.T) {
 	result := ImageUpdateResult{

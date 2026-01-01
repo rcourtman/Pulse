@@ -327,4 +327,3 @@ func TestListGuests(t *testing.T) {
 		t.Errorf("Expected 2 guests, got %d", len(guests))
 	}
 }
-

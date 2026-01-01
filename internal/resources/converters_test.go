@@ -119,15 +119,15 @@ func TestFromNode(t *testing.T) {
 
 func TestFromVM(t *testing.T) {
 	vm := models.VM{
-		ID:        "pve1/qemu/100",
-		VMID:      100,
-		Name:      "webserver",
-		Node:      "node1",
-		Instance:  "pve1",
-		Status:    "running",
-		Type:      "qemu",
-		CPU:       0.15,
-		CPUs:      4,
+		ID:       "pve1/qemu/100",
+		VMID:     100,
+		Name:     "webserver",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		Type:     "qemu",
+		CPU:      0.15,
+		CPUs:     4,
 		Memory: models.Memory{
 			Total: 8 * 1024 * 1024 * 1024,
 			Used:  4 * 1024 * 1024 * 1024,
@@ -391,17 +391,17 @@ func TestFromHost(t *testing.T) {
 
 func TestFromDockerHost(t *testing.T) {
 	dh := models.DockerHost{
-		ID:           "docker-host-1",
-		AgentID:      "agent-xyz",
-		Hostname:     "docker-server",
-		DisplayName:  "Docker Server",
-		MachineID:    "machine-id-123",
-		OS:           "linux",
-		Architecture: "amd64",
-		Runtime:      "docker",
+		ID:            "docker-host-1",
+		AgentID:       "agent-xyz",
+		Hostname:      "docker-server",
+		DisplayName:   "Docker Server",
+		MachineID:     "machine-id-123",
+		OS:            "linux",
+		Architecture:  "amd64",
+		Runtime:       "docker",
 		DockerVersion: "24.0.5",
-		CPUs:         16,
-		CPUUsage:     35.0,
+		CPUs:          16,
+		CPUUsage:      35.0,
 		Memory: models.Memory{
 			Total: 64 * 1024 * 1024 * 1024,
 			Used:  32 * 1024 * 1024 * 1024,

@@ -11,7 +11,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
 
-
 func TestHandleGetInfraUpdates(t *testing.T) {
 	// We can't easily create a real Monitor, so we'll test the core logic
 	t.Run("collectDockerUpdates filters correctly", func(t *testing.T) {

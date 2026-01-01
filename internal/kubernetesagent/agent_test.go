@@ -293,9 +293,9 @@ func TestSendReport_SetsHeadersAndHandlesStatus(t *testing.T) {
 	defer server.Close()
 
 	a := &Agent{
-		cfg:         Config{APIToken: "token"},
-		httpClient:  server.Client(),
-		pulseURL:    server.URL,
+		cfg:          Config{APIToken: "token"},
+		httpClient:   server.Client(),
+		pulseURL:     server.URL,
 		agentVersion: "1.2.3",
 	}
 
@@ -306,4 +306,3 @@ func TestSendReport_SetsHeadersAndHandlesStatus(t *testing.T) {
 		t.Fatalf("expected server to receive request")
 	}
 }
-

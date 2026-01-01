@@ -9,6 +9,10 @@
 			"version": "20"
 		}
 	},
+	"mounts": [
+		"source=pulse-go-build-cache,target=/go/pkg,type=volume",
+		"source=pulse-npm-cache,target=/home/vscode/.npm,type=volume"
+	],
 	"customizations": {
 		"vscode": {
 			"extensions": [
@@ -19,7 +23,9 @@
 			],
 			"settings": {
 				"go.gopath": "/go",
-				"go.toolsManagement.autoUpdate": true
+				"go.toolsManagement.autoUpdate": true,
+				"go.useLanguageServer": true,
+				"go.testExplorer.enable": true
 			}
 		}
 	},
@@ -39,6 +45,7 @@
 		"FRONTEND_DEV_HOST": "0.0.0.0",
 		"LAN_IP": "localhost"
 	},
-	"updateContentCommand": "sudo chown -R vscode:vscode /workspaces/pulse && cd frontend-modern && npm install",
+	"updateContentCommand": "sudo chown -R vscode:vscode /workspaces/pulse /go /home/vscode/.npm && cd frontend-modern && npm install",
+	"postCreateCommand": "echo source /workspaces/pulse/.devcontainer/.bashrc >> ~/.bashrc",
 	"remoteUser": "vscode"
 }

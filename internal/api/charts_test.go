@@ -161,9 +161,9 @@ func TestMetricPointStructure(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		point     MetricPoint
-		wantJSON  string
+		name     string
+		point    MetricPoint
+		wantJSON string
 	}{
 		{
 			name:     "positive values",
@@ -201,8 +201,8 @@ func TestTimeRangeConversion(t *testing.T) {
 
 	// Test the time range conversion logic used in handleCharts
 	tests := []struct {
-		rangeStr     string
-		expectedDur  time.Duration
+		rangeStr    string
+		expectedDur time.Duration
 	}{
 		{"5m", 5 * time.Minute},
 		{"15m", 15 * time.Minute},
@@ -344,10 +344,10 @@ func TestDockerContainerDiskPercentCalculation(t *testing.T) {
 	// Test disk percentage calculation for Docker containers
 	// Mirrors: float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
 	tests := []struct {
-		name                  string
-		writableLayerBytes    uint64
-		rootFilesystemBytes   uint64
-		expectedDiskPercent   float64
+		name                string
+		writableLayerBytes  uint64
+		rootFilesystemBytes uint64
+		expectedDiskPercent float64
 	}{
 		{"50% usage", 500, 1000, 50.0},
 		{"100% usage", 1000, 1000, 100.0},
@@ -379,12 +379,12 @@ func TestChartStatsOldestTimestamp(t *testing.T) {
 	t.Parallel()
 
 	now := time.Now().Unix() * 1000
-	oneHourAgo := now - 3600000  // 1 hour in ms
+	oneHourAgo := now - 3600000    // 1 hour in ms
 	fourHoursAgo := now - 14400000 // 4 hours in ms
 
 	// Simulate finding oldest timestamp
 	timestamps := []int64{now, oneHourAgo, fourHoursAgo, now - 1800000}
-	
+
 	oldestTimestamp := now
 	for _, ts := range timestamps {
 		if ts < oldestTimestamp {
@@ -398,7 +398,7 @@ func TestChartStatsOldestTimestamp(t *testing.T) {
 
 	stats := ChartStats{OldestDataTimestamp: oldestTimestamp}
 	if stats.OldestDataTimestamp != fourHoursAgo {
-		t.Errorf("ChartStats.OldestDataTimestamp: got %d, want %d", 
+		t.Errorf("ChartStats.OldestDataTimestamp: got %d, want %d",
 			stats.OldestDataTimestamp, fourHoursAgo)
 	}
 }

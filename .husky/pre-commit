@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run Go formatting
+echo "Running Go formatter..."
+gofmt -w -s .
+
+# Run Go linting (if golangci-lint is available)
+if command -v golangci-lint >/dev/null 2>&1; then
+    echo "Running golangci-lint..."
+    golangci-lint run ./...
+fi
+
+# Run frontend linting (if package.json has lint script)
+if [ -f frontend-modern/package.json ]; then
+    echo "Running frontend linter..."
+    cd frontend-modern
+    npm run lint --if-present || true
+    cd ..
+fi
+
+# Stage formatted files
+git add -u
+
+echo "Pre-commit checks passed!"

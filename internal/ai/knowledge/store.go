@@ -160,7 +160,7 @@ func (s *Store) SaveNote(guestID, guestName, guestType, category, title, content
 			GuestType: guestType,
 			Notes:     []Note{},
 		}
-		
+
 		// Check for existing file
 		filePath := s.guestFilePath(guestID)
 		if data, err := os.ReadFile(filePath); err == nil {
@@ -365,8 +365,8 @@ func (s *Store) ListGuests() ([]string, error) {
 // This is used when no specific target is selected to give the AI full context
 // To prevent context bloat, it limits output to maxGuests and maxBytes
 func (s *Store) FormatAllForContext() string {
-	const maxGuests = 10   // Only include the 10 most recently updated guests
-	const maxBytes = 8000  // Cap total output at ~8KB to leave room for other context
+	const maxGuests = 10  // Only include the 10 most recently updated guests
+	const maxBytes = 8000 // Cap total output at ~8KB to leave room for other context
 
 	guests, err := s.ListGuests()
 	if err != nil || len(guests) == 0 {
@@ -450,7 +450,7 @@ func (s *Store) FormatAllForContext() string {
 					content = content[:2] + "****" + content[len(content)-2:]
 				}
 				noteLine := fmt.Sprintf("\n- **%s**: %s", note.Title, content)
-				
+
 				// Check if adding this note would exceed our byte limit
 				if currentBytes+len(guestSection)+len(noteLine) > maxBytes {
 					// Stop adding notes, we've hit the limit

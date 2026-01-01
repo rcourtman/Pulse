@@ -56,4 +56,3 @@ func TestHandleDownloadUnifiedAgentSetsChecksumAndInvalidatesOnChange(t *testing
 		t.Fatalf("unexpected response body after update")
 	}
 }
-

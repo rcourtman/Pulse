@@ -23,17 +23,17 @@ func NewUpdateDetectionHandlers(monitor *monitoring.Monitor) *UpdateDetectionHan
 
 // ContainerUpdateInfo represents a container with an available update
 type ContainerUpdateInfo struct {
-	HostID           string `json:"hostId"`
-	HostName         string `json:"hostName"`
-	ContainerID      string `json:"containerId"`
-	ContainerName    string `json:"containerName"`
-	Image            string `json:"image"`
-	CurrentDigest    string `json:"currentDigest,omitempty"`
-	LatestDigest     string `json:"latestDigest,omitempty"`
-	UpdateAvailable  bool   `json:"updateAvailable"`
-	LastChecked      int64  `json:"lastChecked,omitempty"`
-	Error            string `json:"error,omitempty"`
-	ResourceType     string `json:"resourceType"`
+	HostID          string `json:"hostId"`
+	HostName        string `json:"hostName"`
+	ContainerID     string `json:"containerId"`
+	ContainerName   string `json:"containerName"`
+	Image           string `json:"image"`
+	CurrentDigest   string `json:"currentDigest,omitempty"`
+	LatestDigest    string `json:"latestDigest,omitempty"`
+	UpdateAvailable bool   `json:"updateAvailable"`
+	LastChecked     int64  `json:"lastChecked,omitempty"`
+	Error           string `json:"error,omitempty"`
+	ResourceType    string `json:"resourceType"`
 }
 
 // HandleGetInfraUpdates returns all tracked infrastructure updates with optional filtering.
@@ -237,7 +237,6 @@ func (h *UpdateDetectionHandlers) HandleTriggerInfraUpdateCheck(w http.ResponseW
 
 	writeErrorResponse(w, http.StatusBadRequest, "missing_params", "Either hostId or resourceId is required", nil)
 }
-
 
 // HandleGetInfraUpdatesForHost returns all updates for a specific host.
 // GET /api/infra-updates/host/{hostId}

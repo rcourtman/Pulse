@@ -6,11 +6,11 @@ import (
 
 func TestParseImageReference(t *testing.T) {
 	tests := []struct {
-		name       string
-		image      string
-		wantReg    string
-		wantRepo   string
-		wantTag    string
+		name     string
+		image    string
+		wantReg  string
+		wantRepo string
+		wantTag  string
 	}{
 		{
 			name:     "official image without tag",

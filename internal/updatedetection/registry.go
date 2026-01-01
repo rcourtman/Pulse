@@ -17,7 +17,7 @@ import (
 
 // RegistryConfig holds authentication for a container registry.
 type RegistryConfig struct {
-	Host     string `json:"host"`              // e.g., "registry-1.docker.io", "ghcr.io"
+	Host     string `json:"host"` // e.g., "registry-1.docker.io", "ghcr.io"
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"` // token or password
 	Insecure bool   `json:"insecure,omitempty"` // Skip TLS verification
@@ -59,10 +59,10 @@ func NewRegistryChecker(logger zerolog.Logger) *RegistryChecker {
 				TLSClientConfig: &tls.Config{
 					MinVersion: tls.VersionTLS12,
 				},
-				MaxIdleConns:        10,
-				IdleConnTimeout:     90 * time.Second,
-				DisableCompression:  false,
-				DisableKeepAlives:   false,
+				MaxIdleConns:       10,
+				IdleConnTimeout:    90 * time.Second,
+				DisableCompression: false,
+				DisableKeepAlives:  false,
 			},
 		},
 		configs: make(map[string]RegistryConfig),
@@ -130,7 +130,7 @@ func ParseImageReference(image string) (registry, repository, tag string) {
 // CheckImageUpdate compares current digest with registry's latest.
 func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDigest string) (*ImageUpdateInfo, error) {
 	registry, repository, tag := ParseImageReference(image)
-	
+
 	// Skip digest-pinned images
 	if registry == "" {
 		return &ImageUpdateInfo{
@@ -168,7 +168,7 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 	if err != nil {
 		// Cache the error to avoid hammering the registry
 		r.cacheError(cacheKey, err.Error())
-		
+
 		r.logger.Debug().
 			Str("image", image).
 			Str("registry", registry).
@@ -278,7 +278,7 @@ func (r *RegistryChecker) getAuthToken(ctx context.Context, registry, repository
 	// Docker Hub requires auth token even for public images
 	if registry == "registry-1.docker.io" {
 		tokenURL := fmt.Sprintf("https://auth.docker.io/token?service=registry.docker.io&scope=repository:%s:pull", repository)
-		
+
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenURL, nil)
 		if err != nil {
 			return "", err

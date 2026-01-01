@@ -191,4 +191,3 @@ func TestAlertConversions_Nil(t *testing.T) {
 		t.Fatalf("expected empty AlertInfo from nil models alert, got %+v", info)
 	}
 }
-

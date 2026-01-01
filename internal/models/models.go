@@ -191,8 +191,8 @@ type Host struct {
 	IsLegacy          bool                   `json:"isLegacy,omitempty"`
 
 	// Linking: When this host agent is running on a known PVE node/VM/container
-	LinkedNodeID     string `json:"linkedNodeId,omitempty"`     // ID of the PVE node this agent is running on
-	LinkedVMID       string `json:"linkedVmId,omitempty"`       // ID of the VM this agent is running inside
+	LinkedNodeID      string `json:"linkedNodeId,omitempty"`      // ID of the PVE node this agent is running on
+	LinkedVMID        string `json:"linkedVmId,omitempty"`        // ID of the VM this agent is running inside
 	LinkedContainerID string `json:"linkedContainerId,omitempty"` // ID of the container this agent is running inside
 }
 

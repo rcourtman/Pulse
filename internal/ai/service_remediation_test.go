@@ -17,7 +17,7 @@ func TestService_Remediation(t *testing.T) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
-	
+
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
 	patrol := NewPatrolService(svc, nil)
@@ -62,7 +62,7 @@ func TestService_Remediation(t *testing.T) {
 func TestService_Remediation_NoPatrolService(t *testing.T) {
 	svc := NewService(nil, nil)
 	// patrolService is nil, logRemediation should handle gracefully
-	
+
 	req := ExecuteRequest{
 		TargetID:   "vm-102",
 		TargetType: "vm",
@@ -78,13 +78,13 @@ func TestService_Remediation_NoRemediationLog(t *testing.T) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
-	
+
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
 	patrol := NewPatrolService(svc, nil)
 	svc.patrolService = patrol
 	// remediationLog is nil on patrol
-	
+
 	req := ExecuteRequest{
 		TargetID:   "vm-103",
 		TargetType: "vm",
@@ -96,7 +96,7 @@ func TestService_Remediation_NoRemediationLog(t *testing.T) {
 
 func TestService_BuildRemediationContext_Empty(t *testing.T) {
 	svc := NewService(nil, nil)
-	
+
 	// With no remediationLog set, should return empty
 	ctx := svc.buildRemediationContext("unknown", "Unknown problem")
 	if ctx != "" {
@@ -122,12 +122,12 @@ func TestTruncateString(t *testing.T) {
 		{"exactly at max minus ellipsis", "1234", 4, "1234"},
 		{"just over", "12345", 4, "1..."},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := truncateString(tt.input, tt.max)
 			if result != tt.expected {
-				t.Errorf("truncateString(%q, %d) = %q, expected %q", 
+				t.Errorf("truncateString(%q, %d) = %q, expected %q",
 					tt.input, tt.max, result, tt.expected)
 			}
 		})
@@ -145,14 +145,11 @@ func TestContainsString(t *testing.T) {
 		{"", "test", false},
 		{"test", "", true},
 	}
-	
+
 	for _, tt := range tests {
 		if containsString(tt.haystack, tt.needle) != tt.expected {
-			t.Errorf("containsString(%q, %q) expected %v", 
+			t.Errorf("containsString(%q, %q) expected %v",
 				tt.haystack, tt.needle, tt.expected)
 		}
 	}
 }
-
-
-

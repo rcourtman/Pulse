@@ -49,7 +49,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version-file: go.mod
           cache: true
 
       - name: Run backend tests
@@ -90,13 +90,7 @@ jobs:
           MOCK_RATE_LIMIT: "false"
           MOCK_STALE_RELEASE: "false"
         run: |
-          docker-compose -f docker-compose.test.yml up -d
-
-          echo "Waiting for mock-github to be healthy..."
-          timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-mock-github | grep -q "healthy"; do sleep 2; done'
-
-          echo "Waiting for pulse-test-server to be healthy..."
-          timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-test-server | grep -q "healthy"; do sleep 2; done'
+          docker compose -f docker-compose.test.yml up -d --wait
 
           echo "Verifying Pulse API is reachable..."
           timeout 60 sh -c 'until curl -fsS http://localhost:7655/api/health > /dev/null; do sleep 2; done'
@@ -107,9 +101,9 @@ jobs:
           echo "Running API-level update integration test..."
           UPDATE_API_BASE_URL=http://localhost:7655 go test ../../tests/integration/api -run TestUpdateFlowIntegration -count=1
 
-          docker-compose -f docker-compose.test.yml down -v
+          docker compose -f docker-compose.test.yml down -v
 
       - name: Cleanup integration environment
         if: always()
         working-directory: tests/integration
-        run: docker-compose -f docker-compose.test.yml down -v || true
+        run: docker compose -f docker-compose.test.yml down -v || true

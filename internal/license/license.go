@@ -448,14 +448,14 @@ func ValidateLicense(licenseKey string) (*License, error) {
 		// Grace period: 7 days after expiration
 		gracePeriodDuration := 7 * 24 * time.Hour
 		gracePeriodEnd := expirationTime.Add(gracePeriodDuration)
-		
+
 		if time.Now().Before(gracePeriodEnd) {
 			// Within grace period - allow activation but mark as in grace period
 			license.GracePeriodEnd = &gracePeriodEnd
 			// License is still valid during grace period
 		} else {
 			// Past grace period - reject
-			return nil, fmt.Errorf("%w: expired on %s (grace period ended %s)", 
+			return nil, fmt.Errorf("%w: expired on %s (grace period ended %s)",
 				ErrExpiredLicense,
 				expirationTime.Format("2006-01-02"),
 				gracePeriodEnd.Format("2006-01-02"))

@@ -335,8 +335,8 @@ func TestFormatDuration(t *testing.T) {
 		input    time.Duration
 		expected string
 	}{
-		{30 * time.Second, "just now"},  // < 1 minute returns "just now"
-		{1 * time.Second, "just now"},    // < 1 minute returns "just now"
+		{30 * time.Second, "just now"}, // < 1 minute returns "just now"
+		{1 * time.Second, "just now"},  // < 1 minute returns "just now"
 		{5 * time.Minute, "5 minutes"},
 		{1 * time.Minute, "1 minute"},
 		{2 * time.Hour, "2 hours"},
@@ -380,7 +380,7 @@ func TestTruncateOutput(t *testing.T) {
 		expected string
 	}{
 		{"short", 10, "short"},
-		{"longer string", 5, "lo..."},  // truncates at maxLen-3 + "..."
+		{"longer string", 5, "lo..."}, // truncates at maxLen-3 + "..."
 		{"", 10, ""},
 	}
 
@@ -394,8 +394,8 @@ func TestTruncateOutput(t *testing.T) {
 
 func TestExtractKeywords(t *testing.T) {
 	tests := []struct {
-		input         string
-		minKeywords   int
+		input       string
+		minKeywords int
 	}{
 		{"High memory usage causing OOM", 3},
 		{"CPU spike detected", 2},

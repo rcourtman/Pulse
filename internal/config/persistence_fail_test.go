@@ -13,7 +13,7 @@ func TestNewConfigPersistenceFailsWhenEncryptedDataPresentWithoutKey(t *testing.
 	// We need to temporarily rename it if it exists to properly test this scenario
 	systemKeyPath := "/etc/pulse/.encryption.key"
 	backupKeyPath := "/etc/pulse/.encryption.key.test-backup"
-	
+
 	if _, err := os.Stat(systemKeyPath); err == nil {
 		// Key exists - temporarily rename it
 		if err := os.Rename(systemKeyPath, backupKeyPath); err != nil {

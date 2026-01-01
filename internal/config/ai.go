@@ -40,16 +40,16 @@ type AIConfig struct {
 	OAuthExpiresAt    time.Time  `json:"oauth_expires_at,omitempty"`    // Token expiration time
 
 	// Patrol settings for background AI monitoring
-	PatrolEnabled         bool   `json:"patrol_enabled"`                    // Enable background AI health patrol
-	PatrolIntervalMinutes int    `json:"patrol_interval_minutes,omitempty"` // How often to run quick patrols (default: 360 = 6 hours)
-	PatrolSchedulePreset  string `json:"patrol_schedule_preset,omitempty"`  // User-friendly preset: "15min", "1hr", "6hr", "12hr", "daily", "disabled"
-	PatrolAnalyzeNodes    bool   `json:"patrol_analyze_nodes"`              // Include Proxmox nodes in patrol
-	PatrolAnalyzeGuests   bool   `json:"patrol_analyze_guests"`             // Include VMs/containers in patrol
-	PatrolAnalyzeDocker   bool   `json:"patrol_analyze_docker"`             // Include Docker hosts in patrol
-	PatrolAnalyzeStorage  bool   `json:"patrol_analyze_storage"`            // Include storage in patrol
-	PatrolAutoFix         bool   `json:"patrol_auto_fix,omitempty"`         // When true, patrol can attempt automatic remediation (default: false, observe only)
-	UseProactiveThresholds bool  `json:"use_proactive_thresholds,omitempty"` // When true, patrol warns 5-15% BEFORE alert thresholds (default: false, use exact thresholds)
-	AutoFixModel          string `json:"auto_fix_model,omitempty"`          // Model for automatic remediation (defaults to PatrolModel, may want more capable model)
+	PatrolEnabled          bool   `json:"patrol_enabled"`                     // Enable background AI health patrol
+	PatrolIntervalMinutes  int    `json:"patrol_interval_minutes,omitempty"`  // How often to run quick patrols (default: 360 = 6 hours)
+	PatrolSchedulePreset   string `json:"patrol_schedule_preset,omitempty"`   // User-friendly preset: "15min", "1hr", "6hr", "12hr", "daily", "disabled"
+	PatrolAnalyzeNodes     bool   `json:"patrol_analyze_nodes"`               // Include Proxmox nodes in patrol
+	PatrolAnalyzeGuests    bool   `json:"patrol_analyze_guests"`              // Include VMs/containers in patrol
+	PatrolAnalyzeDocker    bool   `json:"patrol_analyze_docker"`              // Include Docker hosts in patrol
+	PatrolAnalyzeStorage   bool   `json:"patrol_analyze_storage"`             // Include storage in patrol
+	PatrolAutoFix          bool   `json:"patrol_auto_fix,omitempty"`          // When true, patrol can attempt automatic remediation (default: false, observe only)
+	UseProactiveThresholds bool   `json:"use_proactive_thresholds,omitempty"` // When true, patrol warns 5-15% BEFORE alert thresholds (default: false, use exact thresholds)
+	AutoFixModel           string `json:"auto_fix_model,omitempty"`           // Model for automatic remediation (defaults to PatrolModel, may want more capable model)
 
 	// Alert-triggered AI analysis - analyze specific resources when alerts fire
 	AlertTriggeredAnalysis bool `json:"alert_triggered_analysis"` // Enable AI analysis when alerts fire (token-efficient)
@@ -77,7 +77,7 @@ const (
 	DefaultAIModelAnthropic = "claude-opus-4-5-20251101"
 	DefaultAIModelOpenAI    = "gpt-4o"
 	DefaultAIModelOllama    = "llama3"
-	DefaultAIModelDeepSeek  = "deepseek-chat" // V3.2 with tool-use support
+	DefaultAIModelDeepSeek  = "deepseek-chat"    // V3.2 with tool-use support
 	DefaultAIModelGemini    = "gemini-2.5-flash" // Latest stable Gemini model
 	DefaultOllamaBaseURL    = "http://localhost:11434"
 	DefaultDeepSeekBaseURL  = "https://api.deepseek.com/chat/completions"

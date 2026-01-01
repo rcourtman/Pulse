@@ -58,4 +58,3 @@ func TestDialContextWithCache_UnresolvableHost(t *testing.T) {
 		t.Fatalf("expected error")
 	}
 }
-

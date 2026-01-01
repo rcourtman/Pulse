@@ -44,11 +44,11 @@ func TestAgent_collectTemperatures_MapsKeys(t *testing.T) {
 
 	got := a.collectTemperatures(context.Background())
 	want := map[string]float64{
-		"cpu_package":      55.5,
-		"cpu_core_0":       44,
-		"cpu_core_1":       45,
-		"nvme0":            40,
-		"amdgpu-pci-0100":  60,
+		"cpu_package":     55.5,
+		"cpu_core_0":      44,
+		"cpu_core_1":      45,
+		"nvme0":           40,
+		"amdgpu-pci-0100": 60,
 	}
 
 	if got.TemperatureCelsius == nil {

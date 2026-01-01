@@ -40,15 +40,15 @@ func TestMakeOIDCResponse_EnabledWithSecret(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.OIDCConfig{
-		Enabled:      true,
-		IssuerURL:    "https://auth.example.com",
-		ClientID:     "pulse-client",
-		ClientSecret: "super-secret-value",
-		RedirectURL:  "https://pulse.example.com/auth/callback",
-		Scopes:       []string{"openid", "profile", "email"},
+		Enabled:       true,
+		IssuerURL:     "https://auth.example.com",
+		ClientID:      "pulse-client",
+		ClientSecret:  "super-secret-value",
+		RedirectURL:   "https://pulse.example.com/auth/callback",
+		Scopes:        []string{"openid", "profile", "email"},
 		UsernameClaim: "preferred_username",
-		EmailClaim:   "email",
-		GroupsClaim:  "groups",
+		EmailClaim:    "email",
+		GroupsClaim:   "groups",
 	}
 
 	resp := makeOIDCResponse(cfg, "https://pulse.example.com")

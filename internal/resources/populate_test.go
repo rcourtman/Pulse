@@ -185,4 +185,3 @@ func TestPopulateFromSnapshotRemovesStaleResources(t *testing.T) {
 	t.Logf("SUCCESS: Removed resources are correctly cleaned up!")
 	t.Logf("After second snapshot: %d container(s) - 'container-to-remove' was properly removed", len(containers))
 }
-

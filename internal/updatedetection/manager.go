@@ -88,15 +88,15 @@ func (m *Manager) ProcessDockerContainerUpdate(
 	// Create or update the update entry
 	updateID := "docker:" + hostID + ":" + containerID
 	update := &UpdateInfo{
-		ID:            updateID,
-		ResourceID:    containerID,
-		ResourceType:  "docker",
-		ResourceName:  containerName,
-		HostID:        hostID,
-		Type:          UpdateTypeDockerImage,
-		CurrentDigest: updateStatus.CurrentDigest,
-		LatestDigest:  updateStatus.LatestDigest,
-		LastChecked:   updateStatus.LastChecked,
+		ID:             updateID,
+		ResourceID:     containerID,
+		ResourceType:   "docker",
+		ResourceName:   containerName,
+		HostID:         hostID,
+		Type:           UpdateTypeDockerImage,
+		CurrentDigest:  updateStatus.CurrentDigest,
+		LatestDigest:   updateStatus.LatestDigest,
+		LastChecked:    updateStatus.LastChecked,
 		CurrentVersion: image,
 	}
 

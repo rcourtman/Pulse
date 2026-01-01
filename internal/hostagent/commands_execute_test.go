@@ -148,4 +148,3 @@ func TestCommandClient_executeCommand_TruncatesLargeOutput(t *testing.T) {
 		t.Fatalf("stdout len=%d, expected <= %d", len(result.Stdout), 1024*1024+64)
 	}
 }
-

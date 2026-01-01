@@ -104,7 +104,7 @@ func TestIsBlockedFetchIP(t *testing.T) {
 			t.Errorf("isBlockedFetchIP(%s) = %v, want %v", tt.ip, got, tt.blocked)
 		}
 	}
-	
+
 	if !isBlockedFetchIP(nil) {
 		t.Error("nil IP should be blocked")
 	}

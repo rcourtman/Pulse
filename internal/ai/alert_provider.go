@@ -198,18 +198,18 @@ func formatTimeAgo(t time.Time) string {
 
 // AlertInvestigationRequest represents a request to investigate an alert
 type AlertInvestigationRequest struct {
-	AlertID      string `json:"alert_id"`
-	ResourceID   string `json:"resource_id"`
-	ResourceName string `json:"resource_name"`
-	ResourceType string `json:"resource_type"` // guest, node, storage, docker
-	AlertType    string `json:"alert_type"`    // cpu, memory, disk, offline, etc.
-	Level        string `json:"level"`         // warning, critical
+	AlertID      string  `json:"alert_id"`
+	ResourceID   string  `json:"resource_id"`
+	ResourceName string  `json:"resource_name"`
+	ResourceType string  `json:"resource_type"` // guest, node, storage, docker
+	AlertType    string  `json:"alert_type"`    // cpu, memory, disk, offline, etc.
+	Level        string  `json:"level"`         // warning, critical
 	Value        float64 `json:"value"`
 	Threshold    float64 `json:"threshold"`
-	Message      string `json:"message"`
-	Duration     string `json:"duration"` // How long the alert has been active
-	Node         string `json:"node,omitempty"`
-	VMID         int    `json:"vmid,omitempty"`
+	Message      string  `json:"message"`
+	Duration     string  `json:"duration"` // How long the alert has been active
+	Node         string  `json:"node,omitempty"`
+	VMID         int     `json:"vmid,omitempty"`
 }
 
 // GenerateAlertInvestigationPrompt creates a focused prompt for alert investigation
