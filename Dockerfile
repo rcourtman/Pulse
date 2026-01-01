@@ -27,6 +27,7 @@ FROM --platform=linux/amd64 golang:1.24-alpine AS backend-builder
 
 ARG BUILD_AGENT
 ARG PULSE_LICENSE_PUBLIC_KEY
+ARG VERSION
 WORKDIR /app
 
 # Install build dependencies
@@ -51,7 +52,7 @@ COPY --from=frontend-builder /app/frontend-modern/dist ./internal/api/frontend-m
 # Build the main pulse binary for all target architectures
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
-    VERSION="v$(cat VERSION | tr -d '\n')" && \
+    VERSION="${VERSION:-v$(cat VERSION | tr -d '\n')}" && \
     BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ") && \
     GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
     LICENSE_LDFLAGS="" && \
@@ -72,7 +73,7 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
 # Build host-agent binaries for all platforms (for download endpoint)
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
-    VERSION="v$(cat VERSION | tr -d '\n')" && \
+    VERSION="${VERSION:-v$(cat VERSION | tr -d '\n')}" && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
       -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
       -trimpath \
@@ -117,7 +118,7 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
 # Build unified agent binaries for all platforms (for download endpoint)
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
-    VERSION="v$(cat VERSION | tr -d '\n')" && \
+    VERSION="${VERSION:-v$(cat VERSION | tr -d '\n')}" && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
       -ldflags="-s -w -X main.Version=${VERSION}" \
       -trimpath \
@@ -162,7 +163,7 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
 # Build pulse-sensor-proxy for all Linux architectures (for download endpoint)
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
-    VERSION="v$(cat VERSION | tr -d '\n')" && \
+    VERSION="${VERSION:-v$(cat VERSION | tr -d '\n')}" && \
     BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S') && \
     GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \

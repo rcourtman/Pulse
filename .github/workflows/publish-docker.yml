@@ -77,6 +77,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache
           build-args: |
             PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+            VERSION=${{ steps.version.outputs.tag }}
           tags: |
             rcourtman/pulse:${{ steps.version.outputs.tag }}
             rcourtman/pulse:${{ steps.version.outputs.version }}
@@ -97,6 +98,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache
           build-args: |
             PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+            VERSION=${{ steps.version.outputs.tag }}
           tags: |
             rcourtman/pulse-docker-agent:${{ steps.version.outputs.tag }}
             rcourtman/pulse-docker-agent:${{ steps.version.outputs.version }}
