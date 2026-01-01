@@ -8773,21 +8773,22 @@ func (m *Monitor) calculateBackupOperationTimeout(instanceName string) time.Dura
 func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("Polling guest snapshots")
 
-	// Get current VMs and containers from state for this instance
-	m.mu.RLock()
+	// Get current VMs and containers from a properly-locked state snapshot.
+	// Using GetSnapshot() ensures we read a consistent view of VMs/containers
+	// with the State's internal mutex, avoiding data races.
+	snapshot := m.state.GetSnapshot()
 	var vms []models.VM
-	for _, vm := range m.state.VMs {
+	for _, vm := range snapshot.VMs {
 		if vm.Instance == instanceName {
 			vms = append(vms, vm)
 		}
 	}
 	var containers []models.Container
-	for _, ct := range m.state.Containers {
+	for _, ct := range snapshot.Containers {
 		if ct.Instance == instanceName {
 			containers = append(containers, ct)
 		}
 	}
-	m.mu.RUnlock()
 
 	guestKey := func(instance, node string, vmid int) string {
 		if instance == node {
