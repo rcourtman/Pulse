@@ -14,6 +14,7 @@ export interface AlertThresholds {
   networkIn?: HysteresisThreshold;
   networkOut?: HysteresisThreshold;
   temperature?: HysteresisThreshold;
+  diskTemperature?: HysteresisThreshold;
   disableConnectivity?: boolean; // Disable connectivity/powered-off alerts
   poweredOffSeverity?: 'warning' | 'critical';
   // Legacy support for backward compatibility

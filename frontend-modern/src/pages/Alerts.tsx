@@ -1023,6 +1023,7 @@ export function Alerts() {
           cpu: getTriggerValue(config.hostDefaults.cpu) ?? 80,
           memory: getTriggerValue(config.hostDefaults.memory) ?? 85,
           disk: getTriggerValue(config.hostDefaults.disk) ?? 90,
+          diskTemperature: getTriggerValue(config.hostDefaults.diskTemperature) ?? 55,
         });
       } else {
         setHostDefaults({ ...FACTORY_HOST_DEFAULTS });
@@ -1428,6 +1429,7 @@ export function Alerts() {
     cpu: 80,
     memory: 85,
     disk: 90,
+    diskTemperature: 55,
   };
 
   const FACTORY_DOCKER_DEFAULTS = {
@@ -1774,6 +1776,7 @@ export function Alerts() {
                         cpu: createHysteresisThreshold(hostDefaults().cpu),
                         memory: createHysteresisThreshold(hostDefaults().memory),
                         disk: createHysteresisThreshold(hostDefaults().disk),
+                        diskTemperature: createHysteresisThreshold(hostDefaults().diskTemperature),
                       },
                       dockerDefaults: {
                         cpu: createHysteresisThreshold(dockerDefaultsValue.cpu),

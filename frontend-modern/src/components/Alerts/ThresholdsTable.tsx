@@ -92,7 +92,8 @@ const normalizeThresholdLabel = (label: string): string =>
     .replace('disk r', 'diskRead')
     .replace('disk w', 'diskWrite')
     .replace('net in', 'networkIn')
-    .replace('net out', 'networkOut');
+    .replace('net out', 'networkOut')
+    .replace('disk temp', 'diskTemperature');
 
 const pmgColumn = (key: keyof PMGThresholdDefaults, label: string) => ({
   key,
@@ -150,6 +151,7 @@ interface SimpleThresholds {
   networkIn?: number;
   networkOut?: number;
   temperature?: number; // For nodes only
+  diskTemperature?: number; // For host agents
   [key: string]: number | undefined; // Add index signature for compatibility
 }
 
@@ -3137,7 +3139,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               <ResourceTable
                 title="Host Agents"
                 resources={hostAgentsWithOverrides()}
-                columns={['CPU %', 'Memory %', 'Disk %']}
+                columns={['CPU %', 'Memory %', 'Disk %', 'Disk Temp °C']}
                 activeAlerts={props.activeAlerts}
                 emptyMessage="No host agents match the current filters."
                 onEdit={startEditing}
