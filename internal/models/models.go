@@ -1117,6 +1117,7 @@ type PVEBackups struct {
 type BackupTask struct {
 	ID        string    `json:"id"`
 	Node      string    `json:"node"`
+	Instance  string    `json:"instance"` // Unique instance identifier
 	Type      string    `json:"type"`
 	VMID      int       `json:"vmid"`
 	Status    string    `json:"status"`
@@ -2364,8 +2365,7 @@ func (s *State) UpdateBackupTasksForInstance(instanceName string, tasks []Backup
 	// Create a map of existing tasks, excluding those from this instance
 	taskMap := make(map[string]BackupTask)
 	for _, task := range s.PVEBackups.BackupTasks {
-		// Check if task ID contains the instance name
-		if !strings.HasPrefix(task.ID, instanceName+"-") {
+		if task.Instance != instanceName {
 			taskMap[task.ID] = task
 		}
 	}
@@ -2423,8 +2423,7 @@ func (s *State) UpdateStorageBackupsForInstance(instanceName string, backups []S
 	// Create a map of existing backups, excluding those from this instance
 	backupMap := make(map[string]StorageBackup)
 	for _, backup := range s.PVEBackups.StorageBackups {
-		// Check if backup ID contains the instance name
-		if !strings.HasPrefix(backup.ID, instanceName+"-") {
+		if backup.Instance != instanceName {
 			backupMap[backup.ID] = backup
 		}
 	}
@@ -2507,8 +2506,7 @@ func (s *State) UpdateGuestSnapshotsForInstance(instanceName string, snapshots [
 	// Create a map of existing snapshots, excluding those from this instance
 	snapshotMap := make(map[string]GuestSnapshot)
 	for _, snapshot := range s.PVEBackups.GuestSnapshots {
-		// Check if snapshot ID contains the instance name
-		if !strings.HasPrefix(snapshot.ID, instanceName+"-") {
+		if snapshot.Instance != instanceName {
 			snapshotMap[snapshot.ID] = snapshot
 		}
 	}

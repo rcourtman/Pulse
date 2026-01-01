@@ -6990,6 +6990,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		backupTask := models.BackupTask{
 			ID:        taskID,
 			Node:      task.Node,
+			Instance:  instanceName,
 			Type:      task.Type,
 			VMID:      vmid,
 			Status:    task.Status,

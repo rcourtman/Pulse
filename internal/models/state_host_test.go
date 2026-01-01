@@ -613,8 +613,8 @@ func TestUpdateBackupTasksForInstance(t *testing.T) {
 
 	// Add tasks from first instance
 	tasks1 := []BackupTask{
-		{ID: "pve-1-task-1", StartTime: now},
-		{ID: "pve-1-task-2", StartTime: now.Add(-time.Hour)},
+		{ID: "pve-1-task-1", Instance: "pve-1", StartTime: now},
+		{ID: "pve-1-task-2", Instance: "pve-1", StartTime: now.Add(-time.Hour)},
 	}
 	state.UpdateBackupTasksForInstance("pve-1", tasks1)
 
@@ -630,7 +630,7 @@ func TestUpdateBackupTasksForInstance(t *testing.T) {
 
 	// Add tasks from second instance
 	tasks2 := []BackupTask{
-		{ID: "pve-2-task-1", StartTime: now.Add(-30 * time.Minute)},
+		{ID: "pve-2-task-1", Instance: "pve-2", StartTime: now.Add(-30 * time.Minute)},
 	}
 	state.UpdateBackupTasksForInstance("pve-2", tasks2)
 
@@ -641,7 +641,7 @@ func TestUpdateBackupTasksForInstance(t *testing.T) {
 
 	// Update first instance (should replace its tasks)
 	tasks1Updated := []BackupTask{
-		{ID: "pve-1-task-3", StartTime: now.Add(time.Hour)},
+		{ID: "pve-1-task-3", Instance: "pve-1", StartTime: now.Add(time.Hour)},
 	}
 	state.UpdateBackupTasksForInstance("pve-1", tasks1Updated)
 
@@ -696,8 +696,8 @@ func TestUpdateGuestSnapshotsForInstance(t *testing.T) {
 
 	// Add snapshots from first instance
 	snapshots1 := []GuestSnapshot{
-		{ID: "pve-1-snap-1", VMID: 100, Name: "snapshot1", Time: now},
-		{ID: "pve-1-snap-2", VMID: 100, Name: "snapshot2", Time: now.Add(-time.Hour)},
+		{ID: "pve-1-snap-1", Instance: "pve-1", VMID: 100, Name: "snapshot1", Time: now},
+		{ID: "pve-1-snap-2", Instance: "pve-1", VMID: 100, Name: "snapshot2", Time: now.Add(-time.Hour)},
 	}
 	state.UpdateGuestSnapshotsForInstance("pve-1", snapshots1)
 
@@ -708,7 +708,7 @@ func TestUpdateGuestSnapshotsForInstance(t *testing.T) {
 
 	// Add snapshots from second instance
 	snapshots2 := []GuestSnapshot{
-		{ID: "pve-2-snap-1", VMID: 200, Name: "snapshot1", Time: now.Add(-30 * time.Minute)},
+		{ID: "pve-2-snap-1", Instance: "pve-2", VMID: 200, Name: "snapshot1", Time: now.Add(-30 * time.Minute)},
 	}
 	state.UpdateGuestSnapshotsForInstance("pve-2", snapshots2)
 
@@ -719,7 +719,7 @@ func TestUpdateGuestSnapshotsForInstance(t *testing.T) {
 
 	// Update first instance (should replace its snapshots)
 	snapshots1Updated := []GuestSnapshot{
-		{ID: "pve-1-snap-3", VMID: 100, Name: "new-snapshot", Time: now.Add(time.Hour)},
+		{ID: "pve-1-snap-3", Instance: "pve-1", VMID: 100, Name: "new-snapshot", Time: now.Add(time.Hour)},
 	}
 	state.UpdateGuestSnapshotsForInstance("pve-1", snapshots1Updated)
 
@@ -878,8 +878,8 @@ func TestUpdateStorageBackupsForInstance(t *testing.T) {
 
 	// Add backups from first instance
 	backups1 := []StorageBackup{
-		{ID: "pve-1-backup-1", VMID: 100, Time: now, Node: "node1"},
-		{ID: "pve-1-backup-2", VMID: 100, Time: now.Add(-time.Hour), Node: "node1"},
+		{ID: "pve-1-backup-1", Instance: "pve-1", VMID: 100, Time: now, Node: "node1"},
+		{ID: "pve-1-backup-2", Instance: "pve-1", VMID: 100, Time: now.Add(-time.Hour), Node: "node1"},
 	}
 	state.UpdateStorageBackupsForInstance("pve-1", backups1)
 
@@ -895,7 +895,7 @@ func TestUpdateStorageBackupsForInstance(t *testing.T) {
 
 	// Add backups from second instance
 	backups2 := []StorageBackup{
-		{ID: "pve-2-backup-1", VMID: 200, Time: now.Add(-30 * time.Minute), Node: "node2"},
+		{ID: "pve-2-backup-1", Instance: "pve-2", VMID: 200, Time: now.Add(-30 * time.Minute), Node: "node2"},
 	}
 	state.UpdateStorageBackupsForInstance("pve-2", backups2)
 
@@ -906,7 +906,7 @@ func TestUpdateStorageBackupsForInstance(t *testing.T) {
 
 	// Update first instance (should replace its backups)
 	backups1Updated := []StorageBackup{
-		{ID: "pve-1-backup-3", VMID: 100, Time: now.Add(time.Hour), Node: "node1"},
+		{ID: "pve-1-backup-3", Instance: "pve-1", VMID: 100, Time: now.Add(time.Hour), Node: "node1"},
 	}
 	state.UpdateStorageBackupsForInstance("pve-1", backups1Updated)
 
