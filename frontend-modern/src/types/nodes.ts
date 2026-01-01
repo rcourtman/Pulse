@@ -39,6 +39,7 @@ export interface PVENodeConfig {
   monitorStorage: boolean;
   monitorBackups: boolean;
   monitorPhysicalDisks: boolean;
+  physicalDiskPollingMinutes?: number;
   temperatureMonitoringEnabled?: boolean | null;
   // Cluster information
   isCluster?: boolean;
