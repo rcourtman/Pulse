@@ -176,7 +176,7 @@ export const ProLicensePanel: Component = () => {
             onInput={(event) => setLicenseKey(event.currentTarget.value)}
           />
           <p class={formHelpText}>
-            Keys are validated locally and never sent to a license server.
+            Keys are validated locally and never sent to a license server. By activating a license, you agree to the <a href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md" target="_blank" class="text-blue-600 hover:underline">Terms of Service</a>.
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">

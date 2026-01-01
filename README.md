@@ -117,4 +117,4 @@ Pulse is maintained by one person. Sponsorships help cover the costs of the demo
 
 ## 📄 License
 
-MIT © [Richard Courtman](https://github.com/rcourtman)
+MIT © [Richard Courtman](https://github.com/rcourtman). Use of Pulse Pro is subject to the [Terms of Service](TERMS.md).
