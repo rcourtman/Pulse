@@ -32,6 +32,7 @@ var errInvalidCommandStatus = errors.New("invalid command status")
 // normalizeCommandStatus converts a client-provided status string into a canonical
 // internal status constant. It accepts multiple aliases for each status:
 //   - acknowledged: "", "ack", "acknowledged"
+//   - in_progress: "in_progress", "progress"
 //   - completed: "success", "completed", "complete"
 //   - failed: "fail", "failed", "error"
 //
@@ -41,6 +42,8 @@ func normalizeCommandStatus(status string) (string, error) {
 	switch status {
 	case "", "ack", "acknowledged":
 		return monitoring.DockerCommandStatusAcknowledged, nil
+	case "in_progress", "progress":
+		return monitoring.DockerCommandStatusInProgress, nil
 	case "success", "completed", "complete":
 		return monitoring.DockerCommandStatusCompleted, nil
 	case "fail", "failed", "error":
@@ -145,7 +148,7 @@ func (h *DockerAgentHandlers) HandleDockerHostActions(w http.ResponseWriter, r *
 		h.HandleSetCustomDisplayName(w, r)
 		return
 	}
-	
+
 	// Check if this is a check updates request
 	if strings.HasSuffix(r.URL.Path, "/check-updates") && r.Method == http.MethodPost {
 		h.HandleCheckUpdates(w, r)
@@ -555,5 +558,3 @@ func (h *DockerAgentHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.
 		log.Error().Err(err).Msg("Failed to serialize check updates response")
 	}
 }
-
-
