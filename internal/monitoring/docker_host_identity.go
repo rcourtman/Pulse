@@ -102,6 +102,17 @@ func findMatchingDockerHost(hosts []models.DockerHost, report agentsdocker.Repor
 		}
 	}
 
+	// Fallback: match by Hostname and Token only (when MachineID is missing)
+	// This fixes issues where containerized agents without persistent machine-id
+	// reconnect with the same token but are treated as new agents.
+	if hostname != "" && tokenID != "" {
+		for _, host := range hosts {
+			if strings.TrimSpace(host.Hostname) == hostname && strings.TrimSpace(host.TokenID) == tokenID {
+				return host, true
+			}
+		}
+	}
+
 	if machineID != "" && tokenID == "" {
 		for _, host := range hosts {
 			if strings.TrimSpace(host.MachineID) == machineID && strings.TrimSpace(host.TokenID) == "" {
