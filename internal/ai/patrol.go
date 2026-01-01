@@ -3156,14 +3156,18 @@ func (p *PatrolService) parseFindingBlock(block string) *Finding {
 		cat = FindingCategoryPerformance
 	}
 
-	// Generate stable ID from resource and category ONLY (not title)
-	// This ensures the same issue on the same resource gets the same ID even if
-	// the LLM phrases it differently each time
-	id := generateFindingID(resource, string(cat), "llm-finding")
+	// Generate stable ID from resource, category, and KEY
+	// We use the normalized key to ensure uniqueness between different findings on the same resource
+	// (e.g. high-cpu vs high-memory) while maintaining stability checks
+	normalizedKey := normalizeFindingKey(key)
+	if normalizedKey == "" {
+		normalizedKey = "llm-finding"
+	}
+	id := generateFindingID(resource, string(cat), normalizedKey)
 
 	return &Finding{
 		ID:             id,
-		Key:            normalizeFindingKey(key),
+		Key:            normalizedKey,
 		Severity:       sev,
 		Category:       cat,
 		ResourceID:     resource,
