@@ -26,6 +26,52 @@ entries:
       org.opencontainers.image.licenses: MIT
       org.opencontainers.image.source: https://github.com/rcourtman/Pulse
     apiVersion: v2
+    appVersion: 5.0.8
+    created: "2026-01-01T11:13:16.378815479Z"
+    description: Helm chart for deploying the Pulse hub and optional Docker monitoring
+      agent.
+    digest: 1cffe1a21eeb0cf6491d412137f46c4170446183d3f1cb2bda60eab106d8ec92
+    home: https://github.com/rcourtman/Pulse
+    icon: https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/images/pulse-logo.svg
+    keywords:
+    - monitoring
+    - proxmox
+    - observability
+    maintainers:
+    - email: pulse@rcourtman.dev
+      name: Pulse Maintainers
+    name: pulse
+    sources:
+    - https://github.com/rcourtman/Pulse
+    type: application
+    urls:
+    - https://github.com/rcourtman/Pulse/releases/download/helm-chart-5.0.8/pulse-5.0.8.tgz
+    version: 5.0.8
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
+          description: GitHub Pages Helm repository distribution (no authentication required)
+        - kind: added
+          description: values.schema.json for configuration validation
+        - kind: added
+          description: ServiceMonitor template for Prometheus integration
+        - kind: added
+          description: Automated chart documentation generation with helm-docs
+        - kind: added
+          description: Smoke tests with kind cluster deployment
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/rcourtman/Pulse/blob/main/docs/KUBERNETES.md
+        - name: Support
+          url: https://github.com/rcourtman/Pulse/discussions
+      artifacthub.io/maintainers: |
+        - name: rcourtman
+          email: pulse@rcourtman.dev
+      org.opencontainers.image.description: Helm chart for deploying Pulse monitoring
+        system
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.source: https://github.com/rcourtman/Pulse
+    apiVersion: v2
     appVersion: 5.0.7
     created: "2025-12-31T00:29:01.882325793Z"
     description: Helm chart for deploying the Pulse hub and optional Docker monitoring
@@ -994,4 +1040,4 @@ entries:
     urls:
     - https://github.com/rcourtman/Pulse/releases/download/helm-chart-4.28.0/pulse-4.28.0.tgz
     version: 4.28.0
-generated: "2025-12-31T00:29:01.882522709Z"
+generated: "2026-01-01T11:13:16.379001476Z"
