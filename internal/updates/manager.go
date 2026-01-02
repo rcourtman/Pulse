@@ -189,23 +189,6 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 
 	m.updateStatus("checking", 0, "Checking for updates...")
 
-	// Skip update check for Docker
-	if currentInfo.IsDocker {
-		info := &UpdateInfo{
-			Available:      false,
-			CurrentVersion: currentInfo.Version,
-			LatestVersion:  currentInfo.Version,
-		}
-		if useCache {
-			m.statusMu.Lock()
-			m.checkCache[channel] = info
-			m.cacheTime[channel] = time.Now()
-			m.statusMu.Unlock()
-		}
-		m.updateStatus("idle", 0, "Updates not available in Docker")
-		return info, nil
-	}
-
 	// Skip update check for source builds
 	if currentInfo.IsSourceBuild {
 		info := &UpdateInfo{
