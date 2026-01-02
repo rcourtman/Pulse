@@ -58,6 +58,8 @@ Pulse is configured via environment variables.
 | `DISCOVERY_SUBNET` | Custom CIDR to scan | *(auto)* |
 | `ALLOWED_ORIGINS` | CORS allowed domains | *(none)* |
 | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
+| `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hide Docker update buttons (read-only mode) | `false` |
+| `PULSE_DISABLE_DOCKER_UPDATE_CHECKS` | Disable Docker update detection entirely | `false` |
 
 > **Tip**: Set `LOG_LEVEL=warn` to reduce log volume while still capturing important events.
 
@@ -154,6 +156,35 @@ docker login registry.example.com
 ```
 
 The agent uses the Docker daemon's credentials for both pulling images and checking for updates.
+
+### Disabling Update Features
+
+Pulse provides granular control over update features via environment variables on the **Pulse server**:
+
+| Variable | Description |
+|----------|-------------|
+| `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hides update buttons from the UI while still detecting updates. Use this for "read-only" monitoring. |
+| `PULSE_DISABLE_DOCKER_UPDATE_CHECKS` | Disables update detection entirely. No registry checks are performed. |
+
+**Example - Read-Only Mode** (detect updates but prevent actions):
+```yaml
+services:
+  pulse:
+    image: rcourtman/pulse:latest
+    environment:
+      - PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true
+```
+
+**Example - Fully Disable Update Detection**:
+```yaml
+services:
+  pulse:
+    image: rcourtman/pulse:latest
+    environment:
+      - PULSE_DISABLE_DOCKER_UPDATE_CHECKS=true
+```
+
+You can also toggle "Hide Docker Update Buttons" from the UI: **Settings → Agents → Docker Settings**.
 
 ---
 
