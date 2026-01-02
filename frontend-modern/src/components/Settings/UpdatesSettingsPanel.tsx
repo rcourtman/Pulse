@@ -160,10 +160,9 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                     onClick={props.checkForUpdates}
                     disabled={
                       props.checkingForUpdates() ||
-                      props.versionInfo()?.isDocker ||
                       props.versionInfo()?.isSourceBuild
                     }
-                    class={`px-4 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 ${props.versionInfo()?.isDocker || props.versionInfo()?.isSourceBuild
+                    class={`px-4 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 ${props.versionInfo()?.isSourceBuild
                       ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                       : 'bg-blue-600 text-white hover:bg-blue-700'
                       }`}
@@ -342,11 +341,11 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         </div>
                         <div class="ml-8 relative group">
                           <code class="block p-3 bg-gray-900 dark:bg-gray-950 rounded-lg text-sm font-mono text-green-400 border border-gray-700">
-                            docker pull rcourtman/pulse:latest
+                            docker pull rcourtman/pulse:{props.updateInfo()?.latestVersion.replace(/^v/, '')}
                           </code>
                           <button
                             type="button"
-                            onClick={() => navigator.clipboard.writeText('docker pull rcourtman/pulse:latest')}
+                            onClick={() => navigator.clipboard.writeText(`docker pull rcourtman/pulse:${props.updateInfo()?.latestVersion.replace(/^v/, '')}`)}
                             class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-60 hover:opacity-100 transition-opacity"
                             title="Copy to clipboard"
                           >
@@ -530,7 +529,7 @@ sudo tar -xzf pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /
                       props.setUpdateChannel('stable');
                       props.setHasUnsavedChanges(true);
                     }}
-                    disabled={props.versionInfo()?.isDocker}
+                    disabled={props.versionInfo()?.isSourceBuild}
                     class={`p-4 rounded-xl border-2 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed ${props.updateChannel() === 'stable'
                       ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
                       : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
@@ -566,7 +565,7 @@ sudo tar -xzf pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /
                       props.setUpdateChannel('rc');
                       props.setHasUnsavedChanges(true);
                     }}
-                    disabled={props.versionInfo()?.isDocker}
+                    disabled={props.versionInfo()?.isSourceBuild}
                     class={`p-4 rounded-xl border-2 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed ${props.updateChannel() === 'rc'
                       ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
                       : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
@@ -624,7 +623,7 @@ sudo tar -xzf pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /
                           props.setAutoUpdateEnabled(e.currentTarget.checked);
                           props.setHasUnsavedChanges(true);
                         }}
-                        disabled={props.versionInfo()?.isDocker}
+                        disabled={props.versionInfo()?.isSourceBuild}
                         class="sr-only peer"
                       />
                       <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
