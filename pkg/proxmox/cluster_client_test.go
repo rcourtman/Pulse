@@ -266,7 +266,7 @@ func TestSanitizeEndpointError(t *testing.T) {
 		{"context deadline basic", "context deadline exceeded", "Request timed out - Proxmox API may be slow or waiting on unreachable backend services"},
 		{"context deadline storage", "Get /api2/json/nodes/delly/storage: context deadline exceeded", "Request timed out - storage API slow (check for unreachable PBS/NFS/Ceph backends)"},
 		{"context deadline pbs", "pbs-backup context deadline exceeded", "Request timed out - PBS storage backend unreachable"},
-		{"context deadline port 8007", "Can't connect to verdeclose:8007 context deadline exceeded", "Request timed out - PBS storage backend unreachable"},
+		{"context deadline port 8007", "Can't connect to tower:8007 context deadline exceeded", "Request timed out - PBS storage backend unreachable"},
 		// Client timeout
 		{"client timeout", "Client.Timeout exceeded while awaiting headers", "Connection timed out - Proxmox API not responding in time"},
 		// Connection refused
@@ -281,7 +281,7 @@ func TestSanitizeEndpointError(t *testing.T) {
 		{"403 error", "status 403: Forbidden", "Authentication failed - check API token or credentials"},
 		{"authentication keyword", "authentication failed: invalid token", "Authentication failed - check API token or credentials"},
 		// PBS specific
-		{"pbs connect error", "Can't connect to verdeclose:8007 (Connection timed out)", "PBS storage unreachable - check Proxmox Backup Server connectivity"},
+		{"pbs connect error", "Can't connect to tower:8007 (Connection timed out)", "PBS storage unreachable - check Proxmox Backup Server connectivity"},
 	}
 
 	for _, tt := range tests {

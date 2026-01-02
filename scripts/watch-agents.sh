@@ -9,7 +9,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 DEPLOY_SCRIPT="$SCRIPT_DIR/dev-deploy-agent.sh"
 
 # Hosts to sync to (edit this list as needed)
-HOSTS=("verdeclose" "minipc" "delly" "pimox")
+HOSTS=("tower")
 
 # Colors
 GREEN='\033[0;32m'
