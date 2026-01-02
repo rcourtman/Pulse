@@ -1685,3 +1685,218 @@ func TestGetGuestThresholds(t *testing.T) {
 		}
 	})
 }
+
+func TestExtractGuestMetrics_Default(t *testing.T) {
+	t.Parallel()
+	_, ok := extractGuestMetrics("invalid-type")
+	if ok {
+		t.Error("extractGuestMetrics should return false for invalid type")
+	}
+}
+
+func TestGetGuestThresholds_AllFields(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+
+	// Define a custom rule that sets all fields
+	trigger := 90.0
+	clear := 85.0
+	threshold := &HysteresisThreshold{Trigger: trigger, Clear: clear}
+
+	rule := CustomAlertRule{
+		ID:       "rule-1",
+		Name:     "All Fields Rule",
+		Enabled:  true,
+		Priority: 100,
+		FilterConditions: FilterStack{
+			LogicalOperator: "AND",
+			Filters: []FilterCondition{
+				{Type: "text", Field: "name", Value: "test-guest"},
+			},
+		},
+		Thresholds: ThresholdConfig{
+			CPU:                 threshold,
+			Memory:              threshold,
+			Disk:                threshold,
+			DiskRead:            threshold,
+			DiskWrite:           threshold,
+			NetworkIn:           threshold,
+			NetworkOut:          threshold,
+			DisableConnectivity: true,
+			Backup:              &BackupAlertConfig{Enabled: true},
+			Snapshot:            &SnapshotAlertConfig{Enabled: true},
+		},
+	}
+
+	m.config.CustomRules = []CustomAlertRule{rule}
+
+	guest := models.VM{ID: "guest-1", Name: "test-guest"}
+
+	thresholds := m.getGuestThresholds(guest, "guest-1")
+
+	if thresholds.CPU == nil || thresholds.CPU.Trigger != trigger {
+		t.Error("CPU threshold not applied")
+	}
+	if thresholds.Memory == nil || thresholds.Memory.Trigger != trigger {
+		t.Error("Memory threshold not applied")
+	}
+	if thresholds.Disk == nil || thresholds.Disk.Trigger != trigger {
+		t.Error("Disk threshold not applied")
+	}
+	if thresholds.DiskRead == nil || thresholds.DiskRead.Trigger != trigger {
+		t.Error("DiskRead threshold not applied")
+	}
+	if thresholds.DiskWrite == nil || thresholds.DiskWrite.Trigger != trigger {
+		t.Error("DiskWrite threshold not applied")
+	}
+	if thresholds.NetworkIn == nil || thresholds.NetworkIn.Trigger != trigger {
+		t.Error("NetworkIn threshold not applied")
+	}
+	if thresholds.NetworkOut == nil || thresholds.NetworkOut.Trigger != trigger {
+		t.Error("NetworkOut threshold not applied")
+	}
+	if !thresholds.DisableConnectivity {
+		t.Error("DisableConnectivity not applied")
+	}
+	if thresholds.Backup == nil || !thresholds.Backup.Enabled {
+		t.Error("Backup config not applied")
+	}
+	if thresholds.Snapshot == nil || !thresholds.Snapshot.Enabled {
+		t.Error("Snapshot config not applied")
+	}
+}
+
+func TestGetGuestThresholds_LegacyFields(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+
+	legacyValue := 95.0
+
+	ruleLegacy := CustomAlertRule{
+		ID:       "rule-legacy",
+		Name:     "Legacy Fields Rule",
+		Enabled:  true,
+		Priority: 200,
+		FilterConditions: FilterStack{
+			LogicalOperator: "AND",
+			Filters: []FilterCondition{
+				{Type: "text", Field: "name", Value: "test-guest"},
+			},
+		},
+		Thresholds: ThresholdConfig{
+			CPULegacy:        &legacyValue,
+			MemoryLegacy:     &legacyValue,
+			DiskLegacy:       &legacyValue,
+			DiskReadLegacy:   &legacyValue,
+			DiskWriteLegacy:  &legacyValue,
+			NetworkInLegacy:  &legacyValue,
+			NetworkOutLegacy: &legacyValue,
+		},
+	}
+
+	m.config.CustomRules = []CustomAlertRule{ruleLegacy}
+
+	guest := models.VM{ID: "guest-1", Name: "test-guest"}
+
+	thresholds := m.getGuestThresholds(guest, "guest-1")
+
+	if thresholds.CPU == nil || thresholds.CPU.Trigger != legacyValue {
+		t.Errorf("Legacy CPU threshold not applied")
+	}
+	if thresholds.Memory == nil || thresholds.Memory.Trigger != legacyValue {
+		t.Errorf("Legacy Memory threshold not applied")
+	}
+	if thresholds.Disk == nil || thresholds.Disk.Trigger != legacyValue {
+		t.Errorf("Legacy Disk threshold not applied")
+	}
+	if thresholds.DiskRead == nil || thresholds.DiskRead.Trigger != legacyValue {
+		t.Errorf("Legacy DiskRead threshold not applied")
+	}
+	if thresholds.DiskWrite == nil || thresholds.DiskWrite.Trigger != legacyValue {
+		t.Errorf("Legacy DiskWrite threshold not applied")
+	}
+	if thresholds.NetworkIn == nil || thresholds.NetworkIn.Trigger != legacyValue {
+		t.Errorf("Legacy NetworkIn threshold not applied")
+	}
+	if thresholds.NetworkOut == nil || thresholds.NetworkOut.Trigger != legacyValue {
+		t.Errorf("Legacy NetworkOut threshold not applied")
+	}
+}
+
+func TestGetGuestThresholds_Override(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+
+	trigger := 88.0
+	threshold := &HysteresisThreshold{Trigger: trigger, Clear: trigger - 5.0}
+
+	m.config.Overrides = map[string]ThresholdConfig{
+		"guest-1": {
+			CPU:                 threshold,
+			Memory:              threshold,
+			Disk:                threshold,
+			DiskRead:            threshold,
+			DiskWrite:           threshold,
+			NetworkIn:           threshold,
+			NetworkOut:          threshold,
+			Disabled:            true,
+			DisableConnectivity: true,
+			Backup:              &BackupAlertConfig{Enabled: true},
+			Snapshot:            &SnapshotAlertConfig{Enabled: true},
+		},
+	}
+
+	guest := models.VM{ID: "guest-1", Name: "test-guest"}
+	thresholds := m.getGuestThresholds(guest, "guest-1")
+
+	if thresholds.CPU.Trigger != trigger {
+		t.Error("Override CPU not applied")
+	}
+	if !thresholds.Disabled {
+		t.Error("Override Disabled not applied")
+	}
+	if !thresholds.DisableConnectivity {
+		t.Error("Override DisableConnectivity not applied")
+	}
+	if thresholds.Backup == nil {
+		t.Error("Override Backup not applied")
+	}
+}
+
+func TestGetGuestThresholds_OverrideLegacy(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+
+	legacyValue := 77.0
+
+	m.config.Overrides = map[string]ThresholdConfig{
+		"guest-1": {
+			CPULegacy:        &legacyValue,
+			MemoryLegacy:     &legacyValue,
+			DiskLegacy:       &legacyValue,
+			DiskReadLegacy:   &legacyValue,
+			DiskWriteLegacy:  &legacyValue,
+			NetworkInLegacy:  &legacyValue,
+			NetworkOutLegacy: &legacyValue,
+		},
+	}
+
+	guest := models.VM{ID: "guest-1", Name: "test-guest"}
+	thresholds := m.getGuestThresholds(guest, "guest-1")
+
+	if thresholds.CPU == nil || thresholds.CPU.Trigger != legacyValue {
+		t.Error("Override Legacy CPU not applied")
+	}
+}
+
+func TestGetGuestThresholds_InvalidGuest(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+
+	// Should return defaults (and hit default case in tryLegacyOverrideMigration)
+	thresholds := m.getGuestThresholds("invalid-guest-struct", "guest-1")
+	if thresholds.CPU == nil {
+		// Just check it returns something valid (defaults)
+		// actually default has nil pointers, so this check is just ensuring no panic
+	}
+}

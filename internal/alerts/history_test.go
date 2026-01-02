@@ -128,6 +128,35 @@ func TestAddAlert(t *testing.T) {
 	}
 }
 
+func TestOnAlert(t *testing.T) {
+	t.Parallel()
+
+	hm := newTestHistoryManager(t)
+
+	called := false
+	var capturedAlert Alert
+
+	hm.OnAlert(func(alert Alert) {
+		called = true
+		capturedAlert = alert
+	})
+
+	alert := Alert{
+		ID:   "callback-test",
+		Type: "cpu",
+	}
+
+	hm.AddAlert(alert)
+
+	if !called {
+		t.Error("Callback was not called")
+	}
+
+	if capturedAlert.ID != "callback-test" {
+		t.Errorf("Callback received wrong alert ID: %s", capturedAlert.ID)
+	}
+}
+
 func TestGetHistory_WithLimit(t *testing.T) {
 	t.Parallel()
 
@@ -568,37 +597,26 @@ func TestSaveHistoryWithRetry_SingleRetry(t *testing.T) {
 	}
 }
 
-func TestSaveHistoryWithRetry_ReadOnlyDirectory(t *testing.T) {
+func TestSaveHistoryWithRetry_WriteError(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
 
-	// Create subdirectory and make it read-only
-	readOnlyDir := filepath.Join(tempDir, "readonly")
-	if err := os.MkdirAll(readOnlyDir, 0755); err != nil {
-		t.Fatalf("Failed to create readonly dir: %v", err)
-	}
-
 	hm := &HistoryManager{
-		dataDir:     readOnlyDir,
-		historyFile: filepath.Join(readOnlyDir, HistoryFileName),
-		backupFile:  filepath.Join(readOnlyDir, HistoryBackupFileName),
-		history:     []HistoryEntry{{Alert: Alert{ID: "test"}, Timestamp: time.Now()}},
-		stopChan:    make(chan struct{}),
+		dataDir: tempDir,
+		// Point to a file in a non-existent subdirectory
+		// os.WriteFile does not create parent directories, so this will fail
+		historyFile:  filepath.Join(tempDir, "nonexistent_dir", HistoryFileName),
+		backupFile:   filepath.Join(tempDir, HistoryBackupFileName),
+		history:      []HistoryEntry{{Alert: Alert{ID: "test"}, Timestamp: time.Now()}},
+		saveInterval: 5 * time.Minute,
+		stopChan:     make(chan struct{}),
 	}
-
-	// Make directory read-only
-	if err := os.Chmod(readOnlyDir, 0444); err != nil {
-		t.Fatalf("Failed to make dir readonly: %v", err)
-	}
-	t.Cleanup(func() {
-		os.Chmod(readOnlyDir, 0755) // Restore for cleanup
-	})
 
 	// Should fail after retries
 	err := hm.saveHistoryWithRetry(2)
 	if err == nil {
-		t.Error("saveHistoryWithRetry should fail on read-only directory")
+		t.Error("saveHistoryWithRetry should fail when parent directory does not exist")
 	}
 }
 
