@@ -110,6 +110,11 @@ type PatrolRunHistoryStore struct {
 	saveTimer    *time.Timer
 	savePending  bool
 	saveDebounce time.Duration
+
+	// Error tracking for persistence
+	lastSaveError error
+	lastSaveTime  time.Time
+	onSaveError   func(err error)
 }
 
 // NewPatrolRunHistoryStore creates a new patrol run history store
@@ -228,9 +233,34 @@ func (s *PatrolRunHistoryStore) scheduleSaveLocked() {
 		if persistence != nil {
 			if err := persistence.SavePatrolRunHistory(runs); err != nil {
 				log.Error().Err(err).Msg("Failed to save patrol run history")
+				s.mu.Lock()
+				s.lastSaveError = err
+				s.mu.Unlock()
+				if onErr := s.onSaveError; onErr != nil {
+					onErr(err)
+				}
+			} else {
+				s.mu.Lock()
+				s.lastSaveError = nil
+				s.lastSaveTime = time.Now()
+				s.mu.Unlock()
 			}
 		}
 	})
+}
+
+// SetOnSaveError sets a callback that is called when persistence fails.
+func (s *PatrolRunHistoryStore) SetOnSaveError(fn func(err error)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onSaveError = fn
+}
+
+// GetPersistenceStatus returns the last save error, last save time, and whether persistence is configured.
+func (s *PatrolRunHistoryStore) GetPersistenceStatus() (lastError error, lastSaveTime time.Time, hasPersistence bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lastSaveError, s.lastSaveTime, s.persistence != nil
 }
 
 // FlushPersistence immediately saves any pending changes
