@@ -625,16 +625,30 @@ func (p *PatrolService) UnsubscribeFromStream(ch chan PatrolStreamEvent) {
 }
 
 // broadcast sends an event to all subscribers
+// Subscribers with full channels are automatically removed to prevent memory leaks
 func (p *PatrolService) broadcast(event PatrolStreamEvent) {
-	p.streamMu.RLock()
-	defer p.streamMu.RUnlock()
+	p.streamMu.Lock()
+	defer p.streamMu.Unlock()
 
+	var staleChannels []chan PatrolStreamEvent
 	for ch := range p.streamSubscribers {
 		select {
 		case ch <- event:
+			// Successfully sent
 		default:
-			// Channel full, skip (don't block on slow consumers)
+			// Channel full - mark for removal (likely dead subscriber)
+			staleChannels = append(staleChannels, ch)
 		}
+	}
+
+	// Clean up stale subscribers
+	for _, ch := range staleChannels {
+		delete(p.streamSubscribers, ch)
+		// Close in a goroutine to avoid blocking if receiver is stuck
+		go func(c chan PatrolStreamEvent) {
+			defer func() { recover() }() // Ignore panic if already closed
+			close(c)
+		}(ch)
 	}
 }
 

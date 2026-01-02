@@ -122,6 +122,10 @@ type FindingsStore struct {
 	saveTimer    *time.Timer
 	savePending  bool
 	saveDebounce time.Duration
+	// Error tracking for persistence failures
+	lastSaveError error           // Last error from save operation
+	onSaveError   func(err error) // Optional callback for save errors
+	lastSaveTime  time.Time       // Last successful save time
 }
 
 // NewFindingsStore creates a new findings store
@@ -188,12 +192,25 @@ func (s *FindingsStore) scheduleSave() {
 			findingsCopy[id] = &copy
 		}
 		persistence := s.persistence
+		onError := s.onSaveError
 		s.mu.Unlock()
 
 		if persistence != nil {
 			if err := persistence.SaveFindings(findingsCopy); err != nil {
-				// Log error but don't fail - persistence is best-effort
-				// (log import would create circular dep, so we silently fail)
+				// Track the error for visibility
+				s.mu.Lock()
+				s.lastSaveError = err
+				s.mu.Unlock()
+				// Call error callback if set
+				if onError != nil {
+					onError(err)
+				}
+			} else {
+				// Clear error and update timestamp on success
+				s.mu.Lock()
+				s.lastSaveError = nil
+				s.lastSaveTime = time.Now()
+				s.mu.Unlock()
 			}
 		}
 	})
@@ -223,6 +240,24 @@ func (s *FindingsStore) ForceSave() error {
 		return persistence.SaveFindings(findingsCopy)
 	}
 	return nil
+}
+
+// SetOnSaveError sets a callback function that will be called when a save operation fails.
+// This allows external code (e.g., logging) to be notified of persistence errors.
+func (s *FindingsStore) SetOnSaveError(callback func(err error)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onSaveError = callback
+}
+
+// GetPersistenceStatus returns the current persistence state:
+// - lastError: the most recent save error, or nil if last save succeeded
+// - lastSaveTime: when findings were last successfully saved
+// - hasPersistence: whether a persistence layer is configured
+func (s *FindingsStore) GetPersistenceStatus() (lastError error, lastSaveTime time.Time, hasPersistence bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lastSaveError, s.lastSaveTime, s.persistence != nil
 }
 
 // Add adds or updates a finding

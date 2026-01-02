@@ -28,4 +28,4 @@ You agree to indemnify and hold harmless the Author from and against all claims,
 This Agreement shall be governed by and construed in accordance with the laws of England and Wales. Any legal action or proceeding related to this Agreement shall be brought exclusively in the courts of England and Wales.
 
 ---
-*Pulse is a product by rcourtman.*
+*Pulse is a product of Pulse Monitoring Ltd (Company No. 16939106, registered in England and Wales).*
