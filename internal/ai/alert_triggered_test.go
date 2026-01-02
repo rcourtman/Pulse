@@ -1047,3 +1047,83 @@ func TestAlertTriggeredAnalyzer_AnalyzeGuestFromAlert_ContainerBackup(t *testing
 		t.Error("Expected findings for container with backup set, got 0")
 	}
 }
+
+func TestAlertTriggeredAnalyzer_StartStop(t *testing.T) {
+	analyzer := NewAlertTriggeredAnalyzer(nil, nil)
+
+	// Verify not started initially
+	analyzer.mu.RLock()
+	tickerBefore := analyzer.cleanupTicker
+	analyzer.mu.RUnlock()
+
+	if tickerBefore != nil {
+		t.Error("Expected cleanupTicker to be nil before Start")
+	}
+
+	// Start the cleanup goroutine
+	analyzer.Start()
+
+	analyzer.mu.RLock()
+	tickerAfter := analyzer.cleanupTicker
+	analyzer.mu.RUnlock()
+
+	if tickerAfter == nil {
+		t.Error("Expected cleanupTicker to be set after Start")
+	}
+
+	// Calling Start again should be a no-op
+	analyzer.Start()
+
+	analyzer.mu.RLock()
+	tickerAfterSecondStart := analyzer.cleanupTicker
+	analyzer.mu.RUnlock()
+
+	if tickerAfterSecondStart != tickerAfter {
+		t.Error("Expected cleanupTicker to remain the same after second Start")
+	}
+
+	// Stop the cleanup goroutine
+	analyzer.Stop()
+
+	analyzer.mu.RLock()
+	tickerAfterStop := analyzer.cleanupTicker
+	analyzer.mu.RUnlock()
+
+	if tickerAfterStop != nil {
+		t.Error("Expected cleanupTicker to be nil after Stop")
+	}
+}
+
+func TestAlertTriggeredAnalyzer_CleanupTickerRuns(t *testing.T) {
+	analyzer := NewAlertTriggeredAnalyzer(nil, nil)
+
+	// Add an old entry
+	analyzer.mu.Lock()
+	analyzer.lastAnalyzed["old-entry"] = time.Now().Add(-2 * time.Hour)
+	analyzer.mu.Unlock()
+
+	// Start with a very short ticker for testing (we'll manually trigger cleanup)
+	analyzer.Start()
+	defer analyzer.Stop()
+
+	// Verify the entry exists
+	analyzer.mu.RLock()
+	_, existsBefore := analyzer.lastAnalyzed["old-entry"]
+	analyzer.mu.RUnlock()
+
+	if !existsBefore {
+		t.Fatal("Expected 'old-entry' to exist before cleanup")
+	}
+
+	// Manually trigger cleanup
+	analyzer.CleanupOldCooldowns()
+
+	// Verify the entry was removed
+	analyzer.mu.RLock()
+	_, existsAfter := analyzer.lastAnalyzed["old-entry"]
+	analyzer.mu.RUnlock()
+
+	if existsAfter {
+		t.Error("Expected 'old-entry' to be removed after cleanup")
+	}
+}
