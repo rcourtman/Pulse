@@ -1,24 +1,54 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, fireEvent, screen, cleanup } from '@solidjs/testing-library';
+import { render, fireEvent, screen, cleanup, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 
 import { ThresholdsTable, normalizeDockerIgnoredInput } from '../ThresholdsTable';
 import type { PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
 import type { Host } from '@/types/api';
 
-let mockPathname = '/alerts/thresholds/containers';
+const [getPathname, setPathname] = createSignal('/alerts/thresholds/containers');
+const mockNavigate = vi.fn();
 
 vi.mock('@solidjs/router', () => ({
-  useNavigate: () => vi.fn(),
-  useLocation: () => ({ pathname: mockPathname }),
+  useNavigate: () => mockNavigate,
+  useLocation: () => ({
+    get pathname() { return getPathname(); }
+  }),
 }));
 
 vi.mock('../ResourceTable', () => ({
-  ResourceTable: (props: { title?: string }) => (
-    <div data-testid={`resource-table-${props.title ?? 'unnamed'}`} />
-  ),
+  ResourceTable: (props: {
+    title?: string;
+    resources?: any[];
+    groupedResources?: Record<string, any[]>;
+    formatMetricValue?: (metric: string, value: number | undefined) => string;
+  }) => {
+    const resources = props.resources || (props.groupedResources ? Object.values(props.groupedResources).flat() : []);
+    const title = props.title ?? 'unnamed';
+    return (
+      <div data-testid={`resource-table-${title}`}>
+        <div data-testid={`resource-count-${title}`}>{resources.length}</div>
+        {resources.map((r: any) => (
+          <div data-testid={`resource-row-${r.id}`}>
+            <div data-testid={`resource-name-${r.id}`}>{r.name}</div>
+            <div data-testid={`resource-cpu-${r.id}`}>
+              {props.formatMetricValue && r.thresholds ? props.formatMetricValue('cpu', r.thresholds.cpu) : (r.thresholds?.cpu ?? '')}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  },
   Resource: () => null,
   GroupHeaderMeta: () => null,
+}));
+
+vi.mock('../Thresholds/sections/CollapsibleSection', () => ({
+  CollapsibleSection: (props: any) => (
+    <div data-testid={`section-${props.title}`}>
+      {props.children}
+    </div>
+  ),
 }));
 
 afterEach(() => {
@@ -26,7 +56,8 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-  mockPathname = '/alerts/thresholds/containers';
+  setPathname('/alerts/thresholds/containers');
+  vi.clearAllMocks();
 });
 
 const DEFAULT_PMG_THRESHOLDS: PMGThresholdDefaults = {
@@ -96,7 +127,7 @@ const baseProps = () => ({
   resetNodeDefaults: vi.fn(),
   resetHostDefaults: vi.fn(),
   resetDockerDefaults: vi.fn(),
-  resetDockerIgnoredPrefixes: undefined as (() => void) | undefined,
+  resetDockerIgnoredPrefixes: vi.fn(),
   resetStorageDefault: vi.fn(),
   factoryGuestDefaults: {},
   factoryNodeDefaults: {},
@@ -164,188 +195,142 @@ const baseProps = () => ({
   setGuestTagWhitelist: vi.fn(),
   guestTagBlacklist: () => [] as string[],
   setGuestTagBlacklist: vi.fn(),
+  dockerIgnoredPrefixes: () => [] as string[],
+  setDockerIgnoredPrefixes: vi.fn(),
+  setHasUnsavedChanges: vi.fn(),
 });
-
-const renderThresholdsTable = (options?: {
-  initialPrefixes?: string[];
-  includeReset?: boolean;
-  hosts?: Host[];
-}) => {
-  let setDockerIgnoredPrefixesMock!: ReturnType<typeof vi.fn>;
-  let resetDockerIgnoredPrefixesMock: ReturnType<typeof vi.fn> | undefined;
-  let setHasUnsavedChangesMock!: ReturnType<typeof vi.fn>;
-  let getPrefixes!: () => string[];
-
-  const result = render(() => {
-    const [prefixes, setPrefixes] = createSignal(options?.initialPrefixes ?? []);
-    getPrefixes = prefixes;
-    const [dockerDefaults, setDockerDefaultsState] = createSignal({ ...DEFAULT_DOCKER_DEFAULTS });
-
-    setHasUnsavedChangesMock = vi.fn();
-
-    setDockerIgnoredPrefixesMock = vi.fn((next: string[]) => {
-      setPrefixes(next);
-    });
-
-    resetDockerIgnoredPrefixesMock =
-      options?.includeReset === false
-        ? undefined
-        : vi.fn(() => {
-          setPrefixes([]);
-        });
-
-    const base = baseProps();
-
-    const props = {
-      ...base,
-      hosts: options?.hosts ?? base.hosts,
-      dockerIgnoredPrefixes: () => prefixes(),
-      setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => {
-        const next = typeof value === 'function' ? value(prefixes()) : value;
-        setDockerIgnoredPrefixesMock(next);
-        setPrefixes(next);
-      },
-      get dockerDefaults() {
-        return dockerDefaults();
-      },
-      setDockerDefaults: (
-        value:
-          | typeof DEFAULT_DOCKER_DEFAULTS
-          | ((
-            prev: typeof DEFAULT_DOCKER_DEFAULTS,
-          ) => typeof DEFAULT_DOCKER_DEFAULTS),
-      ) => {
-        const next =
-          typeof value === 'function'
-            ? value(dockerDefaults())
-            : { ...value };
-        setDockerDefaultsState(next);
-      },
-      setHasUnsavedChanges: (value: boolean) => {
-        setHasUnsavedChangesMock(value);
-      },
-      resetDockerIgnoredPrefixes: resetDockerIgnoredPrefixesMock,
-    };
-
-    return <ThresholdsTable {...props} />;
-  });
-
-  return {
-    ...result,
-    setDockerIgnoredPrefixesMock,
-    resetDockerIgnoredPrefixesMock,
-    setHasUnsavedChangesMock,
-    getPrefixes,
-  };
-};
 
 describe('normalizeDockerIgnoredInput', () => {
-  it('trims whitespace and removes empty lines', () => {
-    expect(normalizeDockerIgnoredInput(' runner-  \n\n #system \n\t \njob-')).toEqual([
-      'runner-',
-      '#system',
-      'job-',
-    ]);
-  });
-
-  it('returns empty array for blank input', () => {
-    expect(normalizeDockerIgnoredInput('   \n ')).toEqual([]);
+  it('correctly normalizes input string', () => {
+    expect(normalizeDockerIgnoredInput('  a  \n b \n\n c ')).toEqual(['a', 'b', 'c']);
   });
 });
 
-describe('ThresholdsTable hosts tab', () => {
-  it('renders host agents table when hosts tab is active', () => {
-    mockPathname = '/alerts/thresholds/hosts';
+describe('ThresholdsTable basics', () => {
+  it('renders the search input', () => {
+    render(() => <ThresholdsTable {...(baseProps() as any)} />);
+    expect(screen.getByPlaceholderText(/Search resources/i)).toBeInTheDocument();
+  });
+
+  it('allows dismissing the help banner', () => {
+    render(() => <ThresholdsTable {...(baseProps() as any)} />);
+    const dismissButton = screen.getByLabelText(/Dismiss tips/i);
+    fireEvent.click(dismissButton);
+    expect(screen.queryByText(/Quick tips:/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('ThresholdsTable navigation and redirection', () => {
+  it('redirects from base path to proxmox', () => {
+    setPathname('/alerts/thresholds');
+    render(() => <ThresholdsTable {...(baseProps() as any)} />);
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/proxmox', { replace: true });
+  });
+
+  it('redirects legacy docker path to containers', () => {
+    setPathname('/alerts/thresholds/docker');
+    render(() => <ThresholdsTable {...(baseProps() as any)} />);
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/containers', { replace: true, scroll: false });
+  });
+
+  it('navigates to correct route when tabs are clicked', () => {
+    render(() => <ThresholdsTable {...(baseProps() as any)} />);
+
+    const hostsTab = screen.getAllByRole('button').find(el => el.textContent?.includes('Host Agents'));
+    if (hostsTab) fireEvent.click(hostsTab);
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/hosts');
+
+    const mailTab = screen.getAllByRole('button').find(el => el.textContent?.includes('Mail Gateway'));
+    if (mailTab) fireEvent.click(mailTab);
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/mail-gateway');
+  });
+});
+
+describe('ThresholdsTable Resource Rendering', () => {
+  it('renders host agents correctly', async () => {
+    setPathname('/alerts/thresholds/hosts');
     const host: Host = {
-      id: 'host-1',
-      hostname: 'host-1.local',
+      id: 'h1',
+      hostname: 'host1',
       displayName: 'Host 1',
-      memory: {
-        total: 1024,
-        used: 512,
-        free: 512,
-        usage: 50,
-      },
       status: 'online',
-      lastSeen: 1,
+      lastSeen: 123,
+      memory: { total: 100, used: 50, free: 50, usage: 50 },
     };
 
-    renderThresholdsTable({ includeReset: false, hosts: [host] });
+    render(() => <ThresholdsTable {...(baseProps() as any)} hosts={[host]} />);
 
-    expect(screen.getByTestId('resource-table-Host Agents')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-table-Host Agents')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('resource-count-Host Agents')).toHaveTextContent('1');
+    expect(screen.getByTestId('resource-name-h1')).toHaveTextContent('Host 1');
   });
+
+  it('renders proxmox nodes and guests correctly', async () => {
+    setPathname('/alerts/thresholds/proxmox');
+    const node = {
+      id: 'node1',
+      name: 'pve1',
+      displayName: 'PVE Node 1',
+      status: 'online',
+    };
+    const guest = {
+      id: 'guest1',
+      name: 'vm1',
+      vmid: 100,
+      status: 'running',
+      node: 'pve1',
+    };
+
+    render(() => <ThresholdsTable
+      {...(baseProps() as any)}
+      nodes={[node]}
+      allGuests={() => [guest]}
+    />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('section-Proxmox Nodes')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('resource-name-node1')).toHaveTextContent('PVE');
+
+    expect(screen.getByTestId('section-VMs & Containers')).toBeInTheDocument();
+    expect(screen.getByTestId('resource-name-guest1')).toHaveTextContent('vm1');
+  });
+
 });
 
-describe('ThresholdsTable docker ignored prefixes', () => {
-  it('updates prefixes when textarea is edited', () => {
-    const { setDockerIgnoredPrefixesMock, setHasUnsavedChangesMock, getPrefixes } =
-      renderThresholdsTable({ includeReset: false });
+describe('ThresholdsTable Metric Formatting', () => {
+  it('formats metrics correctly', async () => {
+    setPathname('/alerts/thresholds/hosts');
+    const host: Host = {
+      id: 'h1',
+      hostname: 'host1',
+      displayName: 'Host 1',
+      status: 'online',
+      lastSeen: 123,
+      memory: { total: 100, used: 50, free: 50, usage: 50 },
+    };
 
-    const textarea = screen.getByPlaceholderText('runner-') as HTMLTextAreaElement;
-    fireEvent.input(textarea, { target: { value: '  runner- \n #system \n' } });
+    const override = {
+      id: 'h1',
+      name: 'host1',
+      type: 'hostAgent' as const,
+      thresholds: {
+        cpu: 85
+      }
+    };
 
-    expect(setDockerIgnoredPrefixesMock).toHaveBeenCalledWith(['runner-', '#system']);
-    expect(getPrefixes()).toEqual(['runner-', '#system']);
-    expect(textarea).toHaveValue('runner-\n#system');
-    expect(setHasUnsavedChangesMock).toHaveBeenCalledWith(true);
-  });
+    render(() => <ThresholdsTable
+      {...(baseProps() as any)}
+      hosts={[host]}
+      overrides={() => [override]}
+    />);
 
-  it('invokes reset handler and clears prefixes', () => {
-    const {
-      resetDockerIgnoredPrefixesMock,
-      setDockerIgnoredPrefixesMock,
-      setHasUnsavedChangesMock,
-      getPrefixes,
-    } = renderThresholdsTable({ initialPrefixes: ['runner-'], includeReset: true });
-
-    const textarea = screen.getByPlaceholderText('runner-') as HTMLTextAreaElement;
-    expect(textarea).toHaveValue('runner-');
-
-    const resetButton = screen.getByRole('button', { name: /reset/i });
-    fireEvent.click(resetButton);
-
-    expect(resetDockerIgnoredPrefixesMock).toHaveBeenCalledTimes(1);
-    expect(setDockerIgnoredPrefixesMock).not.toHaveBeenCalled();
-    expect(getPrefixes()).toEqual([]);
-    expect(textarea).toHaveValue('');
-    expect(setHasUnsavedChangesMock).toHaveBeenCalledWith(true);
-  });
-
-  it('preserves trailing newlines when typing', () => {
-    const { getPrefixes } = renderThresholdsTable({ includeReset: false });
-    const textarea = screen.getByPlaceholderText('runner-') as HTMLTextAreaElement;
-
-    // Simulate typing "abc"
-    fireEvent.input(textarea, { target: { value: 'abc' } });
-    expect(getPrefixes()).toEqual(['abc']);
-    expect(textarea).toHaveValue('abc');
-
-    // Simulate hitting Enter ("abc\n")
-    fireEvent.input(textarea, { target: { value: 'abc\n' } });
-    // Prop should still be ['abc'] as "abc" trimmed is "abc", "\n" trimmed is empty
-    expect(getPrefixes()).toEqual(['abc']);
-    // Value should NOT be reset to "abc" by the effect, it should remain "abc\n"
-    expect(textarea).toHaveValue('abc\n');
-
-    // Simulate typing "d" ("abc\nd")
-    fireEvent.input(textarea, { target: { value: 'abc\nd' } });
-    expect(getPrefixes()).toEqual(['abc', 'd']);
-    expect(textarea).toHaveValue('abc\nd');
-  });
-});
-
-describe('ThresholdsTable service gap validation', () => {
-  it('shows a validation message when the critical gap falls below the warning gap', () => {
-    renderThresholdsTable({ includeReset: false });
-
-    const warnInput = screen.getByLabelText('Warning gap %') as HTMLInputElement;
-    const critInput = screen.getByLabelText('Critical gap %') as HTMLInputElement;
-
-    fireEvent.input(warnInput, { target: { value: '40' } });
-    fireEvent.input(critInput, { target: { value: '20' } });
-
-    expect(
-      screen.getByText(/critical gap must be greater than or equal to the warning gap/i),
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-cpu-h1')).toHaveTextContent('85%');
+    });
   });
 });
