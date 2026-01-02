@@ -1440,8 +1440,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         disableConnectivity,
         thresholds: override?.thresholds || {},
         defaults: {
-          cpu: props.nodeDefaults.cpu,
-          memory: props.nodeDefaults.memory,
+          cpu: props.pbsDefaults?.cpu ?? 80,
+          memory: props.pbsDefaults?.memory ?? 85,
         },
       };
     });
