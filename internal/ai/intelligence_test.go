@@ -494,7 +494,7 @@ func TestIntelligence_GetResourceIntelligence_WithBaselines(t *testing.T) {
 	resourceIntel := intel.GetResourceIntelligence("vm-with-baseline")
 
 	// Should have baselines
-	if resourceIntel.Baselines == nil || len(resourceIntel.Baselines) == 0 {
+	if len(resourceIntel.Baselines) == 0 {
 		t.Error("Expected baselines to be populated")
 	}
 

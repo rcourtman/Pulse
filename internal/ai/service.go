@@ -1895,7 +1895,7 @@ func isActionableCommand(cmd string) bool {
 
 // generateRemediationSummary creates a human-readable summary of what a command achieved
 // This is used to display meaningful descriptions in the Pulse AI Impact section
-func generateRemediationSummary(command string, targetType string, context map[string]interface{}) string {
+func generateRemediationSummary(command string, _ string, context map[string]interface{}) string {
 	cmd := strings.TrimSpace(command)
 
 	// Extract target name from context
@@ -3604,7 +3604,7 @@ func truncateString(s string, maxLen int) string {
 // - Trend analysis ("memory growing 5%/day")
 // - Predictions ("disk full in 12 days")
 // - Recent changes ("config changed 2 hours ago")
-func (s *Service) buildEnrichedResourceContext(resourceID, resourceType string, currentMetrics map[string]interface{}) string {
+func (s *Service) buildEnrichedResourceContext(resourceID, _ string, currentMetrics map[string]interface{}) string {
 	s.mu.RLock()
 	patrol := s.patrolService
 	s.mu.RUnlock()

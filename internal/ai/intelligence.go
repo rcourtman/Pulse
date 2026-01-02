@@ -926,7 +926,7 @@ func (i *Intelligence) formatAnomaliesForContext(anomalies []AnomalyReport) stri
 	return strings.Join(lines, "\n")
 }
 
-func (i *Intelligence) formatAnomalyDescription(metric string, value float64, bl *baseline.MetricBaseline, zScore float64) string {
+func (i *Intelligence) formatAnomalyDescription(_ string, value float64, bl *baseline.MetricBaseline, zScore float64) string {
 	direction := "above"
 	if zScore < 0 {
 		direction = "below"

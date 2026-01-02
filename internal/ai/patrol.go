@@ -2205,9 +2205,10 @@ func (p *PatrolService) analyzeKubernetesCluster(cluster models.KubernetesCluste
 	for _, pod := range cluster.Pods {
 		phase := strings.ToLower(strings.TrimSpace(pod.Phase))
 
-		if phase == "failed" {
+		switch phase {
+		case "failed":
 			failedPods++
-		} else if phase == "pending" {
+		case "pending":
 			pendingPods++
 		}
 
@@ -2681,9 +2682,10 @@ func (p *PatrolService) buildInfrastructureSummary(state models.StateSnapshot) s
 			problemPods := 0
 			for _, pod := range cluster.Pods {
 				phase := strings.ToLower(strings.TrimSpace(pod.Phase))
-				if phase == "running" {
+				switch phase {
+				case "running":
 					runningPods++
-				} else if phase == "failed" || phase == "pending" {
+				case "failed", "pending":
 					problemPods++
 				}
 			}
@@ -3119,11 +3121,12 @@ func (p *PatrolService) checkAnomalies(resourceID, resourceName, resourceType st
 			})
 
 			// Record this as an event for correlation if it's a spike
-			if metric == "cpu" {
+			switch metric {
+			case "cpu":
 				p.recordEvent(resourceID, resourceName, resourceType, CorrelationEventHighCPU, value)
-			} else if metric == "memory" {
+			case "memory":
 				p.recordEvent(resourceID, resourceName, resourceType, CorrelationEventHighMem, value)
-			} else if metric == "disk" {
+			case "disk":
 				p.recordEvent(resourceID, resourceName, resourceType, CorrelationEventDiskFull, value)
 			}
 		}
