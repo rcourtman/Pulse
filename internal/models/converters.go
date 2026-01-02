@@ -36,6 +36,7 @@ func (n Node) ToFrontend() NodeFrontend {
 		IsClusterMember:              n.IsClusterMember,
 		ClusterName:                  n.ClusterName,
 		TemperatureMonitoringEnabled: n.TemperatureMonitoringEnabled,
+		LinkedHostAgentId:            n.LinkedHostAgentID,
 	}
 
 	// Include full Memory object if it has data
@@ -479,6 +480,9 @@ func (h Host) ToFrontend() HostFrontend {
 		TokenHint:       h.TokenHint,
 		Tags:            append([]string(nil), h.Tags...),
 		LastSeen:        h.LastSeen.Unix() * 1000,
+		CommandsEnabled: h.CommandsEnabled,
+		IsLegacy:        h.IsLegacy,
+		LinkedNodeId:    h.LinkedNodeID,
 	}
 
 	// Fall back to Hostname if DisplayName is empty

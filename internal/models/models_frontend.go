@@ -31,6 +31,7 @@ type NodeFrontend struct {
 	IsClusterMember              bool         `json:"isClusterMember,omitempty"`
 	ClusterName                  string       `json:"clusterName,omitempty"`
 	TemperatureMonitoringEnabled *bool        `json:"temperatureMonitoringEnabled,omitempty"` // Per-node temperature monitoring override
+	LinkedHostAgentId            string       `json:"linkedHostAgentId,omitempty"`            // ID of linked host agent (for "Via agent" badge)
 }
 
 // VMFrontend represents a VM with frontend-friendly field names
@@ -435,6 +436,9 @@ type HostFrontend struct {
 	TokenHint         string                     `json:"tokenHint,omitempty"`
 	TokenLastUsedAt   *int64                     `json:"tokenLastUsedAt,omitempty"`
 	Tags              []string                   `json:"tags,omitempty"`
+	CommandsEnabled   bool                       `json:"commandsEnabled,omitempty"` // Whether AI command execution is enabled
+	IsLegacy          bool                       `json:"isLegacy,omitempty"`        // True if using legacy agent protocol
+	LinkedNodeId      string                     `json:"linkedNodeId,omitempty"`    // ID of linked PVE node (if running on a node)
 }
 
 // HostSensorSummaryFrontend mirrors HostSensorSummary with primitives for the frontend.
