@@ -21,6 +21,7 @@ const FEATURE_LABELS: Record<string, string> = {
   ai_alerts: 'AI Alert Analysis',
   ai_autofix: 'AI Auto-Fix',
   kubernetes_ai: 'Kubernetes AI',
+  update_alerts: 'Update Alerts',
   multi_user: 'Multi-user / RBAC',
   white_label: 'White-label Branding',
   multi_tenant: 'Multi-tenant Mode',

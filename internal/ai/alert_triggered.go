@@ -240,7 +240,12 @@ func (a *AlertTriggeredAnalyzer) analyzeResourceByAlert(ctx context.Context, ale
 		alertType == "memory" && strings.Contains(alert.ResourceID, "/node/"):
 		return a.analyzeNodeFromAlert(ctx, alert)
 
-	// Guest (VM/Container) alerts
+	// Docker update alerts - provide AI-powered update risk assessment
+	// NOTE: This must come BEFORE the guest container check since "container" matches "docker-container-update"
+	case alertType == "docker-container-update":
+		return a.analyzeUpdateAlertFromAlert(ctx, alert)
+
+	// Guest (VM/Container) alerts - Proxmox VMs and LXC containers
 	case strings.Contains(alertType, "container") ||
 		strings.Contains(alertType, "vm") ||
 		strings.HasPrefix(alertType, "qemu") ||
@@ -249,7 +254,7 @@ func (a *AlertTriggeredAnalyzer) analyzeResourceByAlert(ctx context.Context, ale
 		strings.Contains(alert.ResourceID, "/lxc/"):
 		return a.analyzeGuestFromAlert(ctx, alert)
 
-	// Docker alerts
+	// Docker alerts (other than container-update)
 	case strings.Contains(alertType, "docker"):
 		return a.analyzeDockerFromAlert(ctx, alert)
 
@@ -376,6 +381,276 @@ func (a *AlertTriggeredAnalyzer) analyzeDockerFromAlert(_ context.Context, alert
 		Str("resourceID", alert.ResourceID).
 		Msg("Could not find Docker resource for alert-triggered analysis")
 	return nil
+}
+
+// analyzeUpdateAlertFromAlert provides AI-powered update risk assessment for container updates
+// This is a Pro feature that helps users prioritize and schedule updates intelligently
+func (a *AlertTriggeredAnalyzer) analyzeUpdateAlertFromAlert(_ context.Context, alert *alerts.Alert) []*Finding {
+	// Handle nil inputs gracefully
+	if alert == nil {
+		return nil
+	}
+
+	// Extract metadata from the update alert with safe type assertions
+	var containerName, imageName, hostName string
+	var pendingHours int
+
+	if alert.Metadata != nil {
+		containerName, _ = alert.Metadata["containerName"].(string)
+		imageName, _ = alert.Metadata["image"].(string)
+		hostName, _ = alert.Metadata["hostName"].(string)
+		// Handle both int and float64 (JSON unmarshaling can produce either)
+		if v, ok := alert.Metadata["pendingHours"].(int); ok {
+			pendingHours = v
+		} else if v, ok := alert.Metadata["pendingHours"].(float64); ok {
+			pendingHours = int(v)
+		}
+	}
+
+	// Fallback to alert fields if metadata is incomplete
+	if containerName == "" {
+		containerName = alert.ResourceName
+	}
+	if containerName == "" {
+		containerName = "unknown container"
+	}
+	if imageName == "" {
+		imageName = "unknown"
+	}
+	if hostName == "" {
+		hostName = alert.Node
+	}
+
+	// Analyze the update and generate recommendations
+	severity, category, urgencyReason, recommendation := a.classifyContainerUpdate(containerName, imageName, pendingHours)
+
+	title := fmt.Sprintf("Update available for %s", containerName)
+	if urgencyReason != "" {
+		title = fmt.Sprintf("Update available for %s (%s)", containerName, urgencyReason)
+	}
+
+	// Build evidence string, omitting empty fields
+	var evidenceParts []string
+	if imageName != "unknown" {
+		evidenceParts = append(evidenceParts, "Image: "+imageName)
+	}
+	if hostName != "" {
+		evidenceParts = append(evidenceParts, "Host: "+hostName)
+	}
+	if pendingHours > 0 {
+		evidenceParts = append(evidenceParts, fmt.Sprintf("Pending: %d hours", pendingHours))
+	}
+	if urgencyReason != "" {
+		evidenceParts = append(evidenceParts, "Type: "+urgencyReason)
+	}
+	evidence := strings.Join(evidenceParts, " | ")
+
+	description := alert.Message
+	if description == "" {
+		description = fmt.Sprintf("Image update available for container '%s'", containerName)
+	}
+
+	finding := &Finding{
+		ID:             fmt.Sprintf("update-analysis-%s", alert.ResourceID),
+		Key:            fmt.Sprintf("update-analysis:%s", alert.ResourceID),
+		Severity:       severity,
+		Category:       category,
+		ResourceID:     alert.ResourceID,
+		ResourceName:   containerName,
+		ResourceType:   "Docker Container",
+		Title:          title,
+		Description:    description,
+		Recommendation: recommendation,
+		Evidence:       evidence,
+		DetectedAt:     time.Now(),
+		LastSeenAt:     time.Now(),
+		AlertID:        alert.ID,
+	}
+
+	log.Info().
+		Str("container", containerName).
+		Str("image", imageName).
+		Str("severity", string(severity)).
+		Str("urgency", urgencyReason).
+		Int("pendingHours", pendingHours).
+		Msg("AI update risk assessment generated for container")
+
+	return []*Finding{finding}
+}
+
+// classifyContainerUpdate determines the urgency and recommendations for a container update
+// based on the image name and how long the update has been pending
+func (a *AlertTriggeredAnalyzer) classifyContainerUpdate(containerName, imageName string, pendingHours int) (FindingSeverity, FindingCategory, string, string) {
+	severity := FindingSeverityWatch
+	category := FindingCategoryReliability
+	urgencyReason := ""
+	recommendation := ""
+
+	imageNameLower := strings.ToLower(imageName)
+
+	switch {
+	// Security-critical: Authentication & Identity services - update ASAP
+	case strings.Contains(imageNameLower, "keycloak") ||
+		strings.Contains(imageNameLower, "authelia") ||
+		strings.Contains(imageNameLower, "authentik") ||
+		strings.Contains(imageNameLower, "oauth") ||
+		strings.Contains(imageNameLower, "dex") ||
+		strings.Contains(imageNameLower, "vault"):
+		severity = FindingSeverityWarning
+		category = FindingCategorySecurity
+		urgencyReason = "auth/identity service"
+		recommendation = fmt.Sprintf("Container '%s' is an %s which handles authentication. "+
+			"Security updates are critical. Review changelog immediately and update within 24 hours if security-related. "+
+			"Schedule during low-auth-activity periods to minimize locked-out users.", containerName, urgencyReason)
+
+	// Security-critical: Reverse proxies and web servers - update promptly
+	case strings.Contains(imageNameLower, "nginx") ||
+		strings.Contains(imageNameLower, "apache") ||
+		strings.Contains(imageNameLower, "httpd") ||
+		strings.Contains(imageNameLower, "traefik") ||
+		strings.Contains(imageNameLower, "haproxy") ||
+		strings.Contains(imageNameLower, "caddy") ||
+		strings.Contains(imageNameLower, "envoy"):
+		severity = FindingSeverityWarning
+		category = FindingCategorySecurity
+		urgencyReason = "reverse proxy/web server"
+		recommendation = fmt.Sprintf("Container '%s' is a %s which is often internet-facing. "+
+			"Review the changelog for security fixes and consider updating within 24-48 hours. "+
+			"Schedule during low-traffic periods.", containerName, urgencyReason)
+
+	// Database - careful updates needed, verify backup first
+	case strings.Contains(imageNameLower, "postgres") ||
+		strings.Contains(imageNameLower, "mysql") ||
+		strings.Contains(imageNameLower, "mariadb") ||
+		strings.Contains(imageNameLower, "mongo") ||
+		strings.Contains(imageNameLower, "redis") ||
+		strings.Contains(imageNameLower, "memcached") ||
+		strings.Contains(imageNameLower, "cassandra") ||
+		strings.Contains(imageNameLower, "cockroach") ||
+		strings.Contains(imageNameLower, "influxdb") ||
+		strings.Contains(imageNameLower, "timescale") ||
+		strings.Contains(imageNameLower, "clickhouse"):
+		severity = FindingSeverityWatch
+		category = FindingCategoryReliability
+		urgencyReason = "database"
+		recommendation = fmt.Sprintf("Container '%s' is a %s. "+
+			"Before updating: 1) Verify backup is current and tested, 2) Review changelog for breaking changes, "+
+			"3) Check for major version incompatibilities. Schedule during maintenance window with low activity.",
+			containerName, urgencyReason)
+
+	// Message queues - handle with care, drain queues first
+	case strings.Contains(imageNameLower, "rabbitmq") ||
+		strings.Contains(imageNameLower, "kafka") ||
+		strings.Contains(imageNameLower, "nats") ||
+		strings.Contains(imageNameLower, "mosquitto") ||
+		strings.Contains(imageNameLower, "activemq") ||
+		strings.Contains(imageNameLower, "zeromq"):
+		severity = FindingSeverityWatch
+		category = FindingCategoryReliability
+		urgencyReason = "message queue"
+		recommendation = fmt.Sprintf("Container '%s' is a %s. "+
+			"Ensure all consumers are healthy and queues can be drained before updating. "+
+			"Consider updating during low message volume periods. Check for protocol compatibility.",
+			containerName, urgencyReason)
+
+	// CI/CD and automation - schedule during non-deployment windows
+	case strings.Contains(imageNameLower, "jenkins") ||
+		strings.Contains(imageNameLower, "gitlab") ||
+		strings.Contains(imageNameLower, "gitea") ||
+		strings.Contains(imageNameLower, "drone") ||
+		strings.Contains(imageNameLower, "argocd") ||
+		strings.Contains(imageNameLower, "flux"):
+		severity = FindingSeverityWatch
+		category = FindingCategoryReliability
+		urgencyReason = "CI/CD system"
+		recommendation = fmt.Sprintf("Container '%s' is a %s. "+
+			"Update during periods when no critical deployments are scheduled. "+
+			"Verify all pipelines complete successfully after update.",
+			containerName, urgencyReason)
+
+	// Storage/backup services - critical, but careful updates needed
+	case strings.Contains(imageNameLower, "minio") ||
+		strings.Contains(imageNameLower, "nextcloud") ||
+		strings.Contains(imageNameLower, "seafile") ||
+		strings.Contains(imageNameLower, "restic") ||
+		strings.Contains(imageNameLower, "duplicati"):
+		severity = FindingSeverityWatch
+		category = FindingCategoryBackup
+		urgencyReason = "storage/backup service"
+		recommendation = fmt.Sprintf("Container '%s' is a %s. "+
+			"Verify no active uploads/syncs and ensure recent backup exists before updating. "+
+			"Check release notes for data migration requirements.",
+			containerName, urgencyReason)
+
+	// Monitoring/observability - generally safe to batch
+	case strings.Contains(imageNameLower, "prometheus") ||
+		strings.Contains(imageNameLower, "grafana") ||
+		strings.Contains(imageNameLower, "loki") ||
+		strings.Contains(imageNameLower, "jaeger") ||
+		strings.Contains(imageNameLower, "alertmanager") ||
+		strings.Contains(imageNameLower, "victoria") ||
+		strings.Contains(imageNameLower, "tempo") ||
+		strings.Contains(imageNameLower, "mimir"):
+		severity = FindingSeverityInfo
+		category = FindingCategoryReliability
+		urgencyReason = "monitoring/observability"
+		recommendation = fmt.Sprintf("Container '%s' is a %s tool. "+
+			"Generally safe to update anytime. Brief monitoring gaps during restart are usually acceptable. "+
+			"Check for dashboard compatibility if changing major versions.",
+			containerName, urgencyReason)
+
+	// Home automation - update during inactive periods
+	case strings.Contains(imageNameLower, "homeassistant") ||
+		strings.Contains(imageNameLower, "home-assistant") ||
+		strings.Contains(imageNameLower, "nodered") ||
+		strings.Contains(imageNameLower, "node-red") ||
+		strings.Contains(imageNameLower, "mosquitto"):
+		severity = FindingSeverityWatch
+		category = FindingCategoryReliability
+		urgencyReason = "home automation"
+		recommendation = fmt.Sprintf("Container '%s' is a %s service. "+
+			"Update when household members are awake and can verify automations work correctly. "+
+			"Check for integration compatibility with major version updates.",
+			containerName, urgencyReason)
+
+	// Media services - low priority, update at convenience
+	case strings.Contains(imageNameLower, "plex") ||
+		strings.Contains(imageNameLower, "jellyfin") ||
+		strings.Contains(imageNameLower, "emby") ||
+		strings.Contains(imageNameLower, "sonarr") ||
+		strings.Contains(imageNameLower, "radarr") ||
+		strings.Contains(imageNameLower, "lidarr"):
+		severity = FindingSeverityInfo
+		category = FindingCategoryReliability
+		urgencyReason = "media service"
+		recommendation = fmt.Sprintf("Container '%s' is a %s. "+
+			"Low priority - update at your convenience when no one is watching. "+
+			"Feature updates are common; security updates are rare but worth checking release notes.",
+			containerName, urgencyReason)
+
+	// Default case for unknown containers
+	default:
+		severity = FindingSeverityWatch
+		category = FindingCategoryReliability
+		recommendation = fmt.Sprintf("Container '%s' has an image update available. "+
+			"Review the changelog at the image registry before updating. "+
+			"Consider testing in a non-production environment first.", containerName)
+	}
+
+	// Add time-based urgency escalation
+	if pendingHours > 336 { // > 14 days
+		severity = FindingSeverityCritical
+		recommendation += fmt.Sprintf(" ⚠️ OVERDUE: This update has been pending for %d days. "+
+			"Prioritize immediately to avoid potential security vulnerabilities.", pendingHours/24)
+	} else if pendingHours > 168 { // > 7 days
+		if severity == FindingSeverityInfo || severity == FindingSeverityWatch {
+			severity = FindingSeverityWarning
+		}
+		recommendation += fmt.Sprintf(" This update has been pending for %d days. "+
+			"Consider prioritizing to avoid security risk accumulation.", pendingHours/24)
+	}
+
+	return severity, category, urgencyReason, recommendation
 }
 
 // analyzeStorageFromAlert analyzes a storage resource triggered by an alert
