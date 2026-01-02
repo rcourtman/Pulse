@@ -181,11 +181,12 @@ func (s *Service) buildUnifiedResourceContext() string {
 			sections = append(sections, fmt.Sprintf("\n**On %s:**", parentName))
 			for _, w := range children {
 				typeLabel := string(w.Type)
-				if w.Type == resources.ResourceTypeVM {
+				switch w.Type {
+				case resources.ResourceTypeVM:
 					typeLabel = "VM"
-				} else if w.Type == resources.ResourceTypeContainer {
+				case resources.ResourceTypeContainer:
 					typeLabel = "LXC"
-				} else if w.Type == resources.ResourceTypeDockerContainer {
+				case resources.ResourceTypeDockerContainer:
 					typeLabel = "Docker"
 				}
 

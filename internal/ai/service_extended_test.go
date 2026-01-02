@@ -2665,7 +2665,7 @@ func TestService_EnrichRequestFromFinding(t *testing.T) {
 		Prompt: "Just a question",
 	}
 	svc.enrichRequestFromFinding(&req3)
-	if req3.Context != nil && len(req3.Context) > 0 {
+	if len(req3.Context) > 0 {
 		t.Error("Should not add context when no FindingID")
 	}
 
@@ -2675,7 +2675,7 @@ func TestService_EnrichRequestFromFinding(t *testing.T) {
 		Prompt:    "Help",
 	}
 	svc.enrichRequestFromFinding(&req4)
-	if req4.Context != nil && len(req4.Context) > 0 {
+	if len(req4.Context) > 0 {
 		t.Error("Should not add context when finding not found")
 	}
 }
