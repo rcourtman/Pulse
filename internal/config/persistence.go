@@ -1631,12 +1631,13 @@ type PatrolRunRecord struct {
 	Type             string    `json:"type"` // "quick" or "deep"
 	ResourcesChecked int       `json:"resources_checked"`
 	// Breakdown by resource type
-	NodesChecked   int `json:"nodes_checked"`
-	GuestsChecked  int `json:"guests_checked"`
-	DockerChecked  int `json:"docker_checked"`
-	StorageChecked int `json:"storage_checked"`
-	HostsChecked   int `json:"hosts_checked"`
-	PBSChecked     int `json:"pbs_checked"`
+	NodesChecked      int `json:"nodes_checked"`
+	GuestsChecked     int `json:"guests_checked"`
+	DockerChecked     int `json:"docker_checked"`
+	StorageChecked    int `json:"storage_checked"`
+	HostsChecked      int `json:"hosts_checked"`
+	PBSChecked        int `json:"pbs_checked"`
+	KubernetesChecked int `json:"kubernetes_checked"`
 	// Findings from this run
 	NewFindings      int      `json:"new_findings"`
 	ExistingFindings int      `json:"existing_findings"`

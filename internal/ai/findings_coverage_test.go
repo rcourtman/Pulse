@@ -143,6 +143,102 @@ func TestFindingsStore_scheduleSave_SaveError(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("timed out waiting for SaveFindings")
 	}
+
+	// Wait for the error to be recorded
+	time.Sleep(50 * time.Millisecond)
+
+	// Check that error is tracked
+	lastErr, _, _ := store.GetPersistenceStatus()
+	if lastErr == nil {
+		t.Error("expected lastSaveError to be set after save failure")
+	}
+}
+
+func TestFindingsStore_SetOnSaveError(t *testing.T) {
+	store := NewFindingsStore()
+	store.saveDebounce = 5 * time.Millisecond
+	saved := make(chan map[string]*Finding, 1)
+	errReceived := make(chan error, 1)
+
+	store.persistence = &recordingPersistence{
+		saveErr: errors.New("callback test error"),
+		saved:   saved,
+	}
+
+	// Set error callback
+	store.SetOnSaveError(func(err error) {
+		errReceived <- err
+	})
+
+	store.findings["real-1"] = &Finding{ID: "real-1", Title: "Real"}
+	store.scheduleSave()
+
+	select {
+	case <-saved:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timed out waiting for SaveFindings")
+	}
+
+	select {
+	case err := <-errReceived:
+		if err == nil {
+			t.Error("expected error to be passed to callback")
+		}
+		if err.Error() != "callback test error" {
+			t.Errorf("expected 'callback test error', got %v", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timed out waiting for error callback")
+	}
+}
+
+func TestFindingsStore_GetPersistenceStatus_NoPersistence(t *testing.T) {
+	store := NewFindingsStore()
+
+	lastErr, lastSaveTime, hasPersistence := store.GetPersistenceStatus()
+
+	if lastErr != nil {
+		t.Error("expected no error when no persistence")
+	}
+	if !lastSaveTime.IsZero() {
+		t.Error("expected zero time when no persistence")
+	}
+	if hasPersistence {
+		t.Error("expected hasPersistence to be false")
+	}
+}
+
+func TestFindingsStore_GetPersistenceStatus_WithPersistence(t *testing.T) {
+	store := NewFindingsStore()
+	store.saveDebounce = 5 * time.Millisecond
+	saved := make(chan map[string]*Finding, 1)
+	store.persistence = &recordingPersistence{saved: saved}
+
+	_, _, hasPersistence := store.GetPersistenceStatus()
+	if !hasPersistence {
+		t.Error("expected hasPersistence to be true")
+	}
+
+	// Trigger a successful save
+	store.findings["real-1"] = &Finding{ID: "real-1", Title: "Real"}
+	store.scheduleSave()
+
+	select {
+	case <-saved:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timed out waiting for SaveFindings")
+	}
+
+	// Wait for status to be updated
+	time.Sleep(50 * time.Millisecond)
+
+	lastErr, lastSaveTime, _ := store.GetPersistenceStatus()
+	if lastErr != nil {
+		t.Errorf("expected no error after successful save, got %v", lastErr)
+	}
+	if lastSaveTime.IsZero() {
+		t.Error("expected lastSaveTime to be set after successful save")
+	}
 }
 
 func TestFindingsStore_ForceSave_NoPersistenceStopsTimer(t *testing.T) {
