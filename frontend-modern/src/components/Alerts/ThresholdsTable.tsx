@@ -1413,10 +1413,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         override?.thresholds &&
         Object.keys(override.thresholds).some((key) => {
           const k = key as keyof typeof override.thresholds;
-          // PBS uses node defaults for CPU/Memory
+          // PBS uses pbsDefaults for CPU/Memory (not nodeDefaults)
           return (
             override.thresholds[k] !== undefined &&
-            override.thresholds[k] !== props.nodeDefaults[k as keyof typeof props.nodeDefaults]
+            override.thresholds[k] !== (props.pbsDefaults?.[k as keyof typeof props.pbsDefaults] ?? (k === 'cpu' ? 80 : 85))
           );
         });
 
