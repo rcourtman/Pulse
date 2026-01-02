@@ -164,7 +164,7 @@ func (s *PatrolRunHistoryStore) Add(run PatrolRunRecord) {
 	}
 
 	// Schedule save
-	s.scheduleSave()
+	s.scheduleSaveLocked()
 }
 
 // GetAll returns all runs (newest first)
@@ -198,8 +198,9 @@ func (s *PatrolRunHistoryStore) Count() int {
 	return len(s.runs)
 }
 
-// scheduleSave schedules a debounced save operation
-func (s *PatrolRunHistoryStore) scheduleSave() {
+// scheduleSaveLocked schedules a debounced save operation.
+// MUST be called with s.mu held (either Lock or is deferred with unlock).
+func (s *PatrolRunHistoryStore) scheduleSaveLocked() {
 	if s.persistence == nil {
 		return
 	}

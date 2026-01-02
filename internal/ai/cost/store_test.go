@@ -327,3 +327,119 @@ func TestSetPersistence_TrimsOldEventsOnLoad(t *testing.T) {
 		t.Fatalf("expected old events to be trimmed, got %d provider models", len(summary.ProviderModels))
 	}
 }
+
+func TestGetPersistenceStatus_NoPersistence(t *testing.T) {
+	store := NewStore(30)
+
+	lastErr, lastSaveTime, hasPersistence := store.GetPersistenceStatus()
+
+	if lastErr != nil {
+		t.Error("expected no error when no persistence")
+	}
+	if !lastSaveTime.IsZero() {
+		t.Error("expected zero time when no persistence")
+	}
+	if hasPersistence {
+		t.Error("expected hasPersistence to be false")
+	}
+}
+
+func TestGetPersistenceStatus_WithPersistence(t *testing.T) {
+	store := NewStore(30)
+	store.saveDebounce = 5 * time.Millisecond
+
+	mock := &mockPersistence{}
+	err := store.SetPersistence(mock)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	_, _, hasPersistence := store.GetPersistenceStatus()
+	if !hasPersistence {
+		t.Error("expected hasPersistence to be true")
+	}
+
+	// Trigger a save
+	store.Record(UsageEvent{
+		Timestamp:    time.Now(),
+		Provider:     "test",
+		RequestModel: "test:model",
+		InputTokens:  100,
+		OutputTokens: 50,
+	})
+
+	// Wait for debounced save
+	time.Sleep(50 * time.Millisecond)
+
+	lastErr, lastSaveTime, _ := store.GetPersistenceStatus()
+	if lastErr != nil {
+		t.Errorf("expected no error after successful save, got %v", lastErr)
+	}
+	if lastSaveTime.IsZero() {
+		t.Error("expected lastSaveTime to be set after successful save")
+	}
+}
+
+// errorPersistence is a mock that returns an error on save
+type errorPersistence struct{}
+
+func (e *errorPersistence) LoadUsageHistory() ([]UsageEvent, error) {
+	return nil, nil
+}
+
+func (e *errorPersistence) SaveUsageHistory(events []UsageEvent) error {
+	return errSaveTestError
+}
+
+var errSaveTestError = &testError{"forced save error"}
+
+type testError struct {
+	msg string
+}
+
+func (e *testError) Error() string {
+	return e.msg
+}
+
+func TestSetOnSaveError_CallbackCalled(t *testing.T) {
+	store := NewStore(30)
+	store.saveDebounce = 5 * time.Millisecond
+
+	errReceived := make(chan error, 1)
+	store.SetOnSaveError(func(err error) {
+		errReceived <- err
+	})
+
+	err := store.SetPersistence(&errorPersistence{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Trigger a save
+	store.Record(UsageEvent{
+		Timestamp:    time.Now(),
+		Provider:     "test",
+		RequestModel: "test:model",
+		InputTokens:  100,
+		OutputTokens: 50,
+	})
+
+	// Wait for callback
+	select {
+	case err := <-errReceived:
+		if err == nil {
+			t.Error("expected error in callback")
+		}
+		if err.Error() != "forced save error" {
+			t.Errorf("expected 'forced save error', got %v", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timed out waiting for error callback")
+	}
+
+	// Check persistence status reflects error
+	lastErr, _, _ := store.GetPersistenceStatus()
+	if lastErr == nil {
+		t.Error("expected lastSaveError to be set after failed save")
+	}
+}

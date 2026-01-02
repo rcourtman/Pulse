@@ -44,6 +44,11 @@ type Store struct {
 	saveTimer    *time.Timer
 	savePending  bool
 	saveDebounce time.Duration
+
+	// Error tracking for persistence
+	lastSaveError error
+	lastSaveTime  time.Time
+	onSaveError   func(err error)
 }
 
 // NewStore creates a new usage store.
@@ -298,14 +303,40 @@ func (s *Store) scheduleSaveLocked() {
 		events := make([]UsageEvent, len(s.events))
 		copy(events, s.events)
 		p := s.persistence
+		onErr := s.onSaveError
 		s.mu.Unlock()
 
 		if p != nil {
 			if err := p.SaveUsageHistory(events); err != nil {
 				log.Error().Err(err).Msg("Failed to save AI usage history")
+				s.mu.Lock()
+				s.lastSaveError = err
+				s.mu.Unlock()
+				if onErr != nil {
+					onErr(err)
+				}
+			} else {
+				s.mu.Lock()
+				s.lastSaveError = nil
+				s.lastSaveTime = time.Now()
+				s.mu.Unlock()
 			}
 		}
 	})
+}
+
+// SetOnSaveError sets a callback that is called when persistence fails.
+func (s *Store) SetOnSaveError(fn func(err error)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onSaveError = fn
+}
+
+// GetPersistenceStatus returns the last save error, last save time, and whether persistence is configured.
+func (s *Store) GetPersistenceStatus() (lastError error, lastSaveTime time.Time, hasPersistence bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lastSaveError, s.lastSaveTime, s.persistence != nil
 }
 
 // ProviderModelSummary is a rollup for a provider/model pair.
