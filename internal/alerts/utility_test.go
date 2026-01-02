@@ -183,11 +183,6 @@ func TestAbs(t *testing.T) {
 			want:  0,
 		},
 		{
-			name:  "negative zero returns zero",
-			input: -0.0,
-			want:  0,
-		},
-		{
 			name:  "small positive",
 			input: 0.001,
 			want:  0.001,

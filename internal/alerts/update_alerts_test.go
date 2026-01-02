@@ -7,16 +7,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-// Helper to find an alert by ID in the active alerts list
-func findAlertByID(alerts []Alert, idPrefix string) *Alert {
-	for _, a := range alerts {
-		if a.ID == idPrefix || (len(a.ID) > len(idPrefix) && a.ID[:len(idPrefix)] == idPrefix[:min(len(idPrefix), len(a.ID))]) {
-			return &a
-		}
-	}
-	return nil
-}
-
 // Helper to check if an alert exists with the given ID prefix
 func hasAlertWithPrefix(alerts []Alert, prefix string) bool {
 	for _, a := range alerts {
@@ -25,13 +15,6 @@ func hasAlertWithPrefix(alerts []Alert, prefix string) bool {
 		}
 	}
 	return false
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func TestCheckDockerContainerImageUpdate(t *testing.T) {

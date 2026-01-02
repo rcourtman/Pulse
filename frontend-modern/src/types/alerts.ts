@@ -128,6 +128,7 @@ export interface AlertConfig {
   guestTagWhitelist?: string[];
   guestTagBlacklist?: string[];
   pmgDefaults?: PMGThresholdDefaults;
+  pbsDefaults?: AlertThresholds;
   snapshotDefaults?: SnapshotAlertConfig;
   backupDefaults?: BackupAlertConfig;
   customRules?: CustomAlertRule[];

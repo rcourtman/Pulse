@@ -386,6 +386,7 @@ type AlertConfig struct {
 	GuestTagWhitelist              []string                   `json:"guestTagWhitelist,omitempty"`
 	GuestTagBlacklist              []string                   `json:"guestTagBlacklist,omitempty"`
 	PMGDefaults                    PMGThresholdConfig         `json:"pmgDefaults"`
+	PBSDefaults                    ThresholdConfig            `json:"pbsDefaults"`
 	SnapshotDefaults               SnapshotAlertConfig        `json:"snapshotDefaults"`
 	BackupDefaults                 BackupAlertConfig          `json:"backupDefaults"`
 	Overrides                      map[string]ThresholdConfig `json:"overrides"` // keyed by resource ID
@@ -645,6 +646,10 @@ func NewManager() *Manager {
 				CriticalDays: 14,
 				FreshHours:   24,
 				StaleHours:   72,
+			},
+			PBSDefaults: ThresholdConfig{
+				CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+				Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
 			},
 			StorageDefault:    HysteresisThreshold{Trigger: 85, Clear: 80},
 			MinimumDelta:      2.0, // 2% minimum change
@@ -2792,12 +2797,12 @@ func (m *Manager) CheckHost(host models.Host) {
 					tempResourceName := fmt.Sprintf("%s (%s Temp)", host.DisplayName, disk.Device)
 
 					diskTempMetadata := cloneMetadata(baseMetadata)
-					diskTempMetadata["metric"] = "disk_temperature"
+					diskTempMetadata["metric"] = "diskTemperature"
 					diskTempMetadata["device"] = disk.Device
 					diskTempMetadata["temperature"] = disk.Temperature
 					diskTempMetadata["model"] = disk.Model
 
-					m.checkMetric(tempResourceID, tempResourceName, nodeName, disk.Device, "Host", "disk_temperature", float64(disk.Temperature), thresholds.DiskTemperature, &metricOptions{Metadata: diskTempMetadata})
+					m.checkMetric(tempResourceID, tempResourceName, nodeName, disk.Device, "Host", "diskTemperature", float64(disk.Temperature), thresholds.DiskTemperature, &metricOptions{Metadata: diskTempMetadata})
 				}
 			}
 		}
@@ -3231,9 +3236,9 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 	// Check if there's an override for this PBS instance
 	override, hasOverride := m.config.Overrides[pbs.ID]
 
-	// Use node defaults for PBS (same as nodes: CPU, Memory)
-	cpuThreshold := m.config.NodeDefaults.CPU
-	memoryThreshold := m.config.NodeDefaults.Memory
+	// Use PBS defaults (CPU, Memory)
+	cpuThreshold := m.config.PBSDefaults.CPU
+	memoryThreshold := m.config.PBSDefaults.Memory
 	disablePBSOffline := m.config.DisableAllPBSOffline
 	m.mu.RUnlock()
 
@@ -5885,7 +5890,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				case "diskRead", "diskWrite", "networkIn", "networkOut":
 					message = fmt.Sprintf("%s %s at %.1f MB/s", resourceType, metricType, value)
 					unit = "MB/s"
-				case "temperature":
+				case "temperature", "disk_temperature", "diskTemperature":
 					message = fmt.Sprintf("%s %s at %.1f°C", resourceType, metricType, value)
 					unit = "°C"
 				default:

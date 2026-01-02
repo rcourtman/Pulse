@@ -1018,6 +1018,15 @@ export function Alerts() {
         });
       }
 
+      if (config.pbsDefaults) {
+        setPBSDefaults({
+          cpu: getTriggerValue(config.pbsDefaults.cpu) ?? 80,
+          memory: getTriggerValue(config.pbsDefaults.memory) ?? 85,
+        });
+      } else {
+        setPBSDefaults({ ...FACTORY_PBS_DEFAULTS });
+      }
+
       if (config.hostDefaults) {
         setHostDefaults({
           cpu: getTriggerValue(config.hostDefaults.cpu) ?? 80,
@@ -1424,6 +1433,10 @@ export function Alerts() {
     disk: 90,
     temperature: 80,
   };
+  const FACTORY_PBS_DEFAULTS = {
+    cpu: 80,
+    memory: 85,
+  };
 
   const FACTORY_HOST_DEFAULTS = {
     cpu: 80,
@@ -1466,6 +1479,7 @@ export function Alerts() {
   const [guestPoweredOffSeverity, setGuestPoweredOffSeverity] = createSignal<'warning' | 'critical'>('warning');
 
   const [nodeDefaults, setNodeDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_NODE_DEFAULTS });
+  const [pbsDefaults, setPBSDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_PBS_DEFAULTS });
   const [hostDefaults, setHostDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_HOST_DEFAULTS });
 
   const [dockerDefaults, setDockerDefaults] = createSignal({ ...FACTORY_DOCKER_DEFAULTS });
@@ -1493,6 +1507,10 @@ export function Alerts() {
 
   const resetNodeDefaults = () => {
     setNodeDefaults({ ...FACTORY_NODE_DEFAULTS });
+    setHasUnsavedChanges(true);
+  };
+  const resetPBSDefaults = () => {
+    setPBSDefaults({ ...FACTORY_PBS_DEFAULTS });
     setHasUnsavedChanges(true);
   };
 
@@ -1777,6 +1795,10 @@ export function Alerts() {
                         memory: createHysteresisThreshold(hostDefaults().memory),
                         disk: createHysteresisThreshold(hostDefaults().disk),
                         diskTemperature: createHysteresisThreshold(hostDefaults().diskTemperature),
+                      },
+                      pbsDefaults: {
+                        cpu: createHysteresisThreshold(pbsDefaults().cpu),
+                        memory: createHysteresisThreshold(pbsDefaults().memory),
                       },
                       dockerDefaults: {
                         cpu: createHysteresisThreshold(dockerDefaultsValue.cpu),
@@ -2081,6 +2103,8 @@ export function Alerts() {
                   setNodeDefaults={setNodeDefaults}
                   hostDefaults={hostDefaults}
                   setHostDefaults={setHostDefaults}
+                  pbsDefaults={pbsDefaults}
+                  setPBSDefaults={setPBSDefaults}
                   dockerDefaults={dockerDefaults}
                   dockerDisableConnectivity={dockerDisableConnectivity}
                   setDockerDisableConnectivity={setDockerDisableConnectivity}
@@ -2100,18 +2124,6 @@ export function Alerts() {
                   resetGuestDefaults={resetGuestDefaults}
                   resetNodeDefaults={resetNodeDefaults}
                   resetHostDefaults={resetHostDefaults}
-                  resetDockerDefaults={resetDockerDefaults}
-                  resetDockerIgnoredPrefixes={resetDockerIgnoredPrefixes}
-                  resetStorageDefault={resetStorageDefault}
-                  resetSnapshotDefaults={resetSnapshotDefaults}
-                  resetBackupDefaults={resetBackupDefaults}
-                  factoryGuestDefaults={FACTORY_GUEST_DEFAULTS}
-                  factoryNodeDefaults={FACTORY_NODE_DEFAULTS}
-                  factoryHostDefaults={FACTORY_HOST_DEFAULTS}
-                  factoryDockerDefaults={FACTORY_DOCKER_DEFAULTS}
-                  factoryStorageDefault={FACTORY_STORAGE_DEFAULT}
-                  snapshotFactoryDefaults={FACTORY_SNAPSHOT_DEFAULTS}
-                  backupFactoryDefaults={FACTORY_BACKUP_DEFAULTS}
                   timeThresholds={timeThresholds}
                   metricTimeThresholds={metricTimeThresholds}
                   setMetricTimeThresholds={setMetricTimeThresholds}
@@ -2155,6 +2167,20 @@ export function Alerts() {
                   setDisableAllPMGOffline={setDisableAllPMGOffline}
                   disableAllDockerHostsOffline={disableAllDockerHostsOffline}
                   setDisableAllDockerHostsOffline={setDisableAllDockerHostsOffline}
+                  resetPBSDefaults={resetPBSDefaults}
+                  resetDockerDefaults={resetDockerDefaults}
+                  resetDockerIgnoredPrefixes={resetDockerIgnoredPrefixes}
+                  resetStorageDefault={resetStorageDefault}
+                  resetSnapshotDefaults={resetSnapshotDefaults}
+                  resetBackupDefaults={resetBackupDefaults}
+                  factoryGuestDefaults={FACTORY_GUEST_DEFAULTS}
+                  factoryNodeDefaults={FACTORY_NODE_DEFAULTS}
+                  factoryPBSDefaults={FACTORY_PBS_DEFAULTS}
+                  factoryHostDefaults={FACTORY_HOST_DEFAULTS}
+                  factoryDockerDefaults={FACTORY_DOCKER_DEFAULTS}
+                  factoryStorageDefault={FACTORY_STORAGE_DEFAULT}
+                  snapshotFactoryDefaults={FACTORY_SNAPSHOT_DEFAULTS}
+                  backupFactoryDefaults={FACTORY_BACKUP_DEFAULTS}
                 />
               </Show>
 
@@ -4241,6 +4267,7 @@ interface ThresholdsTabProps {
   hosts: Host[];
   guestDefaults: () => Record<string, number | undefined>;
   nodeDefaults: () => Record<string, number | undefined>;
+  pbsDefaults: () => Record<string, number | undefined>;
   hostDefaults: () => Record<string, number | undefined>;
   dockerDefaults: () => {
     cpu: number;
@@ -4285,6 +4312,11 @@ interface ThresholdsTabProps {
       | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
   ) => void;
   setHostDefaults: (
+    value:
+      | Record<string, number | undefined>
+      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+  ) => void;
+  setPBSDefaults: (
     value:
       | Record<string, number | undefined>
       | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
@@ -4393,12 +4425,14 @@ interface ThresholdsTabProps {
   // Reset functions and factory defaults
   resetGuestDefaults?: () => void;
   resetNodeDefaults?: () => void;
+  resetPBSDefaults?: () => void;
   resetHostDefaults?: () => void;
   resetDockerDefaults?: () => void;
   resetDockerIgnoredPrefixes?: () => void;
   resetStorageDefault?: () => void;
   factoryGuestDefaults?: Record<string, number | undefined>;
   factoryNodeDefaults?: Record<string, number | undefined>;
+  factoryPBSDefaults?: Record<string, number | undefined>;
   factoryHostDefaults?: Record<string, number | undefined>;
   factoryDockerDefaults?: Record<string, number | undefined>;
   factoryStorageDefault?: number;
@@ -4432,8 +4466,10 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setGuestPoweredOffSeverity={props.setGuestPoweredOffSeverity}
       nodeDefaults={props.nodeDefaults()}
       hostDefaults={props.hostDefaults()}
+      pbsDefaults={props.pbsDefaults()}
       setNodeDefaults={props.setNodeDefaults}
       setHostDefaults={props.setHostDefaults}
+      setPBSDefaults={props.setPBSDefaults}
       dockerDefaults={props.dockerDefaults()}
       dockerDisableConnectivity={props.dockerDisableConnectivity}
       dockerPoweredOffSeverity={props.dockerPoweredOffSeverity}
@@ -4496,12 +4532,14 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setDisableAllDockerHostsOffline={props.setDisableAllDockerHostsOffline}
       resetGuestDefaults={props.resetGuestDefaults}
       resetNodeDefaults={props.resetNodeDefaults}
+      resetPBSDefaults={props.resetPBSDefaults}
       resetHostDefaults={props.resetHostDefaults}
       resetDockerDefaults={props.resetDockerDefaults}
       resetDockerIgnoredPrefixes={props.resetDockerIgnoredPrefixes}
       resetStorageDefault={props.resetStorageDefault}
       factoryGuestDefaults={props.factoryGuestDefaults}
       factoryNodeDefaults={props.factoryNodeDefaults}
+      factoryPBSDefaults={props.factoryPBSDefaults}
       factoryHostDefaults={props.factoryHostDefaults}
       factoryDockerDefaults={props.factoryDockerDefaults}
       factoryStorageDefault={props.factoryStorageDefault}
