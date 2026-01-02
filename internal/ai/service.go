@@ -24,6 +24,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/types"
 	"github.com/rs/zerolog/log"
@@ -429,13 +430,12 @@ func (s *Service) GetLicenseState() (string, bool) {
 	return checker.GetLicenseStateString()
 }
 
-// Feature constants are convenience aliases for license.Feature* constants.
-// These allow the ai package to be used without importing the license package directly.
-// IMPORTANT: These MUST match the values in internal/license/features.go
+// Feature constants are imported from the license package for compile-time consistency.
+// This ensures the ai package always uses the same feature strings as the license system.
 const (
-	FeatureAIPatrol  = "ai_patrol"  // license.FeatureAIPatrol
-	FeatureAIAlerts  = "ai_alerts"  // license.FeatureAIAlerts
-	FeatureAIAutoFix = "ai_autofix" // license.FeatureAIAutoFix
+	FeatureAIPatrol  = license.FeatureAIPatrol
+	FeatureAIAlerts  = license.FeatureAIAlerts
+	FeatureAIAutoFix = license.FeatureAIAutoFix
 )
 
 // StartPatrol starts the background patrol service
