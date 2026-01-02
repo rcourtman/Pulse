@@ -67,7 +67,7 @@ Patrol is **intentionally conservative** to avoid noise:
 ## Features
 
 - **Interactive chat**: Ask questions about current cluster state and get AI-assisted troubleshooting.
-- **Patrol**: Background checks every 15 minutes (configurable) that generate findings.
+- **Patrol**: Background checks periodically (default: 6 hours) that generate findings. Interval is fully configurable down to 15 minutes.
 - **Alert analysis**: Optional token-efficient analysis when alerts fire.
 - **Command execution**: When enabled, AI can run commands via connected agents.
 - **Finding management**: Dismiss, resolve, or suppress findings to prevent recurrence.
@@ -77,7 +77,7 @@ Patrol is **intentionally conservative** to avoid noise:
 
 Configure in the UI: **Settings → AI**
 
-AI settings are stored encrypted at rest in `ai.enc` under the Pulse config directory (`/etc/pulse` for systemd installs, `/data` for Docker/Kubernetes).
+AI settings are stored encrypted at rest in `ai.enc` under the Pulse config directory. The discovered findings and their history are stored in `ai_findings.enc` (or `ai_findings.json` if encryption is disabled). These files are located in `/etc/pulse` for systemd installs, or `/data` for Docker/Kubernetes.
 
 ### Supported Providers
 
@@ -104,9 +104,9 @@ You can set separate models for:
 
 ## Patrol Service (Pro Feature)
 
-Patrol runs automated health checks on a configurable schedule (default: every 15 minutes). It passes comprehensive infrastructure context to the LLM (see "Context Patrol Receives" above) and generates findings when issues are detected.
+Patrol runs automated health checks on a configurable schedule (default: every 6 hours). It passes comprehensive infrastructure context to the LLM (see "Context Patrol Receives" above) and generates findings when issues are detected.
 
-Patrol requires a [Pulse Pro](https://pulserelay.pro) license. Free users get full access to the AI Chat assistant (BYOK) and all other monitoring features.
+Pulse Pro users get full LLM-powered analysis. Free users still benefit from **Heuristic Patrol**, which uses local rule-based logic to detect common issues (offline nodes, disk exhaustion, etc.) without requiring an external AI provider. Free users also get full access to the AI Chat assistant (BYOK).
 
 ### Finding Severity
 
@@ -148,6 +148,6 @@ If you enable execution features, ensure agent tokens and scopes are appropriate
 |-------|----------|
 | AI not responding | Verify provider credentials in **Settings → AI** |
 | No execution capability | Confirm at least one agent is connected |
-| Findings not persisting | Check Pulse has write access to config directory |
+| Findings not persisting | Check Pulse has write access to `ai_findings.enc` in the config directory |
 | Too many findings | This shouldn't happen - please report if it does |
 
