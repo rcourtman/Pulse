@@ -188,8 +188,14 @@ interface ThresholdsTableProps {
   guestPoweredOffSeverity: () => 'warning' | 'critical';
   setGuestPoweredOffSeverity: (value: 'warning' | 'critical') => void;
   nodeDefaults: SimpleThresholds;
+  pbsDefaults?: SimpleThresholds;
   hostDefaults: SimpleThresholds;
   setNodeDefaults: (
+    value:
+      | Record<string, number | undefined>
+      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+  ) => void;
+  setPBSDefaults?: (
     value:
       | Record<string, number | undefined>
       | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
@@ -261,12 +267,14 @@ interface ThresholdsTableProps {
   setStorageDefault: (value: number) => void;
   resetGuestDefaults?: () => void;
   resetNodeDefaults?: () => void;
+  resetPBSDefaults?: () => void;
   resetHostDefaults?: () => void;
   resetDockerDefaults?: () => void;
   resetDockerIgnoredPrefixes?: () => void;
   resetStorageDefault?: () => void;
   factoryGuestDefaults?: Record<string, number | undefined>;
   factoryNodeDefaults?: Record<string, number | undefined>;
+  factoryPBSDefaults?: Record<string, number | undefined>;
   factoryHostDefaults?: Record<string, number | undefined>;
   factoryDockerDefaults?: Record<string, number | undefined>;
   factoryStorageDefault?: number;
@@ -2675,26 +2683,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingNote={setEditingNote}
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
-                  globalDefaults={{ cpu: props.nodeDefaults.cpu, memory: props.nodeDefaults.memory }}
-                  setGlobalDefaults={(value) => {
-                    if (typeof value === 'function') {
-                      const newValue = value({
-                        cpu: props.nodeDefaults.cpu,
-                        memory: props.nodeDefaults.memory,
-                      });
-                      props.setNodeDefaults((prev) => ({
-                        ...prev,
-                        cpu: newValue.cpu ?? prev.cpu,
-                        memory: newValue.memory ?? prev.memory,
-                      }));
-                    } else {
-                      props.setNodeDefaults((prev) => ({
-                        ...prev,
-                        cpu: value.cpu ?? prev.cpu,
-                        memory: value.memory ?? prev.memory,
-                      }));
-                    }
-                  }}
+                  globalDefaults={props.pbsDefaults ?? { cpu: props.nodeDefaults.cpu, memory: props.nodeDefaults.memory }}
+                  setGlobalDefaults={props.setPBSDefaults}
                   setHasUnsavedChanges={props.setHasUnsavedChanges}
                   globalDisableFlag={props.disableAllPBS}
                   onToggleGlobalDisable={() => props.setDisableAllPBS(!props.disableAllPBS())}
@@ -2706,15 +2696,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   globalDelaySeconds={props.timeThresholds().pbs}
                   metricDelaySeconds={props.metricTimeThresholds().pbs ?? {}}
                   onMetricDelayChange={(metric, value) => updateMetricDelay('pbs', metric, value)}
-                  factoryDefaults={
-                    props.factoryNodeDefaults
-                      ? {
-                        cpu: props.factoryNodeDefaults.cpu,
-                        memory: props.factoryNodeDefaults.memory,
-                      }
-                      : undefined
-                  }
-                  onResetDefaults={props.resetNodeDefaults}
+                  factoryDefaults={props.factoryPBSDefaults}
+                  onResetDefaults={props.resetPBSDefaults}
                 />
               </div>
             </CollapsibleSection>
