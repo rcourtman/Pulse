@@ -1,7 +1,7 @@
 #!/bin/bash
 # Dev deployment script for Pulse agents
 # Usage: ./scripts/dev-deploy-agent.sh [host1] [host2] ...
-# Example: ./scripts/dev-deploy-agent.sh tower pimox minipc
+# Example: ./scripts/dev-deploy-agent.sh tower minipc
 
 set -e
 
