@@ -123,6 +123,8 @@ Environment variables take precedence over `system.json`.
 | `SSH_PORT` | SSH port for legacy SSH-based temperature collection | `22` |
 | `ADAPTIVE_POLLING_ENABLED` | Enable smart polling for large clusters | `false` |
 | `WEBHOOK_BATCH_DELAY` | Delay before sending batched webhooks | `10s` |
+| `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hide Docker update buttons (read-only mode) | `false` |
+| `PULSE_DISABLE_DOCKER_UPDATE_CHECKS` | Disable Docker update detection entirely | `false` |
 
 ### Metrics Retention (Tiered)
 
