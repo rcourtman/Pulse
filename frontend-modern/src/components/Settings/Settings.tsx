@@ -622,12 +622,18 @@ const Settings: Component<SettingsProps> = (props) => {
   const [hideLocalLogin, setHideLocalLogin] = createSignal(false);
   const [savingHideLocalLogin, setSavingHideLocalLogin] = createSignal(false);
 
+  // Docker update actions control (server-wide setting to hide update buttons)
+  const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
+  const [savingDockerUpdateActions, setSavingDockerUpdateActions] = createSignal(false);
+
   const temperatureMonitoringLocked = () =>
     Boolean(
       envOverrides().temperatureMonitoringEnabled || envOverrides()['ENABLE_TEMPERATURE_MONITORING'],
     );
   const hideLocalLoginLocked = () =>
     Boolean(envOverrides().hideLocalLogin || envOverrides()['PULSE_AUTH_HIDE_LOCAL_LOGIN']);
+  const disableDockerUpdateActionsLocked = () =>
+    Boolean(envOverrides().disableDockerUpdateActions || envOverrides()['PULSE_DISABLE_DOCKER_UPDATE_ACTIONS']);
 
   const pvePollingEnvLocked = () =>
     Boolean(envOverrides().pvePollingInterval || envOverrides().PVE_POLLING_INTERVAL);
@@ -718,6 +724,37 @@ const Settings: Component<SettingsProps> = (props) => {
       setHideLocalLogin(previous);
     } finally {
       setSavingHideLocalLogin(false);
+    }
+  };
+
+  const handleDisableDockerUpdateActionsChange = async (disabled: boolean): Promise<void> => {
+    if (disableDockerUpdateActionsLocked() || savingDockerUpdateActions()) {
+      return;
+    }
+
+    const previous = disableDockerUpdateActions();
+    setDisableDockerUpdateActions(disabled);
+    setSavingDockerUpdateActions(true);
+
+    try {
+      await SettingsAPI.updateSystemSettings({ disableDockerUpdateActions: disabled });
+      // Also update the global store so UpdateButton reacts immediately
+      const { updateDockerUpdateActionsSetting } = await import('@/stores/systemSettings');
+      updateDockerUpdateActionsSetting(disabled);
+
+      if (disabled) {
+        notificationStore.success('Docker update buttons hidden', 2000);
+      } else {
+        notificationStore.info('Docker update buttons visible', 2000);
+      }
+    } catch (error) {
+      logger.error('Failed to update Docker update actions setting', error);
+      notificationStore.error(
+        error instanceof Error ? error.message : 'Failed to update Docker update actions setting',
+      );
+      setDisableDockerUpdateActions(previous);
+    } finally {
+      setSavingDockerUpdateActions(false);
     }
   };
 
@@ -1776,6 +1813,9 @@ const Settings: Component<SettingsProps> = (props) => {
         );
         // Load hideLocalLogin setting
         setHideLocalLogin(systemSettings.hideLocalLogin ?? false);
+
+        // Load Docker update actions setting
+        setDisableDockerUpdateActions(systemSettings.disableDockerUpdateActions ?? false);
 
         // Backup polling controls
         if (typeof systemSettings.backupPollingEnabled === 'boolean') {
@@ -3355,6 +3395,64 @@ const Settings: Component<SettingsProps> = (props) => {
               </Show>
               {/* Unified Agents Tab */}
               <Show when={activeTab() === 'agents'}>
+                {/* Docker Settings Card */}
+                <Card padding="lg" class="mb-6">
+                  <div class="space-y-4">
+                    <div class="space-y-1">
+                      <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Docker Settings</h3>
+                      <p class="text-sm text-gray-600 dark:text-gray-400">
+                        Server-wide settings for Docker container management.
+                      </p>
+                    </div>
+
+                    {/* Hide Docker Update Buttons Toggle */}
+                    <div class="flex items-start justify-between gap-4 p-4 rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
+                      <div class="flex-1 space-y-1">
+                        <div class="flex items-center gap-2">
+                          <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            Hide Docker Update Buttons
+                          </span>
+                          <Show when={disableDockerUpdateActionsLocked()}>
+                            <span class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" title="Locked by environment variable PULSE_DISABLE_DOCKER_UPDATE_ACTIONS">
+                              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                              </svg>
+                              ENV
+                            </span>
+                          </Show>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                          When enabled, the "Update" button on Docker containers will be hidden across all views.
+                          Update detection will still work, allowing you to see which containers have updates available.
+                          Use this in production environments where you prefer Pulse to be read-only.
+                        </p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Can also be set via environment variable: <code class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true</code>
+                        </p>
+                      </div>
+                      <div class="flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleDisableDockerUpdateActionsChange(!disableDockerUpdateActions())}
+                          disabled={disableDockerUpdateActionsLocked() || savingDockerUpdateActions()}
+                          class={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${disableDockerUpdateActions()
+                              ? 'bg-blue-600'
+                              : 'bg-gray-300 dark:bg-gray-600'
+                            } ${disableDockerUpdateActionsLocked() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          role="switch"
+                          aria-checked={disableDockerUpdateActions()}
+                          title={disableDockerUpdateActionsLocked() ? 'Locked by environment variable' : undefined}
+                        >
+                          <span
+                            class={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${disableDockerUpdateActions() ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
                 <UnifiedAgents />
               </Show>
 

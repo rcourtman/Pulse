@@ -129,17 +129,18 @@ type Config struct {
 	LogCompress bool   `envconfig:"LOG_COMPRESS" default:"true"`
 
 	// Security settings
-	APIToken                string           `envconfig:"API_TOKEN"`
-	APITokenEnabled         bool             `envconfig:"API_TOKEN_ENABLED" default:"false"`
-	APITokens               []APITokenRecord `json:"-"`
-	SuppressedEnvMigrations []string         `json:"-"` // Hashes of env tokens deleted by user (prevent re-migration)
-	AuthUser                string           `envconfig:"PULSE_AUTH_USER"`
-	AuthPass                string           `envconfig:"PULSE_AUTH_PASS"`
-	DisableAuthEnvDetected  bool             `json:"-"`
-	DemoMode                bool             `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
-	AllowedOrigins          string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
-	IframeEmbeddingAllow    string           `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
-	HideLocalLogin          bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
+	APIToken                   string           `envconfig:"API_TOKEN"`
+	APITokenEnabled            bool             `envconfig:"API_TOKEN_ENABLED" default:"false"`
+	APITokens                  []APITokenRecord `json:"-"`
+	SuppressedEnvMigrations    []string         `json:"-"` // Hashes of env tokens deleted by user (prevent re-migration)
+	AuthUser                   string           `envconfig:"PULSE_AUTH_USER"`
+	AuthPass                   string           `envconfig:"PULSE_AUTH_PASS"`
+	DisableAuthEnvDetected     bool             `json:"-"`
+	DemoMode                   bool             `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
+	AllowedOrigins             string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
+	IframeEmbeddingAllow       string           `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
+	HideLocalLogin             bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
+	DisableDockerUpdateActions bool             `envconfig:"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS" default:"false"` // Hide Docker update buttons (read-only mode for containers)
 
 	// Proxy authentication settings
 	ProxyAuthSecret        string `envconfig:"PROXY_AUTH_SECRET"`
@@ -689,6 +690,8 @@ func Load() (*Config, error) {
 			}
 			// Load HideLocalLogin
 			cfg.HideLocalLogin = systemSettings.HideLocalLogin
+			// Load DisableDockerUpdateActions (hide Docker update buttons)
+			cfg.DisableDockerUpdateActions = systemSettings.DisableDockerUpdateActions
 			// Load PublicURL from settings (will be overridden by env var if set)
 			if systemSettings.PublicURL != "" {
 				cfg.PublicURL = systemSettings.PublicURL
@@ -863,6 +866,17 @@ func Load() (*Config, error) {
 			log.Info().Bool("hide", hide).Msg("Overriding hide local login setting from environment")
 		} else {
 			log.Warn().Str("value", hideLocalLoginStr).Msg("Invalid PULSE_AUTH_HIDE_LOCAL_LOGIN value, ignoring")
+		}
+	}
+
+	if disableDockerUpdateActionsStr := utils.GetenvTrim("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"); disableDockerUpdateActionsStr != "" {
+		if disabled, err := strconv.ParseBool(disableDockerUpdateActionsStr); err == nil {
+			cfg.DisableDockerUpdateActions = disabled
+			cfg.EnvOverrides["PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"] = true
+			cfg.EnvOverrides["disableDockerUpdateActions"] = true
+			log.Info().Bool("disabled", disabled).Msg("Overriding Docker update actions setting from environment")
+		} else {
+			log.Warn().Str("value", disableDockerUpdateActionsStr).Msg("Invalid PULSE_DISABLE_DOCKER_UPDATE_ACTIONS value, ignoring")
 		}
 	}
 

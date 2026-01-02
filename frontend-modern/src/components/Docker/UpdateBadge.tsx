@@ -10,6 +10,8 @@ import {
     clearContainerUpdateState,
     updateStates
 } from '@/stores/containerUpdates';
+import { shouldHideDockerUpdateActions, areSystemSettingsLoaded } from '@/stores/systemSettings';
+
 
 
 interface UpdateBadgeProps {
@@ -126,15 +128,27 @@ interface UpdateButtonProps {
     externalState?: 'updating' | 'queued' | 'error';
 }
 
+
 type UpdateState = 'idle' | 'confirming' | 'updating' | 'success' | 'error';
 
 /**
  * UpdateButton displays a clickable button to trigger container updates.
  * Uses a persistent store to maintain state across WebSocket refreshes.
+ * 
+ * If the server has disabled Docker update actions (via PULSE_DISABLE_DOCKER_UPDATE_ACTIONS
+ * or the Settings UI), this component will render a read-only UpdateBadge instead,
+ * allowing users to see that updates are available without being able to trigger them.
+ * 
+ * While system settings are loading, the button displays in a disabled/loading state
+ * to prevent premature clicks before the server configuration is known.
  */
 export const UpdateButton: Component<UpdateButtonProps> = (props) => {
     const [localState, setLocalState] = createSignal<'idle' | 'confirming'>('idle');
     const [errorMessage, setErrorMessage] = createSignal<string>('');
+
+    // Reactive check for whether settings are loaded and what they say
+    const settingsLoaded = () => areSystemSettingsLoaded();
+    const shouldHideButton = () => shouldHideDockerUpdateActions();
 
     // Get persistent state from store - this survives WebSocket updates
     const storeState = createMemo(() => {
@@ -264,72 +278,96 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
         }
     };
 
+    // Compute if the button should be disabled due to loading or settings
+    const isButtonDisabled = () => currentState() === 'updating' || !settingsLoaded();
+
     return (
         <Show when={hasUpdate()}>
-            <div class="inline-flex items-center gap-1" data-prevent-toggle>
-                <button
-                    type="button"
-                    class={getButtonClass()}
-                    onClick={handleClick}
-                    onMouseDown={(e) => { e.stopPropagation(); }}
-                    disabled={currentState() === 'updating'}
-                    data-prevent-toggle
-                    onMouseEnter={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        showTooltip(getTooltip(), rect.left + rect.width / 2, rect.top, {
-                            align: 'center',
-                            direction: 'up'
-                        });
-                    }}
-                    onMouseLeave={() => hideTooltip()}
-                >
-                    <Show when={currentState() === 'updating'}>
-                        {/* Spinner */}
-                        <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
-                    </Show>
-                    <Show when={currentState() === 'success'}>
-                        {/* Check icon */}
-                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                    </Show>
-                    <Show when={currentState() === 'error'}>
-                        {/* X icon */}
-                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </Show>
-                    <Show when={currentState() === 'idle' || currentState() === 'confirming'}>
-                        {/* Upload/update icon */}
-                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                        </svg>
-                    </Show>
-                    <Show when={!props.compact}>
-                        <span>
-                            {currentState() === 'confirming' ? 'Confirm?' :
-                                currentState() === 'updating' ? 'Updating...' :
-                                    currentState() === 'success' ? 'Queued!' :
-                                        currentState() === 'error' ? 'Failed' : 'Update'}
-                        </span>
-                    </Show>
-                </button>
-                <Show when={currentState() === 'confirming'}>
+            {/* Case 1: Settings loaded and updates are disabled - show read-only badge */}
+            <Show when={settingsLoaded() && shouldHideButton()}>
+                <UpdateBadge updateStatus={props.updateStatus} compact={props.compact} />
+            </Show>
+
+            {/* Case 2: Settings loading OR settings loaded with updates enabled - show button */}
+            <Show when={!settingsLoaded() || !shouldHideButton()}>
+                <div class="inline-flex items-center gap-1" data-prevent-toggle>
                     <button
                         type="button"
-                        class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                        onClick={handleCancel}
-                        title="Cancel"
+                        class={getButtonClass()}
+                        onClick={handleClick}
+                        onMouseDown={(e) => { e.stopPropagation(); }}
+                        disabled={isButtonDisabled()}
+                        data-prevent-toggle
+                        onMouseEnter={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const tooltip = !settingsLoaded()
+                                ? 'Loading settings...'
+                                : getTooltip();
+                            showTooltip(tooltip, rect.left + rect.width / 2, rect.top, {
+                                align: 'center',
+                                direction: 'up'
+                            });
+                        }}
+                        onMouseLeave={() => hideTooltip()}
                     >
-                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        {/* Loading state - settings haven't loaded yet */}
+                        <Show when={!settingsLoaded()}>
+                            <svg class="w-3 h-3 animate-pulse opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                            </svg>
+                        </Show>
+                        {/* Normal states - settings loaded */}
+                        <Show when={settingsLoaded()}>
+                            <Show when={currentState() === 'updating'}>
+                                {/* Spinner */}
+                                <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                            </Show>
+                            <Show when={currentState() === 'success'}>
+                                {/* Check icon */}
+                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                            </Show>
+                            <Show when={currentState() === 'error'}>
+                                {/* X icon */}
+                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </Show>
+                            <Show when={currentState() === 'idle' || currentState() === 'confirming'}>
+                                {/* Upload/update icon */}
+                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                </svg>
+                            </Show>
+                        </Show>
+                        <Show when={!props.compact}>
+                            <span class={!settingsLoaded() ? 'opacity-50' : ''}>
+                                {!settingsLoaded() ? 'Update' :
+                                    currentState() === 'confirming' ? 'Confirm?' :
+                                        currentState() === 'updating' ? 'Updating...' :
+                                            currentState() === 'success' ? 'Queued!' :
+                                                currentState() === 'error' ? 'Failed' : 'Update'}
+                            </span>
+                        </Show>
                     </button>
-                </Show>
-            </div>
+                    <Show when={settingsLoaded() && currentState() === 'confirming'}>
+                        <button
+                            type="button"
+                            class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                            onClick={handleCancel}
+                            title="Cancel"
+                        >
+                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </Show>
+                </div>
+            </Show>
         </Show>
     );
 };

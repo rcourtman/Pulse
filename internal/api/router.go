@@ -190,7 +190,7 @@ func (r *Router) setupRoutes() {
 	hostMetadataHandler := NewHostMetadataHandler(r.config.DataPath)
 	r.configHandlers = NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings)
 	updateHandlers := NewUpdateHandlers(r.updateManager, r.updateHistory)
-	r.dockerAgentHandlers = NewDockerAgentHandlers(r.monitor, r.wsHub)
+	r.dockerAgentHandlers = NewDockerAgentHandlers(r.monitor, r.wsHub, r.config)
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.monitor, r.wsHub)
 	r.hostAgentHandlers = NewHostAgentHandlers(r.monitor, r.wsHub)
 	r.temperatureProxyHandlers = NewTemperatureProxyHandlers(r.config, r.persistence, r.reloadFunc)
