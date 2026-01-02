@@ -2683,7 +2683,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingNote={setEditingNote}
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
-                  globalDefaults={props.pbsDefaults ?? { cpu: props.nodeDefaults.cpu, memory: props.nodeDefaults.memory }}
+                  globalDefaults={props.pbsDefaults ?? { cpu: 80, memory: 85 }}
                   setGlobalDefaults={props.setPBSDefaults}
                   setHasUnsavedChanges={props.setHasUnsavedChanges}
                   globalDisableFlag={props.disableAllPBS}
