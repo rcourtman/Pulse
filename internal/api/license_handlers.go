@@ -90,6 +90,7 @@ func (h *LicenseHandlers) HandleLicenseFeatures(w http.ResponseWriter, r *http.R
 			license.FeatureAIAlerts:     h.service.HasFeature(license.FeatureAIAlerts),
 			license.FeatureAIAutoFix:    h.service.HasFeature(license.FeatureAIAutoFix),
 			license.FeatureKubernetesAI: h.service.HasFeature(license.FeatureKubernetesAI),
+			license.FeatureUpdateAlerts: h.service.HasFeature(license.FeatureUpdateAlerts),
 		},
 		UpgradeURL: "https://pulserelay.pro",
 	}
