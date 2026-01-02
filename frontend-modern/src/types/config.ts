@@ -49,6 +49,7 @@ export interface SystemConfig {
   webhookAllowedPrivateCIDRs?: string; // Comma-separated list of private CIDR ranges allowed for webhooks (e.g., "192.168.1.0/24,10.0.0.0/8")
   hideLocalLogin?: boolean; // Hide local login form (username/password)
   publicURL?: string; // Public URL for email notifications (e.g., http://192.168.1.100:8080)
+  disableDockerUpdateActions?: boolean; // Hide Docker update buttons while still detecting updates (server-wide)
 }
 
 /**

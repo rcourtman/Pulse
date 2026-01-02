@@ -403,6 +403,8 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		settings.BackupPollingEnabled = &enabled
 		settings.DiscoveryConfig = config.CloneDiscoveryConfig(h.config.Discovery)
 		settings.TemperatureMonitoringEnabled = h.config.TemperatureMonitoringEnabled
+		// Expose Docker update actions setting (respects env override)
+		settings.DisableDockerUpdateActions = h.config.DisableDockerUpdateActions
 	}
 
 	// Include env override information
@@ -634,6 +636,9 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		}
 		settings.TemperatureMonitoringEnabled = updates.TemperatureMonitoringEnabled
 		tempToggleRequested = true
+	}
+	if _, ok := rawRequest["disableDockerUpdateActions"]; ok {
+		settings.DisableDockerUpdateActions = updates.DisableDockerUpdateActions
 	}
 
 	// Update the config

@@ -956,6 +956,11 @@ type SystemSettings struct {
 	MetricsRetentionHourlyDays  int `json:"metricsRetentionHourlyDays,omitempty"`  // Hourly averages, default: 7 days
 	MetricsRetentionDailyDays   int `json:"metricsRetentionDailyDays,omitempty"`   // Daily averages, default: 90 days
 
+	// Docker update control - server-wide settings
+	// These allow admins to control Docker update features globally, addressing concerns
+	// about Pulse being a "monitoring-first" tool vs an orchestration tool.
+	DisableDockerUpdateActions bool `json:"disableDockerUpdateActions"` // Hide update buttons while still detecting updates
+
 	// APIToken removed - now handled via .env file only
 }
 

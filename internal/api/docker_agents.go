@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -18,6 +19,7 @@ import (
 type DockerAgentHandlers struct {
 	monitor *monitoring.Monitor
 	wsHub   *websocket.Hub
+	config  *config.Config
 }
 
 type dockerCommandAckRequest struct {
@@ -54,8 +56,8 @@ func normalizeCommandStatus(status string) (string, error) {
 }
 
 // NewDockerAgentHandlers constructs a new Docker agent handler group.
-func NewDockerAgentHandlers(m *monitoring.Monitor, hub *websocket.Hub) *DockerAgentHandlers {
-	return &DockerAgentHandlers{monitor: m, wsHub: hub}
+func NewDockerAgentHandlers(m *monitoring.Monitor, hub *websocket.Hub, cfg *config.Config) *DockerAgentHandlers {
+	return &DockerAgentHandlers{monitor: m, wsHub: hub, config: cfg}
 }
 
 // SetMonitor updates the monitor reference for docker agent handlers.
@@ -496,6 +498,13 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 	}
 	if req.ContainerID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_container_id", "Container ID is required", nil)
+		return
+	}
+
+	// Check if Docker update actions are disabled server-wide
+	if h.config != nil && h.config.DisableDockerUpdateActions {
+		writeErrorResponse(w, http.StatusForbidden, "docker_updates_disabled",
+			"Docker container updates are disabled by server configuration. Set PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=false or disable in Settings to enable.", nil)
 		return
 	}
 
