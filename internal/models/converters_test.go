@@ -114,14 +114,15 @@ func TestNodeToFrontend(t *testing.T) {
 			Total: 500000000000,
 			Used:  250000000000,
 		},
-		Uptime:           86400,
-		LoadAverage:      []float64{0.5, 0.7, 0.9},
-		KernelVersion:    "5.15.0",
-		PVEVersion:       "7.4-3",
-		LastSeen:         now,
-		ConnectionHealth: "connected",
-		IsClusterMember:  true,
-		ClusterName:      "pve-cluster",
+		Uptime:            86400,
+		LoadAverage:       []float64{0.5, 0.7, 0.9},
+		KernelVersion:     "5.15.0",
+		PVEVersion:        "7.4-3",
+		LastSeen:          now,
+		ConnectionHealth:  "connected",
+		IsClusterMember:   true,
+		ClusterName:       "pve-cluster",
+		LinkedHostAgentID: "agent-123",
 	}
 
 	frontend := node.ToFrontend()
@@ -158,6 +159,9 @@ func TestNodeToFrontend(t *testing.T) {
 	}
 	if len(frontend.LoadAverage) != 3 {
 		t.Errorf("LoadAverage length = %d, want 3", len(frontend.LoadAverage))
+	}
+	if frontend.LinkedHostAgentId != node.LinkedHostAgentID {
+		t.Errorf("LinkedHostAgentId = %q, want %q", frontend.LinkedHostAgentId, node.LinkedHostAgentID)
 	}
 }
 
@@ -1076,6 +1080,9 @@ func TestHostToFrontend(t *testing.T) {
 		Sensors: HostSensorSummary{
 			TemperatureCelsius: map[string]float64{"cpu": 55.0},
 		},
+		CommandsEnabled: true,
+		IsLegacy:        false,
+		LinkedNodeID:    "node-abc",
 	}
 
 	frontend := host.ToFrontend()
@@ -1118,6 +1125,15 @@ func TestHostToFrontend(t *testing.T) {
 	}
 	if frontend.Sensors == nil {
 		t.Error("Sensors should not be nil")
+	}
+	if frontend.CommandsEnabled != host.CommandsEnabled {
+		t.Errorf("CommandsEnabled = %v, want %v", frontend.CommandsEnabled, host.CommandsEnabled)
+	}
+	if frontend.IsLegacy != host.IsLegacy {
+		t.Errorf("IsLegacy = %v, want %v", frontend.IsLegacy, host.IsLegacy)
+	}
+	if frontend.LinkedNodeId != host.LinkedNodeID {
+		t.Errorf("LinkedNodeId = %q, want %q", frontend.LinkedNodeId, host.LinkedNodeID)
 	}
 	if frontend.TokenLastUsedAt == nil || *frontend.TokenLastUsedAt != tokenLastUsed.Unix()*1000 {
 		t.Errorf("TokenLastUsedAt = %v, want %d", frontend.TokenLastUsedAt, tokenLastUsed.Unix()*1000)
