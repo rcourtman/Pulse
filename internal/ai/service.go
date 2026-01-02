@@ -429,14 +429,14 @@ func (s *Service) GetLicenseState() (string, bool) {
 	return checker.GetLicenseStateString()
 }
 
-// FeatureAIPatrol is the license feature constant for AI Patrol
-const FeatureAIPatrol = "ai_patrol"
-
-// FeatureAIAlerts is the license feature constant for AI Alert Analysis
-const FeatureAIAlerts = "ai_alerts"
-
-// FeatureAIAutoFix is the license feature constant for AI Auto-Fix
-const FeatureAIAutoFix = "ai_autofix"
+// Feature constants are convenience aliases for license.Feature* constants.
+// These allow the ai package to be used without importing the license package directly.
+// IMPORTANT: These MUST match the values in internal/license/features.go
+const (
+	FeatureAIPatrol  = "ai_patrol"  // license.FeatureAIPatrol
+	FeatureAIAlerts  = "ai_alerts"  // license.FeatureAIAlerts
+	FeatureAIAutoFix = "ai_autofix" // license.FeatureAIAutoFix
+)
 
 // StartPatrol starts the background patrol service
 func (s *Service) StartPatrol(ctx context.Context) {
@@ -486,6 +486,7 @@ func (s *Service) StartPatrol(ctx context.Context) {
 			enabled = false
 		}
 		alertAnalyzer.SetEnabled(enabled)
+		alertAnalyzer.Start() // Start cleanup goroutine
 		log.Info().
 			Bool("enabled", enabled).
 			Msg("Alert-triggered AI analysis configured")
@@ -501,10 +502,14 @@ func (s *Service) StartPatrol(ctx context.Context) {
 func (s *Service) StopPatrol() {
 	s.mu.RLock()
 	patrol := s.patrolService
+	alertAnalyzer := s.alertTriggeredAnalyzer
 	s.mu.RUnlock()
 
 	if patrol != nil {
 		patrol.Stop()
+	}
+	if alertAnalyzer != nil {
+		alertAnalyzer.Stop()
 	}
 }
 

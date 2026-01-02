@@ -27,6 +27,10 @@ type AlertTriggeredAnalyzer struct {
 
 	// Track pending analyses to deduplicate concurrent alerts
 	pending map[string]bool
+
+	// Cleanup goroutine management
+	cleanupTicker *time.Ticker
+	stopCh        chan struct{}
 }
 
 // NewAlertTriggeredAnalyzer creates a new alert-triggered analyzer
@@ -38,7 +42,53 @@ func NewAlertTriggeredAnalyzer(patrolService *PatrolService, stateProvider State
 		lastAnalyzed:  make(map[string]time.Time),
 		cooldown:      5 * time.Minute, // Don't re-analyze the same resource within 5 minutes
 		pending:       make(map[string]bool),
+		stopCh:        make(chan struct{}),
 	}
+}
+
+// Start begins the background cleanup goroutine
+func (a *AlertTriggeredAnalyzer) Start() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.cleanupTicker != nil {
+		return // Already started
+	}
+
+	ticker := time.NewTicker(30 * time.Minute)
+	a.cleanupTicker = ticker
+	stopCh := a.stopCh
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				a.CleanupOldCooldowns()
+			case <-stopCh:
+				return
+			}
+		}
+	}()
+	log.Debug().Msg("Alert-triggered analyzer cleanup goroutine started")
+}
+
+// Stop stops the background cleanup goroutine
+func (a *AlertTriggeredAnalyzer) Stop() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.cleanupTicker != nil {
+		a.cleanupTicker.Stop()
+		a.cleanupTicker = nil
+	}
+	select {
+	case <-a.stopCh:
+		// Already closed
+	default:
+		close(a.stopCh)
+	}
+	a.stopCh = make(chan struct{}) // Reset for potential restart
+	log.Debug().Msg("Alert-triggered analyzer cleanup goroutine stopped")
 }
 
 // SetEnabled enables or disables alert-triggered analysis
