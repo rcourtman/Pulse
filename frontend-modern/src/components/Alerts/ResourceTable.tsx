@@ -20,6 +20,7 @@ const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
   'temp °c': 'CPU temperature limit for node alerts.',
   'temperature °c': 'CPU temperature limit for node alerts.',
   temperature: 'CPU temperature limit for node alerts.',
+  'disk temp °c': 'Individual disk temperature threshold for host agents.',
   'restart count': 'Maximum container restarts within the evaluation window.',
   'restart window': 'Time window used to evaluate the restart count threshold.',
   'restart window (s)': 'Time window used to evaluate the restart count threshold.',
@@ -51,7 +52,7 @@ const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
 const OFFLINE_ALERTS_TOOLTIP =
   'Toggle default behavior for powered-off or connectivity alerts for this resource type.';
 
-const SLIDER_METRICS = new Set(['cpu', 'memory', 'disk', 'temperature']);
+const SLIDER_METRICS = new Set(['cpu', 'memory', 'disk', 'temperature', 'diskTemperature']);
 
 export interface Resource {
   id: string;
@@ -238,6 +239,7 @@ export function ResourceTable(props: ResourceTableProps) {
       ['memory critical %', 'memoryCriticalPct'],
       ['warning size (gib)', 'warningSizeGiB'],
       ['critical size (gib)', 'criticalSizeGiB'],
+      ['disk temp °c', 'diskTemperature'],
       ['backup', 'backup'],
       ['snapshot', 'snapshot'],
     ]).get(key);
@@ -256,7 +258,7 @@ export function ResourceTable(props: ResourceTableProps) {
   };
 
   const metricBounds = (metric: string): { min: number; max: number } => {
-    if (metric === 'temperature') {
+    if (metric === 'temperature' || metric === 'diskTemperature') {
       return { min: -1, max: 150 };
     }
     if (['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
@@ -293,6 +295,9 @@ export function ResourceTable(props: ResourceTableProps) {
     }
     if (metric === 'temperature') {
       return 80;
+    }
+    if (metric === 'diskTemperature') {
+      return 55;
     }
     if (metric === 'restartCount') {
       return 3;
@@ -1284,21 +1289,19 @@ export function ResourceTable(props: ResourceTableProps) {
                                             <div class="flex w-full items-center gap-3">
                                               <Show when={SLIDER_METRICS.has(metric)}>
                                                 {(() => {
-                                                  const sliderMin =
-                                                    metric === 'temperature'
-                                                      ? Math.max(0, bounds.min)
-                                                      : Math.max(0, bounds.min);
-                                                  const sliderMax =
-                                                    metric === 'temperature'
-                                                      ? Math.max(
-                                                        sliderMin,
-                                                        bounds.max > 0 ? bounds.max : 120,
-                                                      )
-                                                      : bounds.max;
+                                                  const isTemperatureMetric = metric === 'temperature' || metric === 'diskTemperature';
+                                                  const sliderMin = Math.max(0, bounds.min);
+                                                  const sliderMax = isTemperatureMetric
+                                                    ? Math.max(
+                                                      sliderMin,
+                                                      bounds.max > 0 ? bounds.max : 120,
+                                                    )
+                                                    : bounds.max;
                                                   const defaultSliderValue = () => {
                                                     if (metric === 'disk') return 90;
                                                     if (metric === 'memory') return 85;
                                                     if (metric === 'temperature') return 80;
+                                                    if (metric === 'diskTemperature') return 55;
                                                     return 80;
                                                   };
                                                   const currentSliderValue = () => {
@@ -1333,7 +1336,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                                           });
                                                         }}
                                                         type={
-                                                          metric === 'temperature'
+                                                          isTemperatureMetric
                                                             ? 'temperature'
                                                             : (metric as 'cpu' | 'memory' | 'disk')
                                                         }

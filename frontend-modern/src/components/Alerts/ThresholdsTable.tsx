@@ -582,7 +582,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     }
 
     // Temperature
-    if (metric === 'temperature') {
+    if (metric === 'temperature' || metric === 'diskTemperature') {
       return formatTemperature(value);
     }
 
