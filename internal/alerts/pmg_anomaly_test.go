@@ -8,7 +8,7 @@ import (
 )
 
 func TestCheckPMGAnomalies_QuietSite(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := newTestManager(t)
 
 	pmgID := "pmg1"
@@ -95,7 +95,7 @@ func TestCheckPMGAnomalies_QuietSite(t *testing.T) {
 }
 
 func TestCheckPMGAnomalies_NormalSite(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := newTestManager(t)
 
 	pmgID := "pmg2"
@@ -158,7 +158,7 @@ func TestCheckPMGAnomalies_NormalSite(t *testing.T) {
 }
 
 func TestCheckPMGAnomalies_NormalSite_Critical(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := newTestManager(t)
 
 	pmgID := "pmg3"
@@ -207,7 +207,7 @@ func TestCheckPMGAnomalies_NormalSite_Critical(t *testing.T) {
 }
 
 func TestCheckPMGAnomalies_QuietSite_Critical(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := newTestManager(t)
 
 	pmgID := "pmg1-crit"

@@ -11,7 +11,7 @@ import (
 
 func TestNewDockerMetadataStore(t *testing.T) {
 	tempDir := t.TempDir()
-	store := NewDockerMetadataStore(tempDir)
+	store := NewDockerMetadataStore(tempDir, nil)
 	assert.NotNil(t, store)
 	assert.Empty(t, store.GetAll())
 	assert.Empty(t, store.GetAllHostMetadata())
@@ -19,7 +19,7 @@ func TestNewDockerMetadataStore(t *testing.T) {
 
 func TestDockerMetadataStore_Container_CRUD(t *testing.T) {
 	tempDir := t.TempDir()
-	store := NewDockerMetadataStore(tempDir)
+	store := NewDockerMetadataStore(tempDir, nil)
 
 	id := "container1"
 	meta := &DockerMetadata{
@@ -33,7 +33,7 @@ func TestDockerMetadataStore_Container_CRUD(t *testing.T) {
 	readMeta := store.Get(id)
 	assert.Equal(t, meta.Description, readMeta.Description)
 
-	store2 := NewDockerMetadataStore(tempDir)
+	store2 := NewDockerMetadataStore(tempDir, nil)
 	assert.Equal(t, meta.Description, store2.Get(id).Description)
 
 	err = store.Delete(id)
@@ -43,7 +43,7 @@ func TestDockerMetadataStore_Container_CRUD(t *testing.T) {
 
 func TestDockerMetadataStore_Host_CRUD(t *testing.T) {
 	tempDir := t.TempDir()
-	store := NewDockerMetadataStore(tempDir)
+	store := NewDockerMetadataStore(tempDir, nil)
 
 	id := "host1"
 	meta := &DockerHostMetadata{
@@ -56,7 +56,7 @@ func TestDockerMetadataStore_Host_CRUD(t *testing.T) {
 	readMeta := store.GetHostMetadata(id)
 	assert.Equal(t, "My Host", readMeta.CustomDisplayName)
 
-	store2 := NewDockerMetadataStore(tempDir)
+	store2 := NewDockerMetadataStore(tempDir, nil)
 	assert.Equal(t, "My Host", store2.GetHostMetadata(id).CustomDisplayName)
 
 	// Delete by setting empty/nil
@@ -66,14 +66,14 @@ func TestDockerMetadataStore_Host_CRUD(t *testing.T) {
 }
 
 func TestDockerMetadataStore_Set_NilContainer(t *testing.T) {
-	store := NewDockerMetadataStore(t.TempDir())
+	store := NewDockerMetadataStore(t.TempDir(), nil)
 	err := store.Set("id", nil)
 	assert.Error(t, err)
 }
 
 func TestDockerMetadataStore_ReplaceAll(t *testing.T) {
 	tempDir := t.TempDir()
-	store := NewDockerMetadataStore(tempDir)
+	store := NewDockerMetadataStore(tempDir, nil)
 
 	newMeta := map[string]*DockerMetadata{
 		"c1": {Description: "C1", Tags: nil},
@@ -94,7 +94,7 @@ func TestDockerMetadataStore_Load_Legacy(t *testing.T) {
 	legacyContent := `{"c1": {"id": "c1", "description": "Legacy"}}`
 	require.NoError(t, os.WriteFile(filePath, []byte(legacyContent), 0644))
 
-	store := NewDockerMetadataStore(tempDir)
+	store := NewDockerMetadataStore(tempDir, nil)
 	assert.Equal(t, "Legacy", store.Get("c1").Description)
 
 	// Save should upgrade format
@@ -117,7 +117,7 @@ func TestDockerMetadataStore_Load_Versioned(t *testing.T) {
 	}`
 	require.NoError(t, os.WriteFile(filePath, []byte(content), 0644))
 
-	store := NewDockerMetadataStore(tempDir)
+	store := NewDockerMetadataStore(tempDir, nil)
 	assert.NotNil(t, store.Get("c1"))
 	assert.NotNil(t, store.GetHostMetadata("h1"))
 }
@@ -127,7 +127,7 @@ func TestDockerMetadataStore_Load_Error(t *testing.T) {
 	filePath := filepath.Join(tempDir, "docker_metadata.json")
 	require.NoError(t, os.WriteFile(filePath, []byte("{invalid"), 0644))
 
-	store := NewDockerMetadataStore(tempDir)
+	store := NewDockerMetadataStore(tempDir, nil)
 	assert.NotNil(t, store)
 
 	err := store.Load()
@@ -139,7 +139,7 @@ func TestDockerMetadataStore_Save_Error(t *testing.T) {
 	badPath := filepath.Join(tempDir, "file")
 	require.NoError(t, os.WriteFile(badPath, []byte("content"), 0644))
 
-	store := NewDockerMetadataStore(tempDir)
+	store := NewDockerMetadataStore(tempDir, nil)
 	store.dataPath = badPath // hack
 
 	err := store.Set("c1", &DockerMetadata{ID: "c1"})

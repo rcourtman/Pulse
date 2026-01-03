@@ -18,7 +18,7 @@ type DockerMetadataHandler struct {
 // NewDockerMetadataHandler creates a new Docker metadata handler
 func NewDockerMetadataHandler(dataPath string) *DockerMetadataHandler {
 	return &DockerMetadataHandler{
-		store: config.NewDockerMetadataStore(dataPath),
+		store: config.NewDockerMetadataStore(dataPath, nil),
 	}
 }
 

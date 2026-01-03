@@ -21,7 +21,7 @@ func newTestMonitor(t *testing.T) *Monitor {
 		rateTracker:         NewRateTracker(),
 		metricsHistory:      NewMetricsHistory(1000, 24*time.Hour),
 		dockerTokenBindings: make(map[string]string),
-		dockerMetadataStore: config.NewDockerMetadataStore(t.TempDir()),
+		dockerMetadataStore: config.NewDockerMetadataStore(t.TempDir(), nil),
 	}
 	t.Cleanup(func() { m.alertManager.Stop() })
 	return m

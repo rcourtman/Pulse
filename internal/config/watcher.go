@@ -17,6 +17,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var (
+	watcherOsStat   = os.Stat
+	watcherOsGetenv = os.Getenv
+)
+
 // ConfigWatcher monitors the .env file for changes and updates runtime config
 type ConfigWatcher struct {
 	config               *Config
@@ -49,16 +54,16 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 	// 5. Last resort: use PULSE_DATA_DIR (may be mock/dev)
 
 	persistentDataDir := ""
-	dataDir := os.Getenv("PULSE_DATA_DIR")
+	dataDir := watcherOsGetenv("PULSE_DATA_DIR")
 
 	// Option 1: Explicit auth config directory override
-	if authDir := os.Getenv("PULSE_AUTH_CONFIG_DIR"); authDir != "" {
+	if authDir := watcherOsGetenv("PULSE_AUTH_CONFIG_DIR"); authDir != "" {
 		persistentDataDir = authDir
 		log.Info().Str("authConfigDir", authDir).Msg("Using PULSE_AUTH_CONFIG_DIR for auth config")
 	} else if dataDir == "/etc/pulse" || dataDir == "/data" {
 		// Option 2: PULSE_DATA_DIR is already production, use it
 		persistentDataDir = dataDir
-	} else if _, err := os.Stat("/etc/pulse/.env"); err == nil {
+	} else if _, err := watcherOsStat("/etc/pulse/.env"); err == nil {
 		// Option 3: /etc/pulse exists, use it (production)
 		persistentDataDir = "/etc/pulse"
 		if dataDir != "" && dataDir != persistentDataDir {
@@ -67,7 +72,7 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 				Str("authConfigDir", persistentDataDir).
 				Msg("PULSE_DATA_DIR points to non-production directory - using /etc/pulse for auth config instead")
 		}
-	} else if _, err := os.Stat("/data/.env"); err == nil {
+	} else if _, err := watcherOsStat("/data/.env"); err == nil {
 		// Option 4: Docker environment
 		persistentDataDir = "/data"
 	} else if dataDir != "" {
@@ -95,10 +100,10 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 
 	// Determine mock.env path - skip in Docker or if directory doesn't exist
 	mockEnvPath := ""
-	isDocker := os.Getenv("PULSE_DOCKER") == "true"
+	isDocker := watcherOsGetenv("PULSE_DOCKER") == "true"
 	mockDir := "/opt/pulse"
 	if !isDocker {
-		if stat, err := os.Stat(mockDir); err == nil && stat.IsDir() {
+		if stat, err := watcherOsStat(mockDir); err == nil && stat.IsDir() {
 			mockEnvPath = filepath.Join(mockDir, "mock.env")
 		}
 	}
@@ -121,7 +126,7 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 	}
 
 	// Get initial mod times and hash
-	if stat, err := os.Stat(envPath); err == nil {
+	if stat, err := watcherOsStat(envPath); err == nil {
 		cw.lastModTime = stat.ModTime()
 		if content, err := os.ReadFile(envPath); err == nil {
 			hash := sha256.Sum256(content)
@@ -129,11 +134,11 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 		}
 	}
 	if mockEnvPath != "" {
-		if stat, err := os.Stat(mockEnvPath); err == nil {
+		if stat, err := watcherOsStat(mockEnvPath); err == nil {
 			cw.mockLastModTime = stat.ModTime()
 		}
 	}
-	if stat, err := os.Stat(apiTokensPath); err == nil {
+	if stat, err := watcherOsStat(apiTokensPath); err == nil {
 		cw.apiTokensLastModTime = stat.ModTime()
 	}
 
@@ -203,9 +208,14 @@ func (cw *ConfigWatcher) ReloadConfig() {
 
 // watchForChanges handles fsnotify events
 func (cw *ConfigWatcher) watchForChanges() {
+	cw.handleEvents(cw.watcher.Events, cw.watcher.Errors)
+}
+
+// handleEvents processes events from the watcher channels
+func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-chan error) {
 	for {
 		select {
-		case event, ok := <-cw.watcher.Events:
+		case event, ok := <-events:
 			if !ok {
 				return
 			}
@@ -253,7 +263,7 @@ func (cw *ConfigWatcher) watchForChanges() {
 				}
 			}
 
-		case err, ok := <-cw.watcher.Errors:
+		case err, ok := <-errors:
 			if !ok {
 				return
 			}

@@ -38,14 +38,20 @@ type DockerMetadataStore struct {
 	metadata     map[string]*DockerMetadata     // keyed by resource ID (containers/services)
 	hostMetadata map[string]*DockerHostMetadata // keyed by host ID
 	dataPath     string
+	fs           FileSystem
 }
 
 // NewDockerMetadataStore creates a new metadata store
-func NewDockerMetadataStore(dataPath string) *DockerMetadataStore {
+func NewDockerMetadataStore(dataPath string, fs FileSystem) *DockerMetadataStore {
 	store := &DockerMetadataStore{
 		metadata:     make(map[string]*DockerMetadata),
 		hostMetadata: make(map[string]*DockerHostMetadata),
 		dataPath:     dataPath,
+		fs:           fs,
+	}
+
+	if store.fs == nil {
+		store.fs = defaultFileSystem{}
 	}
 
 	// Load existing metadata
@@ -54,6 +60,102 @@ func NewDockerMetadataStore(dataPath string) *DockerMetadataStore {
 	}
 
 	return store
+}
+
+// ... Get/GetAll/GetHostMetadata/GetAllHostMetadata/SetHostMetadata/Set/Delete/ReplaceAll ... (unchanged)
+
+// Load reads metadata from disk
+func (s *DockerMetadataStore) Load() error {
+	filePath := filepath.Join(s.dataPath, "docker_metadata.json")
+
+	log.Debug().Str("path", filePath).Msg("Loading Docker metadata from disk")
+
+	data, err := s.fs.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist yet, not an error
+			log.Debug().Str("path", filePath).Msg("Docker metadata file does not exist yet")
+			return nil
+		}
+		return fmt.Errorf("failed to read metadata file: %w", err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Try to load as versioned format first
+	var fileData dockerMetadataFile
+	if err := json.Unmarshal(data, &fileData); err != nil {
+		return fmt.Errorf("failed to unmarshal metadata: %w", err)
+	}
+
+	// Check if this is the new format (has "hosts" or "containers" keys)
+	if fileData.Hosts != nil || fileData.Containers != nil {
+		// New versioned format
+		if fileData.Containers != nil {
+			s.metadata = fileData.Containers
+		} else {
+			s.metadata = make(map[string]*DockerMetadata)
+		}
+		if fileData.Hosts != nil {
+			s.hostMetadata = fileData.Hosts
+		} else {
+			s.hostMetadata = make(map[string]*DockerHostMetadata)
+		}
+		log.Info().
+			Int("containerCount", len(s.metadata)).
+			Int("hostCount", len(s.hostMetadata)).
+			Msg("Loaded Docker metadata (versioned format)")
+	} else {
+		// Legacy format: top-level map is container metadata
+		if err := json.Unmarshal(data, &s.metadata); err != nil {
+			return fmt.Errorf("failed to unmarshal legacy metadata: %w", err)
+		}
+		s.hostMetadata = make(map[string]*DockerHostMetadata)
+		log.Info().
+			Int("containerCount", len(s.metadata)).
+			Msg("Loaded Docker metadata (legacy format)")
+	}
+
+	return nil
+}
+
+// save writes metadata to disk (must be called with lock held)
+func (s *DockerMetadataStore) save() error {
+	filePath := filepath.Join(s.dataPath, "docker_metadata.json")
+
+	log.Debug().Str("path", filePath).Msg("Saving Docker metadata to disk")
+
+	// Use versioned format
+	fileData := dockerMetadataFile{
+		Containers: s.metadata,
+		Hosts:      s.hostMetadata,
+	}
+
+	data, err := json.Marshal(fileData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	// Ensure directory exists
+	if err := os.MkdirAll(s.dataPath, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	// Write to temp file first for atomic operation
+	tempFile := filePath + ".tmp"
+	if err := s.fs.WriteFile(tempFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to write metadata file: %w", err)
+	}
+
+	// Rename temp file to actual file (atomic on most systems)
+	if err := s.fs.Rename(tempFile, filePath); err != nil {
+		return fmt.Errorf("failed to rename metadata file: %w", err)
+	}
+
+	log.Debug().Str("path", filePath).Int("containers", len(s.metadata)).Int("hosts", len(s.hostMetadata)).Msg("Docker metadata saved successfully")
+
+	return nil
 }
 
 // Get retrieves metadata for a Docker resource
@@ -170,98 +272,4 @@ func (s *DockerMetadataStore) ReplaceAll(metadata map[string]*DockerMetadata) er
 	}
 
 	return s.save()
-}
-
-// Load reads metadata from disk
-func (s *DockerMetadataStore) Load() error {
-	filePath := filepath.Join(s.dataPath, "docker_metadata.json")
-
-	log.Debug().Str("path", filePath).Msg("Loading Docker metadata from disk")
-
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// File doesn't exist yet, not an error
-			log.Debug().Str("path", filePath).Msg("Docker metadata file does not exist yet")
-			return nil
-		}
-		return fmt.Errorf("failed to read metadata file: %w", err)
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Try to load as versioned format first
-	var fileData dockerMetadataFile
-	if err := json.Unmarshal(data, &fileData); err != nil {
-		return fmt.Errorf("failed to unmarshal metadata: %w", err)
-	}
-
-	// Check if this is the new format (has "hosts" or "containers" keys)
-	if fileData.Hosts != nil || fileData.Containers != nil {
-		// New versioned format
-		if fileData.Containers != nil {
-			s.metadata = fileData.Containers
-		} else {
-			s.metadata = make(map[string]*DockerMetadata)
-		}
-		if fileData.Hosts != nil {
-			s.hostMetadata = fileData.Hosts
-		} else {
-			s.hostMetadata = make(map[string]*DockerHostMetadata)
-		}
-		log.Info().
-			Int("containerCount", len(s.metadata)).
-			Int("hostCount", len(s.hostMetadata)).
-			Msg("Loaded Docker metadata (versioned format)")
-	} else {
-		// Legacy format: top-level map is container metadata
-		if err := json.Unmarshal(data, &s.metadata); err != nil {
-			return fmt.Errorf("failed to unmarshal legacy metadata: %w", err)
-		}
-		s.hostMetadata = make(map[string]*DockerHostMetadata)
-		log.Info().
-			Int("containerCount", len(s.metadata)).
-			Msg("Loaded Docker metadata (legacy format)")
-	}
-
-	return nil
-}
-
-// save writes metadata to disk (must be called with lock held)
-func (s *DockerMetadataStore) save() error {
-	filePath := filepath.Join(s.dataPath, "docker_metadata.json")
-
-	log.Debug().Str("path", filePath).Msg("Saving Docker metadata to disk")
-
-	// Use versioned format
-	fileData := dockerMetadataFile{
-		Containers: s.metadata,
-		Hosts:      s.hostMetadata,
-	}
-
-	data, err := json.Marshal(fileData)
-	if err != nil {
-		return fmt.Errorf("failed to marshal metadata: %w", err)
-	}
-
-	// Ensure directory exists
-	if err := os.MkdirAll(s.dataPath, 0755); err != nil {
-		return fmt.Errorf("failed to create data directory: %w", err)
-	}
-
-	// Write to temp file first for atomic operation
-	tempFile := filePath + ".tmp"
-	if err := os.WriteFile(tempFile, data, 0644); err != nil {
-		return fmt.Errorf("failed to write metadata file: %w", err)
-	}
-
-	// Rename temp file to actual file (atomic on most systems)
-	if err := os.Rename(tempFile, filePath); err != nil {
-		return fmt.Errorf("failed to rename metadata file: %w", err)
-	}
-
-	log.Debug().Str("path", filePath).Int("containers", len(s.metadata)).Int("hosts", len(s.hostMetadata)).Msg("Docker metadata saved successfully")
-
-	return nil
 }

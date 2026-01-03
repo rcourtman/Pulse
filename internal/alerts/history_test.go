@@ -29,7 +29,7 @@ func newTestHistoryManager(t *testing.T) *HistoryManager {
 }
 
 func TestGetStats_EmptyHistory(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -47,7 +47,7 @@ func TestGetStats_EmptyHistory(t *testing.T) {
 }
 
 func TestGetStats_WithHistory(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -77,7 +77,7 @@ func TestGetStats_WithHistory(t *testing.T) {
 }
 
 func TestGetFileSize_NonExistent(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -88,7 +88,7 @@ func TestGetFileSize_NonExistent(t *testing.T) {
 }
 
 func TestGetFileSize_ExistingFile(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -105,7 +105,7 @@ func TestGetFileSize_ExistingFile(t *testing.T) {
 }
 
 func TestAddAlert(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -129,7 +129,7 @@ func TestAddAlert(t *testing.T) {
 }
 
 func TestOnAlert(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -158,7 +158,7 @@ func TestOnAlert(t *testing.T) {
 }
 
 func TestGetHistory_WithLimit(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -187,7 +187,7 @@ func TestGetHistory_WithLimit(t *testing.T) {
 }
 
 func TestGetHistory_WithSinceFilter(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -209,7 +209,7 @@ func TestGetHistory_WithSinceFilter(t *testing.T) {
 }
 
 func TestGetAllHistory(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -233,7 +233,7 @@ func TestGetAllHistory(t *testing.T) {
 }
 
 func TestGetAllHistory_WithLimit(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -260,7 +260,7 @@ func TestGetAllHistory_WithLimit(t *testing.T) {
 }
 
 func TestRemoveAlert(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -285,7 +285,7 @@ func TestRemoveAlert(t *testing.T) {
 }
 
 func TestRemoveAlert_NotFound(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -302,7 +302,7 @@ func TestRemoveAlert_NotFound(t *testing.T) {
 }
 
 func TestClearAllHistory(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -335,7 +335,7 @@ func TestClearAllHistory(t *testing.T) {
 }
 
 func TestCleanOldEntries(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -362,7 +362,7 @@ func TestCleanOldEntries(t *testing.T) {
 }
 
 func TestSaveHistory(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -394,7 +394,7 @@ func TestSaveHistory(t *testing.T) {
 }
 
 func TestLoadHistory_NonExistent(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -409,7 +409,7 @@ func TestLoadHistory_NonExistent(t *testing.T) {
 }
 
 func TestLoadHistory_FromMainFile(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -435,7 +435,7 @@ func TestLoadHistory_FromMainFile(t *testing.T) {
 }
 
 func TestLoadHistory_FromBackupFile(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -461,7 +461,7 @@ func TestLoadHistory_FromBackupFile(t *testing.T) {
 }
 
 func TestLoadHistory_InvalidJSON(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -477,7 +477,7 @@ func TestLoadHistory_InvalidJSON(t *testing.T) {
 }
 
 func TestSaveHistoryWithRetry_Success(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -497,7 +497,7 @@ func TestSaveHistoryWithRetry_Success(t *testing.T) {
 }
 
 func TestSaveHistory_CreatesBackup(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -522,7 +522,7 @@ func TestSaveHistory_CreatesBackup(t *testing.T) {
 }
 
 func TestSaveHistoryWithRetry_CreatesBackup(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -558,7 +558,7 @@ func TestSaveHistoryWithRetry_CreatesBackup(t *testing.T) {
 }
 
 func TestSaveHistoryWithRetry_EmptyHistory(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 	hm.history = []HistoryEntry{}
@@ -579,7 +579,7 @@ func TestSaveHistoryWithRetry_EmptyHistory(t *testing.T) {
 }
 
 func TestSaveHistoryWithRetry_SingleRetry(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 	hm.history = []HistoryEntry{
@@ -598,7 +598,7 @@ func TestSaveHistoryWithRetry_SingleRetry(t *testing.T) {
 }
 
 func TestSaveHistoryWithRetry_WriteError(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	tempDir := t.TempDir()
 
@@ -621,7 +621,7 @@ func TestSaveHistoryWithRetry_WriteError(t *testing.T) {
 }
 
 func TestSaveHistoryWithRetry_ConcurrentSaves(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 
@@ -655,7 +655,7 @@ func TestSaveHistoryWithRetry_ConcurrentSaves(t *testing.T) {
 }
 
 func TestSaveHistoryWithRetry_SnapshotIsolation(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	hm := newTestHistoryManager(t)
 	hm.history = []HistoryEntry{
@@ -724,7 +724,7 @@ func TestNewHistoryManager_DefaultDir(t *testing.T) {
 }
 
 func TestLoadHistory_PermissionError(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	tempDir := t.TempDir()
 	hm := &HistoryManager{

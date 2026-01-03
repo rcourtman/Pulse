@@ -1676,7 +1676,7 @@ func TestEnsureValidHysteresis(t *testing.T) {
 
 // TestCloneThreshold tests the cloneThreshold function
 func TestCloneThreshold(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	tests := []struct {
 		name      string
@@ -1706,7 +1706,7 @@ func TestCloneThreshold(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 
 			result := cloneThreshold(tc.threshold)
 
@@ -1747,7 +1747,7 @@ func TestCloneThreshold(t *testing.T) {
 
 // TestCloneStringPtr tests the cloneStringPtr function
 func TestCloneStringPtr(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	tests := []struct {
 		name  string
@@ -1781,7 +1781,7 @@ func TestCloneStringPtr(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 
 			result := cloneStringPtr(tc.value)
 
@@ -1824,7 +1824,7 @@ func strPtr(s string) *string {
 
 // TestCloneThresholdConfig tests the cloneThresholdConfig function
 func TestCloneThresholdConfig(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	tests := []struct {
 		name   string
@@ -1879,7 +1879,7 @@ func TestCloneThresholdConfig(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 
 			result := cloneThresholdConfig(tc.config)
 
@@ -1960,7 +1960,7 @@ func checkThresholdClone(t *testing.T, name string, result, original *Hysteresis
 
 // TestEnsureHysteresisThreshold tests the ensureHysteresisThreshold function
 func TestEnsureHysteresisThreshold(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	tests := []struct {
 		name        string
@@ -2018,7 +2018,7 @@ func TestEnsureHysteresisThreshold(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 
 			result := ensureHysteresisThreshold(tc.threshold)
 
@@ -2046,7 +2046,7 @@ func TestEnsureHysteresisThreshold(t *testing.T) {
 
 // TestParsePulseTags tests the parsePulseTags function
 func TestParsePulseTags(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	tests := []struct {
 		name string
@@ -2132,7 +2132,7 @@ func TestParsePulseTags(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 
 			result := parsePulseTags(tc.tags)
 
@@ -2151,7 +2151,7 @@ func TestParsePulseTags(t *testing.T) {
 
 // TestNormalizeMetricTimeThresholds tests the normalizeMetricTimeThresholds function
 func TestNormalizeMetricTimeThresholds(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	tests := []struct {
 		name  string
@@ -2275,7 +2275,7 @@ func TestNormalizeMetricTimeThresholds(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 
 			result := NormalizeMetricTimeThresholds(tc.input)
 
@@ -2322,7 +2322,7 @@ func TestNormalizeMetricTimeThresholds(t *testing.T) {
 
 // TestGetThresholdForMetric tests the getThresholdForMetric function
 func TestGetThresholdForMetric(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	cpuThreshold := &HysteresisThreshold{Trigger: 80, Clear: 70}
 	memoryThreshold := &HysteresisThreshold{Trigger: 85, Clear: 75}
@@ -2368,7 +2368,7 @@ func TestGetThresholdForMetric(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 
 			result := getThresholdForMetric(config, tc.metricType)
 			if result != tc.want {
@@ -2380,7 +2380,7 @@ func TestGetThresholdForMetric(t *testing.T) {
 
 // TestGetThresholdForMetric_EmptyConfig tests getThresholdForMetric with empty config
 func TestGetThresholdForMetric_EmptyConfig(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	config := ThresholdConfig{}
 
@@ -2388,7 +2388,7 @@ func TestGetThresholdForMetric_EmptyConfig(t *testing.T) {
 
 	for _, metricType := range metricTypes {
 		t.Run(metricType, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 
 			result := getThresholdForMetric(config, metricType)
 			if result != nil {
@@ -2400,7 +2400,7 @@ func TestGetThresholdForMetric_EmptyConfig(t *testing.T) {
 
 // TestGetThresholdForMetricFromConfig tests the getThresholdForMetricFromConfig function
 func TestGetThresholdForMetricFromConfig(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	tests := []struct {
 		name        string
@@ -2518,7 +2518,7 @@ func TestGetThresholdForMetricFromConfig(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 
 			result := getThresholdForMetricFromConfig(tc.config, tc.metricType)
 

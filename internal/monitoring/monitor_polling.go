@@ -1385,11 +1385,17 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 
 				// Create storage model
 				// Initialize Enabled/Active from per-node API response
+				// Use clusterName for Instance when available to match node ID format
+				// (nodes use clusterName-nodeName as ID when clustered)
+				storageInstance := instanceName
+				if instanceCfg != nil && instanceCfg.IsCluster && instanceCfg.ClusterName != "" {
+					storageInstance = instanceCfg.ClusterName
+				}
 				modelStorage := models.Storage{
 					ID:       storageID,
 					Name:     storage.Storage,
 					Node:     n.Node,
-					Instance: instanceName,
+					Instance: storageInstance,
 					Type:     storage.Type,
 					Status:   "available",
 					Total:    int64(storage.Total),

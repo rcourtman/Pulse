@@ -27,13 +27,19 @@ type GuestMetadataStore struct {
 	mu       sync.RWMutex
 	metadata map[string]*GuestMetadata // keyed by guest ID
 	dataPath string
+	fs       FileSystem
 }
 
 // NewGuestMetadataStore creates a new metadata store
-func NewGuestMetadataStore(dataPath string) *GuestMetadataStore {
+func NewGuestMetadataStore(dataPath string, fs FileSystem) *GuestMetadataStore {
 	store := &GuestMetadataStore{
 		metadata: make(map[string]*GuestMetadata),
 		dataPath: dataPath,
+		fs:       fs,
+	}
+
+	if store.fs == nil {
+		store.fs = defaultFileSystem{}
 	}
 
 	// Load existing metadata
@@ -42,6 +48,67 @@ func NewGuestMetadataStore(dataPath string) *GuestMetadataStore {
 	}
 
 	return store
+}
+
+// ... Get/GetWithLegacyMigration/GetAll/Set/Delete/ReplaceAll ... (unchanged)
+
+// Load reads metadata from disk
+func (s *GuestMetadataStore) Load() error {
+	filePath := filepath.Join(s.dataPath, "guest_metadata.json")
+
+	log.Debug().Str("path", filePath).Msg("Loading guest metadata from disk")
+
+	data, err := s.fs.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist yet, not an error
+			log.Debug().Str("path", filePath).Msg("Guest metadata file does not exist yet")
+			return nil
+		}
+		return fmt.Errorf("failed to read metadata file: %w", err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := json.Unmarshal(data, &s.metadata); err != nil {
+		return fmt.Errorf("failed to unmarshal metadata: %w", err)
+	}
+
+	log.Info().Int("count", len(s.metadata)).Msg("Loaded guest metadata")
+	return nil
+}
+
+// save writes metadata to disk (must be called with lock held)
+func (s *GuestMetadataStore) save() error {
+	filePath := filepath.Join(s.dataPath, "guest_metadata.json")
+
+	log.Debug().Str("path", filePath).Msg("Saving guest metadata to disk")
+
+	data, err := json.Marshal(s.metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	// Ensure directory exists
+	if err := s.fs.MkdirAll(s.dataPath, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	// Write to temp file first for atomic operation
+	tempFile := filePath + ".tmp"
+	if err := s.fs.WriteFile(tempFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to write metadata file: %w", err)
+	}
+
+	// Rename temp file to actual file (atomic on most systems)
+	if err := s.fs.Rename(tempFile, filePath); err != nil {
+		return fmt.Errorf("failed to rename metadata file: %w", err)
+	}
+
+	log.Debug().Str("path", filePath).Int("entries", len(s.metadata)).Msg("Guest metadata saved successfully")
+
+	return nil
 }
 
 // Get retrieves metadata for a guest
@@ -188,63 +255,4 @@ func (s *GuestMetadataStore) ReplaceAll(metadata map[string]*GuestMetadata) erro
 	}
 
 	return s.save()
-}
-
-// Load reads metadata from disk
-func (s *GuestMetadataStore) Load() error {
-	filePath := filepath.Join(s.dataPath, "guest_metadata.json")
-
-	log.Debug().Str("path", filePath).Msg("Loading guest metadata from disk")
-
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// File doesn't exist yet, not an error
-			log.Debug().Str("path", filePath).Msg("Guest metadata file does not exist yet")
-			return nil
-		}
-		return fmt.Errorf("failed to read metadata file: %w", err)
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if err := json.Unmarshal(data, &s.metadata); err != nil {
-		return fmt.Errorf("failed to unmarshal metadata: %w", err)
-	}
-
-	log.Info().Int("count", len(s.metadata)).Msg("Loaded guest metadata")
-	return nil
-}
-
-// save writes metadata to disk (must be called with lock held)
-func (s *GuestMetadataStore) save() error {
-	filePath := filepath.Join(s.dataPath, "guest_metadata.json")
-
-	log.Debug().Str("path", filePath).Msg("Saving guest metadata to disk")
-
-	data, err := json.Marshal(s.metadata)
-	if err != nil {
-		return fmt.Errorf("failed to marshal metadata: %w", err)
-	}
-
-	// Ensure directory exists
-	if err := os.MkdirAll(s.dataPath, 0755); err != nil {
-		return fmt.Errorf("failed to create data directory: %w", err)
-	}
-
-	// Write to temp file first for atomic operation
-	tempFile := filePath + ".tmp"
-	if err := os.WriteFile(tempFile, data, 0644); err != nil {
-		return fmt.Errorf("failed to write metadata file: %w", err)
-	}
-
-	// Rename temp file to actual file (atomic on most systems)
-	if err := os.Rename(tempFile, filePath); err != nil {
-		return fmt.Errorf("failed to rename metadata file: %w", err)
-	}
-
-	log.Debug().Str("path", filePath).Int("entries", len(s.metadata)).Msg("Guest metadata saved successfully")
-
-	return nil
 }

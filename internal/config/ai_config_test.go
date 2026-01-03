@@ -73,6 +73,55 @@ func TestAIConfig_IsConfigured(t *testing.T) {
 			},
 			expected: true,
 		},
+		{
+			name: "enabled with deepseek key",
+			config: AIConfig{
+				Enabled:        true,
+				DeepSeekAPIKey: "sk-ds-123",
+			},
+			expected: true,
+		},
+		{
+			name: "enabled with ollama (always configured if enabled)",
+			config: AIConfig{
+				Enabled:  true,
+				Provider: AIProviderOllama,
+			},
+			expected: true,
+		},
+		{
+			name: "enabled with unknown provider",
+			config: AIConfig{
+				Enabled:  true,
+				Provider: "unknown",
+			},
+			expected: false,
+		},
+		{
+			name: "anthropic legacy needs key",
+			config: AIConfig{
+				Enabled:  true,
+				Provider: AIProviderAnthropic,
+			},
+			expected: false,
+		},
+		{
+			name: "openai legacy needs key",
+			config: AIConfig{
+				Enabled:  true,
+				Provider: AIProviderOpenAI,
+			},
+			expected: false,
+		},
+		{
+			name: "anthropic oauth needs token",
+			config: AIConfig{
+				Enabled:    true,
+				Provider:   AIProviderAnthropic,
+				AuthMethod: AuthMethodOAuth,
+			},
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -222,6 +271,34 @@ func TestAIConfig_GetAPIKeyForProvider(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("legacy fallback anthropic", func(t *testing.T) {
+		cfg := AIConfig{APIKey: "legacy", Provider: AIProviderAnthropic}
+		if key := cfg.GetAPIKeyForProvider(AIProviderAnthropic); key != "legacy" {
+			t.Errorf("want legacy, got %q", key)
+		}
+	})
+
+	t.Run("legacy fallback openai", func(t *testing.T) {
+		cfg := AIConfig{APIKey: "legacy", Provider: AIProviderOpenAI}
+		if key := cfg.GetAPIKeyForProvider(AIProviderOpenAI); key != "legacy" {
+			t.Errorf("want legacy, got %q", key)
+		}
+	})
+
+	t.Run("legacy fallback deepseek", func(t *testing.T) {
+		cfg := AIConfig{APIKey: "legacy", Provider: AIProviderDeepSeek}
+		if key := cfg.GetAPIKeyForProvider(AIProviderDeepSeek); key != "legacy" {
+			t.Errorf("want legacy, got %q", key)
+		}
+	})
+
+	t.Run("legacy fallback gemini", func(t *testing.T) {
+		cfg := AIConfig{APIKey: "legacy", Provider: AIProviderGemini}
+		if key := cfg.GetAPIKeyForProvider(AIProviderGemini); key != "legacy" {
+			t.Errorf("want legacy, got %q", key)
+		}
+	})
 }
 
 func TestAIConfig_GetBaseURLForProvider(t *testing.T) {
@@ -238,6 +315,7 @@ func TestAIConfig_GetBaseURLForProvider(t *testing.T) {
 		{AIProviderOpenAI, "https://custom-openai.com"},
 		{AIProviderDeepSeek, DefaultDeepSeekBaseURL},
 		{AIProviderGemini, DefaultGeminiBaseURL},
+		{AIProviderAnthropic, ""},
 		{"unknown", ""},
 	}
 
@@ -249,6 +327,26 @@ func TestAIConfig_GetBaseURLForProvider(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("default urls", func(t *testing.T) {
+		cfg := AIConfig{}
+		if url := cfg.GetBaseURLForProvider(AIProviderOllama); url != DefaultOllamaBaseURL {
+			t.Errorf("ollama default = %q, want %q", url, DefaultOllamaBaseURL)
+		}
+		if url := cfg.GetBaseURLForProvider(AIProviderOpenAI); url != "" {
+			t.Errorf("openai default = %q, want empty", url)
+		}
+	})
+
+	t.Run("legacy base url fallback", func(t *testing.T) {
+		cfg := AIConfig{
+			Provider: AIProviderOllama,
+			BaseURL:  "http://legacy:11434",
+		}
+		if url := cfg.GetBaseURLForProvider(AIProviderOllama); url != "http://legacy:11434" {
+			t.Errorf("got %q, want legacy url", url)
+		}
+	})
 }
 
 func TestAIConfig_IsUsingOAuth(t *testing.T) {
@@ -397,18 +495,97 @@ func TestAIConfig_GetModel(t *testing.T) {
 			expected: "custom-model",
 		},
 		{
-			name: "single provider configured",
+			name: "single provider configured - anthropic",
 			config: AIConfig{
 				AnthropicAPIKey: "key",
 			},
 			expected: DefaultAIModelAnthropic,
 		},
 		{
-			name: "legacy provider fallback",
+			name: "single provider configured - openai",
 			config: AIConfig{
-				Provider: AIProviderOpenAI,
+				OpenAIAPIKey: "key",
 			},
 			expected: DefaultAIModelOpenAI,
+		},
+		{
+			name: "single provider configured - deepseek",
+			config: AIConfig{
+				DeepSeekAPIKey: "key",
+			},
+			expected: DefaultAIModelDeepSeek,
+		},
+		{
+			name: "single provider configured - gemini",
+			config: AIConfig{
+				GeminiAPIKey: "key",
+			},
+			expected: DefaultAIModelGemini,
+		},
+		{
+			name: "single provider configured - ollama",
+			config: AIConfig{
+				OllamaBaseURL: "http://localhost:11434",
+			},
+			expected: DefaultAIModelOllama,
+		},
+		{
+			name: "multiple providers configured (no default)",
+			config: AIConfig{
+				AnthropicAPIKey: "key",
+				OpenAIAPIKey:    "key",
+			},
+			// Fallback to legacy Provider logic
+			expected: "",
+		},
+		{
+			name: "multiple providers configured with legacy provider set",
+			config: AIConfig{
+				AnthropicAPIKey: "key",
+				OpenAIAPIKey:    "key",
+				Provider:        AIProviderOpenAI,
+			},
+			expected: DefaultAIModelOpenAI,
+		},
+		{
+			name: "legacy provider fallback - anthropic",
+			config: AIConfig{
+				Provider: AIProviderAnthropic,
+			},
+			expected: DefaultAIModelAnthropic,
+		},
+		{
+			name: "legacy provider fallback - deepseek",
+			config: AIConfig{
+				Provider: AIProviderDeepSeek,
+			},
+			expected: DefaultAIModelDeepSeek,
+		},
+		{
+			name: "legacy provider fallback - gemini",
+			config: AIConfig{
+				Provider: AIProviderGemini,
+			},
+			expected: DefaultAIModelGemini,
+		},
+		{
+			name: "legacy provider fallback - ollama",
+			config: AIConfig{
+				Provider: AIProviderOllama,
+			},
+			expected: DefaultAIModelOllama,
+		},
+		{
+			name: "ollama fallback (configured provider)",
+			config: AIConfig{
+				OllamaBaseURL: "http://localhost:11434",
+			},
+			expected: DefaultAIModelOllama,
+		},
+		{
+			name:     "no model/provider",
+			config:   AIConfig{},
+			expected: "",
 		},
 	}
 

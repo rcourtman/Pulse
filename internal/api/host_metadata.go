@@ -18,7 +18,7 @@ type HostMetadataHandler struct {
 // NewHostMetadataHandler creates a new host metadata handler
 func NewHostMetadataHandler(dataPath string) *HostMetadataHandler {
 	return &HostMetadataHandler{
-		store: config.NewHostMetadataStore(dataPath),
+		store: config.NewHostMetadataStore(dataPath, nil),
 	}
 }
 

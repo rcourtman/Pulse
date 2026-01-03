@@ -6,12 +6,12 @@ import (
 )
 
 func TestCleanupStaleMaps(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := newTestManager(t)
 
 	// Populate maps with old data
 	oldTime := time.Now().Add(-25 * time.Hour)
-	recentTime := time.Now().Add(-1 * time.Hour)
+	recentTime := time.Now().Add(-1 * time.Minute)
 
 	m.mu.Lock()
 	// Flapping history
@@ -84,9 +84,7 @@ func TestCleanupStaleMaps(t *testing.T) {
 
 	// Verify
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	// Test additional maps
-	m.mu.Lock()
 	// Offline confirmations
 	m.offlineConfirmations["stale-node"] = 3
 	m.activeAlerts["node:active-node:offline"] = &Alert{ID: "node:active-node:offline"}

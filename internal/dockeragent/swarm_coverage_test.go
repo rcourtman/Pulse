@@ -217,7 +217,7 @@ func TestCollectSwarmDataFromManager(t *testing.T) {
 					t.Fatalf("expected node filter to include node1, got %v", got)
 				}
 				return []swarmtypes.Task{
-					{ID: "task1", ServiceID: "svc1", Status: swarmtypes.TaskStatus{State: swarmtypes.TaskStateRunning}},
+					{ID: "task1", ServiceID: "svc1", DesiredState: swarmtypes.TaskStateRunning, Status: swarmtypes.TaskStatus{State: swarmtypes.TaskStateRunning}},
 				}, nil
 			},
 		},

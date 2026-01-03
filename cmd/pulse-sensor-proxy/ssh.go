@@ -961,7 +961,6 @@ func discoverLocalHostAddressesFallback() ([]string, error) {
 
 // isProxmoxHost checks if we're running on a Proxmox host
 func isProxmoxHost() bool {
-func isProxmoxHost() bool {
 	// Check for pvecm command
 	if _, err := execLookPath("pvecm"); err == nil {
 		return true

@@ -5,11 +5,14 @@ import { MetricsViewToggle } from '@/components/shared/MetricsViewToggle';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { createSearchHistoryManager } from '@/utils/searchHistory';
 
+export type DockerViewMode = 'grouped' | 'flat' | 'cluster';
+
 interface DockerFilterProps {
   search: () => string;
   setSearch: (value: string) => void;
-  groupingMode?: () => 'grouped' | 'flat';
-  setGroupingMode?: (mode: 'grouped' | 'flat') => void;
+  groupingMode?: () => DockerViewMode;
+  setGroupingMode?: (mode: DockerViewMode) => void;
+  hasSwarmClusters?: boolean;
   statusFilter?: () => 'all' | 'online' | 'degraded' | 'offline';
   setStatusFilter?: (value: 'all' | 'online' | 'degraded' | 'offline') => void;
   searchInputRef?: (el: HTMLInputElement) => void;
@@ -175,7 +178,7 @@ export const DockerFilter: Component<DockerFilterProps> = (props) => {
   const hasActiveFilters = createMemo(
     () =>
       props.search().trim() !== '' ||
-      (!!props.groupingMode && props.groupingMode() === 'flat') ||
+      (!!props.groupingMode && props.groupingMode() !== 'grouped') ||
       (!!props.statusFilter && props.statusFilter() !== 'all') ||
       Boolean(props.activeHostName),
   );
@@ -458,6 +461,7 @@ export const DockerFilter: Component<DockerFilterProps> = (props) => {
                   ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                   }`}
+                title="Group containers by host"
               >
                 Grouped
               </button>
@@ -468,9 +472,23 @@ export const DockerFilter: Component<DockerFilterProps> = (props) => {
                   ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                   }`}
+                title="Show all containers in a flat list"
               >
                 List
               </button>
+              <Show when={props.hasSwarmClusters}>
+                <button
+                  type="button"
+                  onClick={() => props.setGroupingMode?.('cluster')}
+                  class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupingMode?.() === 'cluster'
+                    ? 'bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                    }`}
+                  title="Show Swarm services grouped by cluster"
+                >
+                  Cluster
+                </button>
+              </Show>
             </div>
           </Show>
 

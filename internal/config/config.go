@@ -42,6 +42,14 @@ const (
 	DefaultGuestMetadataMaxConcurrent = 4
 )
 
+// Vars for mocking system calls in tests
+var (
+	osStat            = os.Stat
+	execCommand       = exec.Command
+	netDial           = net.Dial
+	netInterfaceAddrs = net.InterfaceAddrs
+)
+
 // IsPasswordHashed checks if a string looks like a bcrypt hash
 func IsPasswordHashed(password string) bool {
 	// Bcrypt hashes start with $2a$, $2b$, or $2y$ and are 60 characters long
@@ -1579,16 +1587,16 @@ func (c *Config) Validate() error {
 func detectPublicURL(port int) string {
 	// When running inside Docker we can't reliably determine an externally reachable address.
 	// Returning an empty string avoids surfacing container-only IPs (e.g., 172.x) in notifications.
-	if _, err := os.Stat("/.dockerenv"); err == nil {
+	if _, err := osStat("/.dockerenv"); err == nil {
 		log.Info().Msg("Docker environment detected - skipping public URL auto-detect. Set PULSE_PUBLIC_URL to expose external links.")
 		return ""
 	}
 
 	// Method 1: Check if we're in a Proxmox container (most common deployment)
-	if _, err := os.Stat("/etc/pve"); err == nil {
+	if _, err := osStat("/etc/pve"); err == nil {
 		// We're likely in a ProxmoxVE container
 		// Try to get the container's IP from hostname -I
-		if output, err := exec.Command("hostname", "-I").Output(); err == nil {
+		if output, err := execCommand("hostname", "-I").Output(); err == nil {
 			ips := strings.Fields(string(output))
 			for _, ip := range ips {
 				// Skip localhost and IPv6
@@ -1605,7 +1613,7 @@ func detectPublicURL(port int) string {
 	}
 
 	// Method 3: Get all non-loopback IPs and use the first private one
-	if addrs, err := net.InterfaceAddrs(); err == nil {
+	if addrs, err := netInterfaceAddrs(); err == nil {
 		for _, addr := range addrs {
 			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
 				if ipnet.IP.To4() != nil {
@@ -1635,10 +1643,10 @@ func detectPublicURL(port int) string {
 // getOutboundIP gets the preferred outbound IP of this machine
 func getOutboundIP() string {
 	// Try to connect to a public DNS server (doesn't actually connect, just resolves the route)
-	conn, err := net.Dial("udp", "8.8.8.8:80")
+	conn, err := netDial("udp", "8.8.8.8:80")
 	if err != nil {
 		// Try Cloudflare DNS as fallback
-		conn, err = net.Dial("udp", "1.1.1.1:80")
+		conn, err = netDial("udp", "1.1.1.1:80")
 		if err != nil {
 			return ""
 		}
