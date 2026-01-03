@@ -687,3 +687,32 @@ func TestNewDefaultAIConfig(t *testing.T) {
 		t.Error("Default alert triggered analysis should be enabled")
 	}
 }
+
+func TestAIConfig_GetRequestTimeout(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *AIConfig
+		expected time.Duration
+	}{
+		{
+			name:     "Default",
+			config:   &AIConfig{},
+			expected: 300 * time.Second,
+		},
+		{
+			name: "Custom",
+			config: &AIConfig{
+				RequestTimeoutSeconds: 60,
+			},
+			expected: 60 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if duration := tt.config.GetRequestTimeout(); duration != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, duration)
+			}
+		})
+	}
+}

@@ -19,6 +19,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -2344,5 +2345,13 @@ func TestPersistence_EnvConfigSuppressions(t *testing.T) {
 	}
 	if len(loaded) != 0 {
 		t.Errorf("Expected empty hashes after clearing, got %v", loaded)
+	}
+
+	// Test invalid JSON
+	invalidFile := filepath.Join(tempDir, "env_token_suppressions.json")
+	require.NoError(t, os.WriteFile(invalidFile, []byte("{xxx"), 0644))
+	_, err = p.LoadEnvTokenSuppressions()
+	if err == nil {
+		t.Fatal("Expected error on invalid JSON")
 	}
 }
