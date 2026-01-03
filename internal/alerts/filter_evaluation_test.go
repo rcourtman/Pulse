@@ -7,7 +7,7 @@ import (
 )
 
 func TestEvaluateVMCondition(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := NewManager()
 
 	testVM := models.VM{
@@ -365,7 +365,7 @@ func TestEvaluateVMCondition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 			got := m.evaluateVMCondition(tt.vm, tt.condition)
 			if got != tt.want {
 				t.Errorf("evaluateVMCondition() = %v, want %v", got, tt.want)
@@ -375,7 +375,7 @@ func TestEvaluateVMCondition(t *testing.T) {
 }
 
 func TestEvaluateContainerCondition(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := NewManager()
 
 	testContainer := models.Container{
@@ -620,7 +620,7 @@ func TestEvaluateContainerCondition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 			got := m.evaluateContainerCondition(tt.container, tt.condition)
 			if got != tt.want {
 				t.Errorf("evaluateContainerCondition() = %v, want %v", got, tt.want)
@@ -630,7 +630,7 @@ func TestEvaluateContainerCondition(t *testing.T) {
 }
 
 func TestEvaluateFilterStack(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := NewManager()
 
 	testVM := models.VM{
@@ -838,7 +838,7 @@ func TestEvaluateFilterStack(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 			got := m.evaluateFilterStack(tt.guest, tt.stack)
 			if got != tt.want {
 				t.Errorf("evaluateFilterStack() = %v, want %v", got, tt.want)
@@ -848,7 +848,7 @@ func TestEvaluateFilterStack(t *testing.T) {
 }
 
 func TestEvaluateFilterCondition(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := NewManager()
 
 	testVM := models.VM{
@@ -938,7 +938,7 @@ func TestEvaluateFilterCondition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 			got := m.evaluateFilterCondition(tt.guest, tt.condition)
 			if got != tt.want {
 				t.Errorf("evaluateFilterCondition() = %v, want %v", got, tt.want)
@@ -949,7 +949,7 @@ func TestEvaluateFilterCondition(t *testing.T) {
 
 // TestMetricOperators tests all metric operators thoroughly
 func TestMetricOperators(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := NewManager()
 
 	testVM := models.VM{
@@ -995,7 +995,7 @@ func TestMetricOperators(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 			condition := FilterCondition{
 				Type:     "metric",
 				Field:    tt.field,
@@ -1013,7 +1013,7 @@ func TestMetricOperators(t *testing.T) {
 
 // TestEdgeCases tests various edge cases
 func TestEdgeCases(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := NewManager()
 
 	tests := []struct {
@@ -1089,7 +1089,7 @@ func TestEdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 			got := m.evaluateVMCondition(tt.vm, tt.condition)
 			if got != tt.want {
 				t.Errorf("evaluateVMCondition() = %v, want %v", got, tt.want)
@@ -1687,7 +1687,7 @@ func TestGetGuestThresholds(t *testing.T) {
 }
 
 func TestExtractGuestMetrics_Default(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	_, ok := extractGuestMetrics("invalid-type")
 	if ok {
 		t.Error("extractGuestMetrics should return false for invalid type")
@@ -1695,7 +1695,7 @@ func TestExtractGuestMetrics_Default(t *testing.T) {
 }
 
 func TestGetGuestThresholds_AllFields(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := NewManager()
 
 	// Define a custom rule that sets all fields
@@ -1767,7 +1767,7 @@ func TestGetGuestThresholds_AllFields(t *testing.T) {
 }
 
 func TestGetGuestThresholds_LegacyFields(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := NewManager()
 
 	legacyValue := 95.0
@@ -1824,7 +1824,7 @@ func TestGetGuestThresholds_LegacyFields(t *testing.T) {
 }
 
 func TestGetGuestThresholds_Override(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := NewManager()
 
 	trigger := 88.0
@@ -1864,7 +1864,7 @@ func TestGetGuestThresholds_Override(t *testing.T) {
 }
 
 func TestGetGuestThresholds_OverrideLegacy(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := NewManager()
 
 	legacyValue := 77.0
@@ -1890,7 +1890,7 @@ func TestGetGuestThresholds_OverrideLegacy(t *testing.T) {
 }
 
 func TestGetGuestThresholds_InvalidGuest(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	m := NewManager()
 
 	// Should return defaults (and hit default case in tryLegacyOverrideMigration)

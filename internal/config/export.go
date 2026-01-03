@@ -95,7 +95,7 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 	if dataPath == "" {
 		dataPath = "/etc/pulse"
 	}
-	guestMetadataStore := NewGuestMetadataStore(dataPath)
+	guestMetadataStore := NewGuestMetadataStore(dataPath, c.fs)
 	guestMetadata := guestMetadataStore.GetAll()
 
 	// Create export data
@@ -228,7 +228,7 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 
 	if exportData.OIDC == nil {
 		// Remove existing OIDC config if backup did not include one
-		if err := os.Remove(c.oidcFile); err != nil && !os.IsNotExist(err) {
+		if err := c.fs.Remove(c.oidcFile); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("failed to remove existing oidc configuration: %w", err)
 		}
 	}
@@ -239,7 +239,7 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 	if dataPath == "" {
 		dataPath = "/etc/pulse"
 	}
-	guestMetadataStore := NewGuestMetadataStore(dataPath)
+	guestMetadataStore := NewGuestMetadataStore(dataPath, c.fs)
 	if err := guestMetadataStore.ReplaceAll(exportData.GuestMetadata); err != nil {
 		log.Warn().Err(err).Msg("Failed to import guest metadata")
 	}

@@ -782,7 +782,7 @@ func TestLoadConfig(t *testing.T) {
 func TestInitDockerWithRetry_Cancel(t *testing.T) {
 	orig := newDockerAgent
 	defer func() { newDockerAgent = orig }()
-	newDockerAgent = func(cfg dockeragent.Config) (*dockeragent.Agent, error) {
+	newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
 		return nil, errors.New("not available")
 	}
 
@@ -804,7 +804,7 @@ func TestInitDockerWithRetry_Success(t *testing.T) {
 
 	// First call fails, second succeeds
 	calls := 0
-	newDockerAgent = func(cfg dockeragent.Config) (*dockeragent.Agent, error) {
+	newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
 		calls++
 		if calls == 1 {
 			return nil, errors.New("not yet")
@@ -818,7 +818,7 @@ func TestInitDockerWithRetry_Success(t *testing.T) {
 
 	t.Run("success on first try", func(t *testing.T) {
 		calls = 1 // will succeed on next call (which is first in this run)
-		newDockerAgent = func(cfg dockeragent.Config) (*dockeragent.Agent, error) {
+		newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
 			return &dockeragent.Agent{}, nil
 		}
 		ctx := context.Background()
@@ -833,7 +833,7 @@ func TestInitDockerWithRetry_Success(t *testing.T) {
 func TestInitKubernetesWithRetry_Cancel(t *testing.T) {
 	orig := newKubeAgent
 	defer func() { newKubeAgent = orig }()
-	newKubeAgent = func(cfg kubernetesagent.Config) (*kubernetesagent.Agent, error) {
+	newKubeAgent = func(cfg kubernetesagent.Config) (Runnable, error) {
 		return nil, errors.New("not available")
 	}
 
@@ -854,7 +854,7 @@ func TestInitKubernetesWithRetry_Success(t *testing.T) {
 	defer func() { newKubeAgent = orig }()
 
 	t.Run("success on first try", func(t *testing.T) {
-		newKubeAgent = func(cfg kubernetesagent.Config) (*kubernetesagent.Agent, error) {
+		newKubeAgent = func(cfg kubernetesagent.Config) (Runnable, error) {
 			return &kubernetesagent.Agent{}, nil
 		}
 		ctx := context.Background()
@@ -875,10 +875,10 @@ func TestRun(t *testing.T) {
 		newKubeAgent = origKube
 	}()
 
-	newDockerAgent = func(cfg dockeragent.Config) (*dockeragent.Agent, error) {
+	newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
 		return &dockeragent.Agent{}, nil
 	}
-	newKubeAgent = func(cfg kubernetesagent.Config) (*kubernetesagent.Agent, error) {
+	newKubeAgent = func(cfg kubernetesagent.Config) (Runnable, error) {
 		return &kubernetesagent.Agent{}, nil
 	}
 
@@ -917,14 +917,14 @@ func TestRun(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		newDockerAgent = func(cfg dockeragent.Config) (*dockeragent.Agent, error) {
+		newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
 			return nil, errors.New("disabled for test")
 		}
-		newKubeAgent = func(cfg kubernetesagent.Config) (*kubernetesagent.Agent, error) {
+		newKubeAgent = func(cfg kubernetesagent.Config) (Runnable, error) {
 			return nil, errors.New("disabled for test")
 		}
 		// hostagent.New will still fail because of token scope or some other thing if not careful
-		newHostAgent = func(cfg hostagent.Config) (*hostagent.Agent, error) {
+		newHostAgent = func(cfg hostagent.Config) (Runnable, error) {
 			return nil, errors.New("disabled for test")
 		}
 
@@ -974,7 +974,7 @@ func TestRun(t *testing.T) {
 		origHost := newHostAgent
 		defer func() { newHostAgent = origHost }()
 
-		newHostAgent = func(cfg hostagent.Config) (*hostagent.Agent, error) {
+		newHostAgent = func(cfg hostagent.Config) (Runnable, error) {
 			// We need a non-nil agent that returns an error from Run
 			// This is hard without a real mock, but we can try to return an agent and have it fail.
 			// Actually, if we return a "real" agent with a bad URL, it might fail.
@@ -998,6 +998,10 @@ func (m *mockCloser) Close() error {
 	return m.err
 }
 
+func (m *mockCloser) Run(ctx context.Context) error {
+	return nil
+}
+
 func TestCleanupDockerAgent_Error(t *testing.T) {
 	logger := zerolog.New(os.Stdout)
 	mock := &mockCloser{err: errors.New("close error")}
@@ -1010,7 +1014,7 @@ func TestInitDockerWithRetry_Failure(t *testing.T) {
 	defer func() { newDockerAgent = orig }()
 
 	// Always fail
-	newDockerAgent = func(cfg dockeragent.Config) (*dockeragent.Agent, error) {
+	newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
 		return nil, errors.New("fail")
 	}
 
@@ -1043,7 +1047,7 @@ func TestInitKubernetesWithRetry_Failure(t *testing.T) {
 	defer func() { newKubeAgent = orig }()
 
 	// Always fail
-	newKubeAgent = func(cfg kubernetesagent.Config) (*kubernetesagent.Agent, error) {
+	newKubeAgent = func(cfg kubernetesagent.Config) (Runnable, error) {
 		return nil, errors.New("fail")
 	}
 

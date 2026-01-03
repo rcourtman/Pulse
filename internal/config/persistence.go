@@ -2,6 +2,7 @@ package config
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -37,6 +38,32 @@ type ConfigPersistence struct {
 	aiPatrolRunsFile         string
 	aiUsageHistoryFile       string
 	crypto                   *crypto.CryptoManager
+	fs                       FileSystem
+}
+
+// FileSystem interface for mocking file operations
+type FileSystem interface {
+	ReadFile(name string) ([]byte, error)
+	WriteFile(name string, data []byte, perm os.FileMode) error
+	Rename(oldpath, newpath string) error
+	Remove(name string) error
+	Stat(name string) (os.FileInfo, error)
+	MkdirAll(path string, perm os.FileMode) error
+}
+
+type defaultFileSystem struct{}
+
+func (dfs defaultFileSystem) ReadFile(name string) ([]byte, error) { return os.ReadFile(name) }
+func (dfs defaultFileSystem) WriteFile(name string, data []byte, perm os.FileMode) error {
+	return os.WriteFile(name, data, perm)
+}
+func (dfs defaultFileSystem) Rename(oldpath, newpath string) error {
+	return os.Rename(oldpath, newpath)
+}
+func (dfs defaultFileSystem) Remove(name string) error              { return os.Remove(name) }
+func (dfs defaultFileSystem) Stat(name string) (os.FileInfo, error) { return os.Stat(name) }
+func (dfs defaultFileSystem) MkdirAll(path string, perm os.FileMode) error {
+	return os.MkdirAll(path, perm)
 }
 
 // NewConfigPersistence creates a new config persistence manager.
@@ -84,6 +111,7 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		aiPatrolRunsFile:         filepath.Join(configDir, "ai_patrol_runs.json"),
 		aiUsageHistoryFile:       filepath.Join(configDir, "ai_usage_history.json"),
 		crypto:                   cryptoMgr,
+		fs:                       defaultFileSystem{},
 	}
 
 	log.Debug().
@@ -103,7 +131,7 @@ func (c *ConfigPersistence) DataDir() string {
 
 // EnsureConfigDir ensures the configuration directory exists
 func (c *ConfigPersistence) EnsureConfigDir() error {
-	return os.MkdirAll(c.configDir, 0700)
+	return c.fs.MkdirAll(c.configDir, 0700)
 }
 
 func (c *ConfigPersistence) beginTransaction(tx *importTransaction) {
@@ -132,11 +160,11 @@ func (c *ConfigPersistence) writeConfigFileLocked(path string, data []byte, perm
 	}
 
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, perm); err != nil {
+	if err := c.fs.WriteFile(tmp, data, perm); err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
+	if err := c.fs.Rename(tmp, path); err != nil {
+		_ = c.fs.Remove(tmp)
 		return err
 	}
 	return nil
@@ -147,7 +175,7 @@ func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	data, err := os.ReadFile(c.apiTokensFile)
+	data, err := c.fs.ReadFile(c.apiTokensFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []APITokenRecord{}, nil
@@ -176,7 +204,7 @@ func (c *ConfigPersistence) LoadEnvTokenSuppressions() ([]string, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	data, err := os.ReadFile(c.envTokenSuppressionsFile)
+	data, err := c.fs.ReadFile(c.envTokenSuppressionsFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []string{}, nil
@@ -223,8 +251,8 @@ func (c *ConfigPersistence) SaveAPITokens(tokens []APITokenRecord) error {
 	}
 
 	// Backup previous state (best effort).
-	if existing, err := os.ReadFile(c.apiTokensFile); err == nil && len(existing) > 0 {
-		if err := os.WriteFile(c.apiTokensFile+".backup", existing, 0600); err != nil {
+	if existing, err := c.fs.ReadFile(c.apiTokensFile); err == nil && len(existing) > 0 {
+		if err := c.fs.WriteFile(c.apiTokensFile+".backup", existing, 0600); err != nil {
 			log.Warn().Err(err).Msg("Failed to create API token backup file")
 		}
 	}
@@ -398,7 +426,7 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	data, err := os.ReadFile(c.alertFile)
+	data, err := c.fs.ReadFile(c.alertFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Return default config if file doesn't exist
@@ -652,7 +680,7 @@ func (c *ConfigPersistence) LoadEmailConfig() (*notifications.EmailConfig, error
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	data, err := os.ReadFile(c.emailFile)
+	data, err := c.fs.ReadFile(c.emailFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Return empty config if encrypted file doesn't exist
@@ -727,7 +755,7 @@ func (c *ConfigPersistence) LoadAppriseConfig() (*notifications.AppriseConfig, e
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	data, err := os.ReadFile(c.appriseFile)
+	data, err := c.fs.ReadFile(c.appriseFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			defaultCfg := notifications.AppriseConfig{
@@ -805,12 +833,12 @@ func (c *ConfigPersistence) LoadWebhooks() ([]notifications.WebhookConfig, error
 	defer c.mu.RUnlock()
 
 	// First try to load from encrypted file
-	data, err := os.ReadFile(c.webhookFile)
+	data, err := c.fs.ReadFile(c.webhookFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Check for legacy unencrypted file
 			legacyFile := filepath.Join(c.configDir, "webhooks.json")
-			legacyData, legacyErr := os.ReadFile(legacyFile)
+			legacyData, legacyErr := c.fs.ReadFile(legacyFile)
 			if legacyErr == nil {
 				// Legacy file exists, parse it
 				var webhooks []notifications.WebhookConfig
@@ -864,14 +892,14 @@ func (c *ConfigPersistence) LoadWebhooks() ([]notifications.WebhookConfig, error
 // MigrateWebhooksIfNeeded checks for legacy webhooks.json and migrates to encrypted format
 func (c *ConfigPersistence) MigrateWebhooksIfNeeded() error {
 	// Check if encrypted file already exists
-	if _, err := os.Stat(c.webhookFile); err == nil {
+	if _, err := c.fs.Stat(c.webhookFile); err == nil {
 		// Encrypted file exists, no migration needed
 		return nil
 	}
 
 	// Check for legacy unencrypted file
 	legacyFile := filepath.Join(c.configDir, "webhooks.json")
-	legacyData, err := os.ReadFile(legacyFile)
+	legacyData, err := c.fs.ReadFile(legacyFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// No legacy file, nothing to migrate
@@ -899,7 +927,7 @@ func (c *ConfigPersistence) MigrateWebhooksIfNeeded() error {
 
 	// Create backup of original file
 	backupFile := legacyFile + ".backup"
-	if err := os.Rename(legacyFile, backupFile); err != nil {
+	if err := c.fs.Rename(legacyFile, backupFile); err != nil {
 		log.Warn().Err(err).Msg("Failed to rename legacy webhooks file to backup")
 	} else {
 		log.Info().Str("backup", backupFile).Msg("Legacy webhooks file backed up")
@@ -1008,8 +1036,8 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 	if !allowEmpty && len(pveInstances) == 0 && len(pbsInstances) == 0 && len(pmgInstances) == 0 {
 		// If we're replacing an existing non-empty config, block the wipe.
 		// We must not call LoadNodesConfig here because it acquires c.mu again.
-		if _, err := os.Stat(c.nodesFile); err == nil {
-			data, err := os.ReadFile(c.nodesFile)
+		if _, err := c.fs.Stat(c.nodesFile); err == nil {
+			data, err := c.fs.ReadFile(c.nodesFile)
 			if err != nil {
 				return fmt.Errorf("refusing to save empty nodes config: failed to read existing nodes config: %w", err)
 			}
@@ -1055,11 +1083,11 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 
 	// Create TIMESTAMPED backup of existing file before overwriting (if it exists and has content)
 	// This ensures we keep multiple backups and can recover from disasters
-	if info, err := os.Stat(c.nodesFile); err == nil && info.Size() > 0 {
+	if info, err := c.fs.Stat(c.nodesFile); err == nil && info.Size() > 0 {
 		// Create timestamped backup
 		timestampedBackup := fmt.Sprintf("%s.backup-%s", c.nodesFile, time.Now().Format("20060102-150405"))
-		if backupData, err := os.ReadFile(c.nodesFile); err == nil {
-			if err := os.WriteFile(timestampedBackup, backupData, 0600); err != nil {
+		if backupData, err := c.fs.ReadFile(c.nodesFile); err == nil {
+			if err := c.fs.WriteFile(timestampedBackup, backupData, 0600); err != nil {
 				log.Warn().Err(err).Msg("Failed to create timestamped backup of nodes config")
 			} else {
 				log.Info().Str("backup", timestampedBackup).Msg("Created timestamped backup of nodes config")
@@ -1068,8 +1096,8 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 
 		// Also maintain a "latest" backup for quick recovery
 		latestBackup := c.nodesFile + ".backup"
-		if backupData, err := os.ReadFile(c.nodesFile); err == nil {
-			if err := os.WriteFile(latestBackup, backupData, 0600); err != nil {
+		if backupData, err := c.fs.ReadFile(c.nodesFile); err == nil {
+			if err := c.fs.WriteFile(latestBackup, backupData, 0600); err != nil {
 				log.Warn().Err(err).Msg("Failed to create latest backup of nodes config")
 			}
 		}
@@ -1110,7 +1138,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 		}
 	}()
 
-	data, err := os.ReadFile(c.nodesFile)
+	data, err := c.fs.ReadFile(c.nodesFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Return empty config if encrypted file doesn't exist
@@ -1133,7 +1161,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 
 			// Try to restore from backup
 			backupFile := c.nodesFile + ".backup"
-			if backupData, backupErr := os.ReadFile(backupFile); backupErr == nil {
+			if backupData, backupErr := c.fs.ReadFile(backupFile); backupErr == nil {
 				log.Info().Str("backup", backupFile).Msg("Attempting to restore nodes config from backup")
 				if decryptedBackup, decryptErr := c.crypto.Decrypt(backupData); decryptErr == nil {
 					log.Info().Msg("Successfully decrypted backup file")
@@ -1141,14 +1169,14 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 
 					// Move corrupted file out of the way with timestamp
 					corruptedFile := fmt.Sprintf("%s.corrupted-%s", c.nodesFile, time.Now().Format("20060102-150405"))
-					if renameErr := os.Rename(c.nodesFile, corruptedFile); renameErr != nil {
+					if renameErr := c.fs.Rename(c.nodesFile, corruptedFile); renameErr != nil {
 						log.Warn().Err(renameErr).Msg("Failed to rename corrupted file")
 					} else {
 						log.Warn().Str("corruptedFile", corruptedFile).Msg("Moved corrupted nodes config")
 					}
 
 					// Restore backup as current file
-					if writeErr := os.WriteFile(c.nodesFile, backupData, 0600); writeErr != nil {
+					if writeErr := c.fs.WriteFile(c.nodesFile, backupData, 0600); writeErr != nil {
 						log.Error().Err(writeErr).Msg("Failed to restore backup as current file")
 					} else {
 						log.Info().Msg("Successfully restored nodes config from backup")
@@ -1165,7 +1193,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 
 					// Move corrupted file with timestamp for forensics
 					corruptedFile := fmt.Sprintf("%s.corrupted-%s", c.nodesFile, time.Now().Format("20060102-150405"))
-					os.Rename(c.nodesFile, corruptedFile)
+					c.fs.Rename(c.nodesFile, corruptedFile)
 
 					// Create empty but valid config so system can start
 					emptyConfig := NodesConfig{PVEInstances: []PVEInstance{}, PBSInstances: []PBSInstance{}, PMGInstances: []PMGInstance{}}
@@ -1173,7 +1201,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 					if c.crypto != nil {
 						emptyData, _ = c.crypto.Encrypt(emptyData)
 					}
-					os.WriteFile(c.nodesFile, emptyData, 0600)
+					c.fs.WriteFile(c.nodesFile, emptyData, 0600)
 
 					return &emptyConfig, nil
 				}
@@ -1187,7 +1215,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 
 				// Move corrupted file with timestamp for forensics
 				corruptedFile := fmt.Sprintf("%s.corrupted-%s", c.nodesFile, time.Now().Format("20060102-150405"))
-				os.Rename(c.nodesFile, corruptedFile)
+				c.fs.Rename(c.nodesFile, corruptedFile)
 
 				// Create empty but valid config so system can start
 				emptyConfig := NodesConfig{PVEInstances: []PVEInstance{}, PBSInstances: []PBSInstance{}, PMGInstances: []PMGInstance{}}
@@ -1195,7 +1223,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 				if c.crypto != nil {
 					emptyData, _ = c.crypto.Encrypt(emptyData)
 				}
-				os.WriteFile(c.nodesFile, emptyData, 0600)
+				c.fs.WriteFile(c.nodesFile, emptyData, 0600)
 
 				return &emptyConfig, nil
 			}
@@ -1413,7 +1441,7 @@ func (c *ConfigPersistence) LoadOIDCConfig() (*OIDCConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	data, err := os.ReadFile(c.oidcFile)
+	data, err := c.fs.ReadFile(c.oidcFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -1473,7 +1501,7 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	data, err := os.ReadFile(c.aiFile)
+	data, err := c.fs.ReadFile(c.aiFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Return default config if file doesn't exist
@@ -1576,12 +1604,19 @@ func (c *ConfigPersistence) SaveAIFindings(findings map[string]*AIFindingRecord)
 	return nil
 }
 
+// SetFileSystem allows injecting a mock file system for testing
+func (c *ConfigPersistence) SetFileSystem(fs FileSystem) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.fs = fs
+}
+
 // LoadAIFindings loads AI findings from disk
 func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	data, err := os.ReadFile(c.aiFindingsFile)
+	data, err := c.fs.ReadFile(c.aiFindingsFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Return empty data if file doesn't exist
@@ -1711,7 +1746,7 @@ func (c *ConfigPersistence) LoadAIUsageHistory() (*AIUsageHistoryData, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	data, err := os.ReadFile(c.aiUsageHistoryFile)
+	data, err := c.fs.ReadFile(c.aiUsageHistoryFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &AIUsageHistoryData{
@@ -1779,7 +1814,7 @@ func (c *ConfigPersistence) LoadPatrolRunHistory() (*PatrolRunHistoryData, error
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	data, err := os.ReadFile(c.aiPatrolRunsFile)
+	data, err := c.fs.ReadFile(c.aiPatrolRunsFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Return empty data if file doesn't exist
@@ -1818,7 +1853,7 @@ func (c *ConfigPersistence) LoadSystemSettings() (*SystemSettings, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	data, err := os.ReadFile(c.systemFile)
+	data, err := c.fs.ReadFile(c.systemFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Return nil if file doesn't exist - let env vars take precedence
@@ -1842,26 +1877,19 @@ func (c *ConfigPersistence) LoadSystemSettings() (*SystemSettings, error) {
 // updateEnvFile updates the .env file with new system settings
 func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSettings) error {
 	// Check if .env file exists
-	if _, err := os.Stat(envFile); os.IsNotExist(err) {
+	if _, err := c.fs.Stat(envFile); os.IsNotExist(err) {
 		// File doesn't exist, nothing to update
 		return nil
 	}
 
 	// Read the existing .env file content
-	existingContent, err := os.ReadFile(envFile)
+	existingContent, err := c.fs.ReadFile(envFile)
 	if err != nil {
 		return err
 	}
-
-	// Read the existing .env file
-	file, err := os.Open(envFile)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
 
 	var lines []string
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(bytes.NewReader(existingContent))
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -1903,12 +1931,12 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 
 	// Write to temp file first
 	tempFile := envFile + ".tmp"
-	if err := os.WriteFile(tempFile, []byte(content), 0644); err != nil {
+	if err := c.fs.WriteFile(tempFile, []byte(content), 0644); err != nil {
 		return err
 	}
 
 	// Atomic rename
-	return os.Rename(tempFile, envFile)
+	return c.fs.Rename(tempFile, envFile)
 }
 
 // IsEncryptionEnabled returns whether the config persistence has encryption enabled
@@ -1940,7 +1968,7 @@ func (c *ConfigPersistence) cleanupOldBackups(pattern string) {
 	}
 	var files []fileInfo
 	for _, match := range matches {
-		info, err := os.Stat(match)
+		info, err := c.fs.Stat(match)
 		if err != nil {
 			continue
 		}
@@ -1955,7 +1983,7 @@ func (c *ConfigPersistence) cleanupOldBackups(pattern string) {
 	// Delete oldest backups (keep last 10)
 	toDelete := len(files) - maxBackups
 	for i := 0; i < toDelete; i++ {
-		if err := os.Remove(files[i].path); err != nil {
+		if err := c.fs.Remove(files[i].path); err != nil {
 			log.Warn().Err(err).Str("file", files[i].path).Msg("Failed to delete old backup")
 		} else {
 			log.Debug().Str("file", files[i].path).Msg("Deleted old backup")
@@ -1963,59 +1991,18 @@ func (c *ConfigPersistence) cleanupOldBackups(pattern string) {
 	}
 }
 
-// LoadGuestMetadata loads all guest metadata from disk (for AI context)
-func (c *ConfigPersistence) LoadGuestMetadata() (map[string]*GuestMetadata, error) {
+// LoadGuestMetadata loads guest metadata from disk
+func (c *ConfigPersistence) LoadGuestMetadata() (*GuestMetadataStore, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	filePath := filepath.Join(c.configDir, "guest_metadata.json")
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return make(map[string]*GuestMetadata), nil
-		}
-		return nil, err
-	}
-
-	var metadata map[string]*GuestMetadata
-	if err := json.Unmarshal(data, &metadata); err != nil {
-		return nil, err
-	}
-
-	return metadata, nil
+	return NewGuestMetadataStore(c.configDir, c.fs), nil
 }
 
-// LoadDockerMetadata loads all docker metadata from disk (for AI context)
-func (c *ConfigPersistence) LoadDockerMetadata() (map[string]*DockerMetadata, error) {
+// LoadDockerMetadata loads docker metadata from disk
+func (c *ConfigPersistence) LoadDockerMetadata() (*DockerMetadataStore, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	filePath := filepath.Join(c.configDir, "docker_metadata.json")
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return make(map[string]*DockerMetadata), nil
-		}
-		return nil, err
-	}
-
-	// Try versioned format first
-	var fileData struct {
-		Containers map[string]*DockerMetadata `json:"containers,omitempty"`
-	}
-	if err := json.Unmarshal(data, &fileData); err != nil {
-		return nil, err
-	}
-
-	if fileData.Containers != nil {
-		return fileData.Containers, nil
-	}
-
-	// Fall back to legacy format (direct map)
-	var metadata map[string]*DockerMetadata
-	if err := json.Unmarshal(data, &metadata); err != nil {
-		return nil, err
-	}
-
-	return metadata, nil
+	return NewDockerMetadataStore(c.configDir, c.fs), nil
 }

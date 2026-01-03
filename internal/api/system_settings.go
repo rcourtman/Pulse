@@ -430,6 +430,10 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 
 	// Require authentication
 	if !CheckAuth(h.config, w, r) {
+		// CheckAuth handles explicit failures (rate limits, invalid tokens)
+		// but returns false silently for missing credentials.
+		// We ensure a 401 is returned nicely even if we risk a double-write warning in rare cases.
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 

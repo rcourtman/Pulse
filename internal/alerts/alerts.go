@@ -8566,6 +8566,7 @@ func (m *Manager) checkEscalations() {
 // Stop stops the alert manager and saves history
 func (m *Manager) Stop() {
 	close(m.escalationStop)
+	close(m.cleanupStop)
 	m.historyManager.Stop()
 
 	// Give background goroutines time to exit cleanly
@@ -8600,14 +8601,26 @@ func (m *Manager) SaveActiveAlerts() error {
 	}
 
 	// Write to temporary file first, then rename (atomic operation)
-	tmpFile := filepath.Join(alertsDir, "active-alerts.json.tmp")
-	finalFile := filepath.Join(alertsDir, "active-alerts.json")
+	// Use a unique temp file to avoid race conditions between concurrent saves (e.g., periodic vs shutdown)
+	tmpFile, err := os.CreateTemp(alertsDir, "active-alerts-*.json.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpName := tmpFile.Name()
 
-	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
+	// Ensure cleanup of temp file in case of failure
+	defer os.Remove(tmpName)
+
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
 		return fmt.Errorf("failed to write active alerts: %w", err)
 	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
 
-	if err := os.Rename(tmpFile, finalFile); err != nil {
+	finalFile := filepath.Join(alertsDir, "active-alerts.json")
+	if err := os.Rename(tmpName, finalFile); err != nil {
 		return fmt.Errorf("failed to rename active alerts file: %w", err)
 	}
 

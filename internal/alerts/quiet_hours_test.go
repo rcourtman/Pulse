@@ -74,10 +74,10 @@ func TestShouldSuppressNotificationQuietHours(t *testing.T) {
 }
 
 func TestIsInQuietHours(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	t.Run("disabled returns false", func(t *testing.T) {
-		t.Parallel()
+		// t.Parallel()
 		m := NewManager()
 		m.mu.Lock()
 		m.config.Schedule.QuietHours.Enabled = false
@@ -93,7 +93,7 @@ func TestIsInQuietHours(t *testing.T) {
 	})
 
 	t.Run("invalid timezone falls back to local", func(t *testing.T) {
-		t.Parallel()
+		// t.Parallel()
 		m := NewManager()
 		m.mu.Lock()
 		m.config.Schedule.QuietHours = QuietHours{
@@ -120,7 +120,7 @@ func TestIsInQuietHours(t *testing.T) {
 	})
 
 	t.Run("day not enabled returns false", func(t *testing.T) {
-		t.Parallel()
+		// t.Parallel()
 		m := NewManager()
 		now := time.Now()
 		currentDay := now.Format("Monday")
@@ -145,7 +145,7 @@ func TestIsInQuietHours(t *testing.T) {
 	})
 
 	t.Run("invalid start time returns false", func(t *testing.T) {
-		t.Parallel()
+		// t.Parallel()
 		m := NewManager()
 
 		m.mu.Lock()
@@ -171,7 +171,7 @@ func TestIsInQuietHours(t *testing.T) {
 	})
 
 	t.Run("invalid end time returns false", func(t *testing.T) {
-		t.Parallel()
+		// t.Parallel()
 		m := NewManager()
 
 		m.mu.Lock()
@@ -197,7 +197,7 @@ func TestIsInQuietHours(t *testing.T) {
 	})
 
 	t.Run("overnight quiet hours spanning midnight", func(t *testing.T) {
-		t.Parallel()
+		// t.Parallel()
 		m := NewManager()
 
 		// Set up overnight quiet hours (22:00 to 06:00)
@@ -222,7 +222,7 @@ func TestIsInQuietHours(t *testing.T) {
 	})
 
 	t.Run("normal daytime quiet hours", func(t *testing.T) {
-		t.Parallel()
+		// t.Parallel()
 		m := NewManager()
 
 		// Set up daytime quiet hours (09:00 to 17:00)
@@ -246,7 +246,7 @@ func TestIsInQuietHours(t *testing.T) {
 	})
 
 	t.Run("outside quiet hours window", func(t *testing.T) {
-		t.Parallel()
+		// t.Parallel()
 		m := NewManager()
 
 		// Use a time window that's definitely not now (narrow window in far past/future time)

@@ -18,7 +18,7 @@ type GuestMetadataHandler struct {
 // NewGuestMetadataHandler creates a new guest metadata handler
 func NewGuestMetadataHandler(dataPath string) *GuestMetadataHandler {
 	return &GuestMetadataHandler{
-		store: config.NewGuestMetadataStore(dataPath),
+		store: config.NewGuestMetadataStore(dataPath, nil),
 	}
 }
 

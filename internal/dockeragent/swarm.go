@@ -194,7 +194,8 @@ func (a *Agent) collectSwarmDataFromManager(ctx context.Context, info systemtype
 		if scope == swarmScopeNode && includeServices && len(services) > 0 {
 			used := make(map[string]struct{}, len(tasks))
 			for _, task := range tasks {
-				if task.ServiceID != "" {
+				// Only count running tasks - ignore shutdown/historical tasks
+				if task.ServiceID != "" && strings.ToLower(task.DesiredState) == "running" {
 					used[task.ServiceID] = struct{}{}
 				}
 			}

@@ -11,10 +11,7 @@ import (
 
 func TestGuestMetadataStore_Get(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Test get on empty store
 	result := store.Get("nonexistent")
@@ -56,10 +53,7 @@ func TestGuestMetadataStore_Get(t *testing.T) {
 
 func TestGuestMetadataStore_GetAll(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Test empty store
 	all := store.GetAll()
@@ -86,10 +80,7 @@ func TestGuestMetadataStore_GetAll(t *testing.T) {
 
 func TestGuestMetadataStore_Set(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Test set nil
 	err := store.Set("id1", nil)
@@ -145,10 +136,7 @@ func TestGuestMetadataStore_Set(t *testing.T) {
 
 func TestGuestMetadataStore_Set_UpdateExisting(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Set initial
 	err := store.Set("id1", &GuestMetadata{CustomURL: "url1", Description: "desc1"})
@@ -174,10 +162,7 @@ func TestGuestMetadataStore_Set_UpdateExisting(t *testing.T) {
 
 func TestGuestMetadataStore_Delete(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Add metadata
 	store.metadata["id1"] = &GuestMetadata{ID: "id1", CustomURL: "url1"}
@@ -202,10 +187,7 @@ func TestGuestMetadataStore_Delete(t *testing.T) {
 
 func TestGuestMetadataStore_ReplaceAll(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Add initial data
 	store.metadata["old1"] = &GuestMetadata{ID: "old1"}
@@ -244,10 +226,7 @@ func TestGuestMetadataStore_ReplaceAll(t *testing.T) {
 
 func TestGuestMetadataStore_ReplaceAll_NilEntry(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Replace with map containing nil entry
 	newData := map[string]*GuestMetadata{
@@ -297,10 +276,7 @@ func TestGuestMetadataStore_Load(t *testing.T) {
 	}
 
 	// Load
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 	err := store.Load()
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
@@ -326,10 +302,7 @@ func TestGuestMetadataStore_Load(t *testing.T) {
 func TestGuestMetadataStore_Load_NonExistent(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Load from nonexistent file should not error
 	err := store.Load()
@@ -347,10 +320,7 @@ func TestGuestMetadataStore_Load_InvalidJSON(t *testing.T) {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	err := store.Load()
 	if err == nil {
@@ -362,10 +332,7 @@ func TestGuestMetadataStore_Save_CreatesDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 	subDir := filepath.Join(tmpDir, "nested", "dir")
 
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: subDir,
-	}
+	store := NewGuestMetadataStore(subDir, nil)
 
 	// Set should create directory and save
 	err := store.Set("id1", &GuestMetadata{CustomURL: "url1"})
@@ -383,10 +350,7 @@ func TestGuestMetadataStore_Save_CreatesDirectory(t *testing.T) {
 func TestGuestMetadataStore_Save_AtomicWrite(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Set some data
 	err := store.Set("id1", &GuestMetadata{CustomURL: "url1"})
@@ -405,10 +369,7 @@ func TestGuestMetadataStore_RoundTrip(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create store and add data
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	err := store.Set("pve1:node1:100", &GuestMetadata{
 		CustomURL:     "http://vm.local",
@@ -422,10 +383,7 @@ func TestGuestMetadataStore_RoundTrip(t *testing.T) {
 	}
 
 	// Create new store and load
-	store2 := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store2 := NewGuestMetadataStore(tmpDir, nil)
 	err = store2.Load()
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
@@ -485,10 +443,7 @@ func TestGuestMetadata_Fields(t *testing.T) {
 
 func TestGuestMetadataStore_ConcurrentAccess(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Pre-populate
 	store.metadata["id1"] = &GuestMetadata{ID: "id1", CustomURL: "url1"}
@@ -510,10 +465,7 @@ func TestGuestMetadataStore_ConcurrentAccess(t *testing.T) {
 
 func TestGuestMetadataStore_GetWithLegacyMigration_ExistingNewFormat(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Add metadata with new format ID
 	store.metadata["pve1:node1:100"] = &GuestMetadata{
@@ -533,10 +485,7 @@ func TestGuestMetadataStore_GetWithLegacyMigration_ExistingNewFormat(t *testing.
 
 func TestGuestMetadataStore_GetWithLegacyMigration_ClusteredLegacy(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Add metadata with legacy clustered format: instance-node-VMID
 	store.metadata["pve1-node1-100"] = &GuestMetadata{
@@ -574,10 +523,7 @@ func TestGuestMetadataStore_GetWithLegacyMigration_ClusteredLegacy(t *testing.T)
 
 func TestGuestMetadataStore_GetWithLegacyMigration_StandaloneLegacy(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Add metadata with legacy standalone format: node-VMID
 	store.metadata["node1-100"] = &GuestMetadata{
@@ -610,10 +556,7 @@ func TestGuestMetadataStore_GetWithLegacyMigration_StandaloneLegacy(t *testing.T
 
 func TestGuestMetadataStore_GetWithLegacyMigration_NotFound(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Get non-existent should return nil
 	result := store.GetWithLegacyMigration("pve1:node1:100", "pve1", "node1", 100)
@@ -624,10 +567,7 @@ func TestGuestMetadataStore_GetWithLegacyMigration_NotFound(t *testing.T) {
 
 func TestGuestMetadataStore_GetWithLegacyMigration_ClusteredMatchesNodeFormat(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Add node-vmid format (legacy standalone format)
 	store.metadata["node1-100"] = &GuestMetadata{
@@ -654,10 +594,7 @@ func TestGuestMetadataStore_GetWithLegacyMigration_ClusteredMatchesNodeFormat(t 
 
 func TestGuestMetadataStore_GetWithLegacyMigration_ConcurrentMigration(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: tmpDir,
-	}
+	store := NewGuestMetadataStore(tmpDir, nil)
 
 	// Add legacy metadata
 	store.metadata["pve1-node1-100"] = &GuestMetadata{

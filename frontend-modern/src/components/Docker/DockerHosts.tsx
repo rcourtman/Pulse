@@ -5,11 +5,14 @@ import { useNavigate } from '@solidjs/router';
 import type { DockerHost } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { DockerFilter } from './DockerFilter';
+import { DockerFilter, type DockerViewMode } from './DockerFilter';
 import { DockerHostSummaryTable, type DockerHostSummary } from './DockerHostSummaryTable';
 import { DockerUnifiedTable } from './DockerUnifiedTable';
+import { DockerClusterServicesTable } from './DockerClusterServicesTable';
+import { hasSwarmClusters } from './swarmClusterHelpers';
 import { useWebSocket } from '@/App';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { formatBytes, formatRelativeTime } from '@/utils/format';
 import { DockerMetadataAPI, type DockerMetadata } from '@/api/dockerMetadata';
 import { DockerHostMetadataAPI, type DockerHostMetadata } from '@/api/dockerHostMetadata';
@@ -86,6 +89,12 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
   const debouncedSearch = useDebouncedValue(search, 250);
   const [selectedHostId, setSelectedHostId] = createSignal<string | null>(null);
   const [statusFilter, setStatusFilter] = createSignal<'all' | 'online' | 'degraded' | 'offline'>('all');
+  const [groupingMode, setGroupingMode] = usePersistentSignal<DockerViewMode>('dockerGroupingMode', 'grouped', {
+    deserialize: (v) => (['grouped', 'flat', 'cluster'].includes(v) ? v as DockerViewMode : 'grouped'),
+  });
+
+  // Detect if any Swarm clusters exist (2+ hosts sharing a clusterId)
+  const hasSwarmClustersDetected = createMemo(() => hasSwarmClusters(sortedHosts()));
 
   const clampPercent = (value: number | undefined | null) => {
     if (value === undefined || value === null || Number.isNaN(value)) return 0;
@@ -461,10 +470,14 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
       setSearch={setSearch}
       statusFilter={statusFilter}
       setStatusFilter={setStatusFilter}
+      groupingMode={groupingMode}
+      setGroupingMode={setGroupingMode}
+      hasSwarmClusters={hasSwarmClustersDetected()}
       onReset={() => {
         setSearch('');
         setSelectedHostId(null);
         setStatusFilter('all');
+        setGroupingMode('grouped');
       }}
       searchInputRef={(el) => {
         searchInputRef = el;
@@ -594,16 +607,26 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
 
           {renderFilter()}
 
-          <DockerUnifiedTable
-            hosts={sortedHosts()}
-            searchTerm={debouncedSearch()}
-            statsFilter={statsFilter()}
-            selectedHostId={selectedHostId}
-            dockerMetadata={dockerMetadata()}
-            dockerHostMetadata={dockerHostMetadata()}
-            onCustomUrlUpdate={handleCustomUrlUpdate}
-            batchUpdateState={batchUpdateState}
-          />
+          <Show
+            when={groupingMode() === 'cluster'}
+            fallback={
+              <DockerUnifiedTable
+                hosts={sortedHosts()}
+                searchTerm={debouncedSearch()}
+                statsFilter={statsFilter()}
+                selectedHostId={selectedHostId}
+                dockerMetadata={dockerMetadata()}
+                dockerHostMetadata={dockerHostMetadata()}
+                onCustomUrlUpdate={handleCustomUrlUpdate}
+                batchUpdateState={batchUpdateState}
+              />
+            }
+          >
+            <DockerClusterServicesTable
+              hosts={sortedHosts()}
+              searchTerm={debouncedSearch()}
+            />
+          </Show>
         </Show>
       </Show>
     </div>

@@ -3266,10 +3266,11 @@ func (s *Service) buildUserAnnotationsContext() string {
 	var annotations []string
 
 	// Load guest metadata
-	guestMeta, err := s.persistence.LoadGuestMetadata()
+	guestStore, err := s.persistence.LoadGuestMetadata()
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to load guest metadata for AI context")
 	} else {
+		guestMeta := guestStore.GetAll()
 		log.Debug().Int("count", len(guestMeta)).Msg("Loaded guest metadata for AI context")
 		for id, meta := range guestMeta {
 			if meta != nil && len(meta.Notes) > 0 {
@@ -3286,10 +3287,11 @@ func (s *Service) buildUserAnnotationsContext() string {
 	}
 
 	// Load docker metadata - include host info for context
-	dockerMeta, err := s.persistence.LoadDockerMetadata()
+	dockerStore, err := s.persistence.LoadDockerMetadata()
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to load docker metadata for AI context")
 	} else {
+		dockerMeta := dockerStore.GetAll()
 		log.Debug().Int("count", len(dockerMeta)).Msg("Loaded docker metadata for AI context")
 		for id, meta := range dockerMeta {
 			if meta != nil && len(meta.Notes) > 0 {

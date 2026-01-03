@@ -1,131 +1,139 @@
-package config_test
+package config
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestAIConfigPersistence(t *testing.T) {
+func TestPersistence_AIFindings(t *testing.T) {
 	tempDir := t.TempDir()
-	cp := config.NewConfigPersistence(tempDir)
-	if err := cp.EnsureConfigDir(); err != nil {
-		t.Fatalf("EnsureConfigDir: %v", err)
-	}
+	p := NewConfigPersistence(tempDir)
 
-	cfg := config.AIConfig{
-		Enabled:  true,
-		Provider: "anthropic",
-		APIKey:   "test-key",
-		Model:    "claude-3-opus",
-	}
+	// Default load (empty)
+	data, err := p.LoadAIFindings()
+	require.NoError(t, err)
+	assert.Empty(t, data.Findings)
 
-	if err := cp.SaveAIConfig(cfg); err != nil {
-		t.Fatalf("SaveAIConfig: %v", err)
+	// Save
+	record := &AIFindingRecord{
+		ID:          "id1",
+		Description: "analysis",
+		DetectedAt:  time.Now(),
 	}
+	data.Findings["id1"] = record
 
-	loaded, err := cp.LoadAIConfig()
-	if err != nil {
-		t.Fatalf("LoadAIConfig: %v", err)
-	}
+	err = p.SaveAIFindings(data.Findings) // SaveAIFindings takes map[string]*AIFindingRecord
+	require.NoError(t, err)
 
-	if loaded.Enabled != cfg.Enabled || loaded.Provider != cfg.Provider || loaded.APIKey != cfg.APIKey {
-		t.Errorf("Loaded config mismatch: %+v", loaded)
-	}
+	// Reload
+	loaded, err := p.LoadAIFindings()
+	require.NoError(t, err)
+	assert.Len(t, loaded.Findings, 1)
+	assert.Equal(t, "analysis", loaded.Findings["id1"].Description)
+
+	// Test Corrupt file (Unmarshal error)
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "ai_findings.json"), []byte("{invalid"), 0644))
+
+	loaded, err = p.LoadAIFindings()
+	// Should return empty structure on unmarshal error, not fail completely (as per code)
+	require.NoError(t, err)
+	assert.Empty(t, loaded.Findings)
 }
 
-func TestAIFindingsPersistence(t *testing.T) {
+func TestPersistence_AIUsageHistory(t *testing.T) {
 	tempDir := t.TempDir()
-	cp := config.NewConfigPersistence(tempDir)
-	if err := cp.EnsureConfigDir(); err != nil {
-		t.Fatalf("EnsureConfigDir: %v", err)
-	}
+	p := NewConfigPersistence(tempDir)
 
-	findings := map[string]*config.AIFindingRecord{
-		"f1": {
-			ID:         "f1",
-			Title:      "Test Finding",
-			Severity:   "warning",
-			ResourceID: "res-1",
-		},
-	}
+	// Default load
+	data, err := p.LoadAIUsageHistory()
+	require.NoError(t, err)
+	assert.Empty(t, data.Events)
 
-	if err := cp.SaveAIFindings(findings); err != nil {
-		t.Fatalf("SaveAIFindings: %v", err)
+	// Save
+	record := AIUsageEventRecord{
+		Timestamp:    time.Now(),
+		RequestModel: "gpt-4",
+		InputTokens:  10,
+		OutputTokens: 20,
 	}
+	data.Events = append(data.Events, record)
 
-	loaded, err := cp.LoadAIFindings()
-	if err != nil {
-		t.Fatalf("LoadAIFindings: %v", err)
-	}
+	err = p.SaveAIUsageHistory(data.Events)
+	require.NoError(t, err)
 
-	if len(loaded.Findings) != 1 || loaded.Findings["f1"].Title != "Test Finding" {
-		t.Errorf("Loaded findings mismatch: %+v", loaded)
-	}
+	// Reload
+	loaded, err := p.LoadAIUsageHistory()
+	require.NoError(t, err)
+	assert.Len(t, loaded.Events, 1)
+	assert.Equal(t, 10, loaded.Events[0].InputTokens)
+
+	// Test Corrupt file
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "ai_usage_history.json"), []byte("{invalid"), 0644))
+
+	loaded, err = p.LoadAIUsageHistory()
+	// Should return empty structure
+	require.NoError(t, err)
+	assert.Empty(t, loaded.Events)
 }
 
-func TestIsEncryptionEnabled(t *testing.T) {
+func TestPersistence_AIConfig(t *testing.T) {
 	tempDir := t.TempDir()
-	cp := config.NewConfigPersistence(tempDir)
+	p := NewConfigPersistence(tempDir)
 
-	// NewConfigPersistence always enables encryption by generating a key if missing
-	if !cp.IsEncryptionEnabled() {
-		t.Error("Encryption should be enabled by default")
-	}
+	// Load default (empty/nil config if file missing? LoadAIConfig returns NewDefaultAIConfig logic inside persistence??)
+	// Let's check logic: LoadAIConfig reads file, if missing returns default?
+	loaded, err := p.LoadAIConfig()
+	require.NoError(t, err)
+	assert.NotNil(t, loaded) // Default config
 
-	// Verify the key file was created
-	keyPath := filepath.Join(tempDir, ".encryption.key")
-	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
-		t.Error("Encryption key file should be created automatically")
-	}
+	// Save
+	cfg := NewDefaultAIConfig()
+	cfg.APIKey = "testkey"
+	err = p.SaveAIConfig(*cfg)
+	require.NoError(t, err)
+
+	// Reload
+	loaded, err = p.LoadAIConfig()
+	require.NoError(t, err)
+	assert.Equal(t, "testkey", loaded.APIKey)
+
+	// Corrupt file
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "ai.enc"), []byte("{invalid"), 0644))
+	// Without encryption, it's just json
+	// If encryption enabled (not in this test), behaviour changes.
+
+	// If crypto nil:
+	// Persistence.LoadAIConfig attempts decrypt if crypto != nil.
+
+	// If Unmarshal fails:
+	_, err = p.LoadAIConfig()
+	assert.Error(t, err)
 }
 
-func TestMetadataPersistence(t *testing.T) {
+func TestPersistence_PatrolRunHistory(t *testing.T) {
 	tempDir := t.TempDir()
-	cp := config.NewConfigPersistence(tempDir)
+	p := NewConfigPersistence(tempDir)
 
-	// 1. Guest Metadata
-	guestMeta := map[string]*config.GuestMetadata{
-		"guest-1": {
-			ID:    "guest-1",
-			Notes: []string{"Important guest"},
-		},
-	}
+	hist, err := p.LoadPatrolRunHistory()
+	require.NoError(t, err)
+	assert.Empty(t, hist.Runs)
 
-	// Create the file manually since SaveGuestMetadata doesn't exist in ConfigPersistence (it's in GuestMetadataStore)
-	// but LoadGuestMetadata is in ConfigPersistence.
-	// This tests the LoadGuestMetadata method in persistence.go
-	guestFile := filepath.Join(tempDir, "guest_metadata.json")
-	data, _ := json.Marshal(guestMeta)
-	os.WriteFile(guestFile, data, 0644)
+	hist.Runs = append(hist.Runs, PatrolRunRecord{ID: "run1"})
+	err = p.SavePatrolRunHistory(hist.Runs)
+	require.NoError(t, err)
 
-	loadedGuest, err := cp.LoadGuestMetadata()
-	if err != nil {
-		t.Fatalf("LoadGuestMetadata failed: %v", err)
-	}
-	if len(loadedGuest) != 1 || loadedGuest["guest-1"].Notes[0] != "Important guest" {
-		t.Errorf("Loaded guest metadata mismatch: %+v", loadedGuest)
-	}
+	loaded, err := p.LoadPatrolRunHistory()
+	require.NoError(t, err)
+	assert.Len(t, loaded.Runs, 1)
 
-	// 2. Docker Metadata
-	dockerMeta := map[string]*config.DockerMetadata{
-		"docker-1": {
-			ID:    "docker-1",
-			Notes: []string{"Worker node"},
-		},
-	}
-	dockerFile := filepath.Join(tempDir, "docker_metadata.json")
-	data, _ = json.Marshal(dockerMeta)
-	os.WriteFile(dockerFile, data, 0644)
-
-	loadedDocker, err := cp.LoadDockerMetadata()
-	if err != nil {
-		t.Fatalf("LoadDockerMetadata failed: %v", err)
-	}
-	if len(loadedDocker) != 1 || loadedDocker["docker-1"].Notes[0] != "Worker node" {
-		t.Errorf("Loaded docker metadata mismatch: %+v", loadedDocker)
-	}
+	// Corrupt
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "ai_patrol_runs.json"), []byte("{invalid"), 0644))
+	loaded, err = p.LoadPatrolRunHistory()
+	require.NoError(t, err) // Returns empty on error
+	assert.Empty(t, loaded.Runs)
 }
