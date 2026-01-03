@@ -362,7 +362,11 @@ func (m *Monitor) acknowledgeDockerCommand(commandID, hostID, status, message st
 	case DockerCommandStatusCompleted:
 		cmd.markAcknowledged(message)
 		cmd.markCompleted(message)
-		shouldRemove = true
+		// Only remove the Docker host if this was a "stop" command.
+		// Other commands (update_container, check_updates) should not remove the host.
+		if cmd.status.Type == DockerCommandTypeStop {
+			shouldRemove = true
+		}
 	case DockerCommandStatusFailed:
 		cmd.markFailed(message)
 		m.state.SetDockerHostPendingUninstall(resolvedHostID, false)
