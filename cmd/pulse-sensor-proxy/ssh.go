@@ -20,6 +20,18 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Variable for testing to mock net.Interfaces
+var netInterfaces = net.Interfaces
+
+// Variable for testing to mock exec.LookPath
+var execLookPath = exec.LookPath
+
+// Variable for testing to mock os.Hostname
+var osHostname = os.Hostname
+
+// Variable for testing to mock exec.Command (for simple output)
+var execCommandFunc = exec.Command
+
 const (
 	tempWrapperPath   = "/usr/local/libexec/pulse-sensor-proxy/temp-wrapper.sh"
 	tempWrapperScript = `#!/bin/sh
@@ -774,10 +786,9 @@ func discoverLocalHostAddresses() ([]string, error) {
 		}
 	}
 
-	// Get all non-loopback IP addresses using Go's native net.Interfaces API
 	// This is more reliable than shelling out to 'ip addr' and works even with strict systemd restrictions
 	ipCount := 0
-	interfaces, err := net.Interfaces()
+	interfaces, err := netInterfaces()
 	if err != nil {
 		// Check if this is an AF_NETLINK restriction error from systemd
 		if strings.Contains(err.Error(), "netlinkrib") || strings.Contains(err.Error(), "address family not supported") {
@@ -950,8 +961,9 @@ func discoverLocalHostAddressesFallback() ([]string, error) {
 
 // isProxmoxHost checks if we're running on a Proxmox host
 func isProxmoxHost() bool {
+func isProxmoxHost() bool {
 	// Check for pvecm command
-	if _, err := exec.LookPath("pvecm"); err == nil {
+	if _, err := execLookPath("pvecm"); err == nil {
 		return true
 	}
 	// Check for /etc/pve directory
@@ -964,7 +976,7 @@ func isProxmoxHost() bool {
 // isLocalNode checks if the requested node is the local machine
 func isLocalNode(nodeHost string) bool {
 	// Get local hostname (short)
-	hostname, err := os.Hostname()
+	hostname, err := osHostname()
 	if err == nil {
 		// Match short hostname
 		if strings.EqualFold(nodeHost, hostname) {
@@ -972,7 +984,7 @@ func isLocalNode(nodeHost string) bool {
 		}
 		// Match FQDN if nodeHost contains dots
 		if strings.Contains(nodeHost, ".") {
-			cmd := exec.Command("hostname", "-f")
+			cmd := execCommandFunc("hostname", "-f")
 			if output, err := cmd.Output(); err == nil {
 				fqdn := strings.TrimSpace(string(output))
 				if strings.EqualFold(nodeHost, fqdn) {
@@ -983,7 +995,7 @@ func isLocalNode(nodeHost string) bool {
 	}
 
 	// Check if nodeHost is a local IP address
-	ifaces, err := net.Interfaces()
+	ifaces, err := netInterfaces()
 	if err != nil {
 		return false
 	}

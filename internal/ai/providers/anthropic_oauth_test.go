@@ -414,3 +414,204 @@ func TestAnthropicOAuthClient_ListModels_UsesConfiguredHost(t *testing.T) {
 		t.Fatalf("unexpected models: %+v", models)
 	}
 }
+func TestAnthropicOAuthClient_Name(t *testing.T) {
+	client := NewAnthropicOAuthClient("access", "refresh", time.Now(), "claude-3", 0)
+	if client.Name() != "anthropic-oauth" {
+		t.Errorf("Expected 'anthropic-oauth', got %q", client.Name())
+	}
+}
+
+func TestAnthropicOAuthClient_TestConnection(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
+	}))
+	defer server.Close()
+
+	client := NewAnthropicOAuthClientWithBaseURL("access", "refresh", time.Now().Add(time.Hour), "claude-3", server.URL, 0)
+	client.client = server.Client()
+
+	if err := client.TestConnection(context.Background()); err != nil {
+		t.Errorf("TestConnection failed: %v", err)
+	}
+}
+
+func TestAnthropicOAuthClient_ListModels_Error(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	client := NewAnthropicOAuthClientWithBaseURL("access", "refresh", time.Now().Add(time.Hour), "claude-3", server.URL, 0)
+	client.client = server.Client()
+
+	if _, err := client.ListModels(context.Background()); err == nil {
+		t.Error("Expected error for 500 status")
+	}
+}
+
+func TestAnthropicOAuthClient_Chat_SystemAndParams(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req anthropicRequest
+		json.NewDecoder(r.Body).Decode(&req)
+
+		if req.System != "sys" {
+			t.Errorf("Expected system 'sys', got %q", req.System)
+		}
+		if req.Temperature != 0.5 {
+			t.Errorf("Expected temp 0.5, got %f", req.Temperature)
+		}
+		if req.MaxTokens != 100 {
+			t.Errorf("Expected max tokens 100, got %d", req.MaxTokens)
+		}
+		if len(req.Messages) != 1 || req.Messages[0].Content != "hi" {
+			t.Errorf("Unexpected messages: %+v", req.Messages)
+		}
+
+		json.NewEncoder(w).Encode(anthropicResponse{
+			Content: []anthropicContent{{Type: "text", Text: "ok"}},
+		})
+	}))
+	defer server.Close()
+
+	client := NewAnthropicOAuthClientWithBaseURL("access", "refresh", time.Now().Add(time.Hour), "claude-3", server.URL, 0)
+	client.client = server.Client()
+
+	_, err := client.Chat(context.Background(), ChatRequest{
+		System:      "sys",
+		Temperature: 0.5,
+		MaxTokens:   100,
+		Messages:    []Message{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat failed: %v", err)
+	}
+}
+
+func TestAnthropicOAuthClient_Chat_NetworkError(t *testing.T) {
+	client := NewAnthropicOAuthClientWithBaseURL("access", "refresh", time.Now().Add(time.Hour), "claude-3", "http://localhost:99999", 0)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	if _, err := client.Chat(ctx, ChatRequest{Messages: []Message{{Role: "user", Content: "hi"}}}); err == nil {
+		t.Error("Expected network error")
+	}
+}
+
+func TestAnthropicOAuthClient_Chat_RefreshesOnTimeExpiry(t *testing.T) {
+	oldTokenURL := oauthTokenURL
+	oldClient := oauthHTTPClient
+	t.Cleanup(func() {
+		oauthTokenURL = oldTokenURL
+		oauthHTTPClient = oldClient
+	})
+
+	// Server handles token refresh
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(OAuthTokens{
+			AccessToken:  "access_new",
+			RefreshToken: "refresh_new",
+			TokenType:    "bearer",
+			ExpiresIn:    3600,
+		})
+	}))
+	defer tokenServer.Close()
+
+	oauthTokenURL = tokenServer.URL
+	oauthHTTPClient = tokenServer.Client()
+
+	// Chat server
+	chatServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer access_new" {
+			t.Errorf("Expected refreshed token, got %q", r.Header.Get("Authorization"))
+		}
+		_ = json.NewEncoder(w).Encode(anthropicResponse{
+			Content: []anthropicContent{{Type: "text", Text: "ok"}},
+		})
+	}))
+	defer chatServer.Close()
+
+	// Client with expired token
+	client := NewAnthropicOAuthClientWithBaseURL(
+		"access_old",
+		"refresh_old",
+		time.Now().Add(-time.Hour), // Expired
+		"claude-3",
+		chatServer.URL,
+		0,
+	)
+	client.client = chatServer.Client()
+
+	_, err := client.Chat(context.Background(), ChatRequest{Messages: []Message{{Role: "user", Content: "hi"}}})
+	if err != nil {
+		t.Fatalf("Chat failed: %v", err)
+	}
+}
+
+func TestAnthropicOAuthClient_Chat_ContextCanceledDuringRetry(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests) // Trigger retry
+		w.Write([]byte(`{"error":{"message":"busy"}}`))
+	}))
+	defer server.Close()
+
+	client := NewAnthropicOAuthClientWithBaseURL("access", "refresh", time.Now().Add(time.Hour), "claude-3", server.URL, 0)
+	client.client = server.Client()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel after short delay, shorter than backoff (2s)
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	_, err := client.Chat(ctx, ChatRequest{Messages: []Message{{Role: "user", Content: "hi"}}})
+	if err == nil {
+		t.Error("Expected error")
+	}
+}
+
+func TestCreateAPIKeyFromOAuth_RequestError(t *testing.T) {
+	oldURL := oauthAPIKeyURL
+	defer func() { oauthAPIKeyURL = oldURL }()
+	oauthAPIKeyURL = "::invalid" // Invalid URL
+
+	_, err := CreateAPIKeyFromOAuth(context.Background(), "token")
+	if err == nil {
+		t.Error("Expected error for invalid URL")
+	}
+}
+
+func TestAnthropicOAuthClient_Chat_ToolUsage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req anthropicRequest
+		json.NewDecoder(r.Body).Decode(&req)
+
+		if len(req.Tools) != 1 || req.Tools[0].Name != "my_tool" {
+			t.Errorf("Expected tool 'my_tool', got %+v", req.Tools)
+		}
+
+		json.NewEncoder(w).Encode(anthropicResponse{
+			Content: []anthropicContent{
+				{Type: "text", Text: "thinking..."},
+				{Type: "tool_use", ID: "id1", Name: "my_tool", Input: map[string]any{"arg": 1}},
+			},
+			StopReason: "tool_use",
+		})
+	}))
+	defer server.Close()
+
+	client := NewAnthropicOAuthClientWithBaseURL("access", "refresh", time.Now().Add(time.Hour), "claude-3", server.URL, 0)
+	client.client = server.Client()
+
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "hi"}},
+		Tools:    []Tool{{Name: "my_tool", Description: "desc", InputSchema: map[string]any{"type": "object"}}},
+	})
+	if err != nil {
+		t.Fatalf("Chat failed: %v", err)
+	}
+	if len(resp.ToolCalls) != 1 || resp.ToolCalls[0].ID != "id1" {
+		t.Errorf("Expected 1 tool call with ID id1, got %+v", resp.ToolCalls)
+	}
+}

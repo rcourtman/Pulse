@@ -503,3 +503,70 @@ func TestOllamaClient_Chat_ToolCallsAndToolResultsInRequest(t *testing.T) {
 		t.Fatalf("expected only function tools to be included, got: %+v", got.Tools)
 	}
 }
+func TestOllamaClient_Chat_ToolCallIDGeneration(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := ollamaResponse{
+			Model: "llama3",
+			Message: ollamaMessageResp{
+				Role:    "assistant",
+				Content: "",
+				ToolCalls: []ollamaToolCall{
+					{
+						// NO ID provided by Ollama
+						Function: ollamaFunctionCall{
+							Name:      "get_time",
+							Arguments: map[string]interface{}{"tz": "UTC"},
+						},
+					},
+				},
+			},
+			Done:       true,
+			DoneReason: "stop",
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewOllamaClient("llama3", server.URL, 0)
+	out, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "What time is it?"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if len(out.ToolCalls) != 1 {
+		t.Fatalf("ToolCalls = %d, want 1", len(out.ToolCalls))
+	}
+	if !strings.HasPrefix(out.ToolCalls[0].ID, "ollama_get_time_") {
+		t.Errorf("Expected generated ID to start with ollama_get_time_, got %s", out.ToolCalls[0].ID)
+	}
+}
+
+func TestOllamaClient_Chat_StatusError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("Not Found"))
+	}))
+	defer server.Close()
+
+	client := NewOllamaClient("llama3", server.URL, 0)
+	_, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "hi"}},
+	})
+	if err == nil {
+		t.Fatal("Expected error for 404 status")
+	}
+	if !strings.Contains(err.Error(), "404") {
+		t.Errorf("Expected error to contain 404, got %v", err)
+	}
+}
+
+func TestNewOllamaClient_Defaults(t *testing.T) {
+	c := NewOllamaClient("llama3", "", -1)
+	if c.baseURL != "http://localhost:11434" {
+		t.Errorf("Expected default baseURL, got %s", c.baseURL)
+	}
+	if c.client.Timeout != 300*time.Second {
+		t.Errorf("Expected default timeout 300s, got %v", c.client.Timeout)
+	}
+}

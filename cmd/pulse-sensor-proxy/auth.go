@@ -260,12 +260,18 @@ func loadSubIDRanges(path string, users []string) ([]idRange, error) {
 	return ranges, nil
 }
 
+// subUIDPath and subGIDPath are variables to allow testing override
+var (
+	subUIDPath = "/etc/subuid"
+	subGIDPath = "/etc/subgid"
+)
+
 func loadIDMappingRanges(users []string) ([]idRange, []idRange, error) {
-	uidRanges, err := loadSubIDRanges("/etc/subuid", users)
+	uidRanges, err := loadSubIDRanges(subUIDPath, users)
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading subordinate UID ranges: %w", err)
 	}
-	gidRanges, err := loadSubIDRanges("/etc/subgid", users)
+	gidRanges, err := loadSubIDRanges(subGIDPath, users)
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading subordinate GID ranges: %w", err)
 	}

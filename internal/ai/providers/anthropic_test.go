@@ -11,6 +11,24 @@ import (
 
 // Anthropic tests focus on request/response correctness and endpoint behavior.
 
+func TestAnthropicClient_New(t *testing.T) {
+	c := NewAnthropicClient("test-key", "claude-3", 0)
+	if c.baseURL != anthropicAPIURL {
+		t.Errorf("Expected default baseURL, got %s", c.baseURL)
+	}
+	if c.client.Timeout != 300*time.Second {
+		t.Errorf("Expected default timeout 300s, got %v", c.client.Timeout)
+	}
+
+	c2 := NewAnthropicClientWithBaseURL("test-key", "claude-3", "", -1)
+	if c2.baseURL != anthropicAPIURL {
+		t.Errorf("Expected default baseURL for empty, got %s", c2.baseURL)
+	}
+	if c2.client.Timeout != 300*time.Second {
+		t.Errorf("Expected default timeout for negative, got %v", c2.client.Timeout)
+	}
+}
+
 func TestAnthropicClient_Name(t *testing.T) {
 	client := NewAnthropicClient("test-key", "claude-3-5-sonnet", 0)
 	if client.Name() != "anthropic" {
@@ -254,5 +272,124 @@ func TestAnthropicClient_TestConnection_CallsListModels(t *testing.T) {
 	}
 	if called != 1 {
 		t.Fatalf("ListModels calls = %d, want 1", called)
+	}
+}
+func TestAnthropicClient_Chat_AssistantToolCallsInRequest(t *testing.T) {
+	var got map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_ = json.NewEncoder(w).Encode(anthropicResponse{
+			ID: "msg_123", Type: "message", Role: "assistant", Model: "claude-3",
+			StopReason: "end_turn", Content: []anthropicContent{{Type: "text", Text: "ok"}},
+		})
+	}))
+	defer server.Close()
+
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3", server.URL, 0)
+	_, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{
+			{Role: "assistant", Content: "I will use a tool.", ToolCalls: []ToolCall{{ID: "tc1", Name: "tool1", Input: map[string]any{"arg1": "val1"}}}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+
+	msgs := got["messages"].([]any)
+	asstMsg := msgs[0].(map[string]any)
+	content := asstMsg["content"].([]any)
+	if len(content) != 2 {
+		t.Fatalf("Expected 2 content blocks, got %d", len(content))
+	}
+}
+
+func TestAnthropicClient_Chat_StripPrefixAndDefaultMaxTokens(t *testing.T) {
+	var got map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_ = json.NewEncoder(w).Encode(anthropicResponse{
+			ID: "msg_123", Type: "message", Role: "assistant", Model: "claude-3",
+			StopReason: "end_turn", Content: []anthropicContent{{Type: "text", Text: "ok"}},
+		})
+	}))
+	defer server.Close()
+
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3", server.URL, 0)
+	_, err := client.Chat(context.Background(), ChatRequest{
+		Model:    "anthropic:claude-3-opus",
+		Messages: []Message{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+
+	if got["model"] != "claude-3-opus" {
+		t.Errorf("Expected model 'claude-3-opus', got %s", got["model"])
+	}
+	if got["max_tokens"].(float64) != 4096 {
+		t.Errorf("Expected default max_tokens 4096, got %v", got["max_tokens"])
+	}
+}
+
+func TestAnthropicClient_Chat_ServerToolAndWebSearchResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(anthropicResponse{
+			ID:         "msg_123",
+			Type:       "message",
+			Role:       "assistant",
+			Model:      "claude-3",
+			StopReason: "end_turn",
+			Content: []anthropicContent{
+				{Type: "text", Text: "I found this information."},
+				{Type: "server_tool_use", ID: "st1", Name: "web_search"},
+				{Type: "web_search_tool_result", ID: "ws1"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3", server.URL, 0)
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if resp.Content != "I found this information." {
+		t.Errorf("Expected content, got %s", resp.Content)
+	}
+}
+
+func TestAnthropicClient_Chat_Retry(t *testing.T) {
+	var count int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count++
+		if count == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte(`{"error":{"message":"Overloaded"}}`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(anthropicResponse{
+			ID: "msg_123", Type: "message", Role: "assistant",
+			StopReason: "end_turn", Content: []anthropicContent{{Type: "text", Text: "ok"}},
+		})
+	}))
+	defer server.Close()
+
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3", server.URL, 0)
+	_, err := client.Chat(context.Background(), ChatRequest{Messages: []Message{{Role: "user", Content: "hi"}}})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("Expected 2 attempts, got %d", count)
+	}
+}
+
+func TestAnthropicClient_ModelsEndpoint_Invalid(t *testing.T) {
+	client := &AnthropicClient{baseURL: "invalid-url"}
+	endpoint := client.modelsEndpoint()
+	if endpoint != "https://api.anthropic.com/v1/models" {
+		t.Errorf("Expected default models endpoint for invalid baseURL, got %s", endpoint)
 	}
 }

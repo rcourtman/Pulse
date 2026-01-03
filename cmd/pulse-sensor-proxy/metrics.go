@@ -213,9 +213,10 @@ func (m *ProxyMetrics) Start(addr string) error {
 
 // Shutdown gracefully shuts down the metrics server
 func (m *ProxyMetrics) Shutdown(ctx context.Context) {
-	if m.server != nil {
-		_ = m.server.Shutdown(ctx)
+	if m == nil || m.server == nil {
+		return
 	}
+	_ = m.server.Shutdown(ctx)
 }
 
 // sanitizeNodeLabel converts a node name into a safe Prometheus label value

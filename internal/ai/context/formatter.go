@@ -173,8 +173,8 @@ func formatRate(ratePerDay float64) string {
 	}
 	// Convert to per hour if < 1/day
 	ratePerHour := absRate / 24
-	if ratePerHour >= 0.1 {
-		return fmt.Sprintf("%.1f/hr", ratePerHour)
+	if ratePerHour >= 0.01 {
+		return fmt.Sprintf("%.2f/hr", ratePerHour)
 	}
 	return "slow"
 }

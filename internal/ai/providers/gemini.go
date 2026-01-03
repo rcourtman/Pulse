@@ -34,9 +34,8 @@ func NewGeminiClient(apiKey, model, baseURL string, timeout time.Duration) *Gemi
 		baseURL = geminiAPIURL
 	}
 	// Strip provider prefix if present - the model should be just the model name
-	if strings.HasPrefix(model, "gemini:") {
-		model = strings.TrimPrefix(model, "gemini:")
-	}
+	// Strip provider prefix if present - the model should be just the model name
+	model = strings.TrimPrefix(model, "gemini:")
 	if timeout <= 0 {
 		timeout = 300 * time.Second // Default 5 minutes
 	}
@@ -490,10 +489,7 @@ func (c *GeminiClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 		}
 
 		// Extract model ID from the full name (e.g., "models/gemini-1.5-pro" -> "gemini-1.5-pro")
-		modelID := m.Name
-		if strings.HasPrefix(modelID, "models/") {
-			modelID = strings.TrimPrefix(modelID, "models/")
-		}
+		modelID := strings.TrimPrefix(m.Name, "models/")
 
 		// Only include the useful Gemini models for chat/agentic tasks
 		// Filter out Gemma (open-source, no function calling), embedding, AQA, vision-only models

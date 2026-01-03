@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestSanitizeNodeLabel(t *testing.T) {
 	tests := []struct {
@@ -223,5 +226,62 @@ func TestSanitizeNodeLabel_Idempotent(t *testing.T) {
 			t.Errorf("sanitizeNodeLabel is not idempotent: sanitizeNodeLabel(%q) = %q, sanitizeNodeLabel(%q) = %q",
 				input, once, once, twice)
 		}
+	}
+}
+
+func TestProxyMetrics(t *testing.T) {
+	m := NewProxyMetrics("1.0.0")
+
+	// Test Start with disabled
+	if err := m.Start("disabled"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test Start with empty
+	if err := m.Start(""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test Start with actual address
+	if err := m.Start("127.0.0.1:0"); err != nil {
+		t.Errorf("failed to start on random port: %v", err)
+	} else {
+		m.Shutdown(context.Background())
+	}
+
+	// Test recording methods
+	m.recordLimiterReject("reason", "peer")
+	m.recordNodeValidationFailure("reason")
+	m.recordReadTimeout()
+	m.recordWriteTimeout()
+	m.recordSSHOutputOversized("node")
+	m.recordSSHOutputOversized("") // Test empty node
+	m.recordHostKeyChange("node")
+	m.recordHostKeyChange("") // Test empty node
+	m.incGlobalConcurrency()
+	m.decGlobalConcurrency()
+	m.recordPenalty("reason", "peer")
+	m.setLimiterPeers(5)
+
+	// Test recording with nil metrics
+	var nilMetrics *ProxyMetrics
+	nilMetrics.recordLimiterReject("r", "p")
+	nilMetrics.recordNodeValidationFailure("r")
+	nilMetrics.recordReadTimeout()
+	nilMetrics.recordWriteTimeout()
+	nilMetrics.recordSSHOutputOversized("n")
+	nilMetrics.recordHostKeyChange("n")
+	nilMetrics.incGlobalConcurrency()
+	nilMetrics.decGlobalConcurrency()
+	nilMetrics.recordPenalty("r", "p")
+	nilMetrics.setLimiterPeers(1)
+	nilMetrics.Shutdown(context.Background())
+}
+
+func TestProxyMetrics_StartError(t *testing.T) {
+	m := NewProxyMetrics("1.0.0")
+	// Invalid address
+	if err := m.Start("999.999.999.999:9999"); err == nil {
+		t.Error("expected error for invalid address")
 	}
 }

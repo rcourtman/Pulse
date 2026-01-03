@@ -162,7 +162,8 @@ var configImportCmd = &cobra.Command{
 	},
 }
 
-// getPassphrase prompts for a passphrase or gets it from environment
+var readPassword = term.ReadPassword
+
 func getPassphrase(prompt string, confirm bool) string {
 	// Check environment variable first
 	if pass := os.Getenv("PULSE_PASSPHRASE"); pass != "" {
@@ -176,7 +177,7 @@ func getPassphrase(prompt string, confirm bool) string {
 
 	// Interactive prompt
 	fmt.Print(prompt)
-	bytePassword, err := term.ReadPassword(syscall.Stdin)
+	bytePassword, err := readPassword(int(syscall.Stdin))
 	fmt.Println()
 	if err != nil {
 		return ""
@@ -187,7 +188,7 @@ func getPassphrase(prompt string, confirm bool) string {
 	// Confirm if requested
 	if confirm {
 		fmt.Print("Confirm passphrase: ")
-		bytePassword2, err := term.ReadPassword(syscall.Stdin)
+		bytePassword2, err := readPassword(int(syscall.Stdin))
 		fmt.Println()
 		if err != nil {
 			return ""

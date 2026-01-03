@@ -1937,7 +1937,7 @@ func generateRemediationSummary(command string, _ string, context map[string]int
 			return match[1]
 		}
 		// docker restart XXX, docker start XXX, etc.
-		if match := regexp.MustCompile(`docker\s+(?:restart|start|stop|logs)\s+(\w+)`).FindStringSubmatch(cmd); len(match) > 1 {
+		if match := regexp.MustCompile(`docker\s+(?:restart|start|stop|logs)\s+([\w.-]+)`).FindStringSubmatch(cmd); len(match) > 1 {
 			return match[1]
 		}
 		return ""
@@ -2001,7 +2001,7 @@ func generateRemediationSummary(command string, _ string, context map[string]int
 		}
 		return "Analyzed disk usage"
 
-	case strings.Contains(cmd, "grep") && (strings.Contains(cmd, "config") || strings.Contains(cmd, ".yml") || strings.Contains(cmd, ".yaml")):
+	case strings.Contains(cmd, "grep") && (strings.Contains(cmd, "config") || strings.Contains(cmd, "conf") || strings.Contains(cmd, ".yml") || strings.Contains(cmd, ".yaml")):
 		if path != "" && strings.Contains(strings.ToLower(path), "frigate") {
 			return "Inspected Frigate configuration"
 		}

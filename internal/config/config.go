@@ -1002,6 +1002,32 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// HTTPS Configuration
+	if httpsEnabled := utils.GetenvTrim("HTTPS_ENABLED"); httpsEnabled != "" {
+		if enabled, err := strconv.ParseBool(httpsEnabled); err == nil {
+			cfg.HTTPSEnabled = enabled
+			cfg.EnvOverrides["HTTPS_ENABLED"] = true
+			log.Info().Bool("enabled", enabled).Msg("HTTPS enabled override from environment")
+		} else {
+			log.Warn().Str("value", httpsEnabled).Msg("Invalid HTTPS_ENABLED value, ignoring")
+		}
+	}
+
+	if certFile := utils.GetenvTrim("TLS_CERT_FILE"); certFile != "" {
+		cfg.TLSCertFile = certFile
+		cfg.EnvOverrides["TLS_CERT_FILE"] = true
+	}
+
+	if keyFile := utils.GetenvTrim("TLS_KEY_FILE"); keyFile != "" {
+		cfg.TLSKeyFile = keyFile
+		cfg.EnvOverrides["TLS_KEY_FILE"] = true
+	}
+
+	if allowedOrigins := utils.GetenvTrim("ALLOWED_ORIGINS"); allowedOrigins != "" {
+		cfg.AllowedOrigins = allowedOrigins
+		cfg.EnvOverrides["ALLOWED_ORIGINS"] = true
+	}
+
 	if sshPort := utils.GetenvTrim("SSH_PORT"); sshPort != "" {
 		if port, err := strconv.Atoi(sshPort); err == nil {
 			if port <= 0 || port > 65535 {

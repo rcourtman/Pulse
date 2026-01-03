@@ -213,7 +213,8 @@ func TestFormatRate(t *testing.T) {
 	}{
 		{5.5, "5.5/day"},
 		{1.0, "1.0/day"},
-		{0.5, "slow"},
+		{0.5, "0.02/hr"},
+		{0.1, "slow"},
 		{0.0, "slow"},
 		{-2.5, "2.5/day"}, // Absolute value
 	}
@@ -792,5 +793,119 @@ func TestFormatResourceContext_WithMetricSamples(t *testing.T) {
 	// Should contain the History section with sampled data
 	if !containsStr(result, "History") {
 		t.Error("Expected result to contain History section with metric samples")
+	}
+}
+func TestFormatResourceContext_Full(t *testing.T) {
+	ctx := ResourceContext{
+		ResourceID:   "ct-105",
+		ResourceType: "docker_container",
+		ResourceName: "frigate",
+		Status:       "running",
+		Uptime:       2 * time.Minute,
+		CurrentCPU:   10.5,
+		MetricSamples: map[string][]MetricPoint{
+			"cpu": {
+				{Value: 5.0, Timestamp: time.Now().Add(-1 * time.Hour)},
+				{Value: 10.0, Timestamp: time.Now().Add(-30 * time.Minute)},
+				{Value: 10.5, Timestamp: time.Now()},
+			},
+		},
+		Trends: map[string]Trend{
+			"cpu": {Direction: TrendGrowing, RatePerDay: 240.0, DataPoints: 10}, // 10%/hr = 240%/day
+		},
+	}
+
+	result := FormatResourceContext(ctx)
+	if !containsStr(result, "Docker Container") {
+		t.Error("Expected 'Docker Container' label")
+	}
+	if !containsStr(result, "History") {
+		t.Error("Expected History section")
+	}
+	if !containsStr(result, "rising 240.0/day") {
+		t.Errorf("Expected rising trend, got: %s", result)
+	}
+}
+
+func TestFormatInfrastructureContext_FullRich(t *testing.T) {
+	ctx := &InfrastructureContext{
+		GeneratedAt:    time.Now(),
+		TotalResources: 1,
+		Changes: []Change{
+			{ResourceName: "web-server", Description: "Upgraded RAM"},
+		},
+		Hosts: []ResourceContext{
+			{ResourceID: "host-1", ResourceName: "server-1", ResourceType: "host", Status: "online"},
+		},
+	}
+
+	result := FormatInfrastructureContext(ctx)
+	if !containsStr(result, "Recent Changes") {
+		t.Error("Expected Recent Changes section")
+	}
+	if !containsStr(result, "Agent Hosts") {
+		t.Error("Expected Agent Hosts section")
+	}
+}
+
+func TestFormatCompactSummary_Full(t *testing.T) {
+	ctx := &InfrastructureContext{
+		GeneratedAt:    time.Now(),
+		TotalResources: 10,
+		Nodes: []ResourceContext{
+			{
+				ResourceID: "node-1",
+				Trends: map[string]Trend{
+					"cpu": {Direction: TrendGrowing, RatePerDay: 5.0, DataPoints: 10},
+				},
+			},
+		},
+	}
+
+	result := FormatCompactSummary(ctx)
+	if !containsStr(result, "1 warning") {
+		t.Errorf("Expected 1 warning for growing trend, got: %s", result)
+	}
+}
+
+func TestFormatRate_PerHour(t *testing.T) {
+	// 4.8 per day = 0.2 per hour (but >= 1, so shows daily)
+	r1 := formatRate(4.8)
+	if r1 != "4.8/day" {
+		t.Errorf("Expected 4.8/day, got %s", r1)
+	}
+
+	// 0.48 per day = 0.02 per hour
+	r2 := formatRate(0.48)
+	if r2 != "0.02/hr" {
+		t.Errorf("Expected 0.02/hr, got %s", r2)
+	}
+
+	r3 := formatRate(0.01) // 0.01 / 24 < 0.01
+	if r3 != "slow" {
+		t.Errorf("Expected slow, got %s", r3)
+	}
+}
+
+func TestDownsampleMetrics_MinTarget(t *testing.T) {
+	points := make([]MetricPoint, 10)
+	sampled := DownsampleMetrics(points, 1)
+	if len(sampled) < 3 {
+		t.Errorf("Expected at least 3 samples, got %d", len(sampled))
+	}
+}
+
+func TestFormatDuration_Large(t *testing.T) {
+	d := 24*time.Hour + 2*time.Hour
+	result := formatDuration(d)
+	if result != "1d2h" {
+		t.Errorf("Expected 1d2h, got %s", result)
+	}
+}
+
+func TestDownsampleMetrics_NoSamples(t *testing.T) {
+	sampled := DownsampleMetrics([]MetricPoint{}, 10)
+	if len(sampled) != 0 {
+		t.Error("Expected 0 samples for empty input")
 	}
 }

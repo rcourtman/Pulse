@@ -119,3 +119,53 @@ func TestProxy_handleRequestCleanup_WritesValidPayloadAndReplacesExisting(t *tes
 		t.Fatalf("payload reason after replace = %#v, want %q", payload2["reason"], "testing-2")
 	}
 }
+
+func TestProxy_handleRequestCleanup_NilRequest(t *testing.T) {
+	p := &Proxy{workDir: t.TempDir()}
+	_, err := p.handleRequestCleanup(context.Background(), nil, zerolog.Nop())
+	if err != nil {
+		t.Fatalf("handleRequestCleanup: %v", err)
+	}
+}
+
+func TestProxy_handleRequestCleanup_MkdirFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "file")
+	if err := os.WriteFile(filePath, []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	p := &Proxy{workDir: filepath.Join(filePath, "subdir")}
+	_, err := p.handleRequestCleanup(context.Background(), nil, zerolog.Nop())
+	if err == nil {
+		t.Error("expected error due to MkdirAll failure")
+	}
+}
+
+func TestProxy_handleRequestCleanup_ParamsEdgeCases(t *testing.T) {
+	workDir := t.TempDir()
+	p := &Proxy{workDir: workDir}
+	logger := zerolog.Nop()
+
+	// Empty host/reason params
+	_, err := p.handleRequestCleanup(context.Background(), &RPCRequest{
+		Params: map[string]interface{}{
+			"host":   "",
+			"reason": "",
+		},
+	}, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Non-string params
+	_, err = p.handleRequestCleanup(context.Background(), &RPCRequest{
+		Params: map[string]interface{}{
+			"host":   123,
+			"reason": true,
+		},
+	}, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+}

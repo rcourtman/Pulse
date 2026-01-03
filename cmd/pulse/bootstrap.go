@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var osExit = os.Exit
+
 var bootstrapTokenCmd = &cobra.Command{
 	Use:   "bootstrap-token",
 	Short: "Display the bootstrap setup token",
@@ -48,16 +50,19 @@ func showBootstrapToken() {
 			fmt.Println("║  • Server hasn't started yet (token not generated)                    ║")
 			fmt.Printf("║  • Token file not found: %-44s║\n", tokenPath)
 			fmt.Println("╚═══════════════════════════════════════════════════════════════════════╝")
-			os.Exit(1)
+			osExit(1)
+			return
 		}
 		fmt.Printf("Error reading bootstrap token: %v\n", err)
-		os.Exit(1)
+		osExit(1)
+		return
 	}
 
 	token := strings.TrimSpace(string(data))
 	if token == "" {
 		fmt.Println("Error: Bootstrap token file is empty")
-		os.Exit(1)
+		osExit(1)
+		return
 	}
 
 	// Display token prominently

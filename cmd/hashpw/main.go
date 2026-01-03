@@ -8,6 +8,13 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 )
 
+var (
+	hashPassword           = auth.HashPassword
+	osArgs                 = os.Args
+	osExit                 = os.Exit
+	stdout       io.Writer = os.Stdout
+)
+
 func run(args []string, out io.Writer) int {
 	if len(args) < 2 {
 		fmt.Fprintln(out, "Usage: hashpw <password>")
@@ -15,7 +22,7 @@ func run(args []string, out io.Writer) int {
 	}
 
 	password := args[1]
-	hash, err := auth.HashPassword(password)
+	hash, err := hashPassword(password)
 	if err != nil {
 		fmt.Fprintf(out, "Error: %v\n", err)
 		return 1
@@ -26,5 +33,5 @@ func run(args []string, out io.Writer) int {
 }
 
 func main() {
-	os.Exit(run(os.Args, os.Stdout))
+	osExit(run(osArgs, stdout))
 }

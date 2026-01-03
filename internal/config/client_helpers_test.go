@@ -219,3 +219,37 @@ func TestStripDefaultPort(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateProxmoxConfigWithHost(t *testing.T) {
+	node := &PVEInstance{
+		User:        "root@pam",
+		Password:    "secret",
+		TokenName:   "token",
+		TokenValue:  "value",
+		VerifySSL:   true,
+		Fingerprint: "fingerprint",
+	}
+
+	// Test with normalizeHost = true
+	cfg1 := CreateProxmoxConfigWithHost(node, "https://pve.local", true)
+	if cfg1.Host != "https://pve.local:8006" {
+		t.Errorf("Expected normalized host, got %s", cfg1.Host)
+	}
+
+	// Test with normalizeHost = false
+	cfg2 := CreateProxmoxConfigWithHost(node, "https://pve.local", false)
+	if cfg2.Host != "https://pve.local" { // Verbatim
+		t.Errorf("Expected verbatim host, got %s", cfg2.Host)
+	}
+}
+
+func TestCreatePMGConfigFromFields(t *testing.T) {
+	cfg := CreatePMGConfigFromFields("pmg.local", "root@pam", "secret", "token", "value", "fingerprint", true)
+
+	if cfg.Host != "https://pmg.local:8006" {
+		t.Errorf("Expected normalized host, got %s", cfg.Host)
+	}
+	if cfg.User != "root@pam" {
+		t.Errorf("Expected user root@pam, got %s", cfg.User)
+	}
+}
