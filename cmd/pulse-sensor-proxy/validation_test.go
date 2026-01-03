@@ -530,8 +530,8 @@ func TestDefaultHostResolver(t *testing.T) {
 		t.Error("expected at least one IP for localhost")
 	}
 
-	// Test with nil context
-	_, _ = r.LookupIP(nil, "localhost")
+	// Test with nil (TODO) context
+	_, _ = r.LookupIP(context.TODO(), "localhost")
 
 	// Test with invalid host
 	_, err = r.LookupIP(context.Background(), "invalid.host.local.test")

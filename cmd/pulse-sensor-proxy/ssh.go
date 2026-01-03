@@ -32,6 +32,9 @@ var osHostname = os.Hostname
 // Variable for testing to mock exec.Command (for simple output)
 var execCommandFunc = exec.Command
 
+// Variable for testing to mock exec.CommandContext
+var execCommandContextFunc = exec.CommandContext
+
 const (
 	tempWrapperPath   = "/usr/local/libexec/pulse-sensor-proxy/temp-wrapper.sh"
 	tempWrapperScript = `#!/bin/sh
@@ -73,17 +76,17 @@ exit 1
 `
 )
 
-const proxmoxClusterKnownHostsPath = "/etc/pve/priv/known_hosts"
+var proxmoxClusterKnownHostsPath = "/etc/pve/priv/known_hosts"
 
 // execCommand executes a shell command and returns output
 func execCommand(cmd string) (string, error) {
-	out, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+	out, err := execCommandFunc("sh", "-c", cmd).CombinedOutput()
 	return string(out), err
 }
 
 // execCommandWithLimitsContext runs a shell command with output limits and context cancellation
 func execCommandWithLimitsContext(ctx context.Context, cmd string, stdoutLimit, stderrLimit int64) (string, string, bool, bool, error) {
-	command := exec.CommandContext(ctx, "sh", "-c", cmd)
+	command := execCommandContextFunc(ctx, "sh", "-c", cmd)
 
 	stdoutPipe, err := command.StdoutPipe()
 	if err != nil {
@@ -150,7 +153,7 @@ func execCommandWithLimitsContext(ctx context.Context, cmd string, stdoutLimit, 
 }
 
 func execCommandWithLimits(cmd string, stdoutLimit, stderrLimit int64) (string, string, bool, bool, error) {
-	command := exec.Command("sh", "-c", cmd)
+	command := execCommandFunc("sh", "-c", cmd)
 
 	stdoutPipe, err := command.StdoutPipe()
 	if err != nil {
@@ -666,7 +669,7 @@ func discoverClusterNodes() ([]string, error) {
 	}
 
 	// Get cluster status with IP addresses
-	cmd := exec.Command("pvecm", "status")
+	cmd := execCommandFunc("pvecm", "status")
 	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
@@ -777,7 +780,7 @@ func discoverLocalHostAddresses() ([]string, error) {
 		addresses[strings.ToLower(hostname)] = struct{}{}
 
 		// Try to get FQDN
-		cmd := exec.Command("hostname", "-f")
+		cmd := execCommandFunc("hostname", "-f")
 		if out, err := cmd.Output(); err == nil {
 			fqdn := strings.TrimSpace(string(out))
 			if fqdn != "" && fqdn != hostname {
@@ -885,7 +888,7 @@ func discoverLocalHostAddressesFallback() ([]string, error) {
 	// Get hostname and FQDN (same as native version)
 	if hostname, err := os.Hostname(); err == nil && hostname != "" {
 		addresses[strings.ToLower(hostname)] = struct{}{}
-		cmd := exec.Command("hostname", "-f")
+		cmd := execCommandFunc("hostname", "-f")
 		if out, err := cmd.Output(); err == nil {
 			fqdn := strings.TrimSpace(string(out))
 			if fqdn != "" && fqdn != hostname {
@@ -895,7 +898,7 @@ func discoverLocalHostAddressesFallback() ([]string, error) {
 	}
 
 	// Use 'ip addr' to get IP addresses
-	cmd := exec.Command("ip", "addr", "show")
+	cmd := execCommandFunc("ip", "addr", "show")
 	out, err := cmd.Output()
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to run 'ip addr' command")
@@ -1029,11 +1032,11 @@ func isLocalNode(nodeHost string) bool {
 // getTemperatureLocal collects temperature data from the local machine
 func (p *Proxy) getTemperatureLocal(ctx context.Context) (string, error) {
 	// Run the same command that the wrapper script runs with context timeout
-	cmd := exec.CommandContext(ctx, "sensors", "-j")
+	cmd := execCommandContextFunc(ctx, "sensors", "-j")
 	output, err := cmd.Output()
 	if err != nil {
 		// Try without -j flag as fallback
-		cmd = exec.CommandContext(ctx, "sensors")
+		cmd = execCommandContextFunc(ctx, "sensors")
 		if _, err = cmd.Output(); err != nil {
 			return "", fmt.Errorf("failed to run sensors: %w", err)
 		}
