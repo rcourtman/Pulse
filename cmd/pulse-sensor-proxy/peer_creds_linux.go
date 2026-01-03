@@ -10,8 +10,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// extractPeerCredentials extracts peer credentials via SO_PEERCRED
-func extractPeerCredentials(conn net.Conn) (*peerCredentials, error) {
+// defaultExtractPeerCredentials extracts peer credentials via SO_PEERCRED
+func defaultExtractPeerCredentials(conn net.Conn) (*peerCredentials, error) {
 	unixConn, ok := conn.(*net.UnixConn)
 	if !ok {
 		return nil, fmt.Errorf("not a unix connection")

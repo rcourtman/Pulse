@@ -62,6 +62,23 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+// Variable for testing - can be overridden to mock credential extraction
+var extractPeerCredentials = defaultExtractPeerCredentials
+
+// Variables for testing system calls
+var (
+	osGeteuid     = os.Geteuid
+	unixSetgroups = unix.Setgroups
+	unixSetgid    = unix.Setgid
+	unixSetuid    = unix.Setuid
+)
+
+// Variable for mocking resolveUserSpec
+var (
+	resolveUserSpecFunc = resolveUserSpec
+	netListen           = net.Listen
+)
+
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version information",
@@ -160,11 +177,11 @@ func dropPrivileges(username string) (*userSpec, error) {
 		return nil, nil
 	}
 
-	if os.Geteuid() != 0 {
+	if osGeteuid() != 0 {
 		return nil, nil
 	}
 
-	spec, err := resolveUserSpec(username)
+	spec, err := resolveUserSpecFunc(username)
 	if err != nil {
 		return nil, err
 	}
@@ -173,13 +190,13 @@ func dropPrivileges(username string) (*userSpec, error) {
 		spec.groups = []int{spec.gid}
 	}
 
-	if err := unix.Setgroups(spec.groups); err != nil {
+	if err := unixSetgroups(spec.groups); err != nil {
 		return nil, fmt.Errorf("setgroups: %w", err)
 	}
-	if err := unix.Setgid(spec.gid); err != nil {
+	if err := unixSetgid(spec.gid); err != nil {
 		return nil, fmt.Errorf("setgid: %w", err)
 	}
-	if err := unix.Setuid(spec.uid); err != nil {
+	if err := unixSetuid(spec.uid); err != nil {
 		return nil, fmt.Errorf("setuid: %w", err)
 	}
 
@@ -236,10 +253,13 @@ func resolveUserSpec(username string) (*userSpec, error) {
 	return nil, fmt.Errorf("lookup user %q failed: %v (fallback: %w)", username, err, fallbackErr)
 }
 
+// Variable for testing
+var passwdPath = "/etc/passwd"
+
 func lookupUserFromPasswd(username string) (*userSpec, error) {
-	f, err := os.Open("/etc/passwd")
+	f, err := os.Open(passwdPath)
 	if err != nil {
-		return nil, fmt.Errorf("open /etc/passwd: %w", err)
+		return nil, fmt.Errorf("open %s: %w", passwdPath, err)
 	}
 	defer f.Close()
 
@@ -557,7 +577,7 @@ func (p *Proxy) Start() error {
 	}
 
 	// Create unix socket listener
-	listener, err := net.Listen("unix", p.socketPath)
+	listener, err := netListen("unix", p.socketPath)
 	if err != nil {
 		return fmt.Errorf("failed to create unix socket: %w", err)
 	}
