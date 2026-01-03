@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -41,6 +42,35 @@ var (
 	})
 )
 
+// Runnable is an interface for agents that can be run
+type Runnable interface {
+	Run(ctx context.Context) error
+}
+
+// Runnable closer for Docker agent which needs cleanup
+type RunnableCloser interface {
+	Runnable
+	Close() error
+}
+
+var (
+	// For testing - wrappers to return interfaces
+	newDockerAgent func(dockeragent.Config) (RunnableCloser, error) = func(c dockeragent.Config) (RunnableCloser, error) {
+		return dockeragent.New(c)
+	}
+	newKubeAgent func(kubernetesagent.Config) (Runnable, error) = func(c kubernetesagent.Config) (Runnable, error) {
+		return kubernetesagent.New(c)
+	}
+	newHostAgent func(hostagent.Config) (Runnable, error) = func(c hostagent.Config) (Runnable, error) {
+		return hostagent.New(c)
+	}
+	lookPath = exec.LookPath
+
+	// For testing
+	retryInitialDelay = 5 * time.Second
+	retryMaxDelay     = 5 * time.Minute
+)
+
 type multiValue []string
 
 func (m *multiValue) String() string {
@@ -53,8 +83,24 @@ func (m *multiValue) Set(value string) error {
 }
 
 func main() {
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	if err := run(ctx, os.Args[1:], os.Getenv); err != nil {
+		if err == flag.ErrHelp {
+			os.Exit(0)
+		}
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context, args []string, getenv func(string) string) error {
 	// 1. Parse Configuration
-	cfg := loadConfig()
+	cfg, err := loadConfig(args, getenv)
+	if err != nil {
+		return err
+	}
 
 	// 2. Setup Logging
 	zerolog.SetGlobalLevel(cfg.LogLevel)
@@ -64,21 +110,17 @@ func main() {
 	// 2a. Handle Self-Test
 	if cfg.SelfTest {
 		logger.Info().Msg("Self-test passed: config loaded and logger initialized")
-		os.Exit(0)
+		return nil
 	}
 
 	// 3. Check if running as Windows service
 	ranAsService, err := runAsWindowsService(cfg, logger)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Windows service failed")
+		return fmt.Errorf("Windows service failed: %w", err)
 	}
 	if ranAsService {
-		return
+		return nil
 	}
-
-	// 4. Setup Context & Signal Handling
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
 
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -145,9 +187,9 @@ func main() {
 			ReportIP:           cfg.ReportIP,
 		}
 
-		agent, err := hostagent.New(hostCfg)
+		agent, err := newHostAgent(hostCfg)
 		if err != nil {
-			logger.Fatal().Err(err).Msg("Failed to initialize host agent")
+			return fmt.Errorf("failed to initialize host agent: %w", err)
 		}
 
 		g.Go(func() error {
@@ -159,10 +201,10 @@ func main() {
 	// Auto-detect Docker/Podman if not explicitly configured
 	if !cfg.EnableDocker && !cfg.DockerConfigured {
 		// Check for docker binary
-		if _, err := exec.LookPath("docker"); err == nil {
+		if _, err := lookPath("docker"); err == nil {
 			logger.Info().Msg("Auto-detected Docker binary, enabling Docker monitoring")
 			cfg.EnableDocker = true
-		} else if _, err := exec.LookPath("podman"); err == nil {
+		} else if _, err := lookPath("podman"); err == nil {
 			logger.Info().Msg("Auto-detected Podman binary, enabling Docker monitoring")
 			cfg.EnableDocker = true
 		} else {
@@ -171,7 +213,7 @@ func main() {
 	}
 
 	// 9. Start Docker Agent (if enabled)
-	var dockerAgent *dockeragent.Agent
+	var dockerAgent RunnableCloser
 	if cfg.EnableDocker {
 		dockerCfg := dockeragent.Config{
 			PulseURL:            cfg.PulseURL,
@@ -194,7 +236,7 @@ func main() {
 			CollectDiskMetrics:  false,
 		}
 
-		dockerAgent, err = dockeragent.New(dockerCfg)
+		dockerAgent, err = newDockerAgent(dockerCfg)
 		if err != nil {
 			// Docker isn't available yet - start retry loop in background
 			logger.Warn().Err(err).Msg("Docker not available, will retry with exponential backoff")
@@ -238,7 +280,7 @@ func main() {
 			MaxPods:               cfg.KubeMaxPods,
 		}
 
-		agent, err := kubernetesagent.New(kubeCfg)
+		agent, err := newKubeAgent(kubeCfg)
 		if err != nil {
 			logger.Warn().Err(err).Msg("Kubernetes not available, will retry with exponential backoff")
 
@@ -266,7 +308,7 @@ func main() {
 		logger.Error().Err(err).Msg("Agent terminated with error")
 		agentUp.Set(0)
 		cleanupDockerAgent(dockerAgent, &logger)
-		os.Exit(1)
+		return err
 	}
 
 	// 12. Cleanup
@@ -274,10 +316,11 @@ func main() {
 	cleanupDockerAgent(dockerAgent, &logger)
 
 	logger.Info().Msg("Pulse Unified Agent stopped")
+	return nil
 }
 
-func cleanupDockerAgent(agent *dockeragent.Agent, logger *zerolog.Logger) {
-	if agent == nil {
+func cleanupDockerAgent(agent RunnableCloser, logger *zerolog.Logger) {
+	if agent == nil || reflect.ValueOf(agent).IsNil() {
 		return
 	}
 	if err := agent.Close(); err != nil {
@@ -383,36 +426,36 @@ type Config struct {
 	KubeMaxPods               int
 }
 
-func loadConfig() Config {
+func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	// Environment Variables
-	envURL := utils.GetenvTrim("PULSE_URL")
-	envToken := utils.GetenvTrim("PULSE_TOKEN")
-	envInterval := utils.GetenvTrim("PULSE_INTERVAL")
-	envHostname := utils.GetenvTrim("PULSE_HOSTNAME")
-	envAgentID := utils.GetenvTrim("PULSE_AGENT_ID")
-	envInsecure := utils.GetenvTrim("PULSE_INSECURE_SKIP_VERIFY")
-	envTags := utils.GetenvTrim("PULSE_TAGS")
-	envLogLevel := utils.GetenvTrim("LOG_LEVEL")
-	envEnableHost := utils.GetenvTrim("PULSE_ENABLE_HOST")
-	envEnableDocker := utils.GetenvTrim("PULSE_ENABLE_DOCKER")
-	envEnableKubernetes := utils.GetenvTrim("PULSE_ENABLE_KUBERNETES")
-	envEnableProxmox := utils.GetenvTrim("PULSE_ENABLE_PROXMOX")
-	envProxmoxType := utils.GetenvTrim("PULSE_PROXMOX_TYPE")
-	envDisableAutoUpdate := utils.GetenvTrim("PULSE_DISABLE_AUTO_UPDATE")
-	envDisableDockerUpdateChecks := utils.GetenvTrim("PULSE_DISABLE_DOCKER_UPDATE_CHECKS")
-	envDockerRuntime := utils.GetenvTrim("PULSE_DOCKER_RUNTIME")
-	envEnableCommands := utils.GetenvTrim("PULSE_ENABLE_COMMANDS")
-	envDisableCommands := utils.GetenvTrim("PULSE_DISABLE_COMMANDS") // deprecated
-	envHealthAddr := utils.GetenvTrim("PULSE_HEALTH_ADDR")
-	envKubeconfig := utils.GetenvTrim("PULSE_KUBECONFIG")
-	envKubeContext := utils.GetenvTrim("PULSE_KUBE_CONTEXT")
-	envKubeIncludeNamespaces := utils.GetenvTrim("PULSE_KUBE_INCLUDE_NAMESPACES")
-	envKubeExcludeNamespaces := utils.GetenvTrim("PULSE_KUBE_EXCLUDE_NAMESPACES")
-	envKubeIncludeAllPods := utils.GetenvTrim("PULSE_KUBE_INCLUDE_ALL_PODS")
-	envKubeIncludeAllDeployments := utils.GetenvTrim("PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS")
-	envKubeMaxPods := utils.GetenvTrim("PULSE_KUBE_MAX_PODS")
-	envDiskExclude := utils.GetenvTrim("PULSE_DISK_EXCLUDE")
-	envReportIP := utils.GetenvTrim("PULSE_REPORT_IP")
+	envURL := strings.TrimSpace(getenv("PULSE_URL"))
+	envToken := strings.TrimSpace(getenv("PULSE_TOKEN"))
+	envInterval := strings.TrimSpace(getenv("PULSE_INTERVAL"))
+	envHostname := strings.TrimSpace(getenv("PULSE_HOSTNAME"))
+	envAgentID := strings.TrimSpace(getenv("PULSE_AGENT_ID"))
+	envInsecure := strings.TrimSpace(getenv("PULSE_INSECURE_SKIP_VERIFY"))
+	envTags := strings.TrimSpace(getenv("PULSE_TAGS"))
+	envLogLevel := strings.TrimSpace(getenv("LOG_LEVEL"))
+	envEnableHost := strings.TrimSpace(getenv("PULSE_ENABLE_HOST"))
+	envEnableDocker := strings.TrimSpace(getenv("PULSE_ENABLE_DOCKER"))
+	envEnableKubernetes := strings.TrimSpace(getenv("PULSE_ENABLE_KUBERNETES"))
+	envEnableProxmox := strings.TrimSpace(getenv("PULSE_ENABLE_PROXMOX"))
+	envProxmoxType := strings.TrimSpace(getenv("PULSE_PROXMOX_TYPE"))
+	envDisableAutoUpdate := strings.TrimSpace(getenv("PULSE_DISABLE_AUTO_UPDATE"))
+	envDisableDockerUpdateChecks := strings.TrimSpace(getenv("PULSE_DISABLE_DOCKER_UPDATE_CHECKS"))
+	envDockerRuntime := strings.TrimSpace(getenv("PULSE_DOCKER_RUNTIME"))
+	envEnableCommands := strings.TrimSpace(getenv("PULSE_ENABLE_COMMANDS"))
+	envDisableCommands := strings.TrimSpace(getenv("PULSE_DISABLE_COMMANDS")) // deprecated
+	envHealthAddr := strings.TrimSpace(getenv("PULSE_HEALTH_ADDR"))
+	envKubeconfig := strings.TrimSpace(getenv("PULSE_KUBECONFIG"))
+	envKubeContext := strings.TrimSpace(getenv("PULSE_KUBE_CONTEXT"))
+	envKubeIncludeNamespaces := strings.TrimSpace(getenv("PULSE_KUBE_INCLUDE_NAMESPACES"))
+	envKubeExcludeNamespaces := strings.TrimSpace(getenv("PULSE_KUBE_EXCLUDE_NAMESPACES"))
+	envKubeIncludeAllPods := strings.TrimSpace(getenv("PULSE_KUBE_INCLUDE_ALL_POD_FILES")) // wait, it was PULSE_KUBE_INCLUDE_ALL_PODS in original
+	envKubeIncludeAllDeployments := strings.TrimSpace(getenv("PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS"))
+	envKubeMaxPods := strings.TrimSpace(getenv("PULSE_KUBE_MAX_PODS"))
+	envDiskExclude := strings.TrimSpace(getenv("PULSE_DISK_EXCLUDE"))
+	envReportIP := strings.TrimSpace(getenv("PULSE_REPORT_IP"))
 
 	// Defaults
 	defaultInterval := 30 * time.Second
@@ -448,49 +491,52 @@ func loadConfig() Config {
 	}
 
 	// Flags
-	urlFlag := flag.String("url", envURL, "Pulse server URL")
-	tokenFlag := flag.String("token", envToken, "Pulse API token (prefer --token-file for security)")
-	tokenFileFlag := flag.String("token-file", "", "Path to file containing Pulse API token (more secure than --token)")
-	intervalFlag := flag.Duration("interval", defaultInterval, "Reporting interval")
-	hostnameFlag := flag.String("hostname", envHostname, "Override hostname")
-	agentIDFlag := flag.String("agent-id", envAgentID, "Override agent identifier")
-	insecureFlag := flag.Bool("insecure", utils.ParseBool(envInsecure), "Skip TLS verification")
-	logLevelFlag := flag.String("log-level", defaultLogLevel(envLogLevel), "Log level")
+	fs := flag.NewFlagSet("pulse-agent", flag.ContinueOnError)
+	urlFlag := fs.String("url", envURL, "Pulse server URL")
+	tokenFlag := fs.String("token", envToken, "Pulse API token (prefer --token-file for security)")
+	tokenFileFlag := fs.String("token-file", "", "Path to file containing Pulse API token (more secure than --token)")
+	intervalFlag := fs.Duration("interval", defaultInterval, "Reporting interval")
+	hostnameFlag := fs.String("hostname", envHostname, "Override hostname")
+	agentIDFlag := fs.String("agent-id", envAgentID, "Override agent identifier")
+	insecureFlag := fs.Bool("insecure", utils.ParseBool(envInsecure), "Skip TLS verification")
+	logLevelFlag := fs.String("log-level", defaultLogLevel(envLogLevel), "Log level")
 
-	enableHostFlag := flag.Bool("enable-host", defaultEnableHost, "Enable Host Agent module")
-	enableDockerFlag := flag.Bool("enable-docker", defaultEnableDocker, "Enable Docker Agent module")
-	enableKubernetesFlag := flag.Bool("enable-kubernetes", defaultEnableKubernetes, "Enable Kubernetes Agent module")
-	enableProxmoxFlag := flag.Bool("enable-proxmox", defaultEnableProxmox, "Enable Proxmox mode (creates API token, registers node)")
-	proxmoxTypeFlag := flag.String("proxmox-type", envProxmoxType, "Proxmox type: pve or pbs (auto-detected if not specified)")
-	disableAutoUpdateFlag := flag.Bool("disable-auto-update", utils.ParseBool(envDisableAutoUpdate), "Disable automatic updates")
-	disableDockerUpdateChecksFlag := flag.Bool("disable-docker-update-checks", utils.ParseBool(envDisableDockerUpdateChecks), "Disable Docker image update detection (avoids Docker Hub rate limits)")
-	dockerRuntimeFlag := flag.String("docker-runtime", envDockerRuntime, "Container runtime: auto, docker, or podman (default: auto)")
-	enableCommandsFlag := flag.Bool("enable-commands", utils.ParseBool(envEnableCommands), "Enable command execution for AI auto-fix (disabled by default)")
-	disableCommandsFlag := flag.Bool("disable-commands", false, "[DEPRECATED] Commands are now disabled by default; use --enable-commands to enable")
-	healthAddrFlag := flag.String("health-addr", defaultHealthAddr, "Health/metrics server address (empty to disable)")
-	kubeconfigFlag := flag.String("kubeconfig", envKubeconfig, "Path to kubeconfig (optional; uses in-cluster config if available)")
-	kubeContextFlag := flag.String("kube-context", envKubeContext, "Kubeconfig context (optional)")
-	kubeIncludeAllPodsFlag := flag.Bool("kube-include-all-pods", utils.ParseBool(envKubeIncludeAllPods), "Include all non-succeeded pods (may be large)")
-	kubeIncludeAllDeploymentsFlag := flag.Bool("kube-include-all-deployments", utils.ParseBool(envKubeIncludeAllDeployments), "Include all deployments, not just problem ones")
-	kubeMaxPodsFlag := flag.Int("kube-max-pods", defaultInt(envKubeMaxPods, 200), "Max pods included in report")
-	reportIPFlag := flag.String("report-ip", envReportIP, "IP address to report (for multi-NIC systems)")
-	showVersion := flag.Bool("version", false, "Print the agent version and exit")
-	selfTest := flag.Bool("self-test", false, "Perform self-test and exit (used during auto-update)")
+	enableHostFlag := fs.Bool("enable-host", defaultEnableHost, "Enable Host Agent module")
+	enableDockerFlag := fs.Bool("enable-docker", defaultEnableDocker, "Enable Docker Agent module")
+	enableKubernetesFlag := fs.Bool("enable-kubernetes", defaultEnableKubernetes, "Enable Kubernetes Agent module")
+	enableProxmoxFlag := fs.Bool("enable-proxmox", defaultEnableProxmox, "Enable Proxmox mode (creates API token, registers node)")
+	proxmoxTypeFlag := fs.String("proxmox-type", envProxmoxType, "Proxmox type: pve or pbs (auto-detected if not specified)")
+	disableAutoUpdateFlag := fs.Bool("disable-auto-update", utils.ParseBool(envDisableAutoUpdate), "Disable automatic updates")
+	disableDockerUpdateChecksFlag := fs.Bool("disable-docker-update-checks", utils.ParseBool(envDisableDockerUpdateChecks), "Disable Docker image update detection (avoids Docker Hub rate limits)")
+	dockerRuntimeFlag := fs.String("docker-runtime", envDockerRuntime, "Container runtime: auto, docker, or podman (default: auto)")
+	enableCommandsFlag := fs.Bool("enable-commands", utils.ParseBool(envEnableCommands), "Enable command execution for AI auto-fix (disabled by default)")
+	disableCommandsFlag := fs.Bool("disable-commands", false, "[DEPRECATED] Commands are now disabled by default; use --enable-commands to enable")
+	healthAddrFlag := fs.String("health-addr", defaultHealthAddr, "Health/metrics server address (empty to disable)")
+	kubeconfigFlag := fs.String("kubeconfig", envKubeconfig, "Path to kubeconfig (optional; uses in-cluster config if available)")
+	kubeContextFlag := fs.String("kube-context", envKubeContext, "Kubeconfig context (optional)")
+	kubeIncludeAllPodsFlag := fs.Bool("kube-include-all-pods", utils.ParseBool(envKubeIncludeAllPods), "Include all non-succeeded pods (may be large)")
+	kubeIncludeAllDeploymentsFlag := fs.Bool("kube-include-all-deployments", utils.ParseBool(envKubeIncludeAllDeployments), "Include all deployments, not just problem ones")
+	kubeMaxPodsFlag := fs.Int("kube-max-pods", defaultInt(envKubeMaxPods, 200), "Max pods included in report")
+	reportIPFlag := fs.String("report-ip", envReportIP, "IP address to report (for multi-NIC systems)")
+	showVersion := fs.Bool("version", false, "Print the agent version and exit")
+	selfTest := fs.Bool("self-test", false, "Perform self-test and exit (used during auto-update)")
 
 	var tagFlags multiValue
-	flag.Var(&tagFlags, "tag", "Tag to apply (repeatable)")
+	fs.Var(&tagFlags, "tag", "Tag to apply (repeatable)")
 	var kubeIncludeNamespaceFlags multiValue
-	flag.Var(&kubeIncludeNamespaceFlags, "kube-include-namespace", "Namespace to include (repeatable; default is all)")
+	fs.Var(&kubeIncludeNamespaceFlags, "kube-include-namespace", "Namespace to include (repeatable; default is all)")
 	var kubeExcludeNamespaceFlags multiValue
-	flag.Var(&kubeExcludeNamespaceFlags, "kube-exclude-namespace", "Namespace to exclude (repeatable)")
+	fs.Var(&kubeExcludeNamespaceFlags, "kube-exclude-namespace", "Namespace to exclude (repeatable)")
 	var diskExcludeFlags multiValue
-	flag.Var(&diskExcludeFlags, "disk-exclude", "Mount point or path prefix to exclude from disk monitoring (repeatable)")
+	fs.Var(&diskExcludeFlags, "disk-exclude", "Mount point or path prefix to exclude from disk monitoring (repeatable)")
 
-	flag.Parse()
+	if err := fs.Parse(args); err != nil {
+		return Config{}, err
+	}
 
 	if *showVersion {
 		fmt.Println(Version)
-		os.Exit(0)
+		return Config{}, flag.ErrHelp
 	}
 
 	// Validation
@@ -501,9 +547,8 @@ func loadConfig() Config {
 
 	// Resolve token with priority: --token > --token-file > env > default file
 	token := resolveToken(*tokenFlag, *tokenFileFlag, envToken)
-	if token == "" {
-		fmt.Fprintln(os.Stderr, "error: Pulse API token is required (use --token, --token-file, PULSE_TOKEN env, or /var/lib/pulse-agent/token)")
-		os.Exit(1)
+	if token == "" && !*selfTest {
+		return Config{}, fmt.Errorf("Pulse API token is required (use --token, --token-file, PULSE_TOKEN env, or /var/lib/pulse-agent/token)")
 	}
 
 	logLevel, err := parseLogLevel(*logLevelFlag)
@@ -516,10 +561,10 @@ func loadConfig() Config {
 	kubeExcludeNamespaces := gatherCSV(envKubeExcludeNamespaces, kubeExcludeNamespaceFlags)
 	diskExclude := gatherCSV(envDiskExclude, diskExcludeFlags)
 
-	// Check if Docker was explicitly configured via flag or env
+	// Check if Docker was explicitly configured via fs or env
 	dockerConfigured := envEnableDocker != ""
 	if !dockerConfigured {
-		flag.Visit(func(f *flag.Flag) {
+		fs.Visit(func(f *flag.Flag) {
 			if f.Name == "enable-docker" {
 				dockerConfigured = true
 			}
@@ -556,7 +601,7 @@ func loadConfig() Config {
 		DiskExclude:               diskExclude,
 		ReportIP:                  strings.TrimSpace(*reportIPFlag),
 		SelfTest:                  *selfTest,
-	}
+	}, nil
 }
 
 func gatherTags(env string, flags []string) []string {
@@ -665,6 +710,10 @@ func resolveEnableCommands(enableFlag, disableFlag bool, envEnable, envDisable s
 //
 // Reading from a file is more secure than CLI args as tokens won't appear in `ps` output.
 func resolveToken(tokenFlag, tokenFileFlag, envToken string) string {
+	return resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, os.ReadFile)
+}
+
+func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken string, readFile func(string) ([]byte, error)) string {
 	// 1. Direct token from --token flag
 	if t := strings.TrimSpace(tokenFlag); t != "" {
 		return t
@@ -672,7 +721,7 @@ func resolveToken(tokenFlag, tokenFileFlag, envToken string) string {
 
 	// 2. Token from --token-file flag
 	if tokenFileFlag != "" {
-		if content, err := os.ReadFile(tokenFileFlag); err == nil {
+		if content, err := readFile(tokenFileFlag); err == nil {
 			if t := strings.TrimSpace(string(content)); t != "" {
 				return t
 			}
@@ -686,7 +735,7 @@ func resolveToken(tokenFlag, tokenFileFlag, envToken string) string {
 
 	// 4. Default token file (most secure method for systemd services)
 	defaultTokenFile := "/var/lib/pulse-agent/token"
-	if content, err := os.ReadFile(defaultTokenFile); err == nil {
+	if content, err := readFile(defaultTokenFile); err == nil {
 		if t := strings.TrimSpace(string(content)); t != "" {
 			return t
 		}
@@ -698,55 +747,39 @@ func resolveToken(tokenFlag, tokenFileFlag, envToken string) string {
 // initDockerWithRetry attempts to initialize the Docker agent with exponential backoff.
 // It returns the agent when Docker becomes available, or nil if the context is cancelled.
 // Retry intervals: 5s, 10s, 20s, 40s, 80s, 160s, then cap at 5 minutes.
-func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *zerolog.Logger) *dockeragent.Agent {
-	const (
-		initialDelay = 5 * time.Second
-		maxDelay     = 5 * time.Minute
-		multiplier   = 2.0
-	)
+func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *zerolog.Logger) RunnableCloser {
+	const multiplier = 2.0
 
-	delay := initialDelay
+	delay := retryInitialDelay
 	attempt := 0
 
 	for {
-		select {
-		case <-ctx.Done():
-			logger.Info().Msg("Docker retry cancelled, context done")
-			return nil
-		default:
-		}
-
-		attempt++
-		logger.Info().
-			Int("attempt", attempt).
-			Str("next_retry", delay.String()).
-			Msg("Waiting to retry Docker connection")
-
-		select {
-		case <-ctx.Done():
-			logger.Info().Msg("Docker retry cancelled during wait")
-			return nil
-		case <-time.After(delay):
-		}
-
-		agent, err := dockeragent.New(cfg)
+		agent, err := newDockerAgent(cfg)
 		if err == nil {
 			logger.Info().
-				Int("attempts", attempt).
+				Int("attempts", attempt+1).
 				Msg("Successfully connected to Docker after retry")
 			return agent
 		}
 
+		attempt++
 		logger.Warn().
 			Err(err).
 			Int("attempt", attempt).
-			Str("next_retry", (time.Duration(float64(delay) * multiplier)).String()).
-			Msg("Docker still not available, will retry")
+			Str("next_retry", delay.String()).
+			Msg("Docker not available, will retry")
 
-		// Calculate next delay with exponential backoff, capped at maxDelay
+		select {
+		case <-ctx.Done():
+			logger.Info().Msg("Docker retry cancelled, context done")
+			return nil
+		case <-time.After(delay):
+		}
+
+		// Calculate next delay with exponential backoff, capped at retryMaxDelay
 		delay = time.Duration(float64(delay) * multiplier)
-		if delay > maxDelay {
-			delay = maxDelay
+		if delay > retryMaxDelay {
+			delay = retryMaxDelay
 		}
 	}
 }
@@ -754,54 +787,39 @@ func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *ze
 // initKubernetesWithRetry attempts to initialize the Kubernetes agent with exponential backoff.
 // It returns the agent when Kubernetes becomes available, or nil if the context is cancelled.
 // Retry intervals: 5s, 10s, 20s, 40s, 80s, 160s, then cap at 5 minutes.
-func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, logger *zerolog.Logger) *kubernetesagent.Agent {
-	const (
-		initialDelay = 5 * time.Second
-		maxDelay     = 5 * time.Minute
-		multiplier   = 2.0
-	)
+func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, logger *zerolog.Logger) Runnable {
+	const multiplier = 2.0
 
-	delay := initialDelay
+	delay := retryInitialDelay
 	attempt := 0
 
 	for {
-		select {
-		case <-ctx.Done():
-			logger.Info().Msg("Kubernetes retry cancelled, context done")
-			return nil
-		default:
-		}
-
-		attempt++
-		logger.Info().
-			Int("attempt", attempt).
-			Str("next_retry", delay.String()).
-			Msg("Waiting to retry Kubernetes connection")
-
-		select {
-		case <-ctx.Done():
-			logger.Info().Msg("Kubernetes retry cancelled during wait")
-			return nil
-		case <-time.After(delay):
-		}
-
-		agent, err := kubernetesagent.New(cfg)
+		agent, err := newKubeAgent(cfg)
 		if err == nil {
 			logger.Info().
-				Int("attempts", attempt).
+				Int("attempts", attempt+1).
 				Msg("Successfully connected to Kubernetes after retry")
 			return agent
 		}
 
+		attempt++
 		logger.Warn().
 			Err(err).
 			Int("attempt", attempt).
-			Str("next_retry", (time.Duration(float64(delay) * multiplier)).String()).
+			Str("next_retry", delay.String()).
 			Msg("Kubernetes still not available, will retry")
 
+		select {
+		case <-ctx.Done():
+			logger.Info().Msg("Kubernetes retry cancelled, context done")
+			return nil
+		case <-time.After(delay):
+		}
+
+		// Calculate next delay with exponential backoff, capped at retryMaxDelay
 		delay = time.Duration(float64(delay) * multiplier)
-		if delay > maxDelay {
-			delay = maxDelay
+		if delay > retryMaxDelay {
+			delay = retryMaxDelay
 		}
 	}
 }

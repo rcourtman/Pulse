@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -48,6 +49,21 @@ func TestNewFromConfig_UnknownProvider(t *testing.T) {
 	// (likely Ollama as the default for unrecognized models)
 	if provider != nil && provider.Name() != "ollama" {
 		t.Errorf("For unknown provider without API key, expected either error or Ollama fallback, got %s", provider.Name())
+	}
+}
+
+func TestNewFromConfig_LegacyUnknownProvider(t *testing.T) {
+	cfg := &config.AIConfig{
+		Enabled:  true,
+		Model:    "anthropic:claude-3-5-sonnet", // Forces multi-provider to fail if AnthropicAPIKey is missing
+		Provider: "unknown",
+	}
+	_, err := NewFromConfig(cfg)
+	if err == nil {
+		t.Fatal("Expected error for unknown legacy provider")
+	}
+	if !strings.Contains(err.Error(), "unknown provider: unknown") {
+		t.Errorf("Unexpected error: %v", err)
 	}
 }
 
@@ -166,6 +182,59 @@ func TestNewFromConfig_DeepSeekNoAPIKey(t *testing.T) {
 	}
 }
 
+func TestNewFromConfig_GeminiWithAPIKey(t *testing.T) {
+	cfg := &config.AIConfig{
+		Enabled:  true,
+		Provider: config.AIProviderGemini,
+		APIKey:   "test-api-key",
+		Model:    "gemini-1.5-pro",
+	}
+	provider, err := NewFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if provider == nil {
+		t.Fatal("Provider should not be nil")
+	}
+	if provider.Name() != "gemini" {
+		t.Errorf("Expected provider name 'gemini', got '%s'", provider.Name())
+	}
+}
+
+func TestNewFromConfig_GeminiNoAPIKey(t *testing.T) {
+	cfg := &config.AIConfig{
+		Enabled:  true,
+		Provider: config.AIProviderGemini,
+		APIKey:   "",
+		Model:    "gemini-1.5-pro",
+	}
+	_, err := NewFromConfig(cfg)
+	if err == nil {
+		t.Error("Expected error for Gemini without API key")
+	}
+}
+
+func TestNewFromConfig_AnthropicOAuth(t *testing.T) {
+	cfg := &config.AIConfig{
+		Enabled:           true,
+		Provider:          config.AIProviderAnthropic,
+		Model:             "claude-3-5-sonnet-20241022",
+		AuthMethod:        config.AuthMethodOAuth,
+		OAuthAccessToken:  "test-token",
+		OAuthRefreshToken: "test-refresh",
+	}
+	provider, err := NewFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if provider == nil {
+		t.Fatal("Provider should not be nil")
+	}
+	if provider.Name() != "anthropic-oauth" {
+		t.Errorf("Expected provider name 'anthropic-oauth', got '%s'", provider.Name())
+	}
+}
+
 func TestNewForProvider_NilConfig(t *testing.T) {
 	_, err := NewForProvider(nil, "anthropic", "claude-3")
 	if err == nil {
@@ -266,6 +335,46 @@ func TestNewForProvider_Ollama(t *testing.T) {
 	}
 	if provider.Name() != "ollama" {
 		t.Errorf("Expected provider name 'ollama', got '%s'", provider.Name())
+	}
+}
+
+func TestNewForProvider_Gemini(t *testing.T) {
+	cfg := &config.AIConfig{
+		Enabled:      true,
+		GeminiAPIKey: "test-key",
+	}
+	provider, err := NewForProvider(cfg, config.AIProviderGemini, "gemini-1.5-pro")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if provider.Name() != "gemini" {
+		t.Errorf("Expected provider name 'gemini', got '%s'", provider.Name())
+	}
+}
+
+func TestNewForProvider_GeminiNoAPIKey(t *testing.T) {
+	cfg := &config.AIConfig{
+		Enabled: true,
+	}
+	_, err := NewForProvider(cfg, config.AIProviderGemini, "gemini-1.5-pro")
+	if err == nil {
+		t.Error("Expected error for Gemini without API key")
+	}
+}
+
+func TestNewForProvider_AnthropicOAuth(t *testing.T) {
+	cfg := &config.AIConfig{
+		Enabled:           true,
+		AuthMethod:        config.AuthMethodOAuth,
+		OAuthAccessToken:  "test-token",
+		OAuthRefreshToken: "test-refresh",
+	}
+	provider, err := NewForProvider(cfg, config.AIProviderAnthropic, "claude-3")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if provider.Name() != "anthropic-oauth" {
+		t.Errorf("Expected provider name 'anthropic-oauth', got '%s'", provider.Name())
 	}
 }
 

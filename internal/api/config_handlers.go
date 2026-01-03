@@ -664,9 +664,11 @@ func findExistingGuestURL(nodeName string, existingEndpoints []config.ClusterEnd
 	return ""
 }
 
+var detectPVECluster = defaultDetectPVECluster
+
 // detectPVECluster checks if a PVE node is part of a cluster and returns cluster information
 // If existingEndpoints is provided, GuestURL values will be preserved for matching nodes
-func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
+func defaultDetectPVECluster(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
 	tempClient, err := proxmox.NewClient(clientConfig)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to create client for cluster detection")

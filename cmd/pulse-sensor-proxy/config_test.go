@@ -1,8 +1,11 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSanitizeDuplicateAllowedNodesBlocks_RemovesExtraBlocks(t *testing.T) {
@@ -310,5 +313,156 @@ func TestParseAllowedSubnets(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestLoadConfig_Basic(t *testing.T) {
+	// Non-existent file should just use defaults
+	cfg, err := loadConfig("/non/existent/config.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.LogLevel != "info" {
+		t.Errorf("expected default log level info, got %s", cfg.LogLevel)
+	}
+}
+
+func TestLoadConfig_EnvOverrides(t *testing.T) {
+	t.Setenv("PULSE_SENSOR_PROXY_LOG_LEVEL", "debug")
+	t.Setenv("PULSE_SENSOR_PROXY_READ_TIMEOUT", "10s")
+	t.Setenv("PULSE_SENSOR_PROXY_WRITE_TIMEOUT", "20s")
+	t.Setenv("PULSE_SENSOR_PROXY_ALLOWED_SUBNETS", "10.0.0.0/24,192.168.1.1")
+	t.Setenv("PULSE_SENSOR_PROXY_MAX_SSH_OUTPUT_BYTES", "2097152")
+	t.Setenv("PULSE_SENSOR_PROXY_ALLOW_IDMAPPED_ROOT", "false")
+	t.Setenv("PULSE_SENSOR_PROXY_ALLOWED_IDMAP_USERS", "root,admin")
+	t.Setenv("PULSE_SENSOR_PROXY_ALLOWED_PEER_UIDS", "1000,1001")
+	t.Setenv("PULSE_SENSOR_PROXY_ALLOWED_PEER_GIDS", "1000,1001")
+	t.Setenv("PULSE_SENSOR_PROXY_ALLOWED_NODES", "node1,node2")
+	t.Setenv("PULSE_SENSOR_PROXY_STRICT_NODE_VALIDATION", "true")
+	t.Setenv("PULSE_SENSOR_PROXY_REQUIRE_PROXMOX_HOSTKEYS", "true")
+	t.Setenv("PULSE_SENSOR_PROXY_METRICS_ADDR", "127.0.0.1:9999")
+
+	cfg, err := loadConfig("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.LogLevel != "debug" {
+		t.Errorf("expected debug log level, got %s", cfg.LogLevel)
+	}
+	if cfg.ReadTimeout != 10*time.Second {
+		t.Errorf("expected 10s read timeout, got %v", cfg.ReadTimeout)
+	}
+	if cfg.WriteTimeout != 20*time.Second {
+		t.Errorf("expected 20s write timeout, got %v", cfg.WriteTimeout)
+	}
+	if cfg.MaxSSHOutputBytes != 2097152 {
+		t.Errorf("expected 2MB max SSH output, got %d", cfg.MaxSSHOutputBytes)
+	}
+	if cfg.AllowIDMappedRoot {
+		t.Error("expected allow_idmapped_root false")
+	}
+	if len(cfg.AllowedPeerUIDs) != 2 {
+		t.Errorf("expected 2 UIDs, got %d", len(cfg.AllowedPeerUIDs))
+	}
+	if cfg.MetricsAddress != "127.0.0.1:9999" {
+		t.Errorf("expected metrics addr 127.0.0.1:9999, got %s", cfg.MetricsAddress)
+	}
+}
+
+func TestLoadAllowedNodesFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// YAML list format
+	yamlList := filepath.Join(tmpDir, "list.yaml")
+	os.WriteFile(yamlList, []byte("- node1\n- node2\n"), 0644)
+	nodes, err := loadAllowedNodesFile(yamlList)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 2 {
+		t.Errorf("expected 2 nodes, got %d", len(nodes))
+	}
+
+	// YAML map format
+	yamlMap := filepath.Join(tmpDir, "map.yaml")
+	os.WriteFile(yamlMap, []byte("allowed_nodes:\n  - node3\n"), 0644)
+	nodes, err = loadAllowedNodesFile(yamlMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 || nodes[0] != "node3" {
+		t.Errorf("unexpected nodes: %v", nodes)
+	}
+
+	// Plain text format
+	plainText := filepath.Join(tmpDir, "plain.txt")
+	os.WriteFile(plainText, []byte("node4\n# comment\n- node5\n"), 0644)
+	nodes, err = loadAllowedNodesFile(plainText)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 2 || nodes[1] != "node5" {
+		t.Errorf("unexpected nodes: %v", nodes)
+	}
+}
+
+func TestLoadConfig_HTTP_Validation(t *testing.T) {
+	t.Setenv("PULSE_SENSOR_PROXY_HTTP_ENABLED", "true")
+	t.Setenv("PULSE_SENSOR_PROXY_HTTP_ADDR", ":8443")
+	t.Setenv("PULSE_SENSOR_PROXY_HTTP_TLS_CERT", "/tmp/cert")
+	t.Setenv("PULSE_SENSOR_PROXY_HTTP_TLS_KEY", "/tmp/key")
+	t.Setenv("PULSE_SENSOR_PROXY_HTTP_AUTH_TOKEN", "token")
+
+	cfg, err := loadConfig("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.HTTPListenAddr != ":8443" {
+		t.Errorf("expected addr :8443, got %s", cfg.HTTPListenAddr)
+	}
+
+	// Test missing token
+	t.Setenv("PULSE_SENSOR_PROXY_HTTP_AUTH_TOKEN", "")
+	_, err = loadConfig("")
+	if err == nil {
+		t.Error("expected error for missing HTTP token")
+	}
+
+	// Test missing cert
+	t.Setenv("PULSE_SENSOR_PROXY_HTTP_AUTH_TOKEN", "token")
+	t.Setenv("PULSE_SENSOR_PROXY_HTTP_TLS_CERT", "")
+	_, err = loadConfig("")
+	if err == nil {
+		t.Error("expected error for missing TLS cert")
+	}
+}
+
+func TestDetectHostCIDRs(t *testing.T) {
+	cidrs := detectHostCIDRs()
+	// Should at least have some IPs if running in a container with network
+	if len(cidrs) == 0 {
+		t.Log("detectHostCIDRs returned no CIDRs (might be expected if no non-loopback IPs)")
+	}
+	for _, cidr := range cidrs {
+		if !strings.Contains(cidr, "/") {
+			t.Errorf("invalid CIDR: %s", cidr)
+		}
+	}
+}
+
+func TestLoadConfig_TimeoutValidation(t *testing.T) {
+	t.Setenv("PULSE_SENSOR_PROXY_READ_TIMEOUT", "0s")
+	t.Setenv("PULSE_SENSOR_PROXY_WRITE_TIMEOUT", "0s")
+	t.Setenv("PULSE_SENSOR_PROXY_MAX_SSH_OUTPUT_BYTES", "0")
+
+	cfg, err := loadConfig("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ReadTimeout <= 0 {
+		t.Error("expected positive read timeout default")
+	}
+	if cfg.WriteTimeout <= 0 {
+		t.Error("expected positive write timeout default")
 	}
 }

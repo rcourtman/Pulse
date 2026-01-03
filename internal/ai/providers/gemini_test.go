@@ -527,3 +527,88 @@ func TestGeminiClient_Chat_RoleConversion(t *testing.T) {
 		t.Errorf("expected third role 'user', got %q", receivedReq.Contents[2].Role)
 	}
 }
+func TestGeminiClient_Chat_ToolResultsAndAssistantToolCalls(t *testing.T) {
+	var got geminiRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		resp := geminiResponse{
+			Candidates: []geminiCandidate{{Content: geminiContent{Parts: []geminiPart{{Text: "Ok"}}}, FinishReason: "STOP"}},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
+	_, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{
+			{Role: "assistant", Content: "Calling tool", ToolCalls: []ToolCall{{ID: "tc1", Name: "get_time", Input: map[string]any{"tz": "UTC"}}}},
+			{Role: "user", ToolResult: &ToolResult{ToolUseID: "get_time", Content: "{\"time\":\"00:00\"}"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+
+	if len(got.Contents) != 2 {
+		t.Fatalf("Expected 2 contents, got %d", len(got.Contents))
+	}
+	// Check assistant tool call
+	if got.Contents[0].Role != "model" || got.Contents[0].Parts[1].FunctionCall == nil {
+		t.Errorf("Expected model role with function call, got %+v", got.Contents[0])
+	}
+	// Check tool result
+	if got.Contents[1].Role != "user" || got.Contents[1].Parts[0].FunctionResponse == nil {
+		t.Errorf("Expected user role with function response, got %+v", got.Contents[1])
+	}
+}
+
+func TestGeminiClient_Chat_Retry(t *testing.T) {
+	var count int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count++
+		if count == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte(`{"error":{"message":"Quota exceeded"}}`))
+			return
+		}
+		resp := geminiResponse{
+			Candidates: []geminiCandidate{{Content: geminiContent{Parts: []geminiPart{{Text: "Ok"}}}, FinishReason: "STOP"}},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
+	_, err := client.Chat(context.Background(), ChatRequest{Messages: []Message{{Role: "user", Content: "hi"}}})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("Expected 2 attempts, got %d", count)
+	}
+}
+
+func TestGeminiClient_Chat_DefaultMaxTokensAndStripPrefix(t *testing.T) {
+	var got geminiRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		resp := geminiResponse{
+			Candidates: []geminiCandidate{{Content: geminiContent{Parts: []geminiPart{{Text: "Ok"}}}, FinishReason: "STOP"}},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
+	_, err := client.Chat(context.Background(), ChatRequest{
+		Model:    "gemini:gemini-1.5-flash",
+		Messages: []Message{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+
+	if got.GenerationConfig.MaxOutputTokens != 8192 {
+		t.Errorf("Expected default max tokens 8192, got %d", got.GenerationConfig.MaxOutputTokens)
+	}
+}

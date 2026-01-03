@@ -32,15 +32,15 @@ var (
 	GitCommit = "unknown"
 )
 
-const metricsPort = 9091
+var metricsPort = 9091
 
 var rootCmd = &cobra.Command{
 	Use:     "pulse",
 	Short:   "Pulse - Proxmox VE and PBS monitoring system",
 	Long:    `Pulse is a real-time monitoring system for Proxmox Virtual Environment (PVE) and Proxmox Backup Server (PBS)`,
 	Version: Version,
-	Run: func(cmd *cobra.Command, args []string) {
-		runServer()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runServer(context.Background())
 	},
 }
 
@@ -69,12 +69,12 @@ var versionCmd = &cobra.Command{
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		// handle exit code in rootCmd or RunE
+		osExit(1)
 	}
 }
 
-func runServer() {
+func runServer(ctx context.Context) error {
 	// Initialize logger with baseline defaults for early startup logs
 	logging.Init(logging.Config{
 		Format:    "auto",
@@ -92,7 +92,7 @@ func runServer() {
 	// Load unified configuration
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to load configuration")
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	// Re-initialize logging with configuration-driven settings
@@ -114,8 +114,8 @@ func runServer() {
 	// Validate agent binaries are available for download
 	agentbinaries.EnsureHostAgentBinaries(Version)
 
-	// Create context that cancels on interrupt
-	ctx, cancel := context.WithCancel(context.Background())
+	// Create derived context that cancels on interrupt
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	metricsAddr := fmt.Sprintf("%s:%d", cfg.BackendHost, metricsPort)
@@ -144,7 +144,7 @@ func runServer() {
 	// Initialize reloadable monitoring system
 	reloadableMonitor, err := monitoring.NewReloadableMonitor(cfg, wsHub)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize monitoring system")
+		return fmt.Errorf("failed to initialize monitoring system: %w", err)
 	}
 
 	// Set state getter for WebSocket hub
@@ -252,7 +252,7 @@ func runServer() {
 				Str("protocol", "HTTPS").
 				Msg("Server listening")
 			if err := srv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil && err != http.ErrServerClosed {
-				log.Fatal().Err(err).Msg("Failed to start HTTPS server")
+				log.Error().Err(err).Msg("Failed to start HTTPS server")
 			}
 		} else {
 			if cfg.HTTPSEnabled {
@@ -264,7 +264,7 @@ func runServer() {
 				Str("protocol", "HTTP").
 				Msg("Server listening")
 			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatal().Err(err).Msg("Failed to start HTTP server")
+				log.Error().Err(err).Msg("Failed to start HTTP server")
 			}
 		}
 	}()
@@ -281,6 +281,10 @@ func runServer() {
 	// Handle signals
 	for {
 		select {
+		case <-ctx.Done():
+			log.Info().Msg("Context cancelled, shutting down...")
+			goto shutdown
+
 		case <-reloadChan:
 			log.Info().Msg("Received SIGHUP, reloading configuration...")
 
@@ -321,6 +325,7 @@ shutdown:
 	}
 
 	log.Info().Msg("Server stopped")
+	return nil
 }
 
 // shouldAutoImport checks if auto-import environment variables are set

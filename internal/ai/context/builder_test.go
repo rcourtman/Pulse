@@ -7,6 +7,97 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
+type mockMetricsHistory struct {
+	nodeMetrics       map[string]map[string][]MetricPoint
+	guestMetrics      map[string]map[string][]MetricPoint
+	allGuestMetrics   map[string]map[string][]MetricPoint
+	allStorageMetrics map[string]map[string][]MetricPoint
+}
+
+func (m *mockMetricsHistory) GetNodeMetrics(nodeID string, metricType string, duration time.Duration) []MetricPoint {
+	if m.nodeMetrics == nil {
+		return nil
+	}
+	if node, ok := m.nodeMetrics[nodeID]; ok {
+		return node[metricType]
+	}
+	return nil
+}
+
+func (m *mockMetricsHistory) GetGuestMetrics(guestID string, metricType string, duration time.Duration) []MetricPoint {
+	if m.guestMetrics == nil {
+		return nil
+	}
+	if guest, ok := m.guestMetrics[guestID]; ok {
+		return guest[metricType]
+	}
+	return nil
+}
+
+func (m *mockMetricsHistory) GetAllGuestMetrics(guestID string, duration time.Duration) map[string][]MetricPoint {
+	if m.allGuestMetrics == nil {
+		return nil
+	}
+	return m.allGuestMetrics[guestID]
+}
+
+func (m *mockMetricsHistory) GetAllStorageMetrics(storageID string, duration time.Duration) map[string][]MetricPoint {
+	if m.allStorageMetrics == nil {
+		return nil
+	}
+	return m.allStorageMetrics[storageID]
+}
+
+type mockKnowledge struct {
+	notes map[string][]string
+}
+
+func (m *mockKnowledge) GetNotes(guestID string) []string {
+	return m.notes[guestID]
+}
+
+func (m *mockKnowledge) FormatAllForContext() string {
+	return "mock formatted knowledge"
+}
+
+type mockFindings struct {
+	findings map[string][]string
+}
+
+func (m *mockFindings) GetDismissedForContext() string {
+	return "mock dismissed findings"
+}
+
+func (m *mockFindings) GetPastFindingsForResource(resourceID string) []string {
+	return m.findings[resourceID]
+}
+
+type mockBaseline struct {
+	anomalies map[string]map[string]struct {
+		severity string
+		zScore   float64
+		mean     float64
+		stddev   float64
+		ok       bool
+	}
+}
+
+func (m *mockBaseline) CheckAnomaly(resourceID, metric string, value float64) (string, float64, float64, float64, bool) {
+	if m.anomalies == nil {
+		return "", 0, 0, 0, false
+	}
+	if res, ok := m.anomalies[resourceID]; ok {
+		if val, ok := res[metric]; ok {
+			return val.severity, val.zScore, val.mean, val.stddev, val.ok
+		}
+	}
+	return "", 0, 0, 0, false
+}
+
+func (m *mockBaseline) GetBaseline(resourceID, metric string) (float64, float64, int, bool) {
+	return 50.0, 10.0, 100, true
+}
+
 func TestNewBuilder(t *testing.T) {
 	builder := NewBuilder()
 	if builder == nil {
@@ -379,105 +470,339 @@ func containsSubstring(s, substr string) bool {
 	return false
 }
 
-func TestFilterRecentPoints_Empty(t *testing.T) {
-	points := []MetricPoint{}
-	result := filterRecentPoints(points, time.Hour)
-
-	if len(result) != 0 {
-		t.Errorf("Expected empty result, got %d points", len(result))
-	}
-}
-
-func TestFilterRecentPoints_AllRecent(t *testing.T) {
+func TestBuilder_BuildForInfrastructure_Enriched(t *testing.T) {
 	now := time.Now()
-	points := []MetricPoint{
-		{Timestamp: now.Add(-30 * time.Minute), Value: 1.0},
-		{Timestamp: now.Add(-15 * time.Minute), Value: 2.0},
-		{Timestamp: now.Add(-5 * time.Minute), Value: 3.0},
-	}
-
-	result := filterRecentPoints(points, time.Hour)
-
-	if len(result) != 3 {
-		t.Errorf("Expected 3 points, got %d", len(result))
-	}
-}
-
-func TestFilterRecentPoints_FilterOld(t *testing.T) {
-	now := time.Now()
-	points := []MetricPoint{
-		{Timestamp: now.Add(-3 * time.Hour), Value: 1.0},    // Old
-		{Timestamp: now.Add(-2 * time.Hour), Value: 2.0},    // Old
-		{Timestamp: now.Add(-30 * time.Minute), Value: 3.0}, // Recent
-	}
-
-	result := filterRecentPoints(points, time.Hour)
-
-	if len(result) != 1 {
-		t.Errorf("Expected 1 recent point, got %d", len(result))
-	}
-	if result[0].Value != 3.0 {
-		t.Errorf("Expected value 3.0, got %f", result[0].Value)
-	}
-}
-
-func TestFormatAnomalyDescription(t *testing.T) {
-	tests := []struct {
-		name         string
-		metric       string
-		current      float64
-		mean         float64
-		stddev       float64
-		severity     string
-		direction    string
-		wantContains []string
-	}{
-		{
-			name:         "cpu high",
-			metric:       "cpu",
-			current:      95.0,
-			mean:         50.0,
-			stddev:       10.0,
-			severity:     "significantly",
-			direction:    "above",
-			wantContains: []string{"Cpu", "significantly", "above", "95%", "50%"},
+	mh := &mockMetricsHistory{
+		nodeMetrics: map[string]map[string][]MetricPoint{
+			"node-1": {
+				"cpu": []MetricPoint{
+					{Timestamp: now.Add(-1 * time.Hour), Value: 10.0},
+					{Timestamp: now.Add(-2 * time.Hour), Value: 20.0},
+					{Timestamp: now.Add(-3 * time.Hour), Value: 30.0},
+					{Timestamp: now.Add(-4 * time.Hour), Value: 40.0},
+					{Timestamp: now.Add(-24 * time.Hour), Value: 50.0},
+					{Timestamp: now.Add(-25 * time.Hour), Value: 60.0},
+					{Timestamp: now.Add(-26 * time.Hour), Value: 70.0},
+					{Timestamp: now.Add(-27 * time.Hour), Value: 80.0},
+					{Timestamp: now.Add(-28 * time.Hour), Value: 90.0},
+					{Timestamp: now.Add(-29 * time.Hour), Value: 100.0},
+					{Timestamp: now.Add(-30 * time.Hour), Value: 110.0},
+				},
+			},
 		},
-		{
-			name:         "memory low",
-			metric:       "memory",
-			current:      20.0,
-			mean:         60.0,
-			stddev:       15.0,
-			severity:     "slightly",
-			direction:    "below",
-			wantContains: []string{"Memory", "slightly", "below", "20%", "60%"},
+		allGuestMetrics: map[string]map[string][]MetricPoint{
+			"vm-100": {
+				"cpu": []MetricPoint{
+					{Timestamp: now.Add(-1 * time.Hour), Value: 10.0},
+					{Timestamp: now.Add(-2 * time.Hour), Value: 11.0},
+					{Timestamp: now.Add(-3 * time.Hour), Value: 12.0},
+				},
+			},
+		},
+		allStorageMetrics: map[string]map[string][]MetricPoint{
+			"storage-1": {
+				"usage": []MetricPoint{
+					{Timestamp: now.Add(-1 * time.Hour), Value: 80.0},
+					{Timestamp: now.Add(-2 * time.Hour), Value: 79.0},
+					{Timestamp: now.Add(-3 * time.Hour), Value: 78.0},
+					{Timestamp: now.Add(-4 * time.Hour), Value: 77.0},
+					{Timestamp: now.Add(-5 * time.Hour), Value: 76.0},
+					{Timestamp: now.Add(-6 * time.Hour), Value: 75.0},
+					{Timestamp: now.Add(-7 * time.Hour), Value: 74.0},
+					{Timestamp: now.Add(-8 * time.Hour), Value: 73.0},
+					{Timestamp: now.Add(-9 * time.Hour), Value: 72.0},
+					{Timestamp: now.Add(-10 * time.Hour), Value: 71.0},
+				},
+			},
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := formatAnomalyDescription(tt.metric, tt.current, tt.mean, tt.stddev, tt.severity, tt.direction)
-			for _, want := range tt.wantContains {
-				if !containsSubstring(result, want) {
-					t.Errorf("formatAnomalyDescription() = %q, want to contain %q", result, want)
-				}
-			}
-		})
+	known := &mockKnowledge{
+		notes: map[string][]string{
+			"vm-100": {"Important database"},
+		},
+	}
+
+	bl := &mockBaseline{
+		anomalies: map[string]map[string]struct {
+			severity string
+			zScore   float64
+			mean     float64
+			stddev   float64
+			ok       bool
+		}{
+			"node-1": {
+				"cpu": {severity: "high", zScore: 3.5, mean: 20.0, stddev: 5.0, ok: true},
+			},
+			"vm-100": {
+				"memory": {severity: "low", zScore: -2.1, mean: 80.0, stddev: 10.0, ok: true},
+			},
+		},
+	}
+
+	builder := NewBuilder().
+		WithMetricsHistory(mh).
+		WithKnowledge(known).
+		WithBaseline(bl)
+
+	state := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node-1", Name: "pve-1", Status: "online", CPU: 40.0},
+		},
+		VMs: []models.VM{
+			{ID: "vm-100", Name: "db", Node: "pve-1", Status: "running", Memory: models.Memory{Usage: 0.5}},
+		},
+		Storage: []models.Storage{
+			{ID: "storage-1", Name: "local", Status: "available", Usage: 80.0, Total: 1000, Used: 800},
+		},
+	}
+
+	ctx := builder.BuildForInfrastructure(state)
+
+	if len(ctx.Nodes) == 0 || len(ctx.Nodes[0].Trends) == 0 {
+		t.Error("Expected trends for node-1")
+	}
+
+	if len(ctx.Nodes[0].Anomalies) == 0 {
+		t.Error("Expected anomalies for node-1")
+	}
+
+	if len(ctx.VMs) == 0 || len(ctx.VMs[0].UserNotes) == 0 {
+		t.Error("Expected notes for vm-100")
+	}
+
+	if len(ctx.VMs[0].MetricSamples) == 0 {
+		t.Error("Expected metric samples for vm-100")
+	}
+
+	if len(ctx.Storage) == 0 || len(ctx.Storage[0].Trends) == 0 {
+		t.Error("Expected trends for storage-1")
 	}
 }
 
-func TestFormatPredictionBasis(t *testing.T) {
-	trend := Trend{
-		RatePerDay: 2.5,
-		Period:     7 * 24 * time.Hour, // 7 days
+func TestBuilder_StoragePredictions(t *testing.T) {
+	// Mock growing trend: 1% per day
+	trends := map[string]Trend{
+		"usage_7d": {
+			Direction:  TrendGrowing,
+			RatePerDay: 1.0,
+			Confidence: 0.9,
+			DataPoints: 12,
+			Period:     7 * 24 * time.Hour,
+		},
 	}
 
-	result := formatPredictionBasis(trend)
-
-	if !containsSubstring(result, "Growing") {
-		t.Errorf("Expected 'Growing' in result, got %q", result)
+	storage := models.Storage{
+		ID:    "storage-1",
+		Usage: 85.0,
+		Total: 1000,
+		Used:  850,
 	}
-	if !containsSubstring(result, "based on") {
-		t.Errorf("Expected 'based on' in result, got %q", result)
+
+	builder := NewBuilder()
+	predictions := builder.computeStoragePredictions(storage, trends)
+
+	// Current 85%, growing 1%/day.
+	// 90% in 5 days.
+	// 100% in 15 days.
+	if len(predictions) != 2 {
+		t.Fatalf("Expected 2 predictions, got %d", len(predictions))
+	}
+
+	if predictions[0].Event != "storage_warning_90pct" {
+		t.Errorf("Expected first prediction to be 90%% warning, got %s", predictions[0].Event)
+	}
+	if predictions[0].DaysUntil != 5.0 {
+		t.Errorf("Expected 5 days until 90%%, got %f", predictions[0].DaysUntil)
+	}
+
+	if predictions[1].Event != "storage_full" {
+		t.Errorf("Expected second prediction to be storage_full, got %s", predictions[1].Event)
+	}
+	if predictions[1].DaysUntil != 15.0 {
+		t.Errorf("Expected 15 days until 100%%, got %f", predictions[1].DaysUntil)
+	}
+
+	// Test already past threshold
+	storage.Usage = 95.0
+	predictions = builder.computeStoragePredictions(storage, trends)
+	if len(predictions) != 1 {
+		t.Errorf("Expected 1 prediction (only 100%%), got %d", len(predictions))
+	}
+
+	// Test not growing
+	trends["usage_7d"] = Trend{Direction: TrendStable, RatePerDay: 0.05}
+	predictions = builder.computeStoragePredictions(storage, trends)
+	if len(predictions) != 0 {
+		t.Errorf("Expected 0 predictions for stable trend, got %d", len(predictions))
+	}
+}
+
+func TestBuilder_BuildHostContext(t *testing.T) {
+	builder := NewBuilder()
+	host := models.Host{
+		ID:            "host-1",
+		Hostname:      "server-1",
+		DisplayName:   "Primary Server",
+		Status:        "online",
+		UptimeSeconds: 3600,
+		LoadAverage:   []float64{4.0, 3.5, 3.0},
+		CPUCount:      8,
+		Memory: models.Memory{
+			Total: 16000,
+			Used:  8000,
+		},
+	}
+
+	ctx := builder.buildHostContext(host)
+	if ctx.ResourceName != "Primary Server" {
+		t.Errorf("Expected display name, got %s", ctx.ResourceName)
+	}
+	if ctx.CurrentCPU != 50.0 { // 4.0 / 8 * 100
+		t.Errorf("Expected 50%% CPU, got %f", ctx.CurrentCPU)
+	}
+	if ctx.CurrentMemory != 50.0 { // 8000 / 16000 * 100
+		t.Errorf("Expected 50%% memory, got %f", ctx.CurrentMemory)
+	}
+}
+
+func TestBuilder_BuildDockerHostContext(t *testing.T) {
+	builder := NewBuilder()
+	host := models.DockerHost{
+		ID:            "docker-1",
+		Hostname:      "docker-host",
+		DisplayName:   "Docker Box",
+		Status:        "running",
+		UptimeSeconds: 7200,
+	}
+
+	ctx := builder.buildDockerHostContext(host)
+	if ctx.ResourceName != "Docker Box" {
+		t.Errorf("Expected display name, got %s", ctx.ResourceName)
+	}
+	if ctx.ResourceType != "docker_host" {
+		t.Errorf("Expected type docker_host, got %s", ctx.ResourceType)
+	}
+}
+
+func TestBuilder_GuestTrends_Insufficient(t *testing.T) {
+	now := time.Now()
+	mh := &mockMetricsHistory{
+		allGuestMetrics: map[string]map[string][]MetricPoint{
+			"vm-100": {
+				"cpu": []MetricPoint{
+					{Timestamp: now.Add(-1 * time.Hour), Value: 10.0},
+					{Timestamp: now.Add(-2 * time.Hour), Value: 11.0},
+					{Timestamp: now.Add(-3 * time.Hour), Value: 12.0},
+					// Only 3 points, not enough for 7d trend (needs 10)
+				},
+			},
+		},
+	}
+	builder := NewBuilder().WithMetricsHistory(mh)
+	trends := builder.computeGuestTrends("vm-100")
+	if _, ok := trends["cpu_7d"]; ok {
+		t.Error("Did not expect 7d trend for only 3 points")
+	}
+}
+
+func TestBuilder_MergeContexts_WithContainers(t *testing.T) {
+	builder := NewBuilder()
+	target := &ResourceContext{ResourceID: "vm-100", Node: "pve-1"}
+	infra := &InfrastructureContext{
+		Containers: []ResourceContext{
+			{ResourceID: "ct-200", Node: "pve-1", ResourceName: "ct1"},
+		},
+	}
+	result := builder.MergeContexts(target, infra)
+	if !containsSubstring(result, "ct1") {
+		t.Error("Expected related container to be included in merged context")
+	}
+}
+
+func TestBuilder_Options(t *testing.T) {
+	b := NewBuilder()
+	b.includeTrends = false
+	if len(b.computeGuestTrends("vm-1")) != 0 {
+		t.Error("Expected no trends when includeTrends is false")
+	}
+
+	b.includeBaseline = false
+	ctx := &ResourceContext{ResourceID: "vm-1"}
+	b.enrichWithAnomalies(ctx)
+	if len(ctx.Anomalies) != 0 {
+		t.Error("Expected no anomalies when includeBaseline is false")
+	}
+
+	b.metricsHistory = nil
+	if len(b.computeGuestMetricSamples("vm-1")) != 0 {
+		t.Error("Expected no samples when metricsHistory is nil")
+	}
+}
+
+func TestBuilder_StoragePredictions_Far(t *testing.T) {
+	b := NewBuilder()
+	storage := models.Storage{Usage: 10.0}
+	trends := map[string]Trend{
+		"usage_7d": {
+			Direction:  TrendGrowing,
+			RatePerDay: 0.1, // Will take 800 days to reach 90%
+			DataPoints: 12,
+		},
+	}
+	preds := b.computeStoragePredictions(storage, trends)
+	if len(preds) != 0 {
+		t.Errorf("Expected no predictions for far-out ETA, got %d", len(preds))
+	}
+}
+
+func TestBuilder_GuestTrends_Empty(t *testing.T) {
+	mh := &mockMetricsHistory{
+		allGuestMetrics: map[string]map[string][]MetricPoint{
+			"vm-1": {"cpu": {{}}}, // only 1 point
+		},
+	}
+	b := NewBuilder().WithMetricsHistory(mh)
+	if len(b.computeGuestTrends("vm-1")) != 0 {
+		t.Error("Expected no trends for single point")
+	}
+}
+
+func TestBuilder_BuildForInfrastructure_EdgeCases(t *testing.T) {
+	builder := NewBuilder().WithBaseline(&mockBaseline{
+		anomalies: map[string]map[string]struct {
+			severity string
+			zScore   float64
+			mean     float64
+			stddev   float64
+			ok       bool
+		}{
+			"node-1": {"cpu": {severity: "high", ok: true}},
+		},
+	})
+
+	state := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node-1", CPU: 0.0}, // zero value should skip anomaly check
+		},
+		Storage: []models.Storage{
+			{ID: "s1", Usage: 95.0, Total: 100, Used: 95}, // past 90% threshold
+		},
+	}
+
+	// Mock growing trend for storage
+	trends := map[string]Trend{
+		"usage_7d": {Direction: TrendGrowing, RatePerDay: 1.0, DataPoints: 10},
+	}
+
+	ctx := builder.BuildForInfrastructure(state)
+	if len(ctx.Nodes[0].Anomalies) != 0 {
+		t.Error("Expected no anomalies for zero CPU")
+	}
+
+	// computeStoragePredictions for s1 should only have 100% prediction, not 90%
+	preds := builder.computeStoragePredictions(state.Storage[0], trends)
+	if len(preds) != 1 || preds[0].Event != "storage_full" {
+		t.Errorf("Expected only storage_full prediction, got %v", preds)
 	}
 }

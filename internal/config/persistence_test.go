@@ -2302,3 +2302,47 @@ func TestLoadOIDCConfigRoundTrip(t *testing.T) {
 		t.Errorf("CABundle: got %q want %q", loaded.CABundle, original.CABundle)
 	}
 }
+
+func TestPersistence_EnvConfigSuppressions(t *testing.T) {
+	tempDir := t.TempDir()
+	p := config.NewConfigPersistence(tempDir)
+	if err := p.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Should start empty
+	hashes, err := p.LoadEnvTokenSuppressions()
+	if err != nil {
+		t.Fatalf("LoadEnvTokenSuppressions: %v", err)
+	}
+	if len(hashes) != 0 {
+		t.Errorf("Expected empty hashes, got %v", hashes)
+	}
+
+	// Save some hashes
+	expected := []string{"hash1", "hash2"}
+	if err := p.SaveEnvTokenSuppressions(expected); err != nil {
+		t.Fatalf("SaveEnvTokenSuppressions: %v", err)
+	}
+
+	// Load back
+	loaded, err := p.LoadEnvTokenSuppressions()
+	if err != nil {
+		t.Fatalf("LoadEnvTokenSuppressions: %v", err)
+	}
+	if !reflect.DeepEqual(loaded, expected) {
+		t.Errorf("Expected %v, got %v", expected, loaded)
+	}
+
+	// Save empty
+	if err := p.SaveEnvTokenSuppressions([]string{}); err != nil {
+		t.Fatalf("SaveEnvTokenSuppressions empty: %v", err)
+	}
+	loaded, err = p.LoadEnvTokenSuppressions()
+	if err != nil {
+		t.Fatalf("LoadEnvTokenSuppressions: %v", err)
+	}
+	if len(loaded) != 0 {
+		t.Errorf("Expected empty hashes after clearing, got %v", loaded)
+	}
+}

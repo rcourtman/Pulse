@@ -44,6 +44,38 @@ type mockOpenAIResponse struct {
 	} `json:"usage"`
 }
 
+func TestNewOpenAIClient(t *testing.T) {
+	// Test default baseURL and timeout
+	c1 := NewOpenAIClient("key", "gpt-4o", "", 0)
+	if c1.baseURL != openaiAPIURL {
+		t.Errorf("Expected default baseURL, got %s", c1.baseURL)
+	}
+	if c1.client.Timeout != 300*time.Second {
+		t.Errorf("Expected default timeout 300s, got %v", c1.client.Timeout)
+	}
+
+	// Test model prefix stripping
+	c2 := NewOpenAIClient("key", "openai:gpt-4o", "", 10*time.Second)
+	if c2.model != "gpt-4o" {
+		t.Errorf("Expected model 'gpt-4o', got %s", c2.model)
+	}
+	if c2.client.Timeout != 10*time.Second {
+		t.Errorf("Expected timeout 10s, got %v", c2.client.Timeout)
+	}
+
+	c3 := NewOpenAIClient("key", "deepseek:deepseek-chat", "", 0)
+	if c3.model != "deepseek-chat" {
+		t.Errorf("Expected model 'deepseek-chat', got %s", c3.model)
+	}
+}
+
+func TestOpenAIClient_Name(t *testing.T) {
+	c := &OpenAIClient{}
+	if c.Name() != "openai" {
+		t.Errorf("Expected Name() to be 'openai', got %s", c.Name())
+	}
+}
+
 // Mock OpenAI models response
 type mockOpenAIModelsResponse struct {
 	Object string `json:"object"`
@@ -473,6 +505,217 @@ func TestOpenAIClient_Chat_O1OmitsTemperature(t *testing.T) {
 	}
 	if _, ok := got["temperature"]; ok {
 		t.Fatalf("did not expect temperature for o1 models, got: %+v", got)
+	}
+}
+
+func TestOpenAIClient_Chat_DeepSeekUsesMaxTokens(t *testing.T) {
+	var got map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_ = json.NewEncoder(w).Encode(mockOpenAIResponse{
+			ID:    "chatcmpl-123",
+			Model: "deepseek-chat",
+			Choices: []struct {
+				Index   int `json:"index"`
+				Message struct {
+					Role    string `json:"role"`
+					Content string `json:"content"`
+				} `json:"message"`
+				FinishReason string `json:"finish_reason"`
+			}{
+				{Message: struct {
+					Role    string `json:"role"`
+					Content string `json:"content"`
+				}{Role: "assistant", Content: "ok"}, FinishReason: "stop"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("test-api-key", "deepseek-chat", "https://api.deepseek.com/chat/completions", 0)
+	serverURL, _ := url.Parse(server.URL)
+	client.client.Transport = rewriteToServerTransport{serverBase: serverURL, rt: http.DefaultTransport}
+
+	_, err := client.Chat(context.Background(), ChatRequest{
+		Messages:  []Message{{Role: "user", Content: "Hello"}},
+		MaxTokens: 100,
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+
+	if val, ok := got["max_tokens"]; !ok || val.(float64) != 100 {
+		t.Fatalf("expected max_tokens=100 for DeepSeek, got: %+v", got)
+	}
+	if _, ok := got["max_completion_tokens"]; ok {
+		t.Fatal("did not expect max_completion_tokens for DeepSeek")
+	}
+}
+
+func TestOpenAIClient_Chat_ToolCalls(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]interface{}{
+			"id":    "chatcmpl-123",
+			"model": "gpt-4o",
+			"choices": []map[string]interface{}{
+				{
+					"index": 0,
+					"message": map[string]interface{}{
+						"role":    "assistant",
+						"content": nil,
+						"tool_calls": []map[string]interface{}{
+							{
+								"id":   "call_123",
+								"type": "function",
+								"function": map[string]interface{}{
+									"name":      "get_weather",
+									"arguments": `{"location":"San Francisco"}`,
+								},
+							},
+						},
+					},
+					"finish_reason": "tool_calls",
+				},
+			},
+			"usage": map[string]interface{}{"prompt_tokens": 10, "completion_tokens": 20},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("test-key", "gpt-4o", server.URL, 0)
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "weather?"}},
+		Tools: []Tool{
+			{
+				Name:        "get_weather",
+				Description: "Get weather",
+				InputSchema: map[string]interface{}{"type": "object"},
+			},
+			{
+				Type: "other", // Should be skipped
+				Name: "other",
+			},
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if len(resp.ToolCalls) != 1 || resp.ToolCalls[0].Name != "get_weather" {
+		t.Errorf("Expected 1 tool call 'get_weather', got %+v", resp.ToolCalls)
+	}
+	if resp.StopReason != "tool_use" {
+		t.Errorf("Expected stop reason 'tool_use', got %s", resp.StopReason)
+	}
+}
+
+func TestOpenAIClient_Chat_DeepSeekReasoner(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]interface{}{
+			"id":    "chatcmpl-123",
+			"model": "deepseek-reasoner",
+			"choices": []map[string]interface{}{
+				{
+					"index": 0,
+					"message": map[string]interface{}{
+						"role":              "assistant",
+						"content":           "The answer is 42.",
+						"reasoning_content": "Let me think...",
+					},
+					"finish_reason": "stop",
+				},
+			},
+			"usage": map[string]interface{}{"prompt_tokens": 10, "completion_tokens": 20},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("test-key", "deepseek-reasoner", "https://api.deepseek.com/chat/completions", 0)
+	// Mock transport to point to our test server
+	serverURL, _ := url.Parse(server.URL)
+	client.client.Transport = rewriteToServerTransport{serverBase: serverURL, rt: http.DefaultTransport}
+
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{
+			{Role: "user", Content: "What is the answer?"},
+			{Role: "assistant", Content: "Previous answer", ReasoningContent: "Previous reasoning", ToolCalls: []ToolCall{{ID: "tc1", Name: "tool", Input: map[string]any{"x": 1}}}},
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if resp.ReasoningContent != "Let me think..." {
+		t.Errorf("Expected reasoning content, got %s", resp.ReasoningContent)
+	}
+}
+
+func TestOpenAIClient_Chat_Retry(t *testing.T) {
+	var count int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count++
+		if count == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte(`{"error":{"message":"Rate limited"}}`))
+			return
+		}
+		json.NewEncoder(w).Encode(mockOpenAIResponse{
+			ID: "chatcmpl-123",
+			Choices: []struct {
+				Index   int `json:"index"`
+				Message struct {
+					Role    string `json:"role"`
+					Content string `json:"content"`
+				} `json:"message"`
+				FinishReason string `json:"finish_reason"`
+			}{{Message: struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			}{Role: "assistant", Content: "ok"}, FinishReason: "stop"}},
+		})
+	}))
+	defer server.Close()
+
+	// Shorten backoff for tests if we could, but we can't easily without modifying the code.
+	// But it only retries once in our test case.
+	client := NewOpenAIClient("test-key", "gpt-4o", server.URL, 0)
+	ctx := context.Background()
+	_, err := client.Chat(ctx, ChatRequest{Messages: []Message{{Role: "user", Content: "hi"}}})
+	if err != nil {
+		t.Fatalf("Chat failed: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("Expected 2 attempts, got %d", count)
+	}
+}
+
+func TestOpenAIClient_ModelsEndpoint_Invalid(t *testing.T) {
+	client := &OpenAIClient{baseURL: "invalid-url"}
+	endpoint := client.modelsEndpoint()
+	if endpoint != "https://api.openai.com/v1/models" {
+		t.Errorf("Expected default models endpoint for invalid baseURL, got %s", endpoint)
+	}
+
+	client = &OpenAIClient{baseURL: "https://api.deepseek.com/chat/completions"}
+	endpoint = client.modelsEndpoint()
+	if endpoint != "https://api.deepseek.com/models" {
+		t.Errorf("Expected DeepSeek models endpoint, got %s", endpoint)
+	}
+}
+
+func TestOpenAIClient_ListModels_Error(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("error"))
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("key", "model", server.URL, 0)
+
+	if _, err := client.ListModels(context.Background()); err == nil {
+		t.Error("Expected error for 500 status")
 	}
 }
 

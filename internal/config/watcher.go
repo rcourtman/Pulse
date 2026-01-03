@@ -33,6 +33,7 @@ type ConfigWatcher struct {
 	mu                   sync.RWMutex
 	onMockReload         func() // Callback to trigger backend restart
 	onAPITokenReload     func() // Callback when API tokens are reloaded from disk
+	pollInterval         time.Duration
 }
 
 // NewConfigWatcher creates a new config watcher
@@ -116,6 +117,7 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 		apiTokensPath: apiTokensPath,
 		watcher:       watcher,
 		stopChan:      make(chan struct{}),
+		pollInterval:  5 * time.Second,
 	}
 
 	// Get initial mod times and hash
@@ -265,7 +267,7 @@ func (cw *ConfigWatcher) watchForChanges() {
 
 // pollForChanges is a fallback that polls for changes
 func (cw *ConfigWatcher) pollForChanges() {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(cw.pollInterval)
 	defer ticker.Stop()
 
 	for {
@@ -431,19 +433,15 @@ func (cw *ConfigWatcher) reloadConfig() {
 			}
 			seen[hashed] = struct{}{}
 
-			if existing, ok := existingByHash[hashed]; ok {
-				newRecords = append(newRecords, existing)
-			} else {
-				newRecords = append(newRecords, APITokenRecord{
-					ID:        uuid.NewString(),
-					Name:      "Environment token",
-					Hash:      hashed,
-					Prefix:    prefix,
-					Suffix:    suffix,
-					CreatedAt: time.Now().UTC(),
-					Scopes:    []string{ScopeWildcard},
-				})
-			}
+			newRecords = append(newRecords, APITokenRecord{
+				ID:        uuid.NewString(),
+				Name:      "Environment token",
+				Hash:      hashed,
+				Prefix:    prefix,
+				Suffix:    suffix,
+				CreatedAt: time.Now().UTC(),
+				Scopes:    []string{ScopeWildcard},
+			})
 		}
 
 		cw.config.APITokens = newRecords
@@ -452,14 +450,7 @@ func (cw *ConfigWatcher) reloadConfig() {
 
 		newHashes := cw.config.ActiveAPITokenHashes()
 		if !reflect.DeepEqual(oldTokenHashes, newHashes) {
-			switch {
-			case len(newHashes) == 0:
-				changes = append(changes, "API tokens removed")
-			case len(oldTokenHashes) == 0:
-				changes = append(changes, "API tokens added")
-			default:
-				changes = append(changes, "API tokens updated")
-			}
+			changes = append(changes, "API tokens added")
 
 			if globalPersistence != nil {
 				if err := globalPersistence.SaveAPITokens(cw.config.APITokens); err != nil {

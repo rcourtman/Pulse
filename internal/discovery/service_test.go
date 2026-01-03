@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	pkgdiscovery "github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
 )
 
@@ -514,4 +515,216 @@ func TestStartAndStop(t *testing.T) {
 	}
 
 	service.Stop()
+}
+
+func TestStartPanicRecovery(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		panic("scan panic")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// This should not panic
+	service.Start(ctx)
+
+	// Wait a bit for the goroutine to run and recover
+	time.Sleep(100 * time.Millisecond)
+	service.Stop()
+}
+
+func TestStartLoopPanicRecovery(t *testing.T) {
+	service := NewService(nil, 10*time.Millisecond, "auto", nil)
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		panic("scan loop panic")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	service.Start(ctx)
+	time.Sleep(50 * time.Millisecond) // Allow ticker to fire
+	service.Stop()
+}
+
+func TestPerformScan_WebsocketHub(t *testing.T) {
+	hub := websocket.NewHub(nil)
+	service := NewService(hub, time.Minute, "auto", nil)
+	service.ctx = context.Background()
+	scanner := &fakeScanner{
+		result: &pkgdiscovery.DiscoveryResult{
+			Servers: []pkgdiscovery.DiscoveredServer{
+				{IP: "1.2.3.4", Port: 80, Type: "web"},
+			},
+			Environment: &pkgdiscovery.EnvironmentInfo{Type: "test"},
+		},
+	}
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		return scanner, nil
+	}
+
+	// Just run it, ensure no panic
+	service.performScan()
+}
+
+func TestPerformScan_ScannerFactoryError(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+	service.ctx = context.Background()
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		return nil, errors.New("factory error")
+	}
+
+	originalNewScannerFn := newScannerFn
+	defer func() { newScannerFn = originalNewScannerFn }()
+
+	mockScanner := &fakeScanner{result: &pkgdiscovery.DiscoveryResult{}}
+	newScannerFn = func() discoveryScanner { return mockScanner }
+
+	service.performScan()
+}
+
+func TestPerformScan_ScannerFactoryNil(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+	service.ctx = context.Background()
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		return nil, nil // Returns nil scanner, nil error
+	}
+
+	originalNewScannerFn := newScannerFn
+	defer func() { newScannerFn = originalNewScannerFn }()
+
+	mockScanner := &fakeScanner{result: &pkgdiscovery.DiscoveryResult{}}
+	newScannerFn = func() discoveryScanner { return mockScanner }
+
+	service.performScan()
+}
+
+func TestForceRefreshPanicRecovery(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+	service.ctx = context.Background()
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		panic("force refresh panic")
+	}
+	service.ForceRefresh()
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestSetSubnetPanicRecovery(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+	service.ctx = context.Background()
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		panic("set subnet panic")
+	}
+	service.SetSubnet("10.0.0.0/24")
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestPerformScan_SkippedIfScanning(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+	service.mu.Lock()
+	service.isScanning = true
+	service.mu.Unlock()
+
+	// Should return immediately
+	service.performScan()
+}
+
+func TestPerformScan_StatusFailure(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+	service.ctx = context.Background()
+	scanner := &fakeScanner{
+		err: errors.New("scan failed"),
+	}
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		return scanner, nil
+	}
+	service.performScan()
+
+	history := service.GetHistory(1)
+	if len(history) > 0 {
+		if history[0].status != "failure" {
+			t.Errorf("expected failure status, got %s", history[0].status)
+		}
+	} else {
+		t.Error("expected history entry")
+	}
+}
+
+func TestAppendHistory_ResetLimit(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+	service.historyLimit = -1
+	service.appendHistory(historyEntry{status: "test"})
+	if service.historyLimit != defaultHistoryLimit {
+		t.Errorf("expected historyLimit to be reset to %d, got %d", defaultHistoryLimit, service.historyLimit)
+	}
+}
+
+func TestDefaultScannerFactory(t *testing.T) {
+	service := NewService(nil, 0, "", nil)
+	// Don't override scannerFactory
+	_, err := service.scannerFactory(config.DefaultDiscoveryConfig())
+	if err != nil {
+		t.Logf("Default scanner factory returned error (expected in some envs): %v", err)
+	}
+}
+
+func TestPerformScan_WebsocketHub_NoEnv(t *testing.T) {
+	hub := websocket.NewHub(nil)
+	service := NewService(hub, time.Minute, "auto", nil)
+	service.ctx = context.Background()
+	scanner := &fakeScanner{
+		result: &pkgdiscovery.DiscoveryResult{
+			Servers: []pkgdiscovery.DiscoveredServer{
+				{IP: "1.2.3.4", Port: 80, Type: "web"},
+			},
+			// No Environment
+		},
+	}
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		return scanner, nil
+	}
+
+	service.performScan()
+}
+
+func TestPerformScan_DeadlineExceeded(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+	service.ctx = context.Background()
+	scanner := &fakeScanner{
+		result: &pkgdiscovery.DiscoveryResult{
+			Servers: []pkgdiscovery.DiscoveredServer{},
+		},
+		err: context.DeadlineExceeded,
+	}
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		return scanner, nil
+	}
+
+	service.performScan()
+}
+
+func TestPerformScan_LegacyErrors(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+	service.ctx = context.Background()
+	scanner := &fakeScanner{
+		result: &pkgdiscovery.DiscoveryResult{
+			Servers:          []pkgdiscovery.DiscoveredServer{},
+			Errors:           []string{"legacy error"},
+			StructuredErrors: nil,
+		},
+	}
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		return scanner, nil
+	}
+
+	service.performScan()
+
+	// Check history to verify error count
+	history := service.GetHistory(1)
+	if len(history) > 0 {
+		if history[0].errorCount != 1 {
+			t.Errorf("expected errorCount 1, got %d", history[0].errorCount)
+		}
+	} else {
+		t.Error("expected history entry")
+	}
 }

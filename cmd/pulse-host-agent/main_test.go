@@ -1,10 +1,15 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
 	"github.com/rs/zerolog"
 )
 
@@ -462,6 +467,325 @@ func TestMultiValue(t *testing.T) {
 			if err := mv.Set(input); err != nil {
 				t.Fatalf("expected nil error for input %q, got %v", input, err)
 			}
+		}
+	})
+}
+
+func TestRunAsWindowsServiceStub(t *testing.T) {
+	// This tests the non-windows stub
+	cfg := Config{}
+	logger := zerolog.Nop()
+	err := runAsWindowsService(cfg, logger)
+	if err != nil {
+		t.Fatalf("expected nil error from stub, got %v", err)
+	}
+}
+
+func TestParseConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		env         map[string]string
+		wantURL     string
+		wantToken   string
+		wantLevel   zerolog.Level
+		wantVersion bool
+		wantErr     bool
+	}{
+		{
+			name:      "defaults with token",
+			args:      []string{"--token", "test-token"},
+			env:       nil,
+			wantURL:   "http://localhost:7655",
+			wantToken: "test-token",
+			wantLevel: zerolog.InfoLevel,
+		},
+		{
+			name: "env vars",
+			args: []string{},
+			env: map[string]string{
+				"PULSE_TOKEN": "env-token",
+				"PULSE_URL":   "http://env-url",
+				"LOG_LEVEL":   "debug",
+			},
+			wantURL:   "http://env-url",
+			wantToken: "env-token",
+			wantLevel: zerolog.DebugLevel,
+		},
+		{
+			name:      "flags override env",
+			args:      []string{"--url", "http://flag-url", "--log-level", "error"},
+			env:       map[string]string{"PULSE_TOKEN": "token", "PULSE_URL": "http://env-url"},
+			wantURL:   "http://flag-url",
+			wantToken: "token",
+			wantLevel: zerolog.ErrorLevel,
+		},
+		{
+			name:        "show version",
+			args:        []string{"--version"},
+			wantVersion: true,
+		},
+		{
+			name:    "missing token returns error",
+			args:    []string{"--url", "http://localhost"},
+			wantErr: true,
+		},
+		{
+			name:    "invalid log level returns error",
+			args:    []string{"--token", "t", "--log-level", "invalid"},
+			wantErr: true,
+		},
+		{
+			name:    "invalid interval returns error",
+			args:    []string{"--token", "t", "--interval", "invalid"},
+			wantErr: true,
+		},
+		{
+			name:    "invalid flag returns error",
+			args:    []string{"--invalid"},
+			wantErr: true,
+		},
+		{
+			name:    "help flag",
+			args:    []string{"--help"},
+			wantErr: true,
+		},
+		{
+			name: "env interval",
+			args: []string{"--token", "t"},
+			env: map[string]string{
+				"PULSE_INTERVAL": "10s",
+			},
+			wantURL:   "http://localhost:7655",
+			wantToken: "t",
+			wantLevel: zerolog.InfoLevel,
+		},
+		{
+			name: "invalid env interval defaults to 30s",
+			args: []string{"--token", "t"},
+			env: map[string]string{
+				"PULSE_INTERVAL": "invalid",
+			},
+			wantURL:   "http://localhost:7655",
+			wantToken: "t",
+			wantLevel: zerolog.InfoLevel,
+		},
+		{
+			name:      "negative interval defaults to 30s",
+			args:      []string{"--token", "t", "--interval", "-10s"},
+			wantURL:   "http://localhost:7655",
+			wantToken: "t",
+			wantLevel: zerolog.InfoLevel,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			getenv := func(k string) string {
+				if tt.env == nil {
+					return ""
+				}
+				return tt.env[k]
+			}
+
+			cfg, showVersion, err := parseConfig("pulse-host-agent", tt.args, getenv)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if showVersion != tt.wantVersion {
+				t.Fatalf("expected showVersion %v, got %v", tt.wantVersion, showVersion)
+			}
+
+			if !showVersion {
+				if cfg.HostConfig.PulseURL != tt.wantURL {
+					t.Fatalf("expected URL %q, got %q", tt.wantURL, cfg.HostConfig.PulseURL)
+				}
+				if cfg.HostConfig.APIToken != tt.wantToken {
+					t.Fatalf("expected Token %q, got %q", tt.wantToken, cfg.HostConfig.APIToken)
+				}
+				if cfg.HostConfig.LogLevel != tt.wantLevel {
+					t.Fatalf("expected Level %v, got %v", tt.wantLevel, cfg.HostConfig.LogLevel)
+				}
+			}
+		})
+	}
+}
+
+func TestMain(m *testing.M) {
+	// Custom TestMain if needed, but we can just use regular tests
+	m.Run()
+}
+
+func TestMainFunc(t *testing.T) {
+	origArgs := os.Args
+	origExit := osExit
+	origRun := runFunc
+	defer func() {
+		os.Args = origArgs
+		osExit = origExit
+		runFunc = origRun
+	}()
+
+	tests := []struct {
+		name     string
+		args     []string
+		runErr   error
+		wantExit int
+	}{
+		{
+			name:     "help exits 0",
+			args:     []string{"pulse-host-agent", "--help"},
+			wantExit: 0,
+		},
+		{
+			name:     "version exits 0",
+			args:     []string{"pulse-host-agent", "--version"},
+			wantExit: 0,
+		},
+		{
+			name:     "invalid flag exits 1",
+			args:     []string{"pulse-host-agent", "--invalid-flag"},
+			wantExit: 1,
+		},
+		{
+			name:     "missing token exits 1",
+			args:     []string{"pulse-host-agent"},
+			wantExit: 1,
+		},
+		{
+			name:     "run success exits normally",
+			args:     []string{"pulse-host-agent", "--token", "test"},
+			runErr:   nil,
+			wantExit: 100, // custom exit to signal success of main and return
+		},
+		{
+			name:     "run failure exits 1",
+			args:     []string{"pulse-host-agent", "--token", "test"},
+			runErr:   fmt.Errorf("run failed"),
+			wantExit: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Args = tt.args
+			runFunc = func(ctx context.Context, cfg Config) error {
+				return tt.runErr
+			}
+
+			var exitCode int
+			var exited bool
+			osExit = func(code int) {
+				exitCode = code
+				exited = true
+				panic("exited")
+			}
+
+			// For the "success" case, we want to see it reach the end of main
+			// Actually, main doesn't call osExit(0) at the very end, it just returns.
+			// But if runFunc returns nil, main returns.
+
+			if tt.wantExit == 100 {
+				// Special case: we expect it NOT to exit via osExit
+				defer func() {
+					_ = recover()
+					if exited {
+						t.Errorf("expected main not to call osExit, but it called with %d", exitCode)
+					}
+				}()
+				main()
+				return
+			}
+
+			defer func() {
+				_ = recover()
+				if !exited {
+					t.Errorf("expected osExit to be called")
+				}
+				if exitCode != tt.wantExit {
+					t.Errorf("expected exit code %d, got %d", tt.wantExit, exitCode)
+				}
+			}()
+
+			main()
+		})
+	}
+}
+
+func TestRunFunc(t *testing.T) {
+	origService := runAsWindowsServiceFunc
+	defer func() {
+		runAsWindowsServiceFunc = origService
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	t.Run("windows service failure", func(t *testing.T) {
+		runAsWindowsServiceFunc = func(cfg Config, logger zerolog.Logger) error {
+			return fmt.Errorf("service failed")
+		}
+		err := run(ctx, Config{})
+		if err == nil || !strings.Contains(err.Error(), "Windows service failed") {
+			t.Fatalf("expected service failure error, got %v", err)
+		}
+	})
+
+	t.Run("invalid config fails hostagent.New", func(t *testing.T) {
+		runAsWindowsServiceFunc = origService
+		cfg := Config{
+			HostConfig: hostagent.Config{
+				PulseURL: "http://localhost",
+				APIToken: "", // Empty token fails New
+			},
+		}
+		err := run(ctx, cfg)
+		if err == nil || !strings.Contains(err.Error(), "failed to initialise host agent") {
+			t.Fatalf("expected hostagent init error, got %v", err)
+		}
+	})
+
+	t.Run("run once finishes", func(t *testing.T) {
+		runAsWindowsServiceFunc = origService
+		cfg := Config{
+			HostConfig: hostagent.Config{
+				PulseURL: "http://localhost:1",
+				APIToken: "test",
+				RunOnce:  true,
+			},
+			DisableAutoUpdate: true,
+		}
+		shortCtx, shortCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer shortCancel()
+
+		_ = run(shortCtx, cfg)
+	})
+
+	t.Run("host agent terminated with error (deadline)", func(t *testing.T) {
+		runAsWindowsServiceFunc = origService
+		cfg := Config{
+			HostConfig: hostagent.Config{
+				PulseURL: "http://localhost:1",
+				APIToken: "test",
+			},
+			DisableAutoUpdate: true,
+		}
+		// Using a short timeout that will definitely trigger before the agent finishes (which is never in this config)
+		timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer timeoutCancel()
+
+		err := run(timeoutCtx, cfg)
+		if err == nil || !strings.Contains(err.Error(), "host agent terminated with error") {
+			t.Fatalf("expected termination error, got %v", err)
 		}
 	})
 }

@@ -20,6 +20,12 @@ import (
 var (
 	// Version is the semantic version of the agent, set at build time via ldflags
 	Version = "dev"
+
+	osExit = os.Exit
+
+	runAsWindowsServiceFunc = runAsWindowsService
+
+	runFunc = run
 )
 
 // Config holds the configuration for the standalone host agent
@@ -40,7 +46,30 @@ func (m *multiValue) Set(value string) error {
 }
 
 func main() {
-	cfg := loadConfig()
+	cfg, showVersion, err := parseConfig(os.Args[0], os.Args[1:], os.Getenv)
+	if err != nil {
+		if err == flag.ErrHelp {
+			osExit(0)
+		}
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		osExit(1)
+	}
+
+	if showVersion {
+		fmt.Println(Version)
+		osExit(0)
+	}
+
+	if err := runFunc(context.Background(), cfg); err != nil {
+		// Log error and exit - logger is set up in run() but we might not have it here
+		// Actually, run() handles its own fatal errors for now to match original behavior
+		// but we return error for testing.
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		osExit(1)
+	}
+}
+
+func run(ctx context.Context, cfg Config) error {
 	hostCfg := cfg.HostConfig
 
 	zerolog.SetGlobalLevel(hostCfg.LogLevel)
@@ -49,14 +78,14 @@ func main() {
 	hostCfg.Logger = &logger
 
 	// Check if we should run as a Windows service
-	if err := runAsWindowsService(cfg, logger); err != nil {
-		logger.Fatal().Err(err).Msg("Windows service failed")
+	if err := runAsWindowsServiceFunc(cfg, logger); err != nil {
+		return fmt.Errorf("Windows service failed: %w", err)
 	}
 
 	// If runAsWindowsService returns nil without error, we're not running as a service
 	// or we're on a non-Windows platform, so run normally
 
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -95,7 +124,7 @@ func main() {
 	// Start the host agent
 	agent, err := hostagent.New(hostCfg)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to initialise host agent")
+		return fmt.Errorf("failed to initialise host agent: %w", err)
 	}
 
 	g.Go(func() error {
@@ -103,23 +132,28 @@ func main() {
 	})
 
 	if err := g.Wait(); err != nil && err != context.Canceled {
-		logger.Fatal().Err(err).Msg("host agent terminated with error")
+		return fmt.Errorf("host agent terminated with error: %w", err)
 	}
 
 	logger.Info().Msg("Host agent stopped")
+	return nil
 }
 
-func loadConfig() Config {
-	envURL := utils.GetenvTrim("PULSE_URL")
-	envToken := utils.GetenvTrim("PULSE_TOKEN")
-	envInterval := utils.GetenvTrim("PULSE_INTERVAL")
-	envHostname := utils.GetenvTrim("PULSE_HOSTNAME")
-	envAgentID := utils.GetenvTrim("PULSE_AGENT_ID")
-	envInsecure := utils.GetenvTrim("PULSE_INSECURE_SKIP_VERIFY")
-	envTags := utils.GetenvTrim("PULSE_TAGS")
-	envRunOnce := utils.GetenvTrim("PULSE_ONCE")
-	envLogLevel := utils.GetenvTrim("LOG_LEVEL")
-	envNoAutoUpdate := utils.GetenvTrim("PULSE_NO_AUTO_UPDATE")
+func parseConfig(progName string, args []string, getenv func(string) string) (Config, bool, error) {
+	getenvTrim := func(k string) string {
+		return strings.TrimSpace(getenv(k))
+	}
+
+	envURL := getenvTrim("PULSE_URL")
+	envToken := getenvTrim("PULSE_TOKEN")
+	envInterval := getenvTrim("PULSE_INTERVAL")
+	envHostname := getenvTrim("PULSE_HOSTNAME")
+	envAgentID := getenvTrim("PULSE_AGENT_ID")
+	envInsecure := getenvTrim("PULSE_INSECURE_SKIP_VERIFY")
+	envTags := getenvTrim("PULSE_TAGS")
+	envRunOnce := getenvTrim("PULSE_ONCE")
+	envLogLevel := getenvTrim("LOG_LEVEL")
+	envNoAutoUpdate := getenvTrim("PULSE_NO_AUTO_UPDATE")
 
 	defaultInterval := 30 * time.Second
 	if envInterval != "" {
@@ -128,25 +162,28 @@ func loadConfig() Config {
 		}
 	}
 
-	urlFlag := flag.String("url", envURL, "Pulse server URL (e.g. https://pulse.example.com)")
-	tokenFlag := flag.String("token", envToken, "Pulse API token (required)")
-	intervalFlag := flag.Duration("interval", defaultInterval, "Reporting interval (e.g. 30s, 1m)")
-	hostnameFlag := flag.String("hostname", envHostname, "Override hostname reported to Pulse")
-	agentIDFlag := flag.String("agent-id", envAgentID, "Override agent identifier")
-	insecureFlag := flag.Bool("insecure", utils.ParseBool(envInsecure), "Skip TLS certificate verification")
-	runOnceFlag := flag.Bool("once", utils.ParseBool(envRunOnce), "Collect and send a single report, then exit")
-	noAutoUpdateFlag := flag.Bool("no-auto-update", utils.ParseBool(envNoAutoUpdate), "Disable automatic updates")
-	showVersion := flag.Bool("version", false, "Print the agent version and exit")
-	logLevelFlag := flag.String("log-level", defaultLogLevel(envLogLevel), "Log level: debug, info, warn, error")
+	fs := flag.NewFlagSet(progName, flag.ContinueOnError)
+
+	urlFlag := fs.String("url", envURL, "Pulse server URL (e.g. https://pulse.example.com)")
+	tokenFlag := fs.String("token", envToken, "Pulse API token (required)")
+	intervalFlag := fs.Duration("interval", defaultInterval, "Reporting interval (e.g. 30s, 1m)")
+	hostnameFlag := fs.String("hostname", envHostname, "Override hostname reported to Pulse")
+	agentIDFlag := fs.String("agent-id", envAgentID, "Override agent identifier")
+	insecureFlag := fs.Bool("insecure", utils.ParseBool(envInsecure), "Skip TLS certificate verification")
+	runOnceFlag := fs.Bool("once", utils.ParseBool(envRunOnce), "Collect and send a single report, then exit")
+	noAutoUpdateFlag := fs.Bool("no-auto-update", utils.ParseBool(envNoAutoUpdate), "Disable automatic updates")
+	showVersion := fs.Bool("version", false, "Print the agent version and exit")
+	logLevelFlag := fs.String("log-level", defaultLogLevel(envLogLevel), "Log level: debug, info, warn, error")
 
 	var tagFlags multiValue
-	flag.Var(&tagFlags, "tag", "Tag to apply to this host (repeatable)")
+	fs.Var(&tagFlags, "tag", "Tag to apply to this host (repeatable)")
 
-	flag.Parse()
+	if err := fs.Parse(args); err != nil {
+		return Config{}, false, err
+	}
 
 	if *showVersion {
-		fmt.Println(Version)
-		os.Exit(0)
+		return Config{}, true, nil
 	}
 
 	pulseURL := strings.TrimSpace(*urlFlag)
@@ -156,8 +193,7 @@ func loadConfig() Config {
 
 	token := strings.TrimSpace(*tokenFlag)
 	if token == "" {
-		fmt.Fprintln(os.Stderr, "error: Pulse API token is required (via --token or PULSE_TOKEN)")
-		os.Exit(1)
+		return Config{}, false, fmt.Errorf("Pulse API token is required (via --token or PULSE_TOKEN)")
 	}
 
 	interval := *intervalFlag
@@ -167,8 +203,7 @@ func loadConfig() Config {
 
 	logLevel, err := parseLogLevel(*logLevelFlag)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
+		return Config{}, false, err
 	}
 
 	tags := gatherTags(envTags, tagFlags)
@@ -186,7 +221,7 @@ func loadConfig() Config {
 			LogLevel:           logLevel,
 		},
 		DisableAutoUpdate: *noAutoUpdateFlag,
-	}
+	}, false, nil
 }
 
 func gatherTags(env string, flags []string) []string {

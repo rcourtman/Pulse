@@ -439,3 +439,167 @@ func TestTrimTrailingZeros(t *testing.T) {
 		}
 	}
 }
+func TestComputeStats_Empty(t *testing.T) {
+	stats := computeStats([]MetricPoint{})
+	if stats.Count != 0 {
+		t.Errorf("Expected count 0, got %d", stats.Count)
+	}
+}
+
+func TestLinearRegression_ZeroDenominator(t *testing.T) {
+	now := time.Now()
+	points := []MetricPoint{
+		{Value: 10, Timestamp: now},
+		{Value: 20, Timestamp: now}, // Same timestamp
+	}
+
+	result := linearRegression(points)
+	if result.R2 != 0 {
+		t.Errorf("Expected R2 0 for zero denominator, got %f", result.R2)
+	}
+}
+
+func TestClassifyTrend_HighMean(t *testing.T) {
+	// For mean > 100, threshold is mean * 0.005
+	// If mean = 1000, threshold = 5.0/hr
+	// Slope 6.0/hr should be growing
+	slope := 6.0 / 3600
+	mean := 1000.0
+	stddev := 1.0
+
+	direction := classifyTrend(slope, mean, stddev)
+	if direction != TrendGrowing {
+		t.Errorf("Expected TrendGrowing for slope 6.0/hr with mean 1000, got %s", direction)
+	}
+
+	// Slope 4.0/hr should be stable
+	direction = classifyTrend(4.0/3600, mean, stddev)
+	if direction != TrendStable {
+		t.Errorf("Expected TrendStable for slope 4.0/hr with mean 1000, got %s", direction)
+	}
+}
+
+func TestComputePercentiles_Edge(t *testing.T) {
+	points := []MetricPoint{
+		{Value: 10},
+		{Value: 20},
+	}
+
+	// Test invalid percentiles
+	res := ComputePercentiles(points, -1, 101)
+	if len(res) != 0 {
+		t.Errorf("Expected 0 results for invalid percentiles, got %d", len(res))
+	}
+
+	// Test empty points
+	res = ComputePercentiles([]MetricPoint{}, 50)
+	if len(res) != 0 {
+		t.Errorf("Expected 0 results for empty points, got %d", len(res))
+	}
+
+	// Test single point
+	res = ComputePercentiles([]MetricPoint{{Value: 100}}, 50)
+	if res[50] != 100 {
+		t.Errorf("Expected 100, got %f", res[50])
+	}
+}
+
+func TestTrendSummary_StableVolatile(t *testing.T) {
+	s1 := TrendSummary(Trend{Direction: TrendStable, DataPoints: 10})
+	if s1 != "stable" {
+		t.Errorf("Expected stable, got %s", s1)
+	}
+
+	s2 := TrendSummary(Trend{Direction: TrendVolatile, DataPoints: 10})
+	if s2 != "volatile" {
+		t.Errorf("Expected volatile, got %s", s2)
+	}
+}
+
+func TestComputeTrend_NegativeCapping(t *testing.T) {
+	now := time.Now()
+	// Negative runaway
+	points := []MetricPoint{
+		{Value: 90, Timestamp: now.Add(-15 * time.Minute)},
+		{Value: 10, Timestamp: now},
+	}
+	trend := ComputeTrend(points, "cpu", 24*time.Hour)
+	if trend.RatePerDay < -100 {
+		t.Errorf("Expected capped negative rate at -100, got %f", trend.RatePerDay)
+	}
+
+	// Test maxReasonableDaily cap with negative rate
+	points2 := []MetricPoint{
+		{Value: 50.1, Timestamp: now.Add(-50 * time.Minute)},
+		{Value: 50.0, Timestamp: now}, // 0.1 change in 50m = 0.12/hr = 2.88/day
+	}
+	// observedChange = 0.1, maxReasonableDaily = 1.0
+	trend2 := ComputeTrend(points2, "cpu", 24*time.Hour)
+	if trend2.RatePerDay < -1.000001 {
+		t.Errorf("Expected capped negative rate at ~ -1.0, got %f", trend2.RatePerDay)
+	}
+}
+
+func TestLinearRegression_SinglePoint(t *testing.T) {
+	res := linearRegression([]MetricPoint{{Value: 10}})
+	if res.Slope != 0 {
+		t.Error("Expected 0 slope for single point")
+	}
+}
+
+func TestFormatTrendLine_Invalid(t *testing.T) {
+	res := formatTrendLine("cpu", Trend{Direction: TrendDirection("invalid"), DataPoints: 10})
+	if res != "" {
+		t.Error("Expected empty string for invalid direction")
+	}
+}
+
+func TestComputeTrend_ExtremeShort(t *testing.T) {
+	now := time.Now()
+	points := []MetricPoint{
+		{Value: 10, Timestamp: now.Add(-1 * time.Minute)},
+		{Value: 20, Timestamp: now},
+	}
+	// actualSpan = 1m < minSpanForHourlyRate (10m)
+	trend := ComputeTrend(points, "cpu", time.Hour)
+	if trend.RatePerHour != 0 {
+		t.Errorf("Expected 0 RatePerHour for extremely short span, got %f", trend.RatePerHour)
+	}
+
+	// Test 100% cap
+	points2 := []MetricPoint{
+		{Value: 10, Timestamp: now.Add(-15 * time.Minute)},
+		{Value: 90, Timestamp: now},
+	}
+	// change = 80 in 15 mins = 320/hr = 7680/day
+	trend2 := ComputeTrend(points2, "cpu", 24*time.Hour)
+	if trend2.RatePerDay > 100 {
+		t.Errorf("Expected capped rate at 100, got %f", trend2.RatePerDay)
+	}
+}
+
+func TestClassifyTrend_Volatile(t *testing.T) {
+	// mean = 10, stddev = 4. 4/10 = 0.4 > 0.3
+	direction := classifyTrend(0, 10.0, 4.0)
+	if direction != TrendVolatile {
+		t.Errorf("Expected TrendVolatile, got %s", direction)
+	}
+
+	// mean = 0, should not be volatile based on ratio
+	direction = classifyTrend(0, 0, 4.0)
+	if direction != TrendStable {
+		t.Errorf("Expected TrendStable for mean 0, got %s", direction)
+	}
+}
+
+func TestComputePercentiles_Large(t *testing.T) {
+	points := make([]MetricPoint, 10)
+	for i := range points {
+		points[i].Value = float64(i)
+	}
+	// idx = 1.0 * 9 = 9. lower=9, upper=9. values[9] = 9.
+	res := ComputePercentiles(points, 100)
+	if res[100] != 9 {
+		t.Errorf("Expected 9, got %f", res[100])
+	}
+}

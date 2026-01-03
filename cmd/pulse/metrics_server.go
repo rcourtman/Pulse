@@ -9,6 +9,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var (
+	metricsShutdownTimeout = 5 * time.Second
+)
+
 func startMetricsServer(ctx context.Context, addr string) {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
@@ -23,7 +27,7 @@ func startMetricsServer(ctx context.Context, addr string) {
 
 	go func() {
 		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), metricsShutdownTimeout)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil && err != http.ErrServerClosed {
 			log.Warn().Err(err).Msg("Failed to shut down metrics server cleanly")

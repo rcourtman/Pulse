@@ -639,6 +639,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 	if _, ok := rawRequest["disableDockerUpdateActions"]; ok {
 		settings.DisableDockerUpdateActions = updates.DisableDockerUpdateActions
+		h.config.DisableDockerUpdateActions = settings.DisableDockerUpdateActions
 	}
 
 	// Update the config

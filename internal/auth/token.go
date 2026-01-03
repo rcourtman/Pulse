@@ -8,10 +8,13 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+// randRead is a variable to allow mocking in tests
+var randRead = rand.Read
+
 // GenerateAPIToken generates a secure random API token
 func GenerateAPIToken() (string, error) {
 	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
+	if _, err := randRead(bytes); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(bytes), nil

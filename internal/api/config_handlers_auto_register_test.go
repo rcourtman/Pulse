@@ -10,6 +10,7 @@ import (
 
 	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 func newTestConfigHandlers(t *testing.T, cfg *config.Config) *ConfigHandlers {
@@ -178,6 +179,13 @@ func TestDisambiguateNodeName(t *testing.T) {
 func TestAutoRegisterDuplicateHostnameSeparateNodes(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	// Mock detectPVECluster to avoid network calls
+	originalDetectPVECluster := detectPVECluster
+	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		return false, "", nil
+	}
+	defer func() { detectPVECluster = originalDetectPVECluster }()
 
 	cfg := &config.Config{
 		DataPath:   tempDir,

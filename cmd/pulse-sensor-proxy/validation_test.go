@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net"
 	"strings"
 	"testing"
@@ -516,5 +517,148 @@ func TestIPAllowed(t *testing.T) {
 				t.Errorf("ipAllowed(%v, hosts, cidrs) = %v, want %v", tc.ip, result, tc.expected)
 			}
 		})
+	}
+}
+
+func TestDefaultHostResolver(t *testing.T) {
+	r := defaultHostResolver{}
+	// Test with localhost
+	ips, err := r.LookupIP(context.Background(), "localhost")
+	if err != nil {
+		t.Logf("localhost lookup failed (might be expected in some environments): %v", err)
+	} else if len(ips) == 0 {
+		t.Error("expected at least one IP for localhost")
+	}
+
+	// Test with nil context
+	_, _ = r.LookupIP(nil, "localhost")
+
+	// Test with invalid host
+	_, err = r.LookupIP(context.Background(), "invalid.host.local.test")
+	if err == nil {
+		t.Error("expected error for invalid host")
+	}
+}
+
+func TestNewNodeValidator(t *testing.T) {
+	if _, err := newNodeValidator(nil, nil); err == nil {
+		t.Error("expected error for nil config")
+	}
+
+	cfg := &Config{
+		AllowedNodes:         []string{"node1", "10.0.0.0/24", ""},
+		StrictNodeValidation: true,
+	}
+	v, err := newNodeValidator(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !v.hasAllowlist {
+		t.Error("expected hasAllowlist to be true")
+	}
+	if len(v.allowHosts) != 1 {
+		t.Errorf("expected 1 host, got %d", len(v.allowHosts))
+	}
+	if len(v.allowCIDRs) != 1 {
+		t.Errorf("expected 1 CIDR, got %d", len(v.allowCIDRs))
+	}
+}
+
+func TestNodeValidator_UpdateAllowlist(t *testing.T) {
+	v := &nodeValidator{}
+	v.UpdateAllowlist([]string{"node1"})
+	if len(v.allowHosts) != 1 {
+		t.Error("expected 1 allowed host")
+	}
+
+	// Update to empty
+	v.UpdateAllowlist([]string{})
+	if v.hasAllowlist {
+		t.Error("expected hasAllowlist to be false")
+	}
+
+	// Nil validator
+	var nilV *nodeValidator
+	nilV.UpdateAllowlist([]string{"node1"})
+}
+
+func TestNodeValidator_Validate_Errors(t *testing.T) {
+	v := &nodeValidator{
+		hasAllowlist: true,
+		resolver: stubResolver{
+			err: errors.New("resolution failed"),
+		},
+		allowCIDRs: []*net.IPNet{{IP: net.ParseIP("10.0.0.0"), Mask: net.CIDRMask(24, 32)}},
+	}
+
+	// matchesAllowlist returns error
+	err := v.Validate(context.Background(), "hostname")
+	if err == nil || !strings.Contains(err.Error(), "resolution failed") {
+		t.Errorf("expected resolution failed error, got %v", err)
+	}
+
+	// Cluster enabled but fetcher fails
+	v2 := &nodeValidator{
+		clusterEnabled: true,
+		clusterFetcher: func() ([]string, error) {
+			return nil, errors.New("fetch failed")
+		},
+		metrics: NewProxyMetrics("test"),
+	}
+	// Note: validateAsLocalhost will be called, which might succeed or fail depending on env
+	_ = v2.Validate(context.Background(), "some-node")
+}
+
+func TestNodeValidator_ValidateAsLocalhost(t *testing.T) {
+	v := &nodeValidator{}
+	// Test with node that is likely NOT localhost
+	err := v.validateAsLocalhost(context.Background(), "not-localhost-host")
+	if err == nil {
+		t.Error("expected error for non-localhost node")
+	}
+
+	// Test with "127.0.0.1"
+	err = v.validateAsLocalhost(context.Background(), "127.0.0.1")
+	if err != nil {
+		t.Logf("127.0.0.1 validation failed (env dependent): %v", err)
+	}
+}
+
+func TestGetClusterMembers_Error(t *testing.T) {
+	v := &nodeValidator{
+		clusterFetcher: func() ([]string, error) {
+			return nil, errors.New("fetch failed")
+		},
+	}
+	_, err := v.getClusterMembers(context.Background())
+	if err == nil {
+		t.Error("expected error from clusterFetcher")
+	}
+}
+
+func TestGetClusterMembers_ResolutionFails(t *testing.T) {
+	v := &nodeValidator{
+		clusterFetcher: func() ([]string, error) {
+			return []string{"valid-node", "invalid-node", "10.0.0.1", ""}, nil
+		},
+		resolver: stubResolver{
+			err: errors.New("resolution failed"),
+		},
+	}
+	members, err := v.getClusterMembers(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// "valid-node", "invalid-node" (both normalized), and "10.0.0.1" should be in members
+	// Hostnames are added even if resolution fails.
+	if len(members) < 3 {
+		t.Errorf("expected at least 3 members, got %d: %v", len(members), members)
+	}
+}
+
+func TestNodeValidator_Validate_Nil(t *testing.T) {
+	var v *nodeValidator
+	if err := v.Validate(context.Background(), "node"); err != nil {
+		t.Error("expected nil error for nil validator")
 	}
 }

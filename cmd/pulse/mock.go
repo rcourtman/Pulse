@@ -32,7 +32,8 @@ Example:
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := setMockMode(true); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			osExit(1)
+			return
 		}
 		fmt.Println("✓ Mock mode enabled")
 		fmt.Println("")
@@ -54,7 +55,8 @@ Example:
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := setMockMode(false); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			osExit(1)
+			return
 		}
 		fmt.Println("✓ Mock mode disabled")
 		fmt.Println("")

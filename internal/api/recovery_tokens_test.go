@@ -661,6 +661,9 @@ func TestRecoveryTokenStore_SaveUnsafe_MkdirAllError(t *testing.T) {
 }
 
 func TestRecoveryTokenStore_SaveUnsafe_WriteFileError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("Skipping permission test running as root")
+	}
 	// Create a read-only directory to prevent file creation
 	tmpDir := t.TempDir()
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
