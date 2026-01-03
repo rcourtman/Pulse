@@ -1429,7 +1429,7 @@ func TestRun_KubeRetry(t *testing.T) {
 	errCh := make(chan error)
 	go func() {
 		// Only enable kubernetes
-		errCh <- run(ctx, []string{"-token", "T", "-enable-kubernetes=true", "-enable-host=false"}, func(s string) string { return "" })
+		errCh <- run(ctx, []string{"-token", "T", "-enable-kubernetes=true", "-enable-host=false", "-enable-docker=false"}, func(s string) string { return "" })
 	}()
 
 	select {
