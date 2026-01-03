@@ -93,6 +93,10 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		} else {
 			return nil, fmt.Errorf("token authentication requires user information either in token name (user@realm!tokenname) or user field")
 		}
+
+		if user == "" {
+			return nil, fmt.Errorf("could not parse user information from token name")
+		}
 	} else {
 		// Password authentication - user@realm format is required
 		parts := strings.Split(cfg.User, "@")
@@ -342,7 +346,7 @@ func (c *Client) CreateUser(ctx context.Context, userID, comment string) error {
 		data.Set("comment", comment)
 	}
 
-	resp, err := c.post(ctx, "/api2/json/access/users", data)
+	resp, err := c.post(ctx, "/access/users", data)
 	if err != nil {
 		// User might already exist, which is okay
 		if strings.Contains(err.Error(), "already exists") {
@@ -366,7 +370,7 @@ func (c *Client) SetUserACL(ctx context.Context, authID, path, role string) erro
 	data.Set("path", path)
 	data.Set("role", role)
 
-	resp, err := c.post(ctx, "/api2/json/access/acl", data)
+	resp, err := c.post(ctx, "/access/acl", data)
 	if err != nil {
 		return fmt.Errorf("set ACL: %w", err)
 	}
@@ -381,8 +385,8 @@ func (c *Client) SetUserACL(ctx context.Context, authID, path, role string) erro
 func (c *Client) CreateUserToken(ctx context.Context, userID, tokenName string) (*TokenResponse, error) {
 	log.Debug().Str("userID", userID).Str("tokenName", tokenName).Msg("PBS CreateUserToken: creating token")
 
-	// PBS API: POST /api2/json/access/users/{userid}/token/{tokenname}
-	path := fmt.Sprintf("/api2/json/access/users/%s/token/%s", url.PathEscape(userID), url.PathEscape(tokenName))
+	// PBS API: POST /access/users/{userid}/token/{tokenname}
+	path := fmt.Sprintf("/access/users/%s/token/%s", url.PathEscape(userID), url.PathEscape(tokenName))
 
 	// Token with no expiry
 	data := url.Values{}
