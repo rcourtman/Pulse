@@ -646,6 +646,146 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+// alertIDRequest is used for endpoints that accept alert ID in request body
+// This avoids URL encoding issues with alert IDs containing special characters (/, :)
+type alertIDRequest struct {
+	ID string `json:"id"`
+}
+
+// AcknowledgeAlertByBody acknowledges an alert using ID from request body
+// POST /api/alerts/acknowledge with {"id": "alert-id"}
+// This is the preferred method as it avoids URL encoding issues with reverse proxies
+func (h *AlertHandlers) AcknowledgeAlertByBody(w http.ResponseWriter, r *http.Request) {
+	var req alertIDRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to decode acknowledge request body")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	alertID := strings.TrimSpace(req.ID)
+	if alertID == "" {
+		http.Error(w, "Alert ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if !validateAlertID(alertID) {
+		log.Error().Str("alertID", alertID).Msg("Invalid alert ID")
+		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+		return
+	}
+
+	user := "admin"
+
+	if err := h.monitor.GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
+		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to acknowledge alert")
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	h.monitor.SyncAlertState()
+
+	log.Info().Str("alertID", alertID).Str("user", user).Msg("Alert acknowledged successfully")
+
+	if err := utils.WriteJSONResponse(w, map[string]bool{"success": true}); err != nil {
+		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to write acknowledge response")
+	}
+
+	if h.wsHub != nil {
+		go func() {
+			state := h.monitor.GetState()
+			h.wsHub.BroadcastState(state.ToFrontend())
+		}()
+	}
+}
+
+// UnacknowledgeAlertByBody unacknowledges an alert using ID from request body
+// POST /api/alerts/unacknowledge with {"id": "alert-id"}
+func (h *AlertHandlers) UnacknowledgeAlertByBody(w http.ResponseWriter, r *http.Request) {
+	var req alertIDRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to decode unacknowledge request body")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	alertID := strings.TrimSpace(req.ID)
+	if alertID == "" {
+		http.Error(w, "Alert ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if !validateAlertID(alertID) {
+		log.Error().Str("alertID", alertID).Msg("Invalid alert ID")
+		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.monitor.GetAlertManager().UnacknowledgeAlert(alertID); err != nil {
+		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to unacknowledge alert")
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	h.monitor.SyncAlertState()
+
+	log.Info().Str("alertID", alertID).Msg("Alert unacknowledged successfully")
+
+	if err := utils.WriteJSONResponse(w, map[string]bool{"success": true}); err != nil {
+		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to write unacknowledge response")
+	}
+
+	if h.wsHub != nil {
+		go func() {
+			state := h.monitor.GetState()
+			h.wsHub.BroadcastState(state.ToFrontend())
+		}()
+	}
+}
+
+// ClearAlertByBody clears an alert using ID from request body
+// POST /api/alerts/clear with {"id": "alert-id"}
+func (h *AlertHandlers) ClearAlertByBody(w http.ResponseWriter, r *http.Request) {
+	var req alertIDRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to decode clear request body")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	alertID := strings.TrimSpace(req.ID)
+	if alertID == "" {
+		http.Error(w, "Alert ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if !validateAlertID(alertID) {
+		log.Error().Str("alertID", alertID).Msg("Invalid alert ID")
+		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+		return
+	}
+
+	if !h.monitor.GetAlertManager().ClearAlert(alertID) {
+		http.Error(w, "Alert not found", http.StatusNotFound)
+		return
+	}
+
+	h.monitor.SyncAlertState()
+
+	log.Info().Str("alertID", alertID).Msg("Alert cleared successfully")
+
+	if err := utils.WriteJSONResponse(w, map[string]bool{"success": true}); err != nil {
+		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to write clear response")
+	}
+
+	if h.wsHub != nil {
+		go func() {
+			state := h.monitor.GetState()
+			h.wsHub.BroadcastState(state.ToFrontend())
+		}()
+	}
+}
+
 // ClearAlert manually clears an alert
 func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 	// Extract alert ID from URL path: /api/alerts/{id}/clear
@@ -887,6 +1027,23 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.BulkClearAlerts(w, r)
+	// Body-based endpoints (preferred - avoids URL encoding issues with reverse proxies)
+	case path == "acknowledge" && r.Method == http.MethodPost:
+		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
+		h.AcknowledgeAlertByBody(w, r)
+	case path == "unacknowledge" && r.Method == http.MethodPost:
+		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
+		h.UnacknowledgeAlertByBody(w, r)
+	case path == "clear" && r.Method == http.MethodPost:
+		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
+		h.ClearAlertByBody(w, r)
+	// Legacy path-based endpoints (kept for backwards compatibility)
 	case strings.HasSuffix(path, "/acknowledge") && r.Method == http.MethodPost:
 		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
 			return

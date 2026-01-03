@@ -61,15 +61,18 @@ export class AlertsAPI {
   }
 
   static async acknowledge(alertId: string, user?: string): Promise<{ success: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(alertId)}/acknowledge`, {
+    // Use body-based endpoint to avoid URL encoding issues with reverse proxies
+    return apiFetchJSON(`${this.baseUrl}/acknowledge`, {
       method: 'POST',
-      body: JSON.stringify({ user }),
+      body: JSON.stringify({ id: alertId, user }),
     });
   }
 
   static async unacknowledge(alertId: string): Promise<{ success: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(alertId)}/unacknowledge`, {
+    // Use body-based endpoint to avoid URL encoding issues with reverse proxies
+    return apiFetchJSON(`${this.baseUrl}/unacknowledge`, {
       method: 'POST',
+      body: JSON.stringify({ id: alertId }),
     });
   }
 

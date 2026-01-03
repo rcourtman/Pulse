@@ -64,7 +64,8 @@ var (
 	newHostAgent func(hostagent.Config) (Runnable, error) = func(c hostagent.Config) (Runnable, error) {
 		return hostagent.New(c)
 	}
-	lookPath = exec.LookPath
+	lookPath                = exec.LookPath
+	runAsWindowsServiceFunc = runAsWindowsService
 
 	// For testing
 	retryInitialDelay = 5 * time.Second
@@ -114,7 +115,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	}
 
 	// 3. Check if running as Windows service
-	ranAsService, err := runAsWindowsService(cfg, logger)
+	ranAsService, err := runAsWindowsServiceFunc(cfg, logger)
 	if err != nil {
 		return fmt.Errorf("Windows service failed: %w", err)
 	}

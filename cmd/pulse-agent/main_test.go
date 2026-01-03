@@ -1042,6 +1042,266 @@ func TestInitDockerWithRetry_Failure(t *testing.T) {
 	}
 }
 
+// Mock agents for TestRun
+type mockRunnable struct {
+	started chan struct{}
+	err     error
+}
+
+func (m *mockRunnable) Run(ctx context.Context) error {
+	if m.started != nil {
+		close(m.started)
+	}
+	if m.err != nil {
+		return m.err
+	}
+	<-ctx.Done()
+	return nil
+}
+
+type mockRunnableCloser struct {
+	mockRunnable
+}
+
+func (m *mockRunnableCloser) Close() error {
+	return nil
+}
+
+func TestRun_Success(t *testing.T) {
+	origDocker := newDockerAgent
+	origKube := newKubeAgent
+	origHost := newHostAgent
+	defer func() {
+		newDockerAgent = origDocker
+		newKubeAgent = origKube
+		newHostAgent = origHost
+	}()
+
+	// Setup mocks that signal startup and wait for context
+	newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
+		return &mockRunnableCloser{mockRunnable: mockRunnable{started: make(chan struct{})}}, nil
+	}
+	newKubeAgent = func(cfg kubernetesagent.Config) (Runnable, error) {
+		return &mockRunnable{started: make(chan struct{})}, nil
+	}
+	newHostAgent = func(cfg hostagent.Config) (Runnable, error) {
+		return &mockRunnable{started: make(chan struct{})}, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Run in a separate goroutine so we can wait for it
+	errCh := make(chan error)
+	go func() {
+		// Enable all agents
+		errCh <- run(ctx, []string{
+			"-token", "T",
+			"-enable-host=true",
+			"-enable-docker=true",
+			"-enable-kubernetes=true",
+			"-health-addr", ":0", // Random port
+		}, func(s string) string { return "" })
+	}()
+
+	// Wait for run to finish (which should happen on context cancel)
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Errorf("expected nil error, got %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timeout waiting for run to finish")
+	}
+}
+
+func TestRun_AgentFailure(t *testing.T) {
+	origDocker := newDockerAgent
+	defer func() {
+		newDockerAgent = origDocker
+	}()
+
+	// Docker agent fails immediately after start
+	newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
+		return &mockRunnableCloser{mockRunnable: mockRunnable{
+			started: make(chan struct{}),
+			err:     errors.New("simulated failure"),
+		}}, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := run(ctx, []string{"-token", "T", "-enable-docker=true", "-enable-host=false"}, func(s string) string { return "" })
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "simulated failure") {
+		t.Errorf("expected 'simulated failure', got %v", err)
+	}
+}
+
+func TestLoadConfig_Comprehensive(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		env      map[string]string
+		validate func(t *testing.T, cfg Config)
+	}{
+		{
+			name: "all flags",
+			args: []string{
+				"-token", "F",
+				"-enable-host=false",
+				"-enable-docker=true",
+				"-enable-kubernetes=true",
+				"-enable-proxmox=true",
+				"-proxmox-type", "pbs",
+				"-disable-auto-update=true",
+				"-disable-docker-update-checks=true",
+				"-docker-runtime", "podman",
+				"-enable-commands=true",
+				"-kubeconfig", "/tmp/kube",
+				"-kube-context", "ctx",
+				"-kube-max-pods", "50",
+				"-kube-include-all-pods=true",
+				"-kube-include-all-deployments=true",
+				"-report-ip", "1.2.3.4",
+			},
+			validate: func(t *testing.T, cfg Config) {
+				if cfg.EnableHost {
+					t.Error("EnableHost should be false")
+				}
+				if !cfg.EnableDocker {
+					t.Error("EnableDocker should be true")
+				}
+				if !cfg.EnableKubernetes {
+					t.Error("EnableKubernetes should be true")
+				}
+				if !cfg.EnableProxmox {
+					t.Error("EnableProxmox should be true")
+				}
+				if cfg.ProxmoxType != "pbs" {
+					t.Errorf("ProxmoxType: got %s, want pbs", cfg.ProxmoxType)
+				}
+				if !cfg.DisableAutoUpdate {
+					t.Error("DisableAutoUpdate should be true")
+				}
+				if !cfg.DisableDockerUpdateChecks {
+					t.Error("DisableDockerUpdateChecks should be true")
+				}
+				if cfg.DockerRuntime != "podman" {
+					t.Errorf("DockerRuntime: got %s, want podman", cfg.DockerRuntime)
+				}
+				if !cfg.EnableCommands {
+					t.Error("EnableCommands should be true")
+				}
+				if cfg.KubeconfigPath != "/tmp/kube" {
+					t.Errorf("KubeconfigPath: got %s, want /tmp/kube", cfg.KubeconfigPath)
+				}
+				if cfg.KubeContext != "ctx" {
+					t.Errorf("KubeContext: got %s, want ctx", cfg.KubeContext)
+				}
+				if cfg.KubeMaxPods != 50 {
+					t.Errorf("KubeMaxPods: got %d, want 50", cfg.KubeMaxPods)
+				}
+				if !cfg.KubeIncludeAllPods {
+					t.Error("KubeIncludeAllPods should be true")
+				}
+				if !cfg.KubeIncludeAllDeployments {
+					t.Error("KubeIncludeAllDeployments should be true")
+				}
+				if cfg.ReportIP != "1.2.3.4" {
+					t.Errorf("ReportIP: got %s, want 1.2.3.4", cfg.ReportIP)
+				}
+				if !cfg.DockerConfigured {
+					t.Error("DockerConfigured should be true when flag is set")
+				}
+			},
+		},
+		{
+			name: "env vars",
+			env: map[string]string{
+				"PULSE_TOKEN":                        "E",
+				"PULSE_ENABLE_HOST":                  "false",
+				"PULSE_ENABLE_DOCKER":                "true",
+				"PULSE_ENABLE_KUBERNETES":            "true",
+				"PULSE_ENABLE_PROXMOX":               "true",
+				"PULSE_PROXMOX_TYPE":                 "pve",
+				"PULSE_DISABLE_AUTO_UPDATE":          "true",
+				"PULSE_DISABLE_DOCKER_UPDATE_CHECKS": "true",
+				"PULSE_DOCKER_RUNTIME":               "docker",
+				"PULSE_ENABLE_COMMANDS":              "true",
+				"PULSE_KUBECONFIG":                   "/env/kube",
+				"PULSE_KUBE_CONTEXT":                 "env-ctx",
+				"PULSE_KUBE_MAX_PODS":                "100",
+				"PULSE_KUBE_INCLUDE_ALL_POD_FILES":   "true", // Note: var name matches loadConfig implementation
+				"PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS": "true",
+				"PULSE_REPORT_IP":                    "5.6.7.8",
+			},
+			validate: func(t *testing.T, cfg Config) {
+				if cfg.EnableHost {
+					t.Error("EnableHost should be false")
+				}
+				if !cfg.EnableDocker {
+					t.Error("EnableDocker should be true")
+				}
+				if cfg.ProxmoxType != "pve" {
+					t.Errorf("ProxmoxType: got %s, want pve", cfg.ProxmoxType)
+				}
+				if cfg.ReportIP != "5.6.7.8" {
+					t.Errorf("ReportIP: got %s, want 5.6.7.8", cfg.ReportIP)
+				}
+				if !cfg.DockerConfigured {
+					t.Error("DockerConfigured should be true when env is set")
+				}
+			},
+		},
+		{
+			name: "docker not configured",
+			args: []string{"-token", "T"},
+			validate: func(t *testing.T, cfg Config) {
+				if cfg.DockerConfigured {
+					t.Error("DockerConfigured should be false when not set")
+				}
+				if cfg.EnableDocker {
+					t.Error("EnableDocker should be false by default")
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			getenv := func(key string) string {
+				if tc.env == nil {
+					return ""
+				}
+				return tc.env[key]
+			}
+			cfg, err := loadConfig(tc.args, getenv)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			tc.validate(t, cfg)
+		})
+	}
+}
+
+func TestStartHealthServer_Error(t *testing.T) {
+	var ready atomic.Bool
+	logger := zerolog.New(os.Stdout)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Use invalid port to force error (logs warning, doesn't panic)
+	// We just want to exercise the code path
+	startHealthServer(ctx, "invalid-address", &ready, &logger)
+
+	// Give it a moment to try starting
+	time.Sleep(50 * time.Millisecond)
+}
+
 func TestInitKubernetesWithRetry_Failure(t *testing.T) {
 	orig := newKubeAgent
 	defer func() { newKubeAgent = orig }()
@@ -1072,5 +1332,116 @@ func TestInitKubernetesWithRetry_Failure(t *testing.T) {
 	agent := initKubernetesWithRetry(ctx, kubernetesagent.Config{}, &logger)
 	if agent != nil {
 		t.Errorf("expected nil agent")
+	}
+}
+
+func TestRun_WindowsServiceError(t *testing.T) {
+	orig := runAsWindowsServiceFunc
+	defer func() { runAsWindowsServiceFunc = orig }()
+
+	runAsWindowsServiceFunc = func(cfg Config, logger zerolog.Logger) (bool, error) {
+		return false, errors.New("service error")
+	}
+
+	ctx := context.Background()
+	err := run(ctx, []string{"-token", "T"}, func(s string) string { return "" })
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "service error") {
+		t.Errorf("expected 'service error', got %v", err)
+	}
+}
+
+func TestRun_DockerRetry(t *testing.T) {
+	origDocker := newDockerAgent
+	defer func() { newDockerAgent = origDocker }()
+
+	// First call fails, second succeeds
+	calls := 0
+	newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
+		calls++
+		if calls == 1 {
+			return nil, errors.New("not available yet")
+		}
+		return &mockRunnableCloser{mockRunnable: mockRunnable{started: make(chan struct{})}}, nil
+	}
+
+	// Speed up retry
+	origInitial := retryInitialDelay
+	retryInitialDelay = 1 * time.Millisecond
+	defer func() { retryInitialDelay = origInitial }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	errCh := make(chan error)
+	go func() {
+		errCh <- run(ctx, []string{"-token", "T", "-enable-docker=true", "-enable-host=false"}, func(s string) string { return "" })
+	}()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Errorf("expected nil error, got %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timeout waiting for run")
+	}
+
+	if calls < 2 {
+		t.Errorf("expected at least 2 calls to newDockerAgent, got %d", calls)
+	}
+}
+
+func TestRunAsWindowsServiceStub(t *testing.T) {
+	res, err := runAsWindowsService(Config{}, zerolog.New(os.Stdout))
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+	if res != false {
+		t.Error("expected false")
+	}
+}
+
+func TestRun_KubeRetry(t *testing.T) {
+	origKube := newKubeAgent
+	defer func() { newKubeAgent = origKube }()
+
+	// First call fails, second succeeds
+	calls := 0
+	newKubeAgent = func(cfg kubernetesagent.Config) (Runnable, error) {
+		calls++
+		if calls == 1 {
+			return nil, errors.New("not available yet")
+		}
+		return &mockRunnable{started: make(chan struct{})}, nil
+	}
+
+	// Speed up retry
+	origInitial := retryInitialDelay
+	retryInitialDelay = 1 * time.Millisecond
+	defer func() { retryInitialDelay = origInitial }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	errCh := make(chan error)
+	go func() {
+		// Only enable kubernetes
+		errCh <- run(ctx, []string{"-token", "T", "-enable-kubernetes=true", "-enable-host=false"}, func(s string) string { return "" })
+	}()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Errorf("expected nil error, got %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timeout waiting for run")
+	}
+
+	if calls < 2 {
+		t.Errorf("expected at least 2 calls to newKubeAgent, got %d", calls)
 	}
 }
