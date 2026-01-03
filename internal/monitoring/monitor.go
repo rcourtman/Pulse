@@ -5650,9 +5650,11 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				}
 			}
 			if len(existing) > 0 {
-				updated := mergeNVMeTempsIntoDisks(existing, modelNodes)
+				// Use nodes from state snapshot - they have LinkedHostAgentID populated
+				// (the local modelNodes variable doesn't have this field set)
+				updated := mergeNVMeTempsIntoDisks(existing, currentState.Nodes)
 				// Also merge SMART data from linked host agents
-				updated = mergeHostAgentSMARTIntoDisks(updated, modelNodes, currentState.Hosts)
+				updated = mergeHostAgentSMARTIntoDisks(updated, currentState.Nodes, currentState.Hosts)
 				m.state.UpdatePhysicalDisks(instanceName, updated)
 			}
 		} else {
@@ -5803,9 +5805,11 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 					}
 				}
 
-				allDisks = mergeNVMeTempsIntoDisks(allDisks, modelNodesCopy)
+				// Use nodes from state snapshot - they have LinkedHostAgentID populated
+				// (modelNodesCopy passed to this goroutine doesn't have this field set)
+				allDisks = mergeNVMeTempsIntoDisks(allDisks, currentState.Nodes)
 				// Also merge SMART data from linked host agents
-				allDisks = mergeHostAgentSMARTIntoDisks(allDisks, modelNodesCopy, currentState.Hosts)
+				allDisks = mergeHostAgentSMARTIntoDisks(allDisks, currentState.Nodes, currentState.Hosts)
 
 				// Update physical disks in state
 				log.Debug().
