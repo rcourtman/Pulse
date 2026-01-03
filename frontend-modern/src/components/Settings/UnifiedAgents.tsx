@@ -943,7 +943,7 @@ export const UnifiedAgents: Component = () => {
                     </div>
                 </Show>
 
-                <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
+                <Card id="linked-agents" padding="none" tone="glass" class="overflow-x-auto rounded-lg">
                     <table class="min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-800">
                             <tr>
