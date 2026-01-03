@@ -740,7 +740,7 @@ func Load() (*Config, error) {
 		cfg.APITokens = tokens
 		cfg.SortAPITokens()
 		log.Info().Int("count", len(tokens)).Msg("Loaded API tokens from persistence")
-	} else if err != nil {
+	} else {
 		log.Warn().Err(err).Msg("Failed to load API tokens from persistence")
 	}
 

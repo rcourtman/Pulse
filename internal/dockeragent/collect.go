@@ -28,7 +28,9 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 		a.daemonHost = a.docker.DaemonHost()
 	}
 
-	newRuntime := detectRuntime(info, a.daemonHost, RuntimeAuto)
+	// Use current runtime as preference to avoid spurious switching.
+	// This preserves user's --docker-runtime choice (stored in a.runtime at init).
+	newRuntime := detectRuntime(info, a.daemonHost, a.runtime)
 	if newRuntime != a.runtime {
 		if a.runtime != "" {
 			a.logger.Info().
