@@ -699,6 +699,14 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 		if errMsg == "" {
 			errMsg = resp.Status
 		}
+		// Detect token-already-in-use error and log a clear warning
+		if strings.Contains(errMsg, "already in use") {
+			a.logger.Error().
+				Str("pulseURL", target.URL).
+				Msg("DOCKER REGISTRATION FAILED: This API token is already used by another Docker agent. " +
+					"Each Docker host requires its own unique token. " +
+					"Generate a new token in Pulse Settings > Agents and reinstall with the new token.")
+		}
 		return fmt.Errorf("target %s: pulse responded %s: %s", target.URL, resp.Status, errMsg)
 	}
 
