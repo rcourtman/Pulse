@@ -4447,19 +4447,7 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 	// Check if update detection is enabled
 	m.mu.RLock()
 	delayHours := m.config.DockerDefaults.UpdateAlertDelayHours
-	hasProFeature := m.hasProFeature
 	m.mu.RUnlock()
-
-	// Update alerts are a Pro-only feature
-	// Free users still see update badges in the UI, but alerts require Pro
-	if hasProFeature != nil && !hasProFeature("update_alerts") {
-		// Not licensed for update alerts - clear any existing alert and tracking
-		m.clearAlert(alertID)
-		m.mu.Lock()
-		delete(m.dockerUpdateFirstSeen, resourceID)
-		m.mu.Unlock()
-		return
-	}
 
 	// Negative value means disabled
 	if delayHours < 0 {

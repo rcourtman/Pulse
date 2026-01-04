@@ -10,8 +10,8 @@ const (
 	FeatureAIAutoFix    = "ai_autofix"    // Automatic remediation
 	FeatureKubernetesAI = "kubernetes_ai" // AI analysis of K8s (NOT basic monitoring)
 
-	// Pro tier features - Monitoring
-	FeatureUpdateAlerts = "update_alerts" // Alerts for pending container/package updates
+	// Free tier features - Monitoring
+	FeatureUpdateAlerts = "update_alerts" // Alerts for pending container/package updates (free feature)
 
 	// MSP tier features (FUTURE - not in v1 launch)
 	FeatureMultiUser   = "multi_user"   // RBAC - NOT IMPLEMENTED YET
@@ -35,7 +35,8 @@ const (
 // TierFeatures maps each tier to its included features.
 var TierFeatures = map[Tier][]string{
 	TierFree: {
-		// Free tier has no Pro features, but full monitoring
+		// Free tier includes update alerts (container image updates) - basic monitoring feature
+		FeatureUpdateAlerts,
 	},
 	TierPro: {
 		FeatureAIPatrol,
