@@ -51,6 +51,12 @@ const (
 	maxTaskTimeout     = 3 * time.Minute
 )
 
+// newProxmoxClientFunc is a variable that holds the function to create a new Proxmox client.
+// It is used to allow mocking the client creation in tests.
+var newProxmoxClientFunc = func(cfg proxmox.ClientConfig) (PVEClientInterface, error) {
+	return proxmox.NewClient(cfg)
+}
+
 // PVEClientInterface defines the interface for PVE clients (both regular and cluster)
 type PVEClientInterface interface {
 	GetNodes(ctx context.Context) ([]proxmox.Node, error)
@@ -3501,7 +3507,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 				// Create regular client
 				clientConfig := config.CreateProxmoxConfig(&pve)
 				clientConfig.Timeout = cfg.ConnectionTimeout
-				client, err := proxmox.NewClient(clientConfig)
+				client, err := newProxmoxClientFunc(clientConfig)
 				if err != nil {
 					monErr := errors.WrapConnectionError("create_pve_client", pve.Name, err)
 					log.Error().
@@ -4112,19 +4118,21 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	}
 }
 
+var connRetryDelays = []time.Duration{
+	5 * time.Second,
+	10 * time.Second,
+	20 * time.Second,
+	40 * time.Second,
+	60 * time.Second,
+}
+
 // retryFailedConnections attempts to recreate clients that failed during initialization
 // This handles cases where Proxmox/network isn't ready when Pulse starts
 func (m *Monitor) retryFailedConnections(ctx context.Context) {
 	defer recoverFromPanic("retryFailedConnections")
 
 	// Retry schedule: 5s, 10s, 20s, 40s, 60s, then every 60s for up to 5 minutes total
-	retryDelays := []time.Duration{
-		5 * time.Second,
-		10 * time.Second,
-		20 * time.Second,
-		40 * time.Second,
-		60 * time.Second,
-	}
+	retryDelays := connRetryDelays
 
 	maxRetryDuration := 5 * time.Minute
 	startTime := time.Now()
@@ -4244,7 +4252,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 				// Create regular client
 				clientConfig := config.CreateProxmoxConfig(&pve)
 				clientConfig.Timeout = m.config.ConnectionTimeout
-				client, err := proxmox.NewClient(clientConfig)
+				client, err := newProxmoxClientFunc(clientConfig)
 				if err != nil {
 					log.Warn().
 						Err(err).
@@ -5231,7 +5239,7 @@ func (m *Monitor) retryPVEPortFallback(ctx context.Context, instanceName string,
 		clientCfg.Timeout = m.config.ConnectionTimeout
 	}
 
-	fallbackClient, err := proxmox.NewClient(clientCfg)
+	fallbackClient, err := newProxmoxClientFunc(clientCfg)
 	if err != nil {
 		return nil, currentClient, cause
 	}
@@ -5724,11 +5732,6 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 						}
 						continue
 					}
-
-					log.Debug().
-						Str("node", node.Node).
-						Int("diskCount", len(disks)).
-						Msg("Got disk list for node")
 
 					// Mark this node as successfully polled
 					polledNodes[node.Node] = true
@@ -8041,7 +8044,9 @@ func (m *Monitor) handleAlertFired(alert *alerts.Alert) {
 		Str("alertID", alert.ID).
 		Str("level", string(alert.Level)).
 		Msg("Alert raised, sending to notification manager")
-	go m.notificationMgr.SendAlert(alert)
+	if m.notificationMgr != nil {
+		go m.notificationMgr.SendAlert(alert)
+	}
 
 	if m.incidentStore != nil {
 		m.incidentStore.RecordAlertFired(alert)
@@ -8052,10 +8057,12 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 	if m.wsHub != nil {
 		m.wsHub.BroadcastAlertResolved(alertID)
 	}
-	m.notificationMgr.CancelAlert(alertID)
-	if m.notificationMgr.GetNotifyOnResolve() {
-		if resolved := m.alertManager.GetResolvedAlert(alertID); resolved != nil {
-			go m.notificationMgr.SendResolvedAlert(resolved)
+	if m.notificationMgr != nil {
+		m.notificationMgr.CancelAlert(alertID)
+		if m.notificationMgr.GetNotifyOnResolve() {
+			if resolved := m.alertManager.GetResolvedAlert(alertID); resolved != nil {
+				go m.notificationMgr.SendResolvedAlert(resolved)
+			}
 		}
 	}
 
@@ -8682,9 +8689,14 @@ func enrichWithPersistedMetadata(metadataStore *config.GuestMetadataStore, byVMI
 		// Parse the guest key (format: instance:node:vmid)
 		// We need to extract instance, node, and vmid
 		var instance, node string
-		var vmid int
-		if _, err := fmt.Sscanf(guestKey, "%[^:]:%[^:]:%d", &instance, &node, &vmid); err != nil {
-			continue // Invalid key format
+		parts := strings.Split(guestKey, ":")
+		if len(parts) != 3 {
+			continue
+		}
+		instance, node = parts[0], parts[1]
+		vmid, err := strconv.Atoi(parts[2])
+		if err != nil {
+			continue
 		}
 
 		vmidKey := strconv.Itoa(vmid)

@@ -687,6 +687,10 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 		used, _ := statusResult.Data["used"].(float64)
 		avail, _ := statusResult.Data["avail"].(float64)
 
+		totalSpace, _ := statusResult.Data["total-space"].(float64)
+		usedSpace, _ := statusResult.Data["used-space"].(float64)
+		availSpace, _ := statusResult.Data["avail-space"].(float64)
+
 		// Check for deduplication_factor in status response
 		if df, ok := statusResult.Data["deduplication-factor"].(float64); ok {
 			dedupFactor = df
@@ -727,6 +731,9 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 			Total:               int64(total),
 			Used:                int64(used),
 			Avail:               int64(avail),
+			TotalSpace:          int64(totalSpace),
+			UsedSpace:           int64(usedSpace),
+			AvailSpace:          int64(availSpace),
 			DeduplicationFactor: dedupFactor,
 		}
 
