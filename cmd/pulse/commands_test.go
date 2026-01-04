@@ -87,6 +87,7 @@ func TestConfigExportCmd(t *testing.T) {
 	tempDir := t.TempDir()
 	os.Setenv("PULSE_DATA_DIR", tempDir)
 	defer os.Unsetenv("PULSE_DATA_DIR")
+	createTestEncryptionKey(t, tempDir)
 
 	// Set PULSE_PASSPHRASE for non-interactive test
 	os.Setenv("PULSE_PASSPHRASE", "testpass")
@@ -116,6 +117,7 @@ func TestConfigImportCmd(t *testing.T) {
 	tempDir := t.TempDir()
 	os.Setenv("PULSE_DATA_DIR", tempDir)
 	defer os.Unsetenv("PULSE_DATA_DIR")
+	createTestEncryptionKey(t, tempDir)
 
 	os.Setenv("PULSE_PASSPHRASE", "testpass")
 	defer os.Unsetenv("PULSE_PASSPHRASE")
@@ -401,6 +403,7 @@ func TestConfigAutoImportCmd(t *testing.T) {
 	tempDir := t.TempDir()
 	os.Setenv("PULSE_DATA_DIR", tempDir)
 	defer os.Unsetenv("PULSE_DATA_DIR")
+	createTestEncryptionKey(t, tempDir)
 
 	os.Setenv("PULSE_INIT_CONFIG_PASSPHRASE", "testpass")
 	defer os.Unsetenv("PULSE_INIT_CONFIG_PASSPHRASE")
