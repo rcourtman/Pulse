@@ -100,14 +100,22 @@ func TestHTTPServer_AuthMiddleware(t *testing.T) {
 func TestHTTPServer_Temperature(t *testing.T) {
 	// Mock SSH execution
 	origExec := execCommandFunc
-	defer func() { execCommandFunc = origExec }()
-	execCommandFunc = func(name string, arg ...string) *exec.Cmd {
+	origExecContext := execCommandContextFunc
+	defer func() {
+		execCommandFunc = origExec
+		execCommandContextFunc = origExecContext
+	}()
+	mockFn := func(name string, arg ...string) *exec.Cmd {
 		args := strings.Join(arg, " ")
 		if strings.Contains(args, "ssh") {
 			// Return mock sensor JSON
 			return mockExecCommand(`{"coretemp-isa-0000":{"Package id 0":{"temp1_input": 50.0}}}`)
 		}
 		return mockExecCommand("")
+	}
+	execCommandFunc = mockFn
+	execCommandContextFunc = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+		return mockFn(name, arg...)
 	}
 
 	// Mock keyscan to avoid trying actual network keyscan
@@ -144,7 +152,7 @@ func TestHTTPServer_Temperature(t *testing.T) {
 		t.Errorf("expected status 200, got %d body: %s", w.Code, w.Body.String())
 	}
 	if !strings.Contains(w.Body.String(), "50.0") {
-		t.Errorf("expected temp 50.0 in response")
+		t.Errorf("expected temp 50.0 in response, got: %s", w.Body.String())
 	}
 
 	// Test missing node
@@ -164,7 +172,7 @@ func TestHTTPServer_Temperature(t *testing.T) {
 	}
 
 	// Test SSH failure
-	execCommandFunc = func(name string, arg ...string) *exec.Cmd {
+	failMock := func(name string, arg ...string) *exec.Cmd {
 		args := strings.Join(arg, " ")
 		if strings.Contains(args, "ssh") {
 			return errorExecCommand("ssh failed")
@@ -174,6 +182,10 @@ func TestHTTPServer_Temperature(t *testing.T) {
 			return errorExecCommand("sensors failed")
 		}
 		return mockExecCommand("")
+	}
+	execCommandFunc = failMock
+	execCommandContextFunc = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+		return failMock(name, arg...)
 	}
 	// Need to mock getTemperatureLocal failing too.
 

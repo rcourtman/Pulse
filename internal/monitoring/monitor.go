@@ -3479,6 +3479,27 @@ func New(cfg *config.Config) (*Monitor, error) {
 						fallback = ensureClusterEndpointURL(pve.Host)
 					}
 					endpoints = []string{fallback}
+				} else {
+					// Always include the main host URL as a fallback endpoint.
+					// This handles remote cluster scenarios where Proxmox reports internal IPs
+					// that aren't reachable from Pulse's network. The user-provided URL is
+					// reachable, so include it as a fallback for cluster API routing.
+					mainHostURL := ensureClusterEndpointURL(pve.Host)
+					mainHostAlreadyIncluded := false
+					for _, ep := range endpoints {
+						if ep == mainHostURL {
+							mainHostAlreadyIncluded = true
+							break
+						}
+					}
+					if !mainHostAlreadyIncluded && mainHostURL != "" {
+						log.Info().
+							Str("instance", pve.Name).
+							Str("mainHost", mainHostURL).
+							Int("clusterEndpoints", len(endpoints)).
+							Msg("Adding main host as fallback for remote cluster access")
+						endpoints = append(endpoints, mainHostURL)
+					}
 				}
 
 				log.Info().

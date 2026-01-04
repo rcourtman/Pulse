@@ -212,10 +212,28 @@ func TestPatrol_RunHeuristicAnalysis_Coverage(t *testing.T) {
 	// Link them
 	ps.aiService = svc
 
+	// Disable AI patrol feature to force heuristic analysis
+	licenseChecker := &mockLicenseStore{
+		features: map[string]bool{
+			"ai_patrol": false, // explicitly false
+		},
+		state: "active",
+		valid: true,
+	}
+	svc.SetLicenseChecker(licenseChecker)
+
 	ctx := context.Background()
 	ps.runPatrol(ctx)
 
 	// Check if heuristics generated findings
-	// If implemented, heuristics should add findings to store.
-	// Note: The file patrol.go suggests runHeuristicAnalysis exists.
+	// With low thresholds and high usage in state, we expect findings
+	findings := ps.GetFindings().GetActive(FindingSeverityWarning)
+	// We expect at least one finding (CPU, Memory, or Storage)
+	if len(findings) == 0 {
+		// Try Info severity (maybe watch/heuristic produces lower severity?)
+		findings = ps.GetFindings().GetActive(FindingSeverityInfo)
+		if len(findings) == 0 {
+			t.Error("Expected findings from heuristic analysis")
+		}
+	}
 }
