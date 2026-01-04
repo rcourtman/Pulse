@@ -162,12 +162,13 @@ func DefaultPolicy() *CommandPolicy {
 			`>\s*/dev/sd`,
 			`>\s*/dev/nvme`,
 
-			// System destruction
-			`shutdown`,
-			`reboot`,
-			`init\s+0`,
-			`poweroff`,
-			`halt`,
+			// System destruction (host-level commands only)
+			// Note: qm/pct reboot/shutdown are allowed with approval (see RequireApproval)
+			`^shutdown(\s|$)`,
+			`^reboot(\s|$)`,
+			`^init\s+0`,
+			`^poweroff(\s|$)`,
+			`^halt(\s|$)`,
 
 			// Dangerous permissions
 			`chmod\s+777`,

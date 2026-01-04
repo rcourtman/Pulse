@@ -23,6 +23,18 @@ func TestDefaultPolicyEvaluate(t *testing.T) {
 		{"require approval", "systemctl restart nginx", PolicyRequireApproval},
 		{"unknown defaults to approval", "echo hello", PolicyRequireApproval},
 		{"sudo with flags remains conservative", "sudo -u root df -h", PolicyRequireApproval},
+
+		// Proxmox VM control - should require approval, not be blocked
+		{"qm reboot requires approval", "qm reboot 201", PolicyRequireApproval},
+		{"qm shutdown requires approval", "qm shutdown 201", PolicyRequireApproval},
+		{"pct reboot requires approval", "pct reboot 100", PolicyRequireApproval},
+		{"pct shutdown requires approval", "pct shutdown 100", PolicyRequireApproval},
+
+		// Host-level system commands should be blocked
+		{"bare reboot blocked", "reboot", PolicyBlock},
+		{"bare shutdown blocked", "shutdown", PolicyBlock},
+		{"shutdown now blocked", "shutdown now", PolicyBlock},
+		{"reboot now blocked", "reboot -f", PolicyBlock},
 	}
 
 	for _, tc := range cases {
