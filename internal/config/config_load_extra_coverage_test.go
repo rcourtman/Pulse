@@ -35,6 +35,7 @@ func TestLoad_EnvLoadErrors(t *testing.T) {
 }
 
 func TestLoad_EnvOverrides_Invalid_Extra(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	t.Setenv("BACKUP_POLLING_CYCLES", "-1")
 	t.Setenv("BACKUP_POLLING_INTERVAL", "-5s")
 	t.Setenv("PVE_POLLING_INTERVAL", "5s") // too low
@@ -51,6 +52,7 @@ func TestLoad_EnvOverrides_Invalid_Extra(t *testing.T) {
 }
 
 func TestLoad_EnvOverrides_Seconds(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	t.Setenv("BACKUP_POLLING_INTERVAL", "30")
 	t.Setenv("PVE_POLLING_INTERVAL", "45")
 
@@ -62,6 +64,7 @@ func TestLoad_EnvOverrides_Seconds(t *testing.T) {
 }
 
 func TestLoad_EnvOverrides_More(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	t.Setenv("PULSE_ENABLE_SENSOR_PROXY", "true")
 	t.Setenv("PULSE_AUTH_HIDE_LOCAL_LOGIN", "true")
 	t.Setenv("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS", "true")
@@ -89,6 +92,7 @@ func TestLoad_EnvOverrides_More(t *testing.T) {
 }
 
 func TestLoad_EnvOverrides_AdaptivePolling_Intervals(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	t.Setenv("ADAPTIVE_POLLING_BASE_INTERVAL", "30s")
 	t.Setenv("ADAPTIVE_POLLING_MIN_INTERVAL", "10s")
 	t.Setenv("ADAPTIVE_POLLING_MAX_INTERVAL", "10m")
@@ -102,6 +106,7 @@ func TestLoad_EnvOverrides_AdaptivePolling_Intervals(t *testing.T) {
 }
 
 func TestLoad_EnvOverrides_Invalid_Negative(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	t.Setenv("GUEST_METADATA_MIN_REFRESH_INTERVAL", "-1s")
 	t.Setenv("GUEST_METADATA_REFRESH_JITTER", "-500ms")
 	t.Setenv("GUEST_METADATA_RETRY_BACKOFF", "-1s")
