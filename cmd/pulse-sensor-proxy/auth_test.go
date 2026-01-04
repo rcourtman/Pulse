@@ -311,8 +311,8 @@ zero:300000:0
 		t.Fatalf("expected 2 ranges, got %d", len(ranges))
 	}
 
-	// Test missing file
-	ranges, err = loadSubIDRanges("/nonexistent/file", nil)
+	// Test missing file - use path under /tmp to reliably get "not exists" vs "permission denied"
+	ranges, err = loadSubIDRanges("/tmp/nonexistent_subid_test_file_xyz123", nil)
 	if err != nil {
 		t.Fatalf("expected no error for nonexistent file, got %v", err)
 	}
