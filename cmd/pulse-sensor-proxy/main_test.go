@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -107,6 +110,133 @@ func TestResolveUserSpec_PasswdFallback(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for nonexistent user")
 	}
+}
+
+func TestEnsureSSHKeypair(t *testing.T) {
+	tmpDir := t.TempDir()
+	proxy := &Proxy{sshKeyPath: tmpDir}
+
+	// Mock exec for ssh-keygen
+	origExec := execCommandFunc
+	defer func() { execCommandFunc = origExec }()
+	execCommandFunc = func(name string, arg ...string) *exec.Cmd {
+		args := strings.Join(arg, " ")
+		if strings.Contains(args, "ssh-keygen") {
+			// Parse shell command to find -f
+			// cmd string is in arg[1] (after -c)
+			if len(arg) > 1 {
+				cmdStr := arg[1]
+				parts := strings.Fields(cmdStr)
+				for i, p := range parts {
+					if p == "-f" && i+1 < len(parts) {
+						path := parts[i+1]
+						os.WriteFile(path, []byte("priv"), 0600)
+						os.WriteFile(path+".pub", []byte("pub"), 0644)
+					}
+				}
+			}
+			return mockExecCommand("")
+		}
+		return mockExecCommand("")
+	}
+
+	// First run: generate
+	if err := proxy.ensureSSHKeypair(); err != nil {
+		t.Fatalf("ensureSSHKeypair failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(tmpDir, "id_ed25519")); err != nil {
+		t.Error("private key not created")
+	}
+
+	// Second run: existing
+	// Restore exec to fail if called (should not be called)
+	execCommandFunc = func(name string, arg ...string) *exec.Cmd {
+		return errorExecCommand("should not be called")
+	}
+	if err := proxy.ensureSSHKeypair(); err != nil {
+		t.Fatalf("ensureSSHKeypair existing failed: %v", err)
+	}
+}
+
+type mockListener struct {
+	net.Listener
+	closed bool
+}
+
+func (m *mockListener) Close() error {
+	m.closed = true
+	return nil
+}
+
+func (m *mockListener) Accept() (net.Conn, error) {
+	// Block until closed
+	select {}
+}
+
+func (m *mockListener) Addr() net.Addr {
+	return &net.UnixAddr{Name: "/tmp/sock", Net: "unix"}
+}
+
+func TestProxy_StartStop(t *testing.T) {
+	tmpDir := t.TempDir()
+	sshDir := filepath.Join(tmpDir, "ssh")
+	socketPath := filepath.Join(tmpDir, "sock")
+
+	// Mock net.Listen
+	origListen := netListen
+	defer func() { netListen = origListen }()
+	listenCalled := false
+	netListen = func(network, address string) (net.Listener, error) {
+		listenCalled = true
+		return &mockListener{}, nil
+	}
+
+	// Mock exec for key gen
+	origExec := execCommandFunc
+	defer func() { execCommandFunc = origExec }()
+	execCommandFunc = func(name string, arg ...string) *exec.Cmd {
+		args := strings.Join(arg, " ")
+		if strings.Contains(args, "ssh-keygen") {
+			// Create dummy key files
+			for i, a := range arg {
+				if a == "-f" && i+1 < len(arg) {
+					os.MkdirAll(filepath.Dir(arg[i+1]), 0755)
+					os.WriteFile(arg[i+1], []byte("priv"), 0600)
+					os.WriteFile(arg[i+1]+".pub", []byte("pub"), 0644)
+				}
+			}
+			return mockExecCommand("")
+		}
+		return mockExecCommand("")
+	}
+
+	proxy := &Proxy{
+		sshKeyPath: sshDir,
+		socketPath: socketPath,
+		metrics:    NewProxyMetrics("test"),
+	}
+
+	if err := proxy.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	if !listenCalled {
+		t.Error("net.Listen not called")
+	}
+
+	// Check directories created
+	if _, err := os.Stat(sshDir); err != nil {
+		t.Error("ssh dir not created")
+	}
+
+	// Stop
+	proxy.Stop()
+	// Should close listener -> our mock doesn't block Stop.
+
+	// Check socket removed (Start code removes it first)
+	// But our mock listener doesn't create file.
+	// The Start() function calls os.RemoveAll(p.socketPath).
 }
 
 // Helpers for http_server_test.go which I might have deleted if they were in main_test.go

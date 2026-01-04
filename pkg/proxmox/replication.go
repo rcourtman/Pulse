@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // ReplicationJob represents the parsed status of a Proxmox storage replication job.
@@ -80,36 +83,90 @@ func (c *Client) enrichReplicationJobStatus(ctx context.Context, job *Replicatio
 	// Status is stored on the source node
 	sourceNode := job.Source
 	if sourceNode == "" {
+		log.Debug().Str("jobID", job.ID).Msg("Skipping replication status fetch - no source node")
 		return
 	}
 
 	jobID := job.ID
 	if jobID == "" {
+		log.Debug().Str("source", sourceNode).Msg("Skipping replication status fetch - no job ID")
 		return
 	}
 
 	endpoint := fmt.Sprintf("/nodes/%s/replication/%s/status", sourceNode, jobID)
 	resp, err := c.get(ctx, endpoint)
 	if err != nil {
-		// Silently ignore - status endpoint may not be available or job may be new
+		log.Debug().
+			Str("jobID", jobID).
+			Str("source", sourceNode).
+			Str("endpoint", endpoint).
+			Err(err).
+			Msg("Failed to fetch replication job status")
 		return
 	}
 	defer resp.Body.Close()
 
+	// Read body for debugging/parsing
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Debug().
+			Str("jobID", jobID).
+			Str("endpoint", endpoint).
+			Err(err).
+			Msg("Failed to read replication status response body")
+		return
+	}
+
+	log.Debug().
+		Str("jobID", jobID).
+		Str("endpoint", endpoint).
+		Str("responseBody", string(bodyBytes)).
+		Msg("Received replication status response")
+
+	// Try to parse as array first (common case)
 	var statusResp struct {
 		Data []map[string]json.RawMessage `json:"data"`
 	}
+	var status map[string]json.RawMessage
 
-	if err := json.NewDecoder(resp.Body).Decode(&statusResp); err != nil {
-		return
+	if err := json.Unmarshal(bodyBytes, &statusResp); err != nil {
+		log.Debug().
+			Str("jobID", jobID).
+			Str("endpoint", endpoint).
+			Err(err).
+			Msg("Failed to decode replication status response as array, trying single object")
+
+		// Try parsing as single object { "data": { ... } }
+		var singleResp struct {
+			Data map[string]json.RawMessage `json:"data"`
+		}
+		if err := json.Unmarshal(bodyBytes, &singleResp); err != nil {
+			log.Debug().
+				Str("jobID", jobID).
+				Str("endpoint", endpoint).
+				Err(err).
+				Msg("Failed to decode replication status response as single object")
+			return
+		}
+		if len(singleResp.Data) == 0 {
+			log.Debug().
+				Str("jobID", jobID).
+				Str("endpoint", endpoint).
+				Msg("Replication status response has empty data object")
+			return
+		}
+		status = singleResp.Data
+	} else {
+		// Successfully parsed as array
+		if len(statusResp.Data) == 0 {
+			log.Debug().
+				Str("jobID", jobID).
+				Str("endpoint", endpoint).
+				Msg("Replication status response has empty data array")
+			return
+		}
+		status = statusResp.Data[0]
 	}
-
-	// The status endpoint returns an array, usually with one entry
-	if len(statusResp.Data) == 0 {
-		return
-	}
-
-	status := statusResp.Data[0]
 
 	// Parse and merge status fields
 	if t, unix := parseReplicationTime(decodeRaw(status["last_sync"])); t != nil {
@@ -141,6 +198,14 @@ func (c *Client) enrichReplicationJobStatus(ctx context.Context, job *Replicatio
 	if errMsg := stringFromAny(decodeRaw(status["error"])); errMsg != "" {
 		job.Error = errMsg
 	}
+
+	log.Debug().
+		Str("jobID", jobID).
+		Str("source", sourceNode).
+		Interface("lastSync", job.LastSyncTime).
+		Interface("nextSync", job.NextSyncTime).
+		Str("state", job.State).
+		Msg("Successfully enriched replication job with status")
 }
 
 func parseReplicationJob(entry map[string]json.RawMessage) ReplicationJob {
