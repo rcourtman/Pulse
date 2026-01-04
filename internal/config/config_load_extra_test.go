@@ -88,6 +88,7 @@ func TestLoad_MockEnvErrors(t *testing.T) {
 	os.Chdir(tempCWD)
 	defer os.Chdir(cwd)
 
+	t.Setenv("PULSE_DATA_DIR", tempCWD)
 	require.NoError(t, os.WriteFile("mock.env", []byte("invalid="), 0644))
 	require.NoError(t, os.WriteFile("mock.env.local", []byte("invalid="), 0644))
 
