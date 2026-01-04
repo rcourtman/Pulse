@@ -631,6 +631,9 @@ func TestRunServer_ConfigReload(t *testing.T) {
 	cancel()
 	err := <-errChan
 	assert.NoError(t, err)
+
+	// Give time for any pending file watcher events to complete before cleanup
+	time.Sleep(100 * time.Millisecond)
 }
 
 func TestMainCmd(t *testing.T) {
@@ -638,6 +641,11 @@ func TestMainCmd(t *testing.T) {
 	// But we don't want it to block forever
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
+
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+	createTestEncryptionKey(t, tempDir)
+	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
 	// Override rootCmd RunE
 	oldRunE := rootCmd.RunE
