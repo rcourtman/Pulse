@@ -815,7 +815,8 @@ func TestCountLegacySSHKeys(t *testing.T) {
 		{
 			name: "non-existent directory returns 0 with no error",
 			setup: func(t *testing.T) string {
-				return "/nonexistent/path/to/ssh/keys"
+				// Use path under /tmp to reliably get "not exists" vs "permission denied"
+				return "/tmp/nonexistent_ssh_keys_test_xyz123"
 			},
 			wantCount: 0,
 			wantErr:   false,

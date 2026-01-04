@@ -1,11 +1,18 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -109,6 +116,52 @@ func TestResolveUserSpec_PasswdFallback(t *testing.T) {
 	_, err = lookupUserFromPasswd("nonexistent")
 	if err == nil {
 		t.Error("expected error for nonexistent user")
+	}
+}
+
+func TestResolveUserSpec(t *testing.T) {
+	// Mock lookupUserFromPasswd if we could, but resolveUserSpec calls user.Lookup first.
+	// We can test that it falls back to passwd if user.Lookup fails (which it might in test env).
+	// But lookupUserFromPasswd reads /etc/passwd path which is hardcoded.
+	// We can't mock os.Open easily without refactoring.
+
+	// However, we can test with a known user if possible, or mock the fallback.
+	// Let's assume user.Lookup works for current user.
+	u, err := user.Current()
+	if err != nil {
+		t.Skip("cannot get current user")
+	}
+
+	spec, err := resolveUserSpec(u.Username)
+	if err != nil {
+		t.Fatalf("resolveUserSpec failed: %v", err)
+	}
+
+	expectedUid, _ := strconv.Atoi(u.Uid)
+	if spec.uid != expectedUid {
+		t.Errorf("expected uid %d, got %d", expectedUid, spec.uid)
+	}
+}
+
+func TestResolveUserSpec_Root(t *testing.T) {
+	// Test success path with existing user
+	// We use "root" as it should exist on almost all unix systems
+	// Check if we can look it up first
+	if _, err := exec.LookPath("id"); err != nil {
+		t.Skip("id command not found")
+	}
+	// Or just try resolving it
+	spec, err := resolveUserSpec("root")
+	if err != nil {
+		t.Skipf("root user resolution failed (maybe minimal env?): %v", err)
+	}
+
+	if spec.name != "root" {
+		t.Errorf("expected name root, got %s", spec.name)
+	}
+	// UID 0 check
+	if spec.uid != 0 {
+		t.Logf("root uid is %d, not 0 (unusual but possible)", spec.uid)
 	}
 }
 
@@ -267,4 +320,115 @@ func TestHelperProcess(t *testing.T) {
 	output := os.Getenv("GO_HELPER_OUTPUT")
 	fmt.Fprint(os.Stdout, output)
 	os.Exit(0)
+}
+
+func TestFetchAuthorizedNodes(t *testing.T) {
+	// Mock server
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Proxy-Token") != "token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		resp := struct {
+			Nodes []struct {
+				Name string `json:"name"`
+				IP   string `json:"ip"`
+			} `json:"nodes"`
+			Hash            string `json:"hash"`
+			RefreshInterval int    `json:"refresh_interval"`
+		}{
+			Nodes: []struct {
+				Name string `json:"name"`
+				IP   string `json:"ip"`
+			}{
+				{Name: "node1", IP: "10.0.0.1"},
+			},
+			Hash:            "abc",
+			RefreshInterval: 60,
+		}
+		json.NewEncoder(w).Encode(resp)
+	})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	nv, _ := newNodeValidator(nil, nil)
+	proxy := &Proxy{
+		controlPlaneCfg: &ControlPlaneConfig{
+			URL: server.URL,
+		},
+		controlPlaneToken: "token",
+		nodeValidator:     nv,
+	}
+
+	// Need a client
+	client := server.Client()
+
+	if err := proxy.fetchAuthorizedNodes(client); err != nil {
+		t.Fatalf("fetchAuthorizedNodes failed: %v", err)
+	}
+
+	if proxy.controlPlaneCfg.RefreshIntervalSec != 60 {
+		t.Errorf("expected refresh interval 60, got %d", proxy.controlPlaneCfg.RefreshIntervalSec)
+	}
+
+	// Need context for Validate
+	if err := proxy.nodeValidator.Validate(context.Background(), "node1"); err != nil {
+		t.Errorf("expected node1 to be valid: %v", err)
+	}
+}
+
+func TestDefaultExtractPeerCredentials_Real(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Skipping Linux-specific test")
+	}
+
+	// Create unix socket
+	tmpDir := t.TempDir()
+	sockPath := filepath.Join(tmpDir, "test.sock")
+	l, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+
+	serverConnCh := make(chan net.Conn)
+
+	// Accept in goroutine
+	go func() {
+		c, err := l.Accept()
+		if err != nil {
+			close(serverConnCh)
+			return
+		}
+		serverConnCh <- c
+	}()
+
+	clientConn, err := net.Dial("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clientConn.Close()
+
+	serverConn := <-serverConnCh
+	if serverConn == nil {
+		t.Fatal("failed to accept connection")
+	}
+	defer serverConn.Close()
+
+	creds, err := defaultExtractPeerCredentials(serverConn)
+	if err != nil {
+		t.Fatalf("defaultExtractPeerCredentials failed: %v", err)
+	}
+
+	// Check against current process
+	if creds.uid != uint32(os.Getuid()) {
+		t.Errorf("expected uid %d, got %d", os.Getuid(), creds.uid)
+	}
+	if creds.gid != uint32(os.Getgid()) {
+		t.Errorf("expected gid %d, got %d", os.Getgid(), creds.gid)
+	}
+	if creds.pid != uint32(os.Getpid()) {
+		t.Errorf("expected pid %d, got %d", os.Getpid(), creds.pid)
+	}
 }
