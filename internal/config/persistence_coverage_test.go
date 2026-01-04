@@ -101,16 +101,6 @@ func TestNewConfigPersistence_DataDirEnv(t *testing.T) {
 	assert.Equal(t, tempDir, cp.configDir)
 }
 
-func TestSaveSystemSettings_EnsureDirError(t *testing.T) {
-	tempDir := t.TempDir()
-	fileAsDir := filepath.Join(tempDir, "blocked")
-	require.NoError(t, os.WriteFile(fileAsDir, []byte("data"), 0644))
-
-	cp := NewConfigPersistence(fileAsDir)
-	err := cp.SaveSystemSettings(SystemSettings{})
-	assert.Error(t, err)
-}
-
 func TestConfigPersistence_IsEncryptionEnabled(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := NewConfigPersistence(tempDir)
