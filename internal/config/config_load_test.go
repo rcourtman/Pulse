@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"testing"
@@ -223,6 +224,14 @@ func TestLoad_ReadErrors(t *testing.T) {
 	os.Chdir(tempDir)
 	defer os.Chdir(cwd)
 	require.NoError(t, os.WriteFile(mockEnv, []byte("MOCK=true"), 0000))
+
+	// Create encryption key first (required before creating .enc files)
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i)
+	}
+	encoded := base64.StdEncoding.EncodeToString(key)
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, ".encryption.key"), []byte(encoded), 0600))
 
 	// Create unreadable nodes.enc
 	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0000))
