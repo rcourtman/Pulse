@@ -440,19 +440,15 @@ func TestRunServer(t *testing.T) {
 	defer func() { metricsPort = oldPort }()
 
 	tempDir := t.TempDir()
-	os.Setenv("PULSE_DATA_DIR", tempDir)
-	defer os.Unsetenv("PULSE_DATA_DIR")
-
-	os.Setenv("PULSE_FRONTEND_PORT", "0")
-	defer os.Unsetenv("PULSE_FRONTEND_PORT")
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+	t.Setenv("PULSE_FRONTEND_PORT", "0")
 
 	// Create a dummy .env to avoid config load error
 	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
 	// Test case: AllowedOrigins = "*"
-	os.Setenv("PULSE_ALLOWED_ORIGINS", "*")
-	defer os.Unsetenv("PULSE_ALLOWED_ORIGINS")
+	t.Setenv("PULSE_ALLOWED_ORIGINS", "*")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -476,10 +472,8 @@ func TestSIGHUP(t *testing.T) {
 	defer func() { metricsPort = oldPort }()
 
 	tempDir := t.TempDir()
-	os.Setenv("PULSE_DATA_DIR", tempDir)
-	defer os.Unsetenv("PULSE_DATA_DIR")
-	os.Setenv("PULSE_FRONTEND_PORT", "0")
-	defer os.Unsetenv("PULSE_FRONTEND_PORT")
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+	t.Setenv("PULSE_FRONTEND_PORT", "0")
 	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
@@ -589,19 +583,13 @@ func TestNormalizeImportPayload(t *testing.T) {
 
 func TestRunServer_HTTPS(t *testing.T) {
 	tempDir := t.TempDir()
-	os.Setenv("PULSE_DATA_DIR", tempDir)
-	defer os.Unsetenv("PULSE_DATA_DIR")
+	t.Setenv("PULSE_DATA_DIR", tempDir)
 	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
-	os.Setenv("PULSE_HTTPS_ENABLED", "true")
-	os.Setenv("PULSE_TLS_CERT_FILE", "nonexistent.crt")
-	os.Setenv("PULSE_TLS_KEY_FILE", "nonexistent.key")
-	defer func() {
-		os.Unsetenv("PULSE_HTTPS_ENABLED")
-		os.Unsetenv("PULSE_TLS_CERT_FILE")
-		os.Unsetenv("PULSE_TLS_KEY_FILE")
-	}()
+	t.Setenv("PULSE_HTTPS_ENABLED", "true")
+	t.Setenv("PULSE_TLS_CERT_FILE", "nonexistent.crt")
+	t.Setenv("PULSE_TLS_KEY_FILE", "nonexistent.key")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -612,10 +600,8 @@ func TestRunServer_HTTPS(t *testing.T) {
 
 func TestRunServer_ConfigReload(t *testing.T) {
 	tempDir := t.TempDir()
-	os.Setenv("PULSE_DATA_DIR", tempDir)
-	defer os.Unsetenv("PULSE_DATA_DIR")
-	os.Setenv("PULSE_FRONTEND_PORT", "0")
-	defer os.Unsetenv("PULSE_FRONTEND_PORT")
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+	t.Setenv("PULSE_FRONTEND_PORT", "0")
 	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
@@ -767,18 +753,13 @@ func TestConfigImport_Errors(t *testing.T) {
 
 func TestRunServer_AutoImportFail(t *testing.T) {
 	tempDir := t.TempDir()
-	os.Setenv("PULSE_DATA_DIR", tempDir)
-	defer os.Unsetenv("PULSE_DATA_DIR")
+	t.Setenv("PULSE_DATA_DIR", tempDir)
 	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
 	// Setup auto-import env vars with invalid data that causes normalize error
-	os.Setenv("PULSE_INIT_CONFIG_DATA", "   ")
-	os.Setenv("PULSE_INIT_CONFIG_PASSPHRASE", "pass")
-	defer func() {
-		os.Unsetenv("PULSE_INIT_CONFIG_DATA")
-		os.Unsetenv("PULSE_INIT_CONFIG_PASSPHRASE")
-	}()
+	t.Setenv("PULSE_INIT_CONFIG_DATA", "   ")
+	t.Setenv("PULSE_INIT_CONFIG_PASSPHRASE", "pass")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -810,20 +791,14 @@ func TestRunServer_WebSocket(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
 
-	os.Setenv("FRONTEND_PORT", fmt.Sprintf("%d", port))
-	defer os.Unsetenv("FRONTEND_PORT")
+	t.Setenv("FRONTEND_PORT", fmt.Sprintf("%d", port))
 
 	// Set up auth for test
-	os.Setenv("PULSE_AUTH_USER", "testuser")
-	os.Setenv("PULSE_AUTH_PASS", "testpass")
-	defer func() {
-		os.Unsetenv("PULSE_AUTH_USER")
-		os.Unsetenv("PULSE_AUTH_PASS")
-	}()
+	t.Setenv("PULSE_AUTH_USER", "testuser")
+	t.Setenv("PULSE_AUTH_PASS", "testpass")
 
 	tempDir := t.TempDir()
-	os.Setenv("PULSE_DATA_DIR", tempDir)
-	defer os.Unsetenv("PULSE_DATA_DIR")
+	t.Setenv("PULSE_DATA_DIR", tempDir)
 	// Need valid node config to proceed
 	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
@@ -887,8 +862,7 @@ func TestRunServer_WebSocket(t *testing.T) {
 func TestRunServer_AllowedOrigins(t *testing.T) {
 	resetFlags()
 	tempDir := t.TempDir()
-	os.Setenv("PULSE_DATA_DIR", tempDir)
-	defer os.Unsetenv("PULSE_DATA_DIR")
+	t.Setenv("PULSE_DATA_DIR", tempDir)
 	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
@@ -921,16 +895,13 @@ func TestRunServer_FrontendFail(t *testing.T) {
 	// Keep l open
 	defer l.Close()
 
-	os.Setenv("BACKEND_HOST", "127.0.0.1")
-	defer os.Unsetenv("BACKEND_HOST")
+	t.Setenv("BACKEND_HOST", "127.0.0.1")
 
 	// Set frontend port to busy port
-	os.Setenv("FRONTEND_PORT", fmt.Sprintf("%d", port))
-	defer os.Unsetenv("FRONTEND_PORT")
+	t.Setenv("FRONTEND_PORT", fmt.Sprintf("%d", port))
 
 	tempDir := t.TempDir()
-	os.Setenv("PULSE_DATA_DIR", tempDir)
-	defer os.Unsetenv("PULSE_DATA_DIR")
+	t.Setenv("PULSE_DATA_DIR", tempDir)
 	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
