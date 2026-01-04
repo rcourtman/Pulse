@@ -21,6 +21,20 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// createTestEncryptionKey creates a valid base64-encoded encryption key in the temp directory.
+// Required before creating .enc files to avoid crypto initialization failures.
+func createTestEncryptionKey(t *testing.T, dir string) {
+	t.Helper()
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i)
+	}
+	encoded := base64.StdEncoding.EncodeToString(key)
+	if err := os.WriteFile(filepath.Join(dir, ".encryption.key"), []byte(encoded), 0600); err != nil {
+		t.Fatalf("failed to create test encryption key: %v", err)
+	}
+}
+
 func TestVersionCmd(t *testing.T) {
 	oldVersion := Version
 	oldBuildTime := BuildTime
@@ -430,6 +444,7 @@ func TestRunServer(t *testing.T) {
 	defer os.Unsetenv("PULSE_FRONTEND_PORT")
 
 	// Create a dummy .env to avoid config load error
+	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
 	// Test case: AllowedOrigins = "*"
@@ -462,6 +477,7 @@ func TestSIGHUP(t *testing.T) {
 	defer os.Unsetenv("PULSE_DATA_DIR")
 	os.Setenv("PULSE_FRONTEND_PORT", "0")
 	defer os.Unsetenv("PULSE_FRONTEND_PORT")
+	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -572,6 +588,7 @@ func TestRunServer_HTTPS(t *testing.T) {
 	tempDir := t.TempDir()
 	os.Setenv("PULSE_DATA_DIR", tempDir)
 	defer os.Unsetenv("PULSE_DATA_DIR")
+	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
 	os.Setenv("PULSE_HTTPS_ENABLED", "true")
@@ -596,6 +613,7 @@ func TestRunServer_ConfigReload(t *testing.T) {
 	defer os.Unsetenv("PULSE_DATA_DIR")
 	os.Setenv("PULSE_FRONTEND_PORT", "0")
 	defer os.Unsetenv("PULSE_FRONTEND_PORT")
+	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
 	metricsPort = 0 // Use random port for metrics
@@ -742,6 +760,7 @@ func TestRunServer_AutoImportFail(t *testing.T) {
 	tempDir := t.TempDir()
 	os.Setenv("PULSE_DATA_DIR", tempDir)
 	defer os.Unsetenv("PULSE_DATA_DIR")
+	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
 	// Setup auto-import env vars with invalid data that causes normalize error
@@ -797,6 +816,7 @@ func TestRunServer_WebSocket(t *testing.T) {
 	os.Setenv("PULSE_DATA_DIR", tempDir)
 	defer os.Unsetenv("PULSE_DATA_DIR")
 	// Need valid node config to proceed
+	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 	// Need system.json to set AllowedOrigins to * for test (relaxed)
 	sysConfig := map[string]interface{}{
@@ -860,6 +880,7 @@ func TestRunServer_AllowedOrigins(t *testing.T) {
 	tempDir := t.TempDir()
 	os.Setenv("PULSE_DATA_DIR", tempDir)
 	defer os.Unsetenv("PULSE_DATA_DIR")
+	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
 	// Write system.json with specific allowed origins
@@ -901,6 +922,7 @@ func TestRunServer_FrontendFail(t *testing.T) {
 	tempDir := t.TempDir()
 	os.Setenv("PULSE_DATA_DIR", tempDir)
 	defer os.Unsetenv("PULSE_DATA_DIR")
+	createTestEncryptionKey(t, tempDir)
 	os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)

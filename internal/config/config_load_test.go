@@ -110,6 +110,7 @@ func TestLoad_MockEnv(t *testing.T) {
 	os.Chdir(tempDir)
 	defer os.Chdir(cwd)
 
+	t.Setenv("PULSE_DATA_DIR", tempDir)
 	os.WriteFile("mock.env", []byte(`PULSE_MOCK_TEST="true"`), 0644)
 
 	t.Cleanup(func() {
