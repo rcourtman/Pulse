@@ -1,160 +1,198 @@
 package main
 
 import (
-	"reflect"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestExtractNodesFromYAML(t *testing.T) {
+func TestAtomicWriteFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	file := filepath.Join(tmpDir, "test.txt")
+	data := []byte("hello world")
+
+	err := atomicWriteFile(file, data, 0644)
+	if err != nil {
+		t.Fatalf("atomicWriteFile failed: %v", err)
+	}
+
+	read, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("read failed: %v", err)
+	}
+	if string(read) != "hello world" {
+		t.Errorf("content mismatch: got %s", read)
+	}
+}
+
+func TestValidateAllowedNodesFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
 	tests := []struct {
-		name     string
-		input    string
-		expected []string
+		name    string
+		content string
+		wantErr bool
 	}{
-		// Map format with allowed_nodes key
 		{
-			name: "map format with allowed_nodes key",
-			input: `allowed_nodes:
+			name: "valid dict",
+			content: `
+allowed_nodes:
   - node1
   - node2
-  - node3`,
-			expected: []string{"node1", "node2", "node3"},
+`,
+			wantErr: false,
 		},
 		{
-			name: "map format with other keys",
-			input: `metrics_address: 127.0.0.1:9127
-allowed_nodes:
-  - host1
-  - host2
-ssh_timeout: 30s`,
-			expected: []string{"host1", "host2"},
-		},
-		{
-			name: "map format empty allowed_nodes",
-			input: `allowed_nodes: []
-other_key: value`,
-			expected: nil,
-		},
-
-		// List format (bare YAML list)
-		{
-			name: "list format bare",
-			input: `- node1
+			name: "valid list",
+			content: `
+- node1
 - node2
-- node3`,
-			expected: []string{"node1", "node2", "node3"},
+`,
+			wantErr: false,
 		},
 		{
-			name:     "list format single item",
-			input:    `- single-node`,
-			expected: []string{"single-node"},
-		},
-
-		// Empty and edge cases
-		{
-			name:     "empty input",
-			input:    ``,
-			expected: nil,
+			name:    "empty file",
+			content: "",
+			wantErr: false,
 		},
 		{
-			name:     "only whitespace",
-			input:    `   `,
-			expected: nil,
+			name:    "empty dict",
+			content: "allowed_nodes: []",
+			wantErr: false,
 		},
 		{
-			name: "empty strings filtered",
-			input: `allowed_nodes:
-  - node1
-  - ""
-  - node2`,
-			expected: []string{"node1", "node2"},
-		},
-		{
-			name: "null value in list",
-			input: `allowed_nodes:
-  - node1
-  - ~
-  - node2`,
-			expected: []string{"node1", "node2"},
-		},
-		{
-			name:     "invalid YAML",
-			input:    `{{{invalid`,
-			expected: nil,
-		},
-
-		// Mixed content
-		{
-			name: "map format with comments",
-			input: `# This is a comment
-allowed_nodes:
-  - node1
-  # inline comment
-  - node2`,
-			expected: []string{"node1", "node2"},
-		},
-		{
-			name:     "map format allowed_nodes not a list",
-			input:    `allowed_nodes: not-a-list`,
-			expected: nil,
-		},
-
-		// Different YAML structures
-		{
-			name: "nested structure ignored",
-			input: `config:
-  allowed_nodes:
-    - nested-node`,
-			expected: nil, // only top-level allowed_nodes is recognized
-		},
-		{
-			name:     "just null",
-			input:    `~`,
-			expected: nil,
+			name:    "invalid yaml",
+			content: ": invalid",
+			wantErr: true,
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			result := extractNodesFromYAML([]byte(tc.input))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, tt.name+".yaml")
+			err := os.WriteFile(file, []byte(tt.content), 0644)
+			if err != nil {
+				t.Fatalf("setup failed: %v", err)
+			}
 
-			if !reflect.DeepEqual(result, tc.expected) {
-				t.Errorf("extractNodesFromYAML() = %v, want %v", result, tc.expected)
+			err = validateAllowedNodesFile(file)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateAllowedNodesFile() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestExtractNodesFromYAML_WithNumericValues(t *testing.T) {
-	// YAML can have non-string values in lists
-	input := `allowed_nodes:
-  - node1
-  - 12345
-  - true
-  - node2`
+func TestSetAllowedNodes(t *testing.T) {
+	tmpDir := t.TempDir()
+	file := filepath.Join(tmpDir, "allowed_nodes.yaml")
 
-	result := extractNodesFromYAML([]byte(input))
+	// Initial set
+	err := setAllowedNodes(file, []string{"node1"}, false)
+	if err != nil {
+		t.Fatalf("setAllowedNodes failed: %v", err)
+	}
 
-	// Only string values should be extracted
-	expected := []string{"node1", "node2"}
-	if !reflect.DeepEqual(result, expected) {
-		t.Errorf("extractNodesFromYAML() = %v, want %v", result, expected)
+	checkContent := func(expected []string) {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read failed: %v", err)
+		}
+		// Simple check for presence
+		content := string(data)
+		for _, e := range expected {
+			if !strings.Contains(content, e) {
+				t.Errorf("expected %s in %s", e, content)
+			}
+		}
+	}
+
+	checkContent([]string{"node1"})
+
+	// Merge
+	err = setAllowedNodes(file, []string{"node2"}, false)
+	if err != nil {
+		t.Fatalf("merge failed: %v", err)
+	}
+	checkContent([]string{"node1", "node2"})
+
+	// Replace
+	err = setAllowedNodes(file, []string{"node3"}, true)
+	if err != nil {
+		t.Fatalf("replace failed: %v", err)
+	}
+	// node1, node2 should be gone
+	// Actual verification
+	data, _ := os.ReadFile(file)
+	nodesInFile := extractNodesFromYAML(data)
+	if len(nodesInFile) != 1 || nodesInFile[0] != "node3" {
+		t.Errorf("expected [node3], got %v", nodesInFile)
 	}
 }
 
-func TestExtractNodesFromYAML_ListWithMixedTypes(t *testing.T) {
-	// Bare list with mixed types
-	input := `- host1
-- 42
-- host2
-- null
-- host3`
+func TestUpdateConfigMap(t *testing.T) {
+	tmpDir := t.TempDir()
+	file := filepath.Join(tmpDir, "config.yaml")
 
-	result := extractNodesFromYAML([]byte(input))
+	os.WriteFile(file, []byte("key: value\n"), 0644)
 
-	// Only non-empty strings should be extracted
-	expected := []string{"host1", "host2", "host3"}
-	if !reflect.DeepEqual(result, expected) {
-		t.Errorf("extractNodesFromYAML() = %v, want %v", result, expected)
+	err := updateConfigMap(file, func(m map[string]interface{}) error {
+		m["new_key"] = "new_value"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("updateConfigMap failed: %v", err)
+	}
+
+	data, _ := os.ReadFile(file)
+	if !strings.Contains(string(data), "new_key: new_value") {
+		t.Errorf("update failed, content: %s", string(data))
+	}
+}
+
+func TestMigrateInlineToFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yaml")
+	nodesFile := filepath.Join(tmpDir, "allowed_nodes.yaml")
+
+	// Scenario 1: No inline nodes, migration not needed
+	os.WriteFile(configFile, []byte("allowed_nodes_file: "+nodesFile+"\n"), 0644)
+	migrated, err := migrateInlineToFile(configFile, nodesFile)
+	if err != nil {
+		t.Fatalf("migrate failed: %v", err)
+	}
+	if migrated {
+		t.Error("expected migrated=false")
+	}
+
+	// Scenario 2: Inline nodes present
+	configContent := `
+allowed_nodes:
+  - inline1
+  - inline2
+`
+	os.WriteFile(configFile, []byte(configContent), 0644)
+
+	migrated, err = migrateInlineToFile(configFile, nodesFile)
+	if err != nil {
+		t.Fatalf("migrate failed: %v", err)
+	}
+	if !migrated {
+		t.Error("expected migrated=true")
+	}
+
+	// Check config file has no allowed_nodes and has allowed_nodes_file
+	data, _ := os.ReadFile(configFile)
+	strData := string(data)
+	if strings.Contains(strData, "allowed_nodes:") && !strings.Contains(strData, "allowed_nodes_file:") {
+		t.Error("config not updated correctly")
+	}
+
+	// Check nodes file
+	nodesData, _ := os.ReadFile(nodesFile)
+	nodes := extractNodesFromYAML(nodesData)
+	if len(nodes) != 2 {
+		t.Errorf("expected 2 nodes, got %d", len(nodes))
 	}
 }

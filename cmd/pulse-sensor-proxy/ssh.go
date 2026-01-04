@@ -664,7 +664,7 @@ func (p *Proxy) getTemperatureViaSSH(ctx context.Context, nodeHost string) (stri
 // For standalone nodes (no cluster), returns the host's own addresses
 func discoverClusterNodes() ([]string, error) {
 	// Check if pvecm is available (only on Proxmox hosts)
-	if _, err := exec.LookPath("pvecm"); err != nil {
+	if _, err := execLookPath("pvecm"); err != nil {
 		return nil, fmt.Errorf("pvecm not found - not running on Proxmox host")
 	}
 
