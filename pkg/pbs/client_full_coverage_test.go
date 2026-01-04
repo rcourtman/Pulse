@@ -1509,3 +1509,211 @@ func TestListAllBackups_ContextCancel(t *testing.T) {
 		t.Error("Expected cancellation error, got nil")
 	}
 }
+func TestSetupMonitoringAccess_Error(t *testing.T) {
+	// Test CreateUser fails
+	client1, server1 := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api2/json/access/users" {
+			http.Error(w, "fail", http.StatusInternalServerError)
+			return
+		}
+	})
+	defer server1.Close()
+	if _, _, err := client1.SetupMonitoringAccess(context.Background(), "test-token"); err == nil {
+		t.Error("expected error when CreateUser fails")
+	}
+
+	// Test SetUserACL fails
+	client2, server2 := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api2/json/access/users" {
+			w.WriteHeader(200)
+			return
+		}
+		if r.URL.Path == "/api2/json/access/acl" {
+			http.Error(w, "fail acl", http.StatusInternalServerError)
+			return
+		}
+	})
+	defer server2.Close()
+	if _, _, err := client2.SetupMonitoringAccess(context.Background(), "test-token"); err == nil {
+		t.Error("expected error when SetUserACL fails")
+	}
+}
+
+func TestListAllBackups_JSONDecodeError(t *testing.T) {
+	client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("invalid json"))
+	})
+	defer server.Close()
+
+	// ListBackupGroups will fail to decode
+	_, err := client.ListBackupGroups(context.Background(), "store1", "ns1")
+	if err == nil {
+		t.Error("expected error for invalid json in ListBackupGroups")
+	}
+}
+
+func TestListBackupSnapshots_JSONDecodeError(t *testing.T) {
+	client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("invalid json"))
+	})
+	defer server.Close()
+
+	_, err := client.ListBackupSnapshots(context.Background(), "store1", "ns1", "vm", "100")
+	if err == nil {
+		t.Error("expected error for invalid json in ListBackupSnapshots")
+	}
+}
+
+func TestListBackupGroups_JSONDecodeError(t *testing.T) {
+	// Covered by TestListAllBackups_JSONDecodeError effectively, but explicit test:
+	client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("invalid json"))
+	})
+	defer server.Close()
+
+	_, err := client.ListBackupGroups(context.Background(), "store1", "ns1")
+	if err == nil {
+		t.Error("expected error for invalid json")
+	}
+}
+
+func TestListAllBackups_ContextCancellation_Inner(t *testing.T) {
+	// We want to trigger ctx.Done() inside the group processing loop
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "groups") {
+			// Return many groups to ensure loop runs
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"data": []map[string]interface{}{
+					{"backup-type": "vm", "backup-id": "100"},
+					{"backup-type": "vm", "backup-id": "101"},
+					{"backup-type": "vm", "backup-id": "102"},
+				},
+			})
+			// Cancel context after getting groups but before processing all snapshots
+			go func() {
+				time.Sleep(10 * time.Millisecond)
+				cancel()
+			}()
+			return
+		}
+		// Slow down snapshot listing to ensure cancellation is hit
+		time.Sleep(50 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"data":[]}`))
+	})
+	defer server.Close()
+	defer cancel() // ensure cancel called
+
+	_, err := client.ListAllBackups(ctx, "store1", []string{"ns1"})
+	// We expect an error, likely context canceled
+	if err == nil {
+		t.Error("expected error due to context cancellation")
+	}
+}
+
+// Helper to test read errors
+type bodyReadErrorReader struct{}
+
+func (e *bodyReadErrorReader) Read(p []byte) (n int, err error) {
+	return 0, fmt.Errorf("read error")
+}
+func (e *bodyReadErrorReader) Close() error { return nil }
+
+func TestCreateUserToken_ReadBodyError_JSON(t *testing.T) {
+	client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		// We can't strictly force io.ReadAll to fail easily with httptest unless we do something hacky.
+		// Instead we can use a small buffer and panic or something, but io.ReadAll usually works.
+		// However, we can mock the client.httpClient or use a transport that returns a bad body.
+		// Since we cannot mock httpClient easily via NewClient, we can set it.
+		w.WriteHeader(200)
+	})
+	defer server.Close()
+
+	// Replace httpClient with one that returns an errorReader
+	client.httpClient.Transport = &readErrorTransport{
+		transport: http.DefaultTransport,
+	}
+
+	_, err := client.CreateUserToken(context.Background(), "user1@pbs", "token")
+
+	if err == nil {
+		t.Error("expected error reading body")
+	}
+}
+
+func TestListBackupSnapshots_HTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "root@pam!token",
+		TokenValue: "token",
+	})
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+
+	_, err = client.ListBackupSnapshots(context.Background(), "store", "", "vm", "100")
+	if err == nil {
+		t.Error("Expected error for HTTP 500")
+	}
+}
+
+func TestListBackupGroups_HTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "root@pam!token",
+		TokenValue: "token",
+	})
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+
+	_, err = client.ListBackupGroups(context.Background(), "store", "")
+	if err == nil {
+		t.Error("Expected error for HTTP 500")
+	}
+}
+
+type readErrorTransport struct {
+	transport http.RoundTripper
+}
+
+func (et *readErrorTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := et.transport.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+	resp.Body = &bodyReadErrorReader{}
+	return resp, nil
+}
+
+func TestGetNodeStatus_ReadBodyError(t *testing.T) {
+	client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	})
+	defer server.Close()
+
+	client.httpClient.Transport = &readErrorTransport{
+		transport: http.DefaultTransport,
+	}
+
+	_, err := client.GetNodeStatus(context.Background())
+	if err == nil {
+		t.Error("expected error reading body in GetNodeStatus")
+	}
+}
