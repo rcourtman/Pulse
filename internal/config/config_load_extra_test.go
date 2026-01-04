@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"testing"
@@ -55,6 +56,16 @@ func TestLoad_OutboundIP(t *testing.T) {
 func TestLoad_Errors(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	// First create encryption key so crypto doesn't fail when it sees .enc files
+	// Key must be base64-encoded 32-byte value
+	keyPath := filepath.Join(tempDir, ".encryption.key")
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i) // Non-zero key
+	}
+	encoded := base64.StdEncoding.EncodeToString(key)
+	require.NoError(t, os.WriteFile(keyPath, []byte(encoded), 0600))
 
 	// 1. Corrupted Nodes
 	nodesPath := filepath.Join(tempDir, "nodes.enc")
