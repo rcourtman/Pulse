@@ -27,7 +27,11 @@ var netInterfaces = net.Interfaces
 var execLookPath = exec.LookPath
 
 // Variable for testing to mock os.Hostname
-var osHostname = os.Hostname
+// Variables for testing
+var (
+	osHostname = os.Hostname
+	osStat     = os.Stat
+)
 
 // Variable for testing to mock exec.Command (for simple output)
 var execCommandFunc = exec.Command
@@ -382,7 +386,7 @@ func (p *Proxy) ensureHostKey(node string) error {
 		if err := p.ensureHostKeyFromProxmox(ctx, node); err == nil {
 			return nil
 		} else {
-			if p.config.RequireProxmoxHostkeys {
+			if p.config != nil && p.config.RequireProxmoxHostkeys {
 				return err
 			}
 			log.Warn().
@@ -390,7 +394,7 @@ func (p *Proxy) ensureHostKey(node string) error {
 				Err(err).
 				Msg("Failed to load host key from Proxmox; falling back to ssh-keyscan")
 		}
-	} else if p.config.RequireProxmoxHostkeys {
+	} else if p.config != nil && p.config.RequireProxmoxHostkeys {
 		return fmt.Errorf("require_proxmox_hostkeys enabled but not running on Proxmox host")
 	}
 
@@ -969,7 +973,8 @@ func isProxmoxHost() bool {
 		return true
 	}
 	// Check for /etc/pve directory
-	if info, err := os.Stat("/etc/pve"); err == nil && info.IsDir() {
+	// Check for /etc/pve directory
+	if info, err := osStat("/etc/pve"); err == nil && info.IsDir() {
 		return true
 	}
 	return false

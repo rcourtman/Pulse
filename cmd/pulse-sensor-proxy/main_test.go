@@ -319,6 +319,12 @@ func TestHelperProcess(t *testing.T) {
 
 	output := os.Getenv("GO_HELPER_OUTPUT")
 	fmt.Fprint(os.Stdout, output)
+
+	if codeStr := os.Getenv("GO_HELPER_EXIT_CODE"); codeStr != "" {
+		if code, err := strconv.Atoi(codeStr); err == nil {
+			os.Exit(code)
+		}
+	}
 	os.Exit(0)
 }
 

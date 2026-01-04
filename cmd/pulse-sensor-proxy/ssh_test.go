@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/ssh/knownhosts"
 )
 
 func setupTempWrapper(t *testing.T) (scriptPath, thermalFile, binDir, baseDir string) {
@@ -706,4 +709,309 @@ func TestDiscoverLocalHostAddresses_InterfaceEdgeCases(t *testing.T) {
 	// We can't easily mock hostname without another variable.
 	// But we can check that it didn't crash.
 	t.Logf("Got addresses: %v", addrs)
+}
+
+func TestLoadProxmoxHostKeys(t *testing.T) {
+	tmpDir := t.TempDir()
+	hostsFile := filepath.Join(tmpDir, "known_hosts")
+
+	// Override path
+	origPath := proxmoxClusterKnownHostsPath
+	defer func() { proxmoxClusterKnownHostsPath = origPath }()
+	proxmoxClusterKnownHostsPath = hostsFile
+
+	// Create dummy file
+	content := `
+# Comment
+node1 ssh-ed25519 AAA...
+node2 ssh-rsa BBB... comment
+invalid line
+node1 ssh-rsa CCC...
+[node3]:2222 ssh-ed25519 DDD...
+`
+	if err := os.WriteFile(hostsFile, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test success
+	keys, err := loadProxmoxHostKeys("node1")
+	if err != nil {
+		t.Fatalf("loadProxmoxHostKeys failed: %v", err)
+	}
+
+	if len(keys) != 2 {
+		t.Errorf("expected 2 keys for node1, got %d", len(keys))
+	}
+
+	if !strings.Contains(string(keys[0]), "node1 ssh-ed25519 AAA...") {
+		t.Errorf("unexpected key content: %s", keys[0])
+	}
+
+	// Test node2 with comment
+	keys2, err := loadProxmoxHostKeys("node2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(keys2) != 1 {
+		t.Errorf("expected 1 key for node2")
+	}
+	// Normalization puts comment at end
+	if !strings.Contains(string(keys2[0]), "comment") {
+		t.Errorf("expected comment in key: %s", keys2[0])
+	}
+
+	// Test not found
+	_, err = loadProxmoxHostKeys("unknown")
+	if err == nil {
+		t.Error("expected error for unknown host")
+	}
+
+	// Test file missing
+	proxmoxClusterKnownHostsPath = filepath.Join(tmpDir, "missing")
+	_, err = loadProxmoxHostKeys("node1")
+	if err == nil {
+		t.Error("expected error for missing file")
+	}
+}
+
+func TestBuildAuthorizedKey(t *testing.T) {
+	proxy := &Proxy{
+		config: &Config{
+			AllowedSourceSubnets: []string{"10.0.0.1/32", "192.168.1.0/24"},
+		},
+	}
+
+	pubKey := "ssh-ed25519 AAA..."
+	line, err := proxy.buildAuthorizedKey(pubKey)
+	if err != nil {
+		t.Fatalf("buildAuthorizedKey failed: %v", err)
+	}
+
+	expectedStart := `from="10.0.0.1/32,192.168.1.0/24",command="/usr/local/libexec/pulse-sensor-proxy/temp-wrapper.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAA... pulse-sensor-proxy`
+	if !strings.HasPrefix(line, expectedStart) && line != expectedStart {
+		t.Errorf("unexpected authorized_key line: %s", line)
+	}
+
+	// Test empty config
+	proxyEmpty := &Proxy{config: &Config{}}
+	_, err = proxyEmpty.buildAuthorizedKey(pubKey)
+	if err == nil {
+		t.Error("expected error for empty allowed subnets")
+	}
+}
+
+func TestGetPublicKeyFrom(t *testing.T) {
+	tmpDir := t.TempDir()
+	pubKeyPath := filepath.Join(tmpDir, "id_ed25519.pub")
+
+	content := "ssh-ed25519 AAA... comment"
+	if err := os.WriteFile(pubKeyPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test getPublicKeyFrom
+	proxy := &Proxy{}
+	pub, err := proxy.getPublicKeyFrom(tmpDir)
+	if err != nil {
+		t.Fatalf("getPublicKeyFrom failed: %v", err)
+	}
+
+	expected := "ssh-ed25519 AAA... comment"
+	if pub != expected {
+		t.Errorf("expected %s, got %s", expected, pub)
+	}
+
+	// Test missing
+	_, err = proxy.getPublicKeyFrom(filepath.Join(tmpDir, "missing"))
+	if err == nil {
+		t.Error("expected error for missing key")
+	}
+}
+
+func TestHandleHostKeyEnsureError(t *testing.T) {
+	proxy := &Proxy{
+		metrics: NewProxyMetrics("test"),
+	}
+
+	// Normal error
+	err := errors.New("normal error")
+	res := proxy.handleHostKeyEnsureError("node1", err)
+	if res != err {
+		t.Errorf("expected original error, got %v", res)
+	}
+
+	// HostKeyChangeError
+	changeErr := &knownhosts.HostKeyChangeError{
+		Host:     "node1",
+		Existing: "old",
+		Provided: "new",
+	}
+
+	res = proxy.handleHostKeyEnsureError("node1", changeErr)
+	if res != changeErr {
+		t.Errorf("expected original error, got %v", res)
+	}
+	// Verify metrics if possible, or just standard output log
+}
+
+func TestEnsureHostKeyFromProxmox(t *testing.T) {
+	// Mock isProxmoxHost
+	origLookPath := execLookPath
+	origStat := osStat
+	defer func() {
+		execLookPath = origLookPath
+		osStat = origStat
+	}()
+
+	// Case 1: Not Proxmox host
+	execLookPath = func(file string) (string, error) {
+		return "", fmt.Errorf("not found")
+	}
+	osStat = func(name string) (os.FileInfo, error) {
+		return nil, os.ErrNotExist
+	}
+
+	proxy := &Proxy{}
+	err := proxy.ensureHostKeyFromProxmox(context.Background(), "node1")
+	if err == nil || err.Error() != "not running on Proxmox host" {
+		t.Errorf("expected 'not running on Proxmox host' error, got %v", err)
+	}
+
+	// Case 2: Proxmox host, key found
+	execLookPath = func(file string) (string, error) {
+		if file == "pvecm" {
+			return "/bin/pvecm", nil
+		}
+		return "", fmt.Errorf("not found")
+	}
+
+	tmpDir := t.TempDir()
+	hostsFile := filepath.Join(tmpDir, "known_hosts")
+	origPath := proxmoxClusterKnownHostsPath
+	defer func() { proxmoxClusterKnownHostsPath = origPath }()
+	proxmoxClusterKnownHostsPath = hostsFile
+
+	os.WriteFile(hostsFile, []byte("node1 ssh-ed25519 AAA..."), 0644)
+
+	proxy = &Proxy{
+		knownHosts: &mockKnownHosts{},
+		config:     &Config{RequireProxmoxHostkeys: true},
+	}
+
+	err = proxy.ensureHostKeyFromProxmox(context.Background(), "node1")
+	if err != nil {
+		t.Errorf("ensureHostKeyFromProxmox failed: %v", err)
+	}
+
+	// Case 3: Proxmox host, key NOT found
+	// knownHosts EnsureWithEntries (mock) returns nil, but loadProxmoxHostKeys will verify if key exists in file
+
+	// loadProxmoxHostKeys returns error if key not found
+	err = proxy.ensureHostKeyFromProxmox(context.Background(), "unknown")
+	if err == nil {
+		t.Error("expected error for unknown host")
+	}
+}
+
+func TestPushSSHKeyFrom(t *testing.T) {
+	tmpDir := t.TempDir()
+	os.WriteFile(filepath.Join(tmpDir, "id_ed25519.pub"), []byte("ssh-ed25519 AAA..."), 0644)
+
+	proxy := &Proxy{
+		sshKeyPath: tmpDir,
+		metrics:    NewProxyMetrics("test"),
+		knownHosts: &mockKnownHosts{},
+		config:     &Config{AllowedSourceSubnets: []string{"10.0.0.0/24"}},
+	}
+
+	origExec := execCommandFunc
+	defer func() { execCommandFunc = origExec }()
+
+	// Case 1: Success (key already present)
+	execCommandFunc = func(name string, arg ...string) *exec.Cmd {
+		args := strings.Join(arg, " ")
+		if strings.Contains(args, "grep -F") {
+			return mockExecCommand("from=...,ssh-ed25519 AAA...") // Found
+		}
+		if strings.Contains(args, "stage temperature wrapper") {
+			return mockExecCommand("") // Wrapper install success
+		}
+		return mockExecCommand("")
+	}
+
+	if err := proxy.pushSSHKeyFrom("node1", tmpDir); err != nil {
+		t.Errorf("pushSSHKeyFrom failed (present): %v", err)
+	}
+
+	// Case 2: Success (key added)
+	execCommandFunc = func(name string, arg ...string) *exec.Cmd {
+		args := strings.Join(arg, " ")
+		if strings.Contains(args, "grep -F") {
+			return mockExecCommandWithExitCode("", 1) // Not found
+		}
+		return mockExecCommand("")
+	}
+
+	if err := proxy.pushSSHKeyFrom("node1", tmpDir); err != nil {
+		t.Errorf("pushSSHKeyFrom failed (added): %v", err)
+	}
+
+	// Case 3: Error key not found
+	if err := proxy.pushSSHKeyFrom("node1", filepath.Join(tmpDir, "missing")); err == nil {
+		t.Error("expected error for missing key dir")
+	}
+
+	// Case 4: ensureHostKey error (mock knownHosts.Ensure failure?)
+	// mockKnownHosts returns nil.
+}
+
+func TestSSHConnection(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	proxy := &Proxy{
+		sshKeyPath:        tmpDir,
+		metrics:           NewProxyMetrics("test"),
+		knownHosts:        &mockKnownHosts{},
+		maxSSHOutputBytes: 1024,
+		config:            &Config{},
+	}
+
+	origExec := execCommandFunc
+	origExecCtx := execCommandContextFunc
+	defer func() {
+		execCommandFunc = origExec
+		execCommandContextFunc = origExecCtx
+	}()
+
+	mockCmd := func(name string, arg ...string) *exec.Cmd {
+		if name == "sh" { // execCommandWithLimits uses "sh -c"
+			return mockExecCommand("{}")
+		}
+		return mockExecCommand("")
+	}
+
+	execCommandFunc = mockCmd
+	execCommandContextFunc = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+		return mockCmd(name, arg...)
+	}
+
+	if err := proxy.testSSHConnection("node1"); err != nil {
+		t.Errorf("testSSHConnection failed: %v", err)
+	}
+
+	// Failure
+	mockCmdFail := func(name string, arg ...string) *exec.Cmd {
+		if name == "sh" {
+			return mockExecCommandWithExitCode("failed", 1)
+		}
+		return mockExecCommand("")
+	}
+	execCommandContextFunc = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+		return mockCmdFail(name, arg...)
+	}
+	execCommandFunc = mockCmdFail
+
+	if err := proxy.testSSHConnection("node1"); err == nil {
+		t.Error("expected error for connection failure")
+	}
 }
