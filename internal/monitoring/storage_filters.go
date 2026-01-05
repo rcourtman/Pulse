@@ -23,10 +23,16 @@ func storageContentQueryable(storage proxmox.Storage) bool {
 		return true
 	}
 
-	// PBS storages report Active=0 on every node because they are accessed remotely via the
-	// backup proxy. We still need to inspect them so the UI can surface PBS-backed Proxmox
-	// backups even when no dedicated PBS instance is configured inside Pulse.
-	if strings.Contains(storage.Content, "backup") && storage.Type == "pbs" {
+	// Storage may report Active=0 for various reasons:
+	// - PBS storages are accessed remotely via the backup proxy
+	// - Shared storage (NFS/CIFS) may not be mounted on all nodes
+	// - Storage may be configured for specific nodes only
+	//
+	// For any storage that can contain backups, we attempt to query it even when Active=0.
+	// If the storage is truly unavailable, GetStorageContent will return an error which
+	// is handled gracefully in pollStorageBackupsWithNodes (errors are logged and skipped).
+	// This ensures datacenter backup tasks stored on shared/remote storage are visible.
+	if strings.Contains(storage.Content, "backup") {
 		return true
 	}
 

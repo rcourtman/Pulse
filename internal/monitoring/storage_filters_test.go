@@ -52,7 +52,7 @@ func TestStorageContentQueryable(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "non-pbs inactive backup storage skipped",
+			name: "non-pbs inactive backup storage allowed (shared storage)",
 			storage: proxmox.Storage{
 				Storage: "backup-dir",
 				Type:    "dir",
@@ -60,7 +60,7 @@ func TestStorageContentQueryable(t *testing.T) {
 				Enabled: 1,
 				Active:  0,
 			},
-			want: false,
+			want: true,
 		},
 	}
 
