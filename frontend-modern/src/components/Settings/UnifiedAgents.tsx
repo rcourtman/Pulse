@@ -274,13 +274,8 @@ export const UnifiedAgents: Component = () => {
             commandsEnabled?: boolean;
         }>();
 
-        // Process Host Agents (skip those linked to PVE nodes - they're shown merged with the node)
+        // Process Host Agents (include linked ones with a badge)
         hosts.forEach(h => {
-            // Skip hosts that are linked to a PVE node - they'll appear in the Dashboard merged with the node
-            if (h.linkedNodeId) {
-                return;
-            }
-
             // Use id as key (not hostname) to avoid overwriting when different machines share the same hostname
             const key = h.id;
             unified.set(key, {
@@ -292,6 +287,7 @@ export const UnifiedAgents: Component = () => {
                 version: h.agentVersion,
                 lastSeen: h.lastSeen,
                 isLegacy: h.isLegacy,
+                linkedNodeId: h.linkedNodeId,
                 commandsEnabled: h.commandsEnabled
             });
         });
@@ -970,6 +966,11 @@ export const UnifiedAgents: Component = () => {
                                             {agent.displayName || agent.hostname}
                                             <Show when={agent.displayName && agent.displayName !== agent.hostname}>
                                                 <span class="ml-2 text-xs text-gray-500">({agent.hostname})</span>
+                                            </Show>
+                                            <Show when={agent.linkedNodeId}>
+                                                <span class="ml-2 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300" title="This agent is linked to a Proxmox node and shown merged in the Dashboard">
+                                                    Linked
+                                                </span>
                                             </Show>
                                         </td>
                                         <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
