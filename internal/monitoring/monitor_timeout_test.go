@@ -39,6 +39,22 @@ func TestDerivePollTimeout(t *testing.T) {
 			},
 			want: maxTaskTimeout,
 		},
+		{
+			name: "respects custom MaxPollTimeout",
+			cfg: &config.Config{
+				ConnectionTimeout: 3 * time.Minute,
+				MaxPollTimeout:    10 * time.Minute,
+			},
+			want: 6 * time.Minute, // 2 * ConnectionTimeout, still under MaxPollTimeout
+		},
+		{
+			name: "custom MaxPollTimeout caps at configured value",
+			cfg: &config.Config{
+				ConnectionTimeout: 10 * time.Minute,
+				MaxPollTimeout:    5 * time.Minute,
+			},
+			want: 5 * time.Minute, // Capped at MaxPollTimeout
+		},
 	}
 
 	for _, tt := range tests {

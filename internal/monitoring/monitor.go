@@ -4529,8 +4529,14 @@ func derivePollTimeout(cfg *config.Config) time.Duration {
 	if timeout < minTaskTimeout {
 		timeout = minTaskTimeout
 	}
-	if timeout > maxTaskTimeout {
-		timeout = maxTaskTimeout
+	// Use configurable max timeout from config (set via MAX_POLL_TIMEOUT env var)
+	// Falls back to hardcoded maxTaskTimeout if config is nil or MaxPollTimeout not set
+	maxTimeout := maxTaskTimeout
+	if cfg != nil && cfg.MaxPollTimeout > 0 {
+		maxTimeout = cfg.MaxPollTimeout
+	}
+	if timeout > maxTimeout {
+		timeout = maxTimeout
 	}
 	return timeout
 }

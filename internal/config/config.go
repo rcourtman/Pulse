@@ -119,7 +119,8 @@ type Config struct {
 	GuestMetadataRetryBackoff       time.Duration `envconfig:"GUEST_METADATA_RETRY_BACKOFF" default:"30s" json:"guestMetadataRetryBackoff"`
 	GuestMetadataMaxConcurrent      int           `envconfig:"GUEST_METADATA_MAX_CONCURRENT" default:"4" json:"guestMetadataMaxConcurrent"`
 	DNSCacheTimeout                 time.Duration `envconfig:"DNS_CACHE_TIMEOUT" default:"5m" json:"dnsCacheTimeout"`
-	SSHPort                         int           `envconfig:"SSH_PORT" default:"22" json:"sshPort"` // Default SSH port for temperature monitoring
+	SSHPort                         int           `envconfig:"SSH_PORT" default:"22" json:"sshPort"`   // Default SSH port for temperature monitoring
+	MaxPollTimeout                  time.Duration `envconfig:"MAX_POLL_TIMEOUT" default:"3m" json:"-"` // Maximum poll timeout for large clusters (default 3m)
 
 	// Metrics retention settings (tiered storage)
 	// These control how long historical metrics are retained at each aggregation level.
@@ -594,6 +595,7 @@ func Load() (*Config, error) {
 		DiscoveryEnabled:                false,
 		DiscoverySubnet:                 "auto",
 		TemperatureMonitoringEnabled:    true,
+		MaxPollTimeout:                  3 * time.Minute, // Default max poll timeout for large clusters
 		EnableSensorProxy:               false,
 		EnvOverrides:                    make(map[string]bool),
 		AgentConnectURL:                 "",
@@ -1444,6 +1446,19 @@ func Load() (*Config, error) {
 			cfg.ConnectionTimeout = d
 			cfg.EnvOverrides["connectionTimeout"] = true
 			log.Info().Dur("timeout", d).Msg("Connection timeout overridden by CONNECTION_TIMEOUT env var")
+		}
+	}
+	if maxPollTimeout := os.Getenv("MAX_POLL_TIMEOUT"); maxPollTimeout != "" {
+		if d, err := time.ParseDuration(maxPollTimeout); err == nil {
+			if d >= 30*time.Second { // Minimum 30 seconds
+				cfg.MaxPollTimeout = d
+				cfg.EnvOverrides["maxPollTimeout"] = true
+				log.Info().Dur("timeout", d).Msg("Max poll timeout overridden by MAX_POLL_TIMEOUT env var")
+			} else {
+				log.Warn().Dur("value", d).Msg("MAX_POLL_TIMEOUT too low (minimum 30s), using default")
+			}
+		} else {
+			log.Warn().Str("value", maxPollTimeout).Msg("Invalid MAX_POLL_TIMEOUT value, using default")
 		}
 	}
 	if allowedOrigins := os.Getenv("ALLOWED_ORIGINS"); allowedOrigins != "" {

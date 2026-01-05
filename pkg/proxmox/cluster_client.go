@@ -724,6 +724,8 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 			// PBS storage errors - Proxmox can't reach PBS, but node is still reachable
 			(strings.Contains(errStr, "500") && strings.Contains(errStr, "pbs-") && strings.Contains(errStr, "error fetching datastores")) ||
 			(strings.Contains(errStr, "500") && strings.Contains(errStr, "Can't connect to") && strings.Contains(errStr, ":8007")) ||
+			// External Ceph errors - Ceph not managed by Proxmox, but node is still reachable
+			(strings.Contains(errStr, "500") && strings.Contains(errStr, "binary not installed")) ||
 			// RRD data timeouts - secondary metric fetch failures, node is still working
 			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/rrddata")) ||
 			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/lxc/") && strings.Contains(errStr, "rrd")) ||
