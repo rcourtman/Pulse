@@ -52,11 +52,13 @@ declare -A host_agent_builds=(
     ["linux-386"]="GOOS=linux GOARCH=386"
     ["darwin-amd64"]="GOOS=darwin GOARCH=amd64"
     ["darwin-arm64"]="GOOS=darwin GOARCH=arm64"
+    ["freebsd-amd64"]="GOOS=freebsd GOARCH=amd64"
+    ["freebsd-arm64"]="GOOS=freebsd GOARCH=arm64"
     ["windows-amd64"]="GOOS=windows GOARCH=amd64"
     ["windows-arm64"]="GOOS=windows GOARCH=arm64"
     ["windows-386"]="GOOS=windows GOARCH=386"
 )
-host_agent_order=(linux-amd64 linux-arm64 linux-armv7 linux-armv6 linux-386 darwin-amd64 darwin-arm64 windows-amd64 windows-arm64 windows-386)
+host_agent_order=(linux-amd64 linux-arm64 linux-armv7 linux-armv6 linux-386 darwin-amd64 darwin-arm64 freebsd-amd64 freebsd-arm64 windows-amd64 windows-arm64 windows-386)
 
 for target in "${host_agent_order[@]}"; do
     build_env="${host_agent_builds[$target]}"
@@ -321,6 +323,9 @@ tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-linux-386.tar.gz" -C "$BUILD
 # Darwin
 tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-darwin-amd64.tar.gz" -C "$BUILD_DIR" pulse-host-agent-darwin-amd64
 tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-darwin-arm64.tar.gz" -C "$BUILD_DIR" pulse-host-agent-darwin-arm64
+# FreeBSD
+tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-freebsd-amd64.tar.gz" -C "$BUILD_DIR" pulse-host-agent-freebsd-amd64
+tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-freebsd-arm64.tar.gz" -C "$BUILD_DIR" pulse-host-agent-freebsd-arm64
 # Windows
 zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-amd64.zip" "$BUILD_DIR/pulse-host-agent-windows-amd64.exe"
 zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-arm64.zip" "$BUILD_DIR/pulse-host-agent-windows-arm64.exe"
@@ -336,21 +341,28 @@ tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-linux-386.tar.gz" -C "$BUILD_DIR"
 # Darwin
 tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-darwin-amd64.tar.gz" -C "$BUILD_DIR" pulse-agent-darwin-amd64
 tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-darwin-arm64.tar.gz" -C "$BUILD_DIR" pulse-agent-darwin-arm64
+# FreeBSD
+tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-freebsd-amd64.tar.gz" -C "$BUILD_DIR" pulse-agent-freebsd-amd64
+tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-freebsd-arm64.tar.gz" -C "$BUILD_DIR" pulse-agent-freebsd-arm64
 # Windows
 zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-amd64.zip" "$BUILD_DIR/pulse-agent-windows-amd64.exe"
 zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-arm64.zip" "$BUILD_DIR/pulse-agent-windows-arm64.exe"
 zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-386.zip" "$BUILD_DIR/pulse-agent-windows-386.exe"
 
-# Copy Windows and macOS binaries into universal tarball for /download/ endpoint
-echo "Adding Windows and macOS binaries to universal tarball..."
+# Copy Windows, macOS, and FreeBSD binaries into universal tarball for /download/ endpoint
+echo "Adding Windows, macOS, and FreeBSD binaries to universal tarball..."
 cp "$BUILD_DIR/pulse-host-agent-darwin-amd64" "$universal_dir/bin/"
 cp "$BUILD_DIR/pulse-host-agent-darwin-arm64" "$universal_dir/bin/"
+cp "$BUILD_DIR/pulse-host-agent-freebsd-amd64" "$universal_dir/bin/"
+cp "$BUILD_DIR/pulse-host-agent-freebsd-arm64" "$universal_dir/bin/"
 cp "$BUILD_DIR/pulse-host-agent-windows-amd64.exe" "$universal_dir/bin/"
 cp "$BUILD_DIR/pulse-host-agent-windows-arm64.exe" "$universal_dir/bin/"
 cp "$BUILD_DIR/pulse-host-agent-windows-386.exe" "$universal_dir/bin/"
 
 cp "$BUILD_DIR/pulse-agent-darwin-amd64" "$universal_dir/bin/"
 cp "$BUILD_DIR/pulse-agent-darwin-arm64" "$universal_dir/bin/"
+cp "$BUILD_DIR/pulse-agent-freebsd-amd64" "$universal_dir/bin/"
+cp "$BUILD_DIR/pulse-agent-freebsd-arm64" "$universal_dir/bin/"
 cp "$BUILD_DIR/pulse-agent-windows-amd64.exe" "$universal_dir/bin/"
 cp "$BUILD_DIR/pulse-agent-windows-arm64.exe" "$universal_dir/bin/"
 cp "$BUILD_DIR/pulse-agent-windows-386.exe" "$universal_dir/bin/"

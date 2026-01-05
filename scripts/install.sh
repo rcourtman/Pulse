@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Pulse Unified Agent Installer
-# Supports: Linux (systemd, OpenRC, SysV init), macOS (launchd), Synology DSM (6.x/7+), Unraid
+# Supports: Linux (systemd, OpenRC, SysV init), macOS (launchd), FreeBSD (rc.d), Synology DSM (6.x/7+), Unraid
 #
 # Usage:
 #   curl -fsSL http://pulse/install.sh | bash -s -- --url http://pulse --token <token> [options]
@@ -589,7 +589,7 @@ OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 
 case "$ARCH" in
-    x86_64) ARCH="amd64" ;;
+    x86_64|amd64) ARCH="amd64" ;;
     aarch64|arm64) ARCH="arm64" ;;
     armv7l|armhf) ARCH="armv7" ;;
     armv6l) ARCH="armv6" ;;
@@ -1247,6 +1247,103 @@ INITEOF
     exit 0
 fi
 
+# 5b. FreeBSD rc.d (OPNsense, pfSense, vanilla FreeBSD)
+if [[ "$OS" == "freebsd" ]] || [[ -f /etc/rc.subr ]]; then
+    RCSCRIPT="/usr/local/etc/rc.d/${AGENT_NAME}"
+    log_info "Configuring FreeBSD rc.d service at $RCSCRIPT..."
+
+    # Build command line args
+    build_exec_args
+
+    # Create FreeBSD rc.d script following FreeBSD conventions
+    cat > "$RCSCRIPT" <<'RCEOF'
+#!/bin/sh
+
+# PROVIDE: pulse_agent
+# REQUIRE: LOGIN NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="pulse_agent"
+rcvar="pulse_agent_enable"
+pidfile="/var/run/${name}.pid"
+
+# These placeholders are replaced by sed below
+command="INSTALL_DIR_PLACEHOLDER/BINARY_NAME_PLACEHOLDER"
+command_args="EXEC_ARGS_PLACEHOLDER"
+
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+
+pulse_agent_start()
+{
+    if checkyesno ${rcvar}; then
+        echo "Starting ${name}."
+        /usr/sbin/daemon -p ${pidfile} -f ${command} ${command_args}
+    fi
+}
+
+pulse_agent_stop()
+{
+    if [ -f ${pidfile} ]; then
+        echo "Stopping ${name}."
+        kill $(cat ${pidfile}) 2>/dev/null
+        rm -f ${pidfile}
+    else
+        echo "${name} is not running."
+    fi
+}
+
+pulse_agent_status()
+{
+    if [ -f ${pidfile} ] && kill -0 $(cat ${pidfile}) 2>/dev/null; then
+        echo "${name} is running as pid $(cat ${pidfile})."
+    else
+        echo "${name} is not running."
+        return 1
+    fi
+}
+
+load_rc_config $name
+run_rc_command "$1"
+RCEOF
+
+    # Replace placeholders with actual values
+    sed -i '' "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$RCSCRIPT" 2>/dev/null || \
+        sed -i "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$RCSCRIPT"
+    sed -i '' "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$RCSCRIPT" 2>/dev/null || \
+        sed -i "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$RCSCRIPT"
+    sed -i '' "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$RCSCRIPT" 2>/dev/null || \
+        sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$RCSCRIPT"
+
+    chmod +x "$RCSCRIPT"
+
+    # Enable the service in rc.conf
+    if ! grep -q "pulse_agent_enable" /etc/rc.conf 2>/dev/null; then
+        echo 'pulse_agent_enable="YES"' >> /etc/rc.conf
+    else
+        sed -i '' 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf 2>/dev/null || \
+            sed -i 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf
+    fi
+
+    # Stop existing agent if running
+    "$RCSCRIPT" stop 2>/dev/null || true
+    sleep 1
+
+    # Start the agent
+    "$RCSCRIPT" start
+    if [[ "$UPGRADE_MODE" == "true" ]]; then
+        log_info "Upgrade complete! Agent restarted with new configuration."
+    else
+        log_info "Installation complete! Agent service started."
+    fi
+    log_info "To check status: $RCSCRIPT status"
+    log_info "To view logs: tail -f /var/log/messages"
+    exit 0
+fi
+
 # 5. Linux (Systemd)
 if command -v systemctl >/dev/null 2>&1; then
     UNIT="/etc/systemd/system/${AGENT_NAME}.service"
@@ -1489,7 +1586,7 @@ INITEOF
     exit 0
 fi
 
-fail "Could not detect a supported service manager (systemd, OpenRC, SysV init, launchd, or Unraid)."
+fail "Could not detect a supported service manager (systemd, OpenRC, FreeBSD rc.d, SysV init, launchd, or Unraid)."
 
 }
 
