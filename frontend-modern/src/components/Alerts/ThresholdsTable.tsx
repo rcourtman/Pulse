@@ -894,6 +894,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         disableConnectivity,
         thresholds: override?.thresholds || {},
         defaults: {},
+        editable: false,
       } satisfies Resource;
     });
 
@@ -917,6 +918,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           disableConnectivity: override.disableConnectivity || false,
           thresholds: override.thresholds || {},
           defaults: {},
+          editable: false,
         });
       });
 
