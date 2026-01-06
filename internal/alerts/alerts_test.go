@@ -15343,10 +15343,22 @@ func TestLoadActiveAlerts(t *testing.T) {
 
 		m.mu.RLock()
 		_, exists := m.activeAlerts["old-ack-alert"]
+		ackRecord, ackExists := m.ackState["old-ack-alert"]
 		m.mu.RUnlock()
 
 		if exists {
-			t.Error("old acknowledged alert (>1h) should be skipped during load")
+			t.Error("old acknowledged alert (>1h) should be skipped from activeAlerts")
+		}
+
+		// But ackState should be preserved so the alert doesn't retrigger if it reappears
+		if !ackExists {
+			t.Error("ackState should be preserved for old acknowledged alerts to prevent retriggering")
+		}
+		if ackExists && !ackRecord.acknowledged {
+			t.Error("ackState.acknowledged should be true")
+		}
+		if ackExists && ackRecord.user != "testuser" {
+			t.Errorf("ackState.user should be 'testuser', got %q", ackRecord.user)
 		}
 	})
 
