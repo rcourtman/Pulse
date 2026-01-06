@@ -8726,9 +8726,20 @@ func (m *Manager) LoadActiveAlerts() error {
 			continue
 		}
 
-		// Skip acknowledged alerts older than 1 hour
+		// Skip acknowledged alerts older than 1 hour from activeAlerts,
+		// but still preserve the ackState so if the same alert reappears
+		// (e.g., backup-age alerts) it won't retrigger notifications.
 		if alert.Acknowledged && alert.AckTime != nil && now.Sub(*alert.AckTime) > time.Hour {
-			log.Debug().Str("alertID", alert.ID).Msg("Skipping old acknowledged alert")
+			log.Debug().Str("alertID", alert.ID).Msg("Skipping old acknowledged alert from activeAlerts but preserving ackState")
+			ackTime := alert.StartTime
+			if alert.AckTime != nil {
+				ackTime = *alert.AckTime
+			}
+			m.ackState[alert.ID] = ackRecord{
+				acknowledged: true,
+				user:         alert.AckUser,
+				time:         ackTime,
+			}
 			continue
 		}
 
