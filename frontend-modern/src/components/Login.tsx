@@ -148,6 +148,22 @@ export const Login: Component<LoginProps> = (props) => {
     setError('');
     setLoading(true);
 
+    // Read values directly from the form DOM to handle password manager autofill
+    // Password managers may fill fields without triggering input events,
+    // leaving the SolidJS signals empty while the DOM has the actual values
+    const form = e.currentTarget as HTMLFormElement;
+    const usernameInput = form.querySelector('#username') as HTMLInputElement;
+    const passwordInput = form.querySelector('#password') as HTMLInputElement;
+    const usernameValue = usernameInput?.value || username();
+    const passwordValue = passwordInput?.value || password();
+
+    // Validate that we have credentials before attempting login
+    if (!usernameValue || !passwordValue) {
+      setError('Please enter both username and password');
+      setLoading(false);
+      return;
+    }
+
     try {
       // Use the new login endpoint for better feedback
       const response = await apiClient.fetch('/api/login', {
@@ -157,8 +173,8 @@ export const Login: Component<LoginProps> = (props) => {
           Accept: 'application/json',
         },
         body: JSON.stringify({
-          username: username(),
-          password: password(),
+          username: usernameValue,
+          password: passwordValue,
           rememberMe: rememberMe(),
         }),
         skipAuth: true,
@@ -169,7 +185,7 @@ export const Login: Component<LoginProps> = (props) => {
       if (response.ok && data.success) {
         // Credentials are valid; persist username for convenience and rely on session cookie
         try {
-          sessionStorage.setItem('pulse_auth_user', username());
+          sessionStorage.setItem('pulse_auth_user', usernameValue);
         } catch (_err) {
           // Ignore storage failures (private browsing, etc.)
         }
@@ -211,7 +227,7 @@ export const Login: Component<LoginProps> = (props) => {
       try {
         const response = await apiClient.fetch('/api/state', {
           headers: {
-            Authorization: `Basic ${btoa(`${username()}:${password()}`)}`,
+            Authorization: `Basic ${btoa(`${usernameValue}:${passwordValue}`)}`,
             'X-Requested-With': 'XMLHttpRequest',
             Accept: 'application/json',
           },
@@ -220,7 +236,7 @@ export const Login: Component<LoginProps> = (props) => {
 
         if (response.ok) {
           try {
-            sessionStorage.setItem('pulse_auth_user', username());
+            sessionStorage.setItem('pulse_auth_user', usernameValue);
           } catch (_storageErr) {
             // Ignore storage issues
           }
