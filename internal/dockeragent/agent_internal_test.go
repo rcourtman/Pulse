@@ -937,7 +937,7 @@ func TestBuildRuntimeCandidates(t *testing.T) {
 		{
 			name:       "podman preference includes podman sockets",
 			preference: RuntimePodman,
-			wantMin:    3, // at least env defaults + podman rootless + podman system
+			wantMin:    4, // at least podman rootless + podman system + podman (var/run) + env defaults
 		},
 	}
 
@@ -948,9 +948,16 @@ func TestBuildRuntimeCandidates(t *testing.T) {
 				t.Errorf("buildRuntimeCandidates(%v) returned %d candidates, want at least %d", tt.preference, len(candidates), tt.wantMin)
 			}
 
-			// Verify first candidate is always "environment defaults"
-			if len(candidates) > 0 && candidates[0].label != "environment defaults" {
-				t.Errorf("first candidate should be 'environment defaults', got %q", candidates[0].label)
+			// When podman is explicitly requested, podman sockets should be tried first.
+			// For auto/docker modes, environment defaults should be first.
+			if len(candidates) > 0 {
+				if tt.preference == RuntimePodman {
+					if candidates[0].label != "podman rootless socket" {
+						t.Errorf("podman preference: first candidate should be 'podman rootless socket', got %q", candidates[0].label)
+					}
+				} else if candidates[0].label != "environment defaults" {
+					t.Errorf("first candidate should be 'environment defaults', got %q", candidates[0].label)
+				}
 			}
 
 			// Verify no duplicates
