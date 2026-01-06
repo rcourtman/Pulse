@@ -407,7 +407,7 @@ func tryRuntimeCandidate(opts []client.Opt) (dockerClient, systemtypes.Info, err
 }
 
 func buildRuntimeCandidates(preference RuntimeKind) []runtimeCandidate {
-	candidates := make([]runtimeCandidate, 0, 6)
+	candidates := make([]runtimeCandidate, 0, 8)
 	seen := make(map[string]struct{})
 
 	add := func(candidate runtimeCandidate) {
@@ -422,6 +422,35 @@ func buildRuntimeCandidates(preference RuntimeKind) []runtimeCandidate {
 		candidates = append(candidates, candidate)
 	}
 
+	// When podman is explicitly requested, try podman-specific sockets FIRST
+	// before falling back to environment defaults (which try /var/run/docker.sock)
+	if preference == RuntimePodman {
+		if host := utils.GetenvTrim("PODMAN_HOST"); host != "" {
+			add(runtimeCandidate{
+				host:  host,
+				label: "PODMAN_HOST",
+			})
+		}
+
+		rootless := fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", os.Getuid())
+		add(runtimeCandidate{
+			host:  rootless,
+			label: "podman rootless socket",
+		})
+
+		add(runtimeCandidate{
+			host:  "unix:///run/podman/podman.sock",
+			label: "podman system socket",
+		})
+
+		// Some distros (CoreOS, Fedora) use /var/run/podman instead of /run/podman
+		add(runtimeCandidate{
+			host:  "unix:///var/run/podman/podman.sock",
+			label: "podman system socket (var/run)",
+		})
+	}
+
+	// Environment defaults (uses Docker client defaults)
 	add(runtimeCandidate{
 		label:          "environment defaults",
 		applyDockerEnv: true,
@@ -442,14 +471,15 @@ func buildRuntimeCandidates(preference RuntimeKind) []runtimeCandidate {
 		})
 	}
 
-	if host := utils.GetenvTrim("PODMAN_HOST"); host != "" {
-		add(runtimeCandidate{
-			host:  host,
-			label: "PODMAN_HOST",
-		})
-	}
+	// For auto mode, check podman after environment defaults
+	if preference == RuntimeAuto {
+		if host := utils.GetenvTrim("PODMAN_HOST"); host != "" {
+			add(runtimeCandidate{
+				host:  host,
+				label: "PODMAN_HOST",
+			})
+		}
 
-	if preference == RuntimePodman || preference == RuntimeAuto {
 		rootless := fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", os.Getuid())
 		add(runtimeCandidate{
 			host:  rootless,
@@ -459,6 +489,12 @@ func buildRuntimeCandidates(preference RuntimeKind) []runtimeCandidate {
 		add(runtimeCandidate{
 			host:  "unix:///run/podman/podman.sock",
 			label: "podman system socket",
+		})
+
+		// Some distros (CoreOS, Fedora) use /var/run/podman instead of /run/podman
+		add(runtimeCandidate{
+			host:  "unix:///var/run/podman/podman.sock",
+			label: "podman system socket (var/run)",
 		})
 	}
 
