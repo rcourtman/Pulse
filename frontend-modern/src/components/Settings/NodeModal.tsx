@@ -352,7 +352,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     props.onSave(nodeData);
   };
 
-  const updateField = (field: string, value: string | boolean) => {
+  const updateField = (field: string, value: string | boolean | number) => {
     if (field === 'host' && typeof value === 'string') {
       setFormData((prev) => {
         const next = { ...prev, host: value };
@@ -2021,7 +2021,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           <div>
                             <p class="font-medium text-gray-900 dark:text-gray-100">Monitor physical disk health (SMART)</p>
                             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                              Polls disk SMART data every 5 minutes. This will spin up idle HDDs; leave disabled if you rely on drive standby.
+                              This will spin up idle HDDs; leave disabled if you rely on drive standby.
                             </p>
                           </div>
                           <TogglePrimitive
@@ -2034,6 +2034,21 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                             }
                           />
                         </div>
+                        <Show when={formData().monitorPhysicalDisks}>
+                          <div class="mt-3 flex items-center gap-2 border-t border-gray-200 pt-3 dark:border-gray-700">
+                            <label class="text-xs text-gray-600 dark:text-gray-400">Poll every</label>
+                            <select
+                              class="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                              value={formData().physicalDiskPollingMinutes}
+                              onChange={(e) => updateField('physicalDiskPollingMinutes', parseInt(e.currentTarget.value, 10))}
+                            >
+                              <option value={5}>5 minutes</option>
+                              <option value={15}>15 minutes</option>
+                              <option value={30}>30 minutes</option>
+                              <option value={60}>1 hour</option>
+                            </select>
+                          </div>
+                        </Show>
                       </div>
 
                       <Show when={showTemperatureMonitoringSection()}>
