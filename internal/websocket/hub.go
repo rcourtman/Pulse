@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -175,6 +176,21 @@ type Client struct {
 	send     chan []byte
 	id       string
 	lastPing time.Time
+	closed   atomic.Bool // Set when the client is unregistered; prevents sends to closed channel
+}
+
+// safeSend attempts to send data to the client's send channel.
+// Returns false if the client is closed or the channel buffer is full.
+func (c *Client) safeSend(data []byte) bool {
+	if c.closed.Load() {
+		return false
+	}
+	select {
+	case c.send <- data:
+		return true
+	default:
+		return false
+	}
 }
 
 // cloneAlertData returns a broadcast-safe copy of alert data to avoid data races when
@@ -345,11 +361,10 @@ func (h *Hub) Run() {
 
 						if stillRegistered {
 							log.Info().Str("client", client.id).Msg("Sending welcome message")
-							select {
-							case client.send <- data:
+							if client.safeSend(data) {
 								log.Info().Str("client", client.id).Msg("Welcome message sent")
-							default:
-								log.Warn().Str("client", client.id).Msg("Failed to send welcome message - buffer full")
+							} else {
+								log.Warn().Str("client", client.id).Msg("Failed to send welcome message - client closed or buffer full")
 							}
 						} else {
 							log.Debug().Str("client", client.id).Msg("Client disconnected before welcome message")
@@ -376,12 +391,10 @@ func (h *Hub) Run() {
 
 						if stillRegistered {
 							log.Info().Str("client", client.id).Int("dataLen", len(data)).Int("dataKB", len(data)/1024).Msg("Sending initial state to client")
-
-							select {
-							case client.send <- data:
+							if client.safeSend(data) {
 								log.Info().Str("client", client.id).Msg("Initial state sent successfully")
-							default:
-								log.Warn().Str("client", client.id).Msg("Client send buffer full, skipping initial state")
+							} else {
+								log.Warn().Str("client", client.id).Msg("Client closed or buffer full, skipping initial state")
 							}
 						} else {
 							log.Debug().Str("client", client.id).Msg("Client disconnected before initial state")
@@ -398,6 +411,7 @@ func (h *Hub) Run() {
 			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
+				client.closed.Store(true) // Mark closed before closing channel to prevent sends
 				close(client.send)
 				h.mu.Unlock()
 				log.Info().Str("client", client.id).Msg("WebSocket client disconnected")
@@ -414,13 +428,14 @@ func (h *Hub) Run() {
 			h.mu.RUnlock()
 
 			for _, client := range clients {
-				select {
-				case client.send <- message:
-				default:
-					// Client's send channel is full, close it
+				if !client.safeSend(message) {
+					// Client closed or buffer full - remove if still registered
 					h.mu.Lock()
-					delete(h.clients, client)
-					close(client.send)
+					if _, stillPresent := h.clients[client]; stillPresent {
+						delete(h.clients, client)
+						client.closed.Store(true)
+						close(client.send)
+					}
 					h.mu.Unlock()
 				}
 			}
@@ -433,6 +448,7 @@ func (h *Hub) Run() {
 			// Close all client connections
 			h.mu.Lock()
 			for client := range h.clients {
+				client.closed.Store(true)
 				close(client.send)
 			}
 			h.clients = make(map[*Client]bool)
@@ -498,16 +514,16 @@ func (h *Hub) dispatchToClients(data []byte, dropLog string) {
 	h.mu.RUnlock()
 
 	for _, client := range clients {
-		select {
-		case client.send <- data:
-		default:
+		if !client.safeSend(data) {
+			// Client closed or buffer full - remove if still registered
 			h.mu.Lock()
 			if _, stillPresent := h.clients[client]; stillPresent {
 				delete(h.clients, client)
+				client.closed.Store(true)
 				close(client.send)
+				log.Warn().Str("client", client.id).Msg(dropLog)
 			}
 			h.mu.Unlock()
-			log.Warn().Str("client", client.id).Msg(dropLog)
 		}
 	}
 }
@@ -718,7 +734,7 @@ func (c *Client) readPump() {
 				Data: map[string]int64{"timestamp": time.Now().Unix()},
 			}
 			if data, err := json.Marshal(pong); err == nil {
-				c.send <- data
+				c.safeSend(data)
 			}
 		case "requestData":
 			// Send current state
@@ -728,7 +744,7 @@ func (c *Client) readPump() {
 					Data: sanitizeData(c.hub.getState()),
 				}
 				if data, err := json.Marshal(stateMsg); err == nil {
-					c.send <- data
+					c.safeSend(data)
 				} else {
 					log.Error().Err(err).Msg("Failed to marshal state for requestData")
 				}
