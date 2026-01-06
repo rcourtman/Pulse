@@ -38,7 +38,8 @@ main() {
 TMP_FILES=()
 # shellcheck disable=SC2317  # Invoked by trap, not directly
 cleanup() {
-    for f in "${TMP_FILES[@]}"; do
+    # Use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u
+    for f in ${TMP_FILES[@]+"${TMP_FILES[@]}"}; do
         rm -f "$f" 2>/dev/null || true
     done
 }
@@ -240,8 +241,8 @@ build_exec_args() {
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
-    # Add disk exclude patterns
-    for pattern in "${DISK_EXCLUDES[@]}"; do
+    # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
+    for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
         EXEC_ARGS="$EXEC_ARGS --disk-exclude '${pattern}'"
     done
 }
@@ -264,8 +265,8 @@ build_exec_args_array() {
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-commands); fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS_ARRAY+=(--agent-id "$AGENT_ID"); fi
-    # Add disk exclude patterns
-    for pattern in "${DISK_EXCLUDES[@]}"; do
+    # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
+    for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
         EXEC_ARGS_ARRAY+=(--disk-exclude "$pattern")
     done
 }
@@ -790,8 +791,8 @@ if [[ "$OS" == "darwin" ]]; then
         <string>--agent-id</string>
         <string>${AGENT_ID}</string>"
     fi
-    # Add disk exclude patterns
-    for pattern in "${DISK_EXCLUDES[@]}"; do
+    # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
+    for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
         PLIST_ARGS="${PLIST_ARGS}
         <string>--disk-exclude</string>
         <string>${pattern}</string>"
@@ -1374,8 +1375,8 @@ if command -v systemctl >/dev/null 2>&1; then
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
-    # Add disk exclude patterns
-    for pattern in "${DISK_EXCLUDES[@]}"; do
+    # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
+    for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
         EXEC_ARGS="$EXEC_ARGS --disk-exclude '${pattern}'"
     done
 
