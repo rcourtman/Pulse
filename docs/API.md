@@ -77,6 +77,24 @@ Returns version, build time, and update status.
 `POST /api/config/nodes/test-connection`
 Validate credentials before saving.
 
+### Export Configuration
+`POST /api/config/export` (admin or API token)
+Request body:
+```json
+{ "passphrase": "use-a-strong-passphrase" }
+```
+Returns an encrypted export bundle in `data`. Passphrases must be at least 12 characters.
+
+### Import Configuration
+`POST /api/config/import` (admin)
+Request body:
+```json
+{
+  "data": "<exported-bundle>",
+  "passphrase": "use-a-strong-passphrase"
+}
+```
+
 ---
 
 ## 📊 Metrics & Charts
@@ -84,7 +102,7 @@ Validate credentials before saving.
 ### Chart Data
 `GET /api/charts?range=1h`
 Returns time-series data for CPU, Memory, and Storage.
-**Ranges**: `1h`, `24h`, `7d`, `30d`
+**Ranges**: `5m`, `15m`, `30m`, `1h`, `4h`, `12h`, `24h`, `7d`
 
 ### Storage Charts
 `GET /api/storage-charts`
@@ -136,6 +154,10 @@ Triggers a test alert to all configured channels.
 
 ## 🛡️ Security
 
+### Security Status
+`GET /api/security/status`
+Returns authentication status, proxy auth state, and security posture flags.
+
 ### List API Tokens
 `GET /api/security/tokens`
 
@@ -156,6 +178,64 @@ Supports actions:
 - `enable_auth`
 
 `GET /api/security/recovery` returns recovery mode status.
+
+### Reset Account Lockout (Admin)
+`POST /api/security/reset-lockout`
+```json
+{ "identifier": "admin" }
+```
+Identifier can be a username or IP address.
+
+### Regenerate API Token (Admin)
+`POST /api/security/regenerate-token`
+
+Returns a new raw token (shown once) and updates stored hashes:
+```json
+{
+  "success": true,
+  "token": "raw-token",
+  "deploymentType": "systemd",
+  "requiresRestart": false,
+  "message": "New API token generated and active immediately! Save this token - it won't be shown again."
+}
+```
+
+### Validate API Token (Admin)
+`POST /api/security/validate-token`
+```json
+{ "token": "raw-token" }
+```
+Returns:
+```json
+{ "valid": true, "message": "Token is valid" }
+```
+
+### Bootstrap Token Validation (Public)
+`POST /api/security/validate-bootstrap-token`
+
+Provide the token via header `X-Setup-Token` or JSON body:
+```json
+{ "token": "bootstrap-token" }
+```
+
+Returns `204 No Content` on success.
+
+### Quick Security Setup (Public, bootstrap token required)
+`POST /api/security/quick-setup`
+
+Requires a valid bootstrap token (header `X-Setup-Token`) or an authenticated session.
+
+```json
+{
+  "username": "admin",
+  "password": "StrongPass!1",
+  "apiToken": "token",
+  "enableNotifications": false,
+  "darkMode": false,
+  "force": false,
+  "setupToken": "optional-bootstrap-token"
+}
+```
 
 ---
 
@@ -182,9 +262,9 @@ Returns scheduler health, DLQ, and breaker status. Requires `monitoring:read`.
 - `POST /api/updates/apply`
 - `GET /api/updates/status`
 - `GET /api/updates/stream`
-- `GET /api/updates/plan`
+- `GET /api/updates/plan?version=vX.Y.Z` (optional `channel`)
 - `GET /api/updates/history`
-- `GET /api/updates/history/entry`
+- `GET /api/updates/history/entry?id=<event_id>`
 
 ---
 
@@ -204,7 +284,28 @@ Initiate OIDC login flow.
 
 ---
 
+## 💳 License (Pulse Pro)
+
+### License Status (Admin)
+`GET /api/license/status`
+
+### License Features (Authenticated)
+`GET /api/license/features`
+
+### Activate License (Admin)
+`POST /api/license/activate`
+```json
+{ "license_key": "PASTE_KEY_HERE" }
+```
+
+### Clear License (Admin)
+`POST /api/license/clear`
+
+---
+
 ## 🤖 Pulse AI *(v5)*
+
+**Pro gating:** endpoints labeled "(Pro)" require a Pulse Pro license and return `402 Payment Required` if the feature is not licensed.
 
 ### Get AI Settings
 `GET /api/settings/ai`
@@ -218,6 +319,12 @@ Configure AI providers, API keys, and preferences. Requires admin + `settings:wr
 `GET /api/ai/models`
 Lists models available to the configured providers (queried live from provider APIs).
 
+### OAuth (Anthropic)
+- `POST /api/ai/oauth/start` (admin)
+- `POST /api/ai/oauth/exchange` (admin, manual code input)
+- `GET /api/ai/oauth/callback` (public, IdP redirect)
+- `POST /api/ai/oauth/disconnect` (admin)
+
 ### Execute (Chat + Tools)
 `POST /api/ai/execute`
 Runs an AI request which may return tool calls, findings, or suggested actions.
@@ -226,12 +333,30 @@ Runs an AI request which may return tool calls, findings, or suggested actions.
 `POST /api/ai/execute/stream`
 Streaming variant of execute (used by the UI for incremental responses).
 
+### Kubernetes AI Analysis (Pro)
+`POST /api/ai/kubernetes/analyze`
+```json
+{ "cluster_id": "cluster-id" }
+```
+Requires a Pulse Pro license with the `kubernetes_ai` feature enabled.
+
 ### Patrol
 - `GET /api/ai/patrol/status`
 - `GET /api/ai/patrol/findings`
+- `DELETE /api/ai/patrol/findings` (clear all findings)
 - `GET /api/ai/patrol/history`
-- `GET /api/ai/patrol/stream`
-- `POST /api/ai/patrol/run` (admin)
+- `GET /api/ai/patrol/runs`
+- `GET /api/ai/patrol/stream` (Pro)
+- `POST /api/ai/patrol/run` (admin, Pro)
+- `POST /api/ai/patrol/acknowledge` (Pro)
+- `POST /api/ai/patrol/dismiss`
+- `POST /api/ai/patrol/resolve`
+- `POST /api/ai/patrol/snooze` (Pro)
+- `POST /api/ai/patrol/suppress` (Pro)
+- `GET /api/ai/patrol/suppressions` (Pro)
+- `POST /api/ai/patrol/suppressions` (Pro)
+- `DELETE /api/ai/patrol/suppressions/{id}` (Pro)
+- `GET /api/ai/patrol/dismissed` (Pro)
 
 ### Cost Tracking
 - `GET /api/ai/cost/summary`
@@ -239,6 +364,8 @@ Streaming variant of execute (used by the UI for incremental responses).
 - `GET /api/ai/cost/export` (admin)
 
 ## 📈 Metrics Store (v5)
+
+Auth required: `monitoring:read`.
 
 ### Store Stats
 `GET /api/metrics-store/stats`
@@ -254,7 +381,12 @@ Returns historical metric series for a resource and time range.
 
 ### Unified Agent (Recommended)
 `GET /download/pulse-agent`
-Downloads the unified agent binary for the current platform.
+Downloads the unified agent binary. Without `arch`, Pulse serves the local binary on the server host.
+
+Optional query:
+- `?arch=linux-amd64` (supported: `linux-amd64`, `linux-arm64`, `linux-armv7`, `linux-armv6`, `linux-386`, `darwin-amd64`, `darwin-arm64`, `windows-amd64`, `windows-arm64`, `windows-386`)
+
+The response includes `X-Checksum-Sha256` for verification.
 
 The unified agent combines host, Docker, and Kubernetes monitoring. Use `--enable-docker` or `--enable-kubernetes` to enable additional metrics.
 
@@ -264,9 +396,24 @@ See [UNIFIED_AGENT.md](UNIFIED_AGENT.md) for installation instructions.
 `GET /install.sh`
 Serves the universal `install.sh` used to install `pulse-agent` on target machines.
 
+### Unified Agent Installer (Windows)
+`GET /install.ps1`
+Serves the PowerShell installer for Windows.
+
 ### Legacy Agents (Deprecated)
 `GET /download/pulse-host-agent` - *Deprecated, use pulse-agent*
 `GET /download/pulse-docker-agent` - *Deprecated, use pulse-agent --enable-docker*
+
+Host-agent downloads accept `?platform=<os>&arch=<arch>` and expose a checksum endpoint:
+- `/download/pulse-host-agent.sha256?platform=linux&arch=amd64`
+
+Legacy install/uninstall scripts:
+- `GET /install-docker-agent.sh`
+- `GET /install-container-agent.sh`
+- `GET /install-host-agent.sh`
+- `GET /install-host-agent.ps1`
+- `GET /uninstall-host-agent.sh`
+- `GET /uninstall-host-agent.ps1`
 
 ### Submit Reports
 `POST /api/agents/host/report` - Host metrics
@@ -274,5 +421,18 @@ Serves the universal `install.sh` used to install `pulse-agent` on target machin
 `POST /api/agents/kubernetes/report` - Kubernetes cluster metrics
 
 ---
+
+## 🌡️ Temperature Proxy (Legacy)
+
+These endpoints are only available when legacy `pulse-sensor-proxy` support is enabled.
+
+- `POST /api/temperature-proxy/register` (proxy registration)
+- `GET /api/temperature-proxy/authorized-nodes` (proxy sync)
+- `DELETE /api/temperature-proxy/unregister` (admin)
+- `GET /api/temperature-proxy/install-command` (admin, `settings:write`)
+- `GET /api/temperature-proxy/host-status` (admin, `settings:read`)
+
+Legacy migration helper:
+- `GET /api/install/migrate-temperature-proxy.sh`
 
 > **Note**: This is a summary of the most common endpoints. For a complete list, inspect the network traffic of the Pulse dashboard or check the source code in `internal/api/router.go`.

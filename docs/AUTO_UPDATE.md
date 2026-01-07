@@ -49,23 +49,22 @@ In **Settings → System → Updates**:
 | Setting | Description |
 |---------|-------------|
 | **Update Channel** | Stable (recommended) or Release Candidate |
-| **Auto-Check** | Automatically check for updates daily |
+| **Auto-Check** | Stored UI preference (server currently checks for updates hourly regardless) |
 
-### Environment Variables
+### Stored Settings (system.json)
 
-```bash
-# Enable one-click updates
-AUTO_UPDATE_ENABLED=true
+Auto-update preferences are stored in `system.json` and edited via the UI.
 
-# Use release candidate channel
-UPDATE_CHANNEL=rc
-
-# Adjust automatic check cadence (duration string)
-AUTO_UPDATE_CHECK_INTERVAL=24h
-
-# Schedule daily checks (HH:MM, 24h)
-AUTO_UPDATE_TIME=03:00
+```json
+{
+  "autoUpdateEnabled": false,
+  "updateChannel": "stable",
+  "autoUpdateCheckInterval": 24,
+  "autoUpdateTime": "03:00"
+}
 ```
+
+**Note:** `autoUpdateTime` is stored for UI reference. The systemd timer still runs on its own schedule (02:00 + jitter). In-app update checks are driven by `autoUpdateCheckInterval`.
 
 ## Manual Update Methods
 
@@ -76,8 +75,10 @@ AUTO_UPDATE_TIME=03:00
 docker pull rcourtman/pulse:latest
 
 # Restart container
-docker-compose down && docker-compose up -d
+docker compose down && docker compose up -d
 ```
+
+If you use the legacy `docker-compose` binary, replace `docker compose` with `docker-compose`.
 
 ### ProxmoxVE LXC (Manual)
 
@@ -85,11 +86,15 @@ docker-compose down && docker-compose up -d
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
+This script installs/updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Agents → Installation commands**.
+
 ### Systemd Service (Manual)
 
 ```bash
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
+
+This script installs/updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Agents → Installation commands**.
 
 ### Source Build
 
@@ -111,16 +116,26 @@ Pulse creates a backup before updating. If the update fails:
 3. Error details are logged
 
 ### Manual Rollback
-If rollback is supported for your deployment, use the **Rollback** action from the update history in **Settings → System → Updates**.
+Backups created by in-app updates are stored as `backup-<timestamp>/` folders inside the Pulse data directory (`/etc/pulse` or `/data`). If that directory is not writable, Pulse falls back to `/tmp/pulse-backup-<timestamp>`.
+There is no rollback UI. To revert, stop Pulse, restore the backup contents to `/opt/pulse`, then restart.
 
-Backups are stored as `backup-<timestamp>/` folders inside the Pulse data directory (`/etc/pulse` or `/data`).
+Example (systemd/LXC):
+```bash
+sudo systemctl stop pulse
+sudo cp -a /etc/pulse/backup-<timestamp>/pulse /opt/pulse/pulse
+sudo cp -a /etc/pulse/backup-<timestamp>/VERSION /opt/pulse/VERSION
+sudo rm -rf /opt/pulse/data /opt/pulse/config
+sudo cp -a /etc/pulse/backup-<timestamp>/data /opt/pulse/data
+sudo cp -a /etc/pulse/backup-<timestamp>/config /opt/pulse/config
+sudo cp -a /etc/pulse/backup-<timestamp>/.env /opt/pulse/.env
+sudo systemctl start pulse
+```
 
 ## Update History
 
-View past updates in **Settings → System → Updates → Update History**:
-- Previous versions installed
-- Update timestamps
-- Success/failure status
+History entries are stored in `update-history.jsonl` under the Pulse data directory (`/etc/pulse` or `/data`), and exposed via `GET /api/updates/history` (admin auth required).
+
+Systemd/LXC update runs write detailed logs to `/var/log/pulse/update-<timestamp>.log`.
 
 ## Troubleshooting
 
@@ -131,7 +146,7 @@ View past updates in **Settings → System → Updates → Update History**:
 
 ### Update failed
 1. Check the error message in the progress modal
-2. Review logs: `journalctl -u pulse -n 100`
+2. Review logs: `journalctl -u pulse -n 100` or `/var/log/pulse/update-<timestamp>.log`
 3. Verify disk space is available
 4. Check network connectivity to GitHub
 

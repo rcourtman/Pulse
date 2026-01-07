@@ -1,6 +1,6 @@
 # Pulse AI
 
-Pulse Pro unlocks **AI Patrol** for continuous, automated health checks. Learn more at https://pulserelay.pro.
+Pulse Pro unlocks **AI Patrol** for continuous, automated health checks. Learn more at https://pulserelay.pro or see the technical overview in [PULSE_PRO.md](PULSE_PRO.md).
 
 ## What Patrol Actually Does (Technical)
 
@@ -38,7 +38,7 @@ Alerts are threshold-based and narrow. Patrol is context-based and cross-system.
 
 ## Controls and Limits
 
-- **Schedule**: from 15 minutes to 24 hours.
+- **Schedule**: from 10 minutes to 7 days (default 6 hours).
 - **Scope**: only configured resources and connected agents.
 - **Safety**: command execution remains disabled by default.
 - **Cost control**: Pro uses model selection and rate limits; free tier uses heuristic-only Patrol.
@@ -114,15 +114,20 @@ Patrol is **intentionally conservative** to avoid noise:
 ## Features
 
 - **Interactive chat**: Ask questions about current cluster state and get AI-assisted troubleshooting.
-- **Patrol**: Background checks periodically (default: 15 minutes) that generate findings. Interval is fully configurable down to 15 minutes.
-- **Alert analysis**: Optional token-efficient analysis when alerts fire.
+- **Patrol**: Background checks periodically (default: 6 hours) that generate findings. Interval is configurable from 10 minutes to 7 days, or set to 0 to disable.
+- **Alert-triggered analysis (Pro)**: Optional token-efficient analysis when alerts fire.
+- **Kubernetes AI analysis (Pro)**: Deep cluster analysis beyond basic monitoring.
 - **Command execution**: When enabled, AI can run commands via connected agents.
 - **Finding management**: Dismiss, resolve, or suppress findings to prevent recurrence.
 - **Cost tracking**: Tracks token usage and supports monthly budget limits.
 
+Alert-triggered analysis runs attach a timeline event to the alert, so investigations remain auditable alongside acknowledgements and remediation steps.
+
+> **License note**: Kubernetes AI analysis is gated by the `kubernetes_ai` Pulse Pro feature.
+
 ## Configuration
 
-Configure in the UI: **Settings → AI**
+Configure in the UI: **Settings → System → AI Assistant**
 
 AI settings are stored encrypted at rest in `ai.enc` under the Pulse config directory. Patrol findings and history are stored in `ai_findings.json`, `ai_patrol_runs.json`, and usage data in `ai_usage_history.json`. These files are located in `/etc/pulse` for systemd installs, or `/data` for Docker/Kubernetes.
 
@@ -151,7 +156,7 @@ You can set separate models for:
 
 ## Patrol Service (Pro Feature)
 
-Patrol runs automated health checks on a configurable schedule (default: every 15 minutes). It passes comprehensive infrastructure context to the LLM (see "Context Patrol Receives" above) and generates findings when issues are detected.
+Patrol runs automated health checks on a configurable schedule (default: every 6 hours). It passes comprehensive infrastructure context to the LLM (see "Context Patrol Receives" above) and generates findings when issues are detected.
 
 Pulse Pro users get full LLM-powered analysis. Free users still benefit from **Heuristic Patrol**, which uses local rule-based logic to detect common issues (offline nodes, disk exhaustion, etc.) without requiring an external AI provider. Free users also get full access to the AI Chat assistant (BYOK).
 
@@ -183,17 +188,25 @@ When chatting with AI about a patrol finding, the AI can:
 
 Pulse includes settings that control how "active" AI features are:
 
-- **Autonomous mode**: When enabled, AI may execute safe commands without approval.
-- **Patrol auto-fix**: Allows patrol to attempt automatic remediation.
-- **Alert-triggered analysis**: Limits AI to analyzing specific events when alerts occur.
+- **Autonomous mode (Pro)**: When enabled, AI may execute safe commands without approval.
+- **Patrol auto-fix (Pro)**: Allows patrol to attempt automatic remediation.
+- **Alert-triggered analysis (Pro)**: Limits AI to analyzing specific events when alerts occur.
 
 If you enable execution features, ensure agent tokens and scopes are appropriately restricted.
+
+### Advanced Network Restrictions
+
+Pulse blocks AI tool HTTP fetches to loopback and link-local addresses by default. For local development, you can allow loopback targets:
+
+- `PULSE_AI_ALLOW_LOOPBACK=true`
+
+Use this only in trusted environments.
 
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| AI not responding | Verify provider credentials in **Settings → AI** |
+| AI not responding | Verify provider credentials in **Settings → System → AI Assistant** |
 | No execution capability | Confirm at least one agent is connected |
 | Findings not persisting | Check Pulse has write access to `ai_findings.json` in the config directory |
 | Too many findings | This shouldn't happen - please report if it does |

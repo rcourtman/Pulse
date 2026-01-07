@@ -19,8 +19,8 @@ Pulse 5.0 adds support for monitoring Proxmox Mail Gateway instances alongside y
 4. Enter connection details:
    - Host: Your PMG IP or hostname
    - Port: 8006 (default)
-   - API Token ID: e.g., `root@pmg!pulse` (format: `<user>@<realm>!<token-id>`)
-   - API Token Secret: Your token secret (shown once when you create the token)
+   - Username: e.g., `root@pam` or a dedicated `api@pmg` user
+   - Password: the PMG account password
 
 ### Via Discovery
 
@@ -31,14 +31,13 @@ Pulse can automatically discover PMG instances on your network:
 3. PMG instances on port 8006 are detected and shown in the Proxmox discovery panels
 4. Click a discovered PMG server to add it
 
-## API Token Setup on PMG
+## Service Account Setup on PMG
 
-Create an API token on your PMG server (recommended). The easiest method is via the PMG web UI:
+PMG does not support API tokens. Use a dedicated PMG user with read-only access if possible:
 
-- Create a token for a user (for example `root@pmg`)
-- Copy the token secret when it is displayed (it is typically shown once)
-
-If you see 403/permission errors, start by testing with a token for an admin user to confirm connectivity, then tighten permissions once you know which PMG endpoints your instance requires.
+- Create a user in the PMG UI (or CLI) such as `api@pmg`.
+- Assign the minimum permissions needed to read mail statistics and cluster status.
+- Use that username and password when adding the node in Pulse.
 
 ## Dashboard
 
@@ -60,7 +59,7 @@ The Mail Gateway tab shows:
 
 ## Alerts
 
-Configure alerts for PMG metrics in **Settings → Alerts**:
+Configure alerts for PMG metrics in **Alerts → Thresholds**:
 
 - Queue depth exceeding threshold
 - Spam rate spike
@@ -80,7 +79,7 @@ Monitor multiple PMG instances from a single Pulse dashboard:
 ### Connection refused
 1. Verify PMG is accessible on port 8006
 2. Check firewall rules
-3. Ensure API token has correct permissions
+3. Ensure the PMG user/password is correct and has read permissions
 
 ### No statistics showing
 1. Wait for initial data collection (may take 1-2 polling cycles)
@@ -89,5 +88,5 @@ Monitor multiple PMG instances from a single Pulse dashboard:
 
 ### Cluster nodes missing
 1. PMG cluster must be properly configured
-2. API token needs cluster-wide permissions
+2. The PMG user needs cluster-wide permissions
 3. All nodes must be reachable from Pulse

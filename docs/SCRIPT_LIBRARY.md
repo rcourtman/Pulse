@@ -12,7 +12,7 @@ This guide explains the shared Bash modules in `scripts/lib/` used for building 
 
 **Conventions:**
 *   **Namespaces:** Functions are exported as `module::function` (e.g., `common::run`).
-*   **Bundling:** `make bundle-scripts` inlines modules for distribution.
+*   **Bundling:** `./scripts/bundle.sh` inlines modules for distribution.
 *   **Compatibility:** Targets Bash 5 on Debian 11+ and Ubuntu LTS.
 
 ## 🦴 Script Skeleton
@@ -56,8 +56,7 @@ main "$@"
 ## 📦 Bundling
 
 1.  Update `scripts/bundle.manifest`.
-2.  Run `make bundle-scripts`.
+2.  Run `./scripts/bundle.sh`.
 3.  Verify `dist/` artifacts.
 
 **Note:** Never edit bundled artifacts manually. Always rebuild from source.
-

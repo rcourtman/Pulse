@@ -150,11 +150,11 @@ all HTTP access attempts to the audit log.
 - Format: JSON with hash chaining (`prev_hash`, `event_hash`, `seq`)
 - Access: Owned by `pulse-sensor-proxy`, `0640`, `chattr +a`
 
-Follow `docs/operations/audit-log-rotation.md` for rotation (remove `+a`,
+Follow `docs/operations/AUDIT_LOG_ROTATION.md` for rotation (remove `+a`,
 truncate, restart service, reapply `+a`). Also consider forwarding with
 `scripts/setup-log-forwarding.sh`; see
-`docs/operations/sensor-proxy-log-forwarding.md` for RELP/TLS forwarding
-instructions and verification steps.
+`docs/operations/SENSOR_PROXY_LOGS.md` for log forwarding and verification
+steps.
 
 ## Metrics & Monitoring
 
@@ -234,5 +234,5 @@ If you suspect config corruption (service won't start, temperatures stopped):
    sudo systemctl start pulse-sensor-proxy
    ```
 
-For additional hardening steps, read `docs/PULSE_SENSOR_PROXY_HARDENING.md` and
-`docs/TEMPERATURE_MONITORING_SECURITY.md`.
+For additional hardening steps, read `docs/security/SENSOR_PROXY_HARDENING.md` and
+`docs/security/TEMPERATURE_MONITORING.md`.

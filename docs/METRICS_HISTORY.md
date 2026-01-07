@@ -52,6 +52,8 @@ Pulse exposes the persistent metrics store via:
 - `GET /api/metrics-store/stats`
 - `GET /api/metrics-store/history`
 
+These endpoints require authentication with the `monitoring:read` scope.
+
 ### History Query Parameters
 
 `GET /api/metrics-store/history` supports:

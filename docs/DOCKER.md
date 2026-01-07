@@ -47,7 +47,7 @@ Run with: `docker compose up -d`
 
 ## ⚙️ Configuration
 
-Pulse is configured via environment variables.
+Pulse is configured via the UI (`system.json`) with optional environment overrides.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -56,7 +56,7 @@ Pulse is configured via environment variables.
 | `PULSE_AUTH_PASS` | Admin Password | *(unset)* |
 | `API_TOKENS` | Comma-separated API tokens (**legacy**) | *(unset)* |
 | `DISCOVERY_SUBNET` | Custom CIDR to scan | *(auto)* |
-| `ALLOWED_ORIGINS` | CORS allowed domains | `*` |
+| `ALLOWED_ORIGINS` | CORS allowed origin (`*` or a single origin). Empty = same-origin only. | *(unset)* |
 | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
 | `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hide Docker update buttons (read-only mode) | `false` |
 
@@ -113,7 +113,7 @@ Pulse can detect and apply updates to your Docker containers directly from the U
 1. **Update Detection**: Pulse compares the local image digest with the latest digest from the container registry
 2. **Visual Indicator**: Containers with available updates show a blue upward arrow icon
 3. **One-Click Update**: Click the update button, confirm, and Pulse handles the rest
-4. **Batch Updates**: Use the **"Update All"** button in the filter bar to update multiple containers safely in sequence
+4. **Batch Updates**: Use the **"Update All"** button in the filter bar to queue updates for multiple containers
 
 ### Updating a Container
 
@@ -125,16 +125,15 @@ Pulse can detect and apply updates to your Docker containers directly from the U
    - Stop the current container
    - Create a backup (renamed with `_pulse_backup_` suffix)
    - Start a new container with the same configuration
-   - Clean up the backup after 5 minutes
+   - Clean up the backup after 15 minutes (if the update succeeds)
 
 ### Batch Updates
 
 When multiple containers have updates available, an **"Update All"** button appears in the filter bar.
 1. Click **"Update All"**
-2. Confirm the action in the toast notification
-3. Pulse queues the updates and processes them in parallel batches (default 5 concurrent updates)
-4. A progress indicator shows the status of the batch operation
-5. Failed updates are pushed to the end of the queue and reported in the final summary
+2. Click again within 3 seconds to confirm
+3. Pulse queues update commands for each container (they run on the next agent report cycle)
+4. A toast summary reports how many updates were queued or failed
 
 ### Safety Features
 
@@ -177,7 +176,7 @@ services:
 
 To disable registry checks entirely, set `PULSE_DISABLE_DOCKER_UPDATE_CHECKS=true` on the **agent**.
 
-You can also toggle "Hide Docker Update Buttons" from the UI: **Settings → Agents → Docker Settings**.
+You can also toggle "Hide Docker Update Buttons" from the UI: **Settings → Agents** (Docker Settings card).
 
 ---
 

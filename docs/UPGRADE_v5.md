@@ -20,8 +20,10 @@ If you prefer CLI, use the official installer for the target version:
 
 ```bash
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | \
-  sudo bash -s -- --stable
+  sudo bash -s -- --version vX.Y.Z
 ```
+
+This installer updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Agents → Installation commands**.
 
 ### Docker
 
@@ -76,7 +78,7 @@ pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin
 
 **Alternative** (re-run agent setup):
 1. Delete the node from Pulse Settings
-2. Re-run the agent setup command from Settings → Add Node
+2. Re-run the agent setup command from Settings → Proxmox → Add Node
 3. The new token will have correct permissions
 
 This happens because v5's agent setup grants broader permissions than the v4 manual setup scripts did.

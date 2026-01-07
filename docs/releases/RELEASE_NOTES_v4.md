@@ -88,12 +88,12 @@ curl -vk https://node.example:8443/health \
 - Standalone host agents now ship with guided Linux, macOS, and Windows installers that stream registration status back to Pulse, generate scoped commands from **Settings → Agents**, and feed host metrics into alerts alongside Proxmox and Docker.
 - Alert thresholds gained host-level overrides, connectivity toggles, and snapshot size guardrails so you can tune offline behaviour per host while keeping a global policy for other resources.
 - API tokens now support fine-grained scopes with a redesigned manager that previews command templates, highlights unused credentials, and makes revocation a single click.
-- Proxmox replication jobs surface in a dedicated **Settings → Hosts → Replication** view with API plumbing to track task health and bubble failures into the monitoring pipeline.
+- Proxmox replication jobs surface in a dedicated **Proxmox → Replication** view with API plumbing to track task health and bubble failures into the monitoring pipeline.
 - Docker Swarm environments now receive service/task-aware reporting with configurable scope, plus a Docker settings view that highlights manager/worker roles, stack health, rollout status, and service alert thresholds.
 
 ### Improvements
 - Dashboard loads and drawer links respond faster thanks to cached guest metadata, reduced polling allocations, and inline URL editing that no longer flashes on WebSocket updates.
-- Settings navigation is reorganized with dedicated Docker and Hosts sections, richer filters, and platform icons that make agent onboarding and discovery workflows clearer.
+- Settings navigation is reorganized with dedicated platform and agent sections, richer filters, and platform icons that make onboarding and discovery workflows clearer.
 - LXC guests now report dynamic interface IPs, configuration metadata, and queue metrics so alerting, discovery, and drawers stay accurate even during rapid container churn.
 - Notifications consolidate into a consistent toast system, with clearer feedback during agent setup, token generation, and background job state changes.
 

@@ -19,7 +19,7 @@ sudo pulse bootstrap-token
 ```
 
 ### Port change didn't take effect
-1. Check which service is running: `systemctl status pulse` (or `pulse-backend`).
+1. Check which service is running: `systemctl status pulse` (legacy installs may use `pulse-backend`).
 2. Verify environment override: `systemctl show pulse --property=Environment`.
 3. Docker: Ensure you updated the `-p` flag (e.g., `-p 8080:7655`).
 
@@ -40,7 +40,8 @@ sudo pulse bootstrap-token
 
 **Cannot login / 401 Unauthorized**
 - Clear browser cookies.
-- Check if your IP is banned (wait 15 mins or restart Pulse).
+- Check if your IP is locked out (wait 15 mins).
+- If another admin can log in, use `POST /api/security/reset-lockout` to clear the lockout for your username or IP.
 
 ### Monitoring Data
 
@@ -63,13 +64,14 @@ sudo pulse bootstrap-token
 ### Notifications
 
 **Emails not sending**
-- Check SMTP settings in **Settings → Alerts**.
+- Check SMTP settings in **Alerts → Notification Destinations**.
 - Check logs: `docker logs pulse | grep email`.
 - Ensure your SMTP provider allows the connection (e.g., Gmail App Passwords).
 
 **Webhooks failing**
 - Verify the URL is reachable from the Pulse server.
-- Check `Allowed Origins` if you are getting CORS errors.
+- If targeting private IPs, allow them in **Settings → System → Network → Webhook Security**.
+- Check Pulse logs for HTTP status codes and response bodies.
 
 ---
 

@@ -1,5 +1,7 @@
 # Security Changelog - Pulse Sensor Proxy
 
+> **Deprecated in v5:** `pulse-sensor-proxy` is deprecated and not recommended for new deployments. This changelog is retained for existing installations and historical reference.
+
 ## 2025-11-07: Critical Security Hardening
 
 ### Summary
@@ -240,11 +242,12 @@ allowed_peers:
 
 New Prometheus metrics for security monitoring:
 ```
-pulse_proxy_node_validation_failures_total{node, reason}
+pulse_proxy_node_validation_failures_total{reason}
 pulse_proxy_read_timeouts_total
 pulse_proxy_write_timeouts_total
-pulse_proxy_limiter_rejections_total{peer, reason}
-pulse_proxy_limiter_penalties_total{peer, reason}
+pulse_proxy_rate_limit_hits_total
+pulse_proxy_limiter_rejections_total{reason, peer}
+pulse_proxy_limiter_penalties_total{reason, peer}
 pulse_proxy_global_concurrency_inflight
 ```
 
