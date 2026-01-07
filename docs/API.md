@@ -98,6 +98,11 @@ Detailed storage usage per node and pool.
 `GET /api/backups/unified`
 Combined view of PVE and PBS backups.
 
+Other backup endpoints:
+- `GET /api/backups`
+- `GET /api/backups/pve`
+- `GET /api/backups/pbs`
+
 ---
 
 ## 🔔 Notifications
@@ -143,6 +148,15 @@ Triggers a test alert to all configured channels.
 ### Revoke Token
 `DELETE /api/security/tokens/<id>`
 
+### Recovery (Localhost or Recovery Token)
+`POST /api/security/recovery`
+Supports actions:
+- `generate_token` (localhost only)
+- `disable_auth`
+- `enable_auth`
+
+`GET /api/security/recovery` returns recovery mode status.
+
 ---
 
 ## ⚙️ System Settings
@@ -158,6 +172,19 @@ Update system settings. Requires admin + `settings:write`.
 ### Toggle Mock Mode
 `POST /api/system/mock-mode`
 Enable or disable mock data generation (dev/demo only).
+
+### Scheduler Health
+`GET /api/monitoring/scheduler/health`
+Returns scheduler health, DLQ, and breaker status. Requires `monitoring:read`.
+
+### Updates (Admin)
+- `GET /api/updates/check`
+- `POST /api/updates/apply`
+- `GET /api/updates/status`
+- `GET /api/updates/stream`
+- `GET /api/updates/plan`
+- `GET /api/updates/history`
+- `GET /api/updates/history/entry`
 
 ---
 

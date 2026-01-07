@@ -26,6 +26,8 @@ Enable Single Sign-On (SSO) with providers like Authentik, Keycloak, Okta, and A
 | **Scopes** | Space-separated scopes. Default: `openid profile email`. |
 | **Claim Mapping** | Map `email`, `username`, and `groups` to specific token claims. |
 
+> **Note**: Setting `OIDC_*` environment variables locks those fields in the UI. See [CONFIGURATION.md](CONFIGURATION.md) for the full list of overrides.
+
 ### Access Control
 Restrict access to specific users or groups:
 *   **Allowed Groups**: Only users in these groups can login. Requires the `groups` scope/claim.

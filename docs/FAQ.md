@@ -36,6 +36,12 @@ If a setting is disabled with an amber warning, it's being overridden by an envi
 
 ## 🔍 Monitoring & Metrics
 
+### What is Pulse Pro, and what does it actually do?
+Pulse Pro unlocks **AI Patrol** — scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
+
+Example output includes trend-based capacity warnings, backup regressions, and correlated container failures that simple threshold alerts miss.
+See [AI Patrol](AI.md) and https://pulserelay.pro.
+
 ### Why do VMs show "-" for disk usage?
 Proxmox API returns `0` for VM disk usage by default. You must install the **QEMU Guest Agent** inside the VM and enable it in Proxmox (VM → Options → QEMU Guest Agent).
 See [VM Disk Monitoring](VM_DISK_MONITORING.md) for details.

@@ -8,7 +8,7 @@ Manage Pulse auto-updates on host-mode installations.
 | :--- | :--- |
 | `pulse-update.timer` | Daily check (02:00 + jitter). |
 | `pulse-update.service` | Runs the update script. |
-| `pulse-auto-update.sh` | Fetches release & restarts Pulse. |
+| `pulse-auto-update.sh` | Fetches release & restarts Pulse (`/usr/local/bin/pulse-auto-update.sh`). |
 
 ## 🚀 Enable/Disable
 
@@ -34,12 +34,12 @@ journalctl -u pulse-update -f
 ```
 
 ## 🔍 Observability
-*   **History**: `curl -s http://localhost:7655/api/updates/history | jq`
-*   **Logs**: `/var/log/pulse/update-*.log`
+*   **History**: `curl -s http://localhost:7655/api/updates/history | jq` (admin auth required)
+*   **Logs**: `journalctl -u pulse-update -f` or `journalctl -t pulse-auto-update -f`
 
 ## ↩️ Rollback
 If an update fails:
-1.  Check logs: `/var/log/pulse/update-YYYYMMDDHHMMSS.log`.
+1.  Check logs: `journalctl -u pulse-update -f` or `journalctl -t pulse-auto-update -f`.
 2.  Use the **Rollback** action in **Settings → System → Updates** if available for your deployment type.
 3.  If you need to pin a specific version, re-run the installer with a version:
     ```bash

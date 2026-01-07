@@ -79,6 +79,11 @@ From Pulse's Settings page:
 5. Click copy to get the setup command
 6. Run the command on your PBS server
 
+Example (what the UI generates):
+```bash
+curl -sSL "http://<pulse-ip>:7655/api/setup-script?type=pbs&host=https://<pbs-ip>:8007&pulse_url=http://<pulse-ip>:7655" | bash
+```
+
 ### Method 4: Manual Token Creation
 
 If you prefer manual setup:
