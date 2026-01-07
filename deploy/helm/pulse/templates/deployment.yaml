@@ -6,6 +6,8 @@ metadata:
     {{- include "pulse.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: {{ .Values.strategy.type | default "RollingUpdate" }}
   selector:
     matchLabels:
       {{- include "pulse.selectorLabels" . | nindent 6 }}
