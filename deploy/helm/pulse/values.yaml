@@ -4,6 +4,11 @@
 
 replicaCount: 1
 
+# Deployment strategy. Default is RollingUpdate, but Recreate is recommended
+# when using ReadWriteOnce (RWO) persistent volumes to avoid Multi-Attach errors.
+strategy:
+  type: RollingUpdate
+
 image:
   repository: rcourtman/pulse
   # Overrides the image tag whose default is the chart appVersion.
