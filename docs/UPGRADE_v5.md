@@ -20,7 +20,7 @@ If you prefer CLI, use the official installer for the target version:
 
 ```bash
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | \
-  sudo bash -s -- --version v5.0.0
+  sudo bash -s -- --stable
 ```
 
 ### Docker

@@ -452,7 +452,11 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	envKubeContext := strings.TrimSpace(getenv("PULSE_KUBE_CONTEXT"))
 	envKubeIncludeNamespaces := strings.TrimSpace(getenv("PULSE_KUBE_INCLUDE_NAMESPACES"))
 	envKubeExcludeNamespaces := strings.TrimSpace(getenv("PULSE_KUBE_EXCLUDE_NAMESPACES"))
-	envKubeIncludeAllPods := strings.TrimSpace(getenv("PULSE_KUBE_INCLUDE_ALL_POD_FILES")) // wait, it was PULSE_KUBE_INCLUDE_ALL_PODS in original
+	envKubeIncludeAllPods := strings.TrimSpace(getenv("PULSE_KUBE_INCLUDE_ALL_PODS"))
+	if envKubeIncludeAllPods == "" {
+		// Backwards compatibility for older env var name.
+		envKubeIncludeAllPods = strings.TrimSpace(getenv("PULSE_KUBE_INCLUDE_ALL_POD_FILES"))
+	}
 	envKubeIncludeAllDeployments := strings.TrimSpace(getenv("PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS"))
 	envKubeMaxPods := strings.TrimSpace(getenv("PULSE_KUBE_MAX_PODS"))
 	envDiskExclude := strings.TrimSpace(getenv("PULSE_DISK_EXCLUDE"))

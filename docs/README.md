@@ -38,6 +38,13 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 - **[Auto Updates](AUTO_UPDATE.md)** – One-click updates for supported deployments.
 - **[Kubernetes](KUBERNETES.md)** – Helm deployment (ingress, persistence, HA patterns).
 
+## 🚀 Pulse Pro
+
+Pulse Pro unlocks **AI Patrol** — automated background monitoring that spots issues before they become incidents.
+
+- **[Learn more at pulserelay.pro](https://pulserelay.pro)**
+- **[AI Patrol deep dive](AI.md)**
+
 ## 📡 Monitoring & Agents
 
 - **[Unified Agent](UNIFIED_AGENT.md)** – Single binary for Host and Docker monitoring.

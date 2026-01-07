@@ -6,7 +6,7 @@ Pulse provides a comprehensive REST API for automation and integration.
 
 ## 🔐 Authentication
 
-All API requests require authentication via one of the following methods:
+Most API requests require authentication via one of the following methods:
 
 **1. API Token (Recommended)**
 Pass the token in the `X-API-Token` header.
@@ -21,6 +21,19 @@ curl -H "Authorization: Bearer your-token" http://localhost:7655/api/health
 
 **3. Session Cookie**
 Standard browser session cookie (used by the UI).
+
+Public endpoints include:
+- `GET /api/health`
+- `GET /api/version`
+
+## 🔏 Scopes and Admin Access
+
+Some endpoints require admin privileges and/or scopes. Common scopes include:
+- `monitoring:read`
+- `settings:read`
+- `settings:write`
+
+Endpoints that require admin access are noted below.
 
 ---
 
@@ -73,6 +86,10 @@ Validate credentials before saving.
 Returns time-series data for CPU, Memory, and Storage.
 **Ranges**: `1h`, `24h`, `7d`, `30d`
 
+### Storage Charts
+`GET /api/storage-charts`
+Returns storage chart data.
+
 ### Storage Stats
 `GET /api/storage/`
 Detailed storage usage per node and pool.
@@ -86,13 +103,29 @@ Combined view of PVE and PBS backups.
 ## 🔔 Notifications
 
 ### Send Test Notification
-`POST /api/notifications/test`
+`POST /api/notifications/test` (admin)
 Triggers a test alert to all configured channels.
 
-### Manage Webhooks
-- `GET /api/notifications/webhooks`
-- `POST /api/notifications/webhooks`
-- `DELETE /api/notifications/webhooks/<id>`
+### Email, Apprise, and Webhooks
+- `GET /api/notifications/email` (admin)
+- `PUT /api/notifications/email` (admin)
+- `GET /api/notifications/apprise` (admin)
+- `PUT /api/notifications/apprise` (admin)
+- `GET /api/notifications/webhooks` (admin)
+- `POST /api/notifications/webhooks` (admin)
+- `PUT /api/notifications/webhooks/<id>` (admin)
+- `DELETE /api/notifications/webhooks/<id>` (admin)
+- `POST /api/notifications/webhooks/test` (admin)
+- `GET /api/notifications/webhook-templates` (admin)
+- `GET /api/notifications/webhook-history` (admin)
+- `GET /api/notifications/email-providers` (admin)
+- `GET /api/notifications/health` (admin)
+
+### Queue and Dead-Letter Tools
+- `GET /api/notifications/queue/stats` (admin)
+- `GET /api/notifications/dlq` (admin)
+- `POST /api/notifications/dlq/retry` (admin)
+- `POST /api/notifications/dlq/delete` (admin)
 
 ---
 
@@ -170,11 +203,13 @@ Streaming variant of execute (used by the UI for incremental responses).
 - `GET /api/ai/patrol/status`
 - `GET /api/ai/patrol/findings`
 - `GET /api/ai/patrol/history`
+- `GET /api/ai/patrol/stream`
 - `POST /api/ai/patrol/run` (admin)
 
 ### Cost Tracking
-`GET /api/ai/cost/summary`
-Get AI usage statistics (includes retention window details).
+- `GET /api/ai/cost/summary`
+- `POST /api/ai/cost/reset` (admin)
+- `GET /api/ai/cost/export` (admin)
 
 ## 📈 Metrics Store (v5)
 

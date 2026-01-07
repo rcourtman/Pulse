@@ -205,7 +205,12 @@ If you're comfortable with your security setup, you can dismiss warnings:
 
 By default, configuration export/import is blocked. You have two options:
 
-### Option 1: Set API Tokens (Recommended)
+### Option 1: Create an API Token (Recommended)
+Create a token in **Settings → Security → API Tokens**, then use it for exports.
+For automation-only environments, you can seed tokens via environment variables (legacy) and
+they will be persisted to `api_tokens.json` on startup.
+
+Legacy environment seeding:
 ```bash
 # Using systemd (secure)
 sudo systemctl edit pulse
@@ -255,7 +260,7 @@ for sensitive data.
   - SHA3-256 hashed before storage (64‑character hash)
   - Raw token shown only once
   - Tokens never stored in plain text
-  - Live reloading when `.env` changes
+  - Stored in `api_tokens.json` and managed via the UI
   - API-only mode supported (no password auth required)
 - **CSRF protection**: all state-changing operations require CSRF tokens
 - **Rate limiting** (enhanced in v4.24.0)
@@ -359,7 +364,7 @@ The Quick Security Setup automatically:
 - Stores only the 64-character hash
 - Adds the token to the managed token list
 
-#### Manual Token Setup
+#### Manual Token Setup (Legacy Seeding)
 ```bash
 # Using systemd (plain text values are auto-hashed on startup)
 sudo systemctl edit pulse
@@ -374,7 +379,7 @@ docker run -e API_TOKENS=ansible-token,docker-agent-token rcourtman/pulse:latest
 # Environment="API_TOKENS=83c8...,b1de..."
 ```
 
-**Security Note**: Tokens defined via environment variables are hashed with SHA3-256 before being stored on disk. Plain values never persist beyond startup.
+**Security Note**: Tokens defined via environment variables are hashed with SHA3-256 before being stored in `api_tokens.json`. Plain values never persist beyond startup.
 
 #### Token Management (Settings → API Tokens)
 - Issue dedicated tokens for automation/agents without sharing a global credential
@@ -402,7 +407,7 @@ curl -H "Authorization: Bearer your-original-token" http://localhost:7655/api/ex
 #### Secure Mode
 - Require API token for all operations
 - Protects auto-registration endpoint
-- Enable by setting at least one API token via `API_TOKENS` (or legacy `API_TOKEN`) environment variable
+- Enable by creating at least one API token (UI or legacy env seeding)
 
 ### Runtime Logging Configuration
 
@@ -445,7 +450,8 @@ docker run \
 
 ## CORS (Cross-Origin Resource Sharing)
 
-By default, Pulse only allows same-origin requests (no CORS headers). This is the most secure configuration.
+By default, Pulse allows all origins (`ALLOWED_ORIGINS=*`). This is convenient for local setups,
+but should be restricted in production.
 
 ### Configuring CORS for External Access
 
@@ -466,8 +472,8 @@ PULSE_DEV=true
 
 Notes:
 
-- `ALLOWED_ORIGINS` currently supports a single origin or `*` (it is written directly to `Access-Control-Allow-Origin`).
-- Never use `ALLOWED_ORIGINS=*` in production as it allows any website to access your API.
+- `ALLOWED_ORIGINS` supports a single origin or `*` (it is written directly to `Access-Control-Allow-Origin`).
+- In production, set a specific origin to avoid exposing the API to arbitrary sites.
 
 ## Monitoring and Observability
 
@@ -563,7 +569,7 @@ curl -X POST http://localhost:7655/api/security/reset-lockout \
 ## Troubleshooting
 
 **Account locked?** Wait 15 minutes or contact admin for manual reset  
-**Export blocked?** You're on a public network – login with password, set an API token (`API_TOKENS`), or set `ALLOW_UNPROTECTED_EXPORT=true`  
+**Export blocked?** You're on a public network – login with password, create an API token, or set `ALLOW_UNPROTECTED_EXPORT=true`  
 **Rate limited?** Wait 1 minute and try again  
 **Can't login?** Check `PULSE_AUTH_USER` and `PULSE_AUTH_PASS` environment variables  
 **API access denied?** Verify the token you supplied matches one of the values created in *Settings → API Tokens* (use the original token, not the hash)  
@@ -571,13 +577,3 @@ curl -X POST http://localhost:7655/api/security/reset-lockout \
 **Forgot password?** Start fresh – delete your Pulse data and restart
 
 ---
-
-_Last updated: 2025-10-20_
-
-**Version 4.24.0 Security Enhancements:**
-- ✅ X-RateLimit-* headers for all API responses
-- ✅ Runtime logging configuration for incident response
-- ✅ Scheduler health API for anomaly detection
-- ✅ Enhanced audit logging (rollback actions, scheduler events)
-- ✅ Adaptive polling with circuit breakers and backoff
-- ✅ Shared script library system (secure installer patterns)

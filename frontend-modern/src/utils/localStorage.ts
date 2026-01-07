@@ -123,4 +123,7 @@ export const STORAGE_KEYS = {
 
   // Resources search
   RESOURCES_SEARCH_HISTORY: 'resourcesSearchHistory',
+
+  // Feature discovery
+  DISMISSED_FEATURE_TIPS: 'pulse-dismissed-feature-tips',
 } as const;

@@ -120,7 +120,7 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
 2. Paste the **Bootstrap Token**.
 3. Create your **Admin Username** and **Password**.
 
-> **Note**: If you configure authentication via environment variables (`PULSE_AUTH_USER`/`PULSE_AUTH_PASS` and/or `API_TOKENS`), the bootstrap token is automatically removed and this step is skipped.
+> **Note**: If you configure authentication via environment variables (`PULSE_AUTH_USER`/`PULSE_AUTH_PASS` and/or legacy `API_TOKENS`), the bootstrap token is automatically removed and this step is skipped.
 
 ---
 
@@ -135,7 +135,7 @@ Pulse can self-update to the latest stable version.
 | Platform | Command |
 |----------|---------|
 | **Docker** | `docker pull rcourtman/pulse:latest && docker restart pulse` |
-| **Kubernetes** | `helm repo update && helm upgrade pulse pulse/pulse -n pulse` |
+| **Kubernetes** | `helm upgrade pulse oci://ghcr.io/rcourtman/pulse-chart -n pulse` |
 | **Systemd** | Re-download binary and restart service |
 
 ### Rollback

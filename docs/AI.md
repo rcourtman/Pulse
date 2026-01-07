@@ -1,5 +1,7 @@
 # Pulse AI
 
+Pulse Pro unlocks **AI Patrol** for continuous, automated health checks. Learn more at https://pulserelay.pro.
+
 Pulse AI adds an optional assistant for troubleshooting and proactive monitoring. It is **off by default** and can be enabled per instance.
 
 ## What Makes AI Patrol Different
@@ -150,4 +152,3 @@ If you enable execution features, ensure agent tokens and scopes are appropriate
 | No execution capability | Confirm at least one agent is connected |
 | Findings not persisting | Check Pulse has write access to `ai_findings.enc` in the config directory |
 | Too many findings | This shouldn't happen - please report if it does |
-

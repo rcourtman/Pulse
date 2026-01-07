@@ -6,6 +6,7 @@ import type { Alert } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { ThresholdSlider } from '@/components/Dashboard/ThresholdSlider';
+import { HelpIcon } from '@/components/shared/HelpIcon';
 import { logger } from '@/utils/logger';
 
 const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
@@ -962,8 +963,9 @@ export function ResourceTable(props: ResourceTableProps) {
                     <span class="text-sm text-gray-400">-</span>
                   </td>
                   <td class="p-1 px-2 align-middle">
-                    <span class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
+                    <span class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 inline-flex items-center gap-1">
                       Alert Delay (s)
+                      <HelpIcon contentId="alerts.thresholds.delay" size="xs" />
                     </span>
                   </td>
                   <For each={props.columns}>
