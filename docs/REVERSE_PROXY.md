@@ -51,8 +51,37 @@ ProxyPassReverse / http://localhost:7655/
 
 ## ⚠️ Common Issues
 
+### "HTTPS: HTTP only" in Security Posture
+
+If your reverse proxy terminates SSL but Pulse shows "HTTPS: HTTP only" in Settings → Security:
+
+**Cause**: Pulse detects HTTPS in two ways:
+1. Direct TLS connection (`req.TLS != nil`)
+2. The `X-Forwarded-Proto: https` header
+
+If your proxy terminates SSL but doesn't forward this header, Pulse sees plain HTTP.
+
+**Fix**: Add the `X-Forwarded-Proto` header in your proxy config:
+
+```nginx
+# Nginx
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+```caddy
+# Caddy (automatic, but explicit override if needed)
+header_up X-Forwarded-Proto {scheme}
+```
+
+```apache
+# Apache
+RequestHeader set X-Forwarded-Proto "https"
+```
+
+### Other Issues
+
 - **"Connection Lost"**: WebSocket upgrade failed. Check `Upgrade` and `Connection` headers.
 - **502 Bad Gateway**: Pulse is not running on port 7655.
 - **CORS Errors**: Do not add CORS headers in the proxy; Pulse handles them. Set **Settings → System → Network → Allowed Origins** or use `ALLOWED_ORIGINS` if needed.
-- **OIDC redirects or HTTPS detection issues**: Ensure `X-Forwarded-Proto` is set to `https`.
+- **OIDC redirects fail**: Ensure `X-Forwarded-Proto` is set (see above).
 - **Wrong client IPs**: Set `PULSE_TRUSTED_PROXY_CIDRS` to your proxy IP/CIDR so `X-Forwarded-For` is trusted.

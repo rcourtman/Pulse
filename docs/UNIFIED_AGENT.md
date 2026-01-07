@@ -287,3 +287,36 @@ systemctl status pulse-agent
 # macOS
 launchctl list | grep pulse
 ```
+
+### Docker Swarm Not Detected
+
+If your Docker Swarm cluster isn't being detected:
+
+1. **Check runtime detection**: Pulse disables Swarm for Podman. Look for "Podman runtime detected" in logs:
+   ```bash
+   journalctl -u pulse-agent | grep -i podman
+   ```
+
+2. **Force Docker runtime**: If auto-detection is incorrect:
+   ```bash
+   --docker-runtime docker
+   # Or set environment variable
+   PULSE_DOCKER_RUNTIME=docker
+   ```
+
+3. **Check Docker info**: Verify Swarm is active on the host:
+   ```bash
+   docker info | grep -i swarm
+   # Should show "Swarm: active"
+   ```
+
+4. **Check socket permissions**: The agent needs access to the Docker socket:
+   ```bash
+   ls -la /var/run/docker.sock
+   ```
+
+5. **Enable debug logging**: For more detail:
+   ```bash
+   LOG_LEVEL=debug journalctl -u pulse-agent -f
+   ```
+
