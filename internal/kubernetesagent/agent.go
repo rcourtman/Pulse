@@ -139,6 +139,12 @@ func New(cfg Config) (*Agent, error) {
 			Proxy:           http.ProxyFromEnvironment,
 			TLSClientConfig: tlsConfig,
 		},
+		// Disallow redirects for agent API calls. If a reverse proxy redirects
+		// HTTP to HTTPS, Go's default behavior converts POST to GET (per HTTP spec),
+		// causing 405 errors. Return an error with guidance instead.
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return fmt.Errorf("server returned redirect to %s - if using a reverse proxy, ensure you use the correct protocol (https:// instead of http://) in your --url flag", req.URL)
+		},
 	}
 
 	clusterServer := strings.TrimSpace(restCfg.Host)
