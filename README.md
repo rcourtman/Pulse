@@ -57,6 +57,8 @@ Run this one-liner on your Proxmox host to create a lightweight LXC container:
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
+Note: this installs the Pulse **server**. Agent installs use the command generated in **Settings → Agents → Installation commands** (served from `/install.sh` on your Pulse server).
+
 ### Option 2: Docker
 ```bash
 docker run -d \
@@ -77,7 +79,7 @@ Access the dashboard at `http://<your-ip>:7655`.
 - **[API Reference](docs/API.md)**: Integrate Pulse with your own tools.
 - **[Architecture](ARCHITECTURE.md)**: High-level system design and data flow.
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)**: Solutions to common issues.
-- **[Agent Security](docs/AGENT_SECURITY.md)**: Details on signed updates and verification.
+- **[Agent Security](docs/AGENT_SECURITY.md)**: Details on checksum-verified updates and verification.
 - **[Docker Monitoring](docs/DOCKER.md)**: Setup and management of Docker agents.
 
 ## 🌐 Community Integrations
@@ -88,18 +90,21 @@ Community-maintained integrations and addons:
 
 ## 🚀 Pulse Pro
 
-**[Pulse Pro](https://pulserelay.pro)** unlocks **AI Patrol** — automated background monitoring that catches issues before they become outages.
+**[Pulse Pro](https://pulserelay.pro)** unlocks **LLM-backed AI Patrol** — automated background monitoring that catches issues before they become outages.
 
 | Feature | Free | Pro |
 |---------|------|-----|
 | Real-time dashboard | ✅ | ✅ |
 | Threshold alerts | ✅ | ✅ |
 | AI Chat (BYOK) | ✅ | ✅ |
-| **AI Patrol** (automated scans) | — | ✅ |
-| Root cause analysis | — | ✅ |
+| Heuristic Patrol (local rules) | ✅ | ✅ |
+| **LLM-backed AI Patrol** | — | ✅ |
+| Alert-triggered AI analysis | — | ✅ |
+| Kubernetes AI analysis | — | ✅ |
+| Auto-fix + autonomous mode | — | ✅ |
 | Priority support | — | ✅ |
 
-AI Patrol runs on your schedule (every 15 minutes to every 24 hours) and finds:
+AI Patrol runs on your schedule (every 10 minutes to every 7 days, default 6 hours) and finds:
 - ZFS pools approaching capacity
 - Backup jobs that silently failed
 - VMs stuck in restart loops
@@ -108,8 +113,8 @@ AI Patrol runs on your schedule (every 15 minutes to every 24 hours) and finds:
 
 Technical highlights:
 - Cross-system context (nodes, VMs, backups, containers, and metrics history)
-- Noise reduction via correlation and trend-aware checks
-- Actionable findings with remediation hints
+- LLM analysis for high-impact findings + alert-triggered deep dives
+- Optional auto-fix with command safety policies and audit trail
 
 **[Try the live demo →](https://demo.pulserelay.pro)** or **[learn more at pulserelay.pro](https://pulserelay.pro)**
 

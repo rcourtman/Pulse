@@ -13,6 +13,8 @@ location / {
     proxy_set_header Connection "upgrade";
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
     
     # Critical for WebSockets
     proxy_read_timeout 86400; # 24h
@@ -51,5 +53,6 @@ ProxyPassReverse / http://localhost:7655/
 
 - **"Connection Lost"**: WebSocket upgrade failed. Check `Upgrade` and `Connection` headers.
 - **502 Bad Gateway**: Pulse is not running on port 7655.
-- **CORS Errors**: Do not add CORS headers in the proxy; Pulse handles them. Set `ALLOWED_ORIGINS` env var if needed.
+- **CORS Errors**: Do not add CORS headers in the proxy; Pulse handles them. Set **Settings → System → Network → Allowed Origins** or use `ALLOWED_ORIGINS` if needed.
+- **OIDC redirects or HTTPS detection issues**: Ensure `X-Forwarded-Proto` is set to `https`.
 - **Wrong client IPs**: Set `PULSE_TRUSTED_PROXY_CIDRS` to your proxy IP/CIDR so `X-Forwarded-For` is trusted.

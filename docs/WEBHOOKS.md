@@ -1,10 +1,10 @@
 # 🔔 Webhooks
 
-Pulse supports Discord, Slack, Teams, Telegram, Gotify, ntfy, and generic webhooks.
+Pulse includes built-in templates for popular services and a generic JSON template for custom endpoints.
 
 ## 🚀 Quick Setup
 
-1. Go to **Alerts → Notifications**.
+1. Go to **Alerts → Notification Destinations**.
 2. Click **Add Webhook**.
 3. Select service type and paste the URL.
 
@@ -14,20 +14,37 @@ Pulse supports Discord, Slack, Teams, Telegram, Gotify, ntfy, and generic webhoo
 |---------|------------|
 | **Discord** | `https://discord.com/api/webhooks/{id}/{token}` |
 | **Slack** | `https://hooks.slack.com/services/...` |
-| **Teams** | `https://{tenant}.webhook.office.com/...` |
-| **Telegram** | `https://api.telegram.org/bot{token}/sendMessage?chat_id={id}` |
+| **Teams** | `https://{tenant}.webhook.office.com/webhookb2/{webhook_path}` |
+| **Teams (Adaptive Card)** | `https://{tenant}.webhook.office.com/webhookb2/{webhook_path}` |
+| **Telegram** | `https://api.telegram.org/bot{bot_token}/sendMessage?chat_id={chat_id}` |
+| **PagerDuty** | `https://events.pagerduty.com/v2/enqueue` |
+| **Pushover** | `https://api.pushover.net/1/messages.json` |
 | **Gotify** | `https://gotify.example.com/message?token={token}` |
 | **ntfy** | `https://ntfy.sh/{topic}` |
+| **Generic** | `https://example.com/webhook` |
 
 ## 🎨 Custom Templates
 
 For generic webhooks, use Go templates to format the JSON payload.
 
-**Variables:**
-- `{{.Message}}`: Alert text
-- `{{.Level}}`: warning/critical
-- `{{.Node}}`: Node name
-- `{{.Value}}`: Metric value (e.g. 95.5)
+**Variables (common):**
+- `{{.ID}}`, `{{.Level}}`, `{{.Type}}`
+- `{{.ResourceName}}`, `{{.ResourceID}}`, `{{.ResourceType}}`, `{{.Node}}`
+- `{{.Message}}`, `{{.Value}}`, `{{.Threshold}}`, `{{.Duration}}`, `{{.Timestamp}}`
+- `{{.Instance}}` (Pulse public URL if configured)
+- `{{.CustomFields.<name>}}` (user-defined fields in the UI)
+
+**Convenience fields:**
+- `{{.ValueFormatted}}`, `{{.ThresholdFormatted}}`
+- `{{.StartTime}}`, `{{.Acknowledged}}`, `{{.AckTime}}`, `{{.AckUser}}`
+
+**Template helpers:** `title`, `upper`, `lower`, `printf`, `urlquery`/`urlencode`, `urlpath`
+
+**Service-specific notes:**
+- **Telegram**: include `chat_id` in the URL query string.
+- **Telegram templates**: `{{.ChatID}}` is populated from the URL query string.
+- **PagerDuty**: set `routing_key` as a custom field (or header) in the webhook config.
+- **Pushover**: add `app_token` and `user_token` custom fields (required).
 
 **Example Payload:**
 ```json

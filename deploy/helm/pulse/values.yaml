@@ -157,6 +157,8 @@ agent:
     failureThreshold: 3
 
 # Monitoring configuration
+# Note: The ServiceMonitor targets the main HTTP service (7655). Prometheus metrics are
+# served on 9091 by the Pulse server, so scraping requires an additional Service.
 monitoring:
   serviceMonitor:
     enabled: false

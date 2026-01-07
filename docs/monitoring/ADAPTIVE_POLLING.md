@@ -7,25 +7,34 @@ Pulse uses an adaptive scheduler to optimize polling based on instance health an
 *   **Priority Queue**: Min-heap keyed by `NextRun`.
 *   **Circuit Breaker**: Prevents hot loops on failing instances using success/failure counters.
 *   **Backoff**: Exponential retry delays (5s min to 5m max).
-*   **Worker Pool**: Controlled concurrency (default 10) to limit host resource usage.
+*   **Worker Pool**: One worker per configured instance (PVE/PBS/PMG), capped at 10.
+*   **Global Concurrency Cap**: At most 2 polling cycles run at once to avoid resource spikes.
 
 ## 🔬 Implementation Details (Developer Info)
 
-### Staleness Weighting
-The `AdaptiveScheduler` (`internal/monitoring/scheduler.go`) calculates a `StalenessScore` (0.0 to 1.0) for every instance type. This score is weighted to prioritize active resources:
-- **PVE (Proxmox nodes)**: High weight (1.0). Missing node data is critical.
-- **VMs/Containers**: Medium weight (0.7).
-- **Storage/Backups**: Lower weight (0.4). They change less frequently.
+### Staleness Scoring
+The `AdaptiveScheduler` (`internal/monitoring/scheduler.go`) relies on the `StalenessTracker` to compute a `StalenessScore` (0.0 to 1.0) based on **how long it has been since the last successful poll**.
 
-The scheduler uses **Exponential Smoothing** on the intervals to prevent rapid "bobbing" between `MinInterval` and `MaxInterval` when sensors fluctuate.
+- `0.0` = fresh (recent success)
+- `1.0` = very stale or never succeeded
+
+The staleness score is normalized against `AdaptivePollingMaxInterval` (default 5 minutes).
+
+The scheduler applies **Exponential Smoothing** (alpha 0.6) and a small jitter (5%) to avoid oscillation.
+
+Additional influences:
+- **Error penalty**: retries tighten the interval based on the error count.
+- **Queue stretch**: large queues gently stretch intervals to avoid overload.
 
 ### Circuit Breaker Recovery
-The `circuitBreaker` (`internal/monitoring/circuit_breaker.go`) follows the standard state machine but with Pulse-specific thresholds:
-1. **Closing the Circuit**: It requires **one single successful poll** to transition from *Half-Open* back to *Closed*.
-2. **Backoff Calculation**: Retries use `2^failures * 5s` up to the configured `MaxInterval`.
+The `circuitBreaker` (`internal/monitoring/circuit_breaker.go`) follows a standard state machine:
+1. **Closing the Circuit**: One successful poll moves *Half-Open* → *Closed* and resets failure count.
+2. **Backoff Calculation**: Retries use exponential backoff starting at 5s (multiplier 2, jitter 0.2) capped at 5m.
 3. **Transient vs. Permanent**:
-   - **Transient (Network, Timeout)**: Retried 5 times before moving to DLQ.
-   - **Permanent (Auth 401, Forbidden 403)**: Bypasses immediate retries and moves straight to the Dead Letter Queue to avoid triggering IP lockouts on the target host.
+   - **Transient** errors (retryable) are retried up to 5 times before moving to the Dead Letter Queue.
+   - **Permanent** errors move directly to the Dead Letter Queue.
+
+**Note:** When `AdaptivePollingMaxInterval` is set to 15 seconds or less, the retry backoff is shortened (750ms initial, 6s max) to keep fast feedback loops during tight polling windows.
 
 ## ⚙️ Configuration
 Adaptive polling is **disabled by default**.

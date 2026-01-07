@@ -7,7 +7,7 @@ The unified agent (`pulse-agent`) combines host, Docker, and Kubernetes monitori
 ## Quick Start
 
 Generate an installation command in the UI:
-**Settings > Agents > "Install New Agent"**
+**Settings → Agents → Installation commands**
 
 ### Linux (systemd)
 ```bash
@@ -19,6 +19,18 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
   bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
+```
+
+### Windows (PowerShell, run as Administrator)
+```powershell
+irm http://<pulse-ip>:7655/install.ps1 | iex
+```
+
+With environment variables:
+```powershell
+$env:PULSE_URL="http://<pulse-ip>:7655"
+$env:PULSE_TOKEN="<api-token>"
+irm http://<pulse-ip>:7655/install.ps1 | iex
 ```
 
 ### Synology NAS
@@ -46,7 +58,7 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 | `--enable-host` | `PULSE_ENABLE_HOST` | Enable host metrics | `true` |
 | `--enable-docker` | `PULSE_ENABLE_DOCKER` | Enable Docker metrics | `false` (auto-detect if not configured) |
 | `--docker-runtime` | `PULSE_DOCKER_RUNTIME` | Force container runtime: `auto`, `docker`, or `podman` | `auto` |
-| `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Enable Kubernetes metrics | `false` |
+| `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Enable Kubernetes metrics | `false` (installer auto-detect if not configured) |
 | `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Enable Proxmox integration | `false` |
 | `--proxmox-type` | `PULSE_PROXMOX_TYPE` | Proxmox type: `pve` or `pbs` | *(auto-detect)* |
 | `--enable-commands` | `PULSE_ENABLE_COMMANDS` | Enable AI command execution (disabled by default) | `false` |
@@ -79,11 +91,11 @@ Legacy env var: `PULSE_KUBE_INCLUDE_ALL_POD_FILES` is still accepted for backwar
 Auto-detection behavior:
 
 - **Host metrics**: Enabled by default.
-- **Docker/Podman**: Enabled automatically if Docker/Podman is detected and `PULSE_ENABLE_DOCKER` was not explicitly set.
-- **Kubernetes**: Only enabled when `--enable-kubernetes`/`PULSE_ENABLE_KUBERNETES=true` is set.
-- **Proxmox**: Only enabled when `--enable-proxmox`/`PULSE_ENABLE_PROXMOX=true` is set. Type auto-detects `pve` vs `pbs` if not specified.
+- **Docker/Podman**: Enabled automatically by the agent if Docker/Podman is detected and `PULSE_ENABLE_DOCKER` was not explicitly set.
+- **Kubernetes**: Enabled automatically by the installer when a kubeconfig is detected and `PULSE_ENABLE_KUBERNETES` was not explicitly set.
+- **Proxmox**: Enabled automatically by the installer when Proxmox is detected. Type auto-detects `pve` vs `pbs` if not specified.
 
-To disable Docker auto-detection, set `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false`.
+To disable auto-detection, set the relevant flag or env var (`--disable-docker`, `--disable-kubernetes`, `--disable-proxmox`).
 
 ## Installation Options
 
@@ -102,7 +114,7 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 ### Disable Docker (even if detected)
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-docker=false
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-docker
 ```
 
 ### Host + Kubernetes Monitoring

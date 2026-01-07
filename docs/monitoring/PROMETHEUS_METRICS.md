@@ -8,6 +8,8 @@ Example scrape target:
 
 This listener is separate from the main UI/API port (`7655`). In Docker and Kubernetes you must expose `9091` explicitly if you want to scrape it from outside the container/pod.
 
+**Helm note:** the current chart exposes only port `7655`, so Prometheus scraping requires an additional Service that targets `9091` (and a matching ServiceMonitor).
+
 ## 🌐 HTTP Ingress
 | Metric | Type | Description |
 | :--- | :--- | :--- |
@@ -48,6 +50,17 @@ This listener is separate from the main UI/API port (`7655`). In Docker and Kube
 | `pulse_diagnostics_cache_hits_total` | Counter | Cache hits. |
 | `pulse_diagnostics_cache_misses_total` | Counter | Cache misses. |
 | `pulse_diagnostics_refresh_duration_seconds` | Histogram | Refresh latency. |
+
+## 🚨 Alert Lifecycle
+| Metric | Type | Description |
+| :--- | :--- | :--- |
+| `pulse_alerts_active` | Gauge | Active alerts by `level` and `type`. |
+| `pulse_alerts_fired_total` | Counter | Total alerts fired by `level` and `type`. |
+| `pulse_alerts_resolved_total` | Counter | Total alerts resolved by `type`. |
+| `pulse_alerts_acknowledged_total` | Counter | Total alerts acknowledged. |
+| `pulse_alerts_suppressed_total` | Counter | Alerts suppressed by `reason` (quiet_hours, rate_limit, duplicate, etc.). |
+| `pulse_alerts_rate_limited_total` | Counter | Alerts suppressed due to rate limiting. |
+| `pulse_alert_duration_seconds` | Histogram | Time from alert fire to resolve (by `type`). |
 
 ## 🚨 Alerting Examples
 *   **High Error Rate**: `rate(pulse_http_request_errors_total[5m]) > 0.05`

@@ -1,7 +1,7 @@
 # Pulse Screenshots
 
 ## Dashboard Overview (Dark Mode)
-![Dashboard Overview](images/01-dashboard.png)
+![Dashboard Overview](images/01-dashboard.jpg)
 *Real-time monitoring dashboard showing 7 Proxmox nodes with 35 VMs and 56 containers. Color-coded resource usage (CPU, RAM, storage) with quick status indicators for running/stopped guests. Automatic layout adapts to cluster size - compact cards for 5-9 nodes. Professional dark theme optimized for 24/7 monitoring setups.*
 
 ## Storage Management

@@ -51,29 +51,13 @@ The agent will:
 3. Generate an API token
 4. Register the PBS node with Pulse automatically
 
-### Method 2: Password Setup (Best for Docker PBS) ⭐
+### Method 2: API-Only Setup Script (Best for PBS in Containers) ⭐
 
-**Perfect for PBS running in Docker containers** where you can't run the agent.
-
-1. Go to **Settings → Nodes → Add PBS Node**
-2. Enter your PBS server's URL (e.g., `https://192.168.1.50:8007`)
-3. Select **Username & Password** authentication
-4. Enter admin credentials (e.g., `root@pam` with password)
-5. Click **Save**
-
-Pulse will automatically:
-- Connect to your PBS server
-- Create a `pulse-monitor@pbs` monitoring user
-- Generate an API token with Audit permissions
-- Store the token (not your password) for ongoing monitoring
-
-> **Note:** This requires admin credentials initially, but Pulse converts them to a limited-permission token immediately.
-
-### Method 3: One-Click Setup Script
+Use this when you can run a command on the PBS host but do not want to install the agent.
 
 From Pulse's Settings page:
-1. Go to **Settings → Nodes**
-2. Click **Add PBS Node**
+1. Go to **Settings → Proxmox**
+2. Click **Add Node**
 3. Select **API Only** tab
 4. Enter your PBS server's URL
 5. Click copy to get the setup command
@@ -84,7 +68,11 @@ Example (what the UI generates):
 curl -sSL "http://<pulse-ip>:7655/api/setup-script?type=pbs&host=https://<pbs-ip>:8007&pulse_url=http://<pulse-ip>:7655" | bash
 ```
 
-### Method 4: Manual Token Creation
+The script creates a `pulse-monitor@pbs` user, generates a scoped API token, and registers the server with Pulse.
+
+> **Note**: API-only mode does not include temperature monitoring or AI command execution. Use **Agent Install** for full functionality.
+
+### Method 3: Manual Token Creation
 
 If you prefer manual setup:
 

@@ -13,6 +13,8 @@ Run this on your Proxmox host:
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
+> **Note**: The GitHub `install.sh` is the **server** installer. The agent installer is served from your Pulse server at `/install.sh` (see **Settings → Agents → Installation commands**).
+
 ### Docker
 Ideal for containerized environments or testing.
 
@@ -38,7 +40,6 @@ services:
       - "7655:7655"
     volumes:
       - pulse_data:/data
-      - /var/run/docker.sock:/var/run/docker.sock # Optional: Monitor local Docker
     environment:
       - PULSE_AUTH_USER=admin
       - PULSE_AUTH_PASS=secret123
@@ -48,6 +49,7 @@ volumes:
 ```
 
 > **Note**: Plain text passwords set via `PULSE_AUTH_PASS` are auto-hashed on startup. For production, prefer Quick Security Setup or a pre-hashed bcrypt value.
+> **Note**: Docker monitoring requires the unified agent on the Docker host with socket access; the Pulse server container does not need `/var/run/docker.sock`. See [UNIFIED_AGENT.md](UNIFIED_AGENT.md).
 
 ---
 
@@ -69,6 +71,8 @@ For Linux servers (VM or bare metal), use the official installer:
 ```bash
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | sudo bash
 ```
+
+> **Note**: This installs the Pulse server. Use the `/install.sh` endpoint from your Pulse UI for installing `pulse-agent` on monitored hosts.
 
 <details>
 <summary><strong>Manual systemd install (advanced)</strong></summary>
@@ -120,7 +124,10 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
 ### Step 2: Create Admin Account
 1. Open `http://<your-ip>:7655`
 2. Paste the **Bootstrap Token**.
-3. Create your **Admin Username** and **Password**.
+3. Complete the **Quick Security Setup** wizard.
+   - Set your **Admin Username** and **Password** (or let Pulse generate one).
+   - Pulse generates an **API token** for agents and automations.
+   - Copy the credentials before leaving the page.
 
 > **Note**: If you configure authentication via environment variables (`PULSE_AUTH_USER`/`PULSE_AUTH_PASS` and/or legacy `API_TOKENS`), the bootstrap token is automatically removed and this step is skipped.
 
@@ -128,7 +135,7 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
 
 ## 🔄 Updates
 
-### Automatic Updates (Systemd only)
+### Automatic Updates (Systemd/LXC only)
 Pulse can self-update to the latest stable version.
 
 **Enable via UI**: Settings → System → Updates
@@ -143,7 +150,7 @@ Pulse can self-update to the latest stable version.
 ### Rollback
 If an update causes issues on systemd installations, backups are created automatically during the update process.
 
-**Manual rollback**: Check for backup directories at `/etc/pulse/backup-<timestamp>/` created during updates. Restore the previous binary manually if needed.
+**Manual rollback**: In-app updates store backups under `/etc/pulse/backup-<timestamp>/`. The systemd auto-update timer uses a temporary `/tmp/pulse-backup-<timestamp>` during the update and auto-restores on failure.
 
 ---
 

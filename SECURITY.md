@@ -44,7 +44,7 @@ environment where `PULSE_DOCKER=true`/`/.dockerenv` is detected.
 Preferred option (no SSH keys, no proxy wiring):
 
 1. Install the unified agent (`pulse-agent`) on each Proxmox host with Proxmox integration enabled.
-   - Use the UI to generate an install command in **Settings → Agents**, or run:
+   - Use the UI to generate an install command in **Settings → Agents → Installation commands**, or run:
      ```bash
      curl -fsSL http://pulse.example.com:7655/install.sh | \
        sudo bash -s -- --url http://pulse.example.com:7655 --token <api-token> --enable-proxmox
@@ -159,9 +159,8 @@ Environment="PULSE_TRUSTED_NETWORKS=192.168.1.0/24,10.0.0.0/24"
 ```
 
 When configured:
-- Access from trusted networks: no auth required
-- Access from outside: authentication enforced
-- Useful for: mixed home/remote access scenarios
+- Access still requires authentication (no bypass).
+- The trusted list only influences security posture warnings and diagnostics.
 
 ## Security Warning System
 
@@ -193,8 +192,8 @@ If you're comfortable with your security setup, you can dismiss warnings:
 ### Security Features
 - **Logs**: token values masked with `***` in all outputs
 - **API**: frontend receives only `hasToken: true`, never actual values
-- **Export**: requires a valid API token (`X-API-Token` header or `token`
-  parameter) to extract credentials
+- **Export**: requires authentication (session, proxy auth, or `X-API-Token`
+  header) to extract credentials
 - **Migration**: use passphrase-protected export/import (see
   [Migration Guide](docs/MIGRATION.md))
 - **Auto-migration**: unencrypted configs automatically migrate to encrypted
@@ -205,7 +204,7 @@ If you're comfortable with your security setup, you can dismiss warnings:
 By default, configuration export/import is blocked. You have two options:
 
 ### Option 1: Create an API Token (Recommended)
-Create a token in **Settings → Security → API Tokens**, then use it for exports.
+Create a token in **Settings → API Tokens**, then use it for exports.
 For automation-only environments, you can seed tokens via environment variables (legacy) and
 they will be persisted to `api_tokens.json` on startup.
 
@@ -246,7 +245,7 @@ for sensitive data.
 - **Encryption**: credentials encrypted at rest (AES-256-GCM)
 - **Export protection**: exports always encrypted with a passphrase
 - **Minimum passphrase**: 12 characters required for exports
-- **Security tab**: check status in *Settings → Security*
+- **Security tab**: check status in *Settings → Security → Overview*
 
 ### Enterprise Security (When Authentication Enabled)
 - **Password security**
@@ -263,12 +262,18 @@ for sensitive data.
   - API-only mode supported (no password auth required)
 - **CSRF protection**: all state-changing operations require CSRF tokens
 - **Rate limiting**
-  - Auth endpoints: 10 attempts/minute per IP (returns `Retry-After` header)
+  - Auth endpoints: 10 attempts/minute per IP
+  - Config changes: 30 requests/minute per IP
+  - Exports: 5 requests per 5 minutes per IP
+  - Recovery operations: 3 requests per 10 minutes per IP
+  - Update checks/actions: 60 requests/minute per IP
+  - WebSocket connects: 30 requests/minute per IP
   - General API: 500 requests/minute per IP
-  - Real-time endpoints exempt for functionality
-  - All responses include rate limit headers:
+  - Public endpoints: 1000 requests/minute per IP
+  - 429 responses include rate limit headers:
     - `X-RateLimit-Limit`: Maximum requests per window
     - `X-RateLimit-Remaining`: Requests remaining in current window
+    - `X-RateLimit-Reset`: Window reset timestamp
     - `Retry-After`: Seconds to wait before retrying (on 429 responses)
 - **Account lockout**
   - Locks after 5 failed login attempts
@@ -278,11 +283,11 @@ for sensitive data.
   - Manual reset available via API for admins
 - **Session management**
   - Secure HttpOnly cookies
-  - 24-hour session expiry
+  - 24-hour session expiry (30 days when "Remember me" is enabled)
   - Session invalidation on password change
 - **Security headers**
   - Content-Security-Policy
-  - X-Frame-Options: DENY
+  - X-Frame-Options: `DENY` by default (adjusted when `allowEmbedding` is enabled in system settings)
   - X-Content-Type-Options: nosniff
   - X-XSS-Protection: 1; mode=block
   - Referrer-Policy: strict-origin-when-cross-origin
@@ -292,6 +297,7 @@ for sensitive data.
   - Rollback actions are logged with timestamps and metadata
   - Scheduler health escalations recorded in audit trail
   - Runtime logging configuration changes tracked
+  - Security status uses `PULSE_AUDIT_LOG=true` (or legacy `AUDIT_LOG_ENABLED=true`) to mark audit logging as active in the UI
 
 ### What's Encrypted in Exports
 - Node credentials (passwords, API tokens)
@@ -315,8 +321,8 @@ together.
 ### Password Authentication
 
 #### Quick Security Setup (Recommended)
-1. Navigate to *Settings → Security*.
-2. Click **Enable Security Now**.
+1. Navigate to *Settings → Security → Authentication*.
+2. Click **Setup**.
 3. Enter username and password.
 4. Save the generated API token (shown only once!).
 5. Security is enabled immediately (no restart needed).
@@ -331,12 +337,12 @@ This automatically:
 
 #### Manual Setup (Advanced)
 ```bash
-# Using systemd (password will be hashed automatically)
+# Using systemd (plain text will be auto-hashed)
 sudo systemctl edit pulse
 # Add:
 [Service]
 Environment="PULSE_AUTH_USER=admin"
-Environment="PULSE_AUTH_PASS=$2a$12$..."  # Use bcrypt hash, not plain text!
+Environment="PULSE_AUTH_PASS=$2a$12$..."  # Prefer bcrypt hash for production; plain text is auto-hashed.
 
 # Docker (credentials persist in volume via .env file)
 # IMPORTANT: Always quote bcrypt hashes to prevent shell expansion!
@@ -348,7 +354,7 @@ docker run -e PULSE_AUTH_USER=admin -e PULSE_AUTH_PASS='$2a$12$...' rcourtman/pu
 
 #### Features
 - Web UI login required when authentication enabled
-- Change/remove password from Settings → Security  
+- Change/remove password from Settings → Security → Authentication  
 - Passwords ALWAYS hashed with bcrypt (cost 12)
 - Session-based authentication with secure HttpOnly cookies
 - 24-hour session expiry
@@ -394,9 +400,15 @@ docker run -e API_TOKENS=ansible-token,docker-agent-token rcourtman/pulse:latest
 # Include the ORIGINAL token (not hash) in X-API-Token header
 curl -H "X-API-Token: your-original-token" http://localhost:7655/api/health
 
-# or in Authorization header (preferred for shared tooling)
-curl -H "Authorization: Bearer your-original-token" http://localhost:7655/api/export
+# Export config requires auth + passphrase (min 12 chars)
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "X-API-Token: your-original-token" \
+  -d '{"passphrase":"use-a-strong-passphrase"}' \
+  http://localhost:7655/api/config/export
 ```
+
+Most API endpoints also accept `Authorization: Bearer <token>`, but export/import uses the `X-API-Token` header.
 
 ### Auto-Registration Security
 
@@ -451,12 +463,13 @@ docker run \
 
 ## CORS (Cross-Origin Resource Sharing)
 
-By default, Pulse allows all origins (`ALLOWED_ORIGINS=*`). This is convenient for local setups,
-but should be restricted in production.
+By default, Pulse does **not** enable CORS (same-origin only). Configure allowed origins only when
+you need cross-origin access (for example, a separate UI domain or external tooling).
 
 ### Configuring CORS for External Access
 
-If you need to access Pulse API from a different domain:
+If you need to access the Pulse API from a different domain, configure **Settings → System → Network**
+or use environment overrides:
 
 ```bash
 # Docker
@@ -475,6 +488,7 @@ Notes:
 
 - `ALLOWED_ORIGINS` supports a single origin or `*` (it is written directly to `Access-Control-Allow-Origin`).
 - In production, set a specific origin to avoid exposing the API to arbitrary sites.
+- For local dev, Pulse auto-allows `http://localhost:5173` and `http://localhost:7655` when `NODE_ENV=development` or `PULSE_DEV=true`.
 
 ## Monitoring and Observability
 
@@ -572,7 +586,7 @@ curl -X POST http://localhost:7655/api/security/reset-lockout \
 **Rate limited?** Wait 1 minute and try again  
 **Can't login?** Check `PULSE_AUTH_USER` and `PULSE_AUTH_PASS` environment variables  
 **API access denied?** Verify the token you supplied matches one of the values created in *Settings → API Tokens* (use the original token, not the hash)  
-**CORS errors?** Configure `ALLOWED_ORIGINS` for your domain  
-**Forgot password?** Start fresh – delete your Pulse data and restart
+**CORS errors?** Configure Allowed Origins in the UI or set `ALLOWED_ORIGINS` for your domain  
+**Forgot password?** Remove `.env` and restart Pulse, then use the bootstrap token to set new credentials
 
 ---

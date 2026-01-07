@@ -5,6 +5,7 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | File | Purpose | Security Level |
 |------|---------|----------------|
 | `.env` | Authentication & Secrets | 🔒 **Critical** (Read-only by owner) |
+| `.encryption.key` | Encryption key for `.enc` files | 🔒 **Critical** |
 | `system.json` | General Settings | 📝 Standard |
 | `nodes.enc` | Node Credentials | 🔒 **Encrypted** (AES-256-GCM) |
 | `alerts.json` | Alert Rules | 📝 Standard |
@@ -13,7 +14,18 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `apprise.enc` | Apprise notification config | 🔒 **Encrypted** |
 | `oidc.enc` | OIDC provider config | 🔒 **Encrypted** |
 | `api_tokens.json` | API token records (hashed) | 🔒 **Sensitive** |
+| `env_token_suppressions.json` | Suppressed legacy env tokens (migration aid) | 📝 Standard |
 | `ai.enc` | AI settings and credentials | 🔒 **Encrypted** |
+| `ai_findings.json` | AI Patrol findings | 📝 Standard |
+| `ai_patrol_runs.json` | AI Patrol run history | 📝 Standard |
+| `ai_usage_history.json` | AI usage history | 📝 Standard |
+| `license.enc` | Pulse Pro license key | 🔒 **Encrypted** |
+| `host_metadata.json` | Host notes, tags, and AI command overrides | 📝 Standard |
+| `docker_metadata.json` | Docker metadata cache | 📝 Standard |
+| `guest_metadata.json` | Guest notes and metadata | 📝 Standard |
+| `recovery_tokens.json` | Recovery tokens (short-lived) | 🔒 **Sensitive** |
+| `sessions.json` | Persistent sessions (includes OIDC refresh tokens) | 🔒 **Sensitive** |
+| `update-history.jsonl` | Update history log (in-app updates) | 📝 Standard |
 | `metrics.db` | Persistent metrics history (SQLite) | 📝 Standard |
 
 All files are located in `/etc/pulse/` (Systemd) or `/data/` (Docker/Kubernetes) by default.
@@ -31,7 +43,7 @@ This file controls access to Pulse. It is **never** exposed to the UI.
 ```bash
 # /etc/pulse/.env
 
-# Admin Credentials (bcrypt hashed)
+# Admin Credentials (bcrypt hashed; plain text auto-hashes on startup)
 PULSE_AUTH_USER='admin'
 PULSE_AUTH_PASS='$2a$12$...' 
 
@@ -92,20 +104,25 @@ Environment overrides (lock the corresponding UI fields):
 Controls runtime behavior like ports, logging, and polling intervals. Most of these can be changed in **Settings → System**.
 
 <details>
-<summary><strong>Full Configuration Reference</strong></summary>
+<summary><strong>Example system.json</strong></summary>
 
 ```json
 {
   "pvePollingInterval": 10,       // Seconds
-  "backendPort": 3000,            // Internal port (default: 3000)
+  "backendPort": 3000,            // Legacy (unused)
   "frontendPort": 7655,           // Public port
   "logLevel": "info",             // debug, info, warn, error
   "autoUpdateEnabled": false,     // Enable auto-update checks
-  "adaptivePollingEnabled": false // Smart polling for large clusters
+  "adaptivePollingEnabled": false, // Smart polling for large clusters
+  "allowedOrigins": "",           // CORS allowlist (single origin or "*")
+  "allowEmbedding": false,        // Allow iframe embedding
+  "allowedEmbedOrigins": "",      // Comma-separated origins for iframe embedding
+  "webhookAllowedPrivateCIDRs": "" // Allowlist for private webhook targets
 }
 ```
 
 > **Note**: `logFormat` is only configurable via the `LOG_FORMAT` environment variable, not in `system.json`.
+> **Note**: `autoUpdateTime` is stored by the UI, but the systemd timer uses its own schedule.
 </details>
 
 ### Common Overrides (Environment Variables)
@@ -114,6 +131,9 @@ Environment variables take precedence over `system.json`.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `FRONTEND_PORT` | Public listening port | `7655` |
+| `PORT` | Legacy alias for `FRONTEND_PORT` | *(unset)* |
+| `BACKEND_HOST` | Bind host for the HTTP server and metrics listener (advanced) | *(unset)* |
+| `BACKEND_PORT` | Legacy internal API port (unused) | `3000` |
 | `LOG_LEVEL` | Log verbosity (see below) | `info` |
 | `LOG_FORMAT` | Log output format (`auto`, `json`, `console`) | `auto` |
 
@@ -130,17 +150,35 @@ Environment variables take precedence over `system.json`.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `PULSE_PUBLIC_URL` | URL for UI links, notifications, and OIDC. **Reverse proxy setups**: set this to the direct/internal Pulse URL (e.g., `http://192.168.1.10:7655`) so agents connect directly instead of via the proxy. | Auto-detected |
+| `PULSE_PUBLIC_URL` | URL for UI links, notifications, and OIDC. For reverse proxies, keep this as the public URL and use `PULSE_AGENT_CONNECT_URL` for agent installs if you need a direct/internal address. | Auto-detected |
 | `PULSE_AGENT_CONNECT_URL` | Dedicated direct URL for agents (overrides `PULSE_PUBLIC_URL` for agent install commands). Alias: `PULSE_AGENT_URL`. | *(unset)* |
-| `ALLOWED_ORIGINS` | CORS allowed domains | `*` |
-| `IFRAME_EMBEDDING_ALLOW` | Iframe embedding policy (`SAMEORIGIN`, `ALLOWALL`, etc.) | `SAMEORIGIN` |
+| `ALLOWED_ORIGINS` | CORS allowed origin (`*` or a single origin). Empty = same-origin only. | *(unset)* |
 | `DISCOVERY_ENABLED` | Auto-discover nodes | `false` |
 | `DISCOVERY_SUBNET` | CIDR or `auto` | `auto` |
+| `DISCOVERY_ENVIRONMENT_OVERRIDE` | Force discovery environment (`auto`, `native`, `docker_host`, `docker_bridge`, `lxc_privileged`, `lxc_unprivileged`) | `auto` |
+| `DISCOVERY_SUBNET_ALLOWLIST` | Comma-separated CIDRs allowed for discovery | *(empty)* |
+| `DISCOVERY_SUBNET_BLOCKLIST` | Comma-separated CIDRs excluded from discovery | `169.254.0.0/16` |
+| `DISCOVERY_MAX_HOSTS_PER_SCAN` | Max hosts to scan per run | `1024` |
+| `DISCOVERY_MAX_CONCURRENT` | Max concurrent discovery probes | `50` |
+| `DISCOVERY_ENABLE_REVERSE_DNS` | Enable reverse DNS lookup (`true`/`false`) | `true` |
+| `DISCOVERY_SCAN_GATEWAYS` | Include gateway IPs in discovery (`true`/`false`) | `true` |
+| `DISCOVERY_DIAL_TIMEOUT_MS` | TCP dial timeout (ms) | `1000` |
+| `DISCOVERY_HTTP_TIMEOUT_MS` | HTTP probe timeout (ms) | `2000` |
 | `PULSE_ENABLE_SENSOR_PROXY` | Enable legacy `pulse-sensor-proxy` endpoints (deprecated, unsupported) | `false` |
 | `PULSE_AUTH_HIDE_LOCAL_LOGIN` | Hide username/password form | `false` |
 | `DEMO_MODE` | Enable read-only demo mode | `false` |
 | `PULSE_TRUSTED_PROXY_CIDRS` | Comma-separated IPs/CIDRs trusted to supply `X-Forwarded-For`/`X-Real-IP` | *(unset)* |
-| `PULSE_TRUSTED_NETWORKS` | Comma-separated CIDRs treated as trusted local networks | *(unset)* |
+| `PULSE_TRUSTED_NETWORKS` | Comma-separated CIDRs treated as trusted local networks (does not bypass auth) | *(unset)* |
+| `PULSE_SENSOR_PROXY_SOCKET` | Legacy sensor-proxy socket override (deprecated) | *(unset)* |
+
+### Iframe Embedding (system.json)
+
+Embedding is controlled by `system.json` and the UI (**Settings → System → Network**):
+
+- `allowEmbedding` (boolean): enables iframe embedding
+- `allowedEmbedOrigins` (comma-separated): restricts `frame-ancestors` when embedding is enabled
+
+When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame-ancestors 'none'`.
 
 ### Monitoring Overrides
 
@@ -150,7 +188,7 @@ Environment variables take precedence over `system.json`.
 | `PBS_POLLING_INTERVAL` | PBS metrics polling frequency | `60s` |
 | `PMG_POLLING_INTERVAL` | PMG metrics polling frequency | `60s` |
 | `CONCURRENT_POLLING` | Enable concurrent polling for multi-node clusters | `true` |
-| `CONNECTION_TIMEOUT` | API connection timeout | `45s` |
+| `CONNECTION_TIMEOUT` | API connection timeout | `60s` |
 | `BACKUP_POLLING_CYCLES` | Poll cycles between backup checks | `10` |
 | `ENABLE_BACKUP_POLLING` | Enable backup job monitoring | `true` |
 | `BACKUP_POLLING_INTERVAL` | Backup polling frequency | `0` (Auto) |
@@ -178,14 +216,41 @@ Environment variables take precedence over `system.json`.
 | `LOG_MAX_AGE` | Log file retention (days) | `30` |
 | `LOG_COMPRESS` | Compress rotated logs | `true` |
 
-### Update Settings
+### Update Settings (system.json)
+
+These are stored in `system.json` and managed via the UI.
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `updateChannel` | Update channel (`stable` or `rc`) | `stable` |
+| `autoUpdateEnabled` | Allow one-click updates | `false` |
+| `autoUpdateCheckInterval` | Stored UI preference (server currently checks hourly) | `24` |
+| `autoUpdateTime` | Stored UI preference (systemd timer has its own schedule) | `03:00` |
+
+### Auto-Import (Bootstrap)
+
+You can auto-import an encrypted backup on first startup. This is useful for automated provisioning and test environments.
+
+| Variable | Description |
+|----------|-------------|
+| `PULSE_INIT_CONFIG_DATA` | Base64 or raw contents of an export bundle (auto-imports on first start) |
+| `PULSE_INIT_CONFIG_FILE` | Path to an export bundle on disk (auto-imports on first start) |
+| `PULSE_INIT_CONFIG_PASSPHRASE` | Passphrase for the export bundle (required) |
+
+> **Note**: `PULSE_INIT_CONFIG_URL` is only supported by the hidden `pulse config auto-import` command, not by the server startup auto-import.
+
+### Developer/Test Overrides (Environment Variables)
+
+These are primarily for development or test harnesses and should not be used in production.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `UPDATE_CHANNEL` | Update channel (`stable` or `rc`) | `stable` |
-| `AUTO_UPDATE_ENABLED` | Allow one-click updates | `false` |
-| `AUTO_UPDATE_CHECK_INTERVAL` | Auto-check interval | `24h` |
-| `AUTO_UPDATE_TIME` | Scheduled check time (HH:MM) | `03:00` |
+| `PULSE_UPDATE_SERVER` | Override update server base URL (testing only) | *(unset)* |
+| `PULSE_UPDATE_STAGE_DELAY_MS` | Adds artificial delays between update stages (testing only) | *(unset)* |
+| `PULSE_ALLOW_DOCKER_UPDATES` | Expose update UI/actions in Docker (debug only) | `false` |
+| `PULSE_AI_ALLOW_LOOPBACK` | Allow AI tool HTTP fetches to loopback addresses | `false` |
+| `PULSE_LICENSE_PUBLIC_KEY` | Override embedded license public key (base64, dev only) | *(unset)* |
+| `PULSE_LICENSE_DEV_MODE` | Skip license verification (development only) | `false` |
 
 ### Metrics Retention (Tiered)
 
@@ -204,7 +269,7 @@ See [METRICS_HISTORY.md](METRICS_HISTORY.md) for details.
 
 Pulse uses a powerful alerting engine with hysteresis (separate trigger/clear thresholds) to prevent flapping.
 
-**Managed via UI**: Settings → Alerts → Thresholds
+**Managed via UI**: Alerts → Thresholds
 
 <details>
 <summary><strong>Manual Configuration (JSON)</strong></summary>

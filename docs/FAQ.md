@@ -9,6 +9,8 @@ If you run Proxmox VE, use the official LXC installer (recommended):
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
+Note: this installs the Pulse **server**. Agent installs use the command from **Settings → Agents → Installation commands** (served from `/install.sh` on your Pulse server).
+
 If you prefer Docker:
 
 ```bash
@@ -20,8 +22,8 @@ See [INSTALL.md](INSTALL.md) for all options (Docker Compose, Kubernetes, system
 ### How do I add a node?
 Go to **Settings → Proxmox**.
 
-- **Recommended (Agent setup)**: choose **Setup mode: Agent** and run the generated install command on the Proxmox host.
-- **Manual**: choose **Setup mode: Manual** and enter the credentials (password or API token) for the Proxmox API.
+- **Recommended (Agent setup)**: select **Agent Install** and run the generated install command on the Proxmox host.
+- **Manual**: use **Username & Password**, or select the **Manual** tab and enter API token credentials.
 
 If you want Pulse to find servers automatically, enable discovery in **Settings → System → Network** and then return to **Settings → Proxmox** to review discovered servers.
 
@@ -39,8 +41,8 @@ If a setting is disabled with an amber warning, it's being overridden by an envi
 ### What is Pulse Pro, and what does it actually do?
 Pulse Pro unlocks **AI Patrol** — scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
 
-Example output includes trend-based capacity warnings, backup regressions, and correlated container failures that simple threshold alerts miss.
-See [AI Patrol](AI.md) and https://pulserelay.pro.
+Example output includes trend-based capacity warnings, backup regressions, Kubernetes AI cluster analysis, and correlated container failures that simple threshold alerts miss.
+See [AI Patrol](AI.md), [Pulse Pro technical overview](PULSE_PRO.md), and https://pulserelay.pro.
 
 ### Why do VMs show "-" for disk usage?
 Proxmox API returns `0` for VM disk usage by default. You must install the **QEMU Guest Agent** inside the VM and enable it in Proxmox (VM → Options → QEMU Guest Agent).
@@ -101,7 +103,7 @@ Yes. Pulse supports OIDC in **Settings → Security → Single Sign-On** and Pro
 - Verify the port (default 7655) is open on your firewall.
 
 ### CORS errors?
-Set `ALLOWED_ORIGINS=https://your-domain.com` environment variable if accessing Pulse from a different domain.
+Pulse defaults to same-origin only. If you access the API from a different domain, set **Settings → System → Network → Allowed Origins** or use `ALLOWED_ORIGINS` (single origin, or `*` if you explicitly want all origins).
 
 ### High memory usage?
 If you are storing long history windows, reduce metrics retention (see [METRICS_HISTORY.md](METRICS_HISTORY.md)). Also confirm your polling intervals match your environment size.

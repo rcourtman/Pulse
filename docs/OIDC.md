@@ -7,7 +7,7 @@ Enable Single Sign-On (SSO) with providers like Authentik, Keycloak, Okta, and A
 1.  **Configure Provider**: Create an OIDC application in your IdP.
     *   **Redirect URI**: `https://<your-pulse-domain>/api/oidc/callback`
     *   **Scopes**: `openid`, `profile`, `email`
-2.  **Enable in Pulse**: Go to **Settings → Security → Single sign-on (OIDC)**.
+2.  **Enable in Pulse**: Go to **Settings → Security → Single Sign-On**.
 3.  **Enter Details**:
     *   **Issuer URL**: The base URL of your IdP (e.g., `https://auth.example.com/application/o/pulse/`).
     *   **Client ID & Secret**: From your IdP.

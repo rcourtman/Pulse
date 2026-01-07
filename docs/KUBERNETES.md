@@ -33,9 +33,17 @@ Configure via `values.yaml` or `--set` flags.
 | `ingress.enabled` | Enable Ingress | `false` |
 | `persistence.enabled` | Enable PVC for /data | `true` |
 | `persistence.size` | PVC Size | `8Gi` |
-| `agent.enabled` | Enable legacy docker agent workload | `false` |
+| `agent.enabled` | Enable legacy `pulse-docker-agent` workload (deprecated) | `false` |
 
-> Note: the `agent.*` block is legacy and currently references `pulse-docker-agent`. For new deployments, prefer the unified agent (`pulse-agent`) where possible.
+> Note: the `agent.*` block is legacy and references `pulse-docker-agent`. For new deployments, prefer the unified agent (`pulse-agent`) where possible.
+
+### Prometheus Metrics
+
+The Helm chart exposes only the main HTTP port (`7655`). Prometheus metrics are served on a separate listener (`9091`) and are **not** exposed by default.
+
+If you want to scrape metrics:
+1. Expose port `9091` with an additional Service.
+2. Point your `ServiceMonitor` at that service/port (the built-in ServiceMonitor targets the HTTP service by default).
 
 ### Example `values.yaml`
 

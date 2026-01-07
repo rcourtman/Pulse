@@ -10,13 +10,24 @@ The agent's self-update mechanism is critical for security and stability. To pre
 The agent verifies a SHA-256 checksum of the downloaded binary. The server must provide
 `X-Checksum-Sha256`; updates are rejected if the header is missing or mismatched.
 
-### 2. Pre-Flight Checks
-To prevent "brick-updates"—bad updates that crash immediately and require manual recovery—the agent performs a pre-flight check before replacing the running executable.
+### 2. Signature Verification (Optional)
+The legacy Docker agent supports optional Ed25519 signature verification when the server provides `X-Signature-Ed25519`. The unified agent relies on checksum verification only. Missing signatures are logged as a warning where supported.
+
+### 3. Pre-Flight Checks
+To prevent "brick-updates"—bad updates that crash immediately and require manual recovery—agents perform pre-flight validation before replacing the running executable.
+
+Unified agent (`pulse-agent`):
+1. Download new binary.
+2. Verify checksum (required).
+3. Validate binary magic (ELF/Mach-O/PE) and size limits (100MB max).
+4. Make executable and swap atomically.
+
+Legacy Docker agent (`pulse-docker-agent`):
 1. Download new binary.
 2. Verify checksum (required).
 3. Make executable.
-4. **Execute with `--self-test`**: The agent attempts to run the new binary with a special flag that loads the configuration and verifies basic functionality.
-5. If the self-test fails (exit code != 0), the update is aborted.
+4. **Execute with `--self-test`** to validate startup.
+5. If the self-test fails, the update is aborted.
 
 ## API Security
 

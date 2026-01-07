@@ -23,9 +23,21 @@ Docker and Kubernetes do not publish `9091` unless you explicitly expose it.
 Pulse uses a split config model:
 
 - **Local auth and secrets**: `.env` (managed by Quick Security Setup or environment overrides, not shown in the UI)
+- **Encryption key**: `.encryption.key` (required to decrypt `.enc` files)
 - **System settings**: `system.json` (editable in the UI unless locked by env)
 - **Nodes and credentials**: `nodes.enc` (encrypted)
+- **Notification config**: `email.enc`, `webhooks.enc`, `apprise.enc` (encrypted)
+- **API tokens**: `api_tokens.json`
+- **Legacy token suppressions**: `env_token_suppressions.json`
 - **AI config**: `ai.enc` (encrypted)
+- **AI patrol data**: `ai_findings.json`, `ai_patrol_runs.json`, `ai_usage_history.json`
+- **Pulse Pro license**: `license.enc` (encrypted)
+- **Host metadata**: `host_metadata.json`
+- **Docker metadata**: `docker_metadata.json`
+- **Guest metadata**: `guest_metadata.json`
+- **Sessions**: `sessions.json` (persistent sessions, sensitive)
+- **Recovery tokens**: `recovery_tokens.json`
+- **Update history**: `update-history.jsonl`
 - **Metrics history**: `metrics.db` (SQLite)
 
 Path mapping:

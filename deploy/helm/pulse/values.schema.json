@@ -153,7 +153,7 @@
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Enable Docker monitoring agent"
+          "description": "Enable legacy pulse-docker-agent workload (deprecated)"
         },
         "kind": {
           "type": "string",
@@ -235,7 +235,7 @@
             },
             "path": {
               "type": "string",
-              "description": "Metrics endpoint path"
+              "description": "Metrics endpoint path on the main HTTP service (metrics listener is separate)"
             }
           }
         }

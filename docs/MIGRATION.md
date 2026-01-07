@@ -28,9 +28,15 @@ Never copy `/etc/pulse` (or `/data` in Docker/Kubernetes) manually. Encryption k
 | Alerts & overrides | Browser sessions and local cookies |
 | Notifications (email, webhooks, Apprise) | Local login username/password (`.env`) |
 | System settings (`system.json`) | Update history/backup folders |
-| API token records | |
-| OIDC config | |
-| Guest metadata/notes | |
+| API token records | — |
+| OIDC config | — |
+| Guest metadata/notes | — |
+| — | Host metadata (notes/tags/AI command overrides) |
+| — | Docker metadata cache |
+| — | AI settings and findings (`ai.enc`, `ai_findings.json`, `ai_patrol_runs.json`, `ai_usage_history.json`) |
+| — | Pulse Pro license (`license.enc`) |
+| — | Server sessions (`sessions.json`) |
+| — | Update history (`update-history.jsonl`) |
 
 ## 🔄 Common Scenarios
 
@@ -56,7 +62,8 @@ Because local login credentials are stored in `.env` (not part of exports), you 
 3.  **Update Agents**:
     *   **Unified Agent**: Update the `--token` flag in your service definition.
     *   **Containerized agent**: Update `PULSE_TOKEN` in the agent container environment.
-    *   *Tip: You can use the "Install New Agent" wizard to generate updated install commands.*
+    *   *Tip: Use **Settings → Agents → Installation commands** to generate updated install commands.*
+4.  **Pulse Pro**: Re-activate your license key after migration (license files are not included in exports).
 
 ## 🔒 Security
 

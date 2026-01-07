@@ -29,6 +29,7 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 ## 🔐 Security
 
 - **[Security Policy](../SECURITY.md)** – The core security model (Encryption, Auth, API Scopes).
+- **[Proxy Auth](PROXY_AUTH.md)** – Authentik/Authelia/Cloudflare proxy authentication configuration.
 
 ## ✨ New in 5.0
 
@@ -40,17 +41,18 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 
 ## 🚀 Pulse Pro
 
-Pulse Pro unlocks **AI Patrol** — automated background monitoring that spots issues before they become incidents.
+Pulse Pro unlocks **LLM-backed AI Patrol** — automated background monitoring that spots issues before they become incidents.
 
 - **[Learn more at pulserelay.pro](https://pulserelay.pro)**
 - **[AI Patrol deep dive](AI.md)**
 - **[Pulse Pro technical overview](PULSE_PRO.md)**
-- **What you actually get**: cross-system context, trend-aware checks, and actionable findings with remediation hints.
+- **What you actually get**: LLM-backed patrol analysis, alert-triggered deep dives, Kubernetes AI analysis, and optional auto-fix workflows.
 - **Technical highlights**: correlation across nodes/VMs/backups/containers, trend-based capacity predictions, and findings you can resolve/suppress.
+- **Scheduling**: 10 minutes to 7 days (default 6 hours).
 
 ## 📡 Monitoring & Agents
 
-- **[Unified Agent](UNIFIED_AGENT.md)** – Single binary for Host and Docker monitoring.
+- **[Unified Agent](UNIFIED_AGENT.md)** – Single binary for host, Docker, and Kubernetes monitoring.
 - **[Proxmox Backup Server](PBS.md)** – PBS integration, direct API vs PVE passthrough, token setup.
 - **[VM Disk Monitoring](VM_DISK_MONITORING.md)** – Enabling QEMU Guest Agent for disk stats.
 - **[Temperature Monitoring](TEMPERATURE_MONITORING.md)** – Agent-based temperature monitoring (`pulse-agent --enable-proxmox`). Sensor proxy is deprecated in v5.
