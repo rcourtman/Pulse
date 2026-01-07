@@ -99,12 +99,19 @@ At minimum, ensure the user/token has read access for inventory and metrics:
 For VM disk usage via QEMU guest agent, also ensure `VM.GuestAgent.Audit` (PVE 9+).
 
 ### Recovery Mode
-If you are completely locked out, you can trigger a recovery token from the localhost CLI:
+If you are completely locked out, you can trigger a recovery token from localhost:
 ```bash
 curl -X POST http://localhost:7655/api/security/recovery \
   -d '{"action":"generate_token","duration":30}'
 ```
-Use the returned token to bypass auth temporarily.
+Use the returned token in `X-Recovery-Token` when calling `/api/security/recovery` to enable or disable local-only auth bypass (`disable_auth` / `enable_auth`). Token generation is localhost-only.
+
+Example (enable recovery mode):
+```bash
+curl -X POST http://localhost:7655/api/security/recovery \
+  -H "X-Recovery-Token: <token>" \
+  -d '{"action":"disable_auth"}'
+```
 
 ---
 

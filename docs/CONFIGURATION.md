@@ -61,6 +61,25 @@ docker run -d \
 Configure Single Sign-On in **Settings → Security → Single Sign-On**, or use environment variables to lock the configuration.
 
 See [OIDC Documentation](OIDC.md) and [Proxy Auth](PROXY_AUTH.md) for details.
+
+Environment overrides (lock the corresponding UI fields):
+
+| Variable | Description |
+|----------|-------------|
+| `OIDC_ENABLED` | Enable OIDC (`true`/`false`) |
+| `OIDC_ISSUER_URL` | Issuer URL from your IdP |
+| `OIDC_CLIENT_ID` | Client ID |
+| `OIDC_CLIENT_SECRET` | Client secret |
+| `OIDC_REDIRECT_URL` | Override redirect URL (defaults to `<public-url>/api/oidc/callback`) |
+| `OIDC_LOGOUT_URL` | Optional logout URL |
+| `OIDC_SCOPES` | Space or comma-separated scopes |
+| `OIDC_USERNAME_CLAIM` | Claim for username (default: `preferred_username`) |
+| `OIDC_EMAIL_CLAIM` | Claim for email (default: `email`) |
+| `OIDC_GROUPS_CLAIM` | Claim for groups |
+| `OIDC_ALLOWED_GROUPS` | Allowed groups (space or comma-separated) |
+| `OIDC_ALLOWED_DOMAINS` | Allowed email domains (space or comma-separated) |
+| `OIDC_ALLOWED_EMAILS` | Allowed emails (space or comma-separated) |
+| `OIDC_CA_BUNDLE` | Custom CA bundle path |
 </details>
 
 > **Note**: `API_TOKEN` / `API_TOKENS` are legacy and will be migrated into `api_tokens.json` on startup.

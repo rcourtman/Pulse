@@ -120,8 +120,7 @@ Verify temperature collection is agent-based:
 
 ## Mandatory Authentication
 
-**Starting with v4.5.0, authentication setup is prompted for all new Pulse
-installations.** This protects your Proxmox API credentials from unauthorized
+Authentication setup is prompted for all new Pulse installations. This protects your Proxmox API credentials from unauthorized
 access.
 
 > **Service name note:** systemd deployments use `pulse.service`. If you're
@@ -188,7 +187,7 @@ If you're comfortable with your security setup, you can dismiss warnings:
 ### Encrypted at Rest (AES-256-GCM)
 - **Node credentials**: passwords and API tokens (`/etc/pulse/nodes.enc`)
 - **Email settings**: SMTP passwords (`/etc/pulse/email.enc`)
-- **Webhook data**: URLs and auth headers (`/etc/pulse/webhooks.enc`) – v4.1.9+
+- **Webhook data**: URLs and auth headers (`/etc/pulse/webhooks.enc`)
 - **Encryption key**: auto-generated (`/etc/pulse/.encryption.key`)
 
 ### Security Features
@@ -263,11 +262,11 @@ for sensitive data.
   - Stored in `api_tokens.json` and managed via the UI
   - API-only mode supported (no password auth required)
 - **CSRF protection**: all state-changing operations require CSRF tokens
-- **Rate limiting** (enhanced in v4.24.0)
+- **Rate limiting**
   - Auth endpoints: 10 attempts/minute per IP (returns `Retry-After` header)
   - General API: 500 requests/minute per IP
   - Real-time endpoints exempt for functionality
-  - **New in v4.24.0**: All responses include rate limit headers:
+  - All responses include rate limit headers:
     - `X-RateLimit-Limit`: Maximum requests per window
     - `X-RateLimit-Remaining`: Requests remaining in current window
     - `Retry-After`: Seconds to wait before retrying (on 429 responses)
@@ -288,17 +287,17 @@ for sensitive data.
   - X-XSS-Protection: 1; mode=block
   - Referrer-Policy: strict-origin-when-cross-origin
   - Permissions-Policy restricting sensitive APIs
-- **Audit logging** (enhanced in v4.24.0)
+- **Audit logging**
   - Authentication events include IP addresses
-  - **New**: Rollback actions are logged with timestamps and metadata
-  - **New**: Scheduler health escalations recorded in audit trail
-  - **New**: Runtime logging configuration changes tracked
+  - Rollback actions are logged with timestamps and metadata
+  - Scheduler health escalations recorded in audit trail
+  - Runtime logging configuration changes tracked
 
 ### What's Encrypted in Exports
 - Node credentials (passwords, API tokens)
 - PBS credentials
 - Email settings passwords
-- Webhook URLs and authentication headers (v4.1.9+)
+- Webhook URLs and authentication headers
 
 ### What's **Not** Encrypted
 - Node hostnames and IPs
@@ -310,6 +309,8 @@ for sensitive data.
 
 Pulse supports multiple authentication methods that can be used independently or
 together.
+
+> **Note**: `DISABLE_AUTH` is deprecated and no longer disables authentication. Remove it from your environment and restart if it's still present.
 
 ### Password Authentication
 
@@ -326,7 +327,7 @@ This automatically:
 - Creates secure API token (SHA3-256 hashed, raw token shown once)
 - For systemd: Configures systemd with hashed credentials
 - For Docker: Saves to `/data/.env` with hashed credentials (properly quoted to prevent shell expansion)
-- Restarts service/container with authentication enabled
+- Applies credentials immediately and persists them for future restarts
 
 #### Manual Setup (Advanced)
 ```bash
@@ -466,8 +467,8 @@ sudo systemctl edit pulse
 [Service]
 Environment="ALLOWED_ORIGINS=https://app.example.com"
 
-# Development mode (allows localhost)
-PULSE_DEV=true
+# Development (allow localhost)
+ALLOWED_ORIGINS="http://localhost:5173"
 ```
 
 Notes:
@@ -478,8 +479,6 @@ Notes:
 ## Monitoring and Observability
 
 ### Scheduler Health API
-
-**New in v4.24.0:** Monitor Pulse's internal health and detect anomalies using the scheduler health API.
 
 #### Endpoint
 ```bash

@@ -55,7 +55,7 @@ Because local login credentials are stored in `.env` (not part of exports), you 
     *   If you used `.env`-based `API_TOKENS`/`API_TOKEN` (legacy), reconfigure them on the new host or re-create tokens in the UI.
 3.  **Update Agents**:
     *   **Unified Agent**: Update the `--token` flag in your service definition.
-    *   **Docker**: Update `PULSE_TOKEN` in your container config.
+    *   **Containerized agent**: Update `PULSE_TOKEN` in the agent container environment.
     *   *Tip: You can use the "Install New Agent" wizard to generate updated install commands.*
 
 ## 🔒 Security

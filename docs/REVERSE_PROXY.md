@@ -52,3 +52,4 @@ ProxyPassReverse / http://localhost:7655/
 - **"Connection Lost"**: WebSocket upgrade failed. Check `Upgrade` and `Connection` headers.
 - **502 Bad Gateway**: Pulse is not running on port 7655.
 - **CORS Errors**: Do not add CORS headers in the proxy; Pulse handles them. Set `ALLOWED_ORIGINS` env var if needed.
+- **Wrong client IPs**: Set `PULSE_TRUSTED_PROXY_CIDRS` to your proxy IP/CIDR so `X-Forwarded-For` is trusted.

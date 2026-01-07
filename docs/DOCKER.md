@@ -62,6 +62,7 @@ Pulse is configured via environment variables.
 
 > **Tip**: Set `LOG_LEVEL=warn` to reduce log volume while still capturing important events.
 > **Note**: `API_TOKEN` / `API_TOKENS` are legacy. Prefer managing API tokens in the UI after initial setup.
+> **Note**: Plain text values in `PULSE_AUTH_PASS` are auto-hashed on startup.
 
 <details>
 <summary><strong>Advanced: Resource Limits & Healthcheck</strong></summary>

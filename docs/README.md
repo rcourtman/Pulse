@@ -44,6 +44,9 @@ Pulse Pro unlocks **AI Patrol** — automated background monitoring that spots i
 
 - **[Learn more at pulserelay.pro](https://pulserelay.pro)**
 - **[AI Patrol deep dive](AI.md)**
+- **[Pulse Pro technical overview](PULSE_PRO.md)**
+- **What you actually get**: cross-system context, trend-aware checks, and actionable findings with remediation hints.
+- **Technical highlights**: correlation across nodes/VMs/backups/containers, trend-based capacity predictions, and findings you can resolve/suppress.
 
 ## 📡 Monitoring & Agents
 

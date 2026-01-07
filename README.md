@@ -99,14 +99,21 @@ Community-maintained integrations and addons:
 | Root cause analysis | — | ✅ |
 | Priority support | — | ✅ |
 
-AI Patrol runs on your schedule (every 5 minutes to every 24 hours) and finds:
+AI Patrol runs on your schedule (every 15 minutes to every 24 hours) and finds:
 - ZFS pools approaching capacity
 - Backup jobs that silently failed
 - VMs stuck in restart loops
 - Clock drift across cluster nodes
 - Container health check failures
 
+Technical highlights:
+- Cross-system context (nodes, VMs, backups, containers, and metrics history)
+- Noise reduction via correlation and trend-aware checks
+- Actionable findings with remediation hints
+
 **[Try the live demo →](https://demo.pulserelay.pro)** or **[learn more at pulserelay.pro](https://pulserelay.pro)**
+
+Pulse Pro technical details: [docs/PULSE_PRO.md](docs/PULSE_PRO.md)
 
 ## ❤️ Support Pulse Development
 

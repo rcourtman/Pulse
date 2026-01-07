@@ -1380,9 +1380,13 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 				// Get cluster config for this storage
 				clusterConfig, hasClusterConfig := clusterStorageMap[storage.Storage]
 
-				// Determine if shared - check both the Shared flag and storage type
-				// Some storage types are inherently cluster-wide/shared even if the flag isn't set
-				shared := hasClusterConfig && (clusterConfig.Shared == 1 || isInherentlySharedStorageType(storage.Type))
+				// Determine if shared - check multiple sources:
+				// 1. Per-node API returns shared flag directly
+				// 2. Cluster config API also has shared flag (if available)
+				// 3. Some storage types are inherently cluster-wide even if flags aren't set
+				shared := storage.Shared == 1 ||
+					(hasClusterConfig && clusterConfig.Shared == 1) ||
+					isInherentlySharedStorageType(storage.Type)
 
 				// Create storage model
 				// Initialize Enabled/Active from per-node API response

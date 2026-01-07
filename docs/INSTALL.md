@@ -47,6 +47,8 @@ volumes:
   pulse_data:
 ```
 
+> **Note**: Plain text passwords set via `PULSE_AUTH_PASS` are auto-hashed on startup. For production, prefer Quick Security Setup or a pre-hashed bcrypt value.
+
 ---
 
 ## 🛠️ Installation Methods

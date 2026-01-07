@@ -2,6 +2,51 @@
 
 Pulse Pro unlocks **AI Patrol** for continuous, automated health checks. Learn more at https://pulserelay.pro.
 
+## What Patrol Actually Does (Technical)
+
+Patrol is a scheduled analysis pipeline that builds a rich, system-wide snapshot and produces actionable findings.
+
+**Inputs (real data, not guesses):**
+- Live state: nodes, VMs/CTs, storages, backups, docker, kubernetes.
+- Recent metrics history (trends + rate of change).
+- Alert state and recent failures.
+- Diagnostics (connectivity, permissions, agent status).
+
+**Enrichment:**
+- Normalizes metrics across resource types.
+- Applies context rules (e.g., ignore idle test nodes, de-noise transient blips).
+- Correlates related issues to avoid duplicate noise.
+
+**Outputs:**
+- Findings with severity, category, and remediation hints.
+- Summary stats for coverage and risk level.
+- Optional AI analysis on the highest impact issues (Pro).
+
+## Why Patrol Is Different From Traditional Alerts
+
+Alerts are threshold-based and narrow. Patrol is context-based and cross-system.
+
+- **Alerts**: "Disk > 90%."  
+- **Patrol**: "ZFS pool is 86% but trending +4%/day; projected to hit 95% within a week. Largest consumer is datastore X. Recommend prune or expand."
+
+## Examples of Patrol Findings (Realistic)
+
+- Backup jobs succeeded but datastore usage jumped 20% since last run.
+- Node health is OK but cluster clock drift is growing.
+- Multiple VMs in the same storage pool are all retrying snapshots.
+- Docker host is healthy but containers in one stack are flapping.
+
+## Controls and Limits
+
+- **Schedule**: from 15 minutes to 24 hours.
+- **Scope**: only configured resources and connected agents.
+- **Safety**: command execution remains disabled by default.
+- **Cost control**: Pro uses model selection and rate limits; free tier uses heuristic-only Patrol.
+
+## Privacy
+
+Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when Pro is enabled). No telemetry is sent to Pulse by default.
+
 Pulse AI adds an optional assistant for troubleshooting and proactive monitoring. It is **off by default** and can be enabled per instance.
 
 ## What Makes AI Patrol Different
@@ -69,7 +114,7 @@ Patrol is **intentionally conservative** to avoid noise:
 ## Features
 
 - **Interactive chat**: Ask questions about current cluster state and get AI-assisted troubleshooting.
-- **Patrol**: Background checks periodically (default: 6 hours) that generate findings. Interval is fully configurable down to 15 minutes.
+- **Patrol**: Background checks periodically (default: 15 minutes) that generate findings. Interval is fully configurable down to 15 minutes.
 - **Alert analysis**: Optional token-efficient analysis when alerts fire.
 - **Command execution**: When enabled, AI can run commands via connected agents.
 - **Finding management**: Dismiss, resolve, or suppress findings to prevent recurrence.
@@ -79,7 +124,7 @@ Patrol is **intentionally conservative** to avoid noise:
 
 Configure in the UI: **Settings → AI**
 
-AI settings are stored encrypted at rest in `ai.enc` under the Pulse config directory. The discovered findings and their history are stored in `ai_findings.enc` (or `ai_findings.json` if encryption is disabled). These files are located in `/etc/pulse` for systemd installs, or `/data` for Docker/Kubernetes.
+AI settings are stored encrypted at rest in `ai.enc` under the Pulse config directory. Patrol findings and history are stored in `ai_findings.json`, `ai_patrol_runs.json`, and usage data in `ai_usage_history.json`. These files are located in `/etc/pulse` for systemd installs, or `/data` for Docker/Kubernetes.
 
 ### Supported Providers
 
@@ -106,7 +151,7 @@ You can set separate models for:
 
 ## Patrol Service (Pro Feature)
 
-Patrol runs automated health checks on a configurable schedule (default: every 6 hours). It passes comprehensive infrastructure context to the LLM (see "Context Patrol Receives" above) and generates findings when issues are detected.
+Patrol runs automated health checks on a configurable schedule (default: every 15 minutes). It passes comprehensive infrastructure context to the LLM (see "Context Patrol Receives" above) and generates findings when issues are detected.
 
 Pulse Pro users get full LLM-powered analysis. Free users still benefit from **Heuristic Patrol**, which uses local rule-based logic to detect common issues (offline nodes, disk exhaustion, etc.) without requiring an external AI provider. Free users also get full access to the AI Chat assistant (BYOK).
 
@@ -150,5 +195,5 @@ If you enable execution features, ensure agent tokens and scopes are appropriate
 |-------|----------|
 | AI not responding | Verify provider credentials in **Settings → AI** |
 | No execution capability | Confirm at least one agent is connected |
-| Findings not persisting | Check Pulse has write access to `ai_findings.enc` in the config directory |
+| Findings not persisting | Check Pulse has write access to `ai_findings.json` in the config directory |
 | Too many findings | This shouldn't happen - please report if it does |

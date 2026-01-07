@@ -22,7 +22,7 @@ Docker and Kubernetes do not publish `9091` unless you explicitly expose it.
 
 Pulse uses a split config model:
 
-- **Local auth and secrets**: `.env` (not editable in the UI)
+- **Local auth and secrets**: `.env` (managed by Quick Security Setup or environment overrides, not shown in the UI)
 - **System settings**: `system.json` (editable in the UI unless locked by env)
 - **Nodes and credentials**: `nodes.enc` (encrypted)
 - **AI config**: `ai.enc` (encrypted)
@@ -59,4 +59,3 @@ Upgrade the chart (OCI):
 ```bash
 helm upgrade pulse oci://ghcr.io/rcourtman/pulse-chart -n pulse
 ```
-
