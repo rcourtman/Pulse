@@ -1,6 +1,7 @@
 import { Component, Show, Accessor, Setter } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import { HelpIcon } from '@/components/shared/HelpIcon';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import CheckCircle from 'lucide-solid/icons/check-circle';
 import ArrowRight from 'lucide-solid/icons/arrow-right';
@@ -519,6 +520,7 @@ sudo tar -xzf pulse-${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                   Update Preferences
+                  <HelpIcon contentId="updates.pulse.channel" size="xs" />
                 </h4>
 
                 {/* Update Channel */}

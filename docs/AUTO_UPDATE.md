@@ -54,11 +54,17 @@ In **Settings → System → Updates**:
 ### Environment Variables
 
 ```bash
-# Disable auto-update check
-PULSE_AUTO_UPDATE_CHECK=false
+# Enable one-click updates
+AUTO_UPDATE_ENABLED=true
 
 # Use release candidate channel
-PULSE_UPDATE_CHANNEL=rc
+UPDATE_CHANNEL=rc
+
+# Adjust automatic check cadence (duration string)
+AUTO_UPDATE_CHECK_INTERVAL=24h
+
+# Schedule daily checks (HH:MM, 24h)
+AUTO_UPDATE_TIME=03:00
 ```
 
 ## Manual Update Methods

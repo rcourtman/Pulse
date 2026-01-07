@@ -3,6 +3,7 @@ import { createStore } from 'solid-js/store';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
+import { HelpIcon } from '@/components/shared/HelpIcon';
 import { formField, labelClass, controlClass } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
@@ -916,14 +917,20 @@ export const AISettings: Component = () => {
                           class={controlClass()}
                           disabled={saving()}
                         />
-                        <input
-                          type="url"
-                          value={form.openaiBaseUrl}
-                          onInput={(e) => setForm('openaiBaseUrl', e.currentTarget.value)}
-                          placeholder="Custom base URL (optional, for Azure OpenAI)"
-                          class={controlClass()}
-                          disabled={saving()}
-                        />
+                        <div class="space-y-1">
+                          <label class="text-xs text-gray-600 dark:text-gray-400 inline-flex items-center gap-1">
+                            Custom Base URL
+                            <HelpIcon contentId="ai.openai.baseUrl" size="xs" />
+                          </label>
+                          <input
+                            type="url"
+                            value={form.openaiBaseUrl}
+                            onInput={(e) => setForm('openaiBaseUrl', e.currentTarget.value)}
+                            placeholder="https://openrouter.ai/api/v1 (optional)"
+                            class={controlClass()}
+                            disabled={saving()}
+                          />
+                        </div>
                         <div class="flex items-center justify-between">
                           <p class="text-xs text-gray-500">
                             <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
@@ -1120,14 +1127,20 @@ export const AISettings: Component = () => {
                     </button>
                     <Show when={expandedProviders().has('ollama')}>
                       <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
-                        <input
-                          type="url"
-                          value={form.ollamaBaseUrl}
-                          onInput={(e) => setForm('ollamaBaseUrl', e.currentTarget.value)}
-                          placeholder="http://localhost:11434"
-                          class={controlClass()}
-                          disabled={saving()}
-                        />
+                        <div class="space-y-1">
+                          <label class="text-xs text-gray-600 dark:text-gray-400 inline-flex items-center gap-1">
+                            Server URL
+                            <HelpIcon contentId="ai.ollama.baseUrl" size="xs" />
+                          </label>
+                          <input
+                            type="url"
+                            value={form.ollamaBaseUrl}
+                            onInput={(e) => setForm('ollamaBaseUrl', e.currentTarget.value)}
+                            placeholder="http://localhost:11434"
+                            class={controlClass()}
+                            disabled={saving()}
+                          />
+                        </div>
                         <div class="flex items-center justify-between">
                           <p class="text-xs text-gray-500">
                             <a href="https://ollama.ai" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Learn about Ollama →</a>

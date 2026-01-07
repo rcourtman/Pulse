@@ -54,6 +54,7 @@ Exposed at `:9091/metrics`.
 | `pulse_monitor_poll_staleness_seconds` | Gauge | Age since last success. |
 | `pulse_monitor_poll_queue_depth` | Gauge | Queue size. |
 | `pulse_monitor_poll_errors_total` | Counter | Error counts by category. |
+| `pulse_scheduler_queue_due_soon` | Gauge | Tasks due in the next 12 seconds. |
 
 ## ⚡ Circuit Breaker
 | State | Trigger | Recovery |

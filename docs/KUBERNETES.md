@@ -25,6 +25,8 @@ Deploy Pulse to Kubernetes using the official Helm chart.
 
 Configure via `values.yaml` or `--set` flags.
 
+> **Note**: `API_TOKEN` / `API_TOKENS` environment variables are legacy. Prefer managing API tokens in the UI after initial setup.
+
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `service.type` | Service type (ClusterIP/LoadBalancer) | `ClusterIP` |
@@ -54,19 +56,13 @@ server:
   secretEnv:
     create: true
     data:
-      API_TOKENS: "my-token"
-
-agent:
-  enabled: false
-  secretEnv:
-    create: true
-    data:
-      PULSE_TOKEN: "my-token"
+      PULSE_AUTH_USER: "admin"
+      PULSE_AUTH_PASS: "replace-me"
 ```
 
 Apply with:
 ```bash
-helm upgrade --install pulse pulse/pulse -n pulse -f values.yaml
+helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart -n pulse -f values.yaml
 ```
 
 ---

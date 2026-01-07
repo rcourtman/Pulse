@@ -54,14 +54,14 @@ Pulse is configured via environment variables.
 | `TZ` | Timezone | `UTC` |
 | `PULSE_AUTH_USER` | Admin Username | *(unset)* |
 | `PULSE_AUTH_PASS` | Admin Password | *(unset)* |
-| `API_TOKENS` | Comma-separated API tokens | *(unset)* |
+| `API_TOKENS` | Comma-separated API tokens (**legacy**) | *(unset)* |
 | `DISCOVERY_SUBNET` | Custom CIDR to scan | *(auto)* |
-| `ALLOWED_ORIGINS` | CORS allowed domains | *(none)* |
+| `ALLOWED_ORIGINS` | CORS allowed domains | `*` |
 | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
 | `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hide Docker update buttons (read-only mode) | `false` |
-| `PULSE_DISABLE_DOCKER_UPDATE_CHECKS` | Disable Docker update detection entirely | `false` |
 
 > **Tip**: Set `LOG_LEVEL=warn` to reduce log volume while still capturing important events.
+> **Note**: `API_TOKEN` / `API_TOKENS` are legacy. Prefer managing API tokens in the UI after initial setup.
 
 <details>
 <summary><strong>Advanced: Resource Limits & Healthcheck</strong></summary>
@@ -143,7 +143,7 @@ When multiple containers have updates available, an **"Update All"** button appe
 
 ### Requirements
 
-- **Unified Agent v5.0.6+** running on the Docker host
+- **Unified agent** running on the Docker host with Docker monitoring enabled
 - Agent must have Docker socket access (`/var/run/docker.sock`)
 - Registry must be accessible for update detection (public registries work automatically)
 
@@ -164,7 +164,6 @@ Pulse provides granular control over update features via environment variables o
 | Variable | Description |
 |----------|-------------|
 | `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hides update buttons from the UI while still detecting updates. Use this for "read-only" monitoring. |
-| `PULSE_DISABLE_DOCKER_UPDATE_CHECKS` | Disables update detection entirely. No registry checks are performed. |
 
 **Example - Read-Only Mode** (detect updates but prevent actions):
 ```yaml
@@ -175,14 +174,7 @@ services:
       - PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true
 ```
 
-**Example - Fully Disable Update Detection**:
-```yaml
-services:
-  pulse:
-    image: rcourtman/pulse:latest
-    environment:
-      - PULSE_DISABLE_DOCKER_UPDATE_CHECKS=true
-```
+To disable registry checks entirely, set `PULSE_DISABLE_DOCKER_UPDATE_CHECKS=true` on the **agent**.
 
 You can also toggle "Hide Docker Update Buttons" from the UI: **Settings → Agents → Docker Settings**.
 

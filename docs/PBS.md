@@ -35,13 +35,14 @@ If your PVE cluster has PBS storage configured, Pulse automatically fetches back
 
 ## Setting Up Direct PBS Connection
 
-### Method 1: Agent Install (Recommended for Bare Metal)
+### Method 1: Unified Agent Install (Recommended for Bare Metal)
 
-Install the Pulse agent directly on your PBS server for automatic setup:
+Install the unified agent directly on your PBS server for automatic setup:
 
 ```bash
 # Run on your PBS server
-curl -sSL https://your-pulse-server/api/pulse-agent-install?type=pbs | sudo bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  sudo bash -s -- --url http://<pulse-ip>:7655 --token <api-token> --enable-proxmox --proxmox-type pbs
 ```
 
 The agent will:

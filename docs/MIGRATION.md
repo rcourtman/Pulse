@@ -52,7 +52,7 @@ Because local login credentials are stored in `.env` (not part of exports), you 
 1.  **Re-create Admin User**: If not using `.env` overrides, create your admin account on the new instance.
 2.  **Confirm API access**:
     *   If you created API tokens in the UI, those token records are included in the export and should continue working.
-    *   If you used `.env`-based `API_TOKENS`/`API_TOKEN`, reconfigure them on the new host.
+    *   If you used `.env`-based `API_TOKENS`/`API_TOKEN` (legacy), reconfigure them on the new host or re-create tokens in the UI.
 3.  **Update Agents**:
     *   **Unified Agent**: Update the `--token` flag in your service definition.
     *   **Docker**: Update `PULSE_TOKEN` in your container config.

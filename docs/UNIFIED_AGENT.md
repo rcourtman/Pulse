@@ -41,17 +41,16 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 |------|---------|-------------|---------|
 | `--url` | `PULSE_URL` | Pulse server URL | `http://localhost:7655` |
 | `--token` | `PULSE_TOKEN` | API token | *(required)* |
+| `--token-file` | - | Read API token from file | *(unset)* |
 | `--interval` | `PULSE_INTERVAL` | Reporting interval | `30s` |
 | `--enable-host` | `PULSE_ENABLE_HOST` | Enable host metrics | `true` |
-| `--enable-docker` | `PULSE_ENABLE_DOCKER` | Force enable Docker metrics | **auto-detect** |
-| `--disable-docker` | - | Disable Docker even if detected | - |
+| `--enable-docker` | `PULSE_ENABLE_DOCKER` | Enable Docker metrics | `false` (auto-detect if not configured) |
 | `--docker-runtime` | `PULSE_DOCKER_RUNTIME` | Force container runtime: `auto`, `docker`, or `podman` | `auto` |
-
-| `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Force enable Kubernetes metrics | **auto-detect** |
-| `--disable-kubernetes` | - | Disable Kubernetes even if detected | - |
-| `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Force enable Proxmox integration | **auto-detect** |
-| `--disable-proxmox` | - | Disable Proxmox even if detected | - |
+| `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Enable Kubernetes metrics | `false` |
+| `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Enable Proxmox integration | `false` |
+| `--proxmox-type` | `PULSE_PROXMOX_TYPE` | Proxmox type: `pve` or `pbs` | *(auto-detect)* |
 | `--enable-commands` | `PULSE_ENABLE_COMMANDS` | Enable AI command execution (disabled by default) | `false` |
+| `--disable-commands` | `PULSE_DISABLE_COMMANDS` | **Deprecated** (commands are disabled by default) | - |
 | `--disk-exclude` | `PULSE_DISK_EXCLUDE` | Mount point patterns to exclude from disk monitoring (repeatable or CSV) | *(none)* |
 | `--kubeconfig` | `PULSE_KUBECONFIG` | Kubeconfig path (optional) | *(auto)* |
 | `--kube-context` | `PULSE_KUBE_CONTEXT` | Kubeconfig context (optional) | *(auto)* |
@@ -65,22 +64,30 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 | `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
 | `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
 | `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(machine-id)* |
+| `--report-ip` | `PULSE_REPORT_IP` | Override reported IP (multi-NIC) | *(auto)* |
+| `--tag` | `PULSE_TAGS` | Apply tags (repeatable or CSV) | *(none)* |
+| `--log-level` | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
 | `--health-addr` | `PULSE_HEALTH_ADDR` | Health/metrics server address | `:9191` |
+
+**Token resolution order**: `--token` → `--token-file` → `PULSE_TOKEN` → `/var/lib/pulse-agent/token`.
+
+Legacy env var: `PULSE_KUBE_INCLUDE_ALL_POD_FILES` is still accepted for backward compatibility.
 
 
 ## Auto-Detection
 
-The installer automatically detects available platforms on the target machine:
+Auto-detection behavior:
 
-- **Docker/Podman**: Enabled if `docker info` or `podman info` succeeds
-- **Kubernetes**: Enabled if `kubectl cluster-info` succeeds or kubeconfig exists
-- **Proxmox**: Enabled if `/etc/pve` or `/etc/proxmox-backup` exists
+- **Host metrics**: Enabled by default.
+- **Docker/Podman**: Enabled automatically if Docker/Podman is detected and `PULSE_ENABLE_DOCKER` was not explicitly set.
+- **Kubernetes**: Only enabled when `--enable-kubernetes`/`PULSE_ENABLE_KUBERNETES=true` is set.
+- **Proxmox**: Only enabled when `--enable-proxmox`/`PULSE_ENABLE_PROXMOX=true` is set. Type auto-detects `pve` vs `pbs` if not specified.
 
-Use `--disable-*` flags to skip auto-detected platforms, or `--enable-*` to force enable.
+To disable Docker auto-detection, set `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false`.
 
 ## Installation Options
 
-### Simple Install (auto-detects everything)
+### Simple Install (host + Docker auto-detect)
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
   bash -s -- --url http://<pulse-ip>:7655 --token <token>
@@ -95,7 +102,7 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 ### Disable Docker (even if detected)
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-docker
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-docker=false
 ```
 
 ### Host + Kubernetes Monitoring
@@ -107,7 +114,7 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 ### Docker Monitoring Only
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-host --enable-docker
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-host=false --enable-docker
 ```
 
 ### Exclude Specific Disks from Monitoring
