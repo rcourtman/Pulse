@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rs/zerolog/log"
 )
 
@@ -479,27 +480,11 @@ type AuditEvent struct {
 	Details   string    `json:"details,omitempty"`
 }
 
-// LogAuditEvent logs security-relevant events
+// LogAuditEvent logs security-relevant events using the audit package.
+// This function delegates to the configured audit.Logger, allowing enterprise
+// versions to provide persistent storage and signing.
 func LogAuditEvent(event string, user string, ip string, path string, success bool, details string) {
-	if success {
-		log.Info().
-			Str("event", event).
-			Str("user", user).
-			Str("ip", ip).
-			Str("path", path).
-			Str("details", details).
-			Time("timestamp", time.Now()).
-			Msg("Security audit event")
-	} else {
-		log.Warn().
-			Str("event", event).
-			Str("user", user).
-			Str("ip", ip).
-			Str("path", path).
-			Str("details", details).
-			Time("timestamp", time.Now()).
-			Msg("Security audit event - FAILED")
-	}
+	audit.Log(event, user, ip, path, success, details)
 }
 
 // Session Management Improvements

@@ -14,9 +14,15 @@ The Pulse Server is the central hub that collects metrics and manages agents.
 
 ### Option A: Using Helm (Recommended)
 
-1.  Install the chart from the OCI registry:
+1.  Add the Pulse Helm repository:
     ```bash
-    helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart \
+    helm repo add pulse https://rcourtman.github.io/Pulse
+    helm repo update
+    ```
+
+2.  Install the chart:
+    ```bash
+    helm upgrade --install pulse pulse/pulse \
       --namespace pulse \
       --create-namespace \
       --set persistence.enabled=true \
@@ -30,7 +36,9 @@ The Pulse Server is the central hub that collects metrics and manages agents.
 If you cannot use Helm directly on the cluster (e.g., restricted Talos environment), you can generate standard Kubernetes YAML manifests:
 
 ```bash
-helm template pulse oci://ghcr.io/rcourtman/pulse-chart \
+helm repo add pulse https://rcourtman.github.io/Pulse
+helm repo update
+helm template pulse pulse/pulse \
   --namespace pulse \
   --set persistence.enabled=true \
   > pulse-server.yaml

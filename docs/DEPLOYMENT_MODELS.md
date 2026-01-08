@@ -68,8 +68,10 @@ docker compose up -d
 
 ### Kubernetes (Helm)
 
-Upgrade the chart (OCI):
+Upgrade the chart:
 
 ```bash
-helm upgrade pulse oci://ghcr.io/rcourtman/pulse-chart -n pulse
+helm repo update
+helm upgrade pulse pulse/pulse -n pulse
 ```
+
