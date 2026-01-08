@@ -1,6 +1,36 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
+# Pre-commit hook to prevent committing restricted or sensitive data
+RESTRICTED_FILES="active_subs.json charges.json customers.json subscriptions.json"
+
+echo "🔒 Running sensitivity check..."
+
+for file in $RESTRICTED_FILES; do
+    if git diff --cached --name-only | grep -q "^${file}$"; then
+        echo "❌ BLOCKED: restricted file pattern matched: ${file}"
+        exit 1
+    fi
+done
+
+# Check for potential credentials or internal identifiers
+if git diff --cached | grep -E "^\+" | grep -v ".husky/pre-commit" | grep -qE "(cus_|sub_|ch_|pi_|pm_|sk_live_|sk_test_)"; then
+    echo "⚠️  WARNING: Potential API keys or identifiers found in staged changes."
+    echo "   Use 'git diff --cached' to review before proceeding."
+    if [ -t 0 ]; then
+        printf "   Proceed anyway? (y/N): "
+        read REPLY < /dev/tty
+        echo
+        if [ "$REPLY" != "y" ] && [ "$REPLY" != "Y" ]; then
+            exit 1
+        fi
+    else
+        echo "   (Skipping confirmation in non-interactive shell)"
+    fi
+fi
+echo "✅ Check passed."
+
+
 # Run Go formatting
 echo "Running Go formatter..."
 gofmt -w -s .

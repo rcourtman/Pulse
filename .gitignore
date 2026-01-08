@@ -13,12 +13,12 @@
 # Logs
 *.log
 
-# Database files
+# Data/Export files
+active_subs.json
+charges.json
 *.db
 *.sqlite
 *.sqlite3
-active_subs.json
-charges.json
 
 # OS files
 .DS_Store
