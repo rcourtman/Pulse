@@ -240,7 +240,6 @@ Response:
   "message": "Event signature verified"
 }
 ```
-```
 
 ### Validate API Token (Admin)
 `POST /api/security/validate-token`
