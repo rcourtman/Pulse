@@ -1242,6 +1242,11 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 		Int("onlineNodes", onlineNodes).
 		Msg("Starting parallel storage polling")
 
+	storageInstance := instanceName
+	if instanceCfg != nil && instanceCfg.IsCluster && instanceCfg.ClusterName != "" {
+		storageInstance = instanceCfg.ClusterName
+	}
+
 	// Get existing storage from state to preserve data for offline nodes
 	currentState := m.state.GetSnapshot()
 	existingStorageMap := make(map[string]models.Storage)
@@ -1380,22 +1385,13 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 				// Get cluster config for this storage
 				clusterConfig, hasClusterConfig := clusterStorageMap[storage.Storage]
 
-				// Determine if shared - check multiple sources:
-				// 1. Per-node API returns shared flag directly
-				// 2. Cluster config API also has shared flag (if available)
-				// 3. Some storage types are inherently cluster-wide even if flags aren't set
-				shared := storage.Shared == 1 ||
-					(hasClusterConfig && clusterConfig.Shared == 1) ||
-					isInherentlySharedStorageType(storage.Type)
+				// Determine if shared
+				shared := hasClusterConfig && clusterConfig.Shared == 1
 
 				// Create storage model
 				// Initialize Enabled/Active from per-node API response
 				// Use clusterName for Instance when available to match node ID format
 				// (nodes use clusterName-nodeName as ID when clustered)
-				storageInstance := instanceName
-				if instanceCfg != nil && instanceCfg.IsCluster && instanceCfg.ClusterName != "" {
-					storageInstance = instanceCfg.ClusterName
-				}
 				modelStorage := models.Storage{
 					ID:       storageID,
 					Name:     storage.Storage,
@@ -1620,7 +1616,7 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 	}
 
 	// Update state with all storage
-	m.state.UpdateStorageForInstance(instanceName, allStorage)
+	m.state.UpdateStorageForInstance(storageInstance, allStorage)
 
 	// Poll Ceph cluster data after refreshing storage information
 	m.pollCephCluster(ctx, instanceName, client, cephDetected)

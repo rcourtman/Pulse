@@ -6,37 +6,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
-// isInherentlySharedStorageType returns true for storage types that are inherently
-// cluster-wide/shared, even if the Proxmox API doesn't set the 'shared' flag.
-// These storage backends are designed to be accessed from multiple nodes simultaneously.
-func isInherentlySharedStorageType(storageType string) bool {
-	switch strings.ToLower(strings.TrimSpace(storageType)) {
-	case "rbd":
-		// Ceph RBD - always cluster-wide in Ceph cluster
-		return true
-	case "cephfs":
-		// CephFS - always cluster-wide
-		return true
-	case "pbs":
-		// Proxmox Backup Server - always shared/remote
-		return true
-	case "glusterfs":
-		// GlusterFS - always cluster-wide
-		return true
-	case "nfs":
-		// NFS - network shared storage, typically accessible from all nodes
-		return true
-	case "cifs", "smb":
-		// CIFS/SMB - network shared storage
-		return true
-	case "iscsi", "iscsidirect":
-		// iSCSI - can be shared across nodes
-		return true
-	default:
-		return false
-	}
-}
-
 // storageContentQueryable reports whether it's safe to inspect the contents of a storage target.
 // Proxmox returns storages that exist in the datacenter config even when the current node
 // cannot access them. When Active==0 or the entry is disabled, querying /storage/<name>/content

@@ -87,7 +87,6 @@ build-agents:
 	@echo "Building agent binaries for all platforms..."
 	@mkdir -p bin
 	@VERSION=$$(cat VERSION | tr -d '\n') && \
-
 	echo "Building host agent binaries..." && \
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-linux-amd64 ./cmd/pulse-host-agent && \
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-linux-arm64 ./cmd/pulse-host-agent && \
