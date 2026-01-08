@@ -1578,6 +1578,10 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 		entry.storage.Nodes = toSortedSlice(entry.nodes)
 		entry.storage.NodeIDs = toSortedSlice(entry.nodeIDs)
 		entry.storage.NodeCount = len(entry.storage.Nodes)
+		// Fix for #1049: Use a consistent ID for shared storage that doesn't
+		// include the node name, preventing duplicates when different nodes
+		// report the same shared storage across polling cycles.
+		entry.storage.ID = fmt.Sprintf("%s-cluster-%s", entry.storage.Instance, entry.storage.Name)
 		allStorage = append(allStorage, entry.storage)
 	}
 
