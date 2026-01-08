@@ -36,6 +36,7 @@ import { ProLicensePanel } from './ProLicensePanel';
 import { SecurityAuthPanel } from './SecurityAuthPanel';
 import { APIAccessPanel } from './APIAccessPanel';
 import { SecurityOverviewPanel } from './SecurityOverviewPanel';
+import AuditLogPanel from './AuditLogPanel';
 import {
   PveNodesTable,
   PbsNodesTable,
@@ -299,6 +300,7 @@ type SettingsTab =
   | 'security-overview'
   | 'security-auth'
   | 'security-sso'
+  | 'security-audit'
   | 'diagnostics'
   | 'updates';
 
@@ -364,6 +366,10 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
   'security-sso': {
     title: 'Single Sign-On',
     description: 'Configure OIDC providers for enterprise authentication.',
+  },
+  'security-audit': {
+    title: 'Audit Log',
+    description: 'View security events, login attempts, and configuration changes.',
   },
   diagnostics: {
     title: 'Diagnostics',
@@ -440,6 +446,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/security-overview')) return 'security-overview';
     if (path.includes('/settings/security-auth')) return 'security-auth';
     if (path.includes('/settings/security-sso')) return 'security-sso';
+    if (path.includes('/settings/security-audit')) return 'security-audit';
     if (path.includes('/settings/security')) return 'security-overview';
     if (path.includes('/settings/diagnostics')) return 'diagnostics';
     if (path.includes('/settings/updates')) return 'updates';
@@ -1113,6 +1120,12 @@ const Settings: Component<SettingsProps> = (props) => {
             id: 'security-sso',
             label: 'Single Sign-On',
             icon: Key,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'security-audit',
+            label: 'Audit Log',
+            icon: Activity,
             iconProps: { strokeWidth: 2 },
           },
         ],
@@ -3617,6 +3630,11 @@ const Settings: Component<SettingsProps> = (props) => {
                 <div class="space-y-6">
                   <OIDCPanel onConfigUpdated={loadSecurityStatus} />
                 </div>
+              </Show>
+
+              {/* Security Audit Log Tab */}
+              <Show when={activeTab() === 'security-audit'}>
+                <AuditLogPanel />
               </Show>
 
               {/* Diagnostics Tab */}

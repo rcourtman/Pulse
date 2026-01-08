@@ -59,7 +59,9 @@ volumes:
 Deploy to your cluster using our Helm chart.
 
 ```bash
-helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart \
+helm repo add pulse https://rcourtman.github.io/Pulse
+helm repo update
+helm upgrade --install pulse pulse/pulse \
   --namespace pulse \
   --create-namespace
 ```
@@ -144,7 +146,7 @@ Pulse can self-update to the latest stable version.
 | Platform | Command |
 |----------|---------|
 | **Docker** | `docker pull rcourtman/pulse:latest && docker restart pulse` |
-| **Kubernetes** | `helm upgrade pulse oci://ghcr.io/rcourtman/pulse-chart -n pulse` |
+| **Kubernetes** | `helm repo update && helm upgrade pulse pulse/pulse -n pulse` |
 | **Systemd** | Re-download binary and restart service |
 
 ### Rollback

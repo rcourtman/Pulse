@@ -35,7 +35,8 @@ docker compose up -d
 ### Kubernetes (Helm)
 
 ```bash
-helm upgrade pulse oci://ghcr.io/rcourtman/pulse-chart -n pulse
+helm repo update
+helm upgrade pulse pulse/pulse -n pulse
 ```
 
 ## Post-Upgrade Checklist

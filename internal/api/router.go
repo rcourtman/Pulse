@@ -493,6 +493,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/license/activate", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleActivateLicense)))
 	r.mux.HandleFunc("/api/license/clear", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleClearLicense)))
 
+	// Audit log routes (Enterprise feature)
+	auditHandlers := NewAuditHandlers()
+	r.mux.HandleFunc("/api/audit", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents)))
+	r.mux.HandleFunc("/api/audit/", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleVerifyAuditEvent)))
+
 	// Security routes
 	r.mux.HandleFunc("/api/security/change-password", r.handleChangePassword)
 	r.mux.HandleFunc("/api/logout", r.handleLogout)
