@@ -150,7 +150,8 @@ func buildAuthorizedNodeList(instances []config.PVEInstance) []authorizedNode {
 		if instance.ClusterEndpoints != nil {
 			for _, ep := range instance.ClusterEndpoints {
 				name := ep.NodeName
-				ip := ep.IP
+				// Use EffectiveIP() which prefers IPOverride over auto-discovered IP
+				ip := ep.EffectiveIP()
 				if ip == "" {
 					ip = extractHostPart(ep.Host)
 				}

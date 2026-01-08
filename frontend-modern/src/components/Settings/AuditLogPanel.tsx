@@ -1,5 +1,5 @@
 import { createSignal, Show, For, onMount, createMemo, onCleanup, createEffect } from 'solid-js';
-import { Shield, CheckCircle, XCircle, AlertTriangle, RefreshCw, Filter, Info, Play, X } from 'lucide-solid';
+import { Shield, CheckCircle, XCircle, RefreshCw, Filter, Info, Play, X } from 'lucide-solid';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import Toggle from '@/components/shared/Toggle';
 import {

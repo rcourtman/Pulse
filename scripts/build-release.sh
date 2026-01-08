@@ -344,10 +344,20 @@ tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-darwin-arm64.tar.gz" -C "$BUILD_D
 # FreeBSD
 tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-freebsd-amd64.tar.gz" -C "$BUILD_DIR" pulse-agent-freebsd-amd64
 tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-freebsd-arm64.tar.gz" -C "$BUILD_DIR" pulse-agent-freebsd-arm64
-# Windows
+# Windows (zip archives with version in filename)
 zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-amd64.zip" "$BUILD_DIR/pulse-agent-windows-amd64.exe"
 zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-arm64.zip" "$BUILD_DIR/pulse-agent-windows-arm64.exe"
 zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-386.zip" "$BUILD_DIR/pulse-agent-windows-386.exe"
+
+# Also copy bare Windows EXEs for /releases/latest/download/ redirect compatibility
+# These allow LXC/barebone installs to redirect to GitHub without needing versioned URLs
+echo "Copying bare Windows EXEs to release directory for redirect compatibility..."
+cp "$BUILD_DIR/pulse-agent-windows-amd64.exe" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-agent-windows-arm64.exe" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-agent-windows-386.exe" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-host-agent-windows-amd64.exe" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-host-agent-windows-arm64.exe" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-host-agent-windows-386.exe" "$RELEASE_DIR/"
 
 # Copy Windows, macOS, and FreeBSD binaries into universal tarball for /download/ endpoint
 echo "Adding Windows, macOS, and FreeBSD binaries to universal tarball..."
@@ -410,8 +420,8 @@ cp scripts/pulse-auto-update.sh "$RELEASE_DIR/"
 # Generate checksums (include tarballs, zip files, helm chart, and install.sh)
 cd "$RELEASE_DIR"
 shopt -s nullglob extglob
-# Match all tarballs, zip files, and install scripts
-checksum_files=( *.tar.gz *.zip install.sh install-sensor-proxy.sh install-docker.sh pulse-auto-update.sh )
+# Match all tarballs, zip files, exe files, and install scripts
+checksum_files=( *.tar.gz *.zip *.exe install.sh install-sensor-proxy.sh install-docker.sh pulse-auto-update.sh )
 if compgen -G "pulse-*.tgz" > /dev/null; then
     checksum_files+=( pulse-*.tgz )
 fi

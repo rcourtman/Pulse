@@ -458,7 +458,8 @@ type ClusterEndpoint struct {
 	NodeName       string     // Node name
 	Host           string     // Full URL (e.g., https://node1.lan:8006)
 	GuestURL       string     // Optional guest-accessible URL (for navigation)
-	IP             string     // IP address
+	IP             string     // IP address (auto-discovered from cluster)
+	IPOverride     string     // User-specified IP override (takes precedence over IP if set)
 	Fingerprint    string     // TLS certificate fingerprint (SHA256, auto-captured via TOFU)
 	Online         bool       // Current online status from Proxmox
 	LastSeen       time.Time  // Last successful connection
@@ -468,6 +469,14 @@ type ClusterEndpoint struct {
 
 	// Per-node temperature proxy tokens (for clusters with sensor-proxy on each node)
 	TemperatureProxyControlToken string // Control-plane token for this specific node
+}
+
+// EffectiveIP returns the IP to use for this endpoint, preferring IPOverride if set
+func (e ClusterEndpoint) EffectiveIP() string {
+	if e.IPOverride != "" {
+		return e.IPOverride
+	}
+	return e.IP
 }
 
 // PBSInstance represents a Proxmox Backup Server connection

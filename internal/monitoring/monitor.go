@@ -537,18 +537,21 @@ func clusterEndpointEffectiveURL(endpoint config.ClusterEndpoint, verifySSL bool
 	// bypasses hostname checks), prefer IP to reduce DNS lookups (refs #620).
 	requiresHostnameForTLS := verifySSL && !hasFingerprint
 
+	// Use EffectiveIP() which prefers user-specified IPOverride over auto-discovered IP
+	effectiveIP := endpoint.EffectiveIP()
+
 	if requiresHostnameForTLS {
 		// Prefer hostname for proper TLS certificate validation
 		if endpoint.Host != "" {
 			return ensureClusterEndpointURL(endpoint.Host)
 		}
-		if endpoint.IP != "" {
-			return ensureClusterEndpointURL(endpoint.IP)
+		if effectiveIP != "" {
+			return ensureClusterEndpointURL(effectiveIP)
 		}
 	} else {
 		// Prefer IP address to avoid excessive DNS lookups
-		if endpoint.IP != "" {
-			return ensureClusterEndpointURL(endpoint.IP)
+		if effectiveIP != "" {
+			return ensureClusterEndpointURL(effectiveIP)
 		}
 		if endpoint.Host != "" {
 			return ensureClusterEndpointURL(endpoint.Host)
@@ -3879,10 +3882,13 @@ func (m *Monitor) getConfiguredHostIPs() []string {
 	// Add PVE hosts
 	for _, pve := range m.config.PVEInstances {
 		addHost(pve.Host)
-		// Also add cluster endpoints
+		// Also add cluster endpoints (include both auto-discovered IP and override if set)
 		for _, ep := range pve.ClusterEndpoints {
 			addHost(ep.Host)
 			addHost(ep.IP)
+			if ep.IPOverride != "" && ep.IPOverride != ep.IP {
+				addHost(ep.IPOverride)
+			}
 		}
 	}
 
@@ -4265,7 +4271,8 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 				endpointFingerprints := make(map[string]string)
 
 				for _, ep := range pve.ClusterEndpoints {
-					host := ep.IP
+					// Use EffectiveIP() which prefers IPOverride over auto-discovered IP
+					host := ep.EffectiveIP()
 					if host == "" {
 						host = ep.Host
 					}
