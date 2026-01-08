@@ -23,6 +23,8 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `host_metadata.json` | Host notes, tags, and AI command overrides | 📝 Standard |
 | `docker_metadata.json` | Docker metadata cache | 📝 Standard |
 | `guest_metadata.json` | Guest notes and metadata | 📝 Standard |
+| `agent_profiles.json` | Agent configuration profiles (Pulse Pro) | 📝 Standard |
+| `agent_profile_assignments.json` | Agent profile assignments (Pulse Pro) | 📝 Standard |
 | `recovery_tokens.json` | Recovery tokens (short-lived) | 🔒 **Sensitive** |
 | `sessions.json` | Persistent sessions (includes OIDC refresh tokens) | 🔒 **Sensitive** |
 | `update-history.jsonl` | Update history log (in-app updates) | 📝 Standard |
@@ -317,3 +319,57 @@ docker run -e HTTPS_ENABLED=true \
 1. **Permissions**: Ensure `.env` and `nodes.enc` are `600` (read/write by owner only).
 2. **Backups**: Back up `.env` separately from `system.json`.
 3. **Tokens**: Use scoped API tokens for agents instead of the admin password.
+
+---
+
+## 🔑 API Tokens
+
+API tokens provide scoped, revocable access to Pulse. Manage tokens in **Settings → Security → API Tokens**.
+
+### Token Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `*` (Full access) | All permissions (legacy, not recommended) |
+| `monitoring:read` | View dashboards, metrics, alerts |
+| `monitoring:write` | Acknowledge/silence alerts |
+| `docker:report` | Container agent telemetry submission |
+| `docker:manage` | Container lifecycle actions (restart, stop) |
+| `kubernetes:report` | Kubernetes agent telemetry submission |
+| `kubernetes:manage` | Kubernetes cluster management |
+| `host-agent:report` | Host agent metrics submission |
+| `settings:read` | Read configuration |
+| `settings:write` | Modify configuration |
+
+### Presets
+
+The UI offers quick presets for common use cases:
+
+| Preset | Scopes | Use Case |
+|--------|--------|----------|
+| **Kiosk / Dashboard** | `monitoring:read` | Read-only dashboard displays |
+| **Host agent** | `host-agent:report` | Host agent authentication |
+| **Container report** | `docker:report` | Container agent (read-only) |
+| **Container manage** | `docker:report`, `docker:manage` | Container agent with actions |
+| **Settings read** | `settings:read` | Read-only config access |
+| **Settings admin** | `settings:read`, `settings:write` | Full config access |
+
+### Kiosk Mode
+
+For unattended displays (wall monitors, dashboards), use a kiosk token to avoid cookie persistence issues:
+
+1. Go to **Settings → Security → API Tokens**
+2. Click **New token** and select the **Kiosk / Dashboard** preset
+3. Copy the generated token
+4. Access Pulse via URL with token:
+   ```
+   https://your-pulse-url/?token=YOUR_TOKEN_HERE
+   ```
+
+**Kiosk tokens:**
+- Grant read-only dashboard access (`monitoring:read` scope)
+- Hide the Settings tab automatically
+- Work without cookies (token in URL)
+- Can be revoked anytime from the UI
+
+> **Security note**: URL tokens appear in browser history and server logs. Use only for read-only dashboard access on trusted networks.
