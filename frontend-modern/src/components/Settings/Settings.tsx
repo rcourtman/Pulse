@@ -22,6 +22,7 @@ import {
 import { NodeModal } from './NodeModal';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { UnifiedAgents } from './UnifiedAgents';
+import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { OIDCPanel } from './OIDCPanel';
 import { AISettings } from './AISettings';
 import { AICostDashboard } from '@/components/AI/AICostDashboard';
@@ -3436,8 +3437,8 @@ const Settings: Component<SettingsProps> = (props) => {
                           onClick={() => handleDisableDockerUpdateActionsChange(!disableDockerUpdateActions())}
                           disabled={disableDockerUpdateActionsLocked() || savingDockerUpdateActions()}
                           class={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${disableDockerUpdateActions()
-                              ? 'bg-blue-600'
-                              : 'bg-gray-300 dark:bg-gray-600'
+                            ? 'bg-blue-600'
+                            : 'bg-gray-300 dark:bg-gray-600'
                             } ${disableDockerUpdateActionsLocked() ? 'opacity-50 cursor-not-allowed' : ''}`}
                           role="switch"
                           aria-checked={disableDockerUpdateActions()}
@@ -3454,6 +3455,9 @@ const Settings: Component<SettingsProps> = (props) => {
                 </Card>
 
                 <UnifiedAgents />
+
+                {/* Agent Profiles (Pro Feature) */}
+                <AgentProfilesPanel />
               </Show>
 
               {/* System General Tab */}

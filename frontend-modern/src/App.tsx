@@ -794,6 +794,10 @@ function App() {
           AIAPI.getSettings()
             .then((settings) => {
               aiChatStore.setEnabled(settings.enabled && settings.configured);
+              // Initialize chat session sync with server
+              if (settings.enabled && settings.configured) {
+                aiChatStore.initSync();
+              }
             })
             .catch(() => {
               aiChatStore.setEnabled(false);

@@ -8,6 +8,8 @@ import type {
   AIExecuteResponse,
   AIStreamEvent,
   AICostSummary,
+  AIChatSession,
+  AIChatSessionSummary,
 } from '@/types/ai';
 import type {
   PatternsResponse,
@@ -473,5 +475,74 @@ export class AIAPI {
       reader.releaseLock();
       logger.debug('[AI SSE] Reader released', { receivedComplete, receivedDone });
     }
+  }
+
+  // ============================================
+  // AI Chat Sessions API - sync across devices
+  // ============================================
+
+  // List all chat sessions for the current user
+  static async listChatSessions(): Promise<AIChatSessionSummary[]> {
+    return apiFetchJSON(`${this.baseUrl}/ai/chat/sessions`) as Promise<AIChatSessionSummary[]>;
+  }
+
+  // Get a specific chat session by ID
+  static async getChatSession(sessionId: string): Promise<AIChatSession> {
+    const response = await apiFetchJSON(`${this.baseUrl}/ai/chat/sessions/${sessionId}`);
+    // Convert server format to client format (snake_case to camelCase)
+    return this.deserializeChatSession(response);
+  }
+
+  // Save a chat session (create or update)
+  static async saveChatSession(session: AIChatSession): Promise<AIChatSession> {
+    const response = await apiFetchJSON(`${this.baseUrl}/ai/chat/sessions/${session.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(this.serializeChatSession(session)),
+    });
+    return this.deserializeChatSession(response);
+  }
+
+  // Delete a chat session
+  static async deleteChatSession(sessionId: string): Promise<void> {
+    await apiFetch(`${this.baseUrl}/ai/chat/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Helper to convert server format (snake_case) to client format (camelCase)
+  private static deserializeChatSession(data: any): AIChatSession {
+    return {
+      id: data.id,
+      username: data.username || '',
+      title: data.title || '',
+      createdAt: new Date(data.created_at || data.createdAt),
+      updatedAt: new Date(data.updated_at || data.updatedAt),
+      messages: (data.messages || []).map((m: any) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        timestamp: new Date(m.timestamp),
+        model: m.model,
+        tokens: m.tokens,
+        toolCalls: m.tool_calls || m.toolCalls,
+      })),
+    };
+  }
+
+  // Helper to convert client format (camelCase) to server format (snake_case)
+  private static serializeChatSession(session: AIChatSession): any {
+    return {
+      id: session.id,
+      title: session.title,
+      messages: session.messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp.toISOString(),
+        model: m.model,
+        tokens: m.tokens,
+        tool_calls: m.toolCalls,
+      })),
+    };
   }
 }

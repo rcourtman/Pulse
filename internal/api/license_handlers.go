@@ -86,11 +86,12 @@ func (h *LicenseHandlers) HandleLicenseFeatures(w http.ResponseWriter, r *http.R
 	response := LicenseFeaturesResponse{
 		LicenseStatus: string(state),
 		Features: map[string]bool{
-			license.FeatureAIPatrol:     h.service.HasFeature(license.FeatureAIPatrol),
-			license.FeatureAIAlerts:     h.service.HasFeature(license.FeatureAIAlerts),
-			license.FeatureAIAutoFix:    h.service.HasFeature(license.FeatureAIAutoFix),
-			license.FeatureKubernetesAI: h.service.HasFeature(license.FeatureKubernetesAI),
-			license.FeatureUpdateAlerts: h.service.HasFeature(license.FeatureUpdateAlerts),
+			license.FeatureAIPatrol:      h.service.HasFeature(license.FeatureAIPatrol),
+			license.FeatureAIAlerts:      h.service.HasFeature(license.FeatureAIAlerts),
+			license.FeatureAIAutoFix:     h.service.HasFeature(license.FeatureAIAutoFix),
+			license.FeatureKubernetesAI:  h.service.HasFeature(license.FeatureKubernetesAI),
+			license.FeatureUpdateAlerts:  h.service.HasFeature(license.FeatureUpdateAlerts),
+			license.FeatureAgentProfiles: h.service.HasFeature(license.FeatureAgentProfiles),
 		},
 		UpgradeURL: "https://pulserelay.pro",
 	}

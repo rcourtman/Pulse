@@ -23,6 +23,7 @@ Scheduled background analysis that correlates live state + metrics history to pr
 - **Autonomous mode**: optional diagnostic/fix commands through connected agents.
 - **Auto-fix**: guarded remediations when enabled.
 - **Kubernetes AI analysis**: deep cluster analysis beyond basic monitoring (Pro-only).
+- **Agent Profiles**: centralized configuration profiles for fleets of agents.
 
 ### What Free Users Still Get
 - **Heuristic Patrol**: local rule-based checks that surface common issues without any external AI provider.
@@ -33,6 +34,7 @@ Scheduled background analysis that correlates live state + metrics history to pr
 - **Patrol findings**: a prioritized list with severity, evidence, and recommended fixes.
 - **Alert timelines**: AI analysis events attached to the alert history for auditability.
 - **Remediation controls**: explicit toggles for autonomous mode and auto-fix workflows.
+- **Agent profiles**: create, edit, and assign profiles in **Settings → Agents → Agent Profiles**.
 
 ## Pro Feature Gates (License-Enforced)
 
@@ -42,6 +44,7 @@ Pulse Pro licenses enable specific server-side features. These are enforced at t
 - `ai_alerts`: alert-triggered analysis runs.
 - `ai_autofix`: autonomous mode and auto-fix workflows.
 - `kubernetes_ai`: AI analysis for Kubernetes clusters (not basic monitoring).
+- `agent_profiles`: centralized agent configuration profiles.
 
 ## Why It Matters (Technical Value)
 
@@ -50,6 +53,7 @@ Pulse Pro licenses enable specific server-side features. These are enforced at t
 - **Noise control**: Suppression and dismissal memory prevent alert fatigue.
 - **Actionable findings**: Each finding includes root-cause clues and next steps.
 - **Auditability**: AI analysis is attached to alerts and stored with finding history, so decisions are traceable.
+- **Fleet consistency**: Agent Profiles keep monitoring settings consistent across large deployments.
 
 ## Scheduling and Controls
 

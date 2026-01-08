@@ -35,6 +35,8 @@ Pulse uses a split config model:
 - **Host metadata**: `host_metadata.json`
 - **Docker metadata**: `docker_metadata.json`
 - **Guest metadata**: `guest_metadata.json`
+- **Agent profiles**: `agent_profiles.json`
+- **Agent profile assignments**: `agent_profile_assignments.json`
 - **Sessions**: `sessions.json` (persistent sessions, sensitive)
 - **Recovery tokens**: `recovery_tokens.json`
 - **Update history**: `update-history.jsonl`

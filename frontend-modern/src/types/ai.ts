@@ -243,3 +243,47 @@ export interface AICostSummary {
   daily_totals: AICostDailySummary[];
   totals: AICostProviderModelSummary;
 }
+
+// ============================================
+// AI Chat Session Types (server-synced)
+// ============================================
+
+export interface AIChatMessageTokens {
+  input: number;
+  output: number;
+}
+
+export interface AIChatToolCall {
+  name: string;
+  input: string;
+  output: string;
+  success: boolean;
+}
+
+export interface AIChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  model?: string;
+  tokens?: AIChatMessageTokens;
+  toolCalls?: AIChatToolCall[];
+}
+
+export interface AIChatSession {
+  id: string;
+  username: string;
+  title: string;
+  createdAt: Date;
+  updatedAt: Date;
+  messages: AIChatMessage[];
+}
+
+// Summary returned by list endpoint (no messages)
+export interface AIChatSessionSummary {
+  id: string;
+  title: string;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+}

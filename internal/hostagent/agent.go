@@ -149,7 +149,7 @@ func New(cfg Config) (*Agent, error) {
 
 	displayName := hostname
 
-	machineID := getReliableMachineID(info.HostID, logger)
+	machineID := GetReliableMachineID(info.HostID, logger)
 
 	agentID := strings.TrimSpace(cfg.AgentID)
 	if agentID == "" {
@@ -866,7 +866,8 @@ func isLXCContainer() bool {
 // - Cloned VMs/hosts may share the same DMI product UUID
 // - Proxmox cluster nodes with identical hardware may have the same UUID
 // The /etc/machine-id file is guaranteed unique per installation.
-func getReliableMachineID(gopsutilHostID string, logger zerolog.Logger) string {
+// GetReliableMachineID attempts to find a stable machine ID.
+func GetReliableMachineID(gopsutilHostID string, logger zerolog.Logger) string {
 	gopsutilID := strings.TrimSpace(gopsutilHostID)
 
 	// On Linux, prefer /etc/machine-id when available.

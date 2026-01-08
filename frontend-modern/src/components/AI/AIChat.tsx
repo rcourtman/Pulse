@@ -87,6 +87,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [showContextPicker, setShowContextPicker] = createSignal(false);
   const [contextSearch, setContextSearch] = createSignal('');
 
+  // Session management state
+  const [showSessionPicker, setShowSessionPicker] = createSignal(false);
+
   // Build a list of all available resources for the context picker
   const availableResources = createMemo(() => {
     const resources: Array<{
@@ -638,11 +641,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   };
 
-  const clearChat = () => {
-    setMessages([]);
-    aiChatStore.clearConversation();
-  };
-
   // Execute an approved command
   const executeApprovedCommand = async (messageId: string, approval: PendingApproval) => {
     // Mark as executing
@@ -997,20 +995,141 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 />
               </svg>
             </button>
-            <button
-              onClick={clearChat}
-              class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-              title="Clear chat"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                />
-              </svg>
-            </button>
+            {/* Session management dropdown */}
+            <div class="relative">
+              <button
+                onClick={() => {
+                  setShowSessionPicker(!showSessionPicker());
+                  if (!showSessionPicker()) {
+                    aiChatStore.refreshSessions();
+                  }
+                }}
+                class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="Chat sessions"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                  />
+                </svg>
+              </button>
+              <Show when={showSessionPicker()}>
+                <div class="absolute right-0 top-full mt-1 w-72 max-h-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                  {/* New conversation button */}
+                  <button
+                    onClick={() => {
+                      aiChatStore.newConversation();
+                      setShowSessionPicker(false);
+                    }}
+                    class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 border-b border-gray-200 dark:border-gray-700"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span class="font-medium">New conversation</span>
+                  </button>
+
+                  {/* Session list */}
+                  <div class="max-h-64 overflow-y-auto">
+                    <Show when={aiChatStore.sessions.length > 0} fallback={
+                      <div class="px-3 py-4 text-center text-xs text-gray-500 dark:text-gray-400">
+                        No previous conversations
+                      </div>
+                    }>
+                      <For each={aiChatStore.sessions}>
+                        {(session) => {
+                          const isCurrentSession = () => session.id === aiChatStore.sessionId;
+                          const sessionDate = new Date(session.updated_at);
+                          const isToday = sessionDate.toDateString() === new Date().toDateString();
+                          const dateStr = isToday
+                            ? sessionDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : sessionDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+                          return (
+                            <div
+                              class={`group relative px-3 py-2 flex items-start gap-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer ${
+                                isCurrentSession() ? 'bg-purple-50 dark:bg-purple-900/20' : ''
+                              }`}
+                              onClick={() => {
+                                if (!isCurrentSession()) {
+                                  aiChatStore.switchSession(session.id);
+                                }
+                                setShowSessionPicker(false);
+                              }}
+                            >
+                              <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2">
+                                  <span class={`text-sm font-medium truncate ${
+                                    isCurrentSession()
+                                      ? 'text-purple-700 dark:text-purple-300'
+                                      : 'text-gray-900 dark:text-gray-100'
+                                  }`}>
+                                    {session.title || 'Untitled conversation'}
+                                  </span>
+                                  <Show when={isCurrentSession()}>
+                                    <span class="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-purple-500" />
+                                  </Show>
+                                </div>
+                                <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                  <span>{session.message_count} messages</span>
+                                  <span>·</span>
+                                  <span>{dateStr}</span>
+                                </div>
+                              </div>
+                              {/* Delete button - show on hover */}
+                              <button
+                                type="button"
+                                class="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 transition-opacity"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm('Delete this conversation?')) {
+                                    aiChatStore.deleteSession(session.id);
+                                  }
+                                }}
+                                title="Delete conversation"
+                              >
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          );
+                        }}
+                      </For>
+                    </Show>
+                  </div>
+
+                  {/* Sync status */}
+                  <div class="px-3 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                    <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                      <span class="flex items-center gap-1.5">
+                        <Show when={aiChatStore.syncing} fallback={
+                          <svg class="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                          </svg>
+                        }>
+                          <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                        </Show>
+                        {aiChatStore.syncing ? 'Syncing...' : 'Synced'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowSessionPicker(false)}
+                        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </Show>
+            </div>
             <button
               onClick={props.onClose}
               class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"

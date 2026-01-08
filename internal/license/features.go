@@ -10,6 +10,9 @@ const (
 	FeatureAIAutoFix    = "ai_autofix"    // Automatic remediation
 	FeatureKubernetesAI = "kubernetes_ai" // AI analysis of K8s (NOT basic monitoring)
 
+	// Pro tier features - Fleet Management
+	FeatureAgentProfiles = "agent_profiles" // Centralized agent configuration profiles
+
 	// Free tier features - Monitoring
 	FeatureUpdateAlerts = "update_alerts" // Alerts for pending container/package updates (free feature)
 
@@ -43,6 +46,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureAIAlerts,
 		FeatureAIAutoFix,
 		FeatureKubernetesAI,
+		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
 	},
 	TierProAnnual: {
@@ -50,6 +54,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureAIAlerts,
 		FeatureAIAutoFix,
 		FeatureKubernetesAI,
+		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
 	},
 	TierLifetime: {
@@ -57,6 +62,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureAIAlerts,
 		FeatureAIAutoFix,
 		FeatureKubernetesAI,
+		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
 	},
 	TierMSP: {
@@ -64,6 +70,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureAIAlerts,
 		FeatureAIAutoFix,
 		FeatureKubernetesAI,
+		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
 		FeatureUnlimited,
 		// Note: FeatureMultiUser, FeatureWhiteLabel, FeatureMultiTenant
@@ -74,6 +81,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureAIAlerts,
 		FeatureAIAutoFix,
 		FeatureKubernetesAI,
+		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
 		FeatureUnlimited,
 		FeatureMultiUser,
@@ -137,6 +145,8 @@ func GetFeatureDisplayName(feature string) string {
 		return "Multi-Tenant Mode"
 	case FeatureUnlimited:
 		return "Unlimited Instances"
+	case FeatureAgentProfiles:
+		return "Centralized Agent Profiles"
 	default:
 		return feature
 	}

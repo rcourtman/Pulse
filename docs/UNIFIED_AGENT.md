@@ -95,7 +95,11 @@ Auto-detection behavior:
 - **Kubernetes**: Enabled automatically by the installer when a kubeconfig is detected and `PULSE_ENABLE_KUBERNETES` was not explicitly set.
 - **Proxmox**: Enabled automatically by the installer when Proxmox is detected. Type auto-detects `pve` vs `pbs` if not specified.
 
-To disable auto-detection, set the relevant flag or env var (`--disable-docker`, `--disable-kubernetes`, `--disable-proxmox`).
+To disable auto-detection, explicitly set the relevant flags or env vars, for example:
+
+- `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false`
+- `--enable-kubernetes=false` or `PULSE_ENABLE_KUBERNETES=false`
+- `--enable-proxmox=false` or `PULSE_ENABLE_PROXMOX=false`
 
 ## Installation Options
 
@@ -193,6 +197,18 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 # Or set environment variable
 PULSE_DISABLE_AUTO_UPDATE=true
 ```
+
+## Remote Configuration (Agent Profiles, Pro)
+
+Pulse Pro can push centralized settings to agents via Agent Profiles.
+
+Behavior:
+- The agent fetches remote config on startup from `/api/agents/host/{agent_id}/config`.
+- Profile settings override local flags/env for supported keys.
+- Profile changes take effect on the next agent restart.
+- Command execution (`commandsEnabled`) is controlled per agent in **Settings → Agents → Unified Agents** and can change live.
+
+See [Centralized Agent Management](CENTRALIZED_MANAGEMENT.md) for supported keys and profile setup.
 
 ## Uninstall
 
@@ -319,4 +335,3 @@ If your Docker Swarm cluster isn't being detected:
    ```bash
    LOG_LEVEL=debug journalctl -u pulse-agent -f
    ```
-
