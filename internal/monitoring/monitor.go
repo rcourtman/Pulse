@@ -2662,8 +2662,8 @@ func (m *Monitor) cleanupGuestMetadataCache(now time.Time) {
 func (m *Monitor) cleanupDiagnosticSnapshots(now time.Time) {
 	const maxAge = 1 * time.Hour
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.diagMu.Lock()
+	defer m.diagMu.Unlock()
 
 	for key, snapshot := range m.nodeSnapshots {
 		if now.Sub(snapshot.RetrievedAt) > maxAge {

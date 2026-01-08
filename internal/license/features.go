@@ -21,6 +21,11 @@ const (
 	FeatureWhiteLabel  = "white_label"  // Custom branding - NOT IMPLEMENTED YET
 	FeatureMultiTenant = "multi_tenant" // Multi-tenant - NOT IMPLEMENTED YET
 	FeatureUnlimited   = "unlimited"    // Unlimited instances (explicit for contracts)
+
+	// Enterprise tier features
+	FeatureAuditLogging = "audit_logging" // Persistent audit logs with signing
+	FeatureSSO          = "sso"           // OIDC/SSO authentication (Basic)
+	FeatureAdvancedSSO  = "advanced_sso"  // SAML, Multi-provider, Role Mapping
 )
 
 // Tier represents a license tier.
@@ -40,6 +45,7 @@ var TierFeatures = map[Tier][]string{
 	TierFree: {
 		// Free tier includes update alerts (container image updates) - basic monitoring feature
 		FeatureUpdateAlerts,
+		FeatureSSO,
 	},
 	TierPro: {
 		FeatureAIPatrol,
@@ -48,6 +54,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureKubernetesAI,
 		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
+		FeatureSSO,
 	},
 	TierProAnnual: {
 		FeatureAIPatrol,
@@ -56,6 +63,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureKubernetesAI,
 		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
+		FeatureSSO,
 	},
 	TierLifetime: {
 		FeatureAIPatrol,
@@ -64,6 +72,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureKubernetesAI,
 		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
+		FeatureSSO,
 	},
 	TierMSP: {
 		FeatureAIPatrol,
@@ -73,6 +82,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
 		FeatureUnlimited,
+		FeatureSSO,
 		// Note: FeatureMultiUser, FeatureWhiteLabel, FeatureMultiTenant
 		// are on the roadmap but NOT included until implemented
 	},
@@ -87,6 +97,9 @@ var TierFeatures = map[Tier][]string{
 		FeatureMultiUser,
 		FeatureWhiteLabel,
 		FeatureMultiTenant,
+		FeatureAuditLogging,
+		FeatureSSO,
+		FeatureAdvancedSSO,
 	},
 }
 
@@ -147,6 +160,12 @@ func GetFeatureDisplayName(feature string) string {
 		return "Unlimited Instances"
 	case FeatureAgentProfiles:
 		return "Centralized Agent Profiles"
+	case FeatureAuditLogging:
+		return "Enterprise Audit Logging"
+	case FeatureSSO:
+		return "Basic SSO (OIDC)"
+	case FeatureAdvancedSSO:
+		return "Advanced SSO (SAML/Multi-Provider)"
 	default:
 		return feature
 	}

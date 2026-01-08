@@ -9,6 +9,9 @@ import {
     STORAGE_KEYS,
 } from '@/utils/localStorage';
 import { showSuccess, showWarning, showToast } from '@/utils/toast';
+import { isEnterprise, loadLicenseStatus } from '@/stores/license';
+import Sparkles from 'lucide-solid/icons/sparkles';
+import ExternalLink from 'lucide-solid/icons/external-link';
 
 interface AuditEvent {
     id: string;
@@ -268,6 +271,7 @@ export default function AuditLogPanel() {
 
     onMount(() => {
         setIsMounted(true);
+        loadLicenseStatus();
         fetchAuditEvents();
     });
 
@@ -439,8 +443,13 @@ export default function AuditLogPanel() {
                 <div class="flex items-center gap-3">
                     <Shield class="w-6 h-6 text-indigo-500" />
                     <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Audit Log</h2>
-                    <Show when={isPersistent()}>
-                        <span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full">
+                    <Show when={isEnterprise()}>
+                        <span class="px-2 py-0.5 text-xs font-bold uppercase tracking-wider bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-md shadow-sm">
+                            Enterprise
+                        </span>
+                    </Show>
+                    <Show when={!isEnterprise()}>
+                        <span class="px-2 py-0.5 text-xs font-bold uppercase tracking-wider bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 rounded-md">
                             Enterprise
                         </span>
                     </Show>
@@ -496,16 +505,28 @@ export default function AuditLogPanel() {
                 </div>
             </div>
 
-            {/* OSS Notice */}
-            <Show when={!isPersistent() && !loading()}>
-                <div class="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                    <AlertTriangle class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                    <div>
-                        <h3 class="font-medium text-amber-800 dark:text-amber-200">Console Logging Only</h3>
-                        <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                            Audit events are logged to the console/file but not stored for querying.
-                            Upgrade to Pulse Pro for persistent audit logs with signature verification.
+            {/* OSS Notice / Upgrade CTA */}
+            <Show when={!isEnterprise() && !loading()}>
+                <div class="flex items-start gap-4 p-5 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800/50 rounded-xl shadow-sm">
+                    <div class="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg">
+                        <Sparkles class="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="font-bold text-indigo-900 dark:text-indigo-100">Unlock Enterprise Audit Logging</h3>
+                        <p class="text-sm text-indigo-800/80 dark:text-indigo-200/80 mt-1 leading-relaxed">
+                            Upgrade to Pulse Enterprise for persistent, searchable audit logs and cryptographically signed event verification.
+                            Ensure compliance and security for your mission-critical infrastructure.
                         </p>
+                        <div class="mt-4 flex flex-wrap gap-3">
+                            <a
+                                href="https://pulse.sh/pro"
+                                target="_blank"
+                                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none"
+                            >
+                                View Enterprise Plans
+                                <ExternalLink class="w-4 h-4" />
+                            </a>
+                        </div>
                     </div>
                 </div>
             </Show>

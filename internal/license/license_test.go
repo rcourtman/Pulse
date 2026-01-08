@@ -32,6 +32,11 @@ func TestTierHasFeature(t *testing.T) {
 		{"msp does not have multi-user yet", TierMSP, FeatureMultiUser, false},
 		{"enterprise has multi-user", TierEnterprise, FeatureMultiUser, true},
 		{"enterprise has white-label", TierEnterprise, FeatureWhiteLabel, true},
+		{"pro has Basic SSO", TierPro, FeatureSSO, true},
+		{"pro does not have Advanced SSO", TierPro, FeatureAdvancedSSO, false},
+		{"enterprise has Advanced SSO", TierEnterprise, FeatureAdvancedSSO, true},
+		{"enterprise has audit logging", TierEnterprise, FeatureAuditLogging, true},
+		{"enterprise has SSO", TierEnterprise, FeatureSSO, true},
 		{"unknown tier has nothing", Tier("unknown"), FeatureAIPatrol, false},
 	}
 

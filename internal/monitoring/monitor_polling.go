@@ -1188,6 +1188,13 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 
 	instanceCfg := m.getInstanceConfig(instanceName)
 
+	// Determine the storage instance name - use cluster name for clustered setups
+	// This must match what is set in each storage item's Instance field
+	storageInstanceName := instanceName
+	if instanceCfg != nil && instanceCfg.IsCluster && instanceCfg.ClusterName != "" {
+		storageInstanceName = instanceCfg.ClusterName
+	}
+
 	// Get cluster storage configuration first (single call)
 	clusterStorages, err := client.GetAllStorage(ctx)
 	clusterStorageAvailable := err == nil
@@ -1390,17 +1397,12 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 
 				// Create storage model
 				// Initialize Enabled/Active from per-node API response
-				// Use clusterName for Instance when available to match node ID format
-				// (nodes use clusterName-nodeName as ID when clustered)
-				storageInstance := instanceName
-				if instanceCfg != nil && instanceCfg.IsCluster && instanceCfg.ClusterName != "" {
-					storageInstance = instanceCfg.ClusterName
-				}
+				// Use storageInstanceName (cluster name when clustered) to match node ID format
 				modelStorage := models.Storage{
 					ID:       storageID,
 					Name:     storage.Storage,
 					Node:     n.Node,
-					Instance: storageInstance,
+					Instance: storageInstanceName,
 					Type:     storage.Type,
 					Status:   "available",
 					Total:    int64(storage.Total),
@@ -1624,7 +1626,7 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 	}
 
 	// Update state with all storage
-	m.state.UpdateStorageForInstance(instanceName, allStorage)
+	m.state.UpdateStorageForInstance(storageInstanceName, allStorage)
 
 	// Poll Ceph cluster data after refreshing storage information
 	m.pollCephCluster(ctx, instanceName, client, cephDetected)

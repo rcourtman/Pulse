@@ -231,7 +231,11 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		if cfg.OIDC != nil && cfg.OIDC.Enabled {
 			log.Debug().Msg("OIDC enabled without local credentials, authentication required")
 		} else {
-			log.Debug().Msg("No auth configured, allowing access")
+			log.Debug().Msg("No auth configured, allowing access as 'anonymous'")
+			if w != nil {
+				w.Header().Set("X-Authenticated-User", "anonymous")
+				w.Header().Set("X-Auth-Method", "none")
+			}
 			return true
 		}
 	}
@@ -245,6 +249,12 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		if providedToken != "" {
 			if record, ok := cfg.ValidateAPIToken(providedToken); ok {
 				attachAPITokenRecord(r, record)
+				tokenID := record.ID
+				if tokenID == "" && len(record.Hash) >= 8 {
+					tokenID = "legacy-" + record.Hash[:8] // Fallback for missing IDs
+				}
+				w.Header().Set("X-Authenticated-User", fmt.Sprintf("token:%s", tokenID))
+				w.Header().Set("X-Auth-Method", "api_token")
 				return true
 			}
 			// Invalid token provided
@@ -275,6 +285,12 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		}
 		if record, ok := cfg.ValidateAPIToken(token); ok {
 			attachAPITokenRecord(r, record)
+			tokenID := record.ID
+			if tokenID == "" && len(record.Hash) >= 8 {
+				tokenID = "legacy-" + record.Hash[:8] // Fallback for missing IDs
+			}
+			w.Header().Set("X-Authenticated-User", fmt.Sprintf("token:%s", tokenID))
+			w.Header().Set("X-Auth-Method", "api_token")
 			return true
 		}
 		return false
@@ -304,6 +320,11 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
 		// Use ValidateAndExtendSession for sliding expiration
 		if ValidateAndExtendSession(cookie.Value) {
+			username := GetSessionUsername(cookie.Value)
+			if username != "" {
+				w.Header().Set("X-Authenticated-User", username)
+			}
+			w.Header().Set("X-Auth-Method", "session")
 			return true
 		}
 		// Debug logging for failed session validation
@@ -462,6 +483,8 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 								// Audit log successful login
 								LogAuditEvent("login", parts[0], GetClientIP(r), r.URL.Path, true, "Basic auth login")
 							}
+							w.Header().Set("X-Authenticated-User", parts[0])
+							w.Header().Set("X-Auth-Method", "basic")
 							return true
 						} else {
 							// Failed login
@@ -600,6 +623,70 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 
 		// User is authenticated and has admin privileges (or not using proxy auth)
 		handler(w, r)
+	}
+}
+
+// RequirePermission middleware checks for authentication and specific RBAC permissions
+func RequirePermission(cfg *config.Config, authorizer internalauth.Authorizer, action string, resource string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// First check if user is authenticated (using RequireAdmin logic as base)
+		if !CheckAuth(cfg, w, r) {
+			if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte(`{"error":"authentication_required","message":"Authentication required"}`))
+			} else {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			}
+			return
+		}
+
+		// Extract user from header (set by CheckAuth) and inject into context
+		username := w.Header().Get("X-Authenticated-User")
+		ctx := r.Context()
+		if username != "" {
+			ctx = internalauth.WithUser(ctx, username)
+		}
+
+		// Check permission via authorizer
+		allowed, err := authorizer.Authorize(ctx, action, resource)
+		if err != nil {
+			log.Error().Err(err).Str("user", username).Str("action", action).Str("resource", resource).Msg("RBAC authorization failed due to system error")
+			if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(`{"error":"internal_error","message":"Failed to verify permissions"}`))
+			} else {
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			}
+			return
+		}
+
+		if !allowed {
+			log.Warn().
+				Str("user", username).
+				Str("ip", r.RemoteAddr).
+				Str("path", r.URL.Path).
+				Str("action", action).
+				Str("resource", resource).
+				Msg("Forbidden access attempt (RBAC)")
+
+			if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error":    "forbidden",
+					"message":  "You do not have permission to perform this action",
+					"action":   action,
+					"resource": resource,
+				})
+			} else {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+			}
+			return
+		}
+
+		next(w, r.WithContext(ctx))
 	}
 }
 

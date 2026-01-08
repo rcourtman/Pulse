@@ -6,6 +6,9 @@ import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import { isEnterprise, loadLicenseStatus } from '@/stores/license';
+import Sparkles from 'lucide-solid/icons/sparkles';
+import ExternalLink from 'lucide-solid/icons/external-link';
 
 interface OIDCConfigResponse {
   enabled: boolean;
@@ -130,6 +133,7 @@ export const OIDCPanel: Component<Props> = (props) => {
   };
 
   onMount(() => {
+    loadLicenseStatus();
     loadConfig();
   });
 
@@ -219,6 +223,16 @@ export const OIDCPanel: Component<Props> = (props) => {
             size="sm"
             class="flex-1"
           />
+          <Show when={isEnterprise()}>
+            <span class="px-2 py-0.5 text-xs font-bold uppercase tracking-wider bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-md shadow-sm">
+              Enterprise
+            </span>
+          </Show>
+          <Show when={!isEnterprise()}>
+            <span class="px-2 py-0.5 text-xs font-bold uppercase tracking-wider bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 rounded-md">
+              Enterprise
+            </span>
+          </Show>
           <Toggle
             checked={form.enabled}
             onChange={async (event) => {
@@ -260,6 +274,31 @@ export const OIDCPanel: Component<Props> = (props) => {
           />
         </div>
       </div>
+      <Show when={!isEnterprise() && !loading()}>
+        <div class="mx-6 mt-6 p-4 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800/50 rounded-xl">
+          <div class="flex items-start gap-4">
+            <div class="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg">
+              <Sparkles class="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div class="flex-1">
+              <h4 class="text-sm font-bold text-indigo-900 dark:text-indigo-100">Enterprise Feature</h4>
+              <p class="text-xs text-indigo-800/80 dark:text-indigo-200/80 mt-1">
+                OIDC integration is an Enterprise-only feature. Upgrade your license to enable seamless Single Sign-On for your team.
+              </p>
+              <div class="mt-3">
+                <a
+                  href="https://pulse.sh/pro"
+                  target="_blank"
+                  class="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  Learn about Enterprise
+                  <ExternalLink class="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Show>
       <form class="p-6 space-y-5" onSubmit={handleSave}>
         <div class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-xs text-blue-800 dark:text-blue-200">
           <ol class="space-y-1 list-decimal pl-4">

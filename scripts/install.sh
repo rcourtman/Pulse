@@ -164,8 +164,8 @@ detect_kubernetes() {
         # Try to connect to cluster (quick timeout)
         if timeout 3 kubectl cluster-info &>/dev/null 2>&1; then
             # kubectl works, try to find the kubeconfig it's using
-            if [[ -n "$KUBECONFIG" ]] && [[ -f "$KUBECONFIG" ]]; then
-                KUBECONFIG_PATH="$KUBECONFIG"
+            if [[ -n "${KUBECONFIG:-}" ]] && [[ -f "${KUBECONFIG:-}" ]]; then
+                KUBECONFIG_PATH="${KUBECONFIG}"
             elif [[ -f "${HOME}/.kube/config" ]]; then
                 KUBECONFIG_PATH="${HOME}/.kube/config"
             fi

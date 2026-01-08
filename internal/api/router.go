@@ -29,7 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
-	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -70,6 +70,7 @@ type Router struct {
 	persistence               *config.ConfigPersistence
 	oidcMu                    sync.Mutex
 	oidcService               *OIDCService
+	authorizer                internalauth.Authorizer
 	wrapped                   http.Handler
 	serverVersion             string
 	projectRoot               string
@@ -142,9 +143,15 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		exportLimiter:   NewRateLimiter(5, 1*time.Minute),  // 5 attempts per minute
 		downloadLimiter: NewRateLimiter(60, 1*time.Minute), // downloads/installers per minute per IP
 		persistence:     config.NewConfigPersistence(cfg.DataPath),
+		authorizer:      internalauth.GetAuthorizer(),
 		serverVersion:   strings.TrimSpace(serverVersion),
 		projectRoot:     projectRoot,
 		checksumCache:   make(map[string]checksumCacheEntry),
+	}
+
+	// Sync the configured admin user to the authorizer (if supported)
+	if cfg.AuthUser != "" {
+		internalauth.SetAdminUser(cfg.AuthUser)
 	}
 
 	r.initializeBootstrapToken()
@@ -495,8 +502,8 @@ func (r *Router) setupRoutes() {
 
 	// Audit log routes (Enterprise feature)
 	auditHandlers := NewAuditHandlers()
-	r.mux.HandleFunc("/api/audit", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents)))
-	r.mux.HandleFunc("/api/audit/", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleVerifyAuditEvent)))
+	r.mux.HandleFunc("/api/audit", RequirePermission(r.config, r.authorizer, internalauth.ActionRead, internalauth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))))
+	r.mux.HandleFunc("/api/audit/", RequirePermission(r.config, r.authorizer, internalauth.ActionRead, internalauth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleVerifyAuditEvent))))
 
 	// Security routes
 	r.mux.HandleFunc("/api/security/change-password", r.handleChangePassword)
@@ -506,7 +513,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/security/oidc", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleOIDCConfig)))
 	r.mux.HandleFunc("/api/oidc/login", r.handleOIDCLogin)
 	r.mux.HandleFunc(config.DefaultOIDCCallbackPath, r.handleOIDCCallback)
-	r.mux.HandleFunc("/api/security/tokens", RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc("/api/security/tokens", RequirePermission(r.config, r.authorizer, internalauth.ActionAdmin, internalauth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			if !ensureScope(w, req, config.ScopeSettingsRead) {
@@ -522,7 +529,7 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
-	r.mux.HandleFunc("/api/security/tokens/", RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc("/api/security/tokens/", RequirePermission(r.config, r.authorizer, internalauth.ActionAdmin, internalauth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureScope(w, req, config.ScopeSettingsWrite) {
 			return
 		}
@@ -1129,6 +1136,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/notifications/", RequireAdmin(r.config, r.notificationHandlers.HandleNotifications))
 
 	// Notification queue/DLQ routes
+	// Security tokens are handled later in the setup with RBAC
 	r.mux.HandleFunc("/api/notifications/dlq", RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodGet {
 			r.notificationQueueHandlers.GetDLQ(w, req)
@@ -1179,7 +1187,7 @@ func (r *Router) setupRoutes() {
 		}
 		// Fall back to legacy single token if set
 		if r.config.APIToken != "" {
-			return auth.CompareAPIToken(token, r.config.APIToken)
+			return internalauth.CompareAPIToken(token, r.config.APIToken)
 		}
 		return false
 	})
@@ -1221,10 +1229,10 @@ func (r *Router) setupRoutes() {
 			})
 		}
 	}
-	r.mux.HandleFunc("/api/settings/ai", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetAISettings)))
-	r.mux.HandleFunc("/api/settings/ai/update", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleUpdateAISettings)))
-	r.mux.HandleFunc("/api/ai/test", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestAIConnection)))
-	r.mux.HandleFunc("/api/ai/test/{provider}", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestProvider)))
+	r.mux.HandleFunc("/api/settings/ai", RequirePermission(r.config, r.authorizer, internalauth.ActionRead, internalauth.ResourceSettings, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetAISettings)))
+	r.mux.HandleFunc("/api/settings/ai/update", RequirePermission(r.config, r.authorizer, internalauth.ActionWrite, internalauth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleUpdateAISettings)))
+	r.mux.HandleFunc("/api/ai/test", RequirePermission(r.config, r.authorizer, internalauth.ActionWrite, internalauth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestAIConnection)))
+	r.mux.HandleFunc("/api/ai/test/{provider}", RequirePermission(r.config, r.authorizer, internalauth.ActionWrite, internalauth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestProvider)))
 	r.mux.HandleFunc("/api/ai/models", RequireAuth(r.config, r.aiSettingsHandler.HandleListModels))
 	r.mux.HandleFunc("/api/ai/execute", RequireAuth(r.config, r.aiSettingsHandler.HandleExecute))
 	r.mux.HandleFunc("/api/ai/execute/stream", RequireAuth(r.config, r.aiSettingsHandler.HandleExecuteStream))
@@ -2422,7 +2430,7 @@ func isRequestAuthenticated(cfg *config.Config, req *http.Request) bool {
 		if authHeader := req.Header.Get("Authorization"); strings.HasPrefix(authHeader, prefix) {
 			if decoded, err := base64.StdEncoding.DecodeString(authHeader[len(prefix):]); err == nil {
 				if parts := strings.SplitN(string(decoded), ":", 2); len(parts) == 2 {
-					if parts[0] == cfg.AuthUser && auth.CheckPasswordHash(parts[1], cfg.AuthPass) {
+					if parts[0] == cfg.AuthUser && internalauth.CheckPasswordHash(parts[1], cfg.AuthPass) {
 						return true
 					}
 				}
@@ -2512,7 +2520,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Validate new password complexity
-	if err := auth.ValidatePasswordComplexity(changeReq.NewPassword); err != nil {
+	if err := internalauth.ValidatePasswordComplexity(changeReq.NewPassword); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_password",
 			err.Error(), nil)
 		return
@@ -2548,7 +2556,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 						username = parts[0]
 						useAuthHeader = true
 						// Verify the password from the header matches
-						if !auth.CheckPasswordHash(parts[1], r.config.AuthPass) {
+						if !internalauth.CheckPasswordHash(parts[1], r.config.AuthPass) {
 							log.Warn().
 								Str("ip", req.RemoteAddr).
 								Str("username", username).
@@ -2567,7 +2575,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 	// If we didn't use the auth header, or need to double-check, verify from JSON body
 	if !useAuthHeader || changeReq.CurrentPassword != "" {
 		// Verify current password from JSON body
-		if !auth.CheckPasswordHash(changeReq.CurrentPassword, r.config.AuthPass) {
+		if !internalauth.CheckPasswordHash(changeReq.CurrentPassword, r.config.AuthPass) {
 			log.Warn().
 				Str("ip", req.RemoteAddr).
 				Str("username", username).
@@ -2579,7 +2587,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Hash the new password before storing
-	hashedPassword, err := auth.HashPassword(changeReq.NewPassword)
+	hashedPassword, err := internalauth.HashPassword(changeReq.NewPassword)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to hash new password")
 		writeErrorResponse(w, http.StatusInternalServerError, "hash_error",
@@ -2933,7 +2941,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Verify credentials
-	if loginReq.Username == r.config.AuthUser && auth.CheckPasswordHash(loginReq.Password, r.config.AuthPass) {
+	if loginReq.Username == r.config.AuthUser && internalauth.CheckPasswordHash(loginReq.Password, r.config.AuthPass) {
 		// Clear failed login attempts
 		ClearFailedLogins(loginReq.Username)
 		ClearFailedLogins(clientIP)
@@ -4813,7 +4821,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		name = fmt.Sprintf("Docker host: %s", displayName)
 	}
 
-	rawToken, err := auth.GenerateAPIToken()
+	rawToken, err := internalauth.GenerateAPIToken()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate docker migration token")
 		writeErrorResponse(w, http.StatusInternalServerError, "token_generation_failed", "Failed to generate API token", nil)
