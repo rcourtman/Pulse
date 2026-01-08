@@ -91,7 +91,7 @@ func TestGetReliableMachineID(t *testing.T) {
 	t.Run("trims whitespace", func(t *testing.T) {
 		readFile = func(string) ([]byte, error) { return nil, os.ErrNotExist }
 		netInterfaces = func() ([]net.Interface, error) { return nil, errors.New("no interfaces") }
-		result := getReliableMachineID("  test-id  ", logger)
+		result := GetReliableMachineID("  test-id  ", logger)
 		if result != "test-id" {
 			t.Errorf("getReliableMachineID trimmed result = %q, want %q", result, "test-id")
 		}
@@ -109,7 +109,7 @@ func TestGetReliableMachineID(t *testing.T) {
 			}
 			netInterfaces = func() ([]net.Interface, error) { return nil, errors.New("no interfaces") }
 
-			result := getReliableMachineID("gopsutil-product-uuid", logger)
+			result := GetReliableMachineID("gopsutil-product-uuid", logger)
 			const want = "01234567-89ab-cdef-0123-456789abcdef"
 			if result != want {
 				t.Errorf("getReliableMachineID() = %q, want %q", result, want)
@@ -126,7 +126,7 @@ func TestGetReliableMachineID(t *testing.T) {
 					},
 				}, nil
 			}
-			result := getReliableMachineID("gopsutil-product-uuid", logger)
+			result := GetReliableMachineID("gopsutil-product-uuid", logger)
 			if result != "mac-001122aabbcc" {
 				t.Errorf("getReliableMachineID() = %q, want %q", result, "mac-001122aabbcc")
 			}
@@ -135,7 +135,7 @@ func TestGetReliableMachineID(t *testing.T) {
 		t.Run("Linux falls back to gopsutil ID when machine-id missing and MAC unavailable", func(t *testing.T) {
 			readFile = func(string) ([]byte, error) { return nil, os.ErrNotExist }
 			netInterfaces = func() ([]net.Interface, error) { return nil, errors.New("no interfaces") }
-			result := getReliableMachineID("gopsutil-product-uuid", logger)
+			result := GetReliableMachineID("gopsutil-product-uuid", logger)
 			if result != "gopsutil-product-uuid" {
 				t.Errorf("getReliableMachineID() = %q, want %q", result, "gopsutil-product-uuid")
 			}
@@ -156,14 +156,14 @@ func TestGetReliableMachineID(t *testing.T) {
 					},
 				}, nil
 			}
-			result := getReliableMachineID("gopsutil-product-uuid", logger)
+			result := GetReliableMachineID("gopsutil-product-uuid", logger)
 			if result != "mac-deadbeef0001" {
 				t.Errorf("getReliableMachineID() = %q, want %q", result, "mac-deadbeef0001")
 			}
 		})
 	} else {
 		t.Run("non-Linux uses gopsutil ID", func(t *testing.T) {
-			result := getReliableMachineID("12345678-1234-1234-1234-123456789abc", logger)
+			result := GetReliableMachineID("12345678-1234-1234-1234-123456789abc", logger)
 			if result != "12345678-1234-1234-1234-123456789abc" {
 				t.Errorf("Expected gopsutil ID, got %q", result)
 			}

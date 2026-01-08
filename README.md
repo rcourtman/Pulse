@@ -102,6 +102,7 @@ Community-maintained integrations and addons:
 | Alert-triggered AI analysis | — | ✅ |
 | Kubernetes AI analysis | — | ✅ |
 | Auto-fix + autonomous mode | — | ✅ |
+| Centralized agent profiles | — | ✅ |
 | Priority support | — | ✅ |
 
 AI Patrol runs on your schedule (every 10 minutes to every 7 days, default 6 hours) and finds:
@@ -115,6 +116,7 @@ Technical highlights:
 - Cross-system context (nodes, VMs, backups, containers, and metrics history)
 - LLM analysis for high-impact findings + alert-triggered deep dives
 - Optional auto-fix with command safety policies and audit trail
+- Centralized agent profiles for consistent fleet settings
 
 **[Try the live demo →](https://demo.pulserelay.pro)** or **[learn more at pulserelay.pro](https://pulserelay.pro)**
 

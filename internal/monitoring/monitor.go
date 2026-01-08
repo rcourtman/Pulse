@@ -1365,25 +1365,61 @@ func (m *Monitor) UnlinkHostAgent(hostID string) error {
 
 // HostAgentConfig represents server-side configuration for a host agent.
 type HostAgentConfig struct {
-	CommandsEnabled *bool `json:"commandsEnabled,omitempty"` // nil = use agent default
+	CommandsEnabled *bool                  `json:"commandsEnabled,omitempty"` // nil = use agent default
+	Settings        map[string]interface{} `json:"settings,omitempty"`        // Merged profile settings
 }
 
 // GetHostAgentConfig returns the server-side configuration for a host agent.
 // The agent can poll this to apply remote config overrides.
 func (m *Monitor) GetHostAgentConfig(hostID string) HostAgentConfig {
 	hostID = strings.TrimSpace(hostID)
-	if hostID == "" || m.hostMetadataStore == nil {
+	if hostID == "" {
 		return HostAgentConfig{}
 	}
 
-	meta := m.hostMetadataStore.Get(hostID)
-	if meta == nil {
-		return HostAgentConfig{}
+	cfg := HostAgentConfig{}
+
+	// 1. Load Host Metadata (CommandsEnabled)
+	if m.hostMetadataStore != nil {
+		if meta := m.hostMetadataStore.Get(hostID); meta != nil {
+			cfg.CommandsEnabled = meta.CommandsEnabled
+		}
 	}
 
-	return HostAgentConfig{
-		CommandsEnabled: meta.CommandsEnabled,
+	// 2. Load Profile Configuration
+	// We handle errors gracefully by logging them and continuing with partial config
+	if m.persistence != nil {
+		// Load Assignments
+		assignments, err := m.persistence.LoadAgentProfileAssignments()
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to load agent profile assignments during config fetch")
+		} else {
+			var profileID string
+			for _, a := range assignments {
+				if a.AgentID == hostID {
+					profileID = a.ProfileID
+					break
+				}
+			}
+
+			if profileID != "" {
+				// Load Profiles
+				profiles, err := m.persistence.LoadAgentProfiles()
+				if err != nil {
+					log.Warn().Err(err).Msg("Failed to load agent profiles during config fetch")
+				} else {
+					for _, p := range profiles {
+						if p.ID == profileID {
+							cfg.Settings = p.Config
+							break
+						}
+					}
+				}
+			}
+		}
 	}
+
+	return cfg
 }
 
 // UpdateHostAgentConfig updates the server-side configuration for a host agent.

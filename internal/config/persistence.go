@@ -15,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rs/zerolog/log"
 )
@@ -37,6 +38,9 @@ type ConfigPersistence struct {
 	aiFindingsFile           string
 	aiPatrolRunsFile         string
 	aiUsageHistoryFile       string
+	agentProfilesFile        string
+	agentAssignmentsFile     string
+	aiChatSessionsFile       string
 	crypto                   *crypto.CryptoManager
 	fs                       FileSystem
 }
@@ -110,6 +114,9 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		aiFindingsFile:           filepath.Join(configDir, "ai_findings.json"),
 		aiPatrolRunsFile:         filepath.Join(configDir, "ai_patrol_runs.json"),
 		aiUsageHistoryFile:       filepath.Join(configDir, "ai_usage_history.json"),
+		agentProfilesFile:        filepath.Join(configDir, "agent_profiles.json"),
+		agentAssignmentsFile:     filepath.Join(configDir, "agent_profile_assignments.json"),
+		aiChatSessionsFile:       filepath.Join(configDir, "ai_chat_sessions.json"),
 		crypto:                   cryptoMgr,
 		fs:                       defaultFileSystem{},
 	}
@@ -2005,4 +2012,278 @@ func (c *ConfigPersistence) LoadDockerMetadata() (*DockerMetadataStore, error) {
 	defer c.mu.RUnlock()
 
 	return NewDockerMetadataStore(c.configDir, c.fs), nil
+}
+
+// LoadAgentProfiles loads agent profiles from file
+func (c *ConfigPersistence) LoadAgentProfiles() ([]models.AgentProfile, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := c.fs.ReadFile(c.agentProfilesFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []models.AgentProfile{}, nil
+		}
+		return nil, err
+	}
+
+	if len(data) == 0 {
+		return []models.AgentProfile{}, nil
+	}
+
+	var profiles []models.AgentProfile
+	if err := json.Unmarshal(data, &profiles); err != nil {
+		return nil, err
+	}
+
+	return profiles, nil
+}
+
+// SaveAgentProfiles saves agent profiles to file
+func (c *ConfigPersistence) SaveAgentProfiles(profiles []models.AgentProfile) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	data, err := json.MarshalIndent(profiles, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	return c.writeConfigFileLocked(c.agentProfilesFile, data, 0600)
+}
+
+// LoadAgentProfileAssignments loads agent profile assignments from file
+func (c *ConfigPersistence) LoadAgentProfileAssignments() ([]models.AgentProfileAssignment, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := c.fs.ReadFile(c.agentAssignmentsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []models.AgentProfileAssignment{}, nil
+		}
+		return nil, err
+	}
+
+	if len(data) == 0 {
+		return []models.AgentProfileAssignment{}, nil
+	}
+
+	var assignments []models.AgentProfileAssignment
+	if err := json.Unmarshal(data, &assignments); err != nil {
+		return nil, err
+	}
+
+	return assignments, nil
+}
+
+// SaveAgentProfileAssignments saves agent profile assignments to file
+func (c *ConfigPersistence) SaveAgentProfileAssignments(assignments []models.AgentProfileAssignment) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	data, err := json.MarshalIndent(assignments, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	return c.writeConfigFileLocked(c.agentAssignmentsFile, data, 0600)
+}
+
+// ============================================
+// AI Chat Sessions Persistence
+// ============================================
+
+// AIChatSessionsData is the top-level container for chat sessions
+type AIChatSessionsData struct {
+	Version   int                       `json:"version"`
+	LastSaved time.Time                 `json:"last_saved"`
+	Sessions  map[string]*AIChatSession `json:"sessions"` // keyed by session ID
+}
+
+// AIChatSession represents a single chat conversation
+type AIChatSession struct {
+	ID        string          `json:"id"`
+	Username  string          `json:"username"` // owner (from auth), empty for single-user
+	Title     string          `json:"title"`    // auto-generated or user-set
+	CreatedAt time.Time       `json:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at"`
+	Messages  []AIChatMessage `json:"messages"`
+}
+
+// AIChatMessage represents a single message in a chat session
+type AIChatMessage struct {
+	ID        string               `json:"id"`
+	Role      string               `json:"role"` // "user" or "assistant"
+	Content   string               `json:"content"`
+	Timestamp time.Time            `json:"timestamp"`
+	Model     string               `json:"model,omitempty"`
+	Tokens    *AIChatMessageTokens `json:"tokens,omitempty"`
+	ToolCalls []AIChatToolCall     `json:"tool_calls,omitempty"`
+}
+
+// AIChatMessageTokens tracks token usage for a message
+type AIChatMessageTokens struct {
+	Input  int `json:"input"`
+	Output int `json:"output"`
+}
+
+// AIChatToolCall represents a tool call made during a message
+type AIChatToolCall struct {
+	Name    string `json:"name"`
+	Input   string `json:"input"`
+	Output  string `json:"output"`
+	Success bool   `json:"success"`
+}
+
+// SaveAIChatSessions persists all chat sessions to disk
+func (c *ConfigPersistence) SaveAIChatSessions(sessions map[string]*AIChatSession) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	data := AIChatSessionsData{
+		Version:   1,
+		LastSaved: time.Now(),
+		Sessions:  sessions,
+	}
+
+	jsonData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := c.writeConfigFileLocked(c.aiChatSessionsFile, jsonData, 0600); err != nil {
+		return err
+	}
+
+	log.Debug().
+		Str("file", c.aiChatSessionsFile).
+		Int("count", len(sessions)).
+		Msg("AI chat sessions saved")
+	return nil
+}
+
+// LoadAIChatSessions loads all chat sessions from disk
+func (c *ConfigPersistence) LoadAIChatSessions() (*AIChatSessionsData, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := c.fs.ReadFile(c.aiChatSessionsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &AIChatSessionsData{
+				Version:  1,
+				Sessions: make(map[string]*AIChatSession),
+			}, nil
+		}
+		return nil, err
+	}
+
+	var sessionsData AIChatSessionsData
+	if err := json.Unmarshal(data, &sessionsData); err != nil {
+		log.Error().Err(err).Str("file", c.aiChatSessionsFile).Msg("Failed to parse AI chat sessions file")
+		return &AIChatSessionsData{
+			Version:  1,
+			Sessions: make(map[string]*AIChatSession),
+		}, nil
+	}
+
+	if sessionsData.Sessions == nil {
+		sessionsData.Sessions = make(map[string]*AIChatSession)
+	}
+
+	log.Debug().
+		Str("file", c.aiChatSessionsFile).
+		Int("count", len(sessionsData.Sessions)).
+		Msg("AI chat sessions loaded")
+	return &sessionsData, nil
+}
+
+// SaveAIChatSession saves or updates a single chat session
+func (c *ConfigPersistence) SaveAIChatSession(session *AIChatSession) error {
+	sessionsData, err := c.LoadAIChatSessions()
+	if err != nil {
+		return err
+	}
+
+	session.UpdatedAt = time.Now()
+	sessionsData.Sessions[session.ID] = session
+
+	return c.SaveAIChatSessions(sessionsData.Sessions)
+}
+
+// DeleteAIChatSession removes a chat session by ID
+func (c *ConfigPersistence) DeleteAIChatSession(sessionID string) error {
+	sessionsData, err := c.LoadAIChatSessions()
+	if err != nil {
+		return err
+	}
+
+	delete(sessionsData.Sessions, sessionID)
+	return c.SaveAIChatSessions(sessionsData.Sessions)
+}
+
+// GetAIChatSessionsForUser returns all sessions for a specific user (or all if username is empty)
+func (c *ConfigPersistence) GetAIChatSessionsForUser(username string) ([]*AIChatSession, error) {
+	sessionsData, err := c.LoadAIChatSessions()
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*AIChatSession
+	for _, session := range sessionsData.Sessions {
+		// If username filter is empty, return all; otherwise filter by username
+		if username == "" || session.Username == username {
+			result = append(result, session)
+		}
+	}
+
+	// Sort by UpdatedAt descending (most recent first)
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].UpdatedAt.After(result[j].UpdatedAt)
+	})
+
+	return result, nil
+}
+
+// CleanupOldAIChatSessions removes sessions older than maxAge
+func (c *ConfigPersistence) CleanupOldAIChatSessions(maxAge time.Duration) (int, error) {
+	sessionsData, err := c.LoadAIChatSessions()
+	if err != nil {
+		return 0, err
+	}
+
+	cutoff := time.Now().Add(-maxAge)
+	removed := 0
+
+	for id, session := range sessionsData.Sessions {
+		if session.UpdatedAt.Before(cutoff) {
+			delete(sessionsData.Sessions, id)
+			removed++
+		}
+	}
+
+	if removed > 0 {
+		if err := c.SaveAIChatSessions(sessionsData.Sessions); err != nil {
+			return 0, err
+		}
+		log.Info().
+			Int("removed", removed).
+			Dur("max_age", maxAge).
+			Msg("Cleaned up old AI chat sessions")
+	}
+
+	return removed, nil
 }

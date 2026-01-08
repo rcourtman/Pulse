@@ -312,6 +312,54 @@ func TestHandleLookupByHostname(t *testing.T) {
 	}
 }
 
+func TestHandleConfigForbiddenOnTokenMismatch(t *testing.T) {
+	t.Parallel()
+
+	hostID := "host-789"
+
+	handler := newHostAgentHandlerForTests(t, models.Host{
+		ID:      hostID,
+		TokenID: "token-expected",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/"+hostID+"/config", nil)
+	attachAPITokenRecord(req, &config.APITokenRecord{
+		ID:     "token-other",
+		Scopes: []string{config.ScopeHostReport},
+	})
+
+	rec := httptest.NewRecorder()
+	handler.HandleConfig(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	}
+}
+
+func TestHandleConfigAllowsHostManageScope(t *testing.T) {
+	t.Parallel()
+
+	hostID := "host-910"
+
+	handler := newHostAgentHandlerForTests(t, models.Host{
+		ID:      hostID,
+		TokenID: "token-expected",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/"+hostID+"/config", nil)
+	attachAPITokenRecord(req, &config.APITokenRecord{
+		ID:     "token-other",
+		Scopes: []string{config.ScopeHostManage},
+	})
+
+	rec := httptest.NewRecorder()
+	handler.HandleConfig(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+}
+
 func newHostAgentHandlerForTests(t *testing.T, hosts ...models.Host) *HostAgentHandlers {
 	t.Helper()
 

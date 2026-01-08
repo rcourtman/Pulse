@@ -1,5 +1,7 @@
 import { createSignal } from 'solid-js';
 import { logger } from '@/utils/logger';
+import { AIAPI } from '@/api/ai';
+import type { AIChatSession, AIChatSessionSummary } from '@/types/ai';
 
 interface AIChatContext {
   targetType?: string;
@@ -34,10 +36,33 @@ interface Message {
   }>;
 }
 
-// Local storage key
+// Local storage keys
 const HISTORY_STORAGE_KEY = 'pulse:ai_chat_history';
+const SESSION_ID_KEY = 'pulse:ai_chat_session_id';
 
-// Load initial messages from storage
+// Generate a unique session ID
+const generateSessionId = (): string => {
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+};
+
+// Load session ID from storage or generate new one
+const loadOrCreateSessionId = (): string => {
+  try {
+    const stored = localStorage.getItem(SESSION_ID_KEY);
+    if (stored) return stored;
+  } catch (e) {
+    logger.error('Failed to load session ID:', e);
+  }
+  const newId = generateSessionId();
+  try {
+    localStorage.setItem(SESSION_ID_KEY, newId);
+  } catch (e) {
+    logger.error('Failed to save session ID:', e);
+  }
+  return newId;
+};
+
+// Load initial messages from local storage (fallback/cache)
 const loadMessagesFromStorage = (): Message[] => {
   try {
     const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
@@ -55,6 +80,15 @@ const loadMessagesFromStorage = (): Message[] => {
   }
 };
 
+// Save messages to local storage (cache)
+const saveMessagesToStorage = (msgs: Message[]) => {
+  try {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(msgs));
+  } catch (e) {
+    logger.error('Failed to save chat history:', e);
+  }
+};
+
 // Global state for the AI chat drawer
 const [isAIChatOpen, setIsAIChatOpen] = createSignal(false);
 const [aiChatContext, setAIChatContext] = createSignal<AIChatContext>({});
@@ -62,8 +96,75 @@ const [contextItems, setContextItems] = createSignal<ContextItem[]>([]);
 const [messages, setMessages] = createSignal<Message[]>(loadMessagesFromStorage());
 const [aiEnabled, setAiEnabled] = createSignal<boolean | null>(null); // null = not checked yet
 
+// Session management state
+const [currentSessionId, setCurrentSessionId] = createSignal<string>(loadOrCreateSessionId());
+const [sessionTitle, setSessionTitle] = createSignal<string>('');
+const [sessions, setSessions] = createSignal<AIChatSessionSummary[]>([]);
+const [syncEnabled, _setSyncEnabled] = createSignal<boolean>(true);
+const [isSyncing, setIsSyncing] = createSignal<boolean>(false);
+
+// Debounce timer for saving
+let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const SAVE_DEBOUNCE_MS = 2000; // Save 2 seconds after last change
+
 // Store reference to AI input for focusing from keyboard shortcuts
 let aiInputRef: HTMLTextAreaElement | null = null;
+
+// Sync current session to server (debounced)
+const syncToServer = async () => {
+  if (!syncEnabled()) return;
+
+  const msgs = messages();
+  if (msgs.length === 0) return; // Don't save empty sessions
+
+  setIsSyncing(true);
+  try {
+    const session: AIChatSession = {
+      id: currentSessionId(),
+      username: '', // Server will set from auth
+      title: sessionTitle() || '',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      messages: msgs,
+    };
+
+    await AIAPI.saveChatSession(session);
+    logger.debug('Chat session synced to server', { sessionId: session.id, messageCount: msgs.length });
+  } catch (e) {
+    logger.error('Failed to sync chat session to server:', e);
+    // Keep local storage as fallback
+  } finally {
+    setIsSyncing(false);
+  }
+};
+
+// Debounced sync
+const debouncedSync = () => {
+  if (saveDebounceTimer) {
+    clearTimeout(saveDebounceTimer);
+  }
+  saveDebounceTimer = setTimeout(syncToServer, SAVE_DEBOUNCE_MS);
+};
+
+// Load session from server
+const loadSessionFromServer = async (sessionId: string): Promise<boolean> => {
+  try {
+    const session = await AIAPI.getChatSession(sessionId);
+    setMessages(session.messages);
+    setSessionTitle(session.title);
+    saveMessagesToStorage(session.messages); // Update local cache
+    logger.debug('Chat session loaded from server', { sessionId, messageCount: session.messages.length });
+    return true;
+  } catch (e: any) {
+    if (e?.message?.includes('404') || e?.message?.includes('not found')) {
+      // Session doesn't exist on server yet, that's fine
+      logger.debug('Chat session not found on server, using local', { sessionId });
+      return false;
+    }
+    logger.error('Failed to load chat session from server:', e);
+    return false;
+  }
+};
 
 export const aiChatStore = {
   // Check if chat is open
@@ -91,6 +192,26 @@ export const aiChatStore = {
     return aiEnabled();
   },
 
+  // Get current session ID
+  get sessionId() {
+    return currentSessionId();
+  },
+
+  // Get session title
+  get title() {
+    return sessionTitle();
+  },
+
+  // Get all sessions (for session picker)
+  get sessions() {
+    return sessions();
+  },
+
+  // Check if syncing
+  get syncing() {
+    return isSyncing();
+  },
+
   // Check if a specific item is in context
   hasContextItem(id: string) {
     return contextItems().some(item => item.id === id);
@@ -104,10 +225,110 @@ export const aiChatStore = {
   // Set messages (for persistence from AIChat component)
   setMessages(msgs: Message[]) {
     setMessages(msgs);
+    saveMessagesToStorage(msgs);
+    debouncedSync();
+  },
+
+  // Set session title
+  setTitle(title: string) {
+    setSessionTitle(title);
+    debouncedSync();
+  },
+
+  // Initialize sync - call this on app startup
+  async initSync() {
     try {
-      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(msgs));
+      // Try to load current session from server
+      const sessionId = currentSessionId();
+      const loaded = await loadSessionFromServer(sessionId);
+
+      if (!loaded) {
+        // Server doesn't have this session, use local storage
+        const localMessages = loadMessagesFromStorage();
+        if (localMessages.length > 0) {
+          // Sync local messages to server
+          setMessages(localMessages);
+          await syncToServer();
+        }
+      }
+
+      // Load session list
+      await this.refreshSessions();
     } catch (e) {
-      logger.error('Failed to save chat history:', e);
+      logger.error('Failed to initialize chat sync:', e);
+    }
+  },
+
+  // Refresh session list from server
+  async refreshSessions() {
+    try {
+      const sessionList = await AIAPI.listChatSessions();
+      setSessions(sessionList);
+    } catch (e) {
+      logger.error('Failed to load chat sessions:', e);
+    }
+  },
+
+  // Switch to a different session
+  async switchSession(sessionId: string) {
+    // Save current session first
+    await syncToServer();
+
+    // Load new session
+    setCurrentSessionId(sessionId);
+    try {
+      localStorage.setItem(SESSION_ID_KEY, sessionId);
+    } catch (e) {
+      logger.error('Failed to save session ID:', e);
+    }
+
+    const loaded = await loadSessionFromServer(sessionId);
+    if (!loaded) {
+      // Session doesn't exist, clear messages
+      setMessages([]);
+      setSessionTitle('');
+      saveMessagesToStorage([]);
+    }
+  },
+
+  // Start a new conversation
+  async newConversation() {
+    // Save current session first
+    await syncToServer();
+
+    // Generate new session ID
+    const newId = generateSessionId();
+    setCurrentSessionId(newId);
+    try {
+      localStorage.setItem(SESSION_ID_KEY, newId);
+    } catch (e) {
+      logger.error('Failed to save session ID:', e);
+    }
+
+    // Clear messages
+    setMessages([]);
+    setSessionTitle('');
+    saveMessagesToStorage([]);
+    localStorage.removeItem(HISTORY_STORAGE_KEY);
+
+    // Refresh session list
+    await this.refreshSessions();
+  },
+
+  // Delete a session
+  async deleteSession(sessionId: string) {
+    try {
+      await AIAPI.deleteChatSession(sessionId);
+
+      // If we deleted the current session, start a new one
+      if (sessionId === currentSessionId()) {
+        await this.newConversation();
+      } else {
+        // Just refresh the list
+        await this.refreshSessions();
+      }
+    } catch (e) {
+      logger.error('Failed to delete chat session:', e);
     }
   },
 
@@ -188,10 +409,9 @@ export const aiChatStore = {
     setAIChatContext({});
   },
 
-  // Clear conversation (start fresh)
+  // Clear conversation (start fresh) - now creates a new session
   clearConversation() {
-    setMessages([]);
-    localStorage.removeItem(HISTORY_STORAGE_KEY);
+    this.newConversation();
   },
 
   // Convenience method to update context for a specific target (host, VM, container, etc.)
@@ -234,5 +454,14 @@ export const aiChatStore = {
       return true;
     }
     return false;
+  },
+
+  // Force sync now (for manual save)
+  async syncNow() {
+    if (saveDebounceTimer) {
+      clearTimeout(saveDebounceTimer);
+      saveDebounceTimer = null;
+    }
+    await syncToServer();
   },
 };

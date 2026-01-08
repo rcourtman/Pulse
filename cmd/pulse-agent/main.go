@@ -22,8 +22,10 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/kubernetesagent"
+	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
+	gohost "github.com/shirou/gopsutil/v4/host"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -112,6 +114,70 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	if cfg.SelfTest {
 		logger.Info().Msg("Self-test passed: config loaded and logger initialized")
 		return nil
+	}
+
+	// 2b. Compute Agent ID if missing (needed for remote config)
+	// We replicate the logic from hostagent.New to ensure we get the same ID
+	lookupHostname := strings.TrimSpace(cfg.HostnameOverride)
+	if cfg.AgentID == "" {
+		// Use a short timeout for host info
+		hCtx, hCancel := context.WithTimeout(ctx, 5*time.Second)
+		info, err := gohost.InfoWithContext(hCtx)
+		hCancel()
+		if err == nil {
+			if lookupHostname == "" {
+				lookupHostname = strings.TrimSpace(info.Hostname)
+			}
+			machineID := hostagent.GetReliableMachineID(info.HostID, logger)
+			cfg.AgentID = machineID
+			if cfg.AgentID == "" {
+				// Fallback to hostname
+				cfg.AgentID = lookupHostname
+			}
+		} else {
+			logger.Warn().Err(err).Msg("Failed to fetch host info for Agent ID generation")
+		}
+	}
+	if lookupHostname == "" {
+		lookupHostname = strings.TrimSpace(cfg.HostnameOverride)
+		if lookupHostname == "" {
+			if name, err := os.Hostname(); err == nil {
+				lookupHostname = strings.TrimSpace(name)
+			}
+		}
+	}
+
+	// 2c. Fetch Remote Config
+	// Only if we have enough info to contact server
+	if cfg.PulseURL != "" && cfg.APIToken != "" && cfg.AgentID != "" {
+		logger.Debug().Msg("Fetching remote configuration...")
+		rc := remoteconfig.New(remoteconfig.Config{
+			PulseURL:           cfg.PulseURL,
+			APIToken:           cfg.APIToken,
+			AgentID:            cfg.AgentID,
+			Hostname:           lookupHostname,
+			InsecureSkipVerify: cfg.InsecureSkipVerify,
+			Logger:             logger,
+		})
+
+		// Use a short timeout for config fetch so we don't block startup too long
+		rcCtx, rcCancel := context.WithTimeout(ctx, 10*time.Second)
+		settings, commandsEnabled, err := rc.Fetch(rcCtx)
+		rcCancel()
+
+		if err != nil {
+			// Just log warning and proceed with local config
+			logger.Warn().Err(err).Msg("Failed to fetch remote config - using local (or previously cached) defaults")
+		} else {
+			logger.Info().Msg("Successfully fetched remote configuration")
+			if commandsEnabled != nil {
+				cfg.EnableCommands = *commandsEnabled
+				logger.Info().Bool("enabled", cfg.EnableCommands).Msg("Applied remote command execution setting")
+			}
+			if len(settings) > 0 {
+				applyRemoteSettings(&cfg, settings, &logger)
+			}
+		}
 	}
 
 	// 3. Check if running as Windows service
@@ -825,6 +891,63 @@ func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, lo
 		delay = time.Duration(float64(delay) * multiplier)
 		if delay > retryMaxDelay {
 			delay = retryMaxDelay
+		}
+	}
+}
+
+// applyRemoteSettings merges remote settings into the local configuration.
+// Supported keys:
+// - enable_docker (bool)
+// - enable_kubernetes (bool)
+// - enable_proxmox (bool)
+// - proxmox_type (string)
+// - log_level (string)
+// - interval (string/duration)
+func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *zerolog.Logger) {
+	for k, v := range settings {
+		switch k {
+		case "enable_docker":
+			if b, ok := v.(bool); ok {
+				cfg.EnableDocker = b
+				logger.Info().Bool("val", b).Msg("Remote config: enable_docker")
+			}
+		case "enable_kubernetes":
+			if b, ok := v.(bool); ok {
+				cfg.EnableKubernetes = b
+				logger.Info().Bool("val", b).Msg("Remote config: enable_kubernetes")
+			}
+		case "enable_proxmox":
+			if b, ok := v.(bool); ok {
+				cfg.EnableProxmox = b
+				logger.Info().Bool("val", b).Msg("Remote config: enable_proxmox")
+			}
+		case "proxmox_type":
+			if s, ok := v.(string); ok {
+				cfg.ProxmoxType = s
+				logger.Info().Str("val", s).Msg("Remote config: proxmox_type")
+			}
+		case "log_level":
+			if s, ok := v.(string); ok {
+				if l, err := zerolog.ParseLevel(s); err == nil {
+					cfg.LogLevel = l
+					zerolog.SetGlobalLevel(l)
+					// Re-create logger with new level
+					newLogger := zerolog.New(os.Stdout).Level(l).With().Timestamp().Logger()
+					cfg.Logger = &newLogger
+					logger.Info().Str("val", s).Msg("Remote config: log_level")
+				}
+			}
+		case "interval":
+			if s, ok := v.(string); ok {
+				if d, err := time.ParseDuration(s); err == nil {
+					cfg.Interval = d
+					logger.Info().Str("val", s).Msg("Remote config: interval")
+				}
+			} else if f, ok := v.(float64); ok {
+				// JSON numbers are floats, assume seconds
+				cfg.Interval = time.Duration(f) * time.Second
+				logger.Info().Float64("val", f).Msg("Remote config: interval (s)")
+			}
 		}
 	}
 }

@@ -3241,3 +3241,258 @@ func (h *AISettingsHandler) HandleGetDismissedFindings(w http.ResponseWriter, r 
 		log.Error().Err(err).Msg("Failed to write dismissed findings response")
 	}
 }
+
+// ============================================
+// AI Chat Sessions API
+// ============================================
+
+// HandleListAIChatSessions lists all chat sessions for the current user (GET /api/ai/chat/sessions)
+func (h *AISettingsHandler) HandleListAIChatSessions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	// Get username from auth context
+	username := getAuthUsername(h.config, r)
+
+	sessions, err := h.persistence.GetAIChatSessionsForUser(username)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to load chat sessions")
+		http.Error(w, "Failed to load chat sessions", http.StatusInternalServerError)
+		return
+	}
+
+	// Return summary (without full messages) for list view
+	type sessionSummary struct {
+		ID           string    `json:"id"`
+		Title        string    `json:"title"`
+		MessageCount int       `json:"message_count"`
+		CreatedAt    time.Time `json:"created_at"`
+		UpdatedAt    time.Time `json:"updated_at"`
+	}
+
+	summaries := make([]sessionSummary, 0, len(sessions))
+	for _, s := range sessions {
+		summaries = append(summaries, sessionSummary{
+			ID:           s.ID,
+			Title:        s.Title,
+			MessageCount: len(s.Messages),
+			CreatedAt:    s.CreatedAt,
+			UpdatedAt:    s.UpdatedAt,
+		})
+	}
+
+	if err := utils.WriteJSONResponse(w, summaries); err != nil {
+		log.Error().Err(err).Msg("Failed to write chat sessions response")
+	}
+}
+
+// HandleGetAIChatSession returns a specific chat session (GET /api/ai/chat/sessions/{id})
+func (h *AISettingsHandler) HandleGetAIChatSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	// Extract session ID from URL
+	sessionID := strings.TrimPrefix(r.URL.Path, "/api/ai/chat/sessions/")
+	if sessionID == "" {
+		http.Error(w, "Session ID required", http.StatusBadRequest)
+		return
+	}
+
+	username := getAuthUsername(h.config, r)
+
+	sessionsData, err := h.persistence.LoadAIChatSessions()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to load chat sessions")
+		http.Error(w, "Failed to load chat sessions", http.StatusInternalServerError)
+		return
+	}
+
+	session, exists := sessionsData.Sessions[sessionID]
+	if !exists {
+		http.Error(w, "Session not found", http.StatusNotFound)
+		return
+	}
+
+	// Check ownership (allow access if single-user or username matches)
+	if session.Username != "" && session.Username != username {
+		http.Error(w, "Access denied", http.StatusForbidden)
+		return
+	}
+
+	if err := utils.WriteJSONResponse(w, session); err != nil {
+		log.Error().Err(err).Msg("Failed to write chat session response")
+	}
+}
+
+// HandleSaveAIChatSession creates or updates a chat session (PUT /api/ai/chat/sessions/{id})
+func (h *AISettingsHandler) HandleSaveAIChatSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	// Extract session ID from URL
+	sessionID := strings.TrimPrefix(r.URL.Path, "/api/ai/chat/sessions/")
+	if sessionID == "" {
+		http.Error(w, "Session ID required", http.StatusBadRequest)
+		return
+	}
+
+	username := getAuthUsername(h.config, r)
+
+	// Parse request body
+	var session config.AIChatSession
+	if err := json.NewDecoder(r.Body).Decode(&session); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Ensure session ID matches URL
+	session.ID = sessionID
+
+	// Check ownership if session exists
+	existingData, err := h.persistence.LoadAIChatSessions()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to load chat sessions")
+		http.Error(w, "Failed to load chat sessions", http.StatusInternalServerError)
+		return
+	}
+
+	if existing, exists := existingData.Sessions[sessionID]; exists {
+		// Check ownership
+		if existing.Username != "" && existing.Username != username {
+			http.Error(w, "Access denied", http.StatusForbidden)
+			return
+		}
+		// Preserve original creation time and username
+		session.CreatedAt = existing.CreatedAt
+		session.Username = existing.Username
+	} else {
+		// New session - set creation time and username
+		session.CreatedAt = time.Now()
+		session.Username = username
+	}
+
+	// Auto-generate title from first user message if not set
+	if session.Title == "" && len(session.Messages) > 0 {
+		for _, msg := range session.Messages {
+			if msg.Role == "user" {
+				title := msg.Content
+				if len(title) > 50 {
+					title = title[:47] + "..."
+				}
+				session.Title = title
+				break
+			}
+		}
+	}
+	if session.Title == "" {
+		session.Title = "New conversation"
+	}
+
+	if err := h.persistence.SaveAIChatSession(&session); err != nil {
+		log.Error().Err(err).Msg("Failed to save chat session")
+		http.Error(w, "Failed to save chat session", http.StatusInternalServerError)
+		return
+	}
+
+	log.Debug().
+		Str("session_id", sessionID).
+		Str("username", username).
+		Int("messages", len(session.Messages)).
+		Msg("Chat session saved")
+
+	if err := utils.WriteJSONResponse(w, session); err != nil {
+		log.Error().Err(err).Msg("Failed to write save chat session response")
+	}
+}
+
+// HandleDeleteAIChatSession deletes a chat session (DELETE /api/ai/chat/sessions/{id})
+func (h *AISettingsHandler) HandleDeleteAIChatSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	// Extract session ID from URL
+	sessionID := strings.TrimPrefix(r.URL.Path, "/api/ai/chat/sessions/")
+	if sessionID == "" {
+		http.Error(w, "Session ID required", http.StatusBadRequest)
+		return
+	}
+
+	username := getAuthUsername(h.config, r)
+
+	// Check ownership
+	existingData, err := h.persistence.LoadAIChatSessions()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to load chat sessions")
+		http.Error(w, "Failed to load chat sessions", http.StatusInternalServerError)
+		return
+	}
+
+	if existing, exists := existingData.Sessions[sessionID]; exists {
+		if existing.Username != "" && existing.Username != username {
+			http.Error(w, "Access denied", http.StatusForbidden)
+			return
+		}
+	}
+
+	if err := h.persistence.DeleteAIChatSession(sessionID); err != nil {
+		log.Error().Err(err).Msg("Failed to delete chat session")
+		http.Error(w, "Failed to delete chat session", http.StatusInternalServerError)
+		return
+	}
+
+	log.Info().
+		Str("session_id", sessionID).
+		Str("username", username).
+		Msg("Chat session deleted")
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// getAuthUsername extracts the username from the current auth context
+func getAuthUsername(cfg *config.Config, r *http.Request) string {
+	// Check OIDC session first
+	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+		if username := GetSessionUsername(cookie.Value); username != "" {
+			return username
+		}
+	}
+
+	// Check proxy auth
+	if cfg.ProxyAuthSecret != "" {
+		if valid, username, _ := CheckProxyAuth(cfg, r); valid && username != "" {
+			return username
+		}
+	}
+
+	// Fall back to basic auth username
+	if cfg.AuthUser != "" {
+		return cfg.AuthUser
+	}
+
+	// Single-user mode without auth
+	return ""
+}

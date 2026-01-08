@@ -420,6 +420,36 @@ Legacy install/uninstall scripts:
 `POST /api/agents/docker/report` - Docker container metrics
 `POST /api/agents/kubernetes/report` - Kubernetes cluster metrics
 
+### Host Agent Management
+`GET /api/agents/host/lookup?id=<host_id>`  
+`GET /api/agents/host/lookup?hostname=<hostname>`  
+Looks up a host by ID or hostname/display name. Requires `host-agent:report`.
+
+`POST /api/agents/host/uninstall`  
+Host agent self-unregister during uninstall. Requires `host-agent:report`.
+
+`POST /api/agents/host/unlink` (admin, `host-agent:manage`)  
+Unlinks a host agent from a node.
+
+`DELETE /api/agents/host/{host_id}` (admin, `host-agent:manage`)  
+Removes a host agent from state.
+
+### Agent Remote Config
+`GET /api/agents/host/{agent_id}/config`  
+Returns the server-side config payload for an agent (used by remote config and debugging). Requires `host-agent:report`.
+
+`PATCH /api/agents/host/{agent_id}/config` (admin, `host-agent:manage`)  
+Updates server-side config for an agent (e.g., `commandsEnabled`).
+
+### Agent Profiles (Pro)
+`GET /api/admin/profiles` (admin, Pro)
+`POST /api/admin/profiles` (admin, Pro)
+`PUT /api/admin/profiles/{id}` (admin, Pro)
+`DELETE /api/admin/profiles/{id}` (admin, Pro)
+`GET /api/admin/profiles/assignments` (admin, Pro)
+`POST /api/admin/profiles/assignments` (admin, Pro)
+`DELETE /api/admin/profiles/assignments/{agent_id}` (admin, Pro)
+
 ---
 
 ## 🌡️ Temperature Proxy (Legacy)

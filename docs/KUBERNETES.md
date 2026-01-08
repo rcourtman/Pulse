@@ -1,98 +1,199 @@
-# ☸️ Kubernetes (Helm)
+# Pulse on Kubernetes
 
-Deploy Pulse to Kubernetes using the official Helm chart.
+This guide explains how to deploy the Pulse Server (Hub) and Pulse Agents on Kubernetes clusters, including immutable distributions like Talos Linux.
 
-## 🚀 Installation
+## Prerequisites
 
-1. **Install (OCI chart, recommended)**
-   ```bash
-   helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart \
-     --namespace pulse \
-     --create-namespace
-   ```
+*   A Kubernetes cluster (v1.19+)
+*   `helm` (v3+) installed locally
+*   `kubectl` configured to talk to your cluster
 
-2. **Access**
-   ```bash
-   kubectl -n pulse port-forward svc/pulse 7655:7655
-   ```
-   Open `http://localhost:7655` to complete setup.
+## 1. Deploying the Pulse Server
 
-> If you installed using a Helm repository URL previously, you can keep using it. OCI is the preferred distribution format going forward.
+The Pulse Server is the central hub that collects metrics and manages agents.
 
----
+### Option A: Using Helm (Recommended)
 
-## ⚙️ Configuration
+1.  Install the chart from the OCI registry:
+    ```bash
+    helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart \
+      --namespace pulse \
+      --create-namespace \
+      --set persistence.enabled=true \
+      --set persistence.size=10Gi
+    ```
 
-Configure via `values.yaml` or `--set` flags.
+    > **Note**: For production, ensure you configure a proper `storageClass` or `deployment.strategy.type=Recreate` if using ReadWriteOnce (RWO) volumes.
 
-> **Note**: `API_TOKEN` / `API_TOKENS` environment variables are legacy. Prefer managing API tokens in the UI after initial setup.
+### Option B: Generating Static Manifests (For Talos / GitOps)
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `service.type` | Service type (ClusterIP/LoadBalancer) | `ClusterIP` |
-| `ingress.enabled` | Enable Ingress | `false` |
-| `persistence.enabled` | Enable PVC for /data | `true` |
-| `persistence.size` | PVC Size | `8Gi` |
-| `agent.enabled` | Enable legacy `pulse-docker-agent` workload (deprecated) | `false` |
+If you cannot use Helm directly on the cluster (e.g., restricted Talos environment), you can generate standard Kubernetes YAML manifests:
 
-> Note: the `agent.*` block is legacy and references `pulse-docker-agent`. For new deployments, prefer the unified agent (`pulse-agent`) where possible.
+```bash
+helm template pulse oci://ghcr.io/rcourtman/pulse-chart \
+  --namespace pulse \
+  --set persistence.enabled=true \
+  > pulse-server.yaml
+```
 
-### Prometheus Metrics
+You can then apply this file:
 
-The Helm chart exposes only the main HTTP port (`7655`). Prometheus metrics are served on a separate listener (`9091`) and are **not** exposed by default.
+```bash
+kubectl apply -f pulse-server.yaml
+```
 
-If you want to scrape metrics:
-1. Expose port `9091` with an additional Service.
-2. Point your `ServiceMonitor` at that service/port (the built-in ServiceMonitor targets the HTTP service by default).
+## 2. Deploying the Pulse Agent
 
-### Example `values.yaml`
+### Important: Helm Chart Agent Is Legacy Docker-Only
+
+The Helm chart includes an `agent` section, but it deploys the **deprecated** `pulse-docker-agent` (Docker socket metrics only). It does **not** deploy the unified `pulse-agent`.
+
+If you need the unified agent on Kubernetes, use a custom DaemonSet as shown below.
+
+### Unified Agent on Kubernetes (DaemonSet)
+
+To monitor Kubernetes resources, run the unified agent as a DaemonSet and enable the Kubernetes module.
+
+**Recommended options:**
+- **Kubernetes-only monitoring**: `PULSE_ENABLE_KUBERNETES=true` and `PULSE_ENABLE_HOST=false` (no host mounts required).
+- **Kubernetes + node metrics**: `PULSE_ENABLE_KUBERNETES=true` and `PULSE_ENABLE_HOST=true` (requires host mounts and privileged mode).
+
+#### Minimal DaemonSet Example
+
+This uses the main `rcourtman/pulse` image but runs the `pulse-agent` binary directly.
 
 ```yaml
-ingress:
-  enabled: true
-  className: nginx
-  hosts:
-    - host: pulse.example.com
-      paths:
-        - path: /
-          pathType: Prefix
-
-server:
-  env:
-    - name: TZ
-      value: Europe/London
-  secretEnv:
-    create: true
-    data:
-      PULSE_AUTH_USER: "admin"
-      PULSE_AUTH_PASS: "replace-me"
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: pulse-agent
+  namespace: pulse
+spec:
+  selector:
+    matchLabels:
+      app: pulse-agent
+  template:
+    metadata:
+      labels:
+        app: pulse-agent
+    spec:
+      serviceAccountName: pulse-agent
+      containers:
+        - name: pulse-agent
+          image: rcourtman/pulse:latest
+          command: ["/usr/local/bin/pulse-agent"]
+          args:
+            - --enable-kubernetes
+          env:
+            - name: PULSE_URL
+              value: "http://pulse-server.pulse.svc.cluster.local:7655"
+            - name: PULSE_TOKEN
+              value: "YOUR_API_TOKEN_HERE"
+            - name: PULSE_ENABLE_HOST
+              value: "false"
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+          resources: {}
 ```
 
-Apply with:
-```bash
-helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart -n pulse -f values.yaml
+Use a token scoped for the agent:
+- `kubernetes:report` for Kubernetes reporting
+- `host-agent:report` if you enable host metrics
+
+#### Add Host Metrics (Optional)
+
+If you want node CPU/memory/disk metrics, add privileged mode plus host mounts:
+
+```yaml
+          env:
+            - name: PULSE_ENABLE_HOST
+              value: "true"
+            - name: HOST_PROC
+              value: "/host/proc"
+            - name: HOST_SYS
+              value: "/host/sys"
+            - name: HOST_ETC
+              value: "/host/etc"
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: host-proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: host-sys
+              mountPath: /host/sys
+              readOnly: true
+            - name: host-root
+              mountPath: /host/root
+              readOnly: true
+      volumes:
+        - name: host-proc
+          hostPath:
+            path: /proc
+        - name: host-sys
+          hostPath:
+            path: /sys
+        - name: host-root
+          hostPath:
+            path: /
 ```
 
+#### RBAC
+
+The Kubernetes agent uses the in-cluster API and needs read access to cluster resources (nodes, pods, deployments, etc.). Create a read-only `ClusterRole` and bind it to the `pulse-agent` service account.
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pulse-agent
+  namespace: pulse
 ---
-
-## 🔄 Upgrades
-
-```bash
-helm upgrade pulse oci://ghcr.io/rcourtman/pulse-chart -n pulse
-```
-
-**Rollback**:
-```bash
-helm rollback pulse -n pulse
-```
-
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pulse-agent-read
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pulse-agent-read
+subjects:
+  - kind: ServiceAccount
+    name: pulse-agent
+    namespace: pulse
+roleRef:
+  kind: ClusterRole
+  name: pulse-agent-read
+  apiGroup: rbac.authorization.k8s.io
+```
 
-## ⚠️ Troubleshooting
+## 3. Talos Linux Specifics
 
-- **Check Pods**: `kubectl -n pulse get pods`
-- **Check Logs**: `kubectl -n pulse logs deploy/pulse`
-- **Scheduler Health**:
-  ```bash
-  kubectl -n pulse exec deploy/pulse -- curl -s http://localhost:7655/api/monitoring/scheduler/health
-  ```
+Talos Linux is immutable, so you cannot install the agent via the shell script. Use the DaemonSet approach above.
+
+### Agent Configuration for Talos
+*   **Storage**: Talos mounts the ephemeral OS on `/`. Persistent data is usually in `/var`. The Pulse agent generally doesn't store state, but if it did, ensure it maps to a persistent path.
+*   **Network**: The agent will report the Pod IP by default. To report the Node IP, set `PULSE_REPORT_IP` using the Downward API:
+
+    Add this to the DaemonSet `env` section:
+    ```yaml
+    - name: PULSE_REPORT_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.hostIP
+    ```
+
+## 4. Troubleshooting
+
+*   **Agent not showing in UI**: Check logs for the DaemonSet pods, for example: `kubectl logs -l app=pulse-agent -n pulse`.
+*   **"Permission Denied" on metrics**: Ensure `securityContext.privileged: true` is set or proper capabilities are added.
+*   **Connection Refused**: Ensure `PULSE_URL` is correct and reachable from the agent pods.

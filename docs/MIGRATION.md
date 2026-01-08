@@ -33,6 +33,7 @@ Never copy `/etc/pulse` (or `/data` in Docker/Kubernetes) manually. Encryption k
 | Guest metadata/notes | — |
 | — | Host metadata (notes/tags/AI command overrides) |
 | — | Docker metadata cache |
+| — | Agent profiles and assignments |
 | — | AI settings and findings (`ai.enc`, `ai_findings.json`, `ai_patrol_runs.json`, `ai_usage_history.json`) |
 | — | Pulse Pro license (`license.enc`) |
 | — | Server sessions (`sessions.json`) |

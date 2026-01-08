@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -247,6 +248,10 @@ func (h *HostAgentHandlers) HandleConfig(w http.ResponseWriter, r *http.Request)
 
 // handleGetConfig returns the server-side config for an agent to apply.
 func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Request, hostID string) {
+	if !h.ensureHostTokenMatch(w, r, hostID) {
+		return
+	}
+
 	config := h.monitor.GetHostAgentConfig(hostID)
 
 	resp := map[string]any{
@@ -258,6 +263,32 @@ func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Reque
 	if err := utils.WriteJSONResponse(w, resp); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize host config response")
 	}
+}
+
+func (h *HostAgentHandlers) ensureHostTokenMatch(w http.ResponseWriter, r *http.Request, hostID string) bool {
+	record := getAPITokenRecordFromRequest(r)
+	if record == nil {
+		return true
+	}
+
+	if record.HasScope(config.ScopeHostManage) || record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeWildcard) {
+		return true
+	}
+
+	state := h.monitor.GetState()
+	for _, host := range state.Hosts {
+		if host.ID != hostID {
+			continue
+		}
+		if host.TokenID == record.ID {
+			return true
+		}
+		writeErrorResponse(w, http.StatusForbidden, "host_lookup_forbidden", "Host does not belong to this API token", nil)
+		return false
+	}
+
+	writeErrorResponse(w, http.StatusNotFound, "host_not_found", "Host has not registered with Pulse yet", nil)
+	return false
 }
 
 // handlePatchConfig updates the server-side config for a host agent.
