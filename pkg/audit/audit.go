@@ -51,6 +51,9 @@ type Logger interface {
 	// Query retrieves audit events matching the filter (optional, may return empty for console logger)
 	Query(filter QueryFilter) ([]Event, error)
 
+	// Count returns the number of audit events matching the filter
+	Count(filter QueryFilter) (int, error)
+
 	// Close releases any resources held by the logger
 	Close() error
 }
@@ -148,6 +151,11 @@ func (c *ConsoleLogger) Log(event Event) error {
 // Console logs are not queryable - use enterprise version for persistent storage.
 func (c *ConsoleLogger) Query(filter QueryFilter) ([]Event, error) {
 	return []Event{}, nil
+}
+
+// Count returns zero for the console logger.
+func (c *ConsoleLogger) Count(filter QueryFilter) (int, error) {
+	return 0, nil
 }
 
 // Close is a no-op for the console logger.

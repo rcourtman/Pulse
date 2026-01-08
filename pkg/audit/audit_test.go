@@ -58,6 +58,19 @@ func TestConsoleLogger_Query(t *testing.T) {
 	}
 }
 
+func TestConsoleLogger_Count(t *testing.T) {
+	logger := NewConsoleLogger()
+
+	count, err := logger.Count(QueryFilter{})
+	if err != nil {
+		t.Errorf("ConsoleLogger.Count() returned error: %v", err)
+	}
+
+	if count != 0 {
+		t.Errorf("ConsoleLogger.Count() should return 0, got %d", count)
+	}
+}
+
 func TestConsoleLogger_Close(t *testing.T) {
 	logger := NewConsoleLogger()
 

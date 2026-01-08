@@ -55,6 +55,43 @@ export function createLocalStorageBooleanSignal(
  * @param key - The localStorage key
  * @param defaultValue - Default value if nothing in localStorage
  */
+export function createLocalStorageNumberSignal(
+  key: string,
+  defaultValue: number = 0,
+): Signal<number> {
+  return createLocalStorageSignal(
+    key,
+    defaultValue,
+    (val) => {
+      const parsed = Number(val);
+      return Number.isFinite(parsed) ? parsed : defaultValue;
+    },
+    (val) => String(val),
+  );
+}
+
+/**
+ * Creates a string signal that syncs with localStorage
+ * @param key - The localStorage key
+ * @param defaultValue - Default value if nothing in localStorage
+ */
+export function createLocalStorageStringSignal(
+  key: string,
+  defaultValue: string = '',
+): Signal<string> {
+  return createLocalStorageSignal(
+    key,
+    defaultValue,
+    (val) => String(val),
+    (val) => String(val),
+  );
+}
+
+/**
+ * Creates a number signal that syncs with localStorage
+ * @param key - The localStorage key
+ * @param defaultValue - Default value if nothing in localStorage
+ */
 // Storage keys used throughout the application
 export const STORAGE_KEYS = {
   // Authentication
@@ -126,4 +163,14 @@ export const STORAGE_KEYS = {
 
   // Feature discovery
   DISMISSED_FEATURE_TIPS: 'pulse-dismissed-feature-tips',
+
+  // Audit log
+  AUDIT_AUTO_VERIFY: 'pulse-audit-auto-verify',
+  AUDIT_AUTO_VERIFY_LIMIT: 'pulse-audit-auto-verify-limit',
+  AUDIT_PAGE_SIZE: 'pulse-audit-page-size',
+  AUDIT_PAGE_OFFSET: 'pulse-audit-page-offset',
+  AUDIT_VERIFICATION_FILTER: 'pulse-audit-verification-filter',
+  AUDIT_EVENT_FILTER: 'pulse-audit-event-filter',
+  AUDIT_USER_FILTER: 'pulse-audit-user-filter',
+  AUDIT_SUCCESS_FILTER: 'pulse-audit-success-filter',
 } as const;

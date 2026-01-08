@@ -69,10 +69,22 @@ func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Req
 		filter.Success = &success
 	}
 
+	logger := audit.GetLogger()
+
 	// Query events from the current logger
-	events, err := audit.GetLogger().Query(filter)
+	events, err := logger.Query(filter)
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "query_failed", "Failed to query audit events", nil)
+		return
+	}
+
+	countFilter := filter
+	countFilter.Limit = 0
+	countFilter.Offset = 0
+
+	totalCount, err := logger.Count(countFilter)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "query_failed", "Failed to count audit events", nil)
 		return
 	}
 
@@ -80,7 +92,7 @@ func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Req
 	// Return a response indicating the feature status
 	response := map[string]interface{}{
 		"events":            events,
-		"total":             len(events),
+		"total":             totalCount,
 		"persistentLogging": len(events) > 0 || isPersistentLogger(),
 	}
 

@@ -17,6 +17,8 @@
 *.db
 *.sqlite
 *.sqlite3
+active_subs.json
+charges.json
 
 # OS files
 .DS_Store

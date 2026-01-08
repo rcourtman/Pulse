@@ -198,6 +198,48 @@ Returns a new raw token (shown once) and updates stored hashes:
   "requiresRestart": false,
   "message": "New API token generated and active immediately! Save this token - it won't be shown again."
 }
+
+---
+
+## 🧾 Audit Log (Enterprise)
+
+These endpoints require admin access and the `settings:read` scope. In OSS builds, the list endpoint returns an empty set and `persistentLogging: false`.
+
+### List Audit Events
+`GET /api/audit?limit=100&event=login&user=admin&success=true&startTime=2024-01-01T00:00:00Z&endTime=2024-01-31T23:59:59Z`
+
+Response:
+```json
+{
+  "events": [
+    {
+      "id": "6b3c9c3c-9a2f-4b3c-9a3b-3d0e8c5c5d45",
+      "timestamp": "2024-01-12T10:15:30Z",
+      "event": "login",
+      "user": "admin",
+      "ip": "10.0.0.10",
+      "path": "/api/login",
+      "success": true,
+      "details": "Successful login",
+      "signature": "..."
+    }
+  ],
+  "total": 1,
+  "persistentLogging": true
+}
+```
+
+### Verify Audit Event Signature
+`GET /api/audit/<id>/verify`
+
+Response:
+```json
+{
+  "available": true,
+  "verified": true,
+  "message": "Event signature verified"
+}
+```
 ```
 
 ### Validate API Token (Admin)

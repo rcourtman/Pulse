@@ -43,6 +43,21 @@ sudo pulse bootstrap-token
 - Check if your IP is locked out (wait 15 mins).
 - If another admin can log in, use `POST /api/security/reset-lockout` to clear the lockout for your username or IP.
 
+**Audit Log verification shows unsigned events**
+- **Symptom**: Audit Log entries show “Unsigned” or verification fails in the UI.
+- **Root cause**: `PULSE_AUDIT_SIGNING_KEY` is not set, so events are stored without signatures.
+- **Fix**: Set `PULSE_AUDIT_SIGNING_KEY` and restart Pulse Pro. Newly created events will be signed; existing unsigned events remain unsigned.
+
+**Audit Log is empty**
+- **Symptom**: Audit Log shows zero events or “Console Logging Only.”
+- **Root cause**: OSS build uses console logging only, or enterprise audit logging is not enabled.
+- **Fix**: Use Pulse Pro with enterprise audit logging enabled, then generate new audit events (logins, token creation, password changes).
+
+**Audit Log verification fails for older events**
+- **Symptom**: Older events fail verification while newer events pass.
+- **Root cause**: The signing key changed or was rotated, so signatures no longer match.
+- **Fix**: Keep `PULSE_AUDIT_SIGNING_KEY` stable. If rotated intentionally, expect older events to fail verification.
+
 ### Monitoring Data
 
 **VMs show "-" for disk usage**
