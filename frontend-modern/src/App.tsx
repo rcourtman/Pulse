@@ -1176,13 +1176,22 @@ function AppLayout(props: {
     const hasSettingsAccess = !scopes || scopes.length === 0 ||
       scopes.includes('*') || scopes.includes('settings:read');
 
-    const tabs = [
+    const tabs: Array<{
+      id: 'alerts' | 'settings';
+      label: string;
+      route: string;
+      tooltip: string;
+      badge: 'update' | null;
+      count: number | undefined;
+      breakdown: { warning: number; critical: number } | undefined;
+      icon: JSX.Element;
+    }> = [
       {
-        id: 'alerts' as const,
+        id: 'alerts',
         label: 'Alerts',
         route: '/alerts',
         tooltip: 'Review active alerts and automation rules',
-        badge: null as 'update' | null,
+        badge: null,
         count: activeAlertCount,
         breakdown,
         icon: <BellIcon class="w-4 h-4 shrink-0" />,
@@ -1192,11 +1201,11 @@ function AppLayout(props: {
     // Only show settings tab if user has access
     if (hasSettingsAccess) {
       tabs.push({
-        id: 'settings' as const,
+        id: 'settings',
         label: 'Settings',
         route: '/settings',
         tooltip: 'Configure Pulse preferences and integrations',
-        badge: updateStore.isUpdateVisible() ? ('update' as const) : null,
+        badge: updateStore.isUpdateVisible() ? 'update' : null,
         count: undefined,
         breakdown: undefined,
         icon: <SettingsIcon class="w-4 h-4 shrink-0" />,
@@ -1385,12 +1394,12 @@ function AppLayout(props: {
                         }
                         return (
                           <span class="inline-flex items-center gap-1">
-                            {tab.breakdown?.critical > 0 && (
+                            {tab.breakdown && tab.breakdown.critical > 0 && (
                               <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-600 dark:bg-red-500 rounded-full">
                                 {tab.breakdown.critical}
                               </span>
                             )}
-                            {tab.breakdown?.warning > 0 && (
+                            {tab.breakdown && tab.breakdown.warning > 0 && (
                               <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500/80 rounded-full">
                                 {tab.breakdown.warning}
                               </span>
