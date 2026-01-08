@@ -44,6 +44,61 @@ func TestSummarizeZFSPoolsUsesZpoolStats(t *testing.T) {
 	}
 }
 
+// TestSummarizeZFSPoolsRAIDZCapacity verifies that RAIDZ pools show usable capacity
+// (from dataset stats) rather than raw capacity (from zpool list SIZE). Issue #1052.
+func TestSummarizeZFSPoolsRAIDZCapacity(t *testing.T) {
+	originalQuery := queryZpoolStats
+	t.Cleanup(func() { queryZpoolStats = originalQuery })
+
+	// Simulate a RAIDZ1 pool with 3 disks:
+	// - Raw SIZE from zpool list: 43.6 TB (sum of all disks)
+	// - Usable capacity from statfs: 29 TB (after RAIDZ1 parity overhead)
+	queryZpoolStats = func(ctx context.Context, pools []string) (map[string]zpoolStats, error) {
+		return map[string]zpoolStats{
+			"Main": {Size: 43600000000000, Alloc: 962000000, Free: 43599038000000},
+		}, nil
+	}
+
+	// Dataset stats from statfs reflect usable capacity (29 TB)
+	datasets := []zfsDatasetUsage{
+		{Pool: "Main", Dataset: "Main", Mountpoint: "/mnt/Main", Total: 29000000000000, Used: 962000000, Free: 28999038000000},
+	}
+
+	disks := summarizeZFSPools(context.Background(), datasets)
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 disk, got %d", len(disks))
+	}
+
+	main := disks[0]
+	if main.Device != "Main" {
+		t.Errorf("expected device Main, got %s", main.Device)
+	}
+
+	// Should use usable capacity (29 TB), not raw capacity (43.6 TB)
+	expectedTotal := int64(29000000000000)
+	if main.TotalBytes != expectedTotal {
+		t.Errorf("expected TotalBytes %d (usable capacity), got %d (might be using raw capacity)", expectedTotal, main.TotalBytes)
+	}
+
+	// Used should come from zpool stats (accurate allocation)
+	expectedUsed := int64(962000000)
+	if main.UsedBytes != expectedUsed {
+		t.Errorf("expected UsedBytes %d, got %d", expectedUsed, main.UsedBytes)
+	}
+
+	// Free should use dataset stats when we're using dataset Total
+	expectedFree := int64(28999038000000)
+	if main.FreeBytes != expectedFree {
+		t.Errorf("expected FreeBytes %d, got %d", expectedFree, main.FreeBytes)
+	}
+
+	// Usage should be calculated against usable capacity
+	// 962000000 / 29000000000000 * 100 ≈ 0.003%
+	if main.Usage > 0.1 {
+		t.Errorf("expected usage ~0%%, got %.2f%% (might be calculated against wrong total)", main.Usage)
+	}
+}
+
 func TestSummarizeZFSPoolsFallback(t *testing.T) {
 	originalQuery := queryZpoolStats
 	t.Cleanup(func() { queryZpoolStats = originalQuery })
