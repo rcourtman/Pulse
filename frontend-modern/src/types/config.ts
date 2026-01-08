@@ -136,6 +136,8 @@ export interface SecurityStatus {
   oidcIssuer?: string;
   oidcClientId?: string;
   oidcEnvOverrides?: Record<string, boolean>;
+  // Token auth scopes (for kiosk/limited-access mode)
+  tokenScopes?: string[];
 }
 
 /**

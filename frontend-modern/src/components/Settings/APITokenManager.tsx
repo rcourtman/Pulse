@@ -15,6 +15,7 @@ import {
   DOCKER_MANAGE_SCOPE,
   DOCKER_REPORT_SCOPE,
   HOST_AGENT_SCOPE,
+  MONITORING_READ_SCOPE,
   SETTINGS_READ_SCOPE,
   SETTINGS_WRITE_SCOPE,
 } from '@/constants/apiScopes';
@@ -118,6 +119,11 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     selectedScopes().length === 0 || selectedScopes().includes(WILDCARD_SCOPE);
 
   const scopePresets: { label: string; scopes: string[]; description: string }[] = [
+    {
+      label: 'Kiosk / Dashboard',
+      scopes: [MONITORING_READ_SCOPE],
+      description: 'Read-only dashboard access for kiosk displays. Use with ?token=xxx in the URL.',
+    },
     {
       label: 'Host agent',
       scopes: [HOST_AGENT_SCOPE],
