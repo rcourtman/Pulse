@@ -184,3 +184,6 @@ start-pulse-agent.sh
 # Dev container extension auth
 .devcontainer/.claude/
 .devcontainer/.config/
+
+# Husky
+.husky/_/
