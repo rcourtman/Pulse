@@ -797,6 +797,7 @@ func (a *Agent) runProxmoxSetup(ctx context.Context) {
 		a.cfg.APIToken,
 		a.cfg.ProxmoxType,
 		a.hostname,
+		a.reportIP,
 		a.cfg.InsecureSkipVerify,
 	)
 

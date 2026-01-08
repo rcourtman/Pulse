@@ -25,6 +25,7 @@ type ProxmoxSetup struct {
 	apiToken           string
 	proxmoxType        string // "pve", "pbs", or "" for auto-detect
 	hostname           string
+	reportIP           string
 	insecureSkipVerify bool
 }
 
@@ -50,7 +51,7 @@ const (
 )
 
 // NewProxmoxSetup creates a new ProxmoxSetup instance.
-func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, pulseURL, apiToken, proxmoxType, hostname string, insecure bool) *ProxmoxSetup {
+func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, pulseURL, apiToken, proxmoxType, hostname, reportIP string, insecure bool) *ProxmoxSetup {
 	return &ProxmoxSetup{
 		logger:             logger,
 		httpClient:         httpClient,
@@ -58,6 +59,7 @@ func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, pulseURL, a
 		apiToken:           apiToken,
 		proxmoxType:        proxmoxType,
 		hostname:           hostname,
+		reportIP:           reportIP,
 		insecureSkipVerify: insecure,
 	}
 }
@@ -358,7 +360,15 @@ func (p *ProxmoxSetup) getHostURL(ptype string) string {
 		port = "8007"
 	}
 
-	// First, try to determine which local IP is used to connect to Pulse
+	// Priority 1: User-specified ReportIP override from configuration.
+	// This allows users to manually specify which IP should be used for Proxmox API
+	// connections when auto-detection picks the wrong one (e.g., Issue #1061).
+	if p.reportIP != "" {
+		p.logger.Info().Str("ip", p.reportIP).Msg("Using user-specified ReportIP for Proxmox registration")
+		return fmt.Sprintf("https://%s:%s", p.reportIP, port)
+	}
+
+	// Priority 2: Try to determine which local IP is used to connect to Pulse
 	// This ensures we pick an IP that can actually communicate with the Pulse server
 	if reachableIP := p.getIPThatReachesPulse(); reachableIP != "" {
 		p.logger.Debug().Str("ip", reachableIP).Msg("Using IP that can reach Pulse server")

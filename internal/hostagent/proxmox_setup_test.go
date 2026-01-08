@@ -1,6 +1,10 @@
 package hostagent
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/rs/zerolog"
+)
 
 func TestSelectBestIP(t *testing.T) {
 	tests := []struct {
@@ -150,6 +154,40 @@ func TestStateFileForType(t *testing.T) {
 			result := setup.stateFileForType(tt.ptype)
 			if result != tt.expected {
 				t.Errorf("stateFileForType(%q) = %q, want %q", tt.ptype, result, tt.expected)
+			}
+		})
+	}
+}
+func TestGetHostURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		ptype    string
+		reportIP string
+		expected string
+	}{
+		{
+			name:     "uses reportIP override for PVE",
+			ptype:    "pve",
+			reportIP: "10.0.0.50",
+			expected: "https://10.0.0.50:8006",
+		},
+		{
+			name:     "uses reportIP override for PBS",
+			ptype:    "pbs",
+			reportIP: "192.168.1.100",
+			expected: "https://192.168.1.100:8007",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setup := &ProxmoxSetup{
+				reportIP: tt.reportIP,
+				logger:   zerolog.Nop(),
+			}
+			result := setup.getHostURL(tt.ptype)
+			if result != tt.expected {
+				t.Errorf("getHostURL(%q) = %q, want %q", tt.ptype, result, tt.expected)
 			}
 		})
 	}
