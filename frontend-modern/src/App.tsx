@@ -858,6 +858,7 @@ function App() {
                         proxyAuthInfo={proxyAuthInfo}
                         handleLogout={handleLogout}
                         state={state}
+                        tokenScopes={() => securityStatus()?.tokenScopes}
                       >
                         {props.children}
                       </AppLayout>
@@ -997,6 +998,7 @@ function AppLayout(props: {
   proxyAuthInfo: () => { username?: string; logoutURL?: string } | null;
   handleLogout: () => void;
   state: () => State;
+  tokenScopes: () => string[] | undefined;
   children?: JSX.Element;
 }) {
   const navigate = useNavigate();
@@ -1162,7 +1164,15 @@ function AppLayout(props: {
       { warning: 0, critical: 0 },
     );
     const activeAlertCount = breakdown.warning + breakdown.critical;
-    return [
+
+    // Check if settings should be shown based on token scopes
+    // If no scopes (session auth), show settings
+    // If scopes include '*' (wildcard) or 'settings:read', show settings
+    const scopes = props.tokenScopes();
+    const hasSettingsAccess = !scopes || scopes.length === 0 ||
+      scopes.includes('*') || scopes.includes('settings:read');
+
+    const tabs = [
       {
         id: 'alerts' as const,
         label: 'Alerts',
@@ -1173,7 +1183,11 @@ function AppLayout(props: {
         breakdown,
         icon: <BellIcon class="w-4 h-4 shrink-0" />,
       },
-      {
+    ];
+
+    // Only show settings tab if user has access
+    if (hasSettingsAccess) {
+      tabs.push({
         id: 'settings' as const,
         label: 'Settings',
         route: '/settings',
@@ -1182,8 +1196,10 @@ function AppLayout(props: {
         count: undefined,
         breakdown: undefined,
         icon: <SettingsIcon class="w-4 h-4 shrink-0" />,
-      },
-    ];
+      });
+    }
+
+    return tabs;
   });
 
   const handlePlatformClick = (platform: ReturnType<typeof platformTabs>[number]) => {

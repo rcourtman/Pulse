@@ -58,6 +58,7 @@ type Router struct {
 	systemSettingsHandler     *SystemSettingsHandler
 	aiSettingsHandler         *AISettingsHandler
 	resourceHandlers          *ResourceHandlers
+	configProfileHandler      *ConfigProfileHandler
 	licenseHandlers           *LicenseHandlers
 	agentExecServer           *agentexec.Server
 	wsHub                     *websocket.Hub
@@ -195,6 +196,7 @@ func (r *Router) setupRoutes() {
 	r.hostAgentHandlers = NewHostAgentHandlers(r.monitor, r.wsHub)
 	r.temperatureProxyHandlers = NewTemperatureProxyHandlers(r.config, r.persistence, r.reloadFunc)
 	r.resourceHandlers = NewResourceHandlers()
+	r.configProfileHandler = NewConfigProfileHandler(r.persistence)
 	r.licenseHandlers = NewLicenseHandlers(r.config.DataPath)
 
 	// API routes
@@ -455,6 +457,12 @@ func (r *Router) setupRoutes() {
 		}
 	})
 
+	// Config Profile Routes - Protected by Admin Auth and Pro License
+	// r.configProfileHandler.ServeHTTP implements http.Handler, so we wrap it
+	r.mux.Handle("/api/admin/profiles/", RequireAdmin(r.config, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAgentProfiles, func(w http.ResponseWriter, req *http.Request) {
+		http.StripPrefix("/api/admin/profiles", r.configProfileHandler).ServeHTTP(w, req)
+	})))
+
 	// System settings routes
 	r.mux.HandleFunc("/api/config/system", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
@@ -563,12 +571,21 @@ func (r *Router) setupRoutes() {
 			isTrustedNetwork := isTrustedNetwork(clientIP, trustedNetworks)
 
 			// Determine whether the caller is authenticated before exposing sensitive fields
+			// Also track token scopes for kiosk/limited-access scenarios
 			isAuthenticated := false
+			var tokenScopes []string
 			if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
 				isAuthenticated = true
 			} else if token := strings.TrimSpace(req.Header.Get("X-API-Token")); token != "" {
-				if _, ok := r.config.ValidateAPIToken(token); ok {
+				if record, ok := r.config.ValidateAPIToken(token); ok {
 					isAuthenticated = true
+					tokenScopes = record.Scopes
+				}
+			} else if token := req.URL.Query().Get("token"); token != "" {
+				// Also check URL query param (used for kiosk mode)
+				if record, ok := r.config.ValidateAPIToken(token); ok {
+					isAuthenticated = true
+					tokenScopes = record.Scopes
 				}
 			}
 
@@ -638,6 +655,11 @@ func (r *Router) setupRoutes() {
 			if isAuthenticated {
 				status["authUsername"] = r.config.AuthUser
 				status["authLastModified"] = authLastModified
+			}
+
+			// Include token scopes when authenticated via API token (for kiosk mode UI)
+			if len(tokenScopes) > 0 {
+				status["tokenScopes"] = tokenScopes
 			}
 
 			if oidcCfg != nil {
