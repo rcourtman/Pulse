@@ -841,6 +841,42 @@ type ContainerInterface struct {
 	IPAddresses []ContainerInterfaceAddress `json:"ip-addresses,omitempty"`
 }
 
+// NodeNetworkInterface describes a network interface on a Proxmox node.
+type NodeNetworkInterface struct {
+	Iface    string `json:"iface"`              // Interface name (e.g., "eth0", "vmbr0")
+	Type     string `json:"type"`               // Type (e.g., "eth", "bridge", "bond")
+	Address  string `json:"address,omitempty"`  // IPv4 address
+	Address6 string `json:"address6,omitempty"` // IPv6 address
+	Netmask  string `json:"netmask,omitempty"`  // IPv4 netmask
+	CIDR     string `json:"cidr,omitempty"`     // CIDR notation (e.g., "10.1.1.5/24")
+	Active   int    `json:"active"`             // 1 if active
+}
+
+// GetNodeNetworkInterfaces returns the network interfaces configured on a Proxmox node.
+// This can be used to find all IPs available on a node for connection purposes.
+func (c *Client) GetNodeNetworkInterfaces(ctx context.Context, node string) ([]NodeNetworkInterface, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/network", node))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get node network interfaces (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var result struct {
+		Data []NodeNetworkInterface `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
+
 // GetContainerConfig returns the configuration of a specific container
 func (c *Client) GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/lxc/%d/config", node, vmid))

@@ -664,6 +664,81 @@ func findExistingGuestURL(nodeName string, existingEndpoints []config.ClusterEnd
 	return ""
 }
 
+// findExistingIPOverride looks up the IPOverride for a node from existing endpoints
+func findExistingIPOverride(nodeName string, existingEndpoints []config.ClusterEndpoint) string {
+	for _, ep := range existingEndpoints {
+		if ep.NodeName == nodeName {
+			return ep.IPOverride
+		}
+	}
+	return ""
+}
+
+// extractSubnetFromHost extracts the network subnet from a host URL.
+// For example, "https://10.1.1.5:8006" returns a *net.IPNet for 10.1.1.0/24 (assumes /24 for IPv4).
+func extractSubnetFromHost(host string) *net.IPNet {
+	// Parse the URL to get the hostname/IP
+	parsed, err := url.Parse(host)
+	if err != nil {
+		return nil
+	}
+
+	hostname := parsed.Hostname()
+	if hostname == "" {
+		hostname = host
+	}
+
+	// Try to parse as IP
+	ip := net.ParseIP(hostname)
+	if ip == nil {
+		// Try resolving hostname
+		ips, err := net.LookupIP(hostname)
+		if err != nil || len(ips) == 0 {
+			return nil
+		}
+		ip = ips[0]
+	}
+
+	// Create subnet (assume /24 for IPv4, /64 for IPv6)
+	if ip4 := ip.To4(); ip4 != nil {
+		return &net.IPNet{
+			IP:   ip4.Mask(net.CIDRMask(24, 32)),
+			Mask: net.CIDRMask(24, 32),
+		}
+	}
+	if ip6 := ip.To16(); ip6 != nil {
+		return &net.IPNet{
+			IP:   ip6.Mask(net.CIDRMask(64, 128)),
+			Mask: net.CIDRMask(64, 128),
+		}
+	}
+	return nil
+}
+
+// findPreferredIP looks through a list of node network interfaces and returns
+// an IP that matches the preferred subnet. Returns empty string if no match found.
+func findPreferredIP(interfaces []proxmox.NodeNetworkInterface, preferredSubnet *net.IPNet) string {
+	if preferredSubnet == nil {
+		return ""
+	}
+
+	for _, iface := range interfaces {
+		// Skip inactive interfaces
+		if iface.Active != 1 {
+			continue
+		}
+
+		// Check IPv4 address
+		if iface.Address != "" {
+			ip := net.ParseIP(iface.Address)
+			if ip != nil && preferredSubnet.Contains(ip) {
+				return iface.Address
+			}
+		}
+	}
+	return ""
+}
+
 var detectPVECluster = defaultDetectPVECluster
 
 // detectPVECluster checks if a PVE node is part of a cluster and returns cluster information
@@ -737,6 +812,16 @@ func defaultDetectPVECluster(clientConfig proxmox.ClientConfig, nodeName string,
 		scheme, defaultPort := deriveSchemeAndPort(clientConfig.Host)
 		schemePrefix := scheme + "://"
 
+		// Extract the preferred subnet from the initial connection
+		// This allows us to prefer management network IPs over internal cluster IPs
+		preferredSubnet := extractSubnetFromHost(clientConfig.Host)
+		if preferredSubnet != nil {
+			log.Debug().
+				Str("subnet", preferredSubnet.String()).
+				Str("from_host", clientConfig.Host).
+				Msg("Extracted preferred subnet from initial connection")
+		}
+
 		var unvalidatedNodes []proxmox.ClusterStatus
 
 		for _, clusterNode := range clusterNodes {
@@ -759,7 +844,8 @@ func defaultDetectPVECluster(clientConfig proxmox.ClientConfig, nodeName string,
 				NodeID:      clusterNode.ID,
 				NodeName:    clusterNode.Name,
 				GuestURL:    findExistingGuestURL(clusterNode.Name, existingEndpoints),
-				Fingerprint: nodeFingerprint, // Store captured fingerprint for per-node TLS verification
+				IPOverride:  findExistingIPOverride(clusterNode.Name, existingEndpoints), // Preserve user override
+				Fingerprint: nodeFingerprint,                                             // Store captured fingerprint for per-node TLS verification
 				Online:      clusterNode.Online == 1,
 				LastSeen:    time.Now(),
 			}
@@ -770,9 +856,40 @@ func defaultDetectPVECluster(clientConfig proxmox.ClientConfig, nodeName string,
 				endpoint.Host = schemePrefix + nodeHost
 			}
 
-			// Populate IP field separately for DNS-free connections
+			// Populate IP field with cluster-reported IP (may be internal network)
 			if clusterNode.IP != "" {
 				endpoint.IP = clusterNode.IP
+			}
+
+			// Try to find a better IP on the preferred subnet (management network)
+			// Only do this if no manual override is set
+			if endpoint.IPOverride == "" && preferredSubnet != nil && clusterNode.IP != "" {
+				// Check if cluster-reported IP is already on the preferred subnet
+				clusterIP := net.ParseIP(clusterNode.IP)
+				if clusterIP != nil && !preferredSubnet.Contains(clusterIP) {
+					// Cluster IP is on a different subnet, try to find one on preferred subnet
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					nodeInterfaces, err := tempClient.GetNodeNetworkInterfaces(ctx, clusterNode.Name)
+					cancel()
+
+					if err == nil {
+						preferredIP := findPreferredIP(nodeInterfaces, preferredSubnet)
+						if preferredIP != "" && preferredIP != clusterNode.IP {
+							log.Info().
+								Str("node", clusterNode.Name).
+								Str("cluster_ip", clusterNode.IP).
+								Str("preferred_ip", preferredIP).
+								Str("subnet", preferredSubnet.String()).
+								Msg("Found preferred management IP for cluster node")
+							endpoint.IPOverride = preferredIP
+						}
+					} else {
+						log.Debug().
+							Err(err).
+							Str("node", clusterNode.Name).
+							Msg("Could not query node network interfaces for subnet preference")
+					}
+				}
 			}
 
 			clusterEndpoints = append(clusterEndpoints, endpoint)
