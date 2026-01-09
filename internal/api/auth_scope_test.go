@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestRequireScopeAllowsSession(t *testing.T) {
@@ -101,7 +102,7 @@ func TestGetAPITokenRecordFromRequestWrongType(t *testing.T) {
 
 	// Attach a value of wrong type to the context
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, contextKeyAPIToken, "not-a-record")
+	ctx = context.WithValue(ctx, auth.GetAPITokenContextKey(), "not-a-record")
 	req = req.WithContext(ctx)
 
 	// Should return nil when type assertion fails

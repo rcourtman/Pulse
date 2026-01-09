@@ -47,6 +47,11 @@ func GetAPIToken(ctx context.Context) APITokenInfo {
 	return nil
 }
 
+// GetAPITokenContextKey returns the context key used for API tokens (for testing purposes)
+func GetAPITokenContextKey() any {
+	return contextKeyAPIToken
+}
+
 // DefaultAuthorizer is a pass-through implementation that allows everything.
 // Used in OSS version and when enterprise features are disabled.
 type DefaultAuthorizer struct{}

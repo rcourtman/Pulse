@@ -61,10 +61,12 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := manager.SaveRole(role); err != nil {
+			LogAuditEvent("role_create_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, "Failed to create role "+role.ID+": "+err.Error())
 			writeErrorResponse(w, http.StatusInternalServerError, "save_failed", err.Error(), nil)
 			return
 		}
 
+		LogAuditEvent("role_created", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Created role "+role.ID)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(role)
 
@@ -80,10 +82,12 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := manager.SaveRole(role); err != nil {
+			LogAuditEvent("role_update_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, "Failed to update role "+role.ID+": "+err.Error())
 			writeErrorResponse(w, http.StatusInternalServerError, "save_failed", err.Error(), nil)
 			return
 		}
 
+		LogAuditEvent("role_updated", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Updated role "+role.ID)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(role)
 
@@ -94,10 +98,12 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := manager.DeleteRole(id); err != nil {
+			LogAuditEvent("role_delete_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, "Failed to delete role "+id+": "+err.Error())
 			writeErrorResponse(w, http.StatusInternalServerError, "delete_failed", err.Error(), nil)
 			return
 		}
 
+		LogAuditEvent("role_deleted", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Deleted role "+id)
 		w.WriteHeader(http.StatusNoContent)
 
 	default:
@@ -151,10 +157,12 @@ func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Requ
 		}
 
 		if err := manager.UpdateUserRoles(username, req.RoleIDs); err != nil {
+			LogAuditEvent("user_roles_update_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, "Failed to update roles for user "+username+": "+err.Error())
 			writeErrorResponse(w, http.StatusInternalServerError, "update_failed", err.Error(), nil)
 			return
 		}
 
+		LogAuditEvent("user_roles_updated", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Updated roles for user "+username+": ["+strings.Join(req.RoleIDs, ", ")+"]")
 		w.WriteHeader(http.StatusNoContent)
 
 	case http.MethodGet:
