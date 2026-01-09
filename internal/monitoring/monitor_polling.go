@@ -1629,7 +1629,7 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 	m.state.UpdateStorageForInstance(storageInstanceName, allStorage)
 
 	// Poll Ceph cluster data after refreshing storage information
-	if !pve.DisableCeph {
+	if instanceCfg == nil || !instanceCfg.DisableCeph {
 		m.pollCephCluster(ctx, instanceName, client, cephDetected)
 	}
 

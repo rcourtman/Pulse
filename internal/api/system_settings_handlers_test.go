@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 // MockMonitor implementation

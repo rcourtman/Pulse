@@ -13,7 +13,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
-	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 

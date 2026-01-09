@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 // Canonical API token scope strings.

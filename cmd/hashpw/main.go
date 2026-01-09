@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 var (

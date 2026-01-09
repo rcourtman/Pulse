@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/server"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -253,13 +254,13 @@ var configAutoImportCmd = &cobra.Command{
 				return fmt.Errorf("configuration response from URL was empty")
 			}
 
-			payload, err := normalizeImportPayload(body)
+			payload, err := server.NormalizeImportPayload(body)
 			if err != nil {
 				return err
 			}
 			encryptedData = payload
 		} else if configData != "" {
-			payload, err := normalizeImportPayload([]byte(configData))
+			payload, err := server.NormalizeImportPayload([]byte(configData))
 			if err != nil {
 				return err
 			}

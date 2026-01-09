@@ -1,5 +1,12 @@
 import { createSignal, Show, For, onMount, createMemo, onCleanup, createEffect } from 'solid-js';
-import { Shield, CheckCircle, XCircle, RefreshCw, Filter, Info, Play, X } from 'lucide-solid';
+import Shield from 'lucide-solid/icons/shield';
+import CheckCircle from 'lucide-solid/icons/check-circle';
+import XCircle from 'lucide-solid/icons/x-circle';
+import RefreshCw from 'lucide-solid/icons/refresh-cw';
+import Filter from 'lucide-solid/icons/filter';
+import Info from 'lucide-solid/icons/info';
+import Play from 'lucide-solid/icons/play';
+import X from 'lucide-solid/icons/x';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import Toggle from '@/components/shared/Toggle';
 import {
@@ -441,16 +448,6 @@ export default function AuditLogPanel() {
                 <div class="flex items-center gap-3">
                     <Shield class="w-6 h-6 text-indigo-500" />
                     <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Audit Log</h2>
-                    <Show when={isEnterprise()}>
-                        <span class="px-2 py-0.5 text-xs font-bold uppercase tracking-wider bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-md shadow-sm">
-                            Enterprise
-                        </span>
-                    </Show>
-                    <Show when={!isEnterprise()}>
-                        <span class="px-2 py-0.5 text-xs font-bold uppercase tracking-wider bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 rounded-md">
-                            Enterprise
-                        </span>
-                    </Show>
                 </div>
                 <div class="flex items-center gap-2">
                     <button
@@ -503,37 +500,23 @@ export default function AuditLogPanel() {
                 </div>
             </div>
 
-            {/* OSS Notice / Upgrade CTA */}
+            {/* Upgrade CTA */}
             <Show when={!isEnterprise() && !loading()}>
-                <div class="relative overflow-hidden group">
-                    <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-blue-500/10 opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                    <div class="relative flex flex-col md:flex-row items-center gap-6 p-8 bg-white dark:bg-gray-800/50 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl shadow-xl backdrop-blur-sm">
-                        <div class="p-4 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl shadow-lg transform group-hover:scale-110 transition-transform duration-500">
-                            <Sparkles class="w-8 h-8 text-white" />
-                        </div>
-                        <div class="flex-1 text-center md:text-left">
-                            <h3 class="text-xl font-bold text-gray-900 dark:text-white flex items-center justify-center md:justify-start gap-2">
-                                Unlock Enterprise Audit Logging
-                                <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-md">PRO Feature</span>
-                            </h3>
-                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-2 leading-relaxed max-w-2xl">
-                                Upgrade to Pulse Enterprise for persistent, searchable audit logs and cryptographically signed event verification.
-                                Ensure high-level compliance, security, and accountability for your mission-critical infrastructure.
+                <div class="p-6 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl">
+                    <div class="flex flex-col sm:flex-row items-center gap-4">
+                        <div class="flex-1">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Audit Logging</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                Persistent, searchable audit logs with cryptographic signature verification.
                             </p>
                         </div>
-                        <div class="flex flex-col gap-3 min-w-[200px]">
-                            <a
-                                href="https://pulse.sh/pro"
-                                target="_blank"
-                                class="inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-bold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 hover:shadow-indigo-500/25 hover:shadow-lg transform active:scale-95 transition-all shadow-md"
-                            >
-                                Get Enterprise
-                                <ExternalLink class="w-4 h-4" />
-                            </a>
-                            <p class="text-[10px] text-center text-gray-500 dark:text-gray-500 italic">
-                                Pricing starts at $1.50/node
-                            </p>
-                        </div>
+                        <a
+                            href="https://pulse.sh/pro"
+                            target="_blank"
+                            class="px-5 py-2.5 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                        >
+                            Upgrade to Pro
+                        </a>
                     </div>
                 </div>
             </Show>

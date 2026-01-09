@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/server"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
@@ -557,25 +558,25 @@ func TestConfigAutoImport_Errors(t *testing.T) {
 
 func TestNormalizeImportPayload(t *testing.T) {
 	// Empty case
-	_, err := normalizeImportPayload([]byte("  "))
+	_, err := server.NormalizeImportPayload([]byte("  "))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "configuration payload is empty")
 
 	// Base64 case (where decoded doesn't look like base64)
 	// base64("!!") = "ISE="
-	s, err := normalizeImportPayload([]byte(" ISE= "))
+	s, err := server.NormalizeImportPayload([]byte(" ISE= "))
 	assert.NoError(t, err)
 	assert.Equal(t, "ISE=", s)
 
 	// Base64-of-Base64 case (unwraps)
 	// base64("test") = "dGVzdA=="
 	// test also looks like base64 (4 chars, alphanumeric)
-	s, err = normalizeImportPayload([]byte(" dGVzdA== "))
+	s, err = server.NormalizeImportPayload([]byte(" dGVzdA== "))
 	assert.NoError(t, err)
 	assert.Equal(t, "test", s)
 
 	// Plain case (not base64)
-	s, err = normalizeImportPayload([]byte("!!"))
+	s, err = server.NormalizeImportPayload([]byte("!!"))
 	assert.NoError(t, err)
 	// Should be base64 encoded
 	assert.Equal(t, base64.StdEncoding.EncodeToString([]byte("!!")), s)

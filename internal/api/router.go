@@ -29,7 +29,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
-	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -39,6 +38,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 

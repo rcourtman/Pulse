@@ -24,9 +24,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
-	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
 )

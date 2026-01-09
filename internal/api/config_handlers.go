@@ -22,7 +22,6 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	discoveryinternal "github.com/rcourtman/pulse-go-rewrite/internal/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
@@ -31,6 +30,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	pkgdiscovery "github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"

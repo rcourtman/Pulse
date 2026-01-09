@@ -201,7 +201,7 @@ Returns a new raw token (shown once) and updates stored hashes:
 
 ---
 
-## 🧾 Audit Log (Enterprise)
+## 🧾 Audit Log (Pro)
 
 These endpoints require admin access and the `settings:read` scope. In OSS builds, the list endpoint returns an empty set and `persistentLogging: false`.
 

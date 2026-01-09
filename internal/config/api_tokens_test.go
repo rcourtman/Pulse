@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestAPITokenRecordHasScope(t *testing.T) {

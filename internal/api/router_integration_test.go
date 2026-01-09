@@ -16,13 +16,13 @@ import (
 
 	gorillaws "github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api"
-	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	internalws "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 type integrationServer struct {

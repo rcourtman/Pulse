@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestRunUsage(t *testing.T) {

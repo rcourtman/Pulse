@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/server"
 )
 
 func TestShouldAutoImport(t *testing.T) {
@@ -15,13 +16,13 @@ func TestShouldAutoImport(t *testing.T) {
 	// No env vars => false.
 	t.Setenv("PULSE_INIT_CONFIG_DATA", "")
 	t.Setenv("PULSE_INIT_CONFIG_FILE", "")
-	if shouldAutoImport() {
+	if server.ShouldAutoImport() {
 		t.Fatalf("expected false when no env vars set")
 	}
 
 	// Env var set => true.
 	t.Setenv("PULSE_INIT_CONFIG_DATA", "anything")
-	if !shouldAutoImport() {
+	if !server.ShouldAutoImport() {
 		t.Fatalf("expected true when init config env var set")
 	}
 
@@ -29,7 +30,7 @@ func TestShouldAutoImport(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "nodes.enc"), []byte("exists"), 0o600); err != nil {
 		t.Fatalf("write nodes.enc: %v", err)
 	}
-	if shouldAutoImport() {
+	if server.ShouldAutoImport() {
 		t.Fatalf("expected false when nodes.enc exists")
 	}
 }
@@ -49,7 +50,7 @@ func TestPerformAutoImport_ValidPayload(t *testing.T) {
 	t.Setenv("PULSE_INIT_CONFIG_DATA", exported)
 	t.Setenv("PULSE_INIT_CONFIG_FILE", "")
 
-	if err := performAutoImport(); err != nil {
+	if err := server.PerformAutoImport(); err != nil {
 		t.Fatalf("performAutoImport: %v", err)
 	}
 
@@ -65,7 +66,7 @@ func TestPerformAutoImport_MissingPassphrase(t *testing.T) {
 	t.Setenv("PULSE_INIT_CONFIG_DATA", "data")
 	t.Setenv("PULSE_INIT_CONFIG_FILE", "")
 
-	if err := performAutoImport(); err == nil {
+	if err := server.PerformAutoImport(); err == nil {
 		t.Fatalf("expected error")
 	}
 }
@@ -77,7 +78,7 @@ func TestPerformAutoImport_MissingData(t *testing.T) {
 	t.Setenv("PULSE_INIT_CONFIG_DATA", "")
 	t.Setenv("PULSE_INIT_CONFIG_FILE", "")
 
-	if err := performAutoImport(); err == nil {
+	if err := server.PerformAutoImport(); err == nil {
 		t.Fatalf("expected error")
 	}
 }
@@ -102,7 +103,7 @@ func TestPerformAutoImport_File(t *testing.T) {
 	t.Setenv("PULSE_INIT_CONFIG_FILE", importFile)
 	t.Setenv("PULSE_INIT_CONFIG_DATA", "")
 
-	if err := performAutoImport(); err != nil {
+	if err := server.PerformAutoImport(); err != nil {
 		t.Fatalf("performAutoImport with file: %v", err)
 	}
 }
@@ -113,7 +114,7 @@ func TestPerformAutoImport_FileReadError(t *testing.T) {
 	t.Setenv("PULSE_INIT_CONFIG_PASSPHRASE", "pass")
 	t.Setenv("PULSE_INIT_CONFIG_FILE", filepath.Join(dir, "nonexistent"))
 
-	if err := performAutoImport(); err == nil {
+	if err := server.PerformAutoImport(); err == nil {
 		t.Fatal("expected error reading nonexistent file")
 	}
 }
@@ -124,7 +125,7 @@ func TestPerformAutoImport_NormalizeError(t *testing.T) {
 	t.Setenv("PULSE_INIT_CONFIG_PASSPHRASE", "pass")
 	t.Setenv("PULSE_INIT_CONFIG_DATA", "   ") // Will trigger "payload is empty" error
 
-	if err := performAutoImport(); err == nil {
+	if err := server.PerformAutoImport(); err == nil {
 		t.Fatal("expected error from normalizeImportPayload")
 	}
 }
@@ -138,7 +139,7 @@ func TestPerformAutoImport_FileNormalizeError(t *testing.T) {
 	os.WriteFile(importFile, []byte("   "), 0600)
 	t.Setenv("PULSE_INIT_CONFIG_FILE", importFile)
 
-	if err := performAutoImport(); err == nil {
+	if err := server.PerformAutoImport(); err == nil {
 		t.Fatal("expected error from normalizeImportPayload for file")
 	}
 }

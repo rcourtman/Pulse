@@ -223,16 +223,6 @@ export const OIDCPanel: Component<Props> = (props) => {
             size="sm"
             class="flex-1"
           />
-          <Show when={isEnterprise()}>
-            <span class="px-2 py-0.5 text-xs font-bold uppercase tracking-wider bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-md shadow-sm">
-              Enterprise
-            </span>
-          </Show>
-          <Show when={!isEnterprise()}>
-            <span class="px-2 py-0.5 text-xs font-bold uppercase tracking-wider bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 rounded-md">
-              Enterprise
-            </span>
-          </Show>
           <Toggle
             checked={form.enabled}
             onChange={async (event) => {
@@ -275,31 +265,21 @@ export const OIDCPanel: Component<Props> = (props) => {
         </div>
       </div>
       <Show when={!isEnterprise() && !loading()}>
-        <div class="mx-6 mt-6 relative overflow-hidden group">
-          <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-blue-500/10 opacity-50 group-hover:opacity-100 transition-opacity"></div>
-          <div class="relative flex items-start gap-4 p-6 bg-white dark:bg-gray-800/50 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl shadow-xl backdrop-blur-sm">
-            <div class="p-3 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl shadow-lg transform group-hover:scale-110 transition-transform duration-500">
-              <Sparkles class="w-5 h-5 text-white" />
-            </div>
+        <div class="mx-6 mt-6 p-5 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl">
+          <div class="flex flex-col sm:flex-row items-center gap-4">
             <div class="flex-1">
-              <h4 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                Enterprise Feature
-                <span class="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded">SSO</span>
-              </h4>
-              <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
-                OIDC integration is an Enterprise-only feature. Upgrade your license to enable seamless Single Sign-On for your team.
+              <h4 class="text-base font-semibold text-gray-900 dark:text-white">Single Sign-On</h4>
+              <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Connect Pulse to your identity provider for seamless team authentication.
               </p>
-              <div class="mt-3">
-                <a
-                  href="https://pulse.sh/pro"
-                  target="_blank"
-                  class="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors group/link"
-                >
-                  Learn about Enterprise
-                  <ExternalLink class="w-3 h-3 transform group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5 transition-transform" />
-                </a>
-              </div>
             </div>
+            <a
+              href="https://pulse.sh/pro"
+              target="_blank"
+              class="px-5 py-2.5 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              Upgrade to Pro
+            </a>
           </div>
         </div>
       </Show>

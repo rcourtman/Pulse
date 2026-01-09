@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func resetRecoveryStore() {

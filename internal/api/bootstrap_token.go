@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 

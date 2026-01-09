@@ -247,7 +247,7 @@ for sensitive data.
 - **Minimum passphrase**: 12 characters required for exports
 - **Security tab**: check status in *Settings → Security → Overview*
 
-### Enterprise Security (When Authentication Enabled)
+### Advanced Security (When Authentication Enabled)
 - **Password security**
   - Bcrypt hashing with cost factor 12 (60‑character hash)
   - Passwords never stored in plain text

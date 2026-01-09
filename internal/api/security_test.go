@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 // fixedTimeForTest returns a fixed time for deterministic testing

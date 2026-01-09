@@ -45,7 +45,7 @@ Designed for homelabs, sysadmins, and MSPs who need a "single pane of glass" wit
 ### Security & Operations
 - **Secure by Design**: Credentials encrypted at rest, strict API scoping
 - **One-Click Updates**: Easy upgrades for supported deployments
-- **OIDC/SSO**: Enterprise authentication support
+- **OIDC/SSO**: Single sign-on authentication
 - **Privacy Focused**: No telemetry, all data stays on your server
 
 ## ⚡ Quick Start

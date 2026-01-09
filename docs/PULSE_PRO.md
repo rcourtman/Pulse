@@ -4,7 +4,7 @@ Pulse Pro unlocks advanced AI automation features on top of the free Pulse platf
 
 ## What You Get
 
-### Enterprise Audit Log
+### Audit Log
 - Persistent audit trail with SQLite storage and HMAC signing.
 - Queryable via `/api/audit` and verified per event in the Security → Audit Log UI.
 - Supports filtering, verification badges, and signature checks for tamper detection.
