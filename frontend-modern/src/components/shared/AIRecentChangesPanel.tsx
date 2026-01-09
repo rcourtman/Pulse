@@ -3,7 +3,7 @@ import { AIAPI } from '@/api/ai';
 import { logger } from '@/utils/logger';
 import type { InfrastructureChange } from '@/types/aiIntelligence';
 
-const DEFAULT_UPGRADE_URL = 'https://pulserelay.pro';
+const DEFAULT_UPGRADE_URL = 'https://pulse.sh/pro';
 
 export const AIRecentChangesPanel: Component<{ hours?: number; showWhenEmpty?: boolean }> = (props) => {
     const [changes, setChanges] = createSignal<InfrastructureChange[]>([]);

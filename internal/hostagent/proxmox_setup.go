@@ -379,7 +379,10 @@ func (p *ProxmoxSetup) getHostURL(ptype string) string {
 	if out, err := exec.Command("hostname", "-I").Output(); err == nil {
 		ips := strings.Fields(string(out))
 		if len(ips) > 0 {
-			bestIP := selectBestIP(ips)
+			// Get the IP that the system hostname currently resolves to
+			hostnameIP := p.getIPForHostname()
+
+			bestIP := selectBestIP(ips, hostnameIP)
 			if bestIP != "" {
 				return fmt.Sprintf("https://%s:%s", bestIP, port)
 			}
@@ -436,6 +439,30 @@ func (p *ProxmoxSetup) getIPThatReachesPulse() string {
 	return ""
 }
 
+// getIPForHostname resolves the system hostname to an IP address.
+func (p *ProxmoxSetup) getIPForHostname() string {
+	hostname := p.hostname
+	if hostname == "" {
+		hostname, _ = os.Hostname()
+	}
+	if hostname == "" {
+		return ""
+	}
+
+	ips, err := net.LookupIP(hostname)
+	if err != nil {
+		p.logger.Debug().Err(err).Str("hostname", hostname).Msg("Could not resolve hostname IP")
+		return ""
+	}
+
+	for _, ip := range ips {
+		if ipv4 := ip.To4(); ipv4 != nil {
+			return ipv4.String()
+		}
+	}
+	return ""
+}
+
 // isPrivateIP checks if an IP address is in a private range (RFC 1918).
 func isPrivateIP(ip string) bool {
 	parsed := net.ParseIP(ip)
@@ -460,7 +487,8 @@ func isPrivateIP(ip string) bool {
 // selectBestIP picks the most likely externally-reachable IP from a list.
 // Prefers common LAN subnets (192.168.x.x, 10.x.x.x) and avoids internal
 // cluster networks (like corosync's 172.20.x.x) and link-local addresses.
-func selectBestIP(ips []string) string {
+// If hostnameIP is provided and present in the list, it is given the highest priority.
+func selectBestIP(ips []string, hostnameIP string) string {
 	type scoredIP struct {
 		ip    string
 		score int
@@ -480,6 +508,15 @@ func selectBestIP(ips []string) string {
 		}
 
 		score := scoreIPv4(ip)
+
+		// If this IP matches the system hostname, give it a significant bonus.
+		// A bonus of +40 ensures that a 172.16.x.x (score 50) match (50+40=90)
+		// correctly loses to a 192.168.x.x (score 100) interface if both are present.
+		// However, it correctly breaks ties between equal-scored ranges.
+		if hostnameIP != "" && ip == hostnameIP {
+			score += 40
+		}
+
 		if score > 0 {
 			candidates = append(candidates, scoredIP{ip: ip, score: score})
 		}

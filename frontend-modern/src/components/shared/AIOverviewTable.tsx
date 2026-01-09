@@ -3,7 +3,7 @@ import { AIAPI } from '@/api/ai';
 import { logger } from '@/utils/logger';
 import type { FailurePrediction, InfrastructureChange, RemediationRecord, RemediationStats, AnomalyReport } from '@/types/aiIntelligence';
 
-const DEFAULT_UPGRADE_URL = 'https://pulserelay.pro';
+const DEFAULT_UPGRADE_URL = 'https://pulse.sh/pro';
 
 interface InsightRow {
     id: string;

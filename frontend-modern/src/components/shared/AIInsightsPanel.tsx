@@ -14,7 +14,7 @@ export const AIInsightsPanel: Component<{ resourceId?: string; showWhenEmpty?: b
     const [expanded, setExpanded] = createSignal(false);
     const [locked, setLocked] = createSignal(false);
     const [lockedCount, setLockedCount] = createSignal(0);
-    const [upgradeUrl, setUpgradeUrl] = createSignal('https://pulserelay.pro');
+    const [upgradeUrl, setUpgradeUrl] = createSignal('https://pulse.sh/pro');
     const [error, setError] = createSignal('');
     const showWhenEmpty = () => Boolean(props.showWhenEmpty);
 
@@ -28,7 +28,7 @@ export const AIInsightsPanel: Component<{ resourceId?: string; showWhenEmpty?: b
             ]);
             const licenseLocked = Boolean(predResp.license_required || corrResp.license_required);
             setLocked(licenseLocked);
-            setUpgradeUrl(predResp.upgrade_url || corrResp.upgrade_url || 'https://pulserelay.pro');
+            setUpgradeUrl(predResp.upgrade_url || corrResp.upgrade_url || 'https://pulse.sh/pro');
             if (licenseLocked) {
                 const predCount = predResp.count || 0;
                 const corrCount = corrResp.count || 0;

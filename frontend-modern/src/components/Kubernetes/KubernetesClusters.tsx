@@ -1,6 +1,8 @@
 import type { Component } from 'solid-js';
 import { For, Show, createMemo, createSignal, createEffect, onMount } from 'solid-js';
 import { AIAPI } from '@/api/ai';
+import Sparkles from 'lucide-solid/icons/sparkles';
+import ExternalLink from 'lucide-solid/icons/external-link';
 import { LicenseAPI, type LicenseFeatureStatus } from '@/api/license';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -213,7 +215,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
 
   const kubernetesAiEnabled = createMemo(() => licenseFeatures()?.features?.kubernetes_ai === true);
   const aiConfigured = createMemo(() => aiSettings()?.configured === true);
-  const upgradeUrl = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulserelay.pro');
+  const upgradeUrl = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulse.sh/pro');
 
   const clustersForAnalysis = createMemo(() => props.clusters ?? []);
 
@@ -554,13 +556,16 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
       <Show when={clustersForAnalysis().length > 0}>
         <Card padding="sm">
           <div class="flex flex-col gap-3">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  Kubernetes AI Analysis
+            <div class="flex flex-wrap items-start justify-between gap-4">
+              <div class="flex-1 min-w-[300px]">
+                <div class="flex items-center gap-2">
+                  <div class="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                    Kubernetes AI Analysis
+                    <span class="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-md">Enterprise</span>
+                  </div>
                 </div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">
-                  Generate a health summary and next actions for a cluster.
+                <div class="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                  Generate deep health insights and actionable remediation for your clusters using Pulse's advanced AI engine.
                 </div>
               </div>
               <Show when={!licenseLoading() && !kubernetesAiEnabled()}>
@@ -568,23 +573,44 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
                   href={upgradeUrl()}
                   target="_blank"
                   rel="noreferrer"
-                  class="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-300 hover:text-blue-700 dark:hover:text-blue-200"
+                  class="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md text-xs font-bold"
                 >
-                  Upgrade to Pro
+                  Get Pulse Pro
+                  <ExternalLink class="w-3 h-3" />
                 </a>
               </Show>
             </div>
 
             <Show when={licenseLoading() || aiLoading()}>
-              <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                Loading AI and license status...
+              <div class="flex items-center gap-3 p-4 bg-blue-50/50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 animate-pulse">
+                <div class="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <span class="text-xs font-medium text-blue-700 dark:text-blue-300">Synchronizing AI & License...</span>
               </div>
             </Show>
 
             <Show when={!licenseLoading() && !kubernetesAiEnabled()}>
-              <div class="text-sm text-gray-600 dark:text-gray-300">
-                Kubernetes AI analysis requires Pulse Pro.
+              <div class="relative overflow-hidden p-6 rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/40 dark:to-blue-950/40 border border-indigo-100 dark:border-indigo-800 shadow-xl group">
+                <div class="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                  <Sparkles class="w-32 h-32 text-indigo-600" />
+                </div>
+                <div class="relative flex flex-col items-center text-center max-w-lg mx-auto">
+                  <div class="p-3 bg-white dark:bg-gray-800 rounded-2xl shadow-lg mb-4">
+                    <Sparkles class="w-8 h-8 text-indigo-500" />
+                  </div>
+                  <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Power up your Kubernetes Fleet</h4>
+                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
+                    Pulse Pro brings advanced AI-driven diagnostics to your Kubernetes clusters. Identify bottlenecks, security risks, and configuration drift in seconds.
+                  </p>
+                  <a
+                    href={upgradeUrl()}
+                    target="_blank"
+                    rel="noreferrer"
+                    class="inline-flex items-center gap-2.5 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transform hover:scale-105 active:scale-95 transition-all shadow-lg font-bold text-sm"
+                  >
+                    Unlock Kubernetes AI
+                    <ExternalLink class="w-4 h-4" />
+                  </a>
+                </div>
               </div>
             </Show>
 

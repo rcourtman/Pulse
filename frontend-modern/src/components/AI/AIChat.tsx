@@ -1,5 +1,7 @@
 import { Component, Show, createSignal, For, createEffect, createMemo, onMount, Switch, Match } from 'solid-js';
 import { AIAPI } from '@/api/ai';
+import Sparkles from 'lucide-solid/icons/sparkles';
+import ExternalLink from 'lucide-solid/icons/external-link';
 import { getPatrolStatus, type PatrolStatus } from '@/api/patrol';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
@@ -1050,9 +1052,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
                           return (
                             <div
-                              class={`group relative px-3 py-2 flex items-start gap-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer ${
-                                isCurrentSession() ? 'bg-purple-50 dark:bg-purple-900/20' : ''
-                              }`}
+                              class={`group relative px-3 py-2 flex items-start gap-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer ${isCurrentSession() ? 'bg-purple-50 dark:bg-purple-900/20' : ''
+                                }`}
                               onClick={() => {
                                 if (!isCurrentSession()) {
                                   aiChatStore.switchSession(session.id);
@@ -1062,11 +1063,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
                             >
                               <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-2">
-                                  <span class={`text-sm font-medium truncate ${
-                                    isCurrentSession()
-                                      ? 'text-purple-700 dark:text-purple-300'
-                                      : 'text-gray-900 dark:text-gray-100'
-                                  }`}>
+                                  <span class={`text-sm font-medium truncate ${isCurrentSession()
+                                    ? 'text-purple-700 dark:text-purple-300'
+                                    : 'text-gray-900 dark:text-gray-100'
+                                    }`}>
                                     {session.title || 'Untitled conversation'}
                                   </span>
                                   <Show when={isCurrentSession()}>
@@ -1152,41 +1152,41 @@ export const AIChat: Component<AIChatProps> = (props) => {
         <div class="flex-1 overflow-y-auto p-4 space-y-4">
           {/* AI Patrol upgrade prompt - shows after first message for free users */}
           <Show when={showUpgradePrompt()}>
-            <div class="relative flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800">
-              <div class="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-800 flex items-center justify-center">
-                <svg class="w-4 h-4 text-purple-600 dark:text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  Want AI to patrol automatically?
-                </p>
-                <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
-                  AI Patrol monitors your infrastructure 24/7 and surfaces issues before they become outages.
-                </p>
-                <a
-                  href={patrolStatus()?.upgrade_url || 'https://pulserelay.pro'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300"
+            <div class="mb-4 relative overflow-hidden group">
+              <div class="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-indigo-500/10 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+              <div class="relative flex items-start gap-4 p-4 bg-white dark:bg-gray-800/50 border border-purple-200 dark:border-purple-900/50 rounded-2xl shadow-lg backdrop-blur-sm">
+                <div class="p-2.5 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl shadow-md transform group-hover:scale-110 transition-transform duration-500">
+                  <Sparkles class="w-4 h-4 text-white" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <p class="text-sm font-bold text-gray-900 dark:text-white">Autopilot your Ops</p>
+                    <span class="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 rounded">Pro</span>
+                  </div>
+                  <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
+                    AI Patrol monitors your infrastructure 24/7 and surfaces issues before they become outages.
+                  </p>
+                  <a
+                    href={patrolStatus()?.upgrade_url || 'https://pulse.sh/pro'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-1.5 mt-2.5 text-xs font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors group/link"
+                  >
+                    Enable AI Patrol
+                    <ExternalLink class="w-3 h-3 transform group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5 transition-transform" />
+                  </a>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUpgradePromptDismissed(true)}
+                  class="flex-shrink-0 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-all"
+                  title="Dismiss"
                 >
-                  Learn about Pulse Pro
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                </a>
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setUpgradePromptDismissed(true)}
-                class="flex-shrink-0 p-1 rounded hover:bg-purple-200 dark:hover:bg-purple-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                title="Dismiss"
-              >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
             </div>
           </Show>
 

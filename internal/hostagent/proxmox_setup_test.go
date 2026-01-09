@@ -8,82 +8,120 @@ import (
 
 func TestSelectBestIP(t *testing.T) {
 	tests := []struct {
-		name     string
-		ips      []string
-		expected string
+		name       string
+		ips        []string
+		hostnameIP string
+		expected   string
 	}{
 		{
-			name:     "prefers 192.168.x.x over corosync 172.20.x.x",
-			ips:      []string{"172.20.0.80", "192.168.1.100"},
-			expected: "192.168.1.100",
+			name:       "prefers hostname IP matching 10.x range over 192.x range",
+			ips:        []string{"10.0.0.1", "192.168.1.100"},
+			hostnameIP: "10.0.0.1",
+			expected:   "10.0.0.1",
 		},
 		{
-			name:     "prefers 192.168.x.x even when listed second",
-			ips:      []string{"10.0.0.1", "192.168.0.1"},
-			expected: "192.168.0.1",
+			name:       "prefers 192.168.x.x LAN over 172.20.x.x hostname match (Corosync)",
+			ips:        []string{"172.20.0.1", "192.168.1.100"},
+			hostnameIP: "172.20.0.1",
+			expected:   "192.168.1.100", // LAN (100) > Cluster (50 + 40 = 90)
 		},
 		{
-			name:     "prefers 10.x.x.x over 172.16-31.x.x",
-			ips:      []string{"172.20.0.1", "10.1.10.5"},
-			expected: "10.1.10.5",
+			name:       "hostname breaks tie between equal subnets (e.g. two 10.x.x.x)",
+			ips:        []string{"10.0.0.1", "10.0.0.2"},
+			hostnameIP: "10.0.0.2",
+			expected:   "10.0.0.2", // (90 + 40) > 90
 		},
 		{
-			name:     "handles single IP",
-			ips:      []string{"192.168.1.1"},
-			expected: "192.168.1.1",
+			name:       "falls back to score heuristic if no hostname IP match",
+			ips:        []string{"10.0.0.1", "192.168.1.100"},
+			hostnameIP: "10.0.0.2", // Different IP
+			expected:   "192.168.1.100",
 		},
 		{
-			name:     "skips loopback",
-			ips:      []string{"127.0.0.1", "192.168.1.1"},
-			expected: "192.168.1.1",
+			name:       "prefers 192.168.x.x over corosync 172.20.x.x (original behavior)",
+			ips:        []string{"172.20.0.80", "192.168.1.100"},
+			hostnameIP: "",
+			expected:   "192.168.1.100",
 		},
 		{
-			name:     "skips IPv6 loopback",
-			ips:      []string{"::1", "10.0.0.1"},
-			expected: "10.0.0.1",
+			name:       "prefers 192.168.x.x even when listed second",
+			ips:        []string{"10.0.0.1", "192.168.0.1"},
+			hostnameIP: "",
+			expected:   "192.168.0.1",
 		},
 		{
-			name:     "skips link-local IPv6",
-			ips:      []string{"fe80::1", "192.168.1.1"},
-			expected: "192.168.1.1",
+			name:       "prefers 10.x.x.x over 172.16-31.x.x",
+			ips:        []string{"172.20.0.1", "10.1.10.5"},
+			hostnameIP: "",
+			expected:   "10.1.10.5",
 		},
 		{
-			name:     "skips link-local IPv4",
-			ips:      []string{"169.254.1.1", "10.0.0.1"},
-			expected: "10.0.0.1",
+			name:       "handles single IP",
+			ips:        []string{"192.168.1.1"},
+			hostnameIP: "",
+			expected:   "192.168.1.1",
 		},
 		{
-			name:     "returns corosync IP if only option",
-			ips:      []string{"127.0.0.1", "172.20.0.80"},
-			expected: "172.20.0.80",
+			name:       "skips loopback",
+			ips:        []string{"127.0.0.1", "192.168.1.1"},
+			hostnameIP: "",
+			expected:   "192.168.1.1",
 		},
 		{
-			name:     "empty list returns empty",
-			ips:      []string{},
-			expected: "",
+			name:       "skips IPv6 loopback",
+			ips:        []string{"::1", "10.0.0.1"},
+			hostnameIP: "",
+			expected:   "10.0.0.1",
 		},
 		{
-			name:     "only loopback returns empty",
-			ips:      []string{"127.0.0.1", "::1"},
-			expected: "",
+			name:       "skips link-local IPv6",
+			ips:        []string{"fe80::1", "192.168.1.1"},
+			hostnameIP: "",
+			expected:   "192.168.1.1",
 		},
 		{
-			name:     "common 10.1.x.x LAN preferred over 172.x.x",
-			ips:      []string{"172.16.0.1", "10.1.10.50"},
-			expected: "10.1.10.50",
+			name:       "skips link-local IPv4",
+			ips:        []string{"169.254.1.1", "10.0.0.1"},
+			hostnameIP: "",
+			expected:   "10.0.0.1",
 		},
 		{
-			name:     "prefers 10.0.x.x to 10.100.x.x (common ranges first)",
-			ips:      []string{"10.100.0.1", "10.0.0.1"},
-			expected: "10.0.0.1",
+			name:       "returns corosync IP if only option",
+			ips:        []string{"127.0.0.1", "172.20.0.80"},
+			hostnameIP: "",
+			expected:   "172.20.0.80",
+		},
+		{
+			name:       "empty list returns empty",
+			ips:        []string{},
+			hostnameIP: "",
+			expected:   "",
+		},
+		{
+			name:       "only loopback returns empty",
+			ips:        []string{"127.0.0.1", "::1"},
+			hostnameIP: "",
+			expected:   "",
+		},
+		{
+			name:       "common 10.1.x.x LAN preferred over 172.x.x",
+			ips:        []string{"172.16.0.1", "10.1.10.50"},
+			hostnameIP: "",
+			expected:   "10.1.10.50",
+		},
+		{
+			name:       "prefers 10.0.x.x to 10.100.x.x (common ranges first)",
+			ips:        []string{"10.100.0.1", "10.0.0.1"},
+			hostnameIP: "",
+			expected:   "10.0.0.1",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := selectBestIP(tt.ips)
+			result := selectBestIP(tt.ips, tt.hostnameIP)
 			if result != tt.expected {
-				t.Errorf("selectBestIP(%v) = %q, want %q", tt.ips, result, tt.expected)
+				t.Errorf("selectBestIP(%v, %q) = %q, want %q", tt.ips, tt.hostnameIP, result, tt.expected)
 			}
 		})
 	}

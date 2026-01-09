@@ -275,24 +275,28 @@ export const OIDCPanel: Component<Props> = (props) => {
         </div>
       </div>
       <Show when={!isEnterprise() && !loading()}>
-        <div class="mx-6 mt-6 p-4 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800/50 rounded-xl">
-          <div class="flex items-start gap-4">
-            <div class="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg">
-              <Sparkles class="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+        <div class="mx-6 mt-6 relative overflow-hidden group">
+          <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-blue-500/10 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+          <div class="relative flex items-start gap-4 p-6 bg-white dark:bg-gray-800/50 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl shadow-xl backdrop-blur-sm">
+            <div class="p-3 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl shadow-lg transform group-hover:scale-110 transition-transform duration-500">
+              <Sparkles class="w-5 h-5 text-white" />
             </div>
             <div class="flex-1">
-              <h4 class="text-sm font-bold text-indigo-900 dark:text-indigo-100">Enterprise Feature</h4>
-              <p class="text-xs text-indigo-800/80 dark:text-indigo-200/80 mt-1">
+              <h4 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                Enterprise Feature
+                <span class="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded">SSO</span>
+              </h4>
+              <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
                 OIDC integration is an Enterprise-only feature. Upgrade your license to enable seamless Single Sign-On for your team.
               </p>
               <div class="mt-3">
                 <a
                   href="https://pulse.sh/pro"
                   target="_blank"
-                  class="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                  class="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors group/link"
                 >
                   Learn about Enterprise
-                  <ExternalLink class="w-3 h-3" />
+                  <ExternalLink class="w-3 h-3 transform group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5 transition-transform" />
                 </a>
               </div>
             </div>

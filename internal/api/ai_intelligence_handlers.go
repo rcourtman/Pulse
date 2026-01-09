@@ -11,7 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const aiIntelligenceUpgradeURL = "https://pulserelay.pro"
+const aiIntelligenceUpgradeURL = "https://pulse.sh/pro"
 
 // HandleGetPatterns returns detected failure patterns (GET /api/ai/intelligence/patterns)
 func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Request) {
@@ -450,11 +450,20 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Check for Pulse Pro license (soft-lock)
+	locked := !h.aiService.HasLicenseFeature(license.FeatureAIAutoFix)
+	if locked {
+		w.Header().Set("X-License-Required", "true")
+		w.Header().Set("X-License-Feature", license.FeatureAIAutoFix)
+	}
+
 	// AI must be enabled to return intelligence data
 	if !h.aiService.IsEnabled() {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
-			"remediations": []interface{}{},
-			"message":      "AI is not enabled",
+			"remediations":     []interface{}{},
+			"message":          "AI is not enabled",
+			"license_required": locked,
+			"upgrade_url":      aiIntelligenceUpgradeURL,
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write remediations response")
 		}
@@ -464,8 +473,10 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 	patrol := h.aiService.GetPatrolService()
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
-			"remediations": []interface{}{},
-			"message":      "Patrol service not initialized",
+			"remediations":     []interface{}{},
+			"message":          "Patrol service not initialized",
+			"license_required": locked,
+			"upgrade_url":      aiIntelligenceUpgradeURL,
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write remediations response")
 		}
@@ -475,8 +486,10 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 	remediationLog := patrol.GetRemediationLog()
 	if remediationLog == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
-			"remediations": []interface{}{},
-			"message":      "Remediation log not initialized",
+			"remediations":     []interface{}{},
+			"message":          "Remediation log not initialized",
+			"license_required": locked,
+			"upgrade_url":      aiIntelligenceUpgradeURL,
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write remediations response")
 		}
@@ -540,12 +553,6 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 			"note":          rec.Note,
 			"automatic":     rec.Automatic,
 		})
-	}
-
-	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
-	if locked {
-		w.Header().Set("X-License-Required", "true")
-		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
 	}
 
 	count := len(result)
@@ -911,13 +918,19 @@ func (h *AISettingsHandler) HandleGetLearningStatus(w http.ResponseWriter, r *ht
 		message = "Baselines established and anomaly detection is active"
 	}
 
+	locked := !h.aiService.HasLicenseFeature(license.FeatureAIPatrol)
+	if locked {
+		w.Header().Set("X-License-Required", "true")
+		w.Header().Set("X-License-Feature", license.FeatureAIPatrol)
+	}
+
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
 		"resources_baselined": resourceCount,
 		"total_metrics":       totalMetrics,
 		"metric_breakdown":    metricCounts,
 		"status":              status,
 		"message":             message,
-		"license_required":    false,
+		"license_required":    locked,
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write learning status response")
 	}

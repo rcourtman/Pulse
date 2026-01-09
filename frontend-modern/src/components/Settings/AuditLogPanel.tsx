@@ -507,25 +507,34 @@ export default function AuditLogPanel() {
 
             {/* OSS Notice / Upgrade CTA */}
             <Show when={!isEnterprise() && !loading()}>
-                <div class="flex items-start gap-4 p-5 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800/50 rounded-xl shadow-sm">
-                    <div class="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg">
-                        <Sparkles class="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                    </div>
-                    <div class="flex-1">
-                        <h3 class="font-bold text-indigo-900 dark:text-indigo-100">Unlock Enterprise Audit Logging</h3>
-                        <p class="text-sm text-indigo-800/80 dark:text-indigo-200/80 mt-1 leading-relaxed">
-                            Upgrade to Pulse Enterprise for persistent, searchable audit logs and cryptographically signed event verification.
-                            Ensure compliance and security for your mission-critical infrastructure.
-                        </p>
-                        <div class="mt-4 flex flex-wrap gap-3">
+                <div class="relative overflow-hidden group">
+                    <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-blue-500/10 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                    <div class="relative flex flex-col md:flex-row items-center gap-6 p-8 bg-white dark:bg-gray-800/50 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl shadow-xl backdrop-blur-sm">
+                        <div class="p-4 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl shadow-lg transform group-hover:scale-110 transition-transform duration-500">
+                            <Sparkles class="w-8 h-8 text-white" />
+                        </div>
+                        <div class="flex-1 text-center md:text-left">
+                            <h3 class="text-xl font-bold text-gray-900 dark:text-white flex items-center justify-center md:justify-start gap-2">
+                                Unlock Enterprise Audit Logging
+                                <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-md">PRO Feature</span>
+                            </h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-2 leading-relaxed max-w-2xl">
+                                Upgrade to Pulse Enterprise for persistent, searchable audit logs and cryptographically signed event verification.
+                                Ensure high-level compliance, security, and accountability for your mission-critical infrastructure.
+                            </p>
+                        </div>
+                        <div class="flex flex-col gap-3 min-w-[200px]">
                             <a
                                 href="https://pulse.sh/pro"
                                 target="_blank"
-                                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none"
+                                class="inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-bold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 hover:shadow-indigo-500/25 hover:shadow-lg transform active:scale-95 transition-all shadow-md"
                             >
-                                View Enterprise Plans
+                                Get Enterprise
                                 <ExternalLink class="w-4 h-4" />
                             </a>
+                            <p class="text-[10px] text-center text-gray-500 dark:text-gray-500 italic">
+                                Pricing starts at $1.50/node
+                            </p>
                         </div>
                     </div>
                 </div>

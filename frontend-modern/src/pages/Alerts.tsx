@@ -35,6 +35,8 @@ import Send from 'lucide-solid/icons/send';
 import Calendar from 'lucide-solid/icons/calendar';
 import { getPatrolStatus, getFindings, getFindingsHistory, getPatrolRunHistory, forcePatrol, subscribeToPatrolStream, dismissFinding, suppressFinding, resolveFinding, clearAllFindings, getSuppressionRules, addSuppressionRule, deleteSuppressionRule, type Finding, type PatrolStatus, type PatrolRunRecord, type SuppressionRule, severityColors, formatTimestamp, categoryLabels } from '@/api/patrol';
 import { aiChatStore } from '@/stores/aiChat';
+import Sparkles from 'lucide-solid/icons/sparkles';
+import ExternalLink from 'lucide-solid/icons/external-link';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
 
@@ -2281,7 +2283,7 @@ function OverviewTab(props: {
     if (!status) return false;
     return !status.features?.['ai_alerts'];
   });
-  const aiAlertsUpgradeURL = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulserelay.pro');
+  const aiAlertsUpgradeURL = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulse.sh/pro');
   // Live streaming state for running patrol
   const [expandedLiveStream, setExpandedLiveStream] = createSignal(false);
   // Track streaming blocks for sequential display (like AI chat)
@@ -2294,7 +2296,7 @@ function OverviewTab(props: {
   const [currentThinking, setCurrentThinking] = createSignal('');
   let liveStreamUnsubscribe: (() => void) | null = null;
   const patrolRequiresLicense = createMemo(() => patrolStatus()?.license_required === true);
-  const patrolUpgradeURL = createMemo(() => patrolStatus()?.upgrade_url || 'https://pulserelay.pro');
+  const patrolUpgradeURL = createMemo(() => patrolStatus()?.upgrade_url || 'https://pulse.sh/pro');
   const patrolLicenseNote = createMemo(() => {
     if (!patrolRequiresLicense()) return '';
     const status = patrolStatus()?.license_status;
@@ -2818,23 +2820,28 @@ function OverviewTab(props: {
             </div>
 
             <Show when={patrolRequiresLicense()}>
-              <div class="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3">
-                <div class="flex items-start gap-3">
-                  <svg class="w-4 h-4 text-amber-600 dark:text-amber-300 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11V7a4 4 0 00-8 0v4m12 0a2 2 0 012 2v6a2 2 0 01-2 2H8a2 2 0 01-2-2v-6a2 2 0 012-2h8z" />
-                  </svg>
+              <div class="mb-4 relative overflow-hidden group">
+                <div class="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-orange-500/10 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                <div class="relative flex items-start gap-3 p-4 bg-white dark:bg-gray-800/50 border border-amber-200 dark:border-amber-900/50 rounded-xl shadow-lg backdrop-blur-sm">
+                  <div class="p-2 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg shadow-md">
+                    <Sparkles class="w-4 h-4 text-white" />
+                  </div>
                   <div class="flex-1">
-                    <p class="text-sm font-medium text-amber-800 dark:text-amber-200">Pulse Pro required</p>
-                    <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                    <div class="flex items-center gap-2">
+                      <p class="text-sm font-bold text-gray-900 dark:text-white">Pulse Pro Required</p>
+                      <span class="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded">AI Patrol</span>
+                    </div>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
                       {patrolLicenseNote() || 'AI Patrol insights require Pulse Pro.'}
                     </p>
                     <a
-                      class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-amber-800 dark:text-amber-200 hover:underline"
+                      class="inline-flex items-center gap-1.5 mt-2.5 text-xs font-bold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors group/link"
                       href={patrolUpgradeURL()}
                       target="_blank"
                       rel="noreferrer"
                     >
-                      Upgrade to Pulse Pro
+                      Upgrade to Pro
+                      <ExternalLink class="w-3 h-3 transform group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5 transition-transform" />
                     </a>
                   </div>
                 </div>

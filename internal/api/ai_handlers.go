@@ -385,7 +385,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				"error":       "license_required",
 				"message":     "AI Auto-Fix requires Pulse Pro",
 				"feature":     ai.FeatureAIAutoFix,
-				"upgrade_url": "https://pulserelay.pro",
+				"upgrade_url": "https://pulse.sh/pro",
 			})
 			return
 		}
@@ -393,6 +393,18 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 
 	if req.UseProactiveThresholds != nil {
+		// Proactive thresholds require Pro license with ai_patrol feature
+		if *req.UseProactiveThresholds && !h.aiService.HasLicenseFeature(ai.FeatureAIPatrol) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPaymentRequired)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":       "license_required",
+				"message":     "Proactive Thresholds requires Pulse Pro",
+				"feature":     ai.FeatureAIPatrol,
+				"upgrade_url": "https://pulse.sh/pro",
+			})
+			return
+		}
 		settings.UseProactiveThresholds = *req.UseProactiveThresholds
 	}
 
@@ -409,7 +421,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				"error":       "license_required",
 				"message":     "Autonomous Mode requires Pulse Pro",
 				"feature":     ai.FeatureAIAutoFix,
-				"upgrade_url": "https://pulserelay.pro",
+				"upgrade_url": "https://pulse.sh/pro",
 			})
 			return
 		}
@@ -481,15 +493,44 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 			http.Error(w, "patrol_interval_minutes cannot exceed 10080 (7 days)", http.StatusBadRequest)
 			return
 		}
+
+		// Enabling background patrol requires Pro license
+		if minutes > 0 && !h.aiService.HasLicenseFeature(ai.FeatureAIPatrol) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPaymentRequired)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":       "license_required",
+				"message":     "Background AI Patrol requires Pulse Pro",
+				"feature":     ai.FeatureAIPatrol,
+				"upgrade_url": "https://pulse.sh/pro",
+			})
+			return
+		}
+
 		settings.PatrolIntervalMinutes = minutes
 		settings.PatrolSchedulePreset = "" // Clear preset when using custom minutes
 	} else if req.PatrolSchedulePreset != nil {
 		// Legacy preset support
 		preset := strings.ToLower(strings.TrimSpace(*req.PatrolSchedulePreset))
 		switch preset {
-		case "15min", "1hr", "6hr", "12hr", "daily", "disabled":
+		case "15min", "1hr", "6hr", "12hr", "daily":
+			// Enabling background patrol requires Pro license
+			if !h.aiService.HasLicenseFeature(ai.FeatureAIPatrol) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusPaymentRequired)
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"error":       "license_required",
+					"message":     "Background AI Patrol requires Pulse Pro",
+					"feature":     ai.FeatureAIPatrol,
+					"upgrade_url": "https://pulse.sh/pro",
+				})
+				return
+			}
 			settings.PatrolSchedulePreset = preset
 			settings.PatrolIntervalMinutes = config.PresetToMinutes(preset)
+		case "disabled":
+			settings.PatrolSchedulePreset = preset
+			settings.PatrolIntervalMinutes = 0
 		default:
 			http.Error(w, "Invalid patrol_schedule_preset. Must be '15min', '1hr', '6hr', '12hr', 'daily', or 'disabled'", http.StatusBadRequest)
 			return
@@ -506,6 +547,18 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 
 	// Handle alert-triggered analysis toggle
 	if req.AlertTriggeredAnalysis != nil {
+		// Alert analysis requires Pro license with ai_alerts feature
+		if *req.AlertTriggeredAnalysis && !h.aiService.HasLicenseFeature(ai.FeatureAIAlerts) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPaymentRequired)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":       "license_required",
+				"message":     "AI Alert Analysis requires Pulse Pro",
+				"feature":     ai.FeatureAIAlerts,
+				"upgrade_url": "https://pulse.sh/pro",
+			})
+			return
+		}
 		settings.AlertTriggeredAnalysis = *req.AlertTriggeredAnalysis
 	}
 
@@ -815,11 +868,46 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 	}
 
 	// Parse request
-	r.Body = http.MaxBytesReader(w, r.Body, 64*1024) // 64KB max
-	var req AIExecuteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+	bodyBytes, readErr := io.ReadAll(r.Body)
+	if readErr != nil {
+		log.Error().Err(readErr).Msg("Failed to read request body")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
+	}
+
+	var req AIExecuteRequest
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Fine-grained license checks based on UseCase
+	useCase := strings.ToLower(strings.TrimSpace(req.UseCase))
+	if useCase == "autofix" || useCase == "remediation" {
+		if !h.aiService.HasLicenseFeature(ai.FeatureAIAutoFix) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPaymentRequired)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":       "license_required",
+				"message":     "AI Auto-Fix requires Pulse Pro",
+				"feature":     ai.FeatureAIAutoFix,
+				"upgrade_url": "https://pulse.sh/pro",
+			})
+			return
+		}
+	} else if useCase == "patrol" {
+		if !h.aiService.HasLicenseFeature(ai.FeatureAIPatrol) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPaymentRequired)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":       "license_required",
+				"message":     "AI Patrol reasoning requires Pulse Pro",
+				"feature":     ai.FeatureAIPatrol,
+				"upgrade_url": "https://pulse.sh/pro",
+			})
+			return
+		}
 	}
 
 	if strings.TrimSpace(req.Prompt) == "" {
@@ -840,7 +928,6 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 		})
 	}
 
-	useCase := strings.TrimSpace(req.UseCase)
 	if useCase == "" {
 		useCase = "chat"
 	}
@@ -981,6 +1068,34 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Fine-grained license checks based on UseCase (before SSE headers)
+	useCase := strings.ToLower(strings.TrimSpace(req.UseCase))
+	if useCase == "autofix" || useCase == "remediation" {
+		if !h.aiService.HasLicenseFeature(ai.FeatureAIAutoFix) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPaymentRequired)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":       "license_required",
+				"message":     "AI Auto-Fix requires Pulse Pro",
+				"feature":     ai.FeatureAIAutoFix,
+				"upgrade_url": "https://pulse.sh/pro",
+			})
+			return
+		}
+	} else if useCase == "patrol" {
+		if !h.aiService.HasLicenseFeature(ai.FeatureAIPatrol) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPaymentRequired)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":       "license_required",
+				"message":     "AI Patrol reasoning requires Pulse Pro",
+				"feature":     ai.FeatureAIPatrol,
+				"upgrade_url": "https://pulse.sh/pro",
+			})
+			return
+		}
+	}
+
 	if strings.TrimSpace(req.Prompt) == "" {
 		http.Error(w, "Prompt is required", http.StatusBadRequest)
 		return
@@ -1106,7 +1221,6 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 		})
 	}
 
-	useCase := strings.TrimSpace(req.UseCase)
 	if useCase == "" {
 		useCase = "chat"
 	}
@@ -1187,6 +1301,19 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 
 	// Require authentication
 	if !CheckAuth(h.config, w, r) {
+		return
+	}
+
+	// Gated for AI Auto-Fix (Pro feature)
+	if !h.aiService.HasLicenseFeature(ai.FeatureAIAutoFix) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusPaymentRequired)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":       "license_required",
+			"message":     "AI Auto-Fix requires Pulse Pro",
+			"feature":     ai.FeatureAIAutoFix,
+			"upgrade_url": "https://pulse.sh/pro",
+		})
 		return
 	}
 
@@ -2171,7 +2298,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		LicenseStatus:    licenseStatus,
 	}
 	if !hasPatrolFeature {
-		response.UpgradeURL = "https://pulserelay.pro"
+		response.UpgradeURL = "https://pulse.sh/pro"
 	}
 	response.Summary.Critical = summary.Critical
 	response.Summary.Warning = summary.Warning

@@ -723,3 +723,102 @@ func TestOpenAIClient_ListModels_Error(t *testing.T) {
 //
 // For now, these tests would require actual API keys to run E2E tests,
 // which should be done in a separate integration test suite.
+
+func TestNewOpenAIClient_URLNormalization(t *testing.T) {
+	tests := []struct {
+		name        string
+		inputURL    string
+		expectedURL string
+		modelsURL   string
+	}{
+		{
+			name:        "OpenRouter base URL",
+			inputURL:    "https://openrouter.ai/api/v1",
+			expectedURL: "https://openrouter.ai/api/v1/chat/completions",
+			modelsURL:   "https://openrouter.ai/api/v1/models",
+		},
+		{
+			name:        "OpenRouter with trailing slash",
+			inputURL:    "https://openrouter.ai/api/v1/",
+			expectedURL: "https://openrouter.ai/api/v1/chat/completions",
+			modelsURL:   "https://openrouter.ai/api/v1/models",
+		},
+		{
+			name:        "Full chat/completions URL unchanged",
+			inputURL:    "https://api.example.com/v1/chat/completions",
+			expectedURL: "https://api.example.com/v1/chat/completions",
+			modelsURL:   "https://api.example.com/v1/models",
+		},
+		{
+			name:        "Base domain only",
+			inputURL:    "https://api.example.com",
+			expectedURL: "https://api.example.com/v1/chat/completions",
+			modelsURL:   "https://api.example.com/v1/models",
+		},
+		{
+			name:        "Custom endpoint with completions",
+			inputURL:    "https://custom.ai/completions",
+			expectedURL: "https://custom.ai/chat/completions",
+			modelsURL:   "https://custom.ai/models",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := NewOpenAIClient("test-key", "gpt-4o", tt.inputURL, 0)
+			if client.baseURL != tt.expectedURL {
+				t.Errorf("baseURL = %q, want %q", client.baseURL, tt.expectedURL)
+			}
+			modelsEndpoint := client.modelsEndpoint()
+			if modelsEndpoint != tt.modelsURL {
+				t.Errorf("modelsEndpoint = %q, want %q", modelsEndpoint, tt.modelsURL)
+			}
+		})
+	}
+}
+
+func TestOpenAIClient_Chat_OpenRouterURL(t *testing.T) {
+	// Simulate OpenRouter with /api/v1 base URL
+	var gotPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		resp := mockOpenAIResponse{
+			ID:    "chatcmpl-123",
+			Model: "openai/gpt-4o",
+			Choices: []struct {
+				Index   int `json:"index"`
+				Message struct {
+					Role    string `json:"role"`
+					Content string `json:"content"`
+				} `json:"message"`
+				FinishReason string `json:"finish_reason"`
+			}{
+				{Message: struct {
+					Role    string `json:"role"`
+					Content string `json:"content"`
+				}{Role: "assistant", Content: "Hello from OpenRouter"}, FinishReason: "stop"},
+			},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	// User provides OpenRouter-style URL without /chat/completions
+	client := NewOpenAIClient("test-key", "openai/gpt-4o", server.URL+"/api/v1", 0)
+
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hello"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+
+	// Should correctly append /chat/completions to the path
+	if gotPath != "/api/v1/chat/completions" {
+		t.Errorf("path = %q, want /api/v1/chat/completions", gotPath)
+	}
+
+	if resp.Content != "Hello from OpenRouter" {
+		t.Errorf("content = %q, want 'Hello from OpenRouter'", resp.Content)
+	}
+}

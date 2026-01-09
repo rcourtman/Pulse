@@ -34,6 +34,23 @@ type OpenAIClient struct {
 func NewOpenAIClient(apiKey, model, baseURL string, timeout time.Duration) *OpenAIClient {
 	if baseURL == "" {
 		baseURL = openaiAPIURL
+	} else {
+		// Normalize baseURL: ensure it ends with /chat/completions for chat endpoint
+		// Users may provide URLs like "https://openrouter.ai/api/v1" which need the path appended
+		baseURL = strings.TrimSuffix(baseURL, "/")
+		if !strings.HasSuffix(baseURL, "/chat/completions") {
+			// If URL ends with /v1, append /chat/completions
+			// Otherwise append /v1/chat/completions
+			if strings.HasSuffix(baseURL, "/v1") {
+				baseURL = baseURL + "/chat/completions"
+			} else if strings.HasSuffix(baseURL, "/completions") {
+				// URL already has /completions, make it /chat/completions
+				baseURL = strings.TrimSuffix(baseURL, "/completions") + "/chat/completions"
+			} else {
+				// Assume it's a base URL, append full path
+				baseURL = baseURL + "/v1/chat/completions"
+			}
+		}
 	}
 	// Strip provider prefix if present - the model should be just the model name
 	if strings.HasPrefix(model, "openai:") {
@@ -488,11 +505,22 @@ func (c *OpenAIClient) modelsEndpoint() string {
 		return modelsURL
 	}
 
-	base := u.Scheme + "://" + u.Host
+	// For custom endpoints, replace /chat/completions with /models in the path
+	// This preserves any custom path structure (e.g., /api/v1 for OpenRouter)
 	if c.isDeepSeek() {
-		return base + "/models"
+		return u.Scheme + "://" + u.Host + "/models"
 	}
-	return base + "/v1/models"
+
+	// Replace /chat/completions with /models to get the models endpoint
+	// baseURL is already normalized to end with /chat/completions
+	path := u.Path
+	if strings.HasSuffix(path, "/chat/completions") {
+		path = strings.TrimSuffix(path, "/chat/completions") + "/models"
+	} else {
+		// Fallback: strip path and use /v1/models
+		path = "/v1/models"
+	}
+	return u.Scheme + "://" + u.Host + path
 }
 
 // ListModels fetches available models from the OpenAI API

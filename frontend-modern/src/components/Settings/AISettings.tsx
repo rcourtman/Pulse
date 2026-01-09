@@ -8,6 +8,8 @@ import { formField, labelClass, controlClass } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
+import Sparkles from 'lucide-solid/icons/sparkles';
+import ExternalLink from 'lucide-solid/icons/external-link';
 import { isEnterprise, loadLicenseStatus } from '@/stores/license';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
 
@@ -1174,7 +1176,7 @@ export const AISettings: Component = () => {
                         </span>
                       </Show>
                       <Show when={autoFixLocked()}>
-                        <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-md shadow-sm">
+                        <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 text-white rounded-md shadow-md shadow-indigo-500/20 ring-1 ring-white/20">
                           Enterprise
                         </span>
                       </Show>
@@ -1188,10 +1190,11 @@ export const AISettings: Component = () => {
                       <strong>⚠️ Legal Disclaimer:</strong> AI models can hallucinate. You are responsible for any damage caused by autonomous actions. See <a href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md" target="_blank" class="underline">Terms of Service</a>.
                     </div>
                     <Show when={autoFixLocked()}>
-                      <p class="text-[10px] text-indigo-600 dark:text-indigo-400 mt-1">
-                        Pulse Enterprise required for autonomous mode.{' '}
+                      <p class="text-[10px] text-indigo-600 dark:text-indigo-400 mt-2 flex items-center gap-1.5 p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg border border-indigo-100 dark:border-indigo-800">
+                        <Sparkles class="w-3 h-3" />
+                        Pulse Enterprise required for autonomous mode.
                         <a
-                          class="underline decoration-dotted font-semibold"
+                          class="ml-auto px-2 py-0.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition shadow-sm font-semibold"
                           href="https://pulse.sh/pro"
                           target="_blank"
                           rel="noreferrer"
@@ -1270,7 +1273,7 @@ export const AISettings: Component = () => {
                         Alert-Triggered Analysis
                         <span class="px-1 py-0.5 text-[9px] font-medium bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Efficient</span>
                         <Show when={alertAnalysisLocked()}>
-                          <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-md shadow-sm">
+                          <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 text-white rounded-md shadow-md shadow-indigo-500/20 ring-1 ring-white/20">
                             Enterprise
                           </span>
                         </Show>
@@ -1329,10 +1332,11 @@ export const AISettings: Component = () => {
                         </Show>
                       </div>
                       <Show when={autoFixLocked()}>
-                        <p class="text-[10px] text-indigo-600 dark:text-indigo-400 mt-1">
-                          Pulse Enterprise required for auto-fix.{' '}
+                        <p class="text-[10px] text-indigo-600 dark:text-indigo-400 mt-2 flex items-center gap-1.5 p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg border border-indigo-100 dark:border-indigo-800">
+                          <Sparkles class="w-3 h-3" />
+                          Pulse Enterprise required for auto-fix.
                           <a
-                            class="underline decoration-dotted font-semibold"
+                            class="ml-auto px-2 py-0.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition shadow-sm font-semibold"
                             href="https://pulse.sh/pro"
                             target="_blank"
                             rel="noreferrer"

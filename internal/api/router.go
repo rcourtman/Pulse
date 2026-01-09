@@ -1307,7 +1307,7 @@ func (r *Router) setupRoutes() {
 					"error":       "license_required",
 					"message":     err.Error(),
 					"feature":     license.FeatureAIPatrol,
-					"upgrade_url": "https://pulserelay.pro",
+					"upgrade_url": "https://pulse.sh/pro",
 				})
 				return
 			}

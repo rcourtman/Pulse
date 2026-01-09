@@ -5,7 +5,7 @@ import { notificationStore } from '@/stores/notifications';
 import { LicenseAPI, type LicenseStatus } from '@/api/license';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 
-const PULSE_PRO_URL = 'https://pulserelay.pro';
+const PULSE_PRO_URL = 'https://pulse.sh/pro';
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Free',
