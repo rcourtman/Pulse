@@ -432,8 +432,9 @@ func (p *ProxmoxSetup) getIPThatReachesPulse() string {
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 	ip := localAddr.IP.String()
 
-	// Only return private IPs (we don't want to register with a public IP)
-	if isPrivateIP(ip) {
+	// If we found an IP that can reach Pulse, it's the most reliable one to report.
+	// We only skip loopback/link-local which net.Dial UDP shouldn't return anyway.
+	if ip != "" && ip != "127.0.0.1" && !strings.HasPrefix(ip, "fe80:") {
 		return ip
 	}
 	return ""
@@ -471,9 +472,11 @@ func isPrivateIP(ip string) bool {
 	}
 	// Check common private ranges
 	private := []string{
-		"10.0.0.0/8",
-		"172.16.0.0/12",
-		"192.168.0.0/16",
+		"10.0.0.0/8",     // RFC 1918
+		"172.16.0.0/12",  // RFC 1918
+		"192.168.0.0/16", // RFC 1918
+		"100.64.0.0/10",  // CGNAT / Tailscale
+		"169.254.0.0/16", // Link-local
 	}
 	for _, cidr := range private {
 		_, network, _ := net.ParseCIDR(cidr)

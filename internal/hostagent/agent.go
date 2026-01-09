@@ -53,7 +53,8 @@ type Config struct {
 	DiskExclude []string // Mount points or path prefixes to exclude from disk monitoring
 
 	// Network configuration
-	ReportIP string // IP address to report instead of auto-detected (for multi-NIC systems)
+	ReportIP    string // IP address to report instead of auto-detected (for multi-NIC systems)
+	DisableCeph bool   // If true, disables local Ceph status polling
 }
 
 // Agent is responsible for collecting host metrics and shipping them to Pulse.
@@ -630,6 +631,9 @@ func (a *Agent) collectRAIDArrays(ctx context.Context) []agentshost.RAIDArray {
 // collectCephStatus attempts to collect Ceph cluster status.
 // Returns nil if Ceph is not available or not configured on this host.
 func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
+	if a.cfg.DisableCeph {
+		return nil
+	}
 	// Only collect on Linux
 	if runtime.GOOS != "linux" {
 		return nil

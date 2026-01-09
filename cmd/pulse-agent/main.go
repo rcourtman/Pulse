@@ -477,8 +477,9 @@ type Config struct {
 	DiskExclude []string // Mount points or patterns to exclude from disk monitoring
 
 	// Network configuration
-	ReportIP string // IP address to report (for multi-NIC systems)
-	SelfTest bool   // Perform self-test and exit
+	ReportIP    string // IP address to report (for multi-NIC systems)
+	DisableCeph bool   // Disable local Ceph status polling
+	SelfTest    bool   // Perform self-test and exit
 
 	// Health/metrics server
 	HealthAddr string
@@ -527,6 +528,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	envKubeMaxPods := strings.TrimSpace(getenv("PULSE_KUBE_MAX_PODS"))
 	envDiskExclude := strings.TrimSpace(getenv("PULSE_DISK_EXCLUDE"))
 	envReportIP := strings.TrimSpace(getenv("PULSE_REPORT_IP"))
+	envDisableCeph := strings.TrimSpace(getenv("PULSE_DISABLE_CEPH"))
 
 	// Defaults
 	defaultInterval := 30 * time.Second
@@ -589,6 +591,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	kubeIncludeAllDeploymentsFlag := fs.Bool("kube-include-all-deployments", utils.ParseBool(envKubeIncludeAllDeployments), "Include all deployments, not just problem ones")
 	kubeMaxPodsFlag := fs.Int("kube-max-pods", defaultInt(envKubeMaxPods, 200), "Max pods included in report")
 	reportIPFlag := fs.String("report-ip", envReportIP, "IP address to report (for multi-NIC systems)")
+	disableCephFlag := fs.Bool("disable-ceph", utils.ParseBool(envDisableCeph), "Disable local Ceph status polling")
 	showVersion := fs.Bool("version", false, "Print the agent version and exit")
 	selfTest := fs.Bool("self-test", false, "Perform self-test and exit (used during auto-update)")
 
@@ -671,6 +674,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		KubeMaxPods:               *kubeMaxPodsFlag,
 		DiskExclude:               diskExclude,
 		ReportIP:                  strings.TrimSpace(*reportIPFlag),
+		DisableCeph:               *disableCephFlag,
 		SelfTest:                  *selfTest,
 	}, nil
 }
@@ -947,6 +951,16 @@ func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *z
 				// JSON numbers are floats, assume seconds
 				cfg.Interval = time.Duration(f) * time.Second
 				logger.Info().Float64("val", f).Msg("Remote config: interval (s)")
+			}
+		case "report_ip":
+			if s, ok := v.(string); ok {
+				cfg.ReportIP = s
+				logger.Info().Str("val", s).Msg("Remote config: report_ip")
+			}
+		case "disable_ceph":
+			if b, ok := v.(bool); ok {
+				cfg.DisableCeph = b
+				logger.Info().Bool("val", b).Msg("Remote config: disable_ceph")
 			}
 		}
 	}

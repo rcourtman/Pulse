@@ -1,0 +1,70 @@
+name: Deploy Demo Server
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      
+      - name: Build static binary
+        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o pulse cmd/pulse/main.go
+      
+      - name: Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:infra
+
+      - name: Deploy to server
+        run: |
+          # Upload new binary
+          scp -o StrictHostKeyChecking=no pulse root@pulse-relay:/tmp/pulse-new
+          
+          # Health check: Run on test port 8082 and verify
+          # We use a subshell to background the process and then kill it after the check
+          ssh -o StrictHostKeyChecking=no root@pulse-relay "
+            chmod +x /tmp/pulse-new &&
+            PULSE_DATA_DIR=/tmp/pulse-demo-test \
+            PULSE_ADDR=127.0.0.1:8082 \
+            PULSE_MOCK_MODE=true \
+            PULSE_AUTH_USER=test \
+            PULSE_AUTH_PASS=test \
+            nohup /tmp/pulse-new > /tmp/demo-deploy-test.log 2>&1 &
+            PID=\$!
+            sleep 5
+            if curl -f http://127.0.0.1:8082/api/health; then
+              echo 'Health check passed!'
+              kill \$PID
+              rm -rf /tmp/pulse-demo-test
+              rm /tmp/demo-deploy-test.log
+            else
+              echo 'Health check failed! Error log:'
+              cat /tmp/demo-deploy-test.log
+              kill \$PID
+              rm -rf /tmp/pulse-demo-test
+              exit 1
+            fi
+          "
+          
+          # Swap and restart production service
+          ssh -o StrictHostKeyChecking=no root@pulse-relay "
+            systemctl stop pulse &&
+            mv /tmp/pulse-new /opt/pulse/bin/pulse &&
+            systemctl start pulse
+          "
+      
+      - name: Verify production
+        run: |
+          sleep 5
+          curl -f https://demo.pulserelay.pro/api/health

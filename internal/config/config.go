@@ -449,7 +449,8 @@ type PVEInstance struct {
 	ClusterEndpoints []ClusterEndpoint // All discovered cluster nodes
 
 	// Agent tracking
-	Source string // "agent" or "script" - how this node was registered (empty = legacy/manual)
+	Source      string // "agent" or "script" - how this node was registered (empty = legacy/manual)
+	DisableCeph bool   // Disable Ceph status polling for this instance
 }
 
 // ClusterEndpoint represents a single node in a cluster
@@ -500,7 +501,8 @@ type PBSInstance struct {
 	SSHPort                      int   // SSH port for temperature monitoring (0 = use global default)
 
 	// Agent tracking
-	Source string // "agent" or "script" - how this node was registered (empty = legacy/manual)
+	Source      string // "agent" or "script" - how this node was registered (empty = legacy/manual)
+	DisableCeph bool   // Disable Ceph status polling for this instance
 }
 
 // PMGInstance represents a Proxmox Mail Gateway connection
