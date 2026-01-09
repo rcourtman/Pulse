@@ -8131,6 +8131,10 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 		m.notificationMgr.CancelAlert(alertID)
 		if m.notificationMgr.GetNotifyOnResolve() {
 			if resolved := m.alertManager.GetResolvedAlert(alertID); resolved != nil {
+				// Check if recovery notification should be suppressed during quiet hours
+				if m.alertManager.ShouldSuppressResolvedNotification(resolved.Alert) {
+					return
+				}
 				go m.notificationMgr.SendResolvedAlert(resolved)
 			}
 		}

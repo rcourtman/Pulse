@@ -2116,6 +2116,29 @@ func (m *Manager) shouldSuppressNotification(alert *Alert) (bool, string) {
 	return false, ""
 }
 
+// ShouldSuppressResolvedNotification checks if a recovery notification should be suppressed
+// during quiet hours. Recovery notifications follow the same quiet hours rules as their
+// corresponding alerts - if the original alert would have been suppressed, so is the recovery.
+func (m *Manager) ShouldSuppressResolvedNotification(alert *Alert) bool {
+	if alert == nil {
+		return false
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	suppressed, reason := m.shouldSuppressNotification(alert)
+	if suppressed {
+		log.Debug().
+			Str("alertID", alert.ID).
+			Str("type", alert.Type).
+			Str("level", string(alert.Level)).
+			Str("quietHoursRule", reason).
+			Msg("Recovery notification suppressed during quiet hours")
+	}
+	return suppressed
+}
+
 // shouldNotifyAfterCooldown checks if enough time has passed since the last notification
 // Returns true if notification should be sent, false if still in cooldown period
 func (m *Manager) shouldNotifyAfterCooldown(alert *Alert) bool {
