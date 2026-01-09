@@ -144,6 +144,14 @@ Triggers a test alert to all configured channels.
 - `GET /api/notifications/email-providers` (admin)
 - `GET /api/notifications/health` (admin)
 
+### Audit Webhooks (Pro)
+- `GET /api/admin/webhooks/audit` (admin, `settings:read`)
+- `POST /api/admin/webhooks/audit` (admin, `settings:write`)
+
+### Advanced Reporting (Pro)
+- `GET /api/admin/reports/generate` (admin, `node:read`)
+  - Query params: `format` (pdf/csv), `id` (resource ID), `type` (node/vm/container/storage), `metric` (cpu/mem/avg), `range` (1h/24h/7d)
+
 ### Queue and Dead-Letter Tools
 - `GET /api/notifications/queue/stats` (admin)
 - `GET /api/notifications/dlq` (admin)

@@ -520,7 +520,6 @@ func (s *Store) Close() error {
 
 // Stats holds metrics store statistics
 type Stats struct {
-	DBPath        string    `json:"dbPath"`
 	DBSize        int64     `json:"dbSize"`
 	RawCount      int64     `json:"rawCount"`
 	MinuteCount   int64     `json:"minuteCount"`
@@ -535,9 +534,7 @@ type Stats struct {
 
 // GetStats returns storage statistics
 func (s *Store) GetStats() Stats {
-	stats := Stats{
-		DBPath: s.config.DBPath,
-	}
+	stats := Stats{}
 
 	// Count by tier
 	rows, err := s.db.Query(`SELECT tier, COUNT(*) FROM metrics GROUP BY tier`)

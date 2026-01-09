@@ -37,8 +37,10 @@ import { SecurityAuthPanel } from './SecurityAuthPanel';
 import { APIAccessPanel } from './APIAccessPanel';
 import { SecurityOverviewPanel } from './SecurityOverviewPanel';
 import AuditLogPanel from './AuditLogPanel';
+import { AuditWebhookPanel } from './AuditWebhookPanel';
 import RolesPanel from './RolesPanel';
 import UserAssignmentsPanel from './UserAssignmentsPanel';
+import { ReportingPanel } from './ReportingPanel';
 import {
   PveNodesTable,
   PbsNodesTable,
@@ -69,6 +71,8 @@ import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Clock from 'lucide-solid/icons/clock';
 import Sparkles from 'lucide-solid/icons/sparkles';
+import FileText from 'lucide-solid/icons/file-text';
+import Globe from 'lucide-solid/icons/globe';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import type { NodeConfig } from '@/types/nodes';
@@ -308,7 +312,9 @@ type SettingsTab =
   | 'security-users'
   | 'security-audit'
   | 'diagnostics'
-  | 'updates';
+  | 'updates'
+  | 'reporting'
+  | 'security-webhooks';
 
 type AgentKey = 'pve' | 'pbs' | 'pmg';
 
@@ -385,6 +391,10 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
     title: 'Audit Log',
     description: 'View security events, login attempts, and configuration changes.',
   },
+  'security-webhooks': {
+    title: 'Audit Webhooks',
+    description: 'Configure real-time delivery of audit events to external systems.',
+  },
   diagnostics: {
     title: 'Diagnostics',
     description:
@@ -393,6 +403,10 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
   updates: {
     title: 'Update History',
     description: 'Review past software updates, rollback events, and upgrade audit logs.',
+  },
+  reporting: {
+    title: 'Detailed Reporting',
+    description: 'Generate and export comprehensive infrastructure reports in PDF and CSV formats.',
   },
 };
 
@@ -465,6 +479,8 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/security-audit')) return 'security-audit';
     if (path.includes('/settings/security')) return 'security-overview';
     if (path.includes('/settings/diagnostics')) return 'diagnostics';
+    if (path.includes('/settings/reporting')) return 'reporting';
+    if (path.includes('/settings/security-webhooks')) return 'security-webhooks';
     if (path.includes('/settings/updates')) return 'updates';
     // Legacy platform paths map to the Proxmox tab
     if (
@@ -1052,6 +1068,8 @@ const Settings: Component<SettingsProps> = (props) => {
       iconProps?: { strokeWidth?: number };
       disabled?: boolean;
       badge?: string;
+      features?: string[];
+      permissions?: string[];
     }[];
   }[] = [
       {
@@ -1115,6 +1133,13 @@ const Settings: Component<SettingsProps> = (props) => {
             icon: BadgeCheck,
             iconProps: { strokeWidth: 2 },
           },
+          {
+            id: 'reporting',
+            label: 'Reporting',
+            icon: FileText,
+            iconProps: { strokeWidth: 2 },
+            features: ['advanced_reporting'],
+          },
         ],
       },
       {
@@ -1156,6 +1181,13 @@ const Settings: Component<SettingsProps> = (props) => {
             label: 'Audit Log',
             icon: Activity,
             iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'security-webhooks',
+            label: 'Webhooks',
+            icon: Globe,
+            iconProps: { strokeWidth: 2 },
+            features: ['audit_logging'],
           },
         ],
       },
@@ -3688,9 +3720,19 @@ const Settings: Component<SettingsProps> = (props) => {
                 <AuditLogPanel />
               </Show>
 
+              {/* Security Webhooks Tab */}
+              <Show when={activeTab() === 'security-webhooks'}>
+                <AuditWebhookPanel />
+              </Show>
+
               {/* Diagnostics Tab */}
               <Show when={activeTab() === 'diagnostics'}>
                 <DiagnosticsPanel />
+              </Show>
+
+              {/* Reporting Tab */}
+              <Show when={activeTab() === 'reporting'}>
+                <ReportingPanel />
               </Show>
             </div>
           </div >

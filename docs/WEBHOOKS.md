@@ -58,3 +58,14 @@ For generic webhooks, use Go templates to format the JSON payload.
 
 - **Private IPs**: By default, webhooks to private IPs are blocked. Allow them in **Settings → System → Network → Webhook Security**.
 - **Headers**: Add custom headers (e.g., `Authorization: Bearer ...`) in the webhook config.
+
+## 🧾 Audit Webhooks (Pro)
+
+Pulse Pro supports dedicated audit webhooks for security event compliance. Unlike alert notifications, these webhooks deliver the raw, signed JSON payload of every security-relevant action (login, config change, group mapping).
+
+### Setup
+1. Go to **Settings → Security → Webhooks**.
+2. Add your endpoint URL (e.g., `https://siem.corp.local/ingest/pulse`).
+
+### Security
+Audit webhooks are dispatched asynchronously. The payload includes a `signature` field which can be verified using your `PULSE_AUDIT_SIGNING_KEY` to ensure the event has not been tampered with in transit.

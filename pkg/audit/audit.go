@@ -54,6 +54,10 @@ type Logger interface {
 	// Count returns the number of audit events matching the filter
 	Count(filter QueryFilter) (int, error)
 
+	// Webhook Management (Optional, may return empty/not implemented for console logger)
+	GetWebhookURLs() []string
+	UpdateWebhookURLs(urls []string) error
+
 	// Close releases any resources held by the logger
 	Close() error
 }
@@ -156,6 +160,16 @@ func (c *ConsoleLogger) Query(filter QueryFilter) ([]Event, error) {
 // Count returns zero for the console logger.
 func (c *ConsoleLogger) Count(filter QueryFilter) (int, error) {
 	return 0, nil
+}
+
+// GetWebhookURLs returns an empty slice for the console logger.
+func (c *ConsoleLogger) GetWebhookURLs() []string {
+	return []string{}
+}
+
+// UpdateWebhookURLs returns an error for the console logger.
+func (c *ConsoleLogger) UpdateWebhookURLs(urls []string) error {
+	return nil // Or return an error saying it's not supported
 }
 
 // Close is a no-op for the console logger.

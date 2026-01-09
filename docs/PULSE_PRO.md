@@ -12,6 +12,18 @@ Pulse Pro unlocks advanced AI automation features on top of the free Pulse platf
 - API reference: `docs/API.md`.
 - If no signing key is set, events are stored without signatures and verification will fail.
 
+### Audit Webhooks
+- real-time delivery of audit events to external endpoints (SIEM, ELK, etc.).
+- Asynchronous dispatch to ensure zero impact on system latency.
+- Signature verification on ingest for secure integration.
+- Configurable via **Settings → Security → Webhooks**.
+
+### Advanced Reporting
+- Generate comprehensive PDF/CSV reports for nodes, VMs, containers, and storage.
+- Includes key statistics, trends, and capacity projections.
+- Customizable time ranges and metric aggregation.
+- Access via **Settings → System → Reporting**.
+
 ### AI Patrol (LLM-Backed)
 Scheduled background analysis that correlates live state + metrics history to produce actionable findings.
 
@@ -31,6 +43,8 @@ Scheduled background analysis that correlates live state + metrics history to pr
 - **Autonomous mode**: optional diagnostic/fix commands through connected agents.
 - **Auto-fix**: guarded remediations when enabled.
 - **Kubernetes AI analysis**: deep cluster analysis beyond basic monitoring (Pro-only).
+- **Audit-triggered webhooks**: real-time delivery of security events to external systems.
+- **Advanced Reporting**: scheduled or on-demand PDF/CSV infrastructure health reports.
 - **Agent Profiles**: centralized configuration profiles for fleets of agents.
 
 ### What Free Users Still Get
@@ -53,6 +67,8 @@ Pulse Pro licenses enable specific server-side features. These are enforced at t
 - `ai_autofix`: autonomous mode and auto-fix workflows.
 - `kubernetes_ai`: AI analysis for Kubernetes clusters (not basic monitoring).
 - `agent_profiles`: centralized agent configuration profiles.
+- `advanced_reporting`: infrastructure health report generation (PDF/CSV).
+- `audit_logging`: persistent audit trail and real-time webhook delivery.
 
 ## Why It Matters (Technical Value)
 

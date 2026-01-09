@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -19,10 +20,10 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
-	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	_ "github.com/rcourtman/pulse-go-rewrite/internal/mock" // Import for init() to run
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog/log"
 )
 
@@ -30,6 +31,23 @@ import (
 var (
 	MetricsPort = 9091
 )
+
+// BusinessHooks allows enterprise features to hook into the server lifecycle.
+type BusinessHooks struct {
+	OnMonitorInitialized func(m *monitoring.Monitor)
+}
+
+var (
+	globalHooks   BusinessHooks
+	globalHooksMu sync.Mutex
+)
+
+// SetBusinessHooks registers hooks for the server.
+func SetBusinessHooks(h BusinessHooks) {
+	globalHooksMu.Lock()
+	defer globalHooksMu.Unlock()
+	globalHooks = h
+}
 
 // Run starts the Pulse monitoring server.
 func Run(ctx context.Context, version string) error {
@@ -101,6 +119,25 @@ func Run(ctx context.Context, version string) error {
 	reloadableMonitor, err := monitoring.NewReloadableMonitor(cfg, wsHub)
 	if err != nil {
 		return fmt.Errorf("failed to initialize monitoring system: %w", err)
+	}
+
+	// Trigger enterprise hooks if registered
+	var onMonitorInitialized func(*monitoring.Monitor)
+	globalHooksMu.Lock()
+	if globalHooks.OnMonitorInitialized != nil {
+		onMonitorInitialized = globalHooks.OnMonitorInitialized
+	}
+	globalHooksMu.Unlock()
+
+	if onMonitorInitialized != nil {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().Interface("panic", r).Msg("Enterprise OnMonitorInitialized hook panicked")
+				}
+			}()
+			onMonitorInitialized(reloadableMonitor.GetMonitor())
+		}()
 	}
 
 	// Set state getter for WebSocket hub

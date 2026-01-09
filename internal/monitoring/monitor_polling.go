@@ -1609,6 +1609,14 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			m.metricsHistory.AddStorageMetric(storage.ID, "used", float64(storage.Used), timestamp)
 			m.metricsHistory.AddStorageMetric(storage.ID, "total", float64(storage.Total), timestamp)
 			m.metricsHistory.AddStorageMetric(storage.ID, "avail", float64(storage.Free), timestamp)
+
+			// Also write to persistent store for enterprise reporting
+			if m.metricsStore != nil {
+				m.metricsStore.Write("storage", storage.ID, "usage", storage.Usage, timestamp)
+				m.metricsStore.Write("storage", storage.ID, "used", float64(storage.Used), timestamp)
+				m.metricsStore.Write("storage", storage.ID, "total", float64(storage.Total), timestamp)
+				m.metricsStore.Write("storage", storage.ID, "avail", float64(storage.Free), timestamp)
+			}
 		}
 
 		if m.alertManager != nil {

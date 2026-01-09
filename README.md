@@ -103,6 +103,8 @@ Community-maintained integrations and addons:
 | Kubernetes AI analysis | — | ✅ |
 | Auto-fix + autonomous mode | — | ✅ |
 | Centralized agent profiles | — | ✅ |
+| **Advanced Reporting (PDF/CSV)** | — | ✅ |
+| **Audit Webhooks (SIEM integration)** | — | ✅ |
 | Priority support | — | ✅ |
 
 AI Patrol runs on your schedule (every 10 minutes to every 7 days, default 6 hours) and finds:

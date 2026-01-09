@@ -24,9 +24,10 @@ const (
 	FeatureUnlimited   = "unlimited"    // Unlimited instances (explicit for contracts)
 
 	// Enterprise tier features
-	FeatureAuditLogging = "audit_logging" // Persistent audit logs with signing
-	FeatureSSO          = "sso"           // OIDC/SSO authentication (Basic)
-	FeatureAdvancedSSO  = "advanced_sso"  // SAML, Multi-provider, Role Mapping
+	FeatureAuditLogging      = "audit_logging"      // Persistent audit logs with signing
+	FeatureSSO               = "sso"                // OIDC/SSO authentication (Basic)
+	FeatureAdvancedSSO       = "advanced_sso"       // SAML, Multi-provider, Role Mapping
+	FeatureAdvancedReporting = "advanced_reporting" // PDF/CSV reporting engine
 )
 
 // Tier represents a license tier.
@@ -105,6 +106,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureSSO,
 		FeatureAdvancedSSO,
 		FeatureRBAC,
+		FeatureAdvancedReporting,
 	},
 }
 
@@ -173,6 +175,8 @@ func GetFeatureDisplayName(feature string) string {
 		return "Basic SSO (OIDC)"
 	case FeatureAdvancedSSO:
 		return "Advanced SSO (SAML/Multi-Provider)"
+	case FeatureAdvancedReporting:
+		return "Advanced Infrastructure Reporting (PDF/CSV)"
 	default:
 		return feature
 	}

@@ -95,7 +95,7 @@ func TestStoreSelectTierAndStats(t *testing.T) {
 	if stats.RawCount != 1 || stats.MinuteCount != 1 || stats.HourlyCount != 1 || stats.DailyCount != 1 {
 		t.Fatalf("unexpected tier counts: %+v", stats)
 	}
-	if stats.DBPath == "" || stats.DBSize <= 0 {
+	if stats.DBSize <= 0 {
 		t.Fatalf("expected stats DB info to be populated: %+v", stats)
 	}
 }

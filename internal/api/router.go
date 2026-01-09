@@ -59,6 +59,7 @@ type Router struct {
 	systemSettingsHandler     *SystemSettingsHandler
 	aiSettingsHandler         *AISettingsHandler
 	resourceHandlers          *ResourceHandlers
+	reportingHandlers         *ReportingHandlers
 	configProfileHandler      *ConfigProfileHandler
 	licenseHandlers           *LicenseHandlers
 	agentExecServer           *agentexec.Server
@@ -206,6 +207,7 @@ func (r *Router) setupRoutes() {
 	r.resourceHandlers = NewResourceHandlers()
 	r.configProfileHandler = NewConfigProfileHandler(r.persistence)
 	r.licenseHandlers = NewLicenseHandlers(r.config.DataPath)
+	r.reportingHandlers = NewReportingHandlers()
 	rbacHandlers := NewRBACHandlers(r.config)
 
 	// API routes
@@ -512,6 +514,18 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/admin/roles/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleRoles)))
 	r.mux.HandleFunc("/api/admin/users", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleGetUsers)))
 	r.mux.HandleFunc("/api/admin/users/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleUserRoleActions)))
+
+	// Advanced Reporting routes
+	r.mux.HandleFunc("/api/admin/reports/generate", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAdvancedReporting, RequireScope(config.ScopeSettingsRead, r.reportingHandlers.HandleGenerateReport))))
+
+	// Audit Webhook routes
+	r.mux.HandleFunc("/api/admin/webhooks/audit", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodGet {
+			RequireScope(config.ScopeSettingsRead, auditHandlers.HandleGetWebhooks)(w, req)
+		} else {
+			RequireScope(config.ScopeSettingsWrite, auditHandlers.HandleUpdateWebhooks)(w, req)
+		}
+	})))
 
 	// Security routes
 	r.mux.HandleFunc("/api/security/change-password", r.handleChangePassword)
@@ -3729,7 +3743,6 @@ func (r *Router) handleMetricsStoreStats(w http.ResponseWriter, req *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"enabled":       true,
-		"dbPath":        stats.DBPath,
 		"dbSize":        stats.DBSize,
 		"rawCount":      stats.RawCount,
 		"minuteCount":   stats.MinuteCount,

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -160,6 +161,44 @@ func (h *AuditHandlers) HandleVerifyAuditEvent(w http.ResponseWriter, r *http.Re
 		"verified":  verified,
 		"message":   message,
 	})
+}
+
+// HandleGetWebhooks returns the audit webhook configuration.
+func (h *AuditHandlers) HandleGetWebhooks(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	logger := audit.GetLogger()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"urls": logger.GetWebhookURLs(),
+	})
+}
+
+// HandleUpdateWebhooks updates the audit webhook configuration.
+func (h *AuditHandlers) HandleUpdateWebhooks(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		URLs []string `json:"urls"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	logger := audit.GetLogger()
+	if err := logger.UpdateWebhookURLs(req.URLs); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to update webhooks: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // isPersistentLogger checks if we're using a persistent audit logger (enterprise).
