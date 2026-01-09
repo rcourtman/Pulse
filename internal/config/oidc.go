@@ -14,21 +14,22 @@ const DefaultOIDCCallbackPath = "/api/oidc/callback"
 
 // OIDCConfig captures configuration required to integrate with an OpenID Connect provider.
 type OIDCConfig struct {
-	Enabled        bool            `json:"enabled"`
-	IssuerURL      string          `json:"issuerUrl"`
-	ClientID       string          `json:"clientId"`
-	ClientSecret   string          `json:"clientSecret,omitempty"`
-	RedirectURL    string          `json:"redirectUrl"`
-	LogoutURL      string          `json:"logoutUrl,omitempty"`
-	Scopes         []string        `json:"scopes,omitempty"`
-	UsernameClaim  string          `json:"usernameClaim,omitempty"`
-	EmailClaim     string          `json:"emailClaim,omitempty"`
-	GroupsClaim    string          `json:"groupsClaim,omitempty"`
-	AllowedGroups  []string        `json:"allowedGroups,omitempty"`
-	AllowedDomains []string        `json:"allowedDomains,omitempty"`
-	AllowedEmails  []string        `json:"allowedEmails,omitempty"`
-	CABundle       string          `json:"caBundle,omitempty"`
-	EnvOverrides   map[string]bool `json:"-"`
+	Enabled           bool              `json:"enabled"`
+	IssuerURL         string            `json:"issuerUrl"`
+	ClientID          string            `json:"clientId"`
+	ClientSecret      string            `json:"clientSecret,omitempty"`
+	RedirectURL       string            `json:"redirectUrl"`
+	LogoutURL         string            `json:"logoutUrl,omitempty"`
+	Scopes            []string          `json:"scopes,omitempty"`
+	UsernameClaim     string            `json:"usernameClaim,omitempty"`
+	EmailClaim        string            `json:"emailClaim,omitempty"`
+	GroupsClaim       string            `json:"groupsClaim,omitempty"`
+	AllowedGroups     []string          `json:"allowedGroups,omitempty"`
+	AllowedDomains    []string          `json:"allowedDomains,omitempty"`
+	AllowedEmails     []string          `json:"allowedEmails,omitempty"`
+	GroupRoleMappings map[string]string `json:"groupRoleMappings,omitempty"`
+	CABundle          string            `json:"caBundle,omitempty"`
+	EnvOverrides      map[string]bool   `json:"-"`
 }
 
 // NewOIDCConfig returns an instance populated with sensible defaults.
@@ -50,6 +51,12 @@ func (c *OIDCConfig) Clone() *OIDCConfig {
 	clone.AllowedDomains = append([]string{}, c.AllowedDomains...)
 	clone.AllowedEmails = append([]string{}, c.AllowedEmails...)
 	clone.CABundle = c.CABundle
+	if c.GroupRoleMappings != nil {
+		clone.GroupRoleMappings = make(map[string]string, len(c.GroupRoleMappings))
+		for k, v := range c.GroupRoleMappings {
+			clone.GroupRoleMappings[k] = v
+		}
+	}
 	if c.EnvOverrides != nil {
 		clone.EnvOverrides = make(map[string]bool, len(c.EnvOverrides))
 		for k, v := range c.EnvOverrides {
@@ -84,6 +91,10 @@ func (c *OIDCConfig) ApplyDefaults(publicURL string) {
 	c.AllowedGroups = normaliseList(c.AllowedGroups)
 	c.AllowedDomains = normaliseList(c.AllowedDomains)
 	c.AllowedEmails = normaliseList(c.AllowedEmails)
+
+	if c.GroupRoleMappings == nil {
+		c.GroupRoleMappings = make(map[string]string)
+	}
 
 	if c.EnvOverrides == nil {
 		c.EnvOverrides = make(map[string]bool)
@@ -169,6 +180,27 @@ func parseDelimited(input string) []string {
 	return normaliseList(parts)
 }
 
+// parseMappings converts a delimiter-separated string of key=value pairs into a map.
+// Format: group1=role1,group2=role2
+func parseMappings(input string) map[string]string {
+	if strings.TrimSpace(input) == "" {
+		return nil
+	}
+
+	result := make(map[string]string)
+	pairs := parseDelimited(input)
+	for _, pair := range pairs {
+		if idx := strings.IndexByte(pair, '='); idx != -1 {
+			key := strings.TrimSpace(pair[:idx])
+			val := strings.TrimSpace(pair[idx+1:])
+			if key != "" && val != "" {
+				result[key] = val
+			}
+		}
+	}
+	return result
+}
+
 // MergeFromEnv overrides config values with environment provided pairs.
 func (c *OIDCConfig) MergeFromEnv(env map[string]string) {
 	if c == nil {
@@ -230,6 +262,10 @@ func (c *OIDCConfig) MergeFromEnv(env map[string]string) {
 	if val, ok := env["OIDC_ALLOWED_EMAILS"]; ok {
 		c.AllowedEmails = parseDelimited(val)
 		c.EnvOverrides["allowedEmails"] = true
+	}
+	if val, ok := env["OIDC_GROUP_ROLE_MAPPINGS"]; ok {
+		c.GroupRoleMappings = parseMappings(val)
+		c.EnvOverrides["groupRoleMappings"] = true
 	}
 	if val, ok := env["OIDC_CA_BUNDLE"]; ok {
 		c.CABundle = val

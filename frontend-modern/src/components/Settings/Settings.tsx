@@ -37,6 +37,8 @@ import { SecurityAuthPanel } from './SecurityAuthPanel';
 import { APIAccessPanel } from './APIAccessPanel';
 import { SecurityOverviewPanel } from './SecurityOverviewPanel';
 import AuditLogPanel from './AuditLogPanel';
+import RolesPanel from './RolesPanel';
+import UserAssignmentsPanel from './UserAssignmentsPanel';
 import {
   PveNodesTable,
   PbsNodesTable,
@@ -62,6 +64,7 @@ import Activity from 'lucide-solid/icons/activity';
 import Loader from 'lucide-solid/icons/loader';
 import Network from 'lucide-solid/icons/network';
 import Monitor from 'lucide-solid/icons/monitor';
+import Users from 'lucide-solid/icons/users';
 import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Clock from 'lucide-solid/icons/clock';
@@ -301,6 +304,8 @@ type SettingsTab =
   | 'security-overview'
   | 'security-auth'
   | 'security-sso'
+  | 'security-roles'
+  | 'security-users'
   | 'security-audit'
   | 'diagnostics'
   | 'updates';
@@ -367,6 +372,14 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
   'security-sso': {
     title: 'Single Sign-On',
     description: 'Configure OIDC providers for enterprise authentication.',
+  },
+  'security-roles': {
+    title: 'Roles',
+    description: 'Define custom roles and manage granular permissions for users and tokens.',
+  },
+  'security-users': {
+    title: 'User Access',
+    description: 'Assign roles to users and view effective permissions across your infrastructure.',
   },
   'security-audit': {
     title: 'Audit Log',
@@ -447,6 +460,8 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/security-overview')) return 'security-overview';
     if (path.includes('/settings/security-auth')) return 'security-auth';
     if (path.includes('/settings/security-sso')) return 'security-sso';
+    if (path.includes('/settings/security-roles')) return 'security-roles';
+    if (path.includes('/settings/security-users')) return 'security-users';
     if (path.includes('/settings/security-audit')) return 'security-audit';
     if (path.includes('/settings/security')) return 'security-overview';
     if (path.includes('/settings/diagnostics')) return 'diagnostics';
@@ -1122,6 +1137,18 @@ const Settings: Component<SettingsProps> = (props) => {
             id: 'security-sso',
             label: 'Single Sign-On',
             icon: Key,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'security-roles',
+            label: 'Roles',
+            icon: Shield,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'security-users',
+            label: 'Users',
+            icon: Users,
             iconProps: { strokeWidth: 2 },
           },
           {
@@ -3644,6 +3671,16 @@ const Settings: Component<SettingsProps> = (props) => {
                 <div class="space-y-6">
                   <OIDCPanel onConfigUpdated={loadSecurityStatus} />
                 </div>
+              </Show>
+
+              {/* Security Roles Tab */}
+              <Show when={activeTab() === 'security-roles'}>
+                <RolesPanel />
+              </Show>
+
+              {/* Security User Assignments Tab */}
+              <Show when={activeTab() === 'security-users'}>
+                <UserAssignmentsPanel />
               </Show>
 
               {/* Security Audit Log Tab */}

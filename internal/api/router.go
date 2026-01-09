@@ -38,6 +38,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
@@ -205,6 +206,7 @@ func (r *Router) setupRoutes() {
 	r.resourceHandlers = NewResourceHandlers()
 	r.configProfileHandler = NewConfigProfileHandler(r.persistence)
 	r.licenseHandlers = NewLicenseHandlers(r.config.DataPath)
+	rbacHandlers := NewRBACHandlers(r.config)
 
 	// API routes
 	r.mux.HandleFunc("/api/health", r.handleHealth)
@@ -503,7 +505,13 @@ func (r *Router) setupRoutes() {
 	// Audit log routes (Enterprise feature)
 	auditHandlers := NewAuditHandlers()
 	r.mux.HandleFunc("/api/audit", RequirePermission(r.config, r.authorizer, internalauth.ActionRead, internalauth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))))
-	r.mux.HandleFunc("/api/audit/", RequirePermission(r.config, r.authorizer, internalauth.ActionRead, internalauth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleVerifyAuditEvent))))
+	r.mux.HandleFunc("/api/audit/", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleVerifyAuditEvent))))
+
+	// RBAC routes (Phase 2 - Enterprise feature)
+	r.mux.HandleFunc("/api/admin/roles", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleRoles)))
+	r.mux.HandleFunc("/api/admin/roles/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleRoles)))
+	r.mux.HandleFunc("/api/admin/users", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleGetUsers)))
+	r.mux.HandleFunc("/api/admin/users/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleUserRoleActions)))
 
 	// Security routes
 	r.mux.HandleFunc("/api/security/change-password", r.handleChangePassword)

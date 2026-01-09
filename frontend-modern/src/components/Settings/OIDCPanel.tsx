@@ -7,8 +7,6 @@ import { formField, labelClass, controlClass, formHelpText } from '@/components/
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { isEnterprise, loadLicenseStatus } from '@/stores/license';
-import Sparkles from 'lucide-solid/icons/sparkles';
-import ExternalLink from 'lucide-solid/icons/external-link';
 
 interface OIDCConfigResponse {
   enabled: boolean;
@@ -24,6 +22,7 @@ interface OIDCConfigResponse {
   allowedDomains: string[];
   allowedEmails: string[];
   caBundle?: string;
+  groupRoleMappings?: Record<string, string>;
   clientSecretSet: boolean;
   envOverrides?: Record<string, boolean>;
   defaultRedirect: string;
@@ -35,6 +34,18 @@ const splitList = (input: string) =>
     .split(/[,\s]+/)
     .map((v) => v.trim())
     .filter(Boolean);
+
+const mappingsToString = (mappings?: Record<string, string>) =>
+  mappings ? Object.entries(mappings).map(([k, v]) => `${k}=${v}`).join(', ') : '';
+
+const stringToMappings = (input: string) => {
+  const result: Record<string, string> = {};
+  splitList(input).forEach(pair => {
+    const [k, v] = pair.split('=').map(s => s.trim());
+    if (k && v) result[k] = v;
+  });
+  return result;
+};
 
 interface Props {
   onConfigUpdated?: (config: OIDCConfigResponse) => void;
@@ -59,6 +70,7 @@ export const OIDCPanel: Component<Props> = (props) => {
     allowedGroups: '',
     allowedDomains: '',
     allowedEmails: '',
+    groupRoleMappings: '',
     caBundle: '',
     clientSecret: '',
     clearSecret: false,
@@ -84,6 +96,7 @@ export const OIDCPanel: Component<Props> = (props) => {
         allowedGroups: '',
         allowedDomains: '',
         allowedEmails: '',
+        groupRoleMappings: '',
         caBundle: '',
         clientSecret: '',
         clearSecret: false,
@@ -104,6 +117,7 @@ export const OIDCPanel: Component<Props> = (props) => {
       allowedGroups: listToString(data.allowedGroups),
       allowedDomains: listToString(data.allowedDomains),
       allowedEmails: listToString(data.allowedEmails),
+      groupRoleMappings: mappingsToString(data.groupRoleMappings),
       caBundle: data.caBundle || '',
       clientSecret: '',
       clearSecret: false,
@@ -158,6 +172,7 @@ export const OIDCPanel: Component<Props> = (props) => {
         allowedGroups: splitList(form.allowedGroups),
         allowedDomains: splitList(form.allowedDomains),
         allowedEmails: splitList(form.allowedEmails),
+        groupRoleMappings: stringToMappings(form.groupRoleMappings),
         caBundle: form.caBundle.trim(),
       };
 
@@ -519,6 +534,20 @@ export const OIDCPanel: Component<Props> = (props) => {
                     disabled={isEnvLocked() || saving()}
                   />
                   <p class={formHelpText}>Optional allowlist of specific emails.</p>
+                </div>
+                <div class={formField}>
+                  <label class={labelClass()}>Group role mappings</label>
+                  <textarea
+                    rows={2}
+                    value={form.groupRoleMappings}
+                    onInput={(event) => setForm('groupRoleMappings', event.currentTarget.value)}
+                    placeholder="admins=admin, operators=operator"
+                    class={controlClass('min-h-[70px]')}
+                    disabled={isEnvLocked() || saving()}
+                  />
+                  <p class={formHelpText}>
+                    Comma or space separated <code>group=roleId</code> pairs.
+                  </p>
                 </div>
               </div>
             </Show>

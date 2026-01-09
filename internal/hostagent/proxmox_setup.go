@@ -413,28 +413,35 @@ func (p *ProxmoxSetup) getIPThatReachesPulse() string {
 
 	host := u.Host
 	if !strings.Contains(host, ":") {
-		// Add default port if not specified
+		// If port is missing, try to infer it from scheme
 		if u.Scheme == "https" {
 			host += ":443"
-		} else {
+		} else if u.Scheme == "http" {
 			host += ":80"
+		} else {
+			// Pulse default if scheme is missing or weird
+			host += ":7655"
 		}
 	}
 
 	// Create a UDP "connection" to determine local address (doesn't actually send data)
-	conn, err := net.DialTimeout("udp", host, 2*time.Second)
+	// We use a short timeout as this is just a routing table lookup.
+	conn, err := net.DialTimeout("udp", host, 500*time.Millisecond)
 	if err != nil {
-		p.logger.Debug().Err(err).Msg("Could not determine local IP for Pulse connection")
+		p.logger.Debug().Err(err).Str("target", host).Msg("Could not determine local IP for Pulse connection (routing check failed)")
 		return ""
 	}
 	defer conn.Close()
 
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	localAddr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok || localAddr == nil {
+		return ""
+	}
 	ip := localAddr.IP.String()
 
 	// If we found an IP that can reach Pulse, it's the most reliable one to report.
 	// We only skip loopback/link-local which net.Dial UDP shouldn't return anyway.
-	if ip != "" && ip != "127.0.0.1" && !strings.HasPrefix(ip, "fe80:") {
+	if ip != "" && ip != "127.0.0.1" && ip != "::1" && !strings.HasPrefix(ip, "fe80:") {
 		return ip
 	}
 	return ""
@@ -462,29 +469,6 @@ func (p *ProxmoxSetup) getIPForHostname() string {
 		}
 	}
 	return ""
-}
-
-// isPrivateIP checks if an IP address is in a private range (RFC 1918).
-func isPrivateIP(ip string) bool {
-	parsed := net.ParseIP(ip)
-	if parsed == nil {
-		return false
-	}
-	// Check common private ranges
-	private := []string{
-		"10.0.0.0/8",     // RFC 1918
-		"172.16.0.0/12",  // RFC 1918
-		"192.168.0.0/16", // RFC 1918
-		"100.64.0.0/10",  // CGNAT / Tailscale
-		"169.254.0.0/16", // Link-local
-	}
-	for _, cidr := range private {
-		_, network, _ := net.ParseCIDR(cidr)
-		if network.Contains(parsed) {
-			return true
-		}
-	}
-	return false
 }
 
 // selectBestIP picks the most likely externally-reachable IP from a list.
@@ -560,8 +544,9 @@ func scoreIPv4(ip string) int {
 	fmt.Sscanf(parts[1], "%d", &second)
 
 	// Scoring logic:
-	// - 192.168.x.x: Very common home/office LAN, high priority (score 100)
+	// - 192.168.x.x: Very common home/office LAN, highest priority (score 100)
 	// - 10.0.x.x - 10.31.x.x: Common corporate LAN ranges (score 90)
+	// - 100.64.x.x: Tailscale / CGNAT (score 85)
 	// - 10.x.x.x (other): Less common, but still likely LAN (score 70)
 	// - 172.16-31.x.x: Private range, often used for internal clusters (score 50)
 	//   Corosync often uses 172.20.x.x or similar for ring0/ring1
@@ -573,6 +558,8 @@ func scoreIPv4(ip string) int {
 		return 100 // Most common home/office LAN
 	case first == 10 && second <= 31:
 		return 90 // Common corporate LAN
+	case first == 100 && (second >= 64 && second <= 127):
+		return 85 // Tailscale / CGNAT
 	case first == 10:
 		return 70 // Other 10.x.x.x
 	case first == 172 && second >= 16 && second <= 31:

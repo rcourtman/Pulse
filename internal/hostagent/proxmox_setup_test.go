@@ -115,6 +115,17 @@ func TestSelectBestIP(t *testing.T) {
 			hostnameIP: "",
 			expected:   "10.0.0.1",
 		},
+		{
+			name:       "prefers LAN over Tailscale if hostname matches both",
+			ips:        []string{"192.168.1.5", "100.64.0.1"},
+			hostnameIP: "192.168.1.5",
+			expected:   "192.168.1.5",
+		},
+		{
+			name:     "prefers Tailscale over cluster network",
+			ips:      []string{"172.20.0.1", "100.64.0.1"},
+			expected: "100.64.0.1",
+		},
 	}
 
 	for _, tt := range tests {
@@ -151,6 +162,13 @@ func TestScoreIPv4(t *testing.T) {
 		{"172.16.0.1", 50},
 		{"172.20.0.80", 50}, // Corosync typical
 		{"172.31.255.255", 50},
+
+		// 100.64.x.x - Tailscale / CGNAT (85)
+		{"100.64.0.1", 85},
+		{"100.100.100.100", 85},
+		{"100.127.255.255", 85},
+		{"100.63.255.255", 30}, // Just outside range (below)
+		{"100.128.0.1", 30},    // Just outside range (above)
 
 		// 169.254.x.x - link-local (0)
 		{"169.254.1.1", 0},

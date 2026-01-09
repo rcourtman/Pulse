@@ -17,7 +17,8 @@ const (
 	FeatureUpdateAlerts = "update_alerts" // Alerts for pending container/package updates (free feature)
 
 	// MSP tier features (FUTURE - not in v1 launch)
-	FeatureMultiUser   = "multi_user"   // RBAC - NOT IMPLEMENTED YET
+	FeatureRBAC        = "rbac"         // Role-Based Access Control
+	FeatureMultiUser   = "multi_user"   // Multi-user (likely merged with RBAC)
 	FeatureWhiteLabel  = "white_label"  // Custom branding - NOT IMPLEMENTED YET
 	FeatureMultiTenant = "multi_tenant" // Multi-tenant - NOT IMPLEMENTED YET
 	FeatureUnlimited   = "unlimited"    // Unlimited instances (explicit for contracts)
@@ -55,6 +56,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
 		FeatureSSO,
+		FeatureRBAC,
 	},
 	TierProAnnual: {
 		FeatureAIPatrol,
@@ -64,6 +66,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
 		FeatureSSO,
+		FeatureRBAC,
 	},
 	TierLifetime: {
 		FeatureAIPatrol,
@@ -73,6 +76,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
 		FeatureSSO,
+		FeatureRBAC,
 	},
 	TierMSP: {
 		FeatureAIPatrol,
@@ -100,6 +104,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureAuditLogging,
 		FeatureSSO,
 		FeatureAdvancedSSO,
+		FeatureRBAC,
 	},
 }
 
@@ -150,8 +155,10 @@ func GetFeatureDisplayName(feature string) string {
 		return "Kubernetes AI Analysis"
 	case FeatureUpdateAlerts:
 		return "Update Alerts (Container/Package Updates)"
+	case FeatureRBAC:
+		return "Role-Based Access Control (RBAC)"
 	case FeatureMultiUser:
-		return "Multi-User / RBAC"
+		return "Multi-User Mode"
 	case FeatureWhiteLabel:
 		return "White-Label Branding"
 	case FeatureMultiTenant:

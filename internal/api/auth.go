@@ -18,12 +18,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type contextKey string
-
-const (
-	contextKeyAPIToken contextKey = "apiTokenRecord"
-)
-
 // Global session store instance
 var (
 	sessionStore     *SessionStore
@@ -752,16 +746,16 @@ func attachAPITokenRecord(r *http.Request, record *config.APITokenRecord) {
 		return
 	}
 	clone := record.Clone()
-	ctx := context.WithValue(r.Context(), contextKeyAPIToken, clone)
+	ctx := internalauth.WithAPIToken(r.Context(), &clone)
 	*r = *r.WithContext(ctx)
 }
 
 func getAPITokenRecordFromRequest(r *http.Request) *config.APITokenRecord {
-	value := r.Context().Value(contextKeyAPIToken)
-	if value == nil {
+	val := internalauth.GetAPIToken(r.Context())
+	if val == nil {
 		return nil
 	}
-	record, ok := value.(config.APITokenRecord)
+	record, ok := val.(*config.APITokenRecord)
 	if !ok {
 		return nil
 	}

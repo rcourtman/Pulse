@@ -17,8 +17,6 @@ import {
 } from '@/utils/localStorage';
 import { showSuccess, showWarning, showToast } from '@/utils/toast';
 import { isEnterprise, loadLicenseStatus } from '@/stores/license';
-import Sparkles from 'lucide-solid/icons/sparkles';
-import ExternalLink from 'lucide-solid/icons/external-link';
 
 interface AuditEvent {
     id: string;

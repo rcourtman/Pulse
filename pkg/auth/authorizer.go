@@ -12,8 +12,14 @@ type Authorizer interface {
 type contextKey string
 
 const (
-	contextKeyUser contextKey = "user"
+	contextKeyUser     contextKey = "user"
+	contextKeyAPIToken contextKey = "apiToken"
 )
+
+// APITokenInfo is a minimal interface for checking token scopes without circular dependencies.
+type APITokenInfo interface {
+	HasScope(scope string) bool
+}
 
 // WithUser adds a username to the context
 func WithUser(ctx context.Context, username string) context.Context {
@@ -26,6 +32,19 @@ func GetUser(ctx context.Context) string {
 		return user
 	}
 	return ""
+}
+
+// WithAPIToken adds an API token record to the context
+func WithAPIToken(ctx context.Context, token APITokenInfo) context.Context {
+	return context.WithValue(ctx, contextKeyAPIToken, token)
+}
+
+// GetAPIToken extracts the API token record from the context
+func GetAPIToken(ctx context.Context) APITokenInfo {
+	if token, ok := ctx.Value(contextKeyAPIToken).(APITokenInfo); ok {
+		return token
+	}
+	return nil
 }
 
 // DefaultAuthorizer is a pass-through implementation that allows everything.

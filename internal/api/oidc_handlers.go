@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 
@@ -244,6 +245,33 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		log.Debug().Msg("User group membership verified")
+	}
+
+	// RBAC Integration: Map OIDC groups to Pulse roles
+	if authManager := internalauth.GetManager(); authManager != nil {
+		groups := extractStringSliceClaim(claims, cfg.GroupsClaim)
+		var rolesToAssign []string
+		seenRoles := make(map[string]bool)
+
+		for _, group := range groups {
+			if roleID, ok := cfg.GroupRoleMappings[group]; ok {
+				if !seenRoles[roleID] {
+					rolesToAssign = append(rolesToAssign, roleID)
+					seenRoles[roleID] = true
+				}
+			}
+		}
+
+		if len(rolesToAssign) > 0 {
+			log.Info().
+				Str("user", username).
+				Strs("mapped_roles", rolesToAssign).
+				Msg("Auto-assigning roles based on OIDC group mapping")
+			if err := authManager.UpdateUserRoles(username, rolesToAssign); err != nil {
+				log.Error().Err(err).Str("user", username).Msg("Failed to auto-assign OIDC roles")
+				// We don't fail the login here, but log the error
+			}
+		}
 	}
 
 	// Prepare OIDC token info for session storage (enables refresh token support)
