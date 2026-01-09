@@ -232,12 +232,10 @@ export default function AuditLogPanel() {
             let failed = 0;
             let errors = 0;
             let unavailable = 0;
-            let unchecked = 0;
 
             for (const event of signedEvents) {
                 const state = verification()[event.id];
                 if (!state) {
-                    unchecked += 1;
                     continue;
                 }
                 switch (state.status) {
@@ -254,7 +252,7 @@ export default function AuditLogPanel() {
                         unavailable += 1;
                         break;
                     default:
-                        unchecked += 1;
+                        break;
                 }
             }
 

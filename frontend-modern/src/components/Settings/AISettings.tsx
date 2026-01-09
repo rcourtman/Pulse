@@ -9,7 +9,6 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
 import Sparkles from 'lucide-solid/icons/sparkles';
-import ExternalLink from 'lucide-solid/icons/external-link';
 import { isEnterprise, loadLicenseStatus } from '@/stores/license';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
 
