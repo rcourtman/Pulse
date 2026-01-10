@@ -4,19 +4,19 @@
 # This script runs a local development environment with:
 # - Go backend with auto-rebuild on file changes (via inotifywait)
 # - Vite frontend dev server with HMR
-# - Automatic enterprise binary support when /opt/pulse-enterprise exists
+# - Auto-detection of pulse-pro module for Pro features
 #
 # Environment Variables:
 #   HOT_DEV_USE_PROD_DATA=true   Use /etc/pulse for data (sessions, config, etc.)
-#   HOT_DEV_USE_ENTERPRISE=true  Build enterprise binary (default: true if available)
+#   HOT_DEV_USE_PRO=true         Build Pro binary (default: true if module available)
 #   PULSE_MOCK_MODE=true         Use isolated mock data directory
 #   PULSE_DATA_DIR=/path         Override data directory
 #   PULSE_DEV_API_PORT=7656      Backend API port (default: 7656)
 #   FRONTEND_DEV_PORT=5173       Frontend dev server port (default: 5173)
 #
-# Enterprise Mode:
-#   When /opt/pulse-enterprise exists and HOT_DEV_USE_ENTERPRISE is not "false",
-#   the script builds and runs the enterprise binary which includes:
+# Pro Features Mode:
+#   When /opt/pulse-enterprise exists and HOT_DEV_USE_PRO is not "false",
+#   the script builds the Pro binary which includes:
 #   - SQLite-based persistent audit logging
 #   - RBAC (Role-Based Access Control)
 #   - HMAC event signing for tamper detection
@@ -272,20 +272,20 @@ cd "${ROOT_DIR}"
 mkdir -p internal/api/frontend-modern/dist
 touch internal/api/frontend-modern/dist/index.html
 
-# Check if enterprise module is available and use it for full audit logging support
-ENTERPRISE_DIR="/opt/pulse-enterprise"
-if [[ -d "${ENTERPRISE_DIR}" ]] && [[ ${HOT_DEV_USE_ENTERPRISE:-true} == "true" ]]; then
-    log_info "Building enterprise binary (includes persistent audit logging)..."
-    cd "${ENTERPRISE_DIR}"
+# Check if Pro module is available and use it for full audit logging support
+PRO_MODULE_DIR="/opt/pulse-enterprise"
+if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; then
+    log_info "Building Pro binary (includes persistent audit logging)..."
+    cd "${PRO_MODULE_DIR}"
     go build -buildvcs=false -o "${ROOT_DIR}/pulse" ./cmd/pulse-enterprise 2>/dev/null || {
-        log_warn "Enterprise build failed, falling back to OSS binary"
+        log_warn "Pro build failed, falling back to standard binary"
         cd "${ROOT_DIR}"
         go build -o pulse ./cmd/pulse
     }
     cd "${ROOT_DIR}"
-    # Set up audit directory for enterprise features
+    # Set up audit directory for Pro features
     export PULSE_AUDIT_DIR="${PULSE_DATA_DIR:-/etc/pulse}"
-    log_info "Enterprise audit logging enabled (SQLite storage in ${PULSE_AUDIT_DIR})"
+    log_info "Pro audit logging enabled (SQLite storage in ${PULSE_AUDIT_DIR})"
 else
     go build -o pulse ./cmd/pulse
 fi
