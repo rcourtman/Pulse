@@ -1346,6 +1346,31 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 	return host, nil
 }
 
+// LinkHostAgent manually links a host agent to a specific PVE node.
+// This is used when auto-linking can't disambiguate (e.g., multiple nodes with hostname "pve").
+// After linking, the host agent's temperature/sensor data will appear on the correct node.
+func (m *Monitor) LinkHostAgent(hostID, nodeID string) error {
+	hostID = strings.TrimSpace(hostID)
+	nodeID = strings.TrimSpace(nodeID)
+	if hostID == "" {
+		return fmt.Errorf("host id is required")
+	}
+	if nodeID == "" {
+		return fmt.Errorf("node id is required")
+	}
+
+	if err := m.state.LinkHostAgentToNode(hostID, nodeID); err != nil {
+		return err
+	}
+
+	log.Info().
+		Str("hostID", hostID).
+		Str("nodeID", nodeID).
+		Msg("Manually linked host agent to PVE node")
+
+	return nil
+}
+
 // UnlinkHostAgent removes the link between a host agent and its PVE node.
 // The agent will continue to report but will appear in the Managed Agents table
 // instead of being merged with the PVE node in the Dashboard.
@@ -2544,6 +2569,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 // findLinkedProxmoxEntity searches for a PVE node, VM, or container with a matching hostname.
 // Returns the IDs of matched entities (empty string if no match).
+// When multiple entities match the same hostname (e.g., two PVE instances both have a node
+// named "pve"), this function returns empty strings to avoid incorrect linking. Users should
+// manually link agents to nodes via the UI in such cases.
 func (m *Monitor) findLinkedProxmoxEntity(hostname string) (nodeID, vmID, containerID string) {
 	if hostname == "" {
 		return "", "", ""
@@ -2572,25 +2600,66 @@ func (m *Monitor) findLinkedProxmoxEntity(hostname string) (nodeID, vmID, contai
 
 	state := m.GetState()
 
-	// Check PVE nodes first
+	// Check PVE nodes first - but detect ambiguity when multiple nodes match
+	var matchingNodes []models.Node
 	for _, node := range state.Nodes {
 		if matchHostname(node.Name) {
-			return node.ID, "", ""
+			matchingNodes = append(matchingNodes, node)
 		}
 	}
+	if len(matchingNodes) == 1 {
+		return matchingNodes[0].ID, "", ""
+	}
+	if len(matchingNodes) > 1 {
+		// Multiple nodes with the same hostname - can't auto-link, would cause data mixing
+		log.Warn().
+			Str("hostname", hostname).
+			Int("matchCount", len(matchingNodes)).
+			Strs("instances", func() []string {
+				instances := make([]string, len(matchingNodes))
+				for i, n := range matchingNodes {
+					instances[i] = n.Instance
+				}
+				return instances
+			}()).
+			Msg("Multiple PVE nodes match hostname - cannot auto-link host agent. Manual linking required via UI.")
+		return "", "", ""
+	}
 
-	// Check VMs
+	// Check VMs - same pattern for ambiguity detection
+	var matchingVMs []models.VM
 	for _, vm := range state.VMs {
 		if matchHostname(vm.Name) {
-			return "", vm.ID, ""
+			matchingVMs = append(matchingVMs, vm)
 		}
 	}
+	if len(matchingVMs) == 1 {
+		return "", matchingVMs[0].ID, ""
+	}
+	if len(matchingVMs) > 1 {
+		log.Warn().
+			Str("hostname", hostname).
+			Int("matchCount", len(matchingVMs)).
+			Msg("Multiple VMs match hostname - cannot auto-link host agent. Manual linking required via UI.")
+		return "", "", ""
+	}
 
-	// Check containers
+	// Check containers - same pattern
+	var matchingCTs []models.Container
 	for _, ct := range state.Containers {
 		if matchHostname(ct.Name) {
-			return "", "", ct.ID
+			matchingCTs = append(matchingCTs, ct)
 		}
+	}
+	if len(matchingCTs) == 1 {
+		return "", "", matchingCTs[0].ID
+	}
+	if len(matchingCTs) > 1 {
+		log.Warn().
+			Str("hostname", hostname).
+			Int("matchCount", len(matchingCTs)).
+			Msg("Multiple containers match hostname - cannot auto-link host agent. Manual linking required via UI.")
+		return "", "", ""
 	}
 
 	return "", "", ""

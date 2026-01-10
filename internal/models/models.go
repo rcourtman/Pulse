@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -2065,6 +2066,66 @@ func (s *State) UnlinkNodesFromHostAgent(hostAgentID string) int {
 		s.LastUpdate = time.Now()
 	}
 	return count
+}
+
+// LinkHostAgentToNode creates a bidirectional link between a host agent and a PVE node.
+// This is used for manual linking when auto-linking can't disambiguate (e.g., multiple nodes
+// with the same hostname). Sets LinkedNodeID on the host and LinkedHostAgentID on the node.
+// Returns an error if either the host or node is not found.
+func (s *State) LinkHostAgentToNode(hostID, nodeID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Find the host
+	var hostIdx int = -1
+	for i, host := range s.Hosts {
+		if host.ID == hostID {
+			hostIdx = i
+			break
+		}
+	}
+	if hostIdx < 0 {
+		return fmt.Errorf("host agent not found: %s", hostID)
+	}
+
+	// Find the node
+	var nodeIdx int = -1
+	for i, node := range s.Nodes {
+		if node.ID == nodeID {
+			nodeIdx = i
+			break
+		}
+	}
+	if nodeIdx < 0 {
+		return fmt.Errorf("node not found: %s", nodeID)
+	}
+
+	// Clear any existing links from this host
+	oldNodeID := s.Hosts[hostIdx].LinkedNodeID
+	if oldNodeID != "" {
+		for i, node := range s.Nodes {
+			if node.ID == oldNodeID {
+				s.Nodes[i].LinkedHostAgentID = ""
+				break
+			}
+		}
+	}
+
+	// Clear any existing links to the target node (from other hosts)
+	for i, host := range s.Hosts {
+		if host.LinkedNodeID == nodeID && i != hostIdx {
+			s.Hosts[i].LinkedNodeID = ""
+		}
+	}
+
+	// Create the bidirectional link
+	s.Hosts[hostIdx].LinkedNodeID = nodeID
+	s.Hosts[hostIdx].LinkedVMID = "" // Clear VM/container links if setting node link
+	s.Hosts[hostIdx].LinkedContainerID = ""
+	s.Nodes[nodeIdx].LinkedHostAgentID = hostID
+
+	s.LastUpdate = time.Now()
+	return nil
 }
 
 // UnlinkHostAgent removes the bidirectional link between a host agent and its PVE node.

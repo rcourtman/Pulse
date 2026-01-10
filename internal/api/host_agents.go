@@ -374,6 +374,55 @@ func (h *HostAgentHandlers) HandleUninstall(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// HandleLink manually links a host agent to a specific PVE node.
+// This is used when auto-linking can't disambiguate (e.g., multiple nodes with hostname "pve").
+func (h *HostAgentHandlers) HandleLink(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	defer r.Body.Close()
+
+	var req struct {
+		HostID string `json:"hostId"`
+		NodeID string `json:"nodeId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", map[string]string{"error": err.Error()})
+		return
+	}
+
+	hostID := strings.TrimSpace(req.HostID)
+	if hostID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Host ID is required", nil)
+		return
+	}
+
+	nodeID := strings.TrimSpace(req.NodeID)
+	if nodeID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_node_id", "Node ID is required", nil)
+		return
+	}
+
+	if err := h.monitor.LinkHostAgent(hostID, nodeID); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "link_failed", err.Error(), nil)
+		return
+	}
+
+	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+
+	if err := utils.WriteJSONResponse(w, map[string]any{
+		"success": true,
+		"hostId":  hostID,
+		"nodeId":  nodeID,
+		"message": "Host agent linked to PVE node",
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to serialize host link response")
+	}
+}
+
 // HandleUnlink removes the link between a host agent and its PVE node.
 // The agent continues to report but appears in the Managed Agents table.
 func (h *HostAgentHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request) {
