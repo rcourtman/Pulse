@@ -113,6 +113,13 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 
 	services, tasks, swarmInfo := a.collectSwarmData(ctx, info, containers)
 
+	// Use Docker's MemTotal, but fall back to gopsutil's reading if Docker returns 0.
+	// This can happen in Docker-in-LXC setups where Docker daemon can't read host memory.
+	totalMemory := info.MemTotal
+	if totalMemory <= 0 && snapshot.Memory.TotalBytes > 0 {
+		totalMemory = snapshot.Memory.TotalBytes
+	}
+
 	report := agentsdocker.Report{
 		Agent: agentsdocker.AgentInfo{
 			ID:              agentID,
@@ -131,7 +138,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 			Architecture:     info.Architecture,
 			DockerVersion:    info.ServerVersion,
 			TotalCPU:         info.NCPU,
-			TotalMemoryBytes: info.MemTotal,
+			TotalMemoryBytes: totalMemory,
 			UptimeSeconds:    uptime,
 			CPUUsagePercent:  safeFloat(snapshot.CPUUsagePercent),
 			LoadAverage:      append([]float64(nil), snapshot.LoadAverage...),
