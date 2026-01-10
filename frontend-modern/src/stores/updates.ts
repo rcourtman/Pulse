@@ -101,12 +101,14 @@ const checkForUpdates = async (force = false): Promise<void> => {
       saveState(state);
     }
 
-    // Don't check for updates in Docker or development builds
-    if (version.isDocker || version.isDevelopment || version.isSourceBuild) {
+    // For development or source builds, skip update checks entirely
+    if (version.isDevelopment || version.isSourceBuild) {
       setUpdateAvailable(false);
       setUpdateInfo(null);
       return;
     }
+    // For Docker, we still check for available updates so users know a new version exists.
+    // The update mechanism is different (docker pull), but the user should see the notification.
 
     // Skip dev builds unless forcing (contains -dirty or commit hash after version)
     const isDirtyBuild =
