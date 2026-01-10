@@ -40,6 +40,26 @@ Install the unified agent on each Proxmox host with Proxmox integration enabled 
 ### 2. Enable temperature monitoring (optional)
 Go to **Settings → Proxmox → [Node] → Advanced Monitoring** and enable "Temperature monitoring" if you want to collect temperatures for that node.
 
+---
+
+## Troubleshooting
+
+**No temperature data appearing:**
+1. Ensure `lm-sensors` is installed: `apt install lm-sensors && sensors-detect`
+2. Verify the agent is running: `systemctl status pulse-agent`
+3. Check agent logs: `journalctl -u pulse-agent -f`
+4. Confirm `--enable-proxmox` flag is set
+
+**Temperatures show as `--` or missing:**
+1. Run `sensors` on the host to verify sensor detection
+2. Some hardware may not expose temperature sensors
+3. Check if the agent has permission to read sensor data
+
+---
+
+<details>
+<summary><strong>Legacy: pulse-sensor-proxy (deprecated, click to expand)</strong></summary>
+
 ## Deprecated: pulse-sensor-proxy (existing installs only)
 
 This section is retained for existing installations during the migration window.
@@ -773,3 +793,5 @@ If temperature monitoring isn't working:
    - Proxy logs
    - Pulse logs
    - Output of manual SSH test
+
+</details>

@@ -34,6 +34,38 @@ Restrict access to specific users or groups:
 *   **Allowed Domains**: Restrict to specific email domains (e.g., `example.com`).
 *   **Allowed Emails**: Allow specific email addresses.
 
+### Group-to-Role Mapping (Pro)
+
+Automatically assign Pulse roles based on OIDC group membership. When a user logs in, Pulse checks their groups claim and assigns the corresponding roles.
+
+**Configuration via UI:**
+Go to **Settings → Security → Single Sign-On → Group Role Mappings** and add mappings like:
+- `oidc-admins` → `admin`
+- `oidc-operators` → `operator`
+- `oidc-viewers` → `viewer`
+
+**Configuration via Environment:**
+```bash
+# Format: group1=role1,group2=role2
+OIDC_GROUP_ROLE_MAPPINGS="oidc-admins=admin,oidc-operators=operator"
+```
+
+**How it works:**
+- On each login, Pulse reads the user's groups from the configured groups claim.
+- For each group that matches a mapping, the corresponding role is assigned.
+- Multiple groups can map to multiple roles (user gets all matching roles).
+- Role assignments are updated on every login to reflect current group membership.
+- Role changes are logged to the audit log for compliance tracking.
+
+**Example:**
+If a user has groups `["oidc-admins", "developers"]` and you have mappings:
+- `oidc-admins` → `admin`
+- `developers` → `operator`
+
+The user will be assigned both `admin` and `operator` roles.
+
+> **Note**: Ensure your IdP includes the `groups` scope and that the groups claim is properly configured. Some providers use `groups`, others use `roles` or custom claims.
+
 ### Long-Lived Sessions with `offline_access`
 For persistent sessions that don't require frequent re-authentication:
 

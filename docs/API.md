@@ -352,6 +352,52 @@ Initiate OIDC login flow.
 
 ---
 
+## 👥 RBAC / Role Management (Pro)
+
+Role-based access control endpoints for managing roles and user assignments. Requires admin access and the `rbac` license feature.
+
+### List Roles
+`GET /api/admin/roles`
+Returns all defined roles.
+
+### Create Role
+`POST /api/admin/roles`
+```json
+{
+  "id": "operator",
+  "name": "Operator",
+  "description": "Can view and manage alerts",
+  "permissions": [
+    { "action": "read", "resource": "alerts" },
+    { "action": "write", "resource": "alerts" }
+  ]
+}
+```
+
+### Update Role
+`PUT /api/admin/roles/{id}`
+Update an existing role's name, description, or permissions.
+
+### Delete Role
+`DELETE /api/admin/roles/{id}`
+
+### List Users
+`GET /api/admin/users`
+Returns all users with their role assignments.
+
+### Assign Role to User
+`POST /api/admin/users/{username}/roles`
+```json
+{ "role_id": "operator" }
+```
+
+### Remove Role from User
+`DELETE /api/admin/users/{username}/roles/{role_id}`
+
+> **Note**: OIDC group-to-role mapping can automatically assign roles on login. See [OIDC.md](OIDC.md) for configuration.
+
+---
+
 ## 🤖 Pulse AI *(v5)*
 
 **Pro gating:** endpoints labeled "(Pro)" require a Pulse Pro license and return `402 Payment Required` if the feature is not licensed.

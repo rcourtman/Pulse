@@ -29,6 +29,12 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `sessions.json` | Persistent sessions (includes OIDC refresh tokens) | 🔒 **Sensitive** |
 | `update-history.jsonl` | Update history log (in-app updates) | 📝 Standard |
 | `metrics.db` | Persistent metrics history (SQLite) | 📝 Standard |
+| `audit.db` | Audit log database (Pulse Pro, SQLite) | 🔒 **Sensitive** |
+| `baselines.json` | AI baseline data for anomaly detection | 📝 Standard |
+| `ai_correlations.json` | AI correlation analysis cache | 📝 Standard |
+| `ai_patterns.json` | AI pattern detection data | 📝 Standard |
+| `ai_remediations.json` | AI remediation suggestions | 📝 Standard |
+| `ai_incidents.json` | AI incident tracking | 📝 Standard |
 
 All files are located in `/etc/pulse/` (Systemd) or `/data/` (Docker/Kubernetes) by default.
 
@@ -93,6 +99,7 @@ Environment overrides (lock the corresponding UI fields):
 | `OIDC_ALLOWED_GROUPS` | Allowed groups (space or comma-separated) |
 | `OIDC_ALLOWED_DOMAINS` | Allowed email domains (space or comma-separated) |
 | `OIDC_ALLOWED_EMAILS` | Allowed emails (space or comma-separated) |
+| `OIDC_GROUP_ROLE_MAPPINGS` | Group-to-role mappings (Pro). Format: `group1=role1,group2=role2` |
 | `OIDC_CA_BUNDLE` | Custom CA bundle path |
 </details>
 

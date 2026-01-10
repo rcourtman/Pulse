@@ -49,9 +49,9 @@ sudo pulse bootstrap-token
 - **Fix**: Set `PULSE_AUDIT_SIGNING_KEY` and restart Pulse Pro. Newly created events will be signed; existing unsigned events remain unsigned.
 
 **Audit Log is empty**
-- **Symptom**: Audit Log shows zero events or “Console Logging Only.”
-- **Root cause**: OSS build uses console logging only, or enterprise audit logging is not enabled.
-- **Fix**: Use Pulse Pro with enterprise audit logging enabled, then generate new audit events (logins, token creation, password changes).
+- **Symptom**: Audit Log shows zero events or "Console Logging Only."
+- **Root cause**: OSS build uses console logging only, or Pulse Pro audit logging is not enabled.
+- **Fix**: Use Pulse Pro with audit logging enabled, then generate new audit events (logins, token creation, password changes).
 
 **Audit Log verification fails for older events**
 - **Symptom**: Older events fail verification while newer events pass.
