@@ -23,6 +23,7 @@ import (
 	_ "github.com/rcourtman/pulse-go-rewrite/internal/mock" // Import for init() to run
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog/log"
 )
@@ -86,6 +87,19 @@ func Run(ctx context.Context, version string) error {
 
 	// Initialize license public key for Pro feature validation
 	license.InitPublicKey()
+
+	// Initialize RBAC manager for role-based access control
+	dataDir := os.Getenv("PULSE_DATA_DIR")
+	if dataDir == "" {
+		dataDir = "/etc/pulse"
+	}
+	rbacManager, err := auth.NewFileManager(dataDir)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to initialize RBAC manager, role management will be unavailable")
+	} else {
+		auth.SetManager(rbacManager)
+		log.Info().Msg("RBAC manager initialized")
+	}
 
 	log.Info().Msg("Starting Pulse monitoring server")
 

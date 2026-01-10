@@ -940,7 +940,7 @@ export const UnifiedAgents: Component = () => {
                 </Show>
 
                 <Card id="linked-agents" padding="none" tone="glass" class="overflow-x-auto rounded-lg">
-                    <table class="min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700">
+                    <table class="w-full min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-800">
                             <tr>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Hostname</th>
@@ -1096,7 +1096,7 @@ export const UnifiedAgents: Component = () => {
                 </div>
 
                 <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
-                    <table class="min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700">
+                    <table class="w-full min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-800">
                             <tr>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Cluster</th>
@@ -1159,7 +1159,7 @@ export const UnifiedAgents: Component = () => {
                     </div>
 
                     <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
-                        <table class="min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700">
+                        <table class="w-full min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-800">
                                 <tr>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Hostname</th>
@@ -1208,7 +1208,7 @@ export const UnifiedAgents: Component = () => {
                     </div>
 
                     <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
-                        <table class="min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700">
+                        <table class="w-full min-w-[800px] divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-800">
                                 <tr>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Cluster</th>
