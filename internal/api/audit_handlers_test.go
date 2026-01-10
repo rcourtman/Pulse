@@ -57,6 +57,14 @@ func (l *testAuditLogger) VerifySignature(event audit.Event) bool {
 	return l.verifyResult
 }
 
+func (l *testAuditLogger) GetWebhookURLs() []string {
+	return []string{}
+}
+
+func (l *testAuditLogger) UpdateWebhookURLs(urls []string) error {
+	return nil
+}
+
 type testAuditLoggerNoVerify struct {
 	events []audit.Event
 }
@@ -75,6 +83,14 @@ func (l *testAuditLoggerNoVerify) Count(filter audit.QueryFilter) (int, error) {
 }
 
 func (l *testAuditLoggerNoVerify) Close() error {
+	return nil
+}
+
+func (l *testAuditLoggerNoVerify) GetWebhookURLs() []string {
+	return []string{}
+}
+
+func (l *testAuditLoggerNoVerify) UpdateWebhookURLs(urls []string) error {
 	return nil
 }
 
