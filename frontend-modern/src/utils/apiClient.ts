@@ -78,6 +78,23 @@ class ApiClient {
 
   private loadStoredAuth() {
     try {
+      // First, check for token in URL query parameter (for kiosk/dashboard mode)
+      // This allows visiting ?token=xxx to auto-authenticate without cookies
+      if (typeof window !== 'undefined' && window.location?.search) {
+        const params = new URLSearchParams(window.location.search);
+        const urlToken = params.get('token');
+        if (urlToken) {
+          this.apiToken = urlToken;
+          this.persistToken(urlToken);
+          // Clean the token from URL for security (don't expose in browser history)
+          params.delete('token');
+          const newQuery = params.toString();
+          const newUrl = `${window.location.pathname}${newQuery ? `?${newQuery}` : ''}`;
+          window.history.replaceState({}, document.title, newUrl);
+          return;
+        }
+      }
+
       const storage = getSessionStorage();
       if (!storage) return;
 
