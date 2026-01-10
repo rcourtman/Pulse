@@ -952,6 +952,37 @@ func defaultDetectPVECluster(clientConfig proxmox.ClientConfig, nodeName string,
 					endpoint.IP = clusterNode.IP
 				}
 
+				// Apply subnet preference even in fallback path (refs #929)
+				// Node validation may have failed because cluster-reported IPs are on internal
+				// network, but we can still query node interfaces via the initial connection
+				if connectionIP != nil && clusterNode.IP != "" && clusterNode.Name != "" {
+					clusterIP := net.ParseIP(clusterNode.IP)
+					if clusterIP != nil && !ipsOnSameNetwork(clusterIP, connectionIP) {
+						// Cluster IP is on a different network, try to find one on the same network
+						ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+						nodeInterfaces, err := tempClient.GetNodeNetworkInterfaces(ctx, clusterNode.Name)
+						cancel()
+
+						if err == nil {
+							preferredIP := findPreferredIP(nodeInterfaces, connectionIP)
+							if preferredIP != "" && preferredIP != clusterNode.IP {
+								log.Info().
+									Str("node", clusterNode.Name).
+									Str("cluster_ip", clusterNode.IP).
+									Str("preferred_ip", preferredIP).
+									Str("connection_ip", connectionIP.String()).
+									Msg("Found preferred management IP for unvalidated cluster node")
+								endpoint.IPOverride = preferredIP
+							}
+						} else {
+							log.Debug().
+								Err(err).
+								Str("node", clusterNode.Name).
+								Msg("Could not query node network interfaces in fallback path")
+						}
+					}
+				}
+
 				clusterEndpoints = append(clusterEndpoints, endpoint)
 			}
 		}
