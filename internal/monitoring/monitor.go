@@ -2007,6 +2007,13 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			SwapUsed:  report.Host.Memory.SwapUsed,
 		}
 	}
+	// Fallback: if gopsutil's memory reading failed but Docker's TotalMemoryBytes
+	// is valid (possibly already a fallback from the agent), use that for Total.
+	// This handles Docker-in-LXC scenarios where both Docker and gopsutil may
+	// fail to read memory stats, but the agent fix provides a valid fallback.
+	if memory.Total <= 0 && report.Host.TotalMemoryBytes > 0 {
+		memory.Total = report.Host.TotalMemoryBytes
+	}
 
 	disks := make([]models.Disk, 0, len(report.Host.Disks))
 	for _, disk := range report.Host.Disks {
