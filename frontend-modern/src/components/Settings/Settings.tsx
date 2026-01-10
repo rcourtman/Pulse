@@ -81,7 +81,7 @@ import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
 
 import { updateStore } from '@/stores/updates';
-import { isEnterprise, loadLicenseStatus } from '@/stores/license';
+import { isPro, loadLicenseStatus } from '@/stores/license';
 
 // Type definitions
 interface DiscoveredServer {
@@ -377,7 +377,7 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
   },
   'security-sso': {
     title: 'Single Sign-On',
-    description: 'Configure OIDC providers for enterprise authentication.',
+    description: 'Configure OIDC providers for team authentication.',
   },
   'security-roles': {
     title: 'Roles',
@@ -2517,7 +2517,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 <item.icon class="w-4 h-4" {...(item.iconProps || {})} />
                                 <Show when={!sidebarCollapsed()}>
                                   <span class="truncate">{item.label}</span>
-                                  <Show when={item.badge && !isEnterprise()}>
+                                  <Show when={item.badge && !isPro()}>
                                     <span class="ml-auto px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-md shadow-sm">
                                       {item.badge}
                                     </span>

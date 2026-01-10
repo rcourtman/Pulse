@@ -145,7 +145,7 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
               <ul class="space-y-0.5 list-disc list-inside">
                 <li>Enable HTTPS via a reverse proxy for encrypted connections</li>
                 <li>Use strong, unique passwords and rotate credentials regularly</li>
-                <li>Consider SSO/OIDC for enterprise authentication needs</li>
+                <li>Consider SSO/OIDC for centralized team authentication</li>
                 <li>Review API token scopes and remove unused tokens</li>
               </ul>
             </div>

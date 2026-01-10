@@ -36,7 +36,7 @@ export async function loadLicenseStatus(force = false): Promise<void> {
 }
 
 /**
- * Helper to check if the current license is Pulse Pro or Enterprise.
+ * Helper to check if the current license is Pulse Pro (any paid tier).
  */
 export const isPro = createMemo(() => {
     const current = licenseStatus();
@@ -44,12 +44,9 @@ export const isPro = createMemo(() => {
 });
 
 /**
- * Helper to check if the current license is Enterprise.
+ * @deprecated Use isPro() or hasFeature() instead. Kept for backwards compatibility.
  */
-export const isEnterprise = createMemo(() => {
-    const current = licenseStatus();
-    return Boolean(current?.valid && (current.tier === 'enterprise' || current.tier === 'msp'));
-});
+export const isEnterprise = isPro;
 
 /**
  * Check if a specific feature is enabled by the current license.

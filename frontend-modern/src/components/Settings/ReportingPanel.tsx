@@ -216,7 +216,7 @@ export function ReportingPanel() {
                         <BarChart size={24} />
                     </div>
                     <div>
-                        <h3 class="text-lg font-bold text-white mb-2">Enterprise Insights</h3>
+                        <h3 class="text-lg font-bold text-white mb-2">Advanced Insights</h3>
                         <p class="text-slate-400 leading-relaxed">
                             Reports are generated directly from the historical metrics store. PDF reports provide a summarized view with average, minimum, and maximum values, while CSV exports provide raw granular data for external analysis in tools like Excel or BI suites.
                         </p>
