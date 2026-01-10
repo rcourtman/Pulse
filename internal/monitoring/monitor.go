@@ -6282,12 +6282,14 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					networkInBytes = int64(detailedStatus.NetIn)
 					networkOutBytes = int64(detailedStatus.NetOut)
 
-					if detailedStatus.Balloon > 0 && detailedStatus.Balloon < detailedStatus.MaxMem {
-						memTotal = detailedStatus.Balloon
-						guestRaw.DerivedFromBall = true
-					} else if detailedStatus.MaxMem > 0 {
+					// Note: We intentionally do NOT override memTotal with balloon.
+					// The balloon value is tracked separately in memory.balloon for
+					// visualization purposes. Using balloon as total causes user
+					// confusion (showing 1GB/1GB at 100% when VM is configured for 4GB)
+					// and makes the frontend's balloon marker logic ineffective.
+					// Refs: #1070
+					if detailedStatus.MaxMem > 0 {
 						memTotal = detailedStatus.MaxMem
-						guestRaw.DerivedFromBall = false
 					}
 
 					switch {

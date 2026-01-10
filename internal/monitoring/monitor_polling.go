@@ -352,10 +352,12 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 								}
 							}
 						}
-						if vmStatus.Balloon > 0 && vmStatus.Balloon < vmStatus.MaxMem {
-							memTotal = vmStatus.Balloon
-							guestRaw.DerivedFromBall = true
-						}
+						// Note: We intentionally do NOT override memTotal with balloon.
+						// The balloon value is tracked separately in memory.balloon for
+						// visualization purposes. Using balloon as total causes user
+						// confusion (showing 1GB/1GB at 100% when VM is configured for 4GB)
+						// and makes the frontend's balloon marker logic ineffective.
+						// Refs: #1070
 						switch {
 						case memAvailable > 0:
 							if memAvailable > memTotal {
