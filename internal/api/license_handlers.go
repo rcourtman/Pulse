@@ -86,12 +86,21 @@ func (h *LicenseHandlers) HandleLicenseFeatures(w http.ResponseWriter, r *http.R
 	response := LicenseFeaturesResponse{
 		LicenseStatus: string(state),
 		Features: map[string]bool{
-			license.FeatureAIPatrol:      h.service.HasFeature(license.FeatureAIPatrol),
-			license.FeatureAIAlerts:      h.service.HasFeature(license.FeatureAIAlerts),
-			license.FeatureAIAutoFix:     h.service.HasFeature(license.FeatureAIAutoFix),
-			license.FeatureKubernetesAI:  h.service.HasFeature(license.FeatureKubernetesAI),
-			license.FeatureUpdateAlerts:  h.service.HasFeature(license.FeatureUpdateAlerts),
+			// AI features
+			license.FeatureAIPatrol:     h.service.HasFeature(license.FeatureAIPatrol),
+			license.FeatureAIAlerts:     h.service.HasFeature(license.FeatureAIAlerts),
+			license.FeatureAIAutoFix:    h.service.HasFeature(license.FeatureAIAutoFix),
+			license.FeatureKubernetesAI: h.service.HasFeature(license.FeatureKubernetesAI),
+			// Monitoring features
+			license.FeatureUpdateAlerts: h.service.HasFeature(license.FeatureUpdateAlerts),
+			// Fleet management
 			license.FeatureAgentProfiles: h.service.HasFeature(license.FeatureAgentProfiles),
+			// Team & Compliance features
+			license.FeatureSSO:               h.service.HasFeature(license.FeatureSSO),
+			license.FeatureAdvancedSSO:       h.service.HasFeature(license.FeatureAdvancedSSO),
+			license.FeatureRBAC:              h.service.HasFeature(license.FeatureRBAC),
+			license.FeatureAuditLogging:      h.service.HasFeature(license.FeatureAuditLogging),
+			license.FeatureAdvancedReporting: h.service.HasFeature(license.FeatureAdvancedReporting),
 		},
 		UpgradeURL: "https://pulse.sh/pro",
 	}
