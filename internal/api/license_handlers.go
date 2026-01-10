@@ -102,7 +102,7 @@ func (h *LicenseHandlers) HandleLicenseFeatures(w http.ResponseWriter, r *http.R
 			license.FeatureAuditLogging:      h.service.HasFeature(license.FeatureAuditLogging),
 			license.FeatureAdvancedReporting: h.service.HasFeature(license.FeatureAdvancedReporting),
 		},
-		UpgradeURL: "https://pulse.sh/pro",
+		UpgradeURL: "https://pulserelay.pro/",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -228,7 +228,7 @@ func RequireLicenseFeature(service *license.Service, feature string, next http.H
 				"error":       "license_required",
 				"message":     err.Error(),
 				"feature":     feature,
-				"upgrade_url": "https://pulse.sh/pro",
+				"upgrade_url": "https://pulserelay.pro/",
 			})
 			return
 		}

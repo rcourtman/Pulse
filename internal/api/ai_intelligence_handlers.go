@@ -11,7 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const aiIntelligenceUpgradeURL = "https://pulse.sh/pro"
+const aiIntelligenceUpgradeURL = "https://pulserelay.pro/"
 
 // HandleGetPatterns returns detected failure patterns (GET /api/ai/intelligence/patterns)
 func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Request) {

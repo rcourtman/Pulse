@@ -1186,7 +1186,7 @@ export const AISettings: Component = () => {
                       <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
                         <a
                           class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
-                          href="https://pulse.sh/pro"
+                          href="https://pulserelay.pro/"
                           target="_blank"
                           rel="noreferrer"
                         >
@@ -1275,7 +1275,7 @@ export const AISettings: Component = () => {
                       <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         <a
                           class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
-                          href="https://pulse.sh/pro"
+                          href="https://pulserelay.pro/"
                           target="_blank"
                           rel="noreferrer"
                         >
@@ -1317,7 +1317,7 @@ export const AISettings: Component = () => {
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
                           <a
                             class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
-                            href="https://pulse.sh/pro"
+                            href="https://pulserelay.pro/"
                             target="_blank"
                             rel="noreferrer"
                           >

@@ -2283,7 +2283,7 @@ function OverviewTab(props: {
     if (!status) return false;
     return !status.features?.['ai_alerts'];
   });
-  const aiAlertsUpgradeURL = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulse.sh/pro');
+  const aiAlertsUpgradeURL = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulserelay.pro/');
   // Live streaming state for running patrol
   const [expandedLiveStream, setExpandedLiveStream] = createSignal(false);
   // Track streaming blocks for sequential display (like AI chat)
@@ -2296,7 +2296,7 @@ function OverviewTab(props: {
   const [currentThinking, setCurrentThinking] = createSignal('');
   let liveStreamUnsubscribe: (() => void) | null = null;
   const patrolRequiresLicense = createMemo(() => patrolStatus()?.license_required === true);
-  const patrolUpgradeURL = createMemo(() => patrolStatus()?.upgrade_url || 'https://pulse.sh/pro');
+  const patrolUpgradeURL = createMemo(() => patrolStatus()?.upgrade_url || 'https://pulserelay.pro/');
   const patrolLicenseNote = createMemo(() => {
     if (!patrolRequiresLicense()) return '';
     const status = patrolStatus()?.license_status;

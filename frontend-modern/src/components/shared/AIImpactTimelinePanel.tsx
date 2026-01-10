@@ -3,7 +3,7 @@ import { AIAPI } from '@/api/ai';
 import { logger } from '@/utils/logger';
 import type { RemediationRecord, RemediationStats } from '@/types/aiIntelligence';
 
-const DEFAULT_UPGRADE_URL = 'https://pulse.sh/pro';
+const DEFAULT_UPGRADE_URL = 'https://pulserelay.pro/';
 
 export const AIImpactTimelinePanel: Component<{ hours?: number; showWhenEmpty?: boolean }> = (props) => {
     const [remediations, setRemediations] = createSignal<RemediationRecord[]>([]);

@@ -260,7 +260,7 @@ export const AgentProfilesPanel: Component = () => {
                     logging levels, and reporting intervals from a central location.
                 </p>
                 <a
-                    href="https://www.yourpulse.io/pro"
+                    href="https://pulserelay.pro/"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-sm font-medium text-white transition-all hover:from-amber-600 hover:to-orange-600"

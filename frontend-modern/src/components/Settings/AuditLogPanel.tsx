@@ -509,7 +509,7 @@ export default function AuditLogPanel() {
                             </p>
                         </div>
                         <a
-                            href="https://pulse.sh/pro"
+                            href="https://pulserelay.pro/"
                             target="_blank"
                             class="px-5 py-2.5 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
                         >

@@ -1167,7 +1167,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     AI Patrol monitors your infrastructure 24/7 and surfaces issues before they become outages.
                   </p>
                   <a
-                    href={patrolStatus()?.upgrade_url || 'https://pulse.sh/pro'}
+                    href={patrolStatus()?.upgrade_url || 'https://pulserelay.pro/'}
                     target="_blank"
                     rel="noopener noreferrer"
                     class="inline-flex items-center gap-1.5 mt-2.5 text-xs font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors group/link"

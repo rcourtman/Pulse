@@ -385,7 +385,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				"error":       "license_required",
 				"message":     "AI Auto-Fix requires Pulse Pro",
 				"feature":     ai.FeatureAIAutoFix,
-				"upgrade_url": "https://pulse.sh/pro",
+				"upgrade_url": "https://pulserelay.pro/",
 			})
 			return
 		}
@@ -401,7 +401,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				"error":       "license_required",
 				"message":     "Proactive Thresholds requires Pulse Pro",
 				"feature":     ai.FeatureAIPatrol,
-				"upgrade_url": "https://pulse.sh/pro",
+				"upgrade_url": "https://pulserelay.pro/",
 			})
 			return
 		}
@@ -421,7 +421,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				"error":       "license_required",
 				"message":     "Autonomous Mode requires Pulse Pro",
 				"feature":     ai.FeatureAIAutoFix,
-				"upgrade_url": "https://pulse.sh/pro",
+				"upgrade_url": "https://pulserelay.pro/",
 			})
 			return
 		}
@@ -502,7 +502,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				"error":       "license_required",
 				"message":     "Background AI Patrol requires Pulse Pro",
 				"feature":     ai.FeatureAIPatrol,
-				"upgrade_url": "https://pulse.sh/pro",
+				"upgrade_url": "https://pulserelay.pro/",
 			})
 			return
 		}
@@ -522,7 +522,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 					"error":       "license_required",
 					"message":     "Background AI Patrol requires Pulse Pro",
 					"feature":     ai.FeatureAIPatrol,
-					"upgrade_url": "https://pulse.sh/pro",
+					"upgrade_url": "https://pulserelay.pro/",
 				})
 				return
 			}
@@ -555,7 +555,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				"error":       "license_required",
 				"message":     "AI Alert Analysis requires Pulse Pro",
 				"feature":     ai.FeatureAIAlerts,
-				"upgrade_url": "https://pulse.sh/pro",
+				"upgrade_url": "https://pulserelay.pro/",
 			})
 			return
 		}
@@ -892,7 +892,7 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 				"error":       "license_required",
 				"message":     "AI Auto-Fix requires Pulse Pro",
 				"feature":     ai.FeatureAIAutoFix,
-				"upgrade_url": "https://pulse.sh/pro",
+				"upgrade_url": "https://pulserelay.pro/",
 			})
 			return
 		}
@@ -904,7 +904,7 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 				"error":       "license_required",
 				"message":     "AI Patrol reasoning requires Pulse Pro",
 				"feature":     ai.FeatureAIPatrol,
-				"upgrade_url": "https://pulse.sh/pro",
+				"upgrade_url": "https://pulserelay.pro/",
 			})
 			return
 		}
@@ -1078,7 +1078,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 				"error":       "license_required",
 				"message":     "AI Auto-Fix requires Pulse Pro",
 				"feature":     ai.FeatureAIAutoFix,
-				"upgrade_url": "https://pulse.sh/pro",
+				"upgrade_url": "https://pulserelay.pro/",
 			})
 			return
 		}
@@ -1090,7 +1090,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 				"error":       "license_required",
 				"message":     "AI Patrol reasoning requires Pulse Pro",
 				"feature":     ai.FeatureAIPatrol,
-				"upgrade_url": "https://pulse.sh/pro",
+				"upgrade_url": "https://pulserelay.pro/",
 			})
 			return
 		}
@@ -1312,7 +1312,7 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 			"error":       "license_required",
 			"message":     "AI Auto-Fix requires Pulse Pro",
 			"feature":     ai.FeatureAIAutoFix,
-			"upgrade_url": "https://pulse.sh/pro",
+			"upgrade_url": "https://pulserelay.pro/",
 		})
 		return
 	}
@@ -2298,7 +2298,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		LicenseStatus:    licenseStatus,
 	}
 	if !hasPatrolFeature {
-		response.UpgradeURL = "https://pulse.sh/pro"
+		response.UpgradeURL = "https://pulserelay.pro/"
 	}
 	response.Summary.Critical = summary.Critical
 	response.Summary.Warning = summary.Warning

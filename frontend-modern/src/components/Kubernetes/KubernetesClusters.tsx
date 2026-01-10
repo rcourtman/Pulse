@@ -215,7 +215,7 @@ export const KubernetesClusters: Component<KubernetesClustersProps> = (props) =>
 
   const kubernetesAiEnabled = createMemo(() => licenseFeatures()?.features?.kubernetes_ai === true);
   const aiConfigured = createMemo(() => aiSettings()?.configured === true);
-  const upgradeUrl = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulse.sh/pro');
+  const upgradeUrl = createMemo(() => licenseFeatures()?.upgrade_url || 'https://pulserelay.pro/');
 
   const clustersForAnalysis = createMemo(() => props.clusters ?? []);
 
