@@ -75,7 +75,7 @@ export function AuditWebhookPanel() {
 
             setWebhookUrls(urls);
             showSuccess('Audit webhooks updated');
-        } catch (err) {
+        } catch (_err) {
             showWarning('Failed to save webhook configuration');
         } finally {
             setSaving(false);
