@@ -74,22 +74,26 @@ func disksFromZpoolStats(
 			// For RAIDZ/mirror pools, zpool SIZE is raw capacity (sum of all disks),
 			// but users expect usable capacity (accounting for parity/redundancy).
 			// The dataset's Total (from statfs) gives usable capacity.
-			// Use dataset stats when available and smaller than zpool size. (issue #1052)
+			// Similarly, zpool ALLOC includes parity overhead, but dataset Used gives
+			// actual data usage. Use dataset stats when available and smaller than
+			// zpool size. (issue #1052)
 			totalBytes := stat.Size
+			usedBytes := stat.Alloc
 			freeBytes := stat.Free
 			if ds.Total > 0 && ds.Total < stat.Size {
 				totalBytes = ds.Total
+				usedBytes = ds.Used
 				freeBytes = ds.Free
 			}
 
-			usage := clampPercent(calculatePercent(totalBytes, stat.Alloc))
+			usage := clampPercent(calculatePercent(totalBytes, usedBytes))
 			disks = append(disks, agentshost.Disk{
 				Device:     pool,
 				Mountpoint: mp,
 				Filesystem: "zfs",
 				Type:       "zfs",
 				TotalBytes: int64(totalBytes),
-				UsedBytes:  int64(stat.Alloc),
+				UsedBytes:  int64(usedBytes),
 				FreeBytes:  int64(freeBytes),
 				Usage:      usage,
 			})

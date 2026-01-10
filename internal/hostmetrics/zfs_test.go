@@ -53,15 +53,17 @@ func TestSummarizeZFSPoolsRAIDZCapacity(t *testing.T) {
 	// Simulate a RAIDZ1 pool with 3 disks:
 	// - Raw SIZE from zpool list: 43.6 TB (sum of all disks)
 	// - Usable capacity from statfs: 29 TB (after RAIDZ1 parity overhead)
+	// - zpool ALLOC: 7 GB (includes parity data)
+	// - zfs USED: 4.6 GB (actual user data)
 	queryZpoolStats = func(ctx context.Context, pools []string) (map[string]zpoolStats, error) {
 		return map[string]zpoolStats{
-			"Main": {Size: 43600000000000, Alloc: 962000000, Free: 43599038000000},
+			"Main": {Size: 43600000000000, Alloc: 7000000000, Free: 43593000000000},
 		}, nil
 	}
 
-	// Dataset stats from statfs reflect usable capacity (29 TB)
+	// Dataset stats from statfs reflect usable capacity (29 TB) and actual data usage (4.6 GB)
 	datasets := []zfsDatasetUsage{
-		{Pool: "Main", Dataset: "Main", Mountpoint: "/mnt/Main", Total: 29000000000000, Used: 962000000, Free: 28999038000000},
+		{Pool: "Main", Dataset: "Main", Mountpoint: "/mnt/Main", Total: 29000000000000, Used: 4600000000, Free: 28995400000000},
 	}
 
 	disks := summarizeZFSPools(context.Background(), datasets)
@@ -80,20 +82,20 @@ func TestSummarizeZFSPoolsRAIDZCapacity(t *testing.T) {
 		t.Errorf("expected TotalBytes %d (usable capacity), got %d (might be using raw capacity)", expectedTotal, main.TotalBytes)
 	}
 
-	// Used should come from zpool stats (accurate allocation)
-	expectedUsed := int64(962000000)
+	// Used should come from dataset stats (4.6 GB actual data), not zpool alloc (7 GB with parity)
+	expectedUsed := int64(4600000000)
 	if main.UsedBytes != expectedUsed {
-		t.Errorf("expected UsedBytes %d, got %d", expectedUsed, main.UsedBytes)
+		t.Errorf("expected UsedBytes %d (dataset used), got %d (might be using zpool alloc which includes parity)", expectedUsed, main.UsedBytes)
 	}
 
 	// Free should use dataset stats when we're using dataset Total
-	expectedFree := int64(28999038000000)
+	expectedFree := int64(28995400000000)
 	if main.FreeBytes != expectedFree {
 		t.Errorf("expected FreeBytes %d, got %d", expectedFree, main.FreeBytes)
 	}
 
-	// Usage should be calculated against usable capacity
-	// 962000000 / 29000000000000 * 100 ≈ 0.003%
+	// Usage should be calculated against usable capacity with actual used data
+	// 4600000000 / 29000000000000 * 100 ≈ 0.016%
 	if main.Usage > 0.1 {
 		t.Errorf("expected usage ~0%%, got %.2f%% (might be calculated against wrong total)", main.Usage)
 	}

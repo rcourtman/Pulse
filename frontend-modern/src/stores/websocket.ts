@@ -99,6 +99,11 @@ export function createWebSocketStore(url: string) {
   let consecutiveEmptyHostUpdates = 0;
   let hasReceivedNonEmptyHosts = false;
 
+  // Track consecutive empty Kubernetes clusters payloads (same protection as dockerHosts/hosts)
+  // This prevents clusters from disappearing when transient empty arrays are received.
+  let consecutiveEmptyK8sUpdates = 0;
+  let hasReceivedNonEmptyK8sClusters = false;
+
   const mergeDockerHostRevocations = (incomingHosts: DockerHost[]) => {
     if (!Array.isArray(incomingHosts) || incomingHosts.length === 0) {
       return incomingHosts;
@@ -311,6 +316,8 @@ export function createWebSocketStore(url: string) {
       hasReceivedNonEmptyDockerHosts = false;
       consecutiveEmptyHostUpdates = 0;
       hasReceivedNonEmptyHosts = false;
+      consecutiveEmptyK8sUpdates = 0;
+      hasReceivedNonEmptyK8sClusters = false;
 
       // Start heartbeat to keep connection alive
       if (heartbeatInterval) {
@@ -597,11 +604,53 @@ export function createWebSocketStore(url: string) {
                 : [];
               setState('removedDockerHosts', reconcile(removed, { key: 'id' }));
             }
+            // Process Kubernetes clusters with transient empty payload protection
+            // (same logic as dockerHosts/hosts to prevent UI flapping)
             if (message.data.kubernetesClusters !== undefined) {
-              const clusters = Array.isArray(message.data.kubernetesClusters)
-                ? (message.data.kubernetesClusters as KubernetesCluster[])
-                : [];
-              setState('kubernetesClusters', reconcile(clusters, { key: 'id' }));
+              if (Array.isArray(message.data.kubernetesClusters)) {
+                const incomingClusters = message.data.kubernetesClusters as KubernetesCluster[];
+                if (incomingClusters.length === 0) {
+                  consecutiveEmptyK8sUpdates += 1;
+
+                  // Check if all existing clusters are stale (>60s since lastSeen)
+                  // If so, they're probably really gone - apply the empty update immediately
+                  const now = Date.now();
+                  const staleThresholdMs = 60_000; // 60 seconds
+                  const existingClusters = state.kubernetesClusters || [];
+                  const allStale = existingClusters.length === 0 || existingClusters.every(
+                    (c) => !c.lastSeen || (now - c.lastSeen) > staleThresholdMs
+                  );
+
+                  const shouldApply =
+                    !hasReceivedNonEmptyK8sClusters ||
+                    allStale ||
+                    consecutiveEmptyK8sUpdates >= 3 ||
+                    message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE;
+
+                  if (shouldApply) {
+                    logger.debug('[WebSocket] Updating kubernetesClusters', {
+                      count: incomingClusters.length,
+                      reason: allStale ? 'allStale' : 'threshold',
+                    });
+                    setState('kubernetesClusters', reconcile(incomingClusters, { key: 'id' }));
+                  } else {
+                    logger.debug('[WebSocket] Skipping transient empty kubernetesClusters payload', {
+                      streak: consecutiveEmptyK8sUpdates,
+                    });
+                  }
+                } else {
+                  consecutiveEmptyK8sUpdates = 0;
+                  hasReceivedNonEmptyK8sClusters = true;
+                  logger.debug('[WebSocket] Updating kubernetesClusters', {
+                    count: incomingClusters.length,
+                  });
+                  setState('kubernetesClusters', reconcile(incomingClusters, { key: 'id' }));
+                }
+              } else {
+                logger.warn('[WebSocket] Received non-array kubernetesClusters payload', {
+                  type: typeof message.data.kubernetesClusters,
+                });
+              }
             }
             if (message.data.removedKubernetesClusters !== undefined) {
               const removed = Array.isArray(message.data.removedKubernetesClusters)
