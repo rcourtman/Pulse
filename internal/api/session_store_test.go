@@ -133,7 +133,7 @@ func TestSessionStore_CreateAndValidate(t *testing.T) {
 	duration := time.Hour
 
 	// Create session
-	store.CreateSession(token, duration, "TestAgent", "127.0.0.1")
+	store.CreateSession(token, duration, "TestAgent", "127.0.0.1", "testuser")
 
 	// Validate session
 	if !store.ValidateSession(token) {
@@ -207,7 +207,7 @@ func TestSessionStore_DeleteSession(t *testing.T) {
 	token := "delete-me-token"
 
 	// Create session
-	store.CreateSession(token, time.Hour, "", "")
+	store.CreateSession(token, time.Hour, "", "", "testuser")
 
 	// Verify exists
 	if !store.ValidateSession(token) {
@@ -234,7 +234,7 @@ func TestSessionStore_ValidateAndExtendSession(t *testing.T) {
 	duration := time.Hour
 
 	// Create session
-	store.CreateSession(token, duration, "", "")
+	store.CreateSession(token, duration, "", "", "testuser")
 
 	// Get original expiry
 	store.mu.RLock()
@@ -343,7 +343,7 @@ func TestSessionStore_MultipleSessions(t *testing.T) {
 
 	// Create multiple sessions
 	for _, token := range tokens {
-		store.CreateSession(token, time.Hour, "Agent-"+token, "")
+		store.CreateSession(token, time.Hour, "Agent-"+token, "", "testuser")
 	}
 
 	// All should be valid
@@ -379,7 +379,7 @@ func TestSessionStore_Persistence(t *testing.T) {
 	}
 
 	token := "persistent-token"
-	store1.CreateSession(token, time.Hour, "PersistAgent", "10.0.0.1")
+	store1.CreateSession(token, time.Hour, "PersistAgent", "10.0.0.1", "persistuser")
 
 	// Verify file was created
 	sessionsFile := filepath.Join(tmpDir, "sessions.json")

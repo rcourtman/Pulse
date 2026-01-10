@@ -506,16 +506,25 @@ func TrackUserSession(user, sessionID string) {
 
 // GetSessionUsername returns the username associated with a session ID
 func GetSessionUsername(sessionID string) string {
+	// First check in-memory map
 	sessionsMu.RLock()
-	defer sessionsMu.RUnlock()
-
 	for user, sessions := range allSessions {
 		for _, sid := range sessions {
 			if sid == sessionID {
+				sessionsMu.RUnlock()
 				return user
 			}
 		}
 	}
+	sessionsMu.RUnlock()
+
+	// Fall back to persisted username in session store (survives restarts)
+	if session := GetSessionStore().GetSession(sessionID); session != nil && session.Username != "" {
+		// Re-populate in-memory map for faster future lookups
+		TrackUserSession(session.Username, sessionID)
+		return session.Username
+	}
+
 	return ""
 }
 

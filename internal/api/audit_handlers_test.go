@@ -101,7 +101,6 @@ func setAuditLogger(t *testing.T, logger audit.Logger) {
 		audit.SetLogger(prev)
 	})
 }
-
 func TestHandleVerifyAuditEvent_InvalidPath(t *testing.T) {
 	handler := NewAuditHandlers()
 
@@ -110,8 +109,8 @@ func TestHandleVerifyAuditEvent_InvalidPath(t *testing.T) {
 
 	handler.HandleVerifyAuditEvent(rec, req)
 
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -120,6 +119,7 @@ func TestHandleVerifyAuditEvent_NotPersistent(t *testing.T) {
 	handler := NewAuditHandlers()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/audit/abc/verify", nil)
+	req.SetPathValue("id", "abc")
 	rec := httptest.NewRecorder()
 
 	handler.HandleVerifyAuditEvent(rec, req)
@@ -145,6 +145,7 @@ func TestHandleVerifyAuditEvent_NoVerifier(t *testing.T) {
 	handler := NewAuditHandlers()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/audit/abc/verify", nil)
+	req.SetPathValue("id", "abc")
 	rec := httptest.NewRecorder()
 
 	handler.HandleVerifyAuditEvent(rec, req)
@@ -159,6 +160,7 @@ func TestHandleVerifyAuditEvent_NotFound(t *testing.T) {
 	handler := NewAuditHandlers()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/audit/abc/verify", nil)
+	req.SetPathValue("id", "abc")
 	rec := httptest.NewRecorder()
 
 	handler.HandleVerifyAuditEvent(rec, req)
@@ -176,6 +178,7 @@ func TestHandleVerifyAuditEvent_Verified(t *testing.T) {
 	handler := NewAuditHandlers()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/audit/abc/verify", nil)
+	req.SetPathValue("id", "abc")
 	rec := httptest.NewRecorder()
 
 	handler.HandleVerifyAuditEvent(rec, req)
@@ -204,6 +207,7 @@ func TestHandleVerifyAuditEvent_Failed(t *testing.T) {
 	handler := NewAuditHandlers()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/audit/abc/verify", nil)
+	req.SetPathValue("id", "abc")
 	rec := httptest.NewRecorder()
 
 	handler.HandleVerifyAuditEvent(rec, req)

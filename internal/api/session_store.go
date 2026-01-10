@@ -28,6 +28,7 @@ func sessionHash(token string) string {
 
 type sessionPersisted struct {
 	Key              string        `json:"key"`
+	Username         string        `json:"username,omitempty"`
 	ExpiresAt        time.Time     `json:"expires_at"`
 	CreatedAt        time.Time     `json:"created_at"`
 	UserAgent        string        `json:"user_agent,omitempty"`
@@ -43,6 +44,7 @@ type sessionPersisted struct {
 
 // SessionData represents a user session
 type SessionData struct {
+	Username         string        `json:"username,omitempty"` // The authenticated user
 	ExpiresAt        time.Time     `json:"expires_at"`
 	CreatedAt        time.Time     `json:"created_at"`
 	UserAgent        string        `json:"user_agent,omitempty"`
@@ -89,12 +91,13 @@ func (s *SessionStore) backgroundWorker() {
 }
 
 // CreateSession creates a new session
-func (s *SessionStore) CreateSession(token string, duration time.Duration, userAgent, ip string) {
+func (s *SessionStore) CreateSession(token string, duration time.Duration, userAgent, ip, username string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	key := sessionHash(token)
 	s.sessions[key] = &SessionData{
+		Username:         username,
 		ExpiresAt:        time.Now().Add(duration),
 		CreatedAt:        time.Now(),
 		UserAgent:        userAgent,
@@ -115,12 +118,13 @@ type OIDCTokenInfo struct {
 }
 
 // CreateOIDCSession creates a new session with OIDC token information
-func (s *SessionStore) CreateOIDCSession(token string, duration time.Duration, userAgent, ip string, oidc *OIDCTokenInfo) {
+func (s *SessionStore) CreateOIDCSession(token string, duration time.Duration, userAgent, ip, username string, oidc *OIDCTokenInfo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	key := sessionHash(token)
 	session := &SessionData{
+		Username:         username,
 		ExpiresAt:        time.Now().Add(duration),
 		CreatedAt:        time.Now(),
 		UserAgent:        userAgent,
@@ -279,6 +283,7 @@ func (s *SessionStore) saveUnsafe() {
 	for key, session := range s.sessions {
 		persisted = append(persisted, sessionPersisted{
 			Key:                key,
+			Username:           session.Username,
 			ExpiresAt:          session.ExpiresAt,
 			CreatedAt:          session.CreatedAt,
 			UserAgent:          session.UserAgent,
@@ -335,6 +340,7 @@ func (s *SessionStore) load() {
 				continue
 			}
 			s.sessions[entry.Key] = &SessionData{
+				Username:           entry.Username,
 				ExpiresAt:          entry.ExpiresAt,
 				CreatedAt:          entry.CreatedAt,
 				UserAgent:          entry.UserAgent,

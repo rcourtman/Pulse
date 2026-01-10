@@ -16,18 +16,18 @@ const (
 	// Free tier features - Monitoring
 	FeatureUpdateAlerts = "update_alerts" // Alerts for pending container/package updates (free feature)
 
-	// MSP tier features (FUTURE - not in v1 launch)
-	FeatureRBAC        = "rbac"         // Role-Based Access Control
-	FeatureMultiUser   = "multi_user"   // Multi-user (likely merged with RBAC)
-	FeatureWhiteLabel  = "white_label"  // Custom branding - NOT IMPLEMENTED YET
-	FeatureMultiTenant = "multi_tenant" // Multi-tenant - NOT IMPLEMENTED YET
-	FeatureUnlimited   = "unlimited"    // Unlimited instances (explicit for contracts)
-
-	// Enterprise tier features
+	// Pro tier features - Team & Compliance
+	FeatureRBAC              = "rbac"               // Role-Based Access Control
 	FeatureAuditLogging      = "audit_logging"      // Persistent audit logs with signing
 	FeatureSSO               = "sso"                // OIDC/SSO authentication (Basic)
 	FeatureAdvancedSSO       = "advanced_sso"       // SAML, Multi-provider, Role Mapping
 	FeatureAdvancedReporting = "advanced_reporting" // PDF/CSV reporting engine
+
+	// MSP/Enterprise tier features (for volume deals)
+	FeatureMultiUser   = "multi_user"   // Multi-user (likely merged with RBAC)
+	FeatureWhiteLabel  = "white_label"  // Custom branding - NOT IMPLEMENTED YET
+	FeatureMultiTenant = "multi_tenant" // Multi-tenant - NOT IMPLEMENTED YET
+	FeatureUnlimited   = "unlimited"    // Unlimited instances (for MSP/volume deals)
 )
 
 // Tier represents a license tier.
@@ -57,7 +57,10 @@ var TierFeatures = map[Tier][]string{
 		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
 		FeatureSSO,
+		FeatureAdvancedSSO,
 		FeatureRBAC,
+		FeatureAuditLogging,
+		FeatureAdvancedReporting,
 	},
 	TierProAnnual: {
 		FeatureAIPatrol,
@@ -67,7 +70,10 @@ var TierFeatures = map[Tier][]string{
 		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
 		FeatureSSO,
+		FeatureAdvancedSSO,
 		FeatureRBAC,
+		FeatureAuditLogging,
+		FeatureAdvancedReporting,
 	},
 	TierLifetime: {
 		FeatureAIPatrol,
@@ -77,7 +83,10 @@ var TierFeatures = map[Tier][]string{
 		FeatureAgentProfiles,
 		FeatureUpdateAlerts,
 		FeatureSSO,
+		FeatureAdvancedSSO,
 		FeatureRBAC,
+		FeatureAuditLogging,
+		FeatureAdvancedReporting,
 	},
 	TierMSP: {
 		FeatureAIPatrol,
@@ -88,6 +97,10 @@ var TierFeatures = map[Tier][]string{
 		FeatureUpdateAlerts,
 		FeatureUnlimited,
 		FeatureSSO,
+		FeatureAdvancedSSO,
+		FeatureRBAC,
+		FeatureAuditLogging,
+		FeatureAdvancedReporting,
 		// Note: FeatureMultiUser, FeatureWhiteLabel, FeatureMultiTenant
 		// are on the roadmap but NOT included until implemented
 	},

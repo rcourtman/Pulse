@@ -2,12 +2,20 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
+
+// validRoleID matches alphanumeric IDs with hyphens and underscores (1-64 chars)
+var validRoleID = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+
+// validUsername matches reasonable username formats (1-128 chars, alphanumeric, plus common chars)
+var validUsername = regexp.MustCompile(`^[a-zA-Z0-9._@+-]{1,128}$`)
 
 // RBACHandlers provides HTTP handlers for RBAC management.
 type RBACHandlers struct {
@@ -30,6 +38,12 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/api/admin/roles")
 	id = strings.TrimPrefix(id, "/")
 	id = strings.TrimSuffix(id, "/")
+
+	// Validate role ID format if provided
+	if id != "" && !validRoleID.MatchString(id) {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_role_id", "Invalid role ID format", nil)
+		return
+	}
 
 	switch r.Method {
 	case http.MethodGet:
@@ -54,15 +68,25 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "POST is for creating roles; do not include an ID in the path", nil)
 			return
 		}
+
+		// Limit request body size
+		r.Body = http.MaxBytesReader(w, r.Body, 64*1024) // 64KB max
+
 		var role auth.Role
 		if err := json.NewDecoder(r.Body).Decode(&role); err != nil {
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Invalid role data", nil)
 			return
 		}
 
+		// Validate role ID in body
+		if role.ID != "" && !validRoleID.MatchString(role.ID) {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_role_id", "Invalid role ID format", nil)
+			return
+		}
+
 		if err := manager.SaveRole(role); err != nil {
-			LogAuditEvent("role_create_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, "Failed to create role "+role.ID+": "+err.Error())
-			writeErrorResponse(w, http.StatusInternalServerError, "save_failed", err.Error(), nil)
+			LogAuditEvent("role_create_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, fmt.Sprintf("Failed to create role %s", role.ID))
+			writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save role", nil)
 			return
 		}
 
@@ -71,6 +95,9 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(role)
 
 	case http.MethodPut:
+		// Limit request body size
+		r.Body = http.MaxBytesReader(w, r.Body, 64*1024) // 64KB max
+
 		var role auth.Role
 		if err := json.NewDecoder(r.Body).Decode(&role); err != nil {
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Invalid role data", nil)
@@ -81,9 +108,15 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 			role.ID = id
 		}
 
+		// Validate role ID
+		if role.ID != "" && !validRoleID.MatchString(role.ID) {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_role_id", "Invalid role ID format", nil)
+			return
+		}
+
 		if err := manager.SaveRole(role); err != nil {
-			LogAuditEvent("role_update_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, "Failed to update role "+role.ID+": "+err.Error())
-			writeErrorResponse(w, http.StatusInternalServerError, "save_failed", err.Error(), nil)
+			LogAuditEvent("role_update_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, fmt.Sprintf("Failed to update role %s", role.ID))
+			writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save role", nil)
 			return
 		}
 
@@ -98,8 +131,8 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := manager.DeleteRole(id); err != nil {
-			LogAuditEvent("role_delete_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, "Failed to delete role "+id+": "+err.Error())
-			writeErrorResponse(w, http.StatusInternalServerError, "delete_failed", err.Error(), nil)
+			LogAuditEvent("role_delete_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, fmt.Sprintf("Failed to delete role %s", id))
+			writeErrorResponse(w, http.StatusInternalServerError, "delete_failed", "Failed to delete role", nil)
 			return
 		}
 
@@ -146,8 +179,17 @@ func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Requ
 	}
 	username := parts[0]
 
+	// Validate username format to prevent injection
+	if !validUsername.MatchString(username) {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_username", "Invalid username format", nil)
+		return
+	}
+
 	switch r.Method {
 	case http.MethodPut, http.MethodPost:
+		// Limit request body size
+		r.Body = http.MaxBytesReader(w, r.Body, 64*1024) // 64KB max
+
 		var req struct {
 			RoleIDs []string `json:"roleIds"`
 		}
@@ -156,9 +198,17 @@ func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Requ
 			return
 		}
 
+		// Validate all role IDs
+		for _, roleID := range req.RoleIDs {
+			if !validRoleID.MatchString(roleID) {
+				writeErrorResponse(w, http.StatusBadRequest, "invalid_role_id", fmt.Sprintf("Invalid role ID format: %s", roleID), nil)
+				return
+			}
+		}
+
 		if err := manager.UpdateUserRoles(username, req.RoleIDs); err != nil {
-			LogAuditEvent("user_roles_update_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, "Failed to update roles for user "+username+": "+err.Error())
-			writeErrorResponse(w, http.StatusInternalServerError, "update_failed", err.Error(), nil)
+			LogAuditEvent("user_roles_update_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, fmt.Sprintf("Failed to update roles for user %s", username))
+			writeErrorResponse(w, http.StatusInternalServerError, "update_failed", "Failed to update user roles", nil)
 			return
 		}
 

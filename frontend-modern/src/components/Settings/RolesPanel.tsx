@@ -4,7 +4,7 @@ import { RBACAPI } from '@/api/rbac';
 import type { Role, Permission } from '@/types/rbac';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
-import { isEnterprise, loadLicenseStatus } from '@/stores/license';
+import { hasFeature, loadLicenseStatus } from '@/stores/license';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -147,7 +147,7 @@ export const RolesPanel: Component = () => {
                     </button>
                 </div>
 
-                <Show when={!isEnterprise() && !loading()}>
+                <Show when={!hasFeature('rbac') && !loading()}>
                     <div class="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl">
                         <div class="flex flex-col sm:flex-row items-center gap-4">
                             <div class="flex-1">

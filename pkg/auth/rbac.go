@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
@@ -58,15 +59,23 @@ type Manager interface {
 	GetUserPermissions(username string) []Permission
 }
 
-var globalManager Manager
+var (
+	globalManager Manager
+	managerMu     sync.RWMutex
+)
 
 // SetManager sets the global RBAC manager instance.
+// This should be called during application initialization.
 func SetManager(m Manager) {
+	managerMu.Lock()
+	defer managerMu.Unlock()
 	globalManager = m
 }
 
 // GetManager returns the global RBAC manager instance.
 func GetManager() Manager {
+	managerMu.RLock()
+	defer managerMu.RUnlock()
 	return globalManager
 }
 

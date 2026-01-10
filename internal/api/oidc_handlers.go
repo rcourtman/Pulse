@@ -269,7 +269,10 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 				Msg("Auto-assigning roles based on OIDC group mapping")
 			if err := authManager.UpdateUserRoles(username, rolesToAssign); err != nil {
 				log.Error().Err(err).Str("user", username).Msg("Failed to auto-assign OIDC roles")
+				LogAuditEvent("oidc_role_assignment", username, GetClientIP(req), req.URL.Path, false, "Failed to auto-assign roles: "+strings.Join(rolesToAssign, ", "))
 				// We don't fail the login here, but log the error
+			} else {
+				LogAuditEvent("oidc_role_assignment", username, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
 			}
 		}
 	}

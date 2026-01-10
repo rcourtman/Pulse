@@ -34,7 +34,9 @@ var (
 
 // BusinessHooks allows enterprise features to hook into the server lifecycle.
 type BusinessHooks struct {
-	OnMonitorInitialized func(m *monitoring.Monitor)
+	// OnMetricsStoreReady is called when the metrics store is initialized.
+	// This allows enterprise features to access metrics for reporting.
+	OnMetricsStoreReady func(store *metrics.Store)
 }
 
 var (
@@ -122,21 +124,20 @@ func Run(ctx context.Context, version string) error {
 	}
 
 	// Trigger enterprise hooks if registered
-	var onMonitorInitialized func(*monitoring.Monitor)
 	globalHooksMu.Lock()
-	if globalHooks.OnMonitorInitialized != nil {
-		onMonitorInitialized = globalHooks.OnMonitorInitialized
-	}
+	onMetricsStoreReady := globalHooks.OnMetricsStoreReady
 	globalHooksMu.Unlock()
 
-	if onMonitorInitialized != nil {
+	if onMetricsStoreReady != nil {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Msg("Enterprise OnMonitorInitialized hook panicked")
+					log.Error().Interface("panic", r).Msg("Enterprise OnMetricsStoreReady hook panicked")
 				}
 			}()
-			onMonitorInitialized(reloadableMonitor.GetMonitor())
+			if store := reloadableMonitor.GetMonitor().GetMetricsStore(); store != nil {
+				onMetricsStoreReady(store)
+			}
 		}()
 	}
 

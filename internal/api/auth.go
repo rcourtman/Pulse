@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
@@ -421,12 +422,12 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 									return false
 								}
 
-								// Store session persistently
+								// Store session persistently (including username for restart survival)
 								userAgent := r.Header.Get("User-Agent")
 								clientIP := GetClientIP(r)
-								GetSessionStore().CreateSession(token, 24*time.Hour, userAgent, clientIP)
+								GetSessionStore().CreateSession(token, 24*time.Hour, userAgent, clientIP, parts[0])
 
-								// Track session for user
+								// Track session for user (in-memory for fast lookups)
 								TrackUserSession(parts[0], token)
 
 								// Generate CSRF token
@@ -621,7 +622,7 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 }
 
 // RequirePermission middleware checks for authentication and specific RBAC permissions
-func RequirePermission(cfg *config.Config, authorizer internalauth.Authorizer, action string, resource string, next http.HandlerFunc) http.HandlerFunc {
+func RequirePermission(cfg *config.Config, authorizer auth.Authorizer, action, resource string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// First check if user is authenticated (using RequireAdmin logic as base)
 		if !CheckAuth(cfg, w, r) {
@@ -688,29 +689,10 @@ func RequirePermission(cfg *config.Config, authorizer internalauth.Authorizer, a
 // Session-based (browser) requests bypass the scope check.
 func RequireScope(scope string, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if scope == "" {
-			handler(w, r)
+		if !ensureScope(w, r, scope) {
 			return
 		}
-
-		record := getAPITokenRecordFromRequest(r)
-		if record == nil {
-			// Session-authenticated request
-			handler(w, r)
-			return
-		}
-
-		if record.HasScope(scope) {
-			handler(w, r)
-			return
-		}
-
-		log.Warn().
-			Str("token_id", record.ID).
-			Str("required_scope", scope).
-			Msg("API token missing required scope")
-
-		respondMissingScope(w, scope)
+		handler(w, r)
 	}
 }
 

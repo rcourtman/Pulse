@@ -1,4 +1,30 @@
 #!/bin/bash
+# hot-dev.sh - Development server with hot-reload for Pulse
+#
+# This script runs a local development environment with:
+# - Go backend with auto-rebuild on file changes (via inotifywait)
+# - Vite frontend dev server with HMR
+# - Automatic enterprise binary support when /opt/pulse-enterprise exists
+#
+# Environment Variables:
+#   HOT_DEV_USE_PROD_DATA=true   Use /etc/pulse for data (sessions, config, etc.)
+#   HOT_DEV_USE_ENTERPRISE=true  Build enterprise binary (default: true if available)
+#   PULSE_MOCK_MODE=true         Use isolated mock data directory
+#   PULSE_DATA_DIR=/path         Override data directory
+#   PULSE_DEV_API_PORT=7656      Backend API port (default: 7656)
+#   FRONTEND_DEV_PORT=5173       Frontend dev server port (default: 5173)
+#
+# Enterprise Mode:
+#   When /opt/pulse-enterprise exists and HOT_DEV_USE_ENTERPRISE is not "false",
+#   the script builds and runs the enterprise binary which includes:
+#   - SQLite-based persistent audit logging
+#   - RBAC (Role-Based Access Control)
+#   - HMAC event signing for tamper detection
+#
+# Usage:
+#   ./scripts/hot-dev.sh                    # Standard dev mode
+#   HOT_DEV_USE_PROD_DATA=true ./scripts/hot-dev.sh  # Use production data
+#
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -59,7 +85,7 @@ load_env_file "${ROOT_DIR}/.env"
 load_env_file "${ROOT_DIR}/.env.local"
 load_env_file "${ROOT_DIR}/.env.dev"
 
-FRONTEND_PORT=${FRONTEND_PORT:-${PORT:-7655}}
+FRONTEND_PORT=${FRONTEND_PORT:-${PORT:-5173}}
 PORT=${PORT:-${FRONTEND_PORT}}
 
 # Detect LAN IP
@@ -96,7 +122,20 @@ fi
 
 # Set specific allowed origin for CORS with credentials
 # Use the frontend dev URL so cross-port SSE requests work with auth cookies
+# Added localhost and 127.0.0.1 by default for flexibility (both 7655 and 5173)
 ALLOWED_ORIGINS="http://${PULSE_DEV_API_HOST:-127.0.0.1}:${FRONTEND_DEV_PORT:-7655}"
+ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://localhost:${FRONTEND_DEV_PORT:-7655},http://127.0.0.1:${FRONTEND_DEV_PORT:-7655}"
+ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://localhost:5173,http://127.0.0.1:5173"
+
+# Detect and add all system IPs (V4)
+for ip in $(hostname -I); do
+    if [[ "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        if [[ "${ip}" != "127.0.0.1" ]]; then
+            ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://${ip}:${FRONTEND_DEV_PORT:-7655}"
+            ALLOWED_ORIGINS="${ALLOWED_ORIGINS},http://${ip}:5173"
+        fi
+    fi
+done
 
 export FRONTEND_PORT PORT
 export FRONTEND_DEV_HOST FRONTEND_DEV_PORT
@@ -233,7 +272,23 @@ cd "${ROOT_DIR}"
 mkdir -p internal/api/frontend-modern/dist
 touch internal/api/frontend-modern/dist/index.html
 
-go build -o pulse ./cmd/pulse
+# Check if enterprise module is available and use it for full audit logging support
+ENTERPRISE_DIR="/opt/pulse-enterprise"
+if [[ -d "${ENTERPRISE_DIR}" ]] && [[ ${HOT_DEV_USE_ENTERPRISE:-true} == "true" ]]; then
+    log_info "Building enterprise binary (includes persistent audit logging)..."
+    cd "${ENTERPRISE_DIR}"
+    go build -buildvcs=false -o "${ROOT_DIR}/pulse" ./cmd/pulse-enterprise 2>/dev/null || {
+        log_warn "Enterprise build failed, falling back to OSS binary"
+        cd "${ROOT_DIR}"
+        go build -o pulse ./cmd/pulse
+    }
+    cd "${ROOT_DIR}"
+    # Set up audit directory for enterprise features
+    export PULSE_AUDIT_DIR="${PULSE_DATA_DIR:-/etc/pulse}"
+    log_info "Enterprise audit logging enabled (SQLite storage in ${PULSE_AUDIT_DIR})"
+else
+    go build -o pulse ./cmd/pulse
+fi
 
 FRONTEND_PORT=${PULSE_DEV_API_PORT}
 PORT=${PULSE_DEV_API_PORT}

@@ -39,7 +39,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
-	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 
@@ -72,7 +71,7 @@ type Router struct {
 	persistence               *config.ConfigPersistence
 	oidcMu                    sync.Mutex
 	oidcService               *OIDCService
-	authorizer                internalauth.Authorizer
+	authorizer                auth.Authorizer
 	wrapped                   http.Handler
 	serverVersion             string
 	projectRoot               string
@@ -145,7 +144,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		exportLimiter:   NewRateLimiter(5, 1*time.Minute),  // 5 attempts per minute
 		downloadLimiter: NewRateLimiter(60, 1*time.Minute), // downloads/installers per minute per IP
 		persistence:     config.NewConfigPersistence(cfg.DataPath),
-		authorizer:      internalauth.GetAuthorizer(),
+		authorizer:      auth.GetAuthorizer(),
 		serverVersion:   strings.TrimSpace(serverVersion),
 		projectRoot:     projectRoot,
 		checksumCache:   make(map[string]checksumCacheEntry),
@@ -153,12 +152,13 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 
 	// Sync the configured admin user to the authorizer (if supported)
 	if cfg.AuthUser != "" {
-		internalauth.SetAdminUser(cfg.AuthUser)
+		auth.SetAdminUser(cfg.AuthUser)
 	}
 
 	r.initializeBootstrapToken()
 
 	r.setupRoutes()
+	log.Debug().Msg("Routes registered successfully")
 
 	// Start forwarding update progress to WebSocket
 	go r.forwardUpdateProgress()
@@ -506,8 +506,9 @@ func (r *Router) setupRoutes() {
 
 	// Audit log routes (Enterprise feature)
 	auditHandlers := NewAuditHandlers()
-	r.mux.HandleFunc("/api/audit", RequirePermission(r.config, r.authorizer, internalauth.ActionRead, internalauth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))))
-	r.mux.HandleFunc("/api/audit/", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleVerifyAuditEvent))))
+	r.mux.HandleFunc("GET /api/audit", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))))
+	r.mux.HandleFunc("GET /api/audit/", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))))
+	r.mux.HandleFunc("GET /api/audit/{id}/verify", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleVerifyAuditEvent))))
 
 	// RBAC routes (Phase 2 - Enterprise feature)
 	r.mux.HandleFunc("/api/admin/roles", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleRoles)))
@@ -535,7 +536,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/security/oidc", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleOIDCConfig)))
 	r.mux.HandleFunc("/api/oidc/login", r.handleOIDCLogin)
 	r.mux.HandleFunc(config.DefaultOIDCCallbackPath, r.handleOIDCCallback)
-	r.mux.HandleFunc("/api/security/tokens", RequirePermission(r.config, r.authorizer, internalauth.ActionAdmin, internalauth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc("/api/security/tokens", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			if !ensureScope(w, req, config.ScopeSettingsRead) {
@@ -551,7 +552,7 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
-	r.mux.HandleFunc("/api/security/tokens/", RequirePermission(r.config, r.authorizer, internalauth.ActionAdmin, internalauth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc("/api/security/tokens/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureScope(w, req, config.ScopeSettingsWrite) {
 			return
 		}
@@ -1209,7 +1210,7 @@ func (r *Router) setupRoutes() {
 		}
 		// Fall back to legacy single token if set
 		if r.config.APIToken != "" {
-			return internalauth.CompareAPIToken(token, r.config.APIToken)
+			return auth.CompareAPIToken(token, r.config.APIToken)
 		}
 		return false
 	})
@@ -1251,10 +1252,10 @@ func (r *Router) setupRoutes() {
 			})
 		}
 	}
-	r.mux.HandleFunc("/api/settings/ai", RequirePermission(r.config, r.authorizer, internalauth.ActionRead, internalauth.ResourceSettings, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetAISettings)))
-	r.mux.HandleFunc("/api/settings/ai/update", RequirePermission(r.config, r.authorizer, internalauth.ActionWrite, internalauth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleUpdateAISettings)))
-	r.mux.HandleFunc("/api/ai/test", RequirePermission(r.config, r.authorizer, internalauth.ActionWrite, internalauth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestAIConnection)))
-	r.mux.HandleFunc("/api/ai/test/{provider}", RequirePermission(r.config, r.authorizer, internalauth.ActionWrite, internalauth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestProvider)))
+	r.mux.HandleFunc("/api/settings/ai", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceSettings, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetAISettings)))
+	r.mux.HandleFunc("/api/settings/ai/update", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleUpdateAISettings)))
+	r.mux.HandleFunc("/api/ai/test", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestAIConnection)))
+	r.mux.HandleFunc("/api/ai/test/{provider}", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestProvider)))
 	r.mux.HandleFunc("/api/ai/models", RequireAuth(r.config, r.aiSettingsHandler.HandleListModels))
 	r.mux.HandleFunc("/api/ai/execute", RequireAuth(r.config, r.aiSettingsHandler.HandleExecute))
 	r.mux.HandleFunc("/api/ai/execute/stream", RequireAuth(r.config, r.aiSettingsHandler.HandleExecuteStream))
@@ -1976,13 +1977,44 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	SecurityHeadersWithConfig(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// Add CORS headers if configured
 		if r.config.AllowedOrigins != "" {
-			w.Header().Set("Access-Control-Allow-Origin", r.config.AllowedOrigins)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Token, X-CSRF-Token, X-Setup-Token")
-			w.Header().Set("Access-Control-Expose-Headers", "X-CSRF-Token, X-Authenticated-User, X-Auth-Method")
-			// Allow credentials when origin is specific (not *)
-			if r.config.AllowedOrigins != "*" {
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			reqOrigin := req.Header.Get("Origin")
+			allowedOrigin := ""
+
+			if r.config.AllowedOrigins == "*" {
+				allowedOrigin = "*"
+			} else if reqOrigin != "" {
+				// Parse comma-separated origins and check for match
+				origins := strings.Split(r.config.AllowedOrigins, ",")
+				for _, o := range origins {
+					o = strings.TrimSpace(o)
+					if o == "" {
+						continue
+					}
+					if o == reqOrigin {
+						allowedOrigin = o
+						break
+					}
+				}
+			} else {
+				// No Origin header (same-origin or direct request)
+				// Set to first allowed origin for simple responses, though not strictly required for same-origin
+				origins := strings.Split(r.config.AllowedOrigins, ",")
+				if len(origins) > 0 {
+					allowedOrigin = strings.TrimSpace(origins[0])
+				}
+			}
+
+			if allowedOrigin != "" {
+				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Token, X-CSRF-Token, X-Setup-Token")
+				w.Header().Set("Access-Control-Expose-Headers", "X-CSRF-Token, X-Authenticated-User, X-Auth-Method")
+				// Allow credentials when origin is specific (not *)
+				if allowedOrigin != "*" {
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+					// Must add Vary: Origin when Origin is used to decide the response
+					w.Header().Add("Vary", "Origin")
+				}
 			}
 		}
 
@@ -2217,6 +2249,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 		// Check if this is an API or WebSocket route
 		log.Debug().Str("path", req.URL.Path).Msg("Routing request")
+
 		if strings.HasPrefix(req.URL.Path, "/api/") ||
 			strings.HasPrefix(req.URL.Path, "/ws") ||
 			strings.HasPrefix(req.URL.Path, "/socket.io/") ||
@@ -2452,7 +2485,7 @@ func isRequestAuthenticated(cfg *config.Config, req *http.Request) bool {
 		if authHeader := req.Header.Get("Authorization"); strings.HasPrefix(authHeader, prefix) {
 			if decoded, err := base64.StdEncoding.DecodeString(authHeader[len(prefix):]); err == nil {
 				if parts := strings.SplitN(string(decoded), ":", 2); len(parts) == 2 {
-					if parts[0] == cfg.AuthUser && internalauth.CheckPasswordHash(parts[1], cfg.AuthPass) {
+					if parts[0] == cfg.AuthUser && auth.CheckPasswordHash(parts[1], cfg.AuthPass) {
 						return true
 					}
 				}
@@ -2542,7 +2575,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Validate new password complexity
-	if err := internalauth.ValidatePasswordComplexity(changeReq.NewPassword); err != nil {
+	if err := auth.ValidatePasswordComplexity(changeReq.NewPassword); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_password",
 			err.Error(), nil)
 		return
@@ -2578,7 +2611,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 						username = parts[0]
 						useAuthHeader = true
 						// Verify the password from the header matches
-						if !internalauth.CheckPasswordHash(parts[1], r.config.AuthPass) {
+						if !auth.CheckPasswordHash(parts[1], r.config.AuthPass) {
 							log.Warn().
 								Str("ip", req.RemoteAddr).
 								Str("username", username).
@@ -2597,7 +2630,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 	// If we didn't use the auth header, or need to double-check, verify from JSON body
 	if !useAuthHeader || changeReq.CurrentPassword != "" {
 		// Verify current password from JSON body
-		if !internalauth.CheckPasswordHash(changeReq.CurrentPassword, r.config.AuthPass) {
+		if !auth.CheckPasswordHash(changeReq.CurrentPassword, r.config.AuthPass) {
 			log.Warn().
 				Str("ip", req.RemoteAddr).
 				Str("username", username).
@@ -2609,7 +2642,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Hash the new password before storing
-	hashedPassword, err := internalauth.HashPassword(changeReq.NewPassword)
+	hashedPassword, err := auth.HashPassword(changeReq.NewPassword)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to hash new password")
 		writeErrorResponse(w, http.StatusInternalServerError, "hash_error",
@@ -2826,7 +2859,7 @@ func (r *Router) establishSession(w http.ResponseWriter, req *http.Request, user
 
 	userAgent := req.Header.Get("User-Agent")
 	clientIP := GetClientIP(req)
-	GetSessionStore().CreateSession(token, 24*time.Hour, userAgent, clientIP)
+	GetSessionStore().CreateSession(token, 24*time.Hour, userAgent, clientIP, username)
 
 	if username != "" {
 		TrackUserSession(username, token)
@@ -2867,8 +2900,8 @@ func (r *Router) establishOIDCSession(w http.ResponseWriter, req *http.Request, 
 	userAgent := req.Header.Get("User-Agent")
 	clientIP := GetClientIP(req)
 
-	// Create session with OIDC tokens
-	GetSessionStore().CreateOIDCSession(token, 24*time.Hour, userAgent, clientIP, oidcTokens)
+	// Create session with OIDC tokens (including username for restart survival)
+	GetSessionStore().CreateOIDCSession(token, 24*time.Hour, userAgent, clientIP, username, oidcTokens)
 
 	if username != "" {
 		TrackUserSession(username, token)
@@ -2963,7 +2996,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Verify credentials
-	if loginReq.Username == r.config.AuthUser && internalauth.CheckPasswordHash(loginReq.Password, r.config.AuthPass) {
+	if loginReq.Username == r.config.AuthUser && auth.CheckPasswordHash(loginReq.Password, r.config.AuthPass) {
 		// Clear failed login attempts
 		ClearFailedLogins(loginReq.Username)
 		ClearFailedLogins(clientIP)
@@ -2976,15 +3009,15 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		// Store session persistently with appropriate duration
+		// Store session persistently with appropriate duration (including username for restart survival)
 		userAgent := req.Header.Get("User-Agent")
 		sessionDuration := 24 * time.Hour
 		if loginReq.RememberMe {
 			sessionDuration = 30 * 24 * time.Hour // 30 days
 		}
-		GetSessionStore().CreateSession(token, sessionDuration, userAgent, clientIP)
+		GetSessionStore().CreateSession(token, sessionDuration, userAgent, clientIP, loginReq.Username)
 
-		// Track session for user
+		// Track session for user (in-memory for fast lookups)
 		TrackUserSession(loginReq.Username, token)
 
 		// Generate CSRF token
@@ -4842,7 +4875,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		name = fmt.Sprintf("Docker host: %s", displayName)
 	}
 
-	rawToken, err := internalauth.GenerateAPIToken()
+	rawToken, err := auth.GenerateAPIToken()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate docker migration token")
 		writeErrorResponse(w, http.StatusInternalServerError, "token_generation_failed", "Failed to generate API token", nil)

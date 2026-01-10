@@ -8,7 +8,7 @@ import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { showSuccess, showWarning } from '@/utils/toast';
 import { apiFetchJSON } from '@/utils/apiClient';
-import { isEnterprise, loadLicenseStatus } from '@/stores/license';
+import { hasFeature, loadLicenseStatus } from '@/stores/license';
 
 export function AuditWebhookPanel() {
     const [webhookUrls, setWebhookUrls] = createSignal<string[]>([]);
@@ -21,7 +21,7 @@ export function AuditWebhookPanel() {
     });
 
     createEffect(() => {
-        if (isEnterprise()) {
+        if (hasFeature('audit_logging')) {
             fetchWebhooks();
         } else {
             setLoading(false);

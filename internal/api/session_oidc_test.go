@@ -26,7 +26,7 @@ func TestCreateOIDCSession(t *testing.T) {
 		ClientID:       "test-client-id",
 	}
 
-	store.CreateOIDCSession(token, 24*time.Hour, "TestAgent", "127.0.0.1", oidcInfo)
+	store.CreateOIDCSession(token, 24*time.Hour, "TestAgent", "127.0.0.1", "testuser", oidcInfo)
 
 	// Verify session was created
 	if !store.ValidateSession(token) {
@@ -74,7 +74,7 @@ func TestUpdateOIDCTokens(t *testing.T) {
 		ClientID:       "test-client-id",
 	}
 
-	store.CreateOIDCSession(token, 24*time.Hour, "TestAgent", "127.0.0.1", oidcInfo)
+	store.CreateOIDCSession(token, 24*time.Hour, "TestAgent", "127.0.0.1", "testuser", oidcInfo)
 
 	// Update the tokens (simulating a refresh)
 	newExpiry := time.Now().Add(2 * time.Hour)
@@ -112,7 +112,7 @@ func TestOIDCSessionPersistence(t *testing.T) {
 
 	// Create session in first store instance
 	store1 := NewSessionStore(tmpDir)
-	store1.CreateOIDCSession(token, 24*time.Hour, "TestAgent", "127.0.0.1", oidcInfo)
+	store1.CreateOIDCSession(token, 24*time.Hour, "TestAgent", "127.0.0.1", "testuser", oidcInfo)
 
 	// Verify file was written
 	sessionFile := filepath.Join(tmpDir, "sessions.json")
@@ -149,7 +149,7 @@ func TestCreateOIDCSession_NilTokenInfo(t *testing.T) {
 
 	// Create OIDC session with nil token info (no refresh token available)
 	token := "test-session-no-refresh"
-	store.CreateOIDCSession(token, 24*time.Hour, "TestAgent", "127.0.0.1", nil)
+	store.CreateOIDCSession(token, 24*time.Hour, "TestAgent", "127.0.0.1", "testuser", nil)
 
 	// Verify session was created
 	if !store.ValidateSession(token) {
@@ -183,7 +183,7 @@ func TestInvalidateSession(t *testing.T) {
 		ClientID:       "test-client-id",
 	}
 
-	store.CreateOIDCSession(token, 24*time.Hour, "TestAgent", "127.0.0.1", oidcInfo)
+	store.CreateOIDCSession(token, 24*time.Hour, "TestAgent", "127.0.0.1", "testuser", oidcInfo)
 
 	// Verify session exists
 	if !store.ValidateSession(token) {

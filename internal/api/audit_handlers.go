@@ -3,13 +3,19 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 )
+
+// validAuditEventID matches alphanumeric IDs with hyphens (UUID format)
+var validAuditEventID = regexp.MustCompile(`^[a-zA-Z0-9\-]+$`)
 
 // AuditHandlers provides HTTP handlers for audit log endpoints.
 type AuditHandlers struct{}
@@ -19,8 +25,7 @@ func NewAuditHandlers() *AuditHandlers {
 	return &AuditHandlers{}
 }
 
-// HandleListAuditEvents returns audit events matching query parameters.
-// Query params: user, event, startTime, endTime, limit, offset, success
+// HandleListAuditEvents handles GET /api/audit
 func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -101,21 +106,24 @@ func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(response)
 }
 
-// HandleVerifyAuditEvent verifies the signature of a specific audit event.
-// This is only functional with enterprise audit logging.
+// HandleVerifyAuditEvent handles GET /api/audit/{id}/verify
 func (h *AuditHandlers) HandleVerifyAuditEvent(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/api/audit/")
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	if len(parts) != 2 || parts[1] != "verify" || parts[0] == "" {
-		http.Error(w, "Not found", http.StatusNotFound)
+	eventID := r.PathValue("id")
+	if eventID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Missing event ID", nil)
 		return
 	}
-	eventID := parts[0]
+
+	// Validate event ID format to prevent injection
+	if !validAuditEventID.MatchString(eventID) || len(eventID) > 64 {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_id", "Invalid event ID format", nil)
+		return
+	}
 
 	// For OSS, return not_available
 	if !isPersistentLogger() {
@@ -184,21 +192,116 @@ func (h *AuditHandlers) HandleUpdateWebhooks(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Limit request body size to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024) // 64KB max
+
 	var req struct {
 		URLs []string `json:"urls"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
 	}
 
+	// Validate all webhook URLs
+	var validatedURLs []string
+	for _, rawURL := range req.URLs {
+		if err := validateWebhookURL(rawURL); err != nil {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_url", fmt.Sprintf("Invalid webhook URL: %s", err.Error()), map[string]string{"url": rawURL})
+			return
+		}
+		validatedURLs = append(validatedURLs, rawURL)
+	}
+
 	logger := audit.GetLogger()
-	if err := logger.UpdateWebhookURLs(req.URLs); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to update webhooks: %v", err), http.StatusInternalServerError)
+	if err := logger.UpdateWebhookURLs(validatedURLs); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "update_failed", "Failed to update webhooks", nil)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// validateWebhookURL validates a webhook URL for security.
+// Returns an error if the URL is invalid or potentially dangerous (SSRF).
+func validateWebhookURL(rawURL string) error {
+	if strings.TrimSpace(rawURL) == "" {
+		return fmt.Errorf("URL cannot be empty")
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL format")
+	}
+
+	// Only allow http and https schemes
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("URL scheme must be http or https")
+	}
+
+	// Ensure host is present
+	if parsed.Host == "" {
+		return fmt.Errorf("URL must have a host")
+	}
+
+	// Extract hostname (without port)
+	hostname := parsed.Hostname()
+	if hostname == "" {
+		return fmt.Errorf("URL must have a hostname")
+	}
+
+	// Block localhost and loopback addresses
+	if hostname == "localhost" || hostname == "127.0.0.1" || hostname == "::1" {
+		return fmt.Errorf("localhost URLs are not allowed")
+	}
+
+	// Check if hostname is an IP address
+	ip := net.ParseIP(hostname)
+	if ip != nil {
+		// Block private/internal IP ranges (SSRF protection)
+		if isPrivateOrReservedIP(ip) {
+			return fmt.Errorf("private or reserved IP addresses are not allowed")
+		}
+	}
+
+	// Block common internal hostnames
+	lowerHost := strings.ToLower(hostname)
+	blockedPatterns := []string{
+		"metadata.google",
+		"169.254.169.254", // AWS/GCP metadata
+		"metadata.azure",
+		"internal",
+		".local",
+		".localhost",
+	}
+	for _, pattern := range blockedPatterns {
+		if strings.Contains(lowerHost, pattern) {
+			return fmt.Errorf("internal hostnames are not allowed")
+		}
+	}
+
+	return nil
+}
+
+// isPrivateOrReservedIP checks if an IP is private, loopback, or reserved.
+func isPrivateOrReservedIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+
+	// Additional checks for reserved ranges
+	// 169.254.0.0/16 - Link-local (also covers cloud metadata endpoints)
+	if ip4 := ip.To4(); ip4 != nil {
+		if ip4[0] == 169 && ip4[1] == 254 {
+			return true
+		}
+		// 0.0.0.0/8
+		if ip4[0] == 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 // isPersistentLogger checks if we're using a persistent audit logger (enterprise).

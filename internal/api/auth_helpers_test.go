@@ -345,7 +345,7 @@ func TestValidateSession_ValidToken(t *testing.T) {
 	// Create a valid session with a generated token
 	store := GetSessionStore()
 	token := generateSessionToken()
-	store.CreateSession(token, 24*time.Hour, "test-agent", "127.0.0.1")
+	store.CreateSession(token, 24*time.Hour, "test-agent", "127.0.0.1", "testuser")
 
 	result := ValidateSession(token)
 	if !result {
@@ -360,7 +360,7 @@ func TestValidateSession_ExpiredToken(t *testing.T) {
 	// Create a session and manually expire it
 	store := GetSessionStore()
 	token := generateSessionToken()
-	store.CreateSession(token, 24*time.Hour, "test-agent", "127.0.0.1")
+	store.CreateSession(token, 24*time.Hour, "test-agent", "127.0.0.1", "testuser")
 
 	// Manually expire the session by modifying the store
 	store.mu.Lock()
@@ -683,7 +683,7 @@ func TestCheckAuth_OIDCSessionValid(t *testing.T) {
 	// Create a session and track it for a user
 	store := GetSessionStore()
 	sessionToken := generateSessionToken()
-	store.CreateSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1")
+	store.CreateSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1", "testuser")
 	TrackUserSession("oidcuser", sessionToken)
 
 	cfg := &config.Config{
@@ -740,7 +740,7 @@ func TestCheckAuth_SessionCookieValid(t *testing.T) {
 	// Create a session
 	store := GetSessionStore()
 	sessionToken := generateSessionToken()
-	store.CreateSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1")
+	store.CreateSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1", "testuser")
 
 	cfg := &config.Config{
 		AuthUser: "testuser",
@@ -766,7 +766,7 @@ func TestCheckAuth_SessionCookieExpired(t *testing.T) {
 	// Create and expire a session
 	store := GetSessionStore()
 	sessionToken := generateSessionToken()
-	store.CreateSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1")
+	store.CreateSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1", "testuser")
 
 	// Manually expire the session
 	store.mu.Lock()
@@ -817,7 +817,7 @@ func TestCheckAuth_ValidSessionWithSlidingExpiration(t *testing.T) {
 
 	store := GetSessionStore()
 	sessionToken := generateSessionToken()
-	store.CreateSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1")
+	store.CreateSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1", "testuser")
 
 	cfg := &config.Config{
 		// No auth configured, so session alone should work

@@ -8,7 +8,7 @@ import { formField, labelClass, controlClass } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
-import { isEnterprise, loadLicenseStatus } from '@/stores/license';
+import { hasFeature, loadLicenseStatus } from '@/stores/license';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
 
 // Providers are now configured via accordion sections, not a single-provider selector
@@ -93,8 +93,8 @@ export const AISettings: Component = () => {
   // Per-provider test state
   const [testingProvider, setTestingProvider] = createSignal<string | null>(null);
   const [providerTestResult, setProviderTestResult] = createSignal<{ provider: string; success: boolean; message: string } | null>(null);
-  const hasAlertAnalysisFeature = createMemo(() => isEnterprise());
-  const hasAutoFixFeature = createMemo(() => isEnterprise());
+  const hasAlertAnalysisFeature = createMemo(() => hasFeature('ai_alerts'));
+  const hasAutoFixFeature = createMemo(() => hasFeature('ai_autofix'));
   const alertAnalysisLocked = createMemo(() => !hasAlertAnalysisFeature());
   const autoFixLocked = createMemo(() => !hasAutoFixFeature());
 
