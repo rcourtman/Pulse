@@ -304,6 +304,19 @@ View in Pulse: {{.Instance}}`,
 			Instructions: "1. Choose a topic name (e.g., 'my-pulse-alerts')\n2. URL format: https://ntfy.sh/YOUR_TOPIC\n   Or for self-hosted: https://your-ntfy-server/YOUR_TOPIC\n3. For authentication, add a custom header:\n   • Header Name: Authorization\n   • Header Value: Bearer YOUR_TOKEN (or Basic base64_encoded_credentials)\n4. Subscribe to the topic in your ntfy app using the same topic name",
 		},
 		{
+			Service:    "mattermost",
+			Name:       "Mattermost Incoming Webhook",
+			URLPattern: "https://{your-mattermost-server}/hooks/{webhook_id}",
+			Method:     "POST",
+			Headers:    map[string]string{"Content-Type": "application/json"},
+			PayloadTemplate: `{
+				"username": "Pulse Monitoring",
+				"icon_url": "https://raw.githubusercontent.com/rcourtman/Pulse/main/frontend-modern/public/android-chrome-192x192.png",
+				"text": "{{if eq .Level "critical"}}:rotating_light: **CRITICAL ALERT**{{else if eq .Level "warning"}}:warning: **WARNING ALERT**{{else}}:information_source: **INFO**{{end}}\n\n**{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName}} |\n| Node | {{.Node}} |\n| Type | {{.Type | title}} |\n| Current | {{if or (eq .Type \"diskRead\") (eq .Type \"diskWrite\")}}{{printf \"%.1f\" .Value}} MB/s{{else}}{{printf \"%.1f\" .Value}}%{{end}} |\n| Threshold | {{if or (eq .Type \"diskRead\") (eq .Type \"diskWrite\")}}{{printf \"%.0f\" .Threshold}} MB/s{{else}}{{printf \"%.0f\" .Threshold}}%{{end}} |\n| Duration | {{.Duration}} |\n| Alert ID | {{.ID}} |\n\n[View in Pulse]({{.Instance}})"
+			}`,
+			Instructions: "1. In Mattermost, go to Integrations > Incoming Webhooks\n2. Create a new webhook and select the channel\n3. Copy the webhook URL and paste it here\n\nNote: This template uses Markdown formatting which is fully supported by Mattermost.",
+		},
+		{
 			Service:    "generic",
 			Name:       "Generic JSON Webhook",
 			URLPattern: "",
