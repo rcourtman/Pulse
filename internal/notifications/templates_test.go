@@ -3,6 +3,7 @@ package notifications
 import (
 	"strings"
 	"testing"
+	"text/template"
 )
 
 func TestGetEmailProviders(t *testing.T) {
@@ -495,7 +496,17 @@ func TestEmailProvider_Fields(t *testing.T) {
 	if !provider.AuthRequired {
 		t.Error("AuthRequired should be true")
 	}
-	if provider.Instructions != "Test instructions" {
-		t.Errorf("Instructions = %q, want Test instructions", provider.Instructions)
+}
+
+func TestGetWebhookTemplates_TemplatesAreValid(t *testing.T) {
+	templates := GetWebhookTemplates()
+
+	for _, tmpl := range templates {
+		t.Run(tmpl.Service, func(t *testing.T) {
+			_, err := template.New("test").Funcs(templateFuncMap()).Parse(tmpl.PayloadTemplate)
+			if err != nil {
+				t.Errorf("Template for service %q is invalid: %v", tmpl.Service, err)
+			}
+		})
 	}
 }

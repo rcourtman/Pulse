@@ -21,6 +21,7 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 import { MonitoringAPI } from '@/api/monitoring';
 import { showSuccess, showError, showToast } from '@/utils/toast';
+import { isKioskMode } from '@/utils/url';
 
 type DockerMetadataRecord = Record<string, DockerMetadata>;
 type DockerHostMetadataRecord = Record<string, DockerHostMetadata>;
@@ -95,6 +96,9 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
 
   // Detect if any Swarm clusters exist (2+ hosts sharing a clusterId)
   const hasSwarmClustersDetected = createMemo(() => hasSwarmClusters(sortedHosts()));
+
+  // Kiosk mode - hide filter panel for clean dashboard display
+  const kioskMode = createMemo(() => isKioskMode());
 
   const clampPercent = (value: number | undefined | null) => {
     if (value === undefined || value === null || Number.isNaN(value)) return 0;
@@ -563,7 +567,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
           when={sortedHosts().length > 0}
           fallback={
             <>
-              {renderFilter()}
+              <Show when={!kioskMode()}>{renderFilter()}</Show>
               <Card padding="lg">
                 <EmptyState
                   icon={
@@ -605,7 +609,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
             />
           </Show>
 
-          {renderFilter()}
+          <Show when={!kioskMode()}>{renderFilter()}</Show>
 
           <Show
             when={groupingMode() === 'cluster'}

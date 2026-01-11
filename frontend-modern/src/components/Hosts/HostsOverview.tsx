@@ -25,6 +25,7 @@ import { HostMetadataAPI, type HostMetadata } from '@/api/hostMetadata';
 import { UrlEditPopover, createUrlEditState } from '@/components/shared/UrlEditPopover';
 import { showSuccess, showError } from '@/utils/toast';
 import { logger } from '@/utils/logger';
+import { isKioskMode } from '@/utils/url';
 
 // Column definition for hosts table
 export interface HostColumnDef {
@@ -650,6 +651,9 @@ export const HostsOverview: Component = () => {
   const visibleColumnIds = createMemo(() => visibleColumns().map(c => c.id));
   const isColVisible = (colId: string) => visibleColumnIds().includes(colId);
 
+  // Kiosk mode - hide filter panel for clean dashboard display
+  const kioskMode = createMemo(() => isKioskMode());
+
   // Host metadata management (for custom URLs)
   const [hostMetadata, setHostMetadata] = createSignal<Record<string, HostMetadata>>({});
   const [hostMetadataVersion, setHostMetadataVersion] = createSignal(0);
@@ -914,19 +918,21 @@ export const HostsOverview: Component = () => {
           when={sortedHosts().length === 0}
           fallback={
             <>
-              {/* Filters with column visibility */}
-              <HostsFilter
-                search={search}
-                setSearch={setSearch}
-                statusFilter={statusFilter}
-                setStatusFilter={setStatusFilter}
-                onReset={() => setSearch('')}
-                searchInputRef={(el) => (searchInputRef = el)}
-                availableColumns={columnVisibility.availableToggles()}
-                isColumnHidden={columnVisibility.isHiddenByUser}
-                onColumnToggle={columnVisibility.toggle}
-                onColumnReset={columnVisibility.resetToDefaults}
-              />
+              {/* Filters with column visibility - hidden in kiosk mode */}
+              <Show when={!kioskMode()}>
+                <HostsFilter
+                  search={search}
+                  setSearch={setSearch}
+                  statusFilter={statusFilter}
+                  setStatusFilter={setStatusFilter}
+                  onReset={() => setSearch('')}
+                  searchInputRef={(el) => (searchInputRef = el)}
+                  availableColumns={columnVisibility.availableToggles()}
+                  isColumnHidden={columnVisibility.isHiddenByUser}
+                  onColumnToggle={columnVisibility.toggle}
+                  onColumnReset={columnVisibility.resetToDefaults}
+                />
+              </Show>
 
               {/* Host Table */}
               <Show
