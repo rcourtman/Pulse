@@ -18,11 +18,13 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	_ "github.com/rcourtman/pulse-go-rewrite/internal/mock" // Import for init() to run
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog/log"
@@ -99,6 +101,37 @@ func Run(ctx context.Context, version string) error {
 	} else {
 		auth.SetManager(rbacManager)
 		log.Info().Msg("RBAC manager initialized")
+	}
+
+	// Initialize SQLite audit logger for Pro/Enterprise
+	// Check if audit logging feature is available via mock mode or license
+	licenseService := license.NewService()
+	if licenseService.HasFeature(license.FeatureAuditLogging) {
+		// Initialize crypto manager for signing key encryption
+		cryptoMgr, err := crypto.NewCryptoManagerAt(dataDir)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize crypto manager for audit logging")
+		} else {
+			auditLogger, err := audit.NewSQLiteLogger(audit.SQLiteLoggerConfig{
+				DataDir:       dataDir,
+				CryptoMgr:     cryptoMgr,
+				RetentionDays: 90, // Default 90 day retention
+			})
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to initialize SQLite audit logger, using console logger")
+			} else {
+				audit.SetLogger(auditLogger)
+				log.Info().Msg("Enterprise audit logging enabled with SQLite backend")
+				// Ensure cleanup on shutdown
+				defer func() {
+					if err := auditLogger.Close(); err != nil {
+						log.Error().Err(err).Msg("Failed to close audit logger")
+					}
+				}()
+			}
+		}
+	} else {
+		log.Debug().Msg("Audit logging feature not licensed, using console logger")
 	}
 
 	log.Info().Msg("Starting Pulse monitoring server")

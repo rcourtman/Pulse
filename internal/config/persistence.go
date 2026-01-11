@@ -32,6 +32,7 @@ type ConfigPersistence struct {
 	nodesFile                string
 	systemFile               string
 	oidcFile                 string
+	ssoFile                  string
 	apiTokensFile            string
 	envTokenSuppressionsFile string
 	aiFile                   string
@@ -108,6 +109,7 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		nodesFile:                filepath.Join(configDir, "nodes.enc"),
 		systemFile:               filepath.Join(configDir, "system.json"),
 		oidcFile:                 filepath.Join(configDir, "oidc.enc"),
+		ssoFile:                  filepath.Join(configDir, "sso.enc"),
 		apiTokensFile:            filepath.Join(configDir, "api_tokens.json"),
 		envTokenSuppressionsFile: filepath.Join(configDir, "env_token_suppressions.json"),
 		aiFile:                   filepath.Join(configDir, "ai.enc"),
@@ -1471,6 +1473,147 @@ func (c *ConfigPersistence) LoadOIDCConfig() (*OIDCConfig, error) {
 
 	log.Info().Str("file", c.oidcFile).Msg("OIDC configuration loaded")
 	return &settings, nil
+}
+
+// SaveSSOConfig stores SSO settings, encrypting them when a crypto manager is available.
+func (c *ConfigPersistence) SaveSSOConfig(settings *SSOConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	if settings == nil {
+		settings = NewSSOConfig()
+	}
+
+	// Clone to avoid modifying the original
+	clone := settings.Clone()
+
+	// Clear sensitive data from OIDC providers (env overrides)
+	for i := range clone.Providers {
+		if clone.Providers[i].OIDC != nil {
+			clone.Providers[i].OIDC.EnvOverrides = nil
+		}
+	}
+
+	data, err := json.Marshal(clone)
+	if err != nil {
+		return err
+	}
+
+	if c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(data)
+		if err != nil {
+			return err
+		}
+		data = encrypted
+	}
+
+	if err := c.writeConfigFileLocked(c.ssoFile, data, 0600); err != nil {
+		return err
+	}
+
+	log.Info().Str("file", c.ssoFile).Int("providers", len(clone.Providers)).Msg("SSO configuration saved")
+	return nil
+}
+
+// LoadSSOConfig retrieves the persisted SSO settings. It returns nil when no configuration exists yet.
+// If no SSO config exists but legacy OIDC config does, it will automatically migrate the configuration.
+func (c *ConfigPersistence) LoadSSOConfig() (*SSOConfig, error) {
+	c.mu.RLock()
+	data, err := c.fs.ReadFile(c.ssoFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			c.mu.RUnlock()
+			// Check if we should migrate from legacy OIDC config
+			return c.migrateFromLegacyOIDCConfig()
+		}
+		c.mu.RUnlock()
+		return nil, err
+	}
+
+	if c.crypto != nil {
+		decrypted, err := c.crypto.Decrypt(data)
+		if err != nil {
+			c.mu.RUnlock()
+			return nil, err
+		}
+		data = decrypted
+	}
+
+	var settings SSOConfig
+	if err := json.Unmarshal(data, &settings); err != nil {
+		c.mu.RUnlock()
+		return nil, err
+	}
+
+	c.mu.RUnlock()
+	log.Info().Str("file", c.ssoFile).Int("providers", len(settings.Providers)).Msg("SSO configuration loaded")
+	return &settings, nil
+}
+
+// migrateFromLegacyOIDCConfig checks for a legacy OIDC config file and migrates it to the new SSO format.
+// This function should be called WITHOUT any lock held.
+func (c *ConfigPersistence) migrateFromLegacyOIDCConfig() (*SSOConfig, error) {
+	c.mu.RLock()
+	// Check if legacy OIDC config exists
+	data, err := c.fs.ReadFile(c.oidcFile)
+	if err != nil {
+		c.mu.RUnlock()
+		if os.IsNotExist(err) {
+			// No legacy config either, return nil
+			return nil, nil
+		}
+		// Error reading file
+		return nil, nil // Don't fail the startup, just return nil
+	}
+
+	// Decrypt if needed
+	if c.crypto != nil {
+		decrypted, err := c.crypto.Decrypt(data)
+		if err != nil {
+			c.mu.RUnlock()
+			log.Warn().Err(err).Msg("Failed to decrypt legacy OIDC config for migration")
+			return nil, nil
+		}
+		data = decrypted
+	}
+	c.mu.RUnlock()
+
+	var oidcConfig OIDCConfig
+	if err := json.Unmarshal(data, &oidcConfig); err != nil {
+		log.Warn().Err(err).Msg("Failed to parse legacy OIDC config for migration")
+		return nil, nil
+	}
+
+	// Only migrate if OIDC was actually configured
+	if oidcConfig.IssuerURL == "" || oidcConfig.ClientID == "" {
+		log.Debug().Msg("Legacy OIDC config not configured, skipping migration")
+		return nil, nil
+	}
+
+	// Migrate to new SSO format
+	ssoConfig := MigrateFromOIDCConfig(&oidcConfig)
+
+	log.Info().
+		Str("issuer", oidcConfig.IssuerURL).
+		Str("clientId", oidcConfig.ClientID).
+		Bool("enabled", oidcConfig.Enabled).
+		Msg("Migrating legacy OIDC configuration to new SSO format")
+
+	// Save the migrated config
+	if err := c.SaveSSOConfig(ssoConfig); err != nil {
+		log.Error().Err(err).Msg("Failed to save migrated SSO configuration")
+		return ssoConfig, nil // Return the migrated config even if save failed
+	}
+
+	log.Info().
+		Int("providers", len(ssoConfig.Providers)).
+		Msg("Successfully migrated legacy OIDC config to new SSO format")
+
+	return ssoConfig, nil
 }
 
 // SaveAIConfig stores AI settings, encrypting them when a crypto manager is available.

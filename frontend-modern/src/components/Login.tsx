@@ -1,7 +1,9 @@
-import { Component, createSignal, Show, onMount, lazy, Suspense } from 'solid-js';
+import { Component, createSignal, Show, For, onMount, lazy, Suspense } from 'solid-js';
 import { logger } from '@/utils/logger';
 import { apiClient, apiFetchJSON } from '@/utils/apiClient';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import Globe from 'lucide-solid/icons/globe';
+import Key from 'lucide-solid/icons/key';
 
 const SetupWizard = lazy(() =>
   import('./SetupWizard').then((m) => ({ default: m.SetupWizard })),
@@ -13,7 +15,7 @@ interface LoginProps {
   securityStatus?: SecurityStatus; // Full security status from App.tsx to avoid redundant API call
 }
 
-import type { SecurityStatus } from '@/types/config';
+import type { SecurityStatus, SSOProviderInfo } from '@/types/config';
 
 export const Login: Component<LoginProps> = (props) => {
   const [username, setUsername] = createSignal('');
@@ -30,8 +32,10 @@ export const Login: Component<LoginProps> = (props) => {
   const [oidcMessage, setOidcMessage] = createSignal('');
 
   const supportsOIDC = () => Boolean(authStatus()?.oidcEnabled);
+  const ssoProviders = () => authStatus()?.ssoProviders || [];
+  const hasMultipleProviders = () => ssoProviders().length > 0;
 
-  const resolveOidcError = (reason?: string | null) => {
+  const resolveSSOError = (reason?: string | null) => {
     switch (reason) {
       case 'email_restricted':
         return 'Your account email is not permitted to access Pulse.';
@@ -51,6 +55,12 @@ export const Login: Component<LoginProps> = (props) => {
         return 'The identity provider is issuing HS256 tokens. Configure it to sign ID tokens with RS256 (see your IdP\'s OIDC settings).';
       case 'invalid_nonce':
         return 'Security validation failed (nonce mismatch). Please try again.';
+      case 'saml_validation_failed':
+        return 'SAML assertion validation failed. Please try again or contact an administrator.';
+      case 'provider_not_found':
+        return 'SSO provider not found or not configured.';
+      case 'provider_not_initialized':
+        return 'SSO provider is not properly configured. Contact your administrator.';
       default:
         return 'Single sign-on failed. Please try again or contact an administrator.';
     }
@@ -73,18 +83,35 @@ export const Login: Component<LoginProps> = (props) => {
     }
 
     const params = new URLSearchParams(window.location.search);
+
+    // Handle OIDC callback
     const oidcStatus = params.get('oidc');
     if (oidcStatus === 'error') {
       const reason = params.get('oidc_error');
-      setOidcError(resolveOidcError(reason));
+      setOidcError(resolveSSOError(reason));
       setError('');
     } else if (oidcStatus === 'success') {
       setOidcMessage('Signed in successfully. Loading Pulse…');
       setError('');
     }
-    if (oidcStatus) {
+
+    // Handle SAML callback
+    const samlStatus = params.get('saml');
+    if (samlStatus === 'error') {
+      const reason = params.get('saml_error');
+      setOidcError(resolveSSOError(reason));
+      setError('');
+    } else if (samlStatus === 'success') {
+      setOidcMessage('Signed in successfully. Loading Pulse…');
+      setError('');
+    }
+
+    // Clean up URL parameters
+    if (oidcStatus || samlStatus) {
       params.delete('oidc');
       params.delete('oidc_error');
+      params.delete('saml');
+      params.delete('saml_error');
       const newQuery = params.toString();
       const newUrl = `${window.location.pathname}${newQuery ? `?${newQuery}` : ''}`;
       window.history.replaceState({}, document.title, newUrl);
@@ -304,6 +331,7 @@ export const Login: Component<LoginProps> = (props) => {
               oidcError,
               oidcMessage,
               showLocalLogin: shouldShowLocalLogin(),
+              ssoProviders: ssoProviders(),
             }}
           />
         }
@@ -344,6 +372,7 @@ const LoginForm: Component<{
   oidcError: () => string;
   oidcMessage: () => string;
   showLocalLogin: boolean;
+  ssoProviders: SSOProviderInfo[];
 }> = (props) => {
   const {
     username,
@@ -361,6 +390,7 @@ const LoginForm: Component<{
     oidcError,
     oidcMessage,
     showLocalLogin,
+    ssoProviders,
   } = props;
 
   // Check if we're on the demo server
@@ -417,7 +447,67 @@ const LoginForm: Component<{
           class="mt-8 space-y-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg p-8 shadow-xl animate-slide-up"
           onSubmit={handleSubmit}
         >
-          <Show when={supportsOIDC()}>
+          {/* Multi-Provider SSO Section */}
+          <Show when={ssoProviders.length > 0}>
+            <div class="space-y-3">
+              <For each={ssoProviders}>
+                {(provider) => (
+                  <button
+                    type="button"
+                    class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900/40 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
+                    disabled={oidcLoading()}
+                    onClick={() => {
+                      window.location.href = provider.loginUrl;
+                    }}
+                  >
+                    <span class="inline-flex items-center gap-2">
+                      <Show
+                        when={provider.iconUrl}
+                        fallback={
+                          provider.type === 'saml' ? (
+                            <Key class="w-5 h-5" />
+                          ) : (
+                            <Globe class="w-5 h-5" />
+                          )
+                        }
+                      >
+                        <img
+                          src={provider.iconUrl}
+                          alt=""
+                          class="w-5 h-5"
+                        />
+                      </Show>
+                      Continue with {provider.displayName || provider.name}
+                    </span>
+                  </button>
+                )}
+              </For>
+              <Show when={oidcError()}>
+                <div class="rounded-md bg-red-50 dark:bg-red-900/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300">
+                  {oidcError()}
+                </div>
+              </Show>
+              <Show when={oidcMessage()}>
+                <div class="rounded-md bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
+                  {oidcMessage()}
+                </div>
+              </Show>
+              <Show when={showLocalLogin}>
+                <div class="flex items-center gap-3 pt-2">
+                  <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                  <span class="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                    or
+                  </span>
+                  <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                </div>
+                <p class="text-xs text-center text-gray-500 dark:text-gray-400">
+                  Use your admin credentials to sign in below.
+                </p>
+              </Show>
+            </div>
+          </Show>
+          {/* Legacy OIDC fallback (when no multi-provider SSO but legacy OIDC is enabled) */}
+          <Show when={ssoProviders.length === 0 && supportsOIDC()}>
             <div class="space-y-3">
               <button
                 type="button"
@@ -435,14 +525,7 @@ const LoginForm: Component<{
                   }
                 >
                   <span class="inline-flex items-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="1.8"
-                        d="M21 12c0 4.97-4.03 9-9 9m9-9c0-4.97-4.03-9-9-9m9 9H3m9 9c-4.97 0-9-4.03-9-9m9 9c-1.5-1.35-3-4.5-3-9s1.5-7.65 3-9m0 18c1.5-1.35 3-4.5 3-9s-1.5-7.65-3-9"
-                      />
-                    </svg>
+                    <Globe class="w-5 h-5" />
                     Continue with Single Sign-On
                   </span>
                 </Show>

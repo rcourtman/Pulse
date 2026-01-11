@@ -310,3 +310,140 @@ func isPersistentLogger() bool {
 	_, isConsole := logger.(*audit.ConsoleLogger)
 	return !isConsole
 }
+
+// HandleExportAuditEvents handles GET /api/audit/export
+func (h *AuditHandlers) HandleExportAuditEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Check if persistent logger is available
+	if !isPersistentLogger() {
+		writeErrorResponse(w, http.StatusNotImplemented, "export_unavailable",
+			"Export requires Pulse Pro with enterprise audit logging", nil)
+		return
+	}
+
+	query := r.URL.Query()
+
+	// Parse format
+	format := audit.ExportFormatJSON
+	if query.Get("format") == "csv" {
+		format = audit.ExportFormatCSV
+	}
+
+	// Parse filter
+	filter := audit.QueryFilter{
+		EventType: query.Get("event"),
+		User:      query.Get("user"),
+	}
+
+	// Parse startTime
+	if startStr := query.Get("startTime"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			filter.StartTime = &t
+		}
+	}
+
+	// Parse endTime
+	if endStr := query.Get("endTime"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			filter.EndTime = &t
+		}
+	}
+
+	// Parse success
+	if successStr := query.Get("success"); successStr != "" {
+		success := successStr == "true"
+		filter.Success = &success
+	}
+
+	// Parse verification flag
+	includeVerification := query.Get("verify") == "true"
+
+	// Get the SQLite logger
+	logger := audit.GetLogger()
+	sqliteLogger, ok := logger.(*audit.SQLiteLogger)
+	if !ok {
+		writeErrorResponse(w, http.StatusNotImplemented, "export_unavailable",
+			"Export requires SQLite audit logger", nil)
+		return
+	}
+
+	// Create exporter and export
+	exporter := audit.NewExporter(sqliteLogger)
+	result, err := exporter.Export(filter, format, includeVerification)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "export_failed",
+			"Failed to export audit events", nil)
+		return
+	}
+
+	// Set response headers
+	w.Header().Set("Content-Type", result.ContentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", result.Filename))
+	w.Header().Set("X-Event-Count", strconv.Itoa(result.EventCount))
+	w.Write(result.Data)
+}
+
+// HandleAuditSummary handles GET /api/audit/summary
+func (h *AuditHandlers) HandleAuditSummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Check if persistent logger is available
+	if !isPersistentLogger() {
+		writeErrorResponse(w, http.StatusNotImplemented, "summary_unavailable",
+			"Summary requires Pulse Pro with enterprise audit logging", nil)
+		return
+	}
+
+	query := r.URL.Query()
+
+	// Parse filter
+	filter := audit.QueryFilter{
+		EventType: query.Get("event"),
+		User:      query.Get("user"),
+	}
+
+	// Parse startTime
+	if startStr := query.Get("startTime"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			filter.StartTime = &t
+		}
+	}
+
+	// Parse endTime
+	if endStr := query.Get("endTime"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			filter.EndTime = &t
+		}
+	}
+
+	// Parse verification flag
+	verifySignatures := query.Get("verify") == "true"
+
+	// Get the SQLite logger
+	logger := audit.GetLogger()
+	sqliteLogger, ok := logger.(*audit.SQLiteLogger)
+	if !ok {
+		writeErrorResponse(w, http.StatusNotImplemented, "summary_unavailable",
+			"Summary requires SQLite audit logger", nil)
+		return
+	}
+
+	// Create exporter and generate summary
+	exporter := audit.NewExporter(sqliteLogger)
+	summary, err := exporter.GenerateSummary(filter, verifySignatures)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "summary_failed",
+			"Failed to generate audit summary", nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(summary)
+}

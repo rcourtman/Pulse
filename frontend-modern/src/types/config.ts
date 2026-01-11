@@ -136,8 +136,23 @@ export interface SecurityStatus {
   oidcIssuer?: string;
   oidcClientId?: string;
   oidcEnvOverrides?: Record<string, boolean>;
+  oidcLogoutURL?: string;
+  // Multi-provider SSO
+  ssoProviders?: SSOProviderInfo[];
   // Token auth scopes (for kiosk/limited-access mode)
   tokenScopes?: string[];
+}
+
+/**
+ * SSO provider info for login page
+ */
+export interface SSOProviderInfo {
+  id: string;
+  name: string;
+  type: 'oidc' | 'saml';
+  displayName: string;
+  iconUrl?: string;
+  loginUrl: string;
 }
 
 /**

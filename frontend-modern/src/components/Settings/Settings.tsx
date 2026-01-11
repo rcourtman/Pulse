@@ -24,6 +24,7 @@ import { ChangePasswordModal } from './ChangePasswordModal';
 import { UnifiedAgents } from './UnifiedAgents';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { OIDCPanel } from './OIDCPanel';
+import { SSOProvidersPanel } from './SSOProvidersPanel';
 import { AISettings } from './AISettings';
 import { AICostDashboard } from '@/components/AI/AICostDashboard';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
@@ -3701,6 +3702,8 @@ const Settings: Component<SettingsProps> = (props) => {
               {/* Security Single Sign-On Tab */}
               <Show when={activeTab() === 'security-sso'}>
                 <div class="space-y-6">
+                  <SSOProvidersPanel onConfigUpdated={loadSecurityStatus} />
+                  {/* Legacy OIDC panel for backward compatibility */}
                   <OIDCPanel onConfigUpdated={loadSecurityStatus} />
                 </div>
               </Show>

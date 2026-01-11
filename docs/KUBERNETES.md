@@ -89,7 +89,7 @@ spec:
       containers:
         - name: pulse-agent
           image: rcourtman/pulse:latest
-          command: ["/usr/local/bin/pulse-agent"]
+          command: ["/opt/pulse/bin/pulse-agent-linux-amd64"]
           args:
             - --enable-kubernetes
           env:
@@ -97,17 +97,69 @@ spec:
               value: "http://pulse-server.pulse.svc.cluster.local:7655"
             - name: PULSE_TOKEN
               value: "YOUR_API_TOKEN_HERE"
+            - name: PULSE_AGENT_ID
+              value: "my-k8s-cluster"
             - name: PULSE_ENABLE_HOST
               value: "false"
+            - name: PULSE_KUBE_INCLUDE_ALL_PODS
+              value: "true"
+            - name: PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS
+              value: "true"
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
-          resources: {}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      tolerations:
+        - operator: Exists
 ```
+
+> **Note for ARM64 clusters**: Replace `pulse-agent-linux-amd64` with `pulse-agent-linux-arm64`.
 
 Use a token scoped for the agent:
 - `kubernetes:report` for Kubernetes reporting
 - `host-agent:report` if you enable host metrics
+
+#### Important DaemonSet Configuration
+
+**PULSE_AGENT_ID (Required for DaemonSets)**
+
+When running as a DaemonSet, all pods share the same API token but need a unified identity. Without `PULSE_AGENT_ID`, each pod auto-generates a unique ID (e.g., `mac-xxxxx`), causing token conflicts:
+
+```
+API token is already in use by agent "mac-aa5496fed726". Each Kubernetes agent must use a unique API token.
+```
+
+Set `PULSE_AGENT_ID` to a shared cluster name so all pods report as one logical agent:
+
+```yaml
+- name: PULSE_AGENT_ID
+  value: "my-k8s-cluster"
+```
+
+**Resource Visibility Flags**
+
+By default, Pulse only shows resources with problems (unhealthy pods, failing deployments). To see all resources:
+
+| Environment Variable | Description | Default |
+|---------------------|-------------|---------|
+| `PULSE_KUBE_INCLUDE_ALL_PODS` | Show all non-succeeded pods, not just problematic ones | `false` |
+| `PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS` | Show all deployments, not just those with issues | `false` |
+
+For most monitoring use cases, set both to `true`:
+
+```yaml
+- name: PULSE_KUBE_INCLUDE_ALL_PODS
+  value: "true"
+- name: PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS
+  value: "true"
+```
+
+See [UNIFIED_AGENT.md](UNIFIED_AGENT.md) for all available configuration options.
 
 #### Add Host Metrics (Optional)
 

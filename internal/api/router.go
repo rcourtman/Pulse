@@ -71,6 +71,8 @@ type Router struct {
 	persistence               *config.ConfigPersistence
 	oidcMu                    sync.Mutex
 	oidcService               *OIDCService
+	ssoConfig                 *config.SSOConfig
+	samlManager               *SAMLServiceManager
 	authorizer                auth.Authorizer
 	wrapped                   http.Handler
 	serverVersion             string
@@ -133,6 +135,12 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 	updateManager := updates.NewManager(cfg)
 	updateManager.SetHistory(updateHistory)
 
+	// Determine base URL for SSO callbacks
+	baseURL := cfg.PublicURL
+	if baseURL == "" {
+		baseURL = fmt.Sprintf("http://localhost:%d", cfg.FrontendPort)
+	}
+
 	r := &Router{
 		mux:             http.NewServeMux(),
 		config:          cfg,
@@ -148,6 +156,8 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		serverVersion:   strings.TrimSpace(serverVersion),
 		projectRoot:     projectRoot,
 		checksumCache:   make(map[string]checksumCacheEntry),
+		ssoConfig:       config.NewSSOConfig(),
+		samlManager:     NewSAMLServiceManager(baseURL),
 	}
 
 	// Sync the configured admin user to the authorizer (if supported)
@@ -510,6 +520,8 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("GET /api/audit", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))))
 	r.mux.HandleFunc("GET /api/audit/", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleListAuditEvents))))
 	r.mux.HandleFunc("GET /api/audit/{id}/verify", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleVerifyAuditEvent))))
+	r.mux.HandleFunc("GET /api/audit/export", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleExportAuditEvents))))
+	r.mux.HandleFunc("GET /api/audit/summary", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureAuditLogging, RequireScope(config.ScopeSettingsRead, auditHandlers.HandleAuditSummary))))
 
 	// RBAC routes (Phase 2 - Enterprise feature)
 	r.mux.HandleFunc("/api/admin/roles", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers.Service(), license.FeatureRBAC, rbacHandlers.HandleRoles)))
@@ -537,6 +549,38 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/security/oidc", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleOIDCConfig)))
 	r.mux.HandleFunc("/api/oidc/login", r.handleOIDCLogin)
 	r.mux.HandleFunc(config.DefaultOIDCCallbackPath, r.handleOIDCCallback)
+
+	// SAML SSO routes - dynamic provider-based endpoints
+	r.mux.HandleFunc("/api/saml/", func(w http.ResponseWriter, req *http.Request) {
+		// Route SAML requests based on path: /api/saml/{providerID}/{action}
+		path := strings.TrimPrefix(req.URL.Path, "/api/saml/")
+		parts := strings.SplitN(path, "/", 2)
+		if len(parts) < 2 {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_path", "Invalid SAML endpoint path", nil)
+			return
+		}
+		action := parts[1]
+		switch action {
+		case "login":
+			r.handleSAMLLogin(w, req)
+		case "acs":
+			r.handleSAMLACS(w, req)
+		case "metadata":
+			r.handleSAMLMetadata(w, req)
+		case "logout":
+			r.handleSAMLLogout(w, req)
+		case "slo":
+			r.handleSAMLSLO(w, req)
+		default:
+			writeErrorResponse(w, http.StatusNotFound, "not_found", "Unknown SAML endpoint", nil)
+		}
+	})
+
+	// SSO providers management API
+	r.mux.HandleFunc("/api/security/sso/providers/test", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleTestSSOProvider)))
+	r.mux.HandleFunc("/api/security/sso/providers/metadata/preview", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleMetadataPreview)))
+	r.mux.HandleFunc("/api/security/sso/providers", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleSSOProviders)))
+	r.mux.HandleFunc("/api/security/sso/providers/", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleSSOProvider)))
 	r.mux.HandleFunc("/api/security/tokens", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
@@ -705,6 +749,35 @@ func (r *Router) setupRoutes() {
 				status["oidcLogoutURL"] = oidcCfg.LogoutURL
 				if len(oidcCfg.EnvOverrides) > 0 {
 					status["oidcEnvOverrides"] = oidcCfg.EnvOverrides
+				}
+			}
+
+			// Add SSO providers for multi-provider support
+			if r.ssoConfig != nil && len(r.ssoConfig.Providers) > 0 {
+				enabledProviders := make([]map[string]interface{}, 0)
+				for _, p := range r.ssoConfig.GetEnabledProviders() {
+					provider := map[string]interface{}{
+						"id":          p.ID,
+						"name":        p.Name,
+						"type":        string(p.Type),
+						"displayName": p.DisplayName,
+					}
+					if provider["displayName"] == "" {
+						provider["displayName"] = p.Name
+					}
+					if p.IconURL != "" {
+						provider["iconUrl"] = p.IconURL
+					}
+					// Add login URL for each provider
+					if p.Type == config.SSOProviderTypeOIDC {
+						provider["loginUrl"] = "/api/oidc/login?provider=" + p.ID
+					} else if p.Type == config.SSOProviderTypeSAML {
+						provider["loginUrl"] = "/api/saml/" + p.ID + "/login"
+					}
+					enabledProviders = append(enabledProviders, provider)
+				}
+				if len(enabledProviders) > 0 {
+					status["ssoProviders"] = enabledProviders
 				}
 			}
 
@@ -2068,6 +2141,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/login", // Add login endpoint as public
 				"/api/oidc/login",
 				config.DefaultOIDCCallbackPath,
+				"/api/saml/",                                         // All SAML endpoints are public (login, ACS, metadata, etc.)
 				"/install-docker-agent.sh",                           // Docker agent bootstrap script must be public
 				"/install-container-agent.sh",                        // Container agent bootstrap script must be public
 				"/download/pulse-docker-agent",                       // Agent binary download should not require auth
