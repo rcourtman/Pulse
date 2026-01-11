@@ -5538,14 +5538,38 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			connectionHealthStr = "error"
 			m.state.SetConnectionHealth(instanceName, false)
 		} else if healthyCount < totalCount {
-			// Some endpoints are down - degraded state
-			connectionHealthStr = "degraded"
-			m.state.SetConnectionHealth(instanceName, true) // Still functional but degraded
-			log.Warn().
-				Str("instance", instanceName).
-				Int("healthy", healthyCount).
-				Int("total", totalCount).
-				Msg("Cluster is in degraded state - some nodes are unreachable")
+			// Some endpoints are down - check if cluster still has quorum
+			// A cluster with quorum is healthy even if some nodes are intentionally offline
+			// (e.g., backup nodes not running). Only mark as degraded if no quorum.
+			isQuorate, err := clusterClient.IsQuorate(ctx)
+			if err != nil {
+				// Couldn't check quorum - log but continue (assume healthy if we have connectivity)
+				log.Debug().
+					Str("instance", instanceName).
+					Err(err).
+					Msg("Could not check cluster quorum status")
+				isQuorate = true // Assume healthy if we can't check
+			}
+
+			if isQuorate {
+				// Cluster has quorum - healthy even with some nodes offline
+				connectionHealthStr = "healthy"
+				m.state.SetConnectionHealth(instanceName, true)
+				log.Debug().
+					Str("instance", instanceName).
+					Int("healthy", healthyCount).
+					Int("total", totalCount).
+					Msg("Cluster has quorum - some API endpoints unreachable but cluster is healthy")
+			} else {
+				// Cluster lost quorum - this is actually degraded/critical
+				connectionHealthStr = "degraded"
+				m.state.SetConnectionHealth(instanceName, true) // Still functional but degraded
+				log.Warn().
+					Str("instance", instanceName).
+					Int("healthy", healthyCount).
+					Int("total", totalCount).
+					Msg("Cluster lost quorum - degraded state")
+			}
 		} else {
 			// All endpoints are healthy
 			connectionHealthStr = "healthy"

@@ -1360,6 +1360,42 @@ func (cc *ClusterClient) GetDisks(ctx context.Context, node string) ([]Disk, err
 	return result, err
 }
 
+// GetClusterStatus returns the cluster status including all nodes with failover support.
+func (cc *ClusterClient) GetClusterStatus(ctx context.Context) ([]ClusterStatus, error) {
+	var result []ClusterStatus
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		status, err := client.GetClusterStatus(ctx)
+		if err != nil {
+			return err
+		}
+		result = status
+		return nil
+	})
+
+	return result, err
+}
+
+// IsQuorate checks if the cluster has quorum by querying the Proxmox cluster status.
+// Returns true if the cluster is quorate (has enough votes for consensus), false otherwise.
+// This is the authoritative check for cluster health - a cluster with quorum is healthy
+// even if some nodes are intentionally offline (e.g., backup nodes not running).
+func (cc *ClusterClient) IsQuorate(ctx context.Context) (bool, error) {
+	status, err := cc.GetClusterStatus(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	// Look for the cluster entry which has the quorate field
+	for _, s := range status {
+		if s.Type == "cluster" {
+			return s.Quorate == 1, nil
+		}
+	}
+
+	// If no cluster entry found, this might be a standalone node - consider it healthy
+	return true, nil
+}
+
 // isAuthError checks if an error is an authentication error
 func isAuthError(err error) bool {
 	if err == nil {
