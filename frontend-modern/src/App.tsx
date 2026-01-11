@@ -53,6 +53,7 @@ import { AIStatusIndicator } from './components/AI/AIStatusIndicator';
 import { aiChatStore } from './stores/aiChat';
 import { useResourcesAsLegacy } from './hooks/useResources';
 import { updateSystemSettingsFromResponse } from './stores/systemSettings';
+import { initKioskMode } from './utils/url';
 
 
 const Dashboard = lazy(() =>
@@ -219,6 +220,10 @@ function GlobalUpdateProgressWatcher() {
 }
 
 function App() {
+  // Initialize kiosk mode from URL params immediately (persists to sessionStorage)
+  // This must happen before any renders so kiosk state is available everywhere
+  initKioskMode();
+
   const TooltipRoot = createTooltipSystem();
   const owner = getOwner();
   const acquireWsStore = (): EnhancedStore => {

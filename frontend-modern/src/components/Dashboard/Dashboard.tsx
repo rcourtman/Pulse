@@ -24,6 +24,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { getBackupInfo } from '@/utils/format';
 import { aiChatStore } from '@/stores/aiChat';
+import { isKioskMode } from '@/utils/url';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
 type IdleCallbackHandle = number;
@@ -212,12 +213,8 @@ export function Dashboard(props: DashboardProps) {
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
 
   // Kiosk mode - hide filter panel for clean dashboard display
-  // Usage: Add ?kiosk=1 to URL
-  const kioskMode = createMemo(() => {
-    if (typeof window === 'undefined') return false;
-    const params = new URLSearchParams(window.location.search);
-    return params.get('kiosk') === '1' || params.get('kiosk') === 'true';
-  });
+  // Usage: Add ?kiosk=1 to URL (persists across navigation via sessionStorage)
+  const kioskMode = createMemo(() => isKioskMode());
 
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
